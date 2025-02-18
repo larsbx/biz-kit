@@ -46,5 +46,11 @@ defmodule Tololo.Extensions.TelegramBot do
   end
 
   @impl true
+  def endpoint() do
+    quote do
+    end
+  end
+
+  @impl true
   def ash_domains(), do: [Tololo.Extensions.TelegramBot.Ash.Users]
 end
