@@ -1,6 +1,23 @@
 defmodule EatsbotCore.Brands.Branch do
   @moduledoc """
-  Define the data fields for storing store branch information.
+  Represents a physical store branch in the Eatsbot e-commerce system.
+
+  Branches are physical locations associated with a brand. Each branch has its own
+  address and geographic coordinates for delivery routing, location tracking, and
+  customer proximity calculations.
+
+  ## Key Features
+  - Physical address information
+  - GPS coordinates (latitude/longitude) for mapping
+  - Belongs to a Brand
+  - Used for delivery distance calculations
+  - Location-based features (e.g., "nearest branch")
+
+  ## Use Cases
+  - Restaurant locations for delivery radius calculation
+  - Store locator functionality
+  - Delivery route optimization
+  - Branch-specific inventory management
   """
 
   use Ash.Resource,
@@ -84,12 +101,14 @@ defmodule EatsbotCore.Brands.Branch do
       allow_nil? false
       sensitive? false
       public? true
+      constraints min: -90, max: 90
     end
 
     attribute :longitude, :float do
       allow_nil? false
       sensitive? false
       public? true
+      constraints min: -180, max: 180
     end
 
     timestamps()

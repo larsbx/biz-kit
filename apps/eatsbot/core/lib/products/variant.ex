@@ -1,9 +1,25 @@
 defmodule EatsbotCore.Products.Variant do
-  # @moduledoc """
-  # Represents a delivery of an order in the Eatsbot system.
+  @moduledoc """
+  Represents a product variant in the Eatsbot e-commerce system.
 
-  # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
-  # """
+  A variant is a specific configuration of a product with particular option values
+  (e.g., "Large Red T-Shirt" where "Large" and "Red" are option values).
+  Each variant has its own SKU, pricing, images, and can have custom attributes.
+
+  ## Key Features
+  - Unique combination of option values per product
+  - Independent pricing in multiple currencies
+  - Custom attributes (e.g., weight, dimensions)
+  - Image gallery support
+  - Discount rules that can override product-level rules
+  - Identity constraint ensures unique variants per option combination
+
+  ## Relationships
+  - Belongs to a Product
+  - Has multiple Prices (one per currency)
+  - Many-to-many with OptionValues (defines the variant configuration)
+  - Has many CartLines (tracks usage in shopping carts)
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,

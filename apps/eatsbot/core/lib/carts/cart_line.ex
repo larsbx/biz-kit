@@ -1,7 +1,22 @@
 defmodule EatsbotCore.Carts.CartLine do
-  # @moduledoc """
+  @moduledoc """
+  Represents a line item in a shopping cart.
 
-  # """
+  A CartLine associates a product variant with a specific cart, including the quantity
+  and any custom notes. Each cart can only have one line per variant (enforced by identity),
+  so adding the same variant again updates the existing line quantity.
+
+  ## Key Features
+  - Unique variant per cart (upsert behavior)
+  - Quantity validation (minimum 1)
+  - Optional customer notes for customization requests
+  - Automatic subtotal calculation before and after discounts
+  - Real-time updates via PubSub notifications
+
+  ## Calculations
+  - `subtotal_before_discount` - Base price × quantity in cart's currency
+  - `subtotal` - Final price after applying discount rules
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Carts,
@@ -46,7 +61,11 @@ defmodule EatsbotCore.Carts.CartLine do
   attributes do
     uuid_v7_primary_key :id
 
-    attribute :quantity, :integer, public?: true, allow_nil?: false, constraints: [min: 1]
+    attribute :quantity, :integer,
+      public?: true,
+      allow_nil?: false,
+      constraints: [min: 1, max: 999]
+
     attribute :notes, :string, public?: true
 
     timestamps()

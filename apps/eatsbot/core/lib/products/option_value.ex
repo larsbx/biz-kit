@@ -1,7 +1,25 @@
 defmodule EatsbotCore.Products.OptionValue do
-  # @moduledoc """
+  @moduledoc """
+  Represents a specific value for a product option.
 
-  # """
+  OptionValues are the individual choices available for an option. For example,
+  if "Size" is an option, then "Small", "Medium", and "Large" would be option values.
+  These values are combined in different ways to create product variants.
+
+  ## Key Features
+  - Unique value per option (enforced by identity)
+  - Belongs to a specific Option
+  - Many-to-many relationship with Variants
+  - Used in variant generation to create option combinations
+
+  ## Example
+  For an Option "Color":
+  - OptionValue: "Red"
+  - OptionValue: "Blue"
+  - OptionValue: "Green"
+
+  These values combine with other option values to form unique product variants.
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,

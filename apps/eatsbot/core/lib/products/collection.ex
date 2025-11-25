@@ -1,9 +1,24 @@
 defmodule EatsbotCore.Products.Collection do
-  # @moduledoc """
-  # Represents a delivery of an order in the Eatsbot system.
+  @moduledoc """
+  Represents a product collection in the Eatsbot e-commerce system.
 
-  # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
-  # """
+  Collections are used to organize and group products for easier navigation and discovery.
+  Examples include "Summer Sale", "Pizza Menu", "Vegetarian Options", etc.
+  Collections can also be marked as brand collections to represent product brands.
+
+  ## Key Features
+  - Many-to-many relationship with products
+  - Optional image for collection display
+  - Can represent brands via `is_brand` flag
+  - Used for product categorization and filtering
+  - Exposed via GraphQL API
+
+  ## Use Cases
+  - Seasonal collections ("Holiday Specials")
+  - Category grouping ("Appetizers", "Main Dishes")
+  - Brand representation when `is_brand` is true
+  - Marketing campaigns and promotions
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,

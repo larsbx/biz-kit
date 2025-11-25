@@ -1,6 +1,22 @@
 defmodule EatsbotCore.Brands.Brand do
   @moduledoc """
-  Define the data fields for storing store brand information.
+  Represents a store brand in the Eatsbot e-commerce system.
+
+  Brands represent the top-level business entities in a multi-brand or franchise setup.
+  Each brand can have one or more branches (physical locations). Brands may optionally
+  connect to a headquarters URL for centralized product and information management.
+
+  ## Key Features
+  - Unique brand identity with name
+  - Optional headquarters URL for brand federation
+  - Has one Branch (physical location)
+  - HQ URL is sensitive and not publicly exposed
+
+  ## Use Cases
+  - Restaurant chains with multiple locations
+  - Franchise businesses
+  - Multi-brand e-commerce platforms
+  - Centralized brand management systems
   """
 
   use Ash.Resource,
