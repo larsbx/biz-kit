@@ -1,4 +1,4 @@
-defmodule TololoCore.Carts.TotalCalculation do
+defmodule EatsbotCore.Carts.TotalCalculation do
   @moduledoc """
   Calculation for cart total.
   """

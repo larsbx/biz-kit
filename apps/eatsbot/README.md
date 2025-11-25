@@ -1,4 +1,4 @@
-# Tololo
+# Eatsbot
 
 To start your Phoenix server:
 

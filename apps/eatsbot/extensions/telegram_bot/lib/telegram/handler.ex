@@ -1,15 +1,15 @@
-defmodule Tololo.Extensions.TelegramBot.Handler do
+defmodule Eatsbot.Extensions.TelegramBot.Handler do
   # TODO: Implement proper docs
   # TODO: Implement telegram bot commands
   @moduledoc false
 
-  alias Tololo.Extensions.TelegramBot
+  alias Eatsbot.Extensions.TelegramBot
 
   require Logger
 
   def on_boot do
     # read some parameters from your env config
-    env_config = Application.get_env(:tololo, __MODULE__)
+    env_config = Application.get_env(:eatsbot, __MODULE__)
 
     # delete the webhook and set it again
     # set the webhook (url is required)

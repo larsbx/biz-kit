@@ -1,10 +1,10 @@
-defmodule TololoCore.Deliveries.DeliveryStateChanges do
+defmodule EatsbotCore.Deliveries.DeliveryStateChanges do
   @moduledoc """
   Resource that stores the state changes of a delivery.
   """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Deliveries,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Deliveries,
     extensions: [AshGraphql.Resource],
     data_layer: AshPostgres.DataLayer
 
@@ -14,7 +14,7 @@ defmodule TololoCore.Deliveries.DeliveryStateChanges do
 
   postgres do
     table "delivery_state_changes"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
       reference :delivery, on_delete: :delete
@@ -52,6 +52,6 @@ defmodule TololoCore.Deliveries.DeliveryStateChanges do
   end
 
   relationships do
-    belongs_to :delivery, TololoCore.Deliveries.Delivery
+    belongs_to :delivery, EatsbotCore.Deliveries.Delivery
   end
 end

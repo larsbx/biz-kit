@@ -1,4 +1,4 @@
-defmodule TololoCore.CldrConfig do
+defmodule EatsbotCore.CldrConfig do
   @moduledoc """
   Config for CLDR.
   """
@@ -14,21 +14,21 @@ defmodule TololoCore.CldrConfig do
     ]
 end
 
-defmodule TololoCore.Cldr do
+defmodule EatsbotCore.Cldr do
   @moduledoc """
   Config for CLDR.
   """
-  use Cldr, TololoCore.CldrConfig.common(TololoCore.Gettext)
+  use Cldr, EatsbotCore.CldrConfig.common(EatsbotCore.Gettext)
 end
 
-defmodule TololoCore.Gettext.Interpolation do
+defmodule EatsbotCore.Gettext.Interpolation do
   @moduledoc """
   Define an interpolation module for ICU messages
   """
-  use Cldr.Gettext.Interpolation, cldr_backend: TololoCore.Cldr
+  use Cldr.Gettext.Interpolation, cldr_backend: EatsbotCore.Cldr
 end
 
-defmodule TololoCore.Gettext do
+defmodule EatsbotCore.Gettext do
   @moduledoc """
   A module providing Internationalization with a gettext-based API.
 
@@ -36,7 +36,7 @@ defmodule TololoCore.Gettext do
   that you can use in your application. To use this Gettext backend module,
   call `use Gettext` and pass it as an option:
 
-      use Gettext, backend: TololoCore.Gettext
+      use Gettext, backend: EatsbotCore.Gettext
 
       # Simple translation
       gettext("Here is the string to translate")
@@ -51,5 +51,5 @@ defmodule TololoCore.Gettext do
 
   See the [Gettext Docs](https://hexdocs.pm/gettext) for detailed usage.
   """
-  use Gettext.Backend, otp_app: :tololo_core, interpolation: TololoCore.Gettext.Interpolation
+  use Gettext.Backend, otp_app: :eatsbot_core, interpolation: EatsbotCore.Gettext.Interpolation
 end

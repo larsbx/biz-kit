@@ -1,16 +1,16 @@
-defmodule TololoCore.Products.Variant do
+defmodule EatsbotCore.Products.Variant do
   # @moduledoc """
-  # Represents a delivery of an order in the Tololo system.
+  # Represents a delivery of an order in the Eatsbot system.
 
   # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Products,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Products,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
   alias Ash.Changeset
 
@@ -30,7 +30,7 @@ defmodule TololoCore.Products.Variant do
 
   postgres do
     table "variants"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
       reference :product, on_delete: :delete
@@ -101,9 +101,9 @@ defmodule TololoCore.Products.Variant do
       public? true
     end
 
-    attribute :attributes, {:array, TololoCore.Products.Attribute}, public?: true
+    attribute :attributes, {:array, EatsbotCore.Products.Attribute}, public?: true
 
-    attribute :discount_rules, {:array, TololoCore.Products.DiscountRule} do
+    attribute :discount_rules, {:array, EatsbotCore.Products.DiscountRule} do
       public? true
       default []
     end
@@ -116,15 +116,15 @@ defmodule TololoCore.Products.Variant do
   end
 
   relationships do
-    has_many :prices, TololoCore.Products.Price, public?: true
+    has_many :prices, EatsbotCore.Products.Price, public?: true
 
-    belongs_to :product, TololoCore.Products.Product, public?: true
+    belongs_to :product, EatsbotCore.Products.Product, public?: true
 
-    has_many :cart_lines, TololoCore.Carts.CartLine, public?: true
+    has_many :cart_lines, EatsbotCore.Carts.CartLine, public?: true
 
     # the option values this variant represents
-    many_to_many :option_values, TololoCore.Products.OptionValue do
-      through TololoCore.Products.VariantOption
+    many_to_many :option_values, EatsbotCore.Products.OptionValue do
+      through EatsbotCore.Products.VariantOption
       source_attribute_on_join_resource :variant_id
       destination_attribute_on_join_resource :option_value_id
       public? true

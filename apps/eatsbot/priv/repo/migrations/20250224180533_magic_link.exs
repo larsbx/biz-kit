@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.MagicLink do
+defmodule Eatsbot.Repo.Migrations.MagicLink do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

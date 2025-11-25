@@ -1,16 +1,16 @@
-defmodule TololoCore.Products.Price do
+defmodule EatsbotCore.Products.Price do
   # @moduledoc """
-  # Represents a delivery of an order in the Tololo system.
+  # Represents a delivery of an order in the Eatsbot system.
 
   # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Products,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Products,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
   graphql do
     type :price
@@ -18,7 +18,7 @@ defmodule TololoCore.Products.Price do
 
   postgres do
     table "prices"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     calculations_to_sql currency: "(money).currency_code"
 
@@ -72,11 +72,11 @@ defmodule TololoCore.Products.Price do
   end
 
   relationships do
-    belongs_to :product, TololoCore.Products.Product do
+    belongs_to :product, EatsbotCore.Products.Product do
       public? true
     end
 
-    belongs_to :variant, TololoCore.Products.Variant do
+    belongs_to :variant, EatsbotCore.Products.Variant do
       public? true
     end
   end

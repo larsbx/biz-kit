@@ -1,14 +1,14 @@
-defmodule TololoCore.Carts.CartLine do
+defmodule EatsbotCore.Carts.CartLine do
   # @moduledoc """
 
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Carts,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Carts,
     extensions: [AshGraphql.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [Ash.Notifier.PubSub, TololoCore.Kafka.AshNotifier]
+    notifiers: [Ash.Notifier.PubSub, EatsbotCore.Kafka.AshNotifier]
 
   graphql do
     type :cart_line
@@ -16,7 +16,7 @@ defmodule TololoCore.Carts.CartLine do
 
   postgres do
     table "cart_lines"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
   end
 
   field_policies do
@@ -53,8 +53,8 @@ defmodule TololoCore.Carts.CartLine do
   end
 
   relationships do
-    belongs_to :variant, TololoCore.Products.Variant, public?: true, allow_nil?: false
-    belongs_to :cart, TololoCore.Carts.Cart, public?: true, allow_nil?: false
+    belongs_to :variant, EatsbotCore.Products.Variant, public?: true, allow_nil?: false
+    belongs_to :cart, EatsbotCore.Carts.Cart, public?: true, allow_nil?: false
   end
 
   calculations do
@@ -73,7 +73,7 @@ defmodule TololoCore.Carts.CartLine do
 
     calculate :subtotal,
               :money,
-              TololoCore.Carts.DiscountsCalculation
+              EatsbotCore.Carts.DiscountsCalculation
   end
 
   identities do

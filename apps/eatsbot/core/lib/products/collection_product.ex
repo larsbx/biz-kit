@@ -1,14 +1,14 @@
-defmodule TololoCore.Products.CollectionProduct do
+defmodule EatsbotCore.Products.CollectionProduct do
   @moduledoc """
   Join resource for the collections and products many_to_many relationship.
   """
   use Ash.Resource,
-    domain: TololoCore.Products,
+    domain: EatsbotCore.Products,
     data_layer: AshPostgres.DataLayer
 
   postgres do
     table "collection_product"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
   end
 
   actions do
@@ -16,13 +16,13 @@ defmodule TololoCore.Products.CollectionProduct do
   end
 
   relationships do
-    belongs_to :product, TololoCore.Products.Product do
+    belongs_to :product, EatsbotCore.Products.Product do
       primary_key? true
       allow_nil? false
       public? true
     end
 
-    belongs_to :collection, TololoCore.Products.Collection do
+    belongs_to :collection, EatsbotCore.Products.Collection do
       primary_key? true
       allow_nil? false
       public? true

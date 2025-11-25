@@ -1,7 +1,7 @@
-defmodule Tololo.Extensions.TelegramBot do
+defmodule Eatsbot.Extensions.TelegramBot do
   @moduledoc false
-  alias Tololo.Extensions.TelegramBot
-  use TololoCore.Extension
+  alias Eatsbot.Extensions.TelegramBot
+  use EatsbotCore.Extension
 
   use Supervisor
 
@@ -37,7 +37,7 @@ defmodule Tololo.Extensions.TelegramBot do
         plug :accepts, ["json"]
       end
 
-      scope "/", Tololo.Extensions.TelegramBot do
+      scope "/", Eatsbot.Extensions.TelegramBot do
         pipe_through :telegram_bot_api
         post "/telegram", Controller, :update
       end
@@ -45,5 +45,5 @@ defmodule Tololo.Extensions.TelegramBot do
   end
 
   @impl true
-  def ash_domains(), do: [Tololo.Extensions.TelegramBot.Ash.Users]
+  def ash_domains(), do: [Eatsbot.Extensions.TelegramBot.Ash.Users]
 end

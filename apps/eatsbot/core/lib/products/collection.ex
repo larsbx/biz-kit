@@ -1,18 +1,18 @@
-defmodule TololoCore.Products.Collection do
+defmodule EatsbotCore.Products.Collection do
   # @moduledoc """
-  # Represents a delivery of an order in the Tololo system.
+  # Represents a delivery of an order in the Eatsbot system.
 
   # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Products,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Products,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
-  use Gettext, backend: TololoCore.Gettext
+  use Gettext, backend: EatsbotCore.Gettext
 
   graphql do
     type :collection
@@ -30,7 +30,7 @@ defmodule TololoCore.Products.Collection do
 
   postgres do
     table "collections"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
       # reference :state_history, on_delete: :delete
@@ -90,8 +90,8 @@ defmodule TololoCore.Products.Collection do
   end
 
   relationships do
-    many_to_many :products, TololoCore.Products.Product do
-      through TololoCore.Products.CollectionProduct
+    many_to_many :products, EatsbotCore.Products.Product do
+      through EatsbotCore.Products.CollectionProduct
       source_attribute_on_join_resource :product_id
       destination_attribute_on_join_resource :collection_id
     end

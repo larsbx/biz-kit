@@ -1,32 +1,32 @@
-defmodule TololoCore.Products do
+defmodule EatsbotCore.Products do
   @moduledoc """
   Domain that contains resources related to product management.
   """
   use Ash.Domain,
-    otp_app: :tololo,
+    otp_app: :eatsbot,
     extensions: [AshGraphql.Domain, AshAdmin.Domain],
     validate_config_inclusion?: false
 
   admin do
     show?(true)
-    show_resources(TololoCore.Products.Product)
+    show_resources(EatsbotCore.Products.Product)
   end
 
   resources do
-    resource TololoCore.Products.Product
-    resource TololoCore.Products.ProductOption
+    resource EatsbotCore.Products.Product
+    resource EatsbotCore.Products.ProductOption
 
-    resource TololoCore.Products.Variant
-    resource TololoCore.Products.VariantOption
+    resource EatsbotCore.Products.Variant
+    resource EatsbotCore.Products.VariantOption
 
-    resource TololoCore.Products.CollectionProduct
-    resource TololoCore.Products.Collection
+    resource EatsbotCore.Products.CollectionProduct
+    resource EatsbotCore.Products.Collection
 
-    resource TololoCore.Products.Option
-    resource TololoCore.Products.OptionValue
+    resource EatsbotCore.Products.Option
+    resource EatsbotCore.Products.OptionValue
 
-    resource TololoCore.Products.Price
+    resource EatsbotCore.Products.Price
 
-    resource TololoCore.Products.Type
+    resource EatsbotCore.Products.Type
   end
 end

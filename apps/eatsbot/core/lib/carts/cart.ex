@@ -1,14 +1,14 @@
-defmodule TololoCore.Carts.Cart do
+defmodule EatsbotCore.Carts.Cart do
   # @moduledoc """
 
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Carts,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Carts,
     extensions: [AshGraphql.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [Ash.Notifier.PubSub, TololoCore.Kafka.AshNotifier]
+    notifiers: [Ash.Notifier.PubSub, EatsbotCore.Kafka.AshNotifier]
 
   graphql do
     type :cart
@@ -26,7 +26,7 @@ defmodule TololoCore.Carts.Cart do
 
   postgres do
     table "carts"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
   end
 
   field_policies do
@@ -51,9 +51,9 @@ defmodule TololoCore.Carts.Cart do
 
       run fn %{arguments: %{cart_id: cart_id, delivery_input: delivery_input}}, _ ->
         cart =
-          Ash.get!(TololoCore.Carts.Cart, cart_id, load: [cart_lines: [:variant]])
+          Ash.get!(EatsbotCore.Carts.Cart, cart_id, load: [cart_lines: [:variant]])
 
-        %{public_auth_key: public_auth_key} = TololoCore.Deliveries.Delivery.initialize!(
+        %{public_auth_key: public_auth_key} = EatsbotCore.Deliveries.Delivery.initialize!(
           Map.merge(delivery_input, %{delivery_order: cart_to_map(cart)}),
           authorize?: false
         )
@@ -69,7 +69,7 @@ defmodule TololoCore.Carts.Cart do
       argument :notes, :string, default: ""
 
       change fn %{arguments: %{variant_id: variant_id}} = changeset, _context ->
-        variant = Ash.get!(TololoCore.Products.Variant, variant_id, load: [:prices])
+        variant = Ash.get!(EatsbotCore.Products.Variant, variant_id, load: [:prices])
 
         changeset
         |> Ash.Changeset.put_context(:variant, variant)
@@ -133,7 +133,7 @@ defmodule TololoCore.Carts.Cart do
   end
 
   relationships do
-    has_many :cart_lines, TololoCore.Carts.CartLine do
+    has_many :cart_lines, EatsbotCore.Carts.CartLine do
       public? true
     end
   end
@@ -141,7 +141,7 @@ defmodule TololoCore.Carts.Cart do
   calculations do
     calculate :total,
               :money,
-              TololoCore.Carts.TotalCalculation
+              EatsbotCore.Carts.TotalCalculation
   end
 
   aggregates do

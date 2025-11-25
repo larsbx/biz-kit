@@ -1,9 +1,9 @@
-defmodule TololoCore.Products.Attribute do
+defmodule EatsbotCore.Products.Attribute do
   # @moduledoc """
 
   # """
   use Ash.Resource,
-    domain: TololoCore.Products,
+    domain: EatsbotCore.Products,
     extensions: [AshGraphql.Resource],
     data_layer: :embedded
 

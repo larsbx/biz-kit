@@ -1,14 +1,14 @@
-defmodule TololoCore.Products.VariantOption do
+defmodule EatsbotCore.Products.VariantOption do
   @moduledoc """
   Join resource for the variants and options many_to_many relationship.
   """
   use Ash.Resource,
-    domain: TololoCore.Products,
+    domain: EatsbotCore.Products,
     data_layer: AshPostgres.DataLayer
 
   postgres do
     table "variant_option"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
       reference :variant, on_delete: :delete
@@ -21,13 +21,13 @@ defmodule TololoCore.Products.VariantOption do
   end
 
   relationships do
-    belongs_to :variant, TololoCore.Products.Variant do
+    belongs_to :variant, EatsbotCore.Products.Variant do
       primary_key? true
       allow_nil? false
       public? true
     end
 
-    belongs_to :option_value, TololoCore.Products.OptionValue do
+    belongs_to :option_value, EatsbotCore.Products.OptionValue do
       primary_key? true
       allow_nil? false
       public? true

@@ -1,9 +1,9 @@
-defmodule Tololo.Extensions.Prometheus.PromEx do
+defmodule Eatsbot.Extensions.Prometheus.PromEx do
   @moduledoc """
   PromEx module, handles integration with Prometheus.
   """
 
-  use PromEx, otp_app: :tololo
+  use PromEx, otp_app: :eatsbot
 
   alias PromEx.Plugins
 
@@ -13,17 +13,17 @@ defmodule Tololo.Extensions.Prometheus.PromEx do
       # PromEx built in plugins
       Plugins.Application,
       Plugins.Beam,
-      {Plugins.Phoenix, router: TololoWeb.Router, endpoint: TololoWeb.Endpoint},
+      {Plugins.Phoenix, router: EatsbotWeb.Router, endpoint: EatsbotWeb.Endpoint},
       Plugins.Ecto,
       Plugins.PhoenixLiveView,
-      Tololo.Extensions.Prometheus.PromExPlugin
+      Eatsbot.Extensions.Prometheus.PromExPlugin
     ]
   end
 
   @impl true
   def dashboard_assigns do
     [
-      datasource_id: "prometheus-tololo",
+      datasource_id: "prometheus-eatsbot",
       default_selected_interval: "30s"
     ]
   end
@@ -38,7 +38,7 @@ defmodule Tololo.Extensions.Prometheus.PromEx do
       {:prom_ex, "ecto.json"},
       {:prom_ex, "phoenix_live_view.json"},
 
-      {:tololo_extension_prometheus, "/dashboards/deliveries.json"}
+      {:eatsbot_extension_prometheus, "/dashboards/deliveries.json"}
     ]
   end
 end

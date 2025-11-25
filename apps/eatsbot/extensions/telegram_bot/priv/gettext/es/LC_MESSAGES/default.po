@@ -33,8 +33,8 @@ msgstr "No se encontraron entregas activas. Por favor, inicia una usando `/new {
 
 #: lib/telegram/chains/auth.ex:62
 #, elixir-autogen, icu-format
-msgid "Thanks for using Tololo Bot. An Admin will contact you soon.\n"
-msgstr "Gracias por usar Tololo Bot. Un administrador se pondrá en contacto contigo pronto.\n"
+msgid "Thanks for using Eatsbot Bot. An Admin will contact you soon.\n"
+msgstr "Gracias por usar Eatsbot Bot. Un administrador se pondrá en contacto contigo pronto.\n"
 
 #: lib/telegram/chains/set_token.ex:91
 #, elixir-autogen, icu-format

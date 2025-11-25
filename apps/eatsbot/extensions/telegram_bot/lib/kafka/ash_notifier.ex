@@ -1,4 +1,4 @@
-defmodule Tololo.Extensions.TelegramBot.Kafka.AshNotifier do
+defmodule Eatsbot.Extensions.TelegramBot.Kafka.AshNotifier do
   use Ash.Notifier
   alias Ash.Notifier.Notification
 
@@ -25,5 +25,5 @@ defmodule Tololo.Extensions.TelegramBot.Kafka.AshNotifier do
   def notify(_notif), do: nil
 
   defp produce(resource, data),
-    do: TololoCore.Kafka.produce("tololo-telegram", data |> Map.put(:resource, resource))
+    do: EatsbotCore.Kafka.produce("eatsbot-telegram", data |> Map.put(:resource, resource))
 end

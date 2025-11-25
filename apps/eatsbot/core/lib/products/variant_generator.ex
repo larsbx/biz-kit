@@ -1,4 +1,4 @@
-defmodule TololoCore.Products.Product.VariantGenerator do
+defmodule EatsbotCore.Products.Product.VariantGenerator do
   @moduledoc """
   Generates variants for a product, using its options.
   """
@@ -32,7 +32,7 @@ defmodule TololoCore.Products.Product.VariantGenerator do
             end),
           else: []
 
-      TololoCore.Products.Variant
+      EatsbotCore.Products.Variant
       |> Ash.Changeset.for_create(
         :create,
         %{

@@ -1,9 +1,9 @@
-defmodule Tololo.MixProject do
+defmodule Eatsbot.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :tololo,
+      app: :eatsbot,
       version: "1.0.41",
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -22,7 +22,7 @@ defmodule Tololo.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {Tololo.Application, []},
+      mod: {Eatsbot.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -87,19 +87,19 @@ defmodule Tololo.MixProject do
       {:ash_money, "~> 0.1.15 "},
       # {:ash_double_entry, "~> 1.0.12"},
       # Optional Enable Telegram Bot
-      {:tololo_extension_telegram_bot,
+      {:eatsbot_extension_telegram_bot,
        path:
          Path.join(["extensions", "telegram_bot"])
          |> Path.expand()},
-      {:tololo_extension_prometheus,
+      {:eatsbot_extension_prometheus,
        path:
          Path.join(["extensions", "prometheus"])
          |> Path.expand()},
-      {:tololo_extension_kafka,
+      {:eatsbot_extension_kafka,
        path:
          Path.join(["extensions", "kafka"])
          |> Path.expand()},
-      {:tololo_core,
+      {:eatsbot_core,
        path:
          Path.join(["core"])
          |> Path.expand()}
@@ -119,10 +119,10 @@ defmodule Tololo.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ash.setup --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind tololo", "esbuild tololo"],
+      "assets.build": ["tailwind eatsbot", "esbuild eatsbot"],
       "assets.deploy": [
-        "tailwind tololo --minify",
-        "esbuild tololo --minify",
+        "tailwind eatsbot --minify",
+        "esbuild eatsbot --minify",
         "phx.digest"
       ]
     ]

@@ -1,2 +1,2 @@
 ExUnit.start()
-Ecto.Adapters.SQL.Sandbox.mode(Tololo.Repo, :auto)
+Ecto.Adapters.SQL.Sandbox.mode(Eatsbot.Repo, :auto)

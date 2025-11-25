@@ -1,8 +1,4 @@
-defmodule Tololo.Extensions.KafkaTest do
+defmodule Eatsbot.Extensions.KafkaTest do
   use ExUnit.Case
-  doctest TololoExtensionKafka
-
-  # test "greets the world" do
-  #   assert TololoExtensionTelegramBot.hello() == :world
-  # end
+  doctest Eatsbot.Extensions.Kafka
 end

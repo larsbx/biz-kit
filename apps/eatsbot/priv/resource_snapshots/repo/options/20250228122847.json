@@ -92,7 +92,7 @@
     "global": null,
     "strategy": null
   },
-  "repo": "Elixir.Tololo.Repo",
+  "repo": "Elixir.Eatsbot.Repo",
   "schema": null,
   "table": "options"
 }

@@ -1,7 +1,7 @@
-defmodule Tololo.Extensions.Prometheus do
+defmodule Eatsbot.Extensions.Prometheus do
   @moduledoc false
   use Supervisor
-  use TololoCore.Extension
+  use EatsbotCore.Extension
 
   @impl true
   def child_spec(init_arg) do
@@ -20,7 +20,7 @@ defmodule Tololo.Extensions.Prometheus do
   @impl true
   def init(_) do
     children = [
-      Tololo.Extensions.Prometheus.PromEx
+      Eatsbot.Extensions.Prometheus.PromEx
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
@@ -29,7 +29,7 @@ defmodule Tololo.Extensions.Prometheus do
   @impl true
   def endpoint() do
     quote do
-      plug PromEx.Plug, prom_ex_module: Tololo.Extensions.Prometheus.PromEx
+      plug PromEx.Plug, prom_ex_module: Eatsbot.Extensions.Prometheus.PromEx
     end
   end
 end

@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.ReferenceDelete do
+defmodule Eatsbot.Repo.Migrations.ReferenceDelete do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

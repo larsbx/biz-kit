@@ -1,14 +1,14 @@
-defmodule TololoCore.Products.Type do
+defmodule EatsbotCore.Products.Type do
   # @moduledoc """
 
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Products,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Products,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
   graphql do
     type :type
@@ -16,7 +16,7 @@ defmodule TololoCore.Products.Type do
 
   postgres do
     table "types"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
   end
 
   field_policies do
@@ -54,7 +54,7 @@ defmodule TololoCore.Products.Type do
       public? true
     end
 
-    attribute :attributes, {:array, TololoCore.Products.Attribute} do
+    attribute :attributes, {:array, EatsbotCore.Products.Attribute} do
       public? true
     end
 

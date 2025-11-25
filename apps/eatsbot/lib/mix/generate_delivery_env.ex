@@ -24,7 +24,7 @@ defmodule Mix.Tasks.Generate.Delivery.Env do
     Mix.Task.run("app.start")
 
     %{id: id, public_auth_key: public_auth_key, private_auth_key: private_auth_key} =
-      TololoCore.Deliveries.Delivery.empty!(authorize?: false)
+      EatsbotCore.Deliveries.Delivery.empty!(authorize?: false)
 
     output =
       EEx.eval_string(@template,

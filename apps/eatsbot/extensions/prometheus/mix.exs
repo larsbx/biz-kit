@@ -1,9 +1,9 @@
-defmodule Tololo.Extensions.Prometheus.MixProject do
+defmodule Eatsbot.Extensions.Prometheus.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :tololo_extension_prometheus,
+      app: :eatsbot_extension_prometheus,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -21,7 +21,7 @@ defmodule Tololo.Extensions.Prometheus.MixProject do
     [
       {:phoenix, "~> 1.7.18"},
       {:prom_ex, "~> 1.11.0"},
-      {:tololo_core,
+      {:eatsbot_core,
        path:
          Path.join(["..", "..", "core"])
          |> Path.expand()}

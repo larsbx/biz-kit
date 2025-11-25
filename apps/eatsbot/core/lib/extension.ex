@@ -1,4 +1,4 @@
-defmodule TololoCore.Extension do
+defmodule EatsbotCore.Extension do
   @moduledoc """
   Defines the extension behaviour.
   """
@@ -8,13 +8,13 @@ defmodule TololoCore.Extension do
   @callback child_spec(any()) :: Supervisor.child_spec()
   # @callback payment()
 
-  @extensions Application.compile_env(:tololo, :extensions)
+  @extensions Application.compile_env(:eatsbot, :extensions)
 
   defmacro __using__([]) do
     quote do
-      @behaviour TololoCore.Extension
+      @behaviour EatsbotCore.Extension
 
-      @before_compile TololoCore.Extension
+      @before_compile EatsbotCore.Extension
     end
   end
 

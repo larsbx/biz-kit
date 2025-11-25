@@ -1,19 +1,19 @@
-defmodule Tololo.Extensions.TelegramBot.Done do
+defmodule Eatsbot.Extensions.TelegramBot.Done do
   @moduledoc false
 
-  use Gettext, backend: Tololo.Extensions.TelegramBot.Gettext
+  use Gettext, backend: Eatsbot.Extensions.TelegramBot.Gettext
   use Telegex.Chain, {:command, :done}
 
   require Logger
 
   @command "/done"
 
-  alias Tololo.Extensions.TelegramBot.Message
+  alias Eatsbot.Extensions.TelegramBot.Message
   alias Telegex.Type.{KeyboardButton}
-  alias TololoCore.Deliveries.Delivery
+  alias EatsbotCore.Deliveries.Delivery
 
-  @actor TololoCore.Deliveries.Actors.private()
-  @min_done_distance Application.compile_env(:tololo, :min_done_distance_meters)
+  @actor EatsbotCore.Deliveries.Actors.private()
+  @min_done_distance Application.compile_env(:eatsbot, :min_done_distance_meters)
 
   @impl true
   def match?(%{text: @command, chat: %{type: "private"}}, _context), do: true
@@ -149,5 +149,5 @@ defmodule Tololo.Extensions.TelegramBot.Done do
          to_latitude: to_lat,
          to_longitude: to_lng
        }),
-       do: TololoCore.Location.distance({current_lat, current_lng}, {to_lat, to_lng})
+       do: EatsbotCore.Location.distance({current_lat, current_lng}, {to_lat, to_lng})
 end

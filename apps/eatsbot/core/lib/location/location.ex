@@ -1,4 +1,4 @@
-defmodule TololoCore.Location do
+defmodule EatsbotCore.Location do
   @moduledoc """
   Contains location functions and useful data structures for geoposition
   """

@@ -1,10 +1,10 @@
-defmodule Tololo.Extensions.TelegramBot.Auth do
+defmodule Eatsbot.Extensions.TelegramBot.Auth do
   @moduledoc false
 
-  use Gettext, backend: Tololo.Extensions.TelegramBot.Gettext
+  use Gettext, backend: Eatsbot.Extensions.TelegramBot.Gettext
   use Telegex.Chain
 
-  @actor TololoCore.Deliveries.Actors.private()
+  @actor EatsbotCore.Deliveries.Actors.private()
 
   # extract the message value
   @impl true
@@ -25,7 +25,7 @@ defmodule Tololo.Extensions.TelegramBot.Auth do
   def handle(%{from: %{id: user_id}}, context) do
     string_id = Integer.to_string(user_id)
 
-    case Ash.get(Tololo.Extensions.TelegramBot.Ash.User, string_id,
+    case Ash.get(Eatsbot.Extensions.TelegramBot.Ash.User, string_id,
            actor: @actor,
            load: :deliveries
          ) do
@@ -45,7 +45,7 @@ defmodule Tololo.Extensions.TelegramBot.Auth do
 
   defp init_user(context, user_id) do
     Ash.create!(
-      Tololo.Extensions.TelegramBot.Ash.User,
+      Eatsbot.Extensions.TelegramBot.Ash.User,
       %{id: user_id, status: :pending, deliveries_id: []},
       action: :create
     )
@@ -57,10 +57,10 @@ defmodule Tololo.Extensions.TelegramBot.Auth do
     %{
       context
       | payload:
-          Tololo.Extensions.TelegramBot.Message.send_message(
+          Eatsbot.Extensions.TelegramBot.Message.send_message(
             user_id,
             gettext("""
-            Thanks for using Tololo Bot. An Admin will contact you soon.
+            Thanks for using Eatsbot Bot. An Admin will contact you soon.
             """)
           )
     }
@@ -70,7 +70,7 @@ defmodule Tololo.Extensions.TelegramBot.Auth do
     %{
       context
       | payload:
-          Tololo.Extensions.TelegramBot.Message.send_message(
+          Eatsbot.Extensions.TelegramBot.Message.send_message(
             user_id,
             gettext("""
             You don't have access to this bot.

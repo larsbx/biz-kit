@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.Users do
+defmodule Eatsbot.Repo.Migrations.Users do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

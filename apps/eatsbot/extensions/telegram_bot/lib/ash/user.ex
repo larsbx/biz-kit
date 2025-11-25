@@ -1,21 +1,21 @@
-defmodule Tololo.Extensions.TelegramBot.Ash.User do
+defmodule Eatsbot.Extensions.TelegramBot.Ash.User do
   @moduledoc """
   Represents a delivery person user in the Telegram bot system. This resource is responsible for handling the state of interactions between the delivery person and the Telegram bot.
   """
 
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: Tololo.Extensions.TelegramBot.Ash.Users,
+    otp_app: :eatsbot,
+    domain: Eatsbot.Extensions.TelegramBot.Ash.Users,
     extensions: [AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
-    notifiers: [Tololo.Extensions.TelegramBot.Kafka.AshNotifier]
+    notifiers: [Eatsbot.Extensions.TelegramBot.Kafka.AshNotifier]
 
   admin do
   end
 
   postgres do
     table "telegram_bot"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
   end
 
   code_interface do
@@ -95,7 +95,7 @@ defmodule Tololo.Extensions.TelegramBot.Ash.User do
     end
 
     relationships do
-      has_many :deliveries, TololoCore.Deliveries.Delivery do
+      has_many :deliveries, EatsbotCore.Deliveries.Delivery do
         no_attributes? true
 
         filter expr(id in parent(deliveries_id) and state == :In_Delivery)
@@ -110,7 +110,7 @@ defmodule Tololo.Extensions.TelegramBot.Ash.User do
   end
 end
 
-defimpl Jason.Encoder, for: Tololo.Extensions.TelegramBot.Ash.User do
+defimpl Jason.Encoder, for: Eatsbot.Extensions.TelegramBot.Ash.User do
   def encode(value, opts) do
     Jason.Encode.map(
       Map.take(value, [

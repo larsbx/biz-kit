@@ -1,9 +1,9 @@
-defmodule Tololo.Extensions.TelegramBot.MixProject do
+defmodule Eatsbot.Extensions.TelegramBot.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :tololo_extension_telegram_bot,
+      app: :eatsbot_extension_telegram_bot,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -31,7 +31,7 @@ defmodule Tololo.Extensions.TelegramBot.MixProject do
       {:ash, "~> 3.0"},
       {:ash_admin, "~> 0.12.6"},
       {:phoenix, "~> 1.7.18"},
-      {:tololo_core,
+      {:eatsbot_core,
        path:
          Path.join(["..", "..", "core"])
          |> Path.expand()},

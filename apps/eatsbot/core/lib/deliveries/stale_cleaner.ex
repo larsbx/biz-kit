@@ -1,11 +1,11 @@
-defmodule TololoCore.Deliveries.StaleCleaner do
+defmodule EatsbotCore.Deliveries.StaleCleaner do
   use GenServer
   require Logger
-  alias TololoCore.Deliveries
-  alias TololoCore.Deliveries.Delivery
+  alias EatsbotCore.Deliveries
+  alias EatsbotCore.Deliveries.Delivery
 
   @actor Deliveries.Actors.admin()
-  @days Application.compile_env(:tololo, :days_for_stale, 2)
+  @days Application.compile_env(:eatsbot, :days_for_stale, 2)
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)

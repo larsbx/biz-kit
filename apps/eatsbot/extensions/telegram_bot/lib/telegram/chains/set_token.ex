@@ -1,12 +1,12 @@
-defmodule Tololo.Extensions.TelegramBot.SetToken do
+defmodule Eatsbot.Extensions.TelegramBot.SetToken do
   @moduledoc false
-  alias Tololo.Extensions.TelegramBot
-  alias TololoCore.Deliveries
-  alias TololoCore.Deliveries.Delivery
-  alias Tololo.Extensions.TelegramBot.Ash.User
+  alias Eatsbot.Extensions.TelegramBot
+  alias EatsbotCore.Deliveries
+  alias EatsbotCore.Deliveries.Delivery
+  alias Eatsbot.Extensions.TelegramBot.Ash.User
   alias Telegex.Type.{KeyboardButton}
 
-  use Gettext, backend: Tololo.Extensions.TelegramBot.Gettext
+  use Gettext, backend: Eatsbot.Extensions.TelegramBot.Gettext
 
   use Telegex.Chain, {:command, :new}
   @command "/new"
@@ -143,12 +143,12 @@ defmodule Tololo.Extensions.TelegramBot.SetToken do
       )
 end
 
-defmodule Tololo.Extensions.TelegramBot.SetTokenCallback do
+defmodule Eatsbot.Extensions.TelegramBot.SetTokenCallback do
   @moduledoc false
 
-  alias TololoCore.Deliveries.Delivery
-  alias TololoCore.Deliveries
-  alias Tololo.Extensions.TelegramBot
+  alias EatsbotCore.Deliveries.Delivery
+  alias EatsbotCore.Deliveries
+  alias Eatsbot.Extensions.TelegramBot
 
   use Telegex.Chain, {:callback_query, prefix: "pickup:"}
   @actor Deliveries.Actors.private()

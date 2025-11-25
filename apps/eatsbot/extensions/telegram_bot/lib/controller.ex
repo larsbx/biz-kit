@@ -1,4 +1,4 @@
-defmodule Tololo.Extensions.TelegramBot.Controller do
+defmodule Eatsbot.Extensions.TelegramBot.Controller do
   # TODO: Implement proper docs
   @moduledoc false
 
@@ -6,7 +6,7 @@ defmodule Tololo.Extensions.TelegramBot.Controller do
 
   use Phoenix.Controller
 
-  alias Tololo.Extensions.TelegramBot.Handler
+  alias Eatsbot.Extensions.TelegramBot.Handler
 
   def update(conn, params) do
     params = atomize_keys(params)

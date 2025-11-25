@@ -1,7 +1,7 @@
-defmodule Tololo.Extensions.Kafka do
+defmodule Eatsbot.Extensions.Kafka do
   @moduledoc false
   use Supervisor
-  use TololoCore.Extension
+  use EatsbotCore.Extension
 
   @impl true
   def child_spec(init_arg) do
@@ -14,7 +14,7 @@ defmodule Tololo.Extensions.Kafka do
   end
 
   def start_link(_init_arg) do
-    Application.put_env(:tololo, :kafka_driver, Tololo.Extensions.Kafka.Driver)
+    Application.put_env(:eatsbot, :kafka_driver, Eatsbot.Extensions.Kafka.Driver)
     Supervisor.start_link(__MODULE__, nil, name: __MODULE__)
     KafkaEx.create_worker(:kafka_ex)
   end
@@ -22,7 +22,7 @@ defmodule Tololo.Extensions.Kafka do
   @impl true
   def init(_) do
     children = [
-      {Tololo.Extensions.Kafka.Supervisor, max_restarts: 10, max_seconds: 60}
+      {Eatsbot.Extensions.Kafka.Supervisor, max_restarts: 10, max_seconds: 60}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)

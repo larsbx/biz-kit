@@ -1,8 +1,4 @@
-defmodule Tololo.Extensions.TelegramBotTest do
+defmodule Eatsbot.Extensions.TelegramBotTest do
   use ExUnit.Case
-  doctest TololoExtensionTelegramBot
-
-  # test "greets the world" do
-  #   assert TololoExtensionTelegramBot.hello() == :world
-  # end
+  doctest Eatsbot.Extensions.TelegramBot
 end

@@ -1,4 +1,4 @@
-defmodule Tololo.Extensions.Kafka.Supervisor do
+defmodule Eatsbot.Extensions.Kafka.Supervisor do
   @moduledoc """
   Wrapper needed to manually pass the KafkaEx supervisor to the main app's supervision tree.
   """

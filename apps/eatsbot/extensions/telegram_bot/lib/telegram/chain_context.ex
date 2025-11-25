@@ -1,4 +1,4 @@
-defmodule Tololo.Extensions.TelegramBot.ChainContext do
+defmodule Eatsbot.Extensions.TelegramBot.ChainContext do
   @moduledoc false
 
   use Telegex.Chain.Context
@@ -7,6 +7,6 @@ defmodule Tololo.Extensions.TelegramBot.ChainContext do
     {:chat_id, integer},
     {:user_id, integer},
     {:chat_title, String.t()},
-    {:user_resource, Tololo.Extensions.TelegramBot.Ash.User.t()}
+    {:user_resource, Eatsbot.Extensions.TelegramBot.Ash.User.t()}
   ])
 end

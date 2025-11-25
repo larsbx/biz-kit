@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.ValueIdentity do
+defmodule Eatsbot.Repo.Migrations.ValueIdentity do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

@@ -1,17 +1,17 @@
-defmodule TololoCore.Brands.Branch do
+defmodule EatsbotCore.Brands.Branch do
   @moduledoc """
   Define the data fields for storing store branch information.
   """
 
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Brands,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Brands,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
-  use Gettext, backend: TololoCore.Gettext
+  use Gettext, backend: EatsbotCore.Gettext
   alias Ash.Changeset
 
   graphql do
@@ -30,7 +30,7 @@ defmodule TololoCore.Brands.Branch do
 
   postgres do
     table "branches"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
     end
@@ -96,7 +96,7 @@ defmodule TololoCore.Brands.Branch do
   end
 
   relationships do
-    belongs_to :brand, TololoCore.Brands.Brand do
+    belongs_to :brand, EatsbotCore.Brands.Brand do
       public? true
     end
   end

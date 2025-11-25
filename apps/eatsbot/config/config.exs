@@ -7,7 +7,7 @@
 # General application configuration
 import Config
 
-config :ex_cldr, default_backend: Tololo.Cldr
+config :ex_cldr, default_backend: Eatsbot.Cldr
 
 config :ash,
   allow_forbidden_field_for_relationships_by_default?: true,
@@ -18,7 +18,7 @@ config :ash,
   known_types: [AshMoney.Types.Money],
   custom_types: [money: AshMoney.Types.Money]
 
-# custom_types: [ticket_status: Tololo.Support.Ticket.Types.Status]
+# custom_types: [ticket_status: Eatsbot.Support.Ticket.Types.Status]
 
 config :ash, :tracer, [OpentelemetryAsh]
 
@@ -55,39 +55,39 @@ config :spark,
     ]
   ]
 
-config :tololo,
-  ecto_repos: [Tololo.Repo],
+config :eatsbot,
+  ecto_repos: [Eatsbot.Repo],
   generators: [timestamp_type: :utc_datetime],
   extensions: [
-    Tololo.Extensions.TelegramBot,
-    Tololo.Extensions.Prometheus
+    Eatsbot.Extensions.TelegramBot,
+    Eatsbot.Extensions.Prometheus
   ],
-  pubsub: Tololo.PubSub,
+  pubsub: Eatsbot.PubSub,
   geocoding_endpoint: "https://nominatim.openstreetmap.org/search",
   # set to 0 to disable stale cleaner
   days_for_stale: 2,
   min_done_distance_meters: 50,
   ash_domains: [
-    TololoCore.Deliveries,
-    TololoCore.Products,
-    TololoCore.Carts,
-    TololoCore.Brands,
-    Tololo.Accounts,
-    Tololo.Extensions.TelegramBot.Ash.Users
+    EatsbotCore.Deliveries,
+    EatsbotCore.Products,
+    EatsbotCore.Carts,
+    EatsbotCore.Brands,
+    Eatsbot.Accounts,
+    Eatsbot.Extensions.TelegramBot.Ash.Users
   ],
   from_email: {"noreply", "noreply@example.com"},
   magic_link_subject: "Your login link"
 
 # Configures the endpoint
-config :tololo, TololoWeb.Endpoint,
+config :eatsbot, EatsbotWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: TololoWeb.ErrorHTML, json: TololoWeb.ErrorJSON],
-    root_layout: {TololoWeb.Layouts, "root.html"},
-    layout: {TololoWeb.Layouts, "app.html"}
+    formats: [html: EatsbotWeb.ErrorHTML, json: EatsbotWeb.ErrorJSON],
+    root_layout: {EatsbotWeb.Layouts, "root.html"},
+    layout: {EatsbotWeb.Layouts, "app.html"}
   ],
-  pubsub_server: Tololo.PubSub,
+  pubsub_server: Eatsbot.PubSub,
   live_view: [signing_salt: "x8OTxxKq"]
 
 # Configures the mailer
@@ -97,12 +97,12 @@ config :tololo, TololoWeb.Endpoint,
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
-config :tololo, Tololo.Mailer, adapter: Swoosh.Adapters.Local
+config :eatsbot, Eatsbot.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",
-  tololo: [
+  eatsbot: [
     args:
       ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
     cd: Path.expand("../assets", __DIR__),
@@ -112,7 +112,7 @@ config :esbuild,
 # Configure tailwind (the version is required)
 config :tailwind,
   version: "3.4.3",
-  tololo: [
+  eatsbot: [
     args: ~w(
       --config=tailwind.config.js
       --input=css/app.css

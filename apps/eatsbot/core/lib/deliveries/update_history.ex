@@ -1,13 +1,13 @@
-defmodule TololoCore.Deliveries.UpdateHistory do
+defmodule EatsbotCore.Deliveries.UpdateHistory do
   @moduledoc """
   Checks validity of state transition and also adds it to the state history.
   """
 
-  alias TololoCore.Deliveries.Transitions
-  alias TololoCore.Deliveries.DeliveryStateChanges
+  alias EatsbotCore.Deliveries.Transitions
+  alias EatsbotCore.Deliveries.DeliveryStateChanges
 
   use Ash.Resource.Change
-  use Gettext, backend: TololoCore.Gettext
+  use Gettext, backend: EatsbotCore.Gettext
 
   @impl true
   @spec change(Ash.Changeset.t(), term(), term()) :: nil

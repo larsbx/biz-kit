@@ -1,6 +1,6 @@
-defmodule Tololo.Extensions.TelegramBot.ChainHandler do
+defmodule Eatsbot.Extensions.TelegramBot.ChainHandler do
   @moduledoc false
-  alias Tololo.Extensions.TelegramBot
+  alias Eatsbot.Extensions.TelegramBot
   use Telegex.Chain.Handler
 
   pipeline([
@@ -8,6 +8,6 @@ defmodule Tololo.Extensions.TelegramBot.ChainHandler do
     TelegramBot.ReceiveLocation,
     TelegramBot.SetToken,
     TelegramBot.SetTokenCallback,
-    Tololo.Extensions.TelegramBot.Done
+    Eatsbot.Extensions.TelegramBot.Done
   ])
 end

@@ -1,12 +1,12 @@
-defmodule Tololo.Extensions.TelegramBot.ReceiveLocation do
+defmodule Eatsbot.Extensions.TelegramBot.ReceiveLocation do
   @moduledoc false
-  alias Tololo.Extensions.TelegramBot
-  alias TololoCore.Deliveries
+  alias Eatsbot.Extensions.TelegramBot
+  alias EatsbotCore.Deliveries
 
-  use Gettext, backend: Tololo.Extensions.TelegramBot.Gettext
+  use Gettext, backend: Eatsbot.Extensions.TelegramBot.Gettext
   use Telegex.Chain, :edited_message
 
-  @actor TololoCore.Deliveries.Actors.private()
+  @actor EatsbotCore.Deliveries.Actors.private()
 
   @impl true
   def match?(%{chat: %{type: "private"}, location: _location}, _context), do: true

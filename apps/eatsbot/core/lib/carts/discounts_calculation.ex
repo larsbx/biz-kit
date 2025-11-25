@@ -1,4 +1,4 @@
-defmodule TololoCore.Carts.DiscountsCalculation do
+defmodule EatsbotCore.Carts.DiscountsCalculation do
   @moduledoc """
   Discounts logic for the product management system. Includes an Ash calculation and a discount engine. Returns the lowest price after applying rules instead of combining rules. Returns normal price if there's no applicable rules.
   """

@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.InstallAshMoneyV520250304111337 do
+defmodule Eatsbot.Repo.Migrations.InstallAshMoneyV520250304111337 do
   @moduledoc """
   Installs any extensions that are mentioned in the repo's `installed_extensions/0` callback
 

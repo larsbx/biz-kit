@@ -17,7 +17,7 @@ erl_crash.dump
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-tololo_extension_telegram_bot-*.tar
+eatsbot_extension_telegram_bot-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/

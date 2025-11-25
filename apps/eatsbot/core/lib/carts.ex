@@ -1,14 +1,14 @@
-defmodule TololoCore.Carts do
+defmodule EatsbotCore.Carts do
   @moduledoc """
   Domain that contains resources related to the cart system.
   """
   use Ash.Domain,
-    otp_app: :tololo,
+    otp_app: :eatsbot,
     extensions: [AshGraphql.Domain],
     validate_config_inclusion?: false
 
   resources do
-    resource TololoCore.Carts.Cart
-    resource TololoCore.Carts.CartLine
+    resource EatsbotCore.Carts.Cart
+    resource EatsbotCore.Carts.CartLine
   end
 end

@@ -1,9 +1,9 @@
-defmodule Tololo.Extensions.Kafka.Driver do
+defmodule Eatsbot.Extensions.Kafka.Driver do
   @moduledoc """
   Default driver implementation for Kafka.
   """
 
-  @behaviour TololoCore.Kafka
+  @behaviour EatsbotCore.Kafka
 
   @spec produce(String.t(), String.t(), term()) :: :ok | {:error, term()}
   def produce(topic, message, opts \\ []) do

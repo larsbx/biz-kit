@@ -1,4 +1,4 @@
-defmodule TololoCore.Kafka.AshNotifier do
+defmodule EatsbotCore.Kafka.AshNotifier do
   use Ash.Notifier
   alias Ash.Notifier.Notification
 
@@ -37,5 +37,5 @@ defmodule TololoCore.Kafka.AshNotifier do
   def notify(_notif), do: nil
 
   defp produce(resource, data),
-    do: TololoCore.Kafka.produce("tololo-deliveries", data |> Map.put(:resource, resource))
+    do: EatsbotCore.Kafka.produce("eatsbot-deliveries", data |> Map.put(:resource, resource))
 end

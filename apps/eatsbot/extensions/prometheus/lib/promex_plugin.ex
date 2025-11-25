@@ -1,10 +1,10 @@
-defmodule Tololo.Extensions.Prometheus.PromExPlugin do
+defmodule Eatsbot.Extensions.Prometheus.PromExPlugin do
   use PromEx.Plugin
 
   @impl true
   def event_metrics(_opts) do
     Event.build(
-      :tololo_deliveries,
+      :eatsbot_deliveries,
       [
         counter(
           [:ash, :deliveries, :create, :count],

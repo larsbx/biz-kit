@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Generate.Delivery.EnvTest do
-  use Tololo.DataCase, async: false
+  use Eatsbot.DataCase, async: false
   import ExUnit.CaptureIO
 
   setup do

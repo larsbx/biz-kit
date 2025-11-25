@@ -1,14 +1,14 @@
-defmodule TololoCore.Products.OptionValue do
+defmodule EatsbotCore.Products.OptionValue do
   # @moduledoc """
 
   # """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Products,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Products,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
   graphql do
     type :option_value
@@ -16,7 +16,7 @@ defmodule TololoCore.Products.OptionValue do
 
   postgres do
     table "option_values"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
       reference :variant, on_delete: :delete
@@ -62,11 +62,11 @@ defmodule TololoCore.Products.OptionValue do
   end
 
   relationships do
-    belongs_to :option, TololoCore.Products.Option do
+    belongs_to :option, EatsbotCore.Products.Option do
       public? true
     end
 
-    belongs_to :variant, TololoCore.Products.Variant do
+    belongs_to :variant, EatsbotCore.Products.Variant do
       public? true
     end
 

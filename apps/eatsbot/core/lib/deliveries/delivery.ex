@@ -1,21 +1,21 @@
-defmodule TololoCore.Deliveries.Delivery do
+defmodule EatsbotCore.Deliveries.Delivery do
   @moduledoc """
-  Represents a delivery of an order in the Tololo system.
+  Represents a delivery of an order in the Eatsbot system.
 
   This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
   """
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Deliveries,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Deliveries,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [Ash.Notifier.PubSub, TololoCore.Kafka.AshNotifier]
+    notifiers: [Ash.Notifier.PubSub, EatsbotCore.Kafka.AshNotifier]
 
-  use Gettext, backend: TololoCore.Gettext
+  use Gettext, backend: EatsbotCore.Gettext
 
-  alias TololoCore.Location
-  @min_done_distance Application.compile_env(:tololo, :min_done_distance_meters)
+  alias EatsbotCore.Location
+  @min_done_distance Application.compile_env(:eatsbot, :min_done_distance_meters)
 
   graphql do
     type :delivery
@@ -50,7 +50,7 @@ defmodule TololoCore.Deliveries.Delivery do
 
   postgres do
     table "deliveries"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
       reference :state_history, on_delete: :delete
@@ -120,7 +120,7 @@ defmodule TololoCore.Deliveries.Delivery do
       filter expr(state != "Stale_Delivery_With_Problems")
       filter expr(state != "Stale_Delivery_Done")
 
-      days = Application.compile_env(:tololo, :days_for_stale, 2)
+      days = Application.compile_env(:eatsbot, :days_for_stale, 2)
       filter expr(inserted_at < ago(^days, :day))
     end
 
@@ -160,8 +160,8 @@ defmodule TololoCore.Deliveries.Delivery do
       ]
 
       change fn changeset, _context ->
-        {lat, lng} = Application.get_env(:tololo, :from_location, {0, 0})
-        name = Application.get_env(:tololo, :business_name, "A business")
+        {lat, lng} = Application.get_env(:eatsbot, :from_location, {0, 0})
+        name = Application.get_env(:eatsbot, :business_name, "A business")
 
         changeset
         |> Ash.Changeset.change_attributes(%{
@@ -195,7 +195,7 @@ defmodule TololoCore.Deliveries.Delivery do
       accept [:state]
       require_atomic? false
 
-      change TololoCore.Deliveries.UpdateHistory
+      change EatsbotCore.Deliveries.UpdateHistory
     end
 
     update :update_delivery_person do
@@ -241,9 +241,9 @@ defmodule TololoCore.Deliveries.Delivery do
         |> Ash.Changeset.after_transaction(fn
           _changeset, {:ok, result} ->
             {:ok, new_state} = Ash.Changeset.fetch_change(changeset, :state)
-            comment = TololoCore.Deliveries.Transitions.message(old_state, new_state)
+            comment = EatsbotCore.Deliveries.Transitions.message(old_state, new_state)
 
-            TololoCore.Deliveries.DeliveryStateChanges.add_to_state_history!(
+            EatsbotCore.Deliveries.DeliveryStateChanges.add_to_state_history!(
               id,
               old_state,
               new_state,
@@ -284,7 +284,7 @@ defmodule TololoCore.Deliveries.Delivery do
   end
 
   pub_sub do
-    module TololoWeb.Endpoint
+    module EatsbotWeb.Endpoint
 
     prefix "delivery"
     publish :update_location, ["updated", :id]
@@ -398,13 +398,13 @@ defmodule TololoCore.Deliveries.Delivery do
   end
 
   relationships do
-    has_many :state_history, TololoCore.Deliveries.DeliveryStateChanges do
+    has_many :state_history, EatsbotCore.Deliveries.DeliveryStateChanges do
       public? true
     end
   end
 end
 
-defimpl Jason.Encoder, for: TololoCore.Deliveries.Delivery do
+defimpl Jason.Encoder, for: EatsbotCore.Deliveries.Delivery do
   def encode(value, opts) do
     Jason.Encode.map(
       Map.take(value, [

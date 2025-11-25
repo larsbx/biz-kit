@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.UserAdminField do
+defmodule Eatsbot.Repo.Migrations.UserAdminField do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

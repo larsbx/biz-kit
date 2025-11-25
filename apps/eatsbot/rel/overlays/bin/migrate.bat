@@ -1,1 +1,1 @@
-call "%~dp0\tololo" eval Tololo.Release.migrate
+call "%~dp0\eatsbot" eval Eatsbot.Release.migrate

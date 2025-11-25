@@ -6,5 +6,5 @@ config :telegex, caller_adapter: Finch
 config :telegex, hook_adapter: Bandit
 
 # Note: webhook_url must be a full URL, such as https://your.domain.com/telegram, where updates_hook path is fixed.
-config :tololo, Tololo.Extensions.TelegramBot.Handler,
+config :eatsbot, Eatsbot.Extensions.TelegramBot.Handler,
   webhook_url: System.get_env("TELEGRAM_WEBHOOK") || ""

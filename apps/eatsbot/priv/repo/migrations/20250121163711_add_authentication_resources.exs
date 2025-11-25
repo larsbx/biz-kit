@@ -1,4 +1,4 @@
-defmodule Tololo.Repo.Migrations.AddAuthenticationResources do
+defmodule Eatsbot.Repo.Migrations.AddAuthenticationResources do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

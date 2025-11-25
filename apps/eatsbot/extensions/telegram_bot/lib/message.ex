@@ -1,4 +1,4 @@
-defmodule Tololo.Extensions.TelegramBot.Message do
+defmodule Eatsbot.Extensions.TelegramBot.Message do
   @moduledoc """
   Functions that help build messages in MarkdownV2 for Telegex.
   """

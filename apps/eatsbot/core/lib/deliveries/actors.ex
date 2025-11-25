@@ -1,4 +1,4 @@
-defmodule TololoCore.Deliveries.Actors do
+defmodule EatsbotCore.Deliveries.Actors do
   @moduledoc """
   Defines actors used in the Deliveries domain.
   """

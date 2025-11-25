@@ -33,7 +33,7 @@ msgstr ""
 
 #: lib/telegram/chains/auth.ex:62
 #, elixir-autogen, icu-format
-msgid "Thanks for using Tololo Bot. An Admin will contact you soon.\n"
+msgid "Thanks for using Eatsbot Bot. An Admin will contact you soon.\n"
 msgstr ""
 
 #: lib/telegram/chains/set_token.ex:91

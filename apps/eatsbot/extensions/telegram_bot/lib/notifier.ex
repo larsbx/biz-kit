@@ -1,8 +1,8 @@
-defmodule Tololo.Extensions.TelegramBot.Notifier do
+defmodule Eatsbot.Extensions.TelegramBot.Notifier do
   use GenServer
-  use Gettext, backend: Tololo.Extensions.TelegramBot.Gettext
+  use Gettext, backend: Eatsbot.Extensions.TelegramBot.Gettext
 
-  alias Tololo.Extensions.TelegramBot
+  alias Eatsbot.Extensions.TelegramBot
   alias Phoenix.PubSub
   @topic "delivery:updated"
 
@@ -14,7 +14,7 @@ defmodule Tololo.Extensions.TelegramBot.Notifier do
 
   @impl true
   def init(_) do
-    pubsub = Application.fetch_env!(:tololo, :pubsub)
+    pubsub = Application.fetch_env!(:eatsbot, :pubsub)
     PubSub.subscribe(pubsub, @topic)
     {:ok, nil}
   end
@@ -90,7 +90,7 @@ defmodule Tololo.Extensions.TelegramBot.Notifier do
         },
         state
       ) do
-    Tololo.Extensions.TelegramBot.Ash.User.get_available_users!()
+    Eatsbot.Extensions.TelegramBot.Ash.User.get_available_users!()
     |> Enum.each(fn %{id: user_id} ->
       Telegex.send_message(
         user_id,

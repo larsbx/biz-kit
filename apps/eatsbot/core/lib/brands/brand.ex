@@ -1,17 +1,17 @@
-defmodule TololoCore.Brands.Brand do
+defmodule EatsbotCore.Brands.Brand do
   @moduledoc """
   Define the data fields for storing store brand information.
   """
 
   use Ash.Resource,
-    otp_app: :tololo,
-    domain: TololoCore.Brands,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Brands,
     extensions: [AshGraphql.Resource, AshAdmin.Resource],
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [TololoCore.Kafka.AshNotifier]
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
 
-  use Gettext, backend: TololoCore.Gettext
+  use Gettext, backend: EatsbotCore.Gettext
   alias Ash.Changeset
 
   graphql do
@@ -30,7 +30,7 @@ defmodule TololoCore.Brands.Brand do
 
   postgres do
     table "brands"
-    repo Tololo.Repo
+    repo Eatsbot.Repo
 
     references do
     end
@@ -73,7 +73,7 @@ defmodule TololoCore.Brands.Brand do
       public? true
     end
 
-    # Define a Headquarters Tololo URL to obtain
+    # Define a Headquarters Eatsbot URL to obtain
     # Common brand and products information
     attribute :hq_url, :string do
       allow_nil? true
@@ -85,7 +85,7 @@ defmodule TololoCore.Brands.Brand do
   end
 
   relationships do
-    has_one :branch, TololoCore.Brands.Branch do
+    has_one :branch, EatsbotCore.Brands.Branch do
       public? true
     end
   end

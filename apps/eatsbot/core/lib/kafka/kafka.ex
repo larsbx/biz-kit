@@ -1,10 +1,10 @@
-defmodule TololoCore.Kafka do
+defmodule EatsbotCore.Kafka do
   @moduledoc """
   A kafka interface to send messages.
   """
 
   # env put by Kafka extension
-  defp driver, do: Application.get_env(:tololo, :kafka_driver, TololoCore.Kafka.Noop)
+  defp driver, do: Application.get_env(:eatsbot, :kafka_driver, EatsbotCore.Kafka.Noop)
 
   @doc """
   Produces a message to Kafka. Should be implemented by drivers.
