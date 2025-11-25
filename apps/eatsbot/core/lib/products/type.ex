@@ -1,7 +1,23 @@
 defmodule EatsbotCore.Products.Type do
-  # @moduledoc """
+  @moduledoc """
+  Represents a product type in the Eatsbot e-commerce system.
 
-  # """
+  Product types define categories of products with shared attributes. For example,
+  "Pizza" might be a type with attributes like "diameter" and "weight", while
+  "T-Shirt" might have attributes like "fabric" and "fit".
+
+  ## Key Features
+  - Defines reusable attribute schemas for products
+  - Products can belong to one type
+  - Attributes define metadata structure (e.g., weight, dimensions, material)
+  - Helps organize products into logical categories
+
+  ## Use Cases
+  - "Food Items" type with nutritional attributes
+  - "Clothing" type with size and material attributes
+  - "Electronics" type with technical specifications
+  - "Pizza" type with diameter and cooking time attributes
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,

@@ -1,7 +1,25 @@
 defmodule EatsbotCore.Products.Option do
-  # @moduledoc """
+  @moduledoc """
+  Represents a product option in the Eatsbot e-commerce system.
 
-  # """
+  Options define customizable attributes for products, such as "Size", "Color", or "Toppings".
+  Each option can have multiple values (e.g., Size option has values: Small, Medium, Large).
+  Options are used to generate product variants through cartesian product combinations.
+
+  ## Key Features
+  - Unique option name per product
+  - Contains multiple option values (e.g., Red, Blue, Green for Color option)
+  - Upsert behavior prevents duplicate options
+  - Used in variant generation to create all possible combinations
+  - Many-to-many relationship with products
+
+  ## Example
+  For a T-Shirt product with two options:
+  - Option "Size" with values: ["S", "M", "L"]
+  - Option "Color" with values: ["Red", "Blue"]
+
+  This generates 6 variants: S-Red, S-Blue, M-Red, M-Blue, L-Red, L-Blue
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,

@@ -1,9 +1,24 @@
 defmodule EatsbotCore.Products.Product do
-  # @moduledoc """
-  # Represents a delivery of an order in the Eatsbot system.
+  @moduledoc """
+  Represents a product in the Eatsbot e-commerce system.
 
-  # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
-  # """
+  This module defines the `Product` resource, which is the core entity for items available for sale.
+  Products can have multiple variants (e.g., different sizes, colors), pricing in different currencies,
+  and can be organized into collections. Products support discount rules, SKU management, and can be
+  in different states (enabled, disabled, or hidden).
+
+  ## States
+  - `:enabled` - Product is visible and available for purchase
+  - `:disabled` - Product is not available for purchase
+  - `:hidden` - Product exists but is not displayed to customers
+
+  ## Key Features
+  - Multiple variants with different option combinations
+  - Multi-currency pricing support
+  - Collection organization
+  - Discount rule application
+  - GraphQL API exposure
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,

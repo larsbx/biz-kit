@@ -1,9 +1,22 @@
 defmodule EatsbotCore.Products.Price do
-  # @moduledoc """
-  # Represents a delivery of an order in the Eatsbot system.
+  @moduledoc """
+  Represents a price for a product or variant in the Eatsbot e-commerce system.
 
-  # This module defines the `Delivery` resource, which is responsible for managing the state and information related to deliveries within the application. It includes fields for tracking the delivery's state (e.g., 'pending', 'shipped', 'delivered'), and a private authentication key for secure access to delivery data.
-  # """
+  Prices are stored with both amount and currency information using the Money type.
+  Each product or variant can have multiple prices, one for each supported currency.
+  The uniqueness constraint ensures only one price per currency per product/variant.
+
+  ## Key Features
+  - Uses PostgreSQL composite Money type for amount and currency
+  - Unique price per currency per product or variant
+  - Upsert support for price updates
+  - Can be associated with either a Product (default price) or Variant (specific price)
+  - Currency information extracted via SQL calculation for efficient queries
+
+  ## Identities
+  - `:unique_product` - Ensures one price per currency per product
+  - `:unique_variant` - Ensures one price per currency per variant
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Products,
@@ -69,6 +82,18 @@ defmodule EatsbotCore.Products.Price do
     attribute :money, :money, public?: true, allow_nil?: false
 
     timestamps()
+  end
+
+  validations do
+    validate fn changeset, _context ->
+      case Ash.Changeset.get_attribute(changeset, :money) do
+        %Money{amount: amount} when amount <= 0 ->
+          {:error, field: :money, message: "price amount must be positive"}
+
+        _ ->
+          :ok
+      end
+    end
   end
 
   relationships do

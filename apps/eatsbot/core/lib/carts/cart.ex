@@ -1,7 +1,28 @@
 defmodule EatsbotCore.Carts.Cart do
-  # @moduledoc """
+  @moduledoc """
+  Represents a shopping cart in the Eatsbot e-commerce system.
 
-  # """
+  A cart holds cart lines (product variants with quantities) and manages the checkout process.
+  Carts have a single currency and calculate totals including discounts. When a customer
+  completes checkout, the cart is converted to a delivery order.
+
+  ## Cart Status
+  - `:active` - Cart is currently being used
+  - `:completed` - Cart has been checked out and converted to a delivery
+  - `:abandoned` - Cart was not completed within the expected timeframe
+
+  ## Key Features
+  - Single currency per cart (defaults to CLP)
+  - Automatic total calculation with discount support
+  - Variant addition with quantity and notes
+  - Validation ensures variant prices match cart currency
+  - Checkout creates a Delivery from cart contents
+  - Real-time updates via PubSub notifications
+
+  ## Checkout Process
+  The `checkout_delivery` action converts the cart into a Delivery and returns
+  a public authentication key for tracking the order.
+  """
   use Ash.Resource,
     otp_app: :eatsbot,
     domain: EatsbotCore.Carts,
