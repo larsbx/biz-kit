@@ -4,6 +4,8 @@ config :eatsbot,
   token_signing_secret: "qg2uHtVokJGsJZ0hdFsoOQlYbDOyeEB0",
   req_impl: Eatsbot.RequestStub
 
+System.put_env("ADMIN_API_KEY", "test_api_key")
+
 config :ash, disable_async?: true
 
 # Configure your database

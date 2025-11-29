@@ -4,7 +4,6 @@ defmodule EatsbotWeb.Router do
   use AshAuthentication.Phoenix.Router
 
   import AshAuthentication.Plug.Helpers
-  use AshAuthentication.Phoenix.Router
 
   import AshAdmin.Router
   import Plug.BasicAuth
@@ -23,7 +22,6 @@ defmodule EatsbotWeb.Router do
     plug :put_root_layout, html: {EatsbotWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug :load_from_session
     plug :load_from_session
   end
 
@@ -80,10 +78,7 @@ defmodule EatsbotWeb.Router do
     sign_in_route reset_path: "/reset",
                   auth_routes_prefix: "/auth",
                   on_mount: [{EatsbotWeb.LiveUserAuth, :live_no_user}],
-                  overrides: [
-                    EatsbotWeb.AuthOverrides,
-                    AshAuthentication.Phoenix.Overrides.Default
-                  ]
+                  overrides: [AshAuthentication.Phoenix.Overrides.Default]
 
     ash_authentication_live_session :authentication_required,
       on_mount: {EatsbotWeb.LiveUserAuth, :live_user_admin_required} do

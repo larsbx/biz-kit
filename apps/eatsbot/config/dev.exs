@@ -30,7 +30,8 @@ config :eatsbot, EatsbotWeb.Endpoint,
   ]
 
 config :eatsbot,
-  extensions: read_config(:eatsbot)[:extensions] ++ [Eatsbot.Extensions.Kafka],
+  extensions:
+    (if System.get_env("ENABLE_KAFKA") == "true", do: [Eatsbot.Extensions.Kafka], else: []),
   token_signing_secret: "U635EKPRXu35QYRpGZEZVN93UasSAl3t"
 
 config :eatsbot, Eatsbot.Extensions.Prometheus.PromEx,

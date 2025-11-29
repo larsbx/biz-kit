@@ -70,7 +70,7 @@ if config_env() == :prod do
     secret_key_base: secret_key_base
 
   config :eatsbot,
-    geocoding_token: System.get_env("GEOCODING_TOKEN"),
+    geocoding_token: System.fetch_env!("GEOCODING_TOKEN"),
     token_signing_secret:
       System.get_env("TOKEN_SIGNING_SECRET") ||
         raise("Missing environment variable `TOKEN_SIGNING_SECRET`!"),
