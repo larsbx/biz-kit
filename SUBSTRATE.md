@@ -82,5 +82,70 @@ in `test/vectors/` lock the profile.
 
 ## 2. Event Envelope V1
 
-*(Sections below this line are completed as their build steps land; §2.1 records the signed-core
-deviation from the hand-off sketch and its rationale.)*
+Implemented by `CoopSubstrate.Protocol.Envelope`; types declared in
+`CoopSubstrate.Protocol.TypeRegistry`.
+
+### 2.1 Signed-core deviation from the hand-off sketch (flagged; spec-forced)
+
+The hand-off sketch (docs/handoff.md §1.6) places `prev_global_hash`/`global_seq` **inside** the
+signed bytes. That is incompatible with spec-mandated bilateral/asynchronous dual signing
+(05 §1.2, 07 §3, 08 §8): a counterparty cannot sign a global chain position that is only assigned
+at append — the position does not exist when they sign. Resolution is certificate-transparency-
+shaped: **authors vouch for content; the log vouches for position.**
+
+- **Signed core** (what every signer signs — one canonical map, sig-excluded):
+  `auth_ref?`, `canonical_profile`, `chapter_id`, `event_id` (ULID), `payload`,
+  `schema_version`, `signers` (ordered, role-tagged `{key_id, pubkey, role}`), `timestamp_ms`,
+  `type`. Stream identity is derivable from `type` + `payload` + `chapter_id` (08 §1, 07 P7), so
+  signers bind to the stream implicitly; it is never author-supplied. `auth_ref` is an optional
+  32-byte hash-pointer to the authorizing event (10 P1 provenance; required-per-type later).
+- **Signature set**: stored beside the core, never inside the signed bytes. All signers sign the
+  same sig-excluded canonical bytes; signatures may be produced out of order and attached
+  asynchronously (`attach_signature/3` verifies before storing — invalid signatures are never
+  held). Completeness = every registry-declared role signed. Witness attestations are separate
+  events referencing the event hash, not extra signers.
+- **Log-assigned at append** (never signed by authors): `stream_id`, `stream_seq`, `global_seq`,
+  `prev_stream_hash`, `prev_global_hash`.
+- **`event_hash`** = SHA-256 over the canonical encoding of the **full record** (core + ordered
+  signature set + chain fields), so the dual chains are tamper-evident over signatures and
+  positions too. Chains: global (whole log) + per-stream.
+- Author authenticity = signatures over the core; history integrity = dual hash-chains; future
+  checkpoints (Phase 1D) sign chain heads. Timestamps remain author-asserted claims; ordering
+  authority is sequence, never wall-clock.
+
+### 2.2 Type registry (minimal for 1A)
+
+Per type (pure data, no functions — so registration can later be gated by prior log events,
+09 gated-N, without rework; `validity_check/2` is the stub hook):
+
+- `payload` schema — required/optional fields with type checkers
+  (`:string | :int | :bytes | :hash | :pubkey | :bool | :any`); unknown fields rejected (§1.3).
+- `required_roles` — the signer roles that must be declared and must all sign (declared roles
+  must equal required roles exactly; extra roles rejected).
+- `stream` — assignment rule: `{:chapter_scoped, prefix}` → `<chapter_id>/<prefix>`, or
+  `{:payload_field, prefix, field}` → `<chapter_id>/<prefix>/<payload[field]>`.
+- `disclosure_class` — `:commons | :telemetry | :edges` (08 §5); carried as data in 1A,
+  enforced by later phases.
+
+Bootstrap types shipped in 1A: `TestProjectionEvent`, `CorrectionRecorded` (payload:
+`target_event_hash`, `reason`), `KeyRotated` (payload: `member_id`, `old_key_id`, `new_key_id`,
+`new_pubkey`), `CharterConstantDeclared` (payload: `name`, `value`, `note?`). Governance
+semantics for the latter three are Phase 1D; representability is the 1A criterion.
+
+`chapter_id` is required on every event. Federation-scoped events (09 §1) are an **open
+representation question** — not resolved in 1A.
+
+### 2.3 Signing & verification rules
+
+- Sign: Ed25519 over `Canonical.encode(signed_core_term)`; verification re-encodes the
+  sig-excluded core and checks every declared signer's signature (missing or invalid → reject,
+  identifying the `key_id`).
+- `Envelope.new/1` validates before anything signs: registered type, payload schema, signer-set
+  shape and role match, `chapter_id`/ULID/timestamp/auth_ref shape, and canonical encodability
+  of the core (size/depth caps bite here).
+- Boot self-test (`CoopSubstrate.SelfTest`): `:eddsa` support, RFC 8032 §7.1 TEST 1, and the
+  committed `envelope-core` vector re-encoded through the production NIF, hashed, and
+  signature-verified — any mismatch aborts boot.
+
+*(§3 event store decision, §4 append-only log, and later sections are completed as their build
+steps land.)*
