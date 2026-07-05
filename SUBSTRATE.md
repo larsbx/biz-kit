@@ -147,5 +147,37 @@ representation question** — not resolved in 1A.
   committed `envelope-core` vector re-encoded through the production NIF, hashed, and
   signature-verified — any mismatch aborts boot.
 
-*(§3 event store decision, §4 append-only log, and later sections are completed as their build
-steps land.)*
+## 3. Event store decision — Commanded `eventstore`, after an honest AshEvents spike
+
+Hand-off §1.7 makes AshEvents (0.7.0, on Ash 3.29.x) the *default* choice but requires a spike
+answering five questions (plus atomic multi-event append, added by the plan for 06 P3 batch
+semantics) before committing to it. The spike lives at `spikes/ash_events_spike/`
+(`mix run spike_run.exs` reproduces every finding empirically; kept as documentation).
+
+### 3.1 Spike findings (AshEvents 0.7.0)
+
+| # | Question (hand-off §1.7) | Finding | Verdict |
+|---|---|---|---|
+| Q1 | Enforce append-only? | The event-log resource exposes only `create` and `replay` actions (no update/destroy at the Ash layer), but there is **no DB-level protection**: raw SQL `UPDATE`/`DELETE` against the `events` table succeeds. Append-only is a convention of the Ash API, not a property of the store. | **Not cleanly** |
+| Q2 | Reject bad events before persistence? | Yes — a validation on the event-log resource runs before persistence and aborts the whole wrapped action transaction (nothing persists). Caveat: AshEvents calls `create_event!/5` internally, so rejection **raises** out of the caller's action rather than returning `{:error, _}`. | Yes, with a raise-shaped API |
+| Q3 | Global + per-stream ordering? | Global ordering: bigint PK sequence (`id`). **No per-stream sequence column** — `record_id` groups a stream but nothing provides `stream_seq`, so per-stream chains/optimistic concurrency have no native support. | **Not cleanly** |
+| Q4 | Deterministic, independently testable replay? | Replay reproduces state and is stable across runs, but it works by **re-executing resource actions** (business logic + side-effect version routing), not by a pure fold over event data. Determinism is contingent on action purity, which the substrate's replay-audit property must not depend on. | Partial |
+| Q5 | Metadata carries Envelope V1? | Metadata is `jsonb`: envelope fields round-trip as a string map, but **raw binaries are rejected** — signatures/hashes/pubkeys must be hex/base64-encoded, and canonical event bytes are not first-class (events are stored as decoded JSON, not the signed bytes). | **Not cleanly** |
+| Q6 | Atomic multi-event append? | Only by wrapping calls in `Repo.transaction/1` yourself. No `expected_version`-style optimistic append control; appends serialize through a single global `pg_advisory_xact_lock`. | **Not cleanly** |
+
+### 3.2 Decision
+
+Per the hand-off rule — *"if any answer is 'not cleanly,' use Commanded + `eventstore` as the
+canonical log instead"* — four of six answers are not clean. **The canonical log is
+`eventstore` (Commanded's Postgres event store, v1.4.x, MIT)**, which natively provides: an
+append-only schema (no UPDATE/DELETE grants on event rows), `$all` global ordering plus
+per-stream versions (`stream_seq`), atomic batched appends with `expected_version` optimistic
+concurrency, and `bytea` event data — so the **canonical signed bytes are stored verbatim** and
+replay folds over exactly the bytes that were signed.
+
+This does not split the log (hand-off §1: ONE canonical log): `eventstore` is *the* write log;
+Ash enters in Phase 1B for domain/read-side modeling only, and AshEvents is not used. Full
+Commanded (aggregates/command-handlers) is not adopted either — only the `eventstore` library,
+wrapped by `CoopSubstrate.Log` (§4), which performs verify-on-append and dual-chain assignment.
+
+*(§4 append-only log and later sections are completed as their build steps land.)*
