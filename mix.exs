@@ -8,6 +8,7 @@ defmodule CoopSubstrate.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      aliases: aliases(),
       deps: deps()
     ]
   end
@@ -28,8 +29,16 @@ defmodule CoopSubstrate.MixProject do
     [
       {:rustler, "~> 0.36"},
       {:cbor, "~> 1.0"},
+      # Canonical log per the AshEvents spike decision (SUBSTRATE.md §3):
+      # the eventstore library only — Commanded aggregates are NOT adopted.
+      {:eventstore, "~> 1.4"},
       {:stream_data, "~> 1.1", only: [:test, :dev]}
-      # Event store dep added after the AshEvents spike decision (see SUBSTRATE.md).
+    ]
+  end
+
+  defp aliases do
+    [
+      test: ["event_store.create --quiet", "event_store.init --quiet", "test"]
     ]
   end
 end

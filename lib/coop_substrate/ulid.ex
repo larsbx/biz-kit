@@ -27,6 +27,28 @@ defmodule CoopSubstrate.ULID do
 
   def valid?(_), do: false
 
+  @doc """
+  The ULID's 128 bits in UUID string form. The event store keys events by
+  uuid; deriving it from the ULID makes appending the same event twice a
+  database-level conflict instead of a silent duplicate.
+  """
+  @spec to_uuid(String.t()) :: {:ok, String.t()} | {:error, :bad_ulid}
+  def to_uuid(ulid) do
+    if valid?(ulid) do
+      n =
+        ulid
+        |> String.to_charlist()
+        |> Enum.reduce(0, fn char, acc -> acc * 32 + Enum.find_index(@crockford, &(&1 == char)) end)
+
+      <<a::binary-size(8), b::binary-size(4), c::binary-size(4), d::binary-size(4),
+        e::binary-size(12)>> = Base.encode16(<<n::128>>, case: :lower)
+
+      {:ok, "#{a}-#{b}-#{c}-#{d}-#{e}"}
+    else
+      {:error, :bad_ulid}
+    end
+  end
+
   defp encode(_n, 0, acc), do: List.to_string(acc)
 
   defp encode(n, chars_left, acc) do

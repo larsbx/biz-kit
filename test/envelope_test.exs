@@ -262,4 +262,47 @@ defmodule CoopSubstrate.Protocol.EnvelopeTest do
         "value" => %{"numerator" => 2, "denominator" => 3}
       })
   end
+  test "full record round-trips: encode -> strict decode -> same envelope" do
+    {pub, seed} = keypair()
+    {:ok, env} = Envelope.new(base_attrs(pub))
+    {:ok, signed} = Envelope.sign(env, hd(env.signers).key_id, seed)
+
+    appended =
+      Envelope.with_log_assignment(signed, %{
+        stream_id: "chapter-genesis/test",
+        stream_seq: 1,
+        global_seq: 1,
+        prev_stream_hash: nil,
+        prev_global_hash: nil
+      })
+
+    {:ok, bytes} = CoopSubstrate.Canonical.encode(Envelope.full_record_term(appended))
+    {:ok, term} = CoopSubstrate.Canonical.decode(bytes)
+    assert {:ok, rebuilt} = Envelope.from_full_record_term(term)
+    assert rebuilt == appended
+    assert Envelope.verify(rebuilt) == :ok
+  end
+
+  test "from_full_record_term rejects a foreign profile or schema version" do
+    {pub, seed} = keypair()
+    {:ok, env} = Envelope.new(base_attrs(pub))
+    {:ok, signed} = Envelope.sign(env, hd(env.signers).key_id, seed)
+
+    appended =
+      Envelope.with_log_assignment(signed, %{
+        stream_id: "chapter-genesis/test",
+        stream_seq: 1,
+        global_seq: 1,
+        prev_stream_hash: nil,
+        prev_global_hash: nil
+      })
+
+    term = Envelope.full_record_term(appended)
+
+    assert {:error, {:unsupported_profile, _}} =
+             Envelope.from_full_record_term(%{term | "canonical_profile" => "V2"})
+
+    assert {:error, {:unsupported_schema_version, _}} =
+             Envelope.from_full_record_term(%{term | "schema_version" => "EventEnvelopeV9"})
+  end
 end

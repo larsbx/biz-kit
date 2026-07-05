@@ -202,6 +202,115 @@ defmodule CoopSubstrate.Protocol.Envelope do
     end
   end
 
+  @doc """
+  Attach the log-assigned fields (append time only — `CoopSubstrate.Log` is
+  the sole caller). Authors never sign these; they are covered by
+  `event_hash/1` and the dual chains instead.
+  """
+  @spec with_log_assignment(t(), map()) :: t()
+  def with_log_assignment(%__MODULE__{} = env, assignment) do
+    %{
+      env
+      | stream_id: Map.fetch!(assignment, :stream_id),
+        stream_seq: Map.fetch!(assignment, :stream_seq),
+        global_seq: Map.fetch!(assignment, :global_seq),
+        prev_stream_hash: Map.fetch!(assignment, :prev_stream_hash),
+        prev_global_hash: Map.fetch!(assignment, :prev_global_hash)
+    }
+  end
+
+  @doc "True once the log has assigned sequence/chain fields."
+  @spec appended?(t()) :: boolean()
+  def appended?(%__MODULE__{} = env), do: env.global_seq != nil
+
+  @doc """
+  Rebuild an envelope from a decoded full-record term (the strict inverse of
+  `full_record_term/1`; bytes come from `Canonical.decode/1`). Structural
+  only — callers still run `verify/1` for signatures and the log's chain
+  audit for history integrity.
+  """
+  @spec from_full_record_term(term()) :: {:ok, t()} | {:error, term()}
+  def from_full_record_term(%{} = term) do
+    with :ok <- check_versions(term),
+         {:ok, signers} <- decode_signers(Map.get(term, "signers")),
+         {:ok, sigs} <- decode_sigs(Map.get(term, "sigs")),
+         {:ok, auth_ref} <- optional_bytes(Map.get(term, "auth_ref"), :bad_auth_ref),
+         {:ok, prev_stream} <- optional_bytes(Map.get(term, "prev_stream_hash"), :bad_prev_hash),
+         {:ok, prev_global} <- optional_bytes(Map.get(term, "prev_global_hash"), :bad_prev_hash) do
+      env = %__MODULE__{
+        event_id: Map.get(term, "event_id"),
+        chapter_id: Map.get(term, "chapter_id"),
+        type: Map.get(term, "type"),
+        payload: Map.get(term, "payload"),
+        signers: signers,
+        auth_ref: auth_ref,
+        timestamp_ms: Map.get(term, "timestamp_ms"),
+        sigs: sigs,
+        stream_id: Map.get(term, "stream_id"),
+        stream_seq: Map.get(term, "stream_seq"),
+        global_seq: Map.get(term, "global_seq"),
+        prev_stream_hash: prev_stream,
+        prev_global_hash: prev_global
+      }
+
+      # Round-trip guard: the rebuilt struct must reproduce the exact term.
+      if full_record_term(env) == term do
+        {:ok, env}
+      else
+        {:error, :record_term_mismatch}
+      end
+    end
+  end
+
+  def from_full_record_term(_), do: {:error, :bad_record}
+
+  defp check_versions(term) do
+    cond do
+      Map.get(term, "canonical_profile") != Constants.canonical_profile() ->
+        {:error, {:unsupported_profile, Map.get(term, "canonical_profile")}}
+
+      Map.get(term, "schema_version") != Constants.envelope_schema_version() ->
+        {:error, {:unsupported_schema_version, Map.get(term, "schema_version")}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp decode_signers(signers) when is_list(signers) and signers != [] do
+    signers
+    |> Enum.reduce_while({:ok, []}, fn
+      %{"role" => role, "pubkey" => {:bytes, <<_::256>> = pubkey}, "key_id" => key_id}, {:ok, acc} ->
+        {:cont, {:ok, [%{role: role, pubkey: pubkey, key_id: key_id} | acc]}}
+
+      _bad, _acc ->
+        {:halt, {:error, :bad_signer}}
+    end)
+    |> case do
+      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
+      error -> error
+    end
+  end
+
+  defp decode_signers(_), do: {:error, :signers_required}
+
+  defp decode_sigs(sigs) when is_list(sigs) do
+    sigs
+    |> Enum.reduce_while({:ok, %{}}, fn
+      %{"key_id" => key_id, "sig" => {:bytes, <<_::512>> = sig}}, {:ok, acc} ->
+        {:cont, {:ok, Map.put(acc, key_id, sig)}}
+
+      _bad, _acc ->
+        {:halt, {:error, :bad_signature_entry}}
+    end)
+  end
+
+  defp decode_sigs(_), do: {:error, :bad_signature_entry}
+
+  defp optional_bytes(nil, _reason), do: {:ok, nil}
+  defp optional_bytes({:bytes, <<_::256>> = bytes}, _reason), do: {:ok, bytes}
+  defp optional_bytes(_, reason), do: {:error, reason}
+
   # -- validation --------------------------------------------------------------
 
   defp validate_core(env) do

@@ -193,4 +193,43 @@ defmodule CoopSubstrate.CanonicalTest do
       assert {:error, :float_forbidden} = ReferenceEncoder.encode(%{"x" => [1, f]})
     end
   end
+  # -- strict decode (inverse of encode; added with the log, plan step 6) --------
+
+  describe "decode/1" do
+    test "round-trips canonical bytes" do
+      term = %{"a" => 1, "b" => [true, nil, {:bytes, <<0, 255>>}], "c" => "text"}
+      {:ok, bytes} = Canonical.encode(term)
+      assert Canonical.decode(bytes) == {:ok, term}
+    end
+
+    test "rejects non-shortest-form integers" do
+      # 24 encoded with an unnecessary one-byte argument (0x18 0x18 is canonical
+      # for 24; 0x19 0x00 0x18 is the non-minimal two-byte form).
+      assert {:error, :non_canonical} = Canonical.decode(<<0x19, 0x00, 0x18>>)
+    end
+
+    test "rejects unsorted map keys" do
+      # {"b": 1, "a": 2} in that wire order — canonical order is "a" first.
+      bytes = <<0xA2, 0x61, ?b, 0x01, 0x61, ?a, 0x02>>
+      assert {:error, :non_canonical} = Canonical.decode(bytes)
+    end
+
+    test "rejects floats, indefinite lengths, and trailing bytes" do
+      assert {:error, _} = Canonical.decode(<<0xF9, 0x3C, 0x00>>)
+      assert {:error, _} = Canonical.decode(<<0x9F, 0x01, 0xFF>>)
+      {:ok, bytes} = Canonical.encode(1)
+      assert {:error, :non_canonical} = Canonical.decode(bytes <> <<0x00>>)
+    end
+
+    test "rejects garbage" do
+      assert {:error, _} = Canonical.decode(<<0xFF, 0xFF>>)
+    end
+  end
+
+  property "decode is the exact inverse of encode" do
+    check all(term <- canonical_term(), max_runs: 200) do
+      {:ok, bytes} = Canonical.encode(term)
+      assert Canonical.decode(bytes) == {:ok, term}
+    end
+  end
 end

@@ -11,7 +11,10 @@ defmodule CoopSubstrate.Application do
     # cannot reproduce its own known-answer vectors must not run.
     case CoopSubstrate.SelfTest.run() do
       :ok ->
-        children = []
+        children = [
+          CoopSubstrate.EventStore,
+          CoopSubstrate.Log
+        ]
 
         opts = [strategy: :one_for_one, name: CoopSubstrate.Supervisor]
         Supervisor.start_link(children, opts)

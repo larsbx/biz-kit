@@ -53,6 +53,69 @@ defmodule CoopSubstrate.Canonical do
     end
   end
 
+  @doc """
+  Strict inverse of `encode/1`. Decodes CBOR, normalizes byte strings to the
+  `{:bytes, binary}` wrapper, then **re-encodes and requires byte equality**
+  with the input — so every profile rule (sorted keys, shortest forms, no
+  tags/floats, UTF-8 validity, size/depth caps) is enforced on the way in
+  without duplicating the encoder's logic. Non-canonical bytes never become
+  a term.
+  """
+  @spec decode(binary()) :: {:ok, term()} | {:error, reason() | :non_canonical | :cbor_invalid}
+  def decode(bytes) when is_binary(bytes) do
+    with {:ok, decoded, ""} <- CBOR.decode(bytes),
+         {:ok, term} <- normalize(decoded),
+         {:ok, ^bytes} <- reencode(term) do
+      {:ok, term}
+    else
+      {:ok, _term, _trailing} -> {:error, :non_canonical}
+      {:ok, _other_bytes} -> {:error, :non_canonical}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp reencode(term) do
+    case encode(term) do
+      {:ok, bytes} -> {:ok, bytes}
+      {:error, _reason} -> {:error, :non_canonical}
+    end
+  end
+
+  defp normalize(%CBOR.Tag{tag: :bytes, value: bin}) when is_binary(bin),
+    do: {:ok, {:bytes, bin}}
+
+  defp normalize(%CBOR.Tag{}), do: {:error, :forbidden_type}
+  defp normalize(f) when is_float(f), do: {:error, :float_forbidden}
+
+  defp normalize(v) when is_integer(v) or is_binary(v) or is_boolean(v) or is_nil(v),
+    do: {:ok, v}
+
+  defp normalize(list) when is_list(list) do
+    Enum.reduce_while(list, {:ok, []}, fn item, {:ok, acc} ->
+      case normalize(item) do
+        {:ok, term} -> {:cont, {:ok, [term | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
+      error -> error
+    end
+  end
+
+  defp normalize(map) when is_map(map) and not is_struct(map) do
+    Enum.reduce_while(map, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      with true <- is_binary(key) or {:error, :bad_map_key},
+           {:ok, term} <- normalize(value) do
+        {:cont, {:ok, Map.put(acc, key, term)}}
+      else
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp normalize(_other), do: {:error, :forbidden_type}
+
   defp nif_encode(_term), do: :erlang.nif_error(:nif_not_loaded)
   defp nif_hash(_term), do: :erlang.nif_error(:nif_not_loaded)
 end

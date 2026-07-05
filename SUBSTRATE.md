@@ -180,4 +180,50 @@ Ash enters in Phase 1B for domain/read-side modeling only, and AshEvents is not 
 Commanded (aggregates/command-handlers) is not adopted either — only the `eventstore` library,
 wrapped by `CoopSubstrate.Log` (§4), which performs verify-on-append and dual-chain assignment.
 
-*(§4 append-only log and later sections are completed as their build steps land.)*
+## 4. The append-only log — `CoopSubstrate.Log`
+
+### 4.1 Store layout
+
+* Every event is appended — atomically, batches included — to the single physical stream
+  **`ledger`**; its order IS the global chain. `global_seq` equals the ledger stream version,
+  is assigned by the single serialized appender (a GenServer — hand-off §1: ONE canonical log),
+  and is embedded in the hashed record.
+* Each event is additionally **linked** (eventstore `link_to_stream`) into its derived
+  per-stream stream for cheap selective reads. Links are a derived index, never canonical
+  truth: per-stream integrity lives in the `stream_seq`/`prev_stream_hash` fields inside the
+  hashed record, and missing links (a crash between append and link) are repaired from the
+  ledger on restart.
+* The store holds the `CoopEventCanonicalV1` bytes of the full record **verbatim** (`bytea`
+  column, pass-through serializer): what is signed is what is stored is what is replayed.
+  The store-level `event_id` is the ULID's 128 bits in UUID form, so re-appending the same
+  event is a database-level conflict.
+
+### 4.2 Verify-on-append
+
+All checks run before anything persists; a batch is all-or-nothing (single
+`append_to_stream` call with `expected_version`): structural validity (registered type,
+payload schema with unknown-field rejection, `chapter_id`, signer-set shape), signature-set
+completeness, every Ed25519 signature valid over the re-encoded core, canonical
+encodability with size/depth caps, no prior log assignment, and no duplicate `event_id`.
+
+### 4.3 Chain assignment & audit
+
+Appends assign `stream_id` (derived, never author-supplied), `stream_seq`, `global_seq`,
+`prev_stream_hash`, `prev_global_hash`; `event_hash` = SHA-256 over the canonical full
+record (§2). Genesis links are `null`. `Log.verify_chains/0` audits from the raw stored
+bytes: strict canonical decode (re-encode must reproduce the exact bytes), every signature
+re-verified, both chains' prev-hash/sequence links checked for every event — and it collects
+**every** failed check per record, so global-chain and stream-chain breaks are reported
+independently (acceptance §6 item 4). Postgres-level append-only comes from eventstore's
+`no_update_events`/`no_delete_events` triggers; the tamper tests bypass them as the database
+superuser and prove both chains catch the forgery.
+
+### 4.4 Reads & export
+
+`read_all/1` (global order) and `read_stream/2` support `as_of:` a global sequence number
+(06 P1 as-of evaluation). Reads strictly re-decode and re-validate; non-canonical bytes never
+become terms. `export_stream/1` returns the raw canonical records of one stream;
+`verify_export/1` independently verifies signatures and the per-stream chain with no access
+to the store (08 §1 per-owner log export, minimal for 1A — full checkpoint publication is 1D).
+
+*(§5 replay/projections and later sections are completed as their build steps land.)*

@@ -28,4 +28,15 @@ defmodule CoopSubstrate.ULIDTest do
     ulids = for _ <- 1..100, do: ULID.generate(1_720_000_000_000)
     assert length(Enum.uniq(ulids)) == 100
   end
+  test "to_uuid maps the 128 bits deterministically into UUID form" do
+    ulid = ULID.generate(1_720_000_000_000)
+    {:ok, uuid} = ULID.to_uuid(ulid)
+    assert uuid =~ ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    assert ULID.to_uuid(ulid) == {:ok, uuid}
+
+    {:ok, other} = ULID.to_uuid(ULID.generate(1_720_000_000_000))
+    refute other == uuid
+
+    assert ULID.to_uuid("not a ulid") == {:error, :bad_ulid}
+  end
 end
