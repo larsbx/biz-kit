@@ -145,6 +145,21 @@ defmodule CoopSubstrate.Log do
   end
 
   @doc """
+  Deterministic replay (phase1a_plan step 7): a pure fold of `projection`
+  (a `CoopSubstrate.Projection`) over the log in `global_seq` order — never
+  timestamp order. Supports `as_of:` like the other reads. Replaying the
+  same log twice reproduces the same state exactly.
+  """
+  @spec replay(module(), keyword()) :: {:ok, term()} | {:error, term()}
+  def replay(projection, opts \\ []) when is_atom(projection) do
+    limit = Keyword.get(opts, :as_of, :infinity)
+
+    fold_ledger(projection.init(), fn env, _bytes, state ->
+      projection.handle_event(env, state)
+    end, limit)
+  end
+
+  @doc """
   Signed per-stream export (08 §1, minimal for 1A): the stream's raw
   canonical records, independently verifiable via `verify_export/1` with no
   access to this store.

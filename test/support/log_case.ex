@@ -98,6 +98,24 @@ defmodule CoopSubstrate.LogCase do
     %{seed: seed, signer: %{role: role, pubkey: pubkey, key_id: key_id}}
   end
 
+  @doc "A fully signed envelope of any registered type."
+  def signed_event(member, type, payload, attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {:ok, envelope} =
+      Envelope.new(%{
+        chapter_id: Map.get(attrs, :chapter_id, "chapter-genesis"),
+        type: type,
+        payload: payload,
+        signers: [member.signer],
+        auth_ref: Map.get(attrs, :auth_ref),
+        timestamp_ms: Map.get(attrs, :timestamp_ms, System.system_time(:millisecond))
+      })
+
+    {:ok, signed} = Envelope.sign(envelope, member.signer.key_id, member.seed)
+    signed
+  end
+
   @doc "A fully signed TestProjectionEvent envelope."
   def signed_test_event(member, attrs \\ []) do
     attrs = Map.new(attrs)
