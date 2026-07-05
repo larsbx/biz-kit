@@ -7,14 +7,17 @@ defmodule CoopSubstrate.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # Starts a worker by calling: CoopSubstrate.Worker.start_link(arg)
-      # {CoopSubstrate.Worker, arg}
-    ]
+    # Crypto self-test gates boot (phase1a_plan step 3): a substrate that
+    # cannot reproduce its own known-answer vectors must not run.
+    case CoopSubstrate.SelfTest.run() do
+      :ok ->
+        children = []
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: CoopSubstrate.Supervisor]
-    Supervisor.start_link(children, opts)
+        opts = [strategy: :one_for_one, name: CoopSubstrate.Supervisor]
+        Supervisor.start_link(children, opts)
+
+      {:error, reason} ->
+        {:error, {:crypto_self_test_failed, reason}}
+    end
   end
 end
