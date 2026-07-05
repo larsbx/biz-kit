@@ -182,8 +182,14 @@ defmodule CoopSubstrate.Protocol.Envelope do
   def full_record_term(%__MODULE__{} = env) do
     signed_core_term(env)
     |> Map.merge(%{
+      # Total even when sigs don't cover signers (a tampered record read back
+      # from storage must still be representable so the audit can report it,
+      # not crash): absent signatures are simply absent from the list. The
+      # append gate guarantees completeness for everything that persists.
       "sigs" =>
-        Enum.map(env.signers, fn s ->
+        env.signers
+        |> Enum.filter(&Map.has_key?(env.sigs, &1.key_id))
+        |> Enum.map(fn s ->
           %{"key_id" => s.key_id, "sig" => {:bytes, Map.fetch!(env.sigs, s.key_id)}}
         end),
       "stream_id" => env.stream_id,

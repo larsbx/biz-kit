@@ -356,8 +356,8 @@ defmodule CoopSubstrate.Log do
     initial = {%Head{}, %{}}
 
     {:ok, {head, links}} =
-      fold_ledger(initial, fn env, _bytes, {head, links} ->
-        {:ok, hash} = Envelope.event_hash(env)
+      fold_ledger(initial, fn env, bytes, {head, links} ->
+        hash = :crypto.hash(:sha256, bytes)
         {:ok, uuid} = ULID.to_uuid(env.event_id)
 
         head = %Head{
@@ -464,7 +464,11 @@ defmodule CoopSubstrate.Log do
           end
 
         breaks = signature_breaks ++ check_chains(position, env, head)
-        {:ok, hash} = Envelope.event_hash(env)
+
+        # event_hash is DEFINED as SHA-256 over the stored canonical bytes,
+        # so hash the bytes directly: identical for intact records, and total
+        # even for tampered ones (which must be reported, never crash).
+        hash = :crypto.hash(:sha256, bytes)
 
         new_head = %Head{
           global_seq: position,
