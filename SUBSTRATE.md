@@ -226,4 +226,112 @@ become terms. `export_stream/1` returns the raw canonical records of one stream;
 `verify_export/1` independently verifies signatures and the per-stream chain with no access
 to the store (08 §1 per-owner log export, minimal for 1A — full checkpoint publication is 1D).
 
-*(§5 replay/projections and later sections are completed as their build steps land.)*
+## 5. Replay & projections
+
+A projection is a **pure fold** over the canonical log (`CoopSubstrate.Projection`:
+`init/0` + `handle_event/2` — no side effects, no clock, no randomness). `Log.replay/2`
+folds a projection over the ledger in `global_seq` order — never timestamp order; timestamps
+are author-asserted claims with no ordering authority — and supports `as_of:` a global
+sequence number. Replaying the same log twice reproduces the same state exactly, and the same
+fold over an independently verified export produces the same state as replay against the
+store (tested), which is what makes every derived number reproducible by any member from
+events alone (invariant §0.5 of the hand-off).
+
+This deliberately differs from AshEvents-style replay (which re-executes resource actions):
+substrate determinism must not be contingent on business-action purity.
+
+Phase 1A ships one trivial projection, `Projections.ChapterStats` (per-chapter counts, key
+registry from `KeyRotated`, last event id per chapter). The 1B capital-account fold and 1C
+throughput/floor computations are projections in exactly this shape, parameterized by
+versioned rules.
+
+## 6. The chapter model (1A scope)
+
+Every event carries a required `chapter_id` (schema- and append-enforced), and every derived
+stream id is chapter-prefixed (`<chapter_id>/...`), so all per-stream reads are chapter-scoped
+by construction. One chapter exists today (tests use `chapter-genesis` as a stand-in name);
+nothing anywhere assumes it is the only one — a second chapter is just a new `chapter_id`
+value, no schema change (tested incidentally throughout the log suite with `chapter-two`).
+Built as *a* chapter, not *the* center. Federation-scoped events (09 §1) remain an **open
+representation question** — see §8.
+
+## 7. Substrate governance (hand-off §4a) — current answers
+
+Captured now so the data model never forecloses them; enforcement workflows are Phase 1D.
+
+- **Who can rotate signing keys?** Rotation is representable and recorded in the log itself
+  (`KeyRotated`, streamed per member under `<chapter>/keys/<member_id>`). *Who may author it*
+  is a governance rule enforced at the type-registry validity hook (`validity_check/2`,
+  currently a no-op) in 1D — the registry was designed so a type's acceptance can depend on
+  prior log events without rework.
+- **Who can authorize a schema / canonical-profile migration?** Encoded in §1.3/§2: new
+  fields require a new `schema_version`; a profile change (V1→V2) requires an explicit signed
+  governance event; old events verify under their original profile forever. Readers reject
+  foreign profiles/versions today (`from_full_record_term/1`), so a migration cannot happen
+  silently.
+- **Who can publish checkpoints, and where?** Not built in 1A (deferred to 1D). The material
+  it needs exists: the global head (seq + hash) is cheap to read, and `event_hash` covers the
+  full record, so a signed head published outside the primary database commits the operator
+  to the entire history. `export_stream/1` + `verify_export/1` are the 1A-minimal slice.
+- **Who holds decryption shares?** No encryption exists in the substrate yet, so no key to
+  hold. The binding rule stands: no long-term architecture may depend on a single
+  operator-held decryption key; day-one trusted encryption (when it arrives with the 1C
+  privacy interfaces) lives behind those interfaces, labeled temporary.
+- **What is exported to a member when they leave?** 1A-minimal: `export_stream/1` yields the
+  raw canonical records of any stream, independently verifiable offline. Full member-export
+  semantics (which streams constitute "their data") are a 1B/1D question tied to membership.
+- **What is never put in the log?** Raw secrets, private keys, other members' private detail,
+  or anything that cannot live forever — the log is append-only and eternal.
+  Sensitive-but-removable data must be *referenced* from events (hash pointers, as with
+  `auth_ref`/`target_event_hash`), never embedded.
+- **Encrypted vs. redactable vs. tombstoned vs. corrected?** Corrections and reversals are
+  new events referencing the target's `event_hash` (`CorrectionRecorded`); nothing mutates or
+  deletes (DB-level triggers + chain audit enforce this). Redactable data is referenced, not
+  embedded, so erasure outside the log cannot break the chains.
+
+## 8. Open questions (flagged, not resolved in 1A)
+
+- **Federation-scoped events** (09 §1): how an event that spans chapters is represented —
+  a federation pseudo-chapter id, or a distinct scope field. Deferred to 1D; current model
+  does not foreclose either.
+- **Glossary mapping to specs 00–13A** (plan step 9): the in-conversation spec documents
+  (system-term glossary per 01, `EventEnvelope` vs `AuthorizationEnvelope` naming, E-n ↔ 04
+  entity names) are **not in this repository**, so the mapping cannot be transcribed
+  faithfully. Add the specs under `docs/` and this section gets completed — flagged rather
+  than reconstructed from memory.
+- **Registry governance**: production registration workflow for new event types (tests use
+  the `:extra_event_types` app env; production types are compile-time data).
+
+## 9. Placeholder (constitutionalized-later) parameters
+
+All in `CoopSubstrate.Constants`, every one **PLACEHOLDER — awaiting charter declaration**
+via future `CharterConstantDeclared` governance events:
+
+| Constant | Placeholder value | Used by |
+|---|---|---|
+| `max_canonical_bytes` | 65 536 | encoder input cap (NIF safety rule, hand-off §4) |
+| `max_canonical_depth` | 32 | encoder nesting cap |
+
+(Phase 1B/1C add the real economic parameters — accrual rules, thresholds, windows, caps —
+as versioned config, never hardcoded.)
+
+## 10. Phase 1A acceptance status
+
+Hand-off §6 [1A] items, all enforced by the test suite (`mix test`; Rust-side
+`cargo test` in `native/canonical_v1` independently verifies the committed vectors):
+
+1. ✅ Canonical profile frozen; committed vectors pass in both implementations; byte-stability
+   property tests (construction-order invariance; NIF ≡ reference encoder).
+2. ✅ Ed25519 startup self-test (RFC 8032 vector + committed envelope vector); corrupting a
+   known answer fails boot (tested via config override).
+3. ✅ Envelope V1; signatures cover the sig-excluded canonical core; verification re-encodes.
+4. ✅ Append-only & tamper-evident: raw SQL UPDATE/DELETE blocked by store triggers;
+   superuser forgery detected by BOTH chains (example + property tests).
+5. ✅ Invalid/missing signatures rejected before persistence (batch is all-or-nothing).
+6. ✅ Deterministic replay of `ChapterStats`; order-stable by `global_seq` against
+   adversarially reversed timestamps; independently reproducible from an export.
+7. ✅ Corrections are new events; the original survives byte-identical and chain-valid.
+8. ✅ `chapter_id` required on every event (envelope layer and append gate).
+9. ✅ `KeyRotated` representable, recorded, and folded into the key-registry projection.
+
+**Gate:** Phase 1B (membership + capital accounts) may start.

@@ -1,21 +1,38 @@
 # CoopSubstrate
 
-**TODO: Add description**
+The signed event ledger + capital-account substrate for a member-owned co-op platform:
+an append-only, tamper-evident, replayable log of Ed25519-signed canonical events that
+every other feature reads from. See `SUBSTRATE.md` (normative) and `docs/handoff.md`
+(the build brief); `docs/phase1a_plan.md` is the current build plan.
 
-## Installation
+**Status: Phase 1A complete** — canonical signed event protocol + append-only log.
+Phase 1B (membership lifecycle + capital-account fold) is next.
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `coop_substrate` to your list of dependencies in `mix.exs`:
+## What exists
 
-```elixir
-def deps do
-  [
-    {:coop_substrate, "~> 0.1.0"}
-  ]
-end
+- `CoopEventCanonicalV1` — a frozen deterministic encoding profile (strict CBOR subset),
+  implemented twice (Rust NIF, production; pure-Elixir reference, test) and locked with
+  committed byte-level test vectors (`test/vectors/`).
+- `CoopSubstrate.Crypto` + boot-gating self-test — Ed25519 via OTP; the app refuses to
+  boot if it cannot reproduce its known-answer vectors.
+- `CoopSubstrate.Protocol.Envelope` — Event Envelope V1: a signed core (multi-signer,
+  role-tagged) plus log-assigned dual chain fields; `event_hash` covers the full record.
+- `CoopSubstrate.Log` — the ONE canonical log, on Commanded's `eventstore` (Postgres):
+  verify-on-append, atomic batches, global + per-stream hash chains, tamper audit
+  (`verify_chains/0`), as-of reads, per-stream export with independent verification.
+- `CoopSubstrate.Projection` + `Log.replay/2` — deterministic pure-fold replay.
+
+## Running
+
+Requires Elixir ≥ 1.19, Rust (for the NIF), PostgreSQL ≥ 16.
+
+```sh
+mix deps.get
+MIX_ENV=dev mix event_store.create && MIX_ENV=dev mix event_store.init
+iex -S mix          # boots only if the crypto self-test passes
+
+mix test            # creates/initializes the test store, runs the full suite
+cd native/canonical_v1 && cargo test   # independent Rust-side vector verification
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/coop_substrate>.
-
+Database credentials live in `config/{dev,test}.exs`.

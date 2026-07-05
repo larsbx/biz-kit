@@ -7,6 +7,7 @@ defmodule CoopSubstrate.LogTest do
   """
 
   use CoopSubstrate.LogCase, async: false
+  use ExUnitProperties
 
   alias CoopSubstrate.Log
   alias CoopSubstrate.Protocol.Envelope
@@ -248,6 +249,61 @@ defmodule CoopSubstrate.LogTest do
 
     test "an untampered log verifies clean" do
       assert Log.verify_chains() == :ok
+    end
+  end
+
+  # Acceptance §6 [1A] item 4, property form: ANY single-byte corruption of
+  # any stored record is detected, and untampered logs never false-positive.
+  # DB-bound, so runs are few; the example-based tests above cover the
+  # adversarial (validly re-signed) forgery in depth.
+  property "any byte-level tamper of any event is detected; clean logs verify" do
+    check all(
+            event_count <- StreamData.integer(2..4),
+            victim <- StreamData.integer(1..2),
+            seed <- StreamData.integer(0..10_000),
+            max_runs: 8
+          ) do
+      victim = min(victim, event_count)
+      reset_log(nil)
+
+      member = new_member()
+
+      for n <- 1..event_count do
+        {:ok, _} = Log.append(signed_test_event(member, note: "event-#{n}"))
+      end
+
+      assert Log.verify_chains() == :ok
+
+      {:ok, conn} = raw_conn()
+
+      %{rows: [[bytes]]} =
+        Postgrex.query!(
+          conn,
+          "SELECT data FROM events e JOIN stream_events se ON se.event_id = e.event_id
+            WHERE se.stream_id = (SELECT stream_id FROM streams WHERE stream_uuid = 'ledger')
+              AND se.stream_version = $1",
+          [victim]
+        )
+
+      position = rem(seed, byte_size(bytes))
+      <<head::binary-size(position), byte, tail::binary>> = bytes
+      corrupted = <<head::binary, Bitwise.bxor(byte, 0x01), tail::binary>>
+
+      with_update_bypass(fn tamper_conn ->
+        Postgrex.query!(
+          tamper_conn,
+          "UPDATE events SET data = $1 WHERE event_id IN
+             (SELECT event_id FROM stream_events
+               WHERE stream_id = (SELECT stream_id FROM streams WHERE stream_uuid = 'ledger')
+                 AND stream_version = $2)",
+          [corrupted, victim]
+        )
+      end)
+
+      GenServer.stop(conn)
+
+      assert {:error, breaks} = Log.verify_chains()
+      assert Enum.any?(breaks, fn {:break, seq, _reasons} -> seq >= victim end)
     end
   end
 
