@@ -22,3 +22,7 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 coop_substrate-*.tar
 
+# Rust NIF build artifacts (rebuilt by mix compile via rustler).
+/native/canonical_v1/target/
+/priv/native/
+
