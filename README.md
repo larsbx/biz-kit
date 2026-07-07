@@ -3,7 +3,8 @@
 The signed event ledger + capital-account substrate for a member-owned co-op platform:
 an append-only, tamper-evident, replayable log of Ed25519-signed canonical events that
 every other feature reads from. See `SUBSTRATE.md` (normative) and `docs/handoff.md`
-(the build brief); `docs/phase1a_plan.md` is the current build plan.
+(the build brief); `docs/phase1a_plan.md` is the completed Phase 1A build plan. New here?
+Start with [`docs/quickstart.md`](docs/quickstart.md).
 
 **Status: Phase 1A complete** — canonical signed event protocol + append-only log.
 Phase 1B (membership lifecycle + capital-account fold) is next.
@@ -35,4 +36,6 @@ mix test            # creates/initializes the test store, runs the full suite
 cd native/canonical_v1 && cargo test   # independent Rust-side vector verification
 ```
 
-Database credentials live in `config/{dev,test}.exs`.
+Database credentials live in `config/{dev,test}.exs`. The dev host's
+environment (user-local Postgres, toolchain, network) is documented in
+[`docs/machine.md`](docs/machine.md).

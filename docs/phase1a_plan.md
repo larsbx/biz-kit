@@ -1,5 +1,10 @@
 # Phase 1A — Substrate Buildout: canonical signed event protocol + append-only log
 
+> **Status: COMPLETE** (2026-07-05, through commit `2391595`). All build steps 0–9 done;
+> every acceptance item below passes (`mix test` green incl. tamper property test,
+> `cargo test` green, boot self-test gates startup, SUBSTRATE.md complete).
+> Kept as the record of what 1A was scoped to be; Phase 1B is next.
+
 New Elixir project at `~/coop_substrate`. Scope is strictly the hand-off's Phase 1A slice (items 1–11); acceptance = hand-off §6 items marked [1A]. Specs 00–13A + Amendment 01 received in-conversation; where they refine the hand-off, the spec governs (flagged inline below).
 
 ## Settled decisions (user-confirmed)
