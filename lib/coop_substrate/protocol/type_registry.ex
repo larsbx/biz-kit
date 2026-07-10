@@ -17,7 +17,7 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
 
   import Bitwise
 
-  @type disclosure_class :: :commons | :telemetry | :edges
+  @type disclosure_class :: :commons | :telemetry | :edges | :bilateral
 
   # Field checkers: :string | :int | :bytes | :hash | :pubkey | :bool | :any
   # Stream spec: {:chapter_scoped, prefix} => "<chapter_id>/<prefix>"
@@ -213,6 +213,133 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
       stream: {:payload_field, "sinking_fund", "entity_id"},
       payload: %{
         required: %{"entity_id" => :string, "amount_minor" => :int},
+        optional: %{}
+      }
+    },
+
+    # -- Phase 1C: floor lifecycle (transitions in Membership.Lifecycle,
+    # enforced at the gate like every lifecycle event) -------------------------
+    "FloorCureStarted" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string},
+        optional: %{"evaluation_ref" => :hash}
+      }
+    },
+    "FloorCureCleared" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string},
+        optional: %{"evaluation_ref" => :hash}
+      }
+    },
+    "HardshipDeclared" => %{
+      required_roles: ["member"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: @membership_payload
+    },
+    "HardshipEnded" => %{
+      required_roles: ["member"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: @membership_payload
+    },
+
+    # -- Phase 1C: throughput & floor compute (docs/phase1c_plan.md) -----------
+    # ThroughputRecorded is the G0-claim carrier (08 §4): the `settlement`
+    # component is NOT recordable here — it derives from obligation-rail
+    # discharges. Component set + gate checks: Phase 1C step 4/5.
+    "ThroughputRecorded" => %{
+      required_roles: ["steward"],
+      disclosure_class: :telemetry,
+      stream: {:payload_fields, "throughput", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "component" => :string,
+          "units" => :int,
+          "occurred_ms" => :int
+        },
+        optional: %{"source_ref" => :hash}
+      }
+    },
+    "ThroughputRuleActivated" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "throughput_rules"},
+      payload: %{
+        required: %{"rule_id" => :string, "params" => :any},
+        optional: %{"note" => :string}
+      }
+    },
+    "FloorRuleActivated" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "floor_rules"},
+      payload: %{
+        required: %{"rule_id" => :string, "params" => :any},
+        optional: %{"note" => :string}
+      }
+    },
+    "FloorEvaluationRecorded" => %{
+      required_roles: ["steward"],
+      disclosure_class: :telemetry,
+      stream: {:payload_fields, "floor", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "cleared" => :bool,
+          "rule_id" => :string,
+          "window_ms" => :int,
+          "value" => :int
+        },
+        optional: %{}
+      }
+    },
+
+    # -- Phase 1C: the obligation-relationship rail (corpus 05 §1.2) -----------
+    # Witnessed transaction relationships, NOT settlement: money movement
+    # stays off-platform (05 P11 — no event type represents fund movement).
+    # All three ride the obligation's own stream; every event is dual-signed
+    # by the parties (signer-role semantics PLACEHOLDER like the 1B types;
+    # key/party checks arrive with the step-4 gate).
+    "ObligationRecorded" => %{
+      required_roles: ["debtor", "creditor"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "obligations", "obligation_id"},
+      payload: %{
+        required: %{
+          "obligation_id" => :string,
+          "debtor_id" => :string,
+          "creditor_id" => :string,
+          "amount_minor" => :int,
+          "denomination" => :string
+        },
+        optional: %{}
+      }
+    },
+    "ObligationAssigned" => %{
+      required_roles: ["assignor", "assignee"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "obligations", "obligation_id"},
+      payload: %{
+        required: %{"obligation_id" => :string, "new_debtor_id" => :string},
+        optional: %{}
+      }
+    },
+    "ObligationDischarged" => %{
+      required_roles: ["debtor", "creditor"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "obligations", "obligation_id"},
+      payload: %{
+        required: %{"obligation_id" => :string},
         optional: %{}
       }
     }

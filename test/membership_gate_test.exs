@@ -312,6 +312,66 @@ defmodule CoopSubstrate.MembershipGateTest do
     )
   end
 
+  # -- Phase 1C: floor cure/hardship states over the real log ------------------
+
+  test "cure round-trip: member → in_cure → member, and in_cure → floor_exited", ctx do
+    :ok = seed_membership!(ctx.steward, ctx.member, @member, @entity)
+
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", membership_payload()))
+    assert %{state: :in_cure} = membership_state()
+
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureCleared", membership_payload()))
+    assert %{state: :member} = membership_state()
+
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", membership_payload()))
+
+    {:ok, _} =
+      Log.append(signed_event(ctx.steward, "MembershipFloorExited", membership_payload()))
+
+    assert %{state: :floor_exited} = membership_state()
+    assert :ok = Log.verify_chains()
+  end
+
+  test "hardship round-trip is member-signed; cure cannot start from hardship", ctx do
+    :ok = seed_membership!(ctx.steward, ctx.member, @member, @entity)
+
+    {:ok, _} = Log.append(signed_event(ctx.member, "HardshipDeclared", membership_payload()))
+    assert %{state: :hardship} = membership_state()
+
+    assert_rejected_without_persisting(
+      signed_event(ctx.steward, "FloorCureStarted", membership_payload()),
+      {:illegal_transition, "FloorCureStarted", :hardship}
+    )
+
+    # Floor exit from hardship is illegal too (hardship suspends the floor).
+    assert_rejected_without_persisting(
+      signed_event(ctx.steward, "MembershipFloorExited", membership_payload()),
+      {:illegal_transition, "MembershipFloorExited", :hardship}
+    )
+
+    {:ok, _} = Log.append(signed_event(ctx.member, "HardshipEnded", membership_payload()))
+    assert %{state: :member} = membership_state()
+  end
+
+  test "hardship declaration must use the member's current key", ctx do
+    :ok = seed_membership!(ctx.steward, ctx.member, @member, @entity)
+
+    imposter = new_member("member")
+
+    assert_rejected_without_persisting(
+      signed_event(imposter, "HardshipDeclared", membership_payload()),
+      {:not_the_members_current_key, imposter.signer.key_id}
+    )
+  end
+
+  test "departure and death remain reachable from cure and hardship", ctx do
+    :ok = seed_membership!(ctx.steward, ctx.member, @member, @entity)
+
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", membership_payload()))
+    {:ok, _} = Log.append(signed_event(ctx.member, "MembershipDeparted", membership_payload()))
+    assert %{state: :departed} = membership_state()
+  end
+
   test "the gate state survives appender restarts (rebuilt from the ledger)", ctx do
     register!(ctx)
     {:ok, _} = Log.append(invite(ctx.steward))

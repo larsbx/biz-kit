@@ -31,6 +31,14 @@ defmodule CoopSubstrate.Constants do
   @doc "Redemption schedule method supported by the 1B data model."
   def redemption_methods, do: ["fifo"]
 
+  @doc """
+  Recordable throughput components (Phase 1C). `settlement` is deliberately
+  absent: it derives from obligation-rail discharge events (corpus 05 §1.2),
+  never from a claim. PLACEHOLDER — the component taxonomy awaits the absent
+  throughput_and_floor spec / charter declaration (docs/phase1c_plan.md).
+  """
+  def throughput_components, do: ["delivery", "match", "custody", "labor_hour"]
+
   @doc "Canonical profile name carried inside every signed core."
   def canonical_profile, do: "CoopEventCanonicalV1"
 
