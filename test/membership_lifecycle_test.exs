@@ -9,27 +9,34 @@ defmodule CoopSubstrate.MembershipLifecycleTest do
 
   alias CoopSubstrate.Membership.Lifecycle
 
-  # The declared machine (docs/phase1b_plan.md). This test restates it
-  # independently so an accidental edit to the table can't silently pass.
+  # The declared machine (docs/phase1b_plan.md + the 1C floor/cure/hardship
+  # extension, docs/phase1c_plan.md). This test restates it independently so
+  # an accidental edit to the table can't silently pass.
   @legal %{
     "MembershipInvited" => {[nil], :invited},
     "MembershipProbationStarted" => {[:invited], :probationary},
     "MembershipConfirmed" => {[:probationary], :member},
-    "MembershipDeparted" => {[:invited, :probationary, :member], :departed},
+    "MembershipDeparted" =>
+      {[:invited, :probationary, :member, :in_cure, :hardship], :departed},
     "MembershipRetired" => {[:member], :retired},
-    "MembershipFloorExited" => {[:member], :floor_exited},
-    "MembershipDeceased" => {[:probationary, :member], :deceased}
+    "MembershipFloorExited" => {[:member, :in_cure], :floor_exited},
+    "MembershipDeceased" => {[:probationary, :member, :in_cure, :hardship], :deceased},
+    "FloorCureStarted" => {[:member], :in_cure},
+    "FloorCureCleared" => {[:in_cure], :member},
+    "HardshipDeclared" => {[:member], :hardship},
+    "HardshipEnded" => {[:hardship], :member}
   }
 
-  @all_states [nil | [:invited, :probationary, :member, :departed, :retired, :floor_exited, :deceased]]
+  @non_terminal [:invited, :probationary, :member, :in_cure, :hardship]
+  @terminal [:departed, :retired, :floor_exited, :deceased]
+  @all_states [nil | @non_terminal ++ @terminal]
 
   test "the declared event set is exactly the lifecycle event set" do
     assert Enum.sort(Map.keys(@legal)) == Enum.sort(Lifecycle.event_types())
   end
 
   test "the declared state set is exhaustive" do
-    assert Enum.sort(Lifecycle.states()) ==
-             Enum.sort([:invited, :probationary, :member, :departed, :retired, :floor_exited, :deceased])
+    assert Enum.sort(Lifecycle.states()) == Enum.sort(@non_terminal ++ @terminal)
   end
 
   test "every (state, event) pair behaves exactly per the table — exhaustive matrix" do
@@ -57,19 +64,25 @@ defmodule CoopSubstrate.MembershipLifecycleTest do
 
   test "terminal states are exactly the redeemable-account states" do
     assert Enum.sort(Enum.filter(Lifecycle.states(), &Lifecycle.terminal?/1)) ==
-             Enum.sort([:departed, :retired, :floor_exited, :deceased])
+             Enum.sort(@terminal)
 
     # No lifecycle event leaves a terminal state (the matrix test proves it;
     # this states the intent directly).
-    for state <- [:departed, :retired, :floor_exited, :deceased],
-        event <- Lifecycle.event_types() do
+    for state <- @terminal, event <- Lifecycle.event_types() do
       assert {:error, _} = Lifecycle.apply(state, event)
     end
   end
 
-  test "active-for-patronage states are probationary and member (PLACEHOLDER semantics)" do
+  test "active-for-accrual states include in_cure and hardship (PLACEHOLDER semantics)" do
     for state <- @all_states do
-      assert Lifecycle.active?(state) == (state in [:probationary, :member])
+      assert Lifecycle.active?(state) ==
+               (state in [:probationary, :member, :in_cure, :hardship])
+    end
+  end
+
+  test "hardship suspends floor evaluation; cure does not" do
+    for state <- @all_states do
+      assert Lifecycle.floor_suspended?(state) == (state == :hardship)
     end
   end
 end
