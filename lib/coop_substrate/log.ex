@@ -29,6 +29,7 @@ defmodule CoopSubstrate.Log do
   use GenServer
 
   alias CoopSubstrate.Canonical
+  alias CoopSubstrate.Crypto
   alias CoopSubstrate.Projections.Membership, as: Gate
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.Protocol.TypeRegistry
@@ -143,6 +144,112 @@ defmodule CoopSubstrate.Log do
         [] -> :ok
         breaks -> {:error, Enum.reverse(breaks)}
       end
+    end
+  end
+
+  # -- checkpoints (Phase 1D; hand-off §6 item 16) ------------------------------
+
+  @doc """
+  A self-contained, externalizable checkpoint: the canonical encoding of the
+  current global head, signed by a `checkpoint`-role key
+  (docs/phase1d_plan.md P6). Publishing the blob outside the primary
+  database commits the operator to the entire history — altering append-only
+  history is protected-objectives class (00 Art. VI), and this is its
+  detection mechanism. Emission does not consult the registry; verification
+  does.
+  """
+  @spec checkpoint(String.t(), String.t(), <<_::256>>) :: {:ok, binary()} | {:error, term()}
+  def checkpoint(chapter_id, key_id, seed) do
+    case head() do
+      %{global_seq: 0} ->
+        {:error, :empty_log}
+
+      %{global_seq: seq, global_hash: hash} ->
+        {:ok, body} =
+          Canonical.encode(%{
+            "schema" => "CheckpointV1",
+            "chapter_id" => chapter_id,
+            "key_id" => key_id,
+            "global_seq" => seq,
+            "global_hash" => {:bytes, hash}
+          })
+
+        Canonical.encode(%{
+          "body" => {:bytes, body},
+          "signature" => {:bytes, Crypto.sign(body, seed)}
+        })
+    end
+  end
+
+  @doc """
+  Independent checkpoint verification: audits both hash chains up to the
+  claimed position, recomputes the head from the raw stored bytes, and
+  validates the signature against the chapter's `checkpoint` keys **as of
+  that position** — later revocation never invalidates a historical
+  attestation, and a revoked key cannot attest any later head.
+  """
+  @spec verify_checkpoint(binary()) :: :ok | {:error, term()}
+  def verify_checkpoint(blob) when is_binary(blob) do
+    with {:ok, {body, signature}} <- unpack_checkpoint(blob),
+         {:ok, cp} <- unpack_checkpoint_body(body),
+         :ok <- verify_chains(as_of: cp.global_seq),
+         {:ok, recomputed} <- head_at(cp.global_seq),
+         {:ok, gate} <- replay(Gate, as_of: cp.global_seq) do
+      declared = Map.get(gate.role_keys[{cp.chapter_id, "checkpoint"}] || %{}, cp.key_id)
+
+      cond do
+        recomputed != cp.global_hash ->
+          {:error, :head_mismatch}
+
+        declared == nil ->
+          {:error, {:checkpoint_key_not_declared, cp.chapter_id, cp.key_id}}
+
+        not Crypto.verify(body, signature, declared) ->
+          {:error, :bad_signature}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  @doc "The recomputed global head hash at `global_seq`, from raw ledger bytes."
+  @spec head_at(pos_integer()) :: {:ok, binary()} | {:error, term()}
+  def head_at(global_seq) when is_integer(global_seq) and global_seq > 0 do
+    with {:ok, {seq, hash}} <-
+           fold_ledger_raw({0, nil}, global_seq, fn position, bytes, _acc ->
+             {position, :crypto.hash(:sha256, bytes)}
+           end) do
+      if seq == global_seq, do: {:ok, hash}, else: {:error, {:unknown_global_seq, global_seq}}
+    end
+  end
+
+  defp unpack_checkpoint(blob) do
+    case Canonical.decode(blob) do
+      {:ok, %{"body" => {:bytes, body}, "signature" => {:bytes, sig}}} -> {:ok, {body, sig}}
+      {:ok, _other} -> {:error, :malformed_checkpoint}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp unpack_checkpoint_body(body) do
+    case Canonical.decode(body) do
+      {:ok,
+       %{
+         "schema" => "CheckpointV1",
+         "chapter_id" => chapter_id,
+         "key_id" => key_id,
+         "global_seq" => seq,
+         "global_hash" => {:bytes, hash}
+       }}
+      when is_integer(seq) and seq > 0 ->
+        {:ok, %{chapter_id: chapter_id, key_id: key_id, global_seq: seq, global_hash: hash}}
+
+      {:ok, _other} ->
+        {:error, :malformed_checkpoint}
+
+      {:error, _} = error ->
+        error
     end
   end
 
