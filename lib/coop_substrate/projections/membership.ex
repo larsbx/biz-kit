@@ -34,7 +34,8 @@ defmodule CoopSubstrate.Projections.Membership do
       schedules: %{},
       throughput_rules: %{},
       floor_rules: %{},
-      obligations: %{}
+      obligations: %{},
+      role_keys: %{}
     }
   end
 
@@ -78,6 +79,23 @@ defmodule CoopSubstrate.Projections.Membership do
       rule_id: p["rule_id"],
       params: p["params"]
     })
+  end
+
+  def handle_event(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p}, state) do
+    {:bytes, pubkey} = p["pubkey"]
+
+    update_in(state, [:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
+      Map.put(keys, p["key_id"], pubkey)
+    end)
+  end
+
+  def handle_event(%Envelope{type: "RoleKeyRevoked", chapter_id: ch, payload: p}, state) do
+    # The (possibly empty) map stays: once a role's door closes, it never
+    # reopens (docs/phase1d_plan.md P4) — an empty declared set means no
+    # signature in that role is acceptable until governance declares a key.
+    update_in(state, [:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
+      Map.delete(keys, p["key_id"])
+    end)
   end
 
   def handle_event(%Envelope{type: "ThroughputRuleActivated", chapter_id: ch, payload: p}, state) do

@@ -39,6 +39,15 @@ defmodule CoopSubstrate.Constants do
   """
   def throughput_components, do: ["delivery", "match", "custody", "labor_hour"]
 
+  @doc """
+  Roles whose keys may be declared in a chapter's governance stream
+  (Phase 1D): `governance` signs declarations themselves, `steward` the
+  administrative event types, `checkpoint` the external head attestations.
+  `member` is deliberately absent — member keys live in the member registry
+  (`MemberRegistered`/`KeyRotated`), never here.
+  """
+  def declarable_roles, do: ["governance", "steward", "checkpoint"]
+
   @doc "Canonical profile name carried inside every signed core."
   def canonical_profile, do: "CoopEventCanonicalV1"
 

@@ -36,8 +36,14 @@ defmodule CoopSubstrate.Protocol.Validity do
       signing with their *current* keys; obligation ids unique; assignment
       and discharge only on open obligations; discharge-once. No event
       represents fund movement (05 P11) — settlement is attestation only.
-    * `KeyRotated` stays ungated (1A compatibility; rotation governance is
-      1D). Everything else: no log-dependent constraints.
+    * Role-key registry (1D) — bootstrap-then-enforce: once a chapter has
+      ever declared keys for a role, every signature in that role must match
+      a currently declared key (`check_role_keys/2`, runs before every
+      per-type check). Genesis (the first governance key) is trust-on-first-
+      use, self-certified; later declarations/revocations are governance-
+      signed; revoking the last governance key is unrepresentable.
+    * `KeyRotated` stays ungated (1A compatibility; rotation gating is the
+      next 1D step). Everything else: no log-dependent constraints.
   """
 
   alias CoopSubstrate.Capital.AccrualRules
@@ -49,7 +55,87 @@ defmodule CoopSubstrate.Protocol.Validity do
   alias CoopSubstrate.Throughput
 
   @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
-  def check(%Envelope{type: "EntityRegistered", chapter_id: ch, payload: p}, gate) do
+  def check(%Envelope{} = env, gate) do
+    with :ok <- check_role_keys(env, gate) do
+      type_check(env, gate)
+    end
+  end
+
+  # Bootstrap-then-enforce (Phase 1D, docs/phase1d_plan.md P4): once a chapter
+  # has EVER declared keys for a role, every signature in that role must match
+  # a currently declared key. Roles never declared are unchecked (bootstrap
+  # mode — the pre-1D behavior, now named). `member` is never in this
+  # registry; member keys are checked against the member registry as before.
+  defp check_role_keys(%Envelope{signers: signers, chapter_id: ch}, gate) do
+    Enum.find_value(signers, :ok, fn signer ->
+      case gate.role_keys[{ch, signer.role}] do
+        nil ->
+          nil
+
+        keys ->
+          unless Map.get(keys, signer.key_id) == signer.pubkey do
+            {:error, {:role_key_not_declared, signer.role, signer.key_id}}
+          end
+      end
+    end)
+  end
+
+  # -- Phase 1D: the role-key registry itself ----------------------------------
+
+  defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do
+    governance = gate.role_keys[{ch, "governance"}]
+    declared = gate.role_keys[{ch, p["role"]}] || %{}
+
+    cond do
+      p["role"] not in Constants.declarable_roles() ->
+        {:error, {:undeclarable_role, p["role"]}}
+
+      Map.has_key?(declared, p["key_id"]) ->
+        {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
+
+      governance == nil and p["role"] != "governance" ->
+        # No governance exists yet: the only representable declaration is the
+        # genesis governance key itself.
+        {:error, :genesis_required}
+
+      governance == nil ->
+        # Genesis: trust-on-first-use, self-certified (the MemberRegistered
+        # pattern) — flagged in docs/phase1d_plan.md; the mitigation is
+        # publishing the genesis checkpoint out-of-band.
+        if genesis_self_certified?(env, p) do
+          :ok
+        else
+          {:error, :genesis_must_be_self_signed}
+        end
+
+      true ->
+        # Post-genesis: the governance-role signature was already validated
+        # against the registry by check_role_keys/2.
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "RoleKeyRevoked", chapter_id: ch, payload: p}, gate) do
+    governance = gate.role_keys[{ch, "governance"}]
+    declared = gate.role_keys[{ch, p["role"]}] || %{}
+
+    cond do
+      governance == nil ->
+        {:error, :genesis_required}
+
+      not Map.has_key?(declared, p["key_id"]) ->
+        {:error, {:unknown_role_key, p["role"], p["key_id"]}}
+
+      p["role"] == "governance" and map_size(governance) == 1 ->
+        # A chapter can never orphan its own governance (P4).
+        {:error, :cannot_orphan_governance}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "EntityRegistered", chapter_id: ch, payload: p}, gate) do
     cond do
       p["class"] not in Constants.entity_classes() ->
         {:error, {:unknown_entity_class, p["class"]}}
@@ -62,7 +148,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "MemberRegistered", chapter_id: ch, payload: p} = env, gate) do
+  defp type_check(%Envelope{type: "MemberRegistered", chapter_id: ch, payload: p} = env, gate) do
     {:bytes, pubkey} = p["pubkey"]
 
     cond do
@@ -80,13 +166,13 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "AccrualRuleActivated", payload: p}, _gate) do
+  defp type_check(%Envelope{type: "AccrualRuleActivated", payload: p}, _gate) do
     with {:ok, module} <- AccrualRules.fetch(p["rule_id"]) do
       module.validate_params(p["params"])
     end
   end
 
-  def check(%Envelope{type: "PatronageRecorded", chapter_id: ch, payload: p}, gate) do
+  defp type_check(%Envelope{type: "PatronageRecorded", chapter_id: ch, payload: p}, gate) do
     record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
 
     cond do
@@ -107,7 +193,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p}, gate) do
+  defp type_check(%Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p}, gate) do
     record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
 
     cond do
@@ -131,7 +217,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "RedemptionPaid", chapter_id: ch, payload: p}, gate) do
+  defp type_check(%Envelope{type: "RedemptionPaid", chapter_id: ch, payload: p}, gate) do
     cond do
       not Map.has_key?(gate.schedules, {ch, p["member_id"], p["entity_id"]}) ->
         {:error, :no_open_schedule}
@@ -144,7 +230,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "SinkingFundContributed", chapter_id: ch, payload: p}, gate) do
+  defp type_check(%Envelope{type: "SinkingFundContributed", chapter_id: ch, payload: p}, gate) do
     cond do
       not Map.has_key?(gate.entities, {ch, p["entity_id"]}) ->
         {:error, {:unregistered_entity, p["entity_id"]}}
@@ -159,19 +245,19 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   # -- Phase 1C: throughput & floor (docs/phase1c_plan.md step 4) --------------
 
-  def check(%Envelope{type: "ThroughputRuleActivated", payload: p}, _gate) do
+  defp type_check(%Envelope{type: "ThroughputRuleActivated", payload: p}, _gate) do
     with {:ok, module} <- Throughput.Rules.fetch(p["rule_id"]) do
       module.validate_params(p["params"])
     end
   end
 
-  def check(%Envelope{type: "FloorRuleActivated", payload: p}, _gate) do
+  defp type_check(%Envelope{type: "FloorRuleActivated", payload: p}, _gate) do
     with {:ok, module} <- Floor.Rules.fetch(p["rule_id"]) do
       module.validate_params(p["params"])
     end
   end
 
-  def check(%Envelope{type: "ThroughputRecorded", chapter_id: ch, payload: p}, gate) do
+  defp type_check(%Envelope{type: "ThroughputRecorded", chapter_id: ch, payload: p}, gate) do
     record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
 
     cond do
@@ -198,7 +284,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "FloorEvaluationRecorded", chapter_id: ch, payload: p}, gate) do
+  defp type_check(%Envelope{type: "FloorEvaluationRecorded", chapter_id: ch, payload: p}, gate) do
     record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
     active = gate.floor_rules[ch]
 
@@ -230,7 +316,7 @@ defmodule CoopSubstrate.Protocol.Validity do
   # funds). Party signatures must use each party's CURRENT registered key,
   # following rotation, exactly as membership events do. ------------------------
 
-  def check(%Envelope{type: "ObligationRecorded", chapter_id: ch, payload: p} = env, gate) do
+  defp type_check(%Envelope{type: "ObligationRecorded", chapter_id: ch, payload: p} = env, gate) do
     debtor = gate.members[{ch, p["debtor_id"]}]
     creditor = gate.members[{ch, p["creditor_id"]}]
 
@@ -257,7 +343,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "ObligationAssigned", chapter_id: ch, payload: p} = env, gate) do
+  defp type_check(%Envelope{type: "ObligationAssigned", chapter_id: ch, payload: p} = env, gate) do
     obligation = gate.obligations[{ch, p["obligation_id"]}]
     assignee = gate.members[{ch, p["new_debtor_id"]}]
 
@@ -281,7 +367,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env, gate) do
+  defp type_check(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env, gate) do
     case gate.obligations[{ch, p["obligation_id"]}] do
       nil ->
         {:error, {:no_such_obligation, p["obligation_id"]}}
@@ -296,7 +382,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  def check(%Envelope{type: type} = env, gate) do
+  defp type_check(%Envelope{type: type} = env, gate) do
     if Lifecycle.lifecycle_event?(type) do
       check_lifecycle(env, gate)
     else
@@ -337,6 +423,15 @@ defmodule CoopSubstrate.Protocol.Validity do
         {:error, {:not_the_members_current_key, signer.key_id}}
       end
     end)
+  end
+
+  defp genesis_self_certified?(%Envelope{signers: signers}, p) do
+    {:bytes, pubkey} = p["pubkey"]
+
+    Enum.any?(
+      signers,
+      &(&1.role == "governance" and &1.pubkey == pubkey and &1.key_id == p["key_id"])
+    )
   end
 
   # Same discipline for obligation-rail parties: every signer carrying the

@@ -342,6 +342,30 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         required: %{"obligation_id" => :string},
         optional: %{}
       }
+    },
+
+    # -- Phase 1D: role-key registry (docs/phase1d_plan.md; hand-off §4a).
+    # Genesis (a chapter's first governance key) is trust-on-first-use,
+    # self-certified; everything after is governance-signed. member_id is a
+    # PLACEHOLDER binding of role → person (which member may act under a role
+    # key is governance semantics, not enforced in 1D). ------------------------
+    "RoleKeyDeclared" => %{
+      required_roles: ["governance"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "governance"},
+      payload: %{
+        required: %{"role" => :string, "key_id" => :string, "pubkey" => :pubkey},
+        optional: %{"member_id" => :string}
+      }
+    },
+    "RoleKeyRevoked" => %{
+      required_roles: ["governance"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "governance"},
+      payload: %{
+        required: %{"role" => :string, "key_id" => :string},
+        optional: %{"reason" => :string}
+      }
     }
   }
 
