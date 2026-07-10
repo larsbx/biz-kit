@@ -8,6 +8,7 @@ defmodule CoopSubstrate.Throughput do
   """
 
   alias CoopSubstrate.Log
+  alias CoopSubstrate.Privacy
   alias CoopSubstrate.Projections.Throughput, as: Fold
 
   @doc """
@@ -28,6 +29,19 @@ defmodule CoopSubstrate.Throughput do
   def entries(chapter_id, member_id, entity_id, opts \\ []) do
     with {:ok, state} <- Log.replay(Fold, opts) do
       {:ok, Fold.entries(state, chapter_id, member_id, entity_id)}
+    end
+  end
+
+  @doc """
+  Chapter-wide system throughput over the window — a system aggregate,
+  summed through the privacy seam; no per-member detail is exposed
+  (hand-off §2.5). Supports `as_of:`.
+  """
+  @spec system_value(String.t(), {integer(), integer()}, keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def system_value(chapter_id, {from_ms, to_ms}, opts \\ []) do
+    with {:ok, state} <- Log.replay(Fold, opts) do
+      {:ok, Privacy.Aggregate.sum(Fold.contributions(state, chapter_id, {from_ms, to_ms}))}
     end
   end
 end

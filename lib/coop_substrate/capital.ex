@@ -12,6 +12,7 @@ defmodule CoopSubstrate.Capital do
   """
 
   alias CoopSubstrate.Log
+  alias CoopSubstrate.Privacy
   alias CoopSubstrate.Projections.CapitalAccounts
 
   @doc "The account record for (chapter, member, entity), or nil. Supports `as_of:`."
@@ -38,6 +39,20 @@ defmodule CoopSubstrate.Capital do
   def sinking_fund(chapter_id, entity_id, opts \\ []) do
     with {:ok, state} <- Log.replay(CapitalAccounts, opts) do
       {:ok, CapitalAccounts.sinking_fund(state, chapter_id, entity_id)}
+    end
+  end
+
+  @doc """
+  The chapter's total sinking-fund pool — a system aggregate, summed through
+  the privacy seam (Phase 1C step 8). Supports `as_of:`.
+  """
+  @spec sinking_fund_total(String.t(), keyword()) :: {:ok, integer()} | {:error, term()}
+  def sinking_fund_total(chapter_id, opts \\ []) do
+    with {:ok, state} <- Log.replay(CapitalAccounts, opts) do
+      contributions =
+        for {{ch, _entity}, balance} <- state.sinking_funds, ch == chapter_id, do: balance
+
+      {:ok, Privacy.Aggregate.sum(contributions)}
     end
   end
 end

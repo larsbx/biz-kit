@@ -88,14 +88,29 @@ defmodule CoopSubstrate.Projections.Throughput do
     [{chapter_id, member_id, entity_id}, {chapter_id, member_id, nil}]
     |> Enum.uniq()
     |> Enum.flat_map(&Map.get(state.entries, &1, []))
-    |> Enum.filter(&(&1.occurred_ms >= from_ms and &1.occurred_ms < to_ms))
-    |> Enum.map(& &1.credited_minor)
-    |> Enum.sum()
+    |> windowed_sum({from_ms, to_ms})
   end
 
   @doc "All entries for (chapter, member, entity), fold order. Own-data query."
   def entries(state, chapter_id, member_id, entity_id) do
     Map.get(state.entries, {chapter_id, member_id, entity_id}, [])
+  end
+
+  @doc """
+  Per-bucket windowed contributions for a chapter — the input to the
+  privacy Aggregate seam. Never exposed per member; only the seam's total is.
+  """
+  def contributions(state, chapter_id, {from_ms, to_ms}) do
+    for {{ch, _member, _entity}, entries} <- state.entries, ch == chapter_id do
+      windowed_sum(entries, {from_ms, to_ms})
+    end
+  end
+
+  defp windowed_sum(entries, {from_ms, to_ms}) do
+    entries
+    |> Enum.filter(&(&1.occurred_ms >= from_ms and &1.occurred_ms < to_ms))
+    |> Enum.map(& &1.credited_minor)
+    |> Enum.sum()
   end
 
   # -- internals ---------------------------------------------------------------
