@@ -135,6 +135,67 @@ defmodule CoopSubstrate.PrivacySeamTest do
     assert Privacy.Proof.verify(fact, proof)
   end
 
+  test "Proof seam: signed proofs bind a checkpoint key, as-of (1D)", ctx do
+    gov = new_member("governance")
+    ck = new_member("checkpoint")
+
+    for {role, owner} <- [{"governance", gov}, {"checkpoint", ck}] do
+      {:ok, _} =
+        Log.append(
+          signed_event(gov, "RoleKeyDeclared", %{
+            "role" => role,
+            "key_id" => owner.signer.key_id,
+            "pubkey" => {:bytes, owner.signer.pubkey}
+          })
+        )
+    end
+
+    {:ok, _} =
+      Log.append(
+        signed_event(ctx.steward, "FloorRuleActivated", %{
+          "rule_id" => "floor-threshold-v1",
+          "params" => %{"window_ms" => 1_000, "default_threshold_minor" => 40}
+        })
+      )
+
+    fact = {:floor_cleared, @chapter, @member, @entity, @t0 + 1}
+    sign_with = {ck.signer.key_id, ck.seed}
+
+    assert {:ok, signed} = Privacy.Proof.prove(fact, sign_with: sign_with)
+    assert %{key_id: _, signature: _} = signed
+    assert Privacy.Proof.verify(fact, signed)
+
+    # A signature by an UNDECLARED key never verifies (emission is unchecked,
+    # verification decides trust — same as checkpoints).
+    rogue = new_member("checkpoint")
+    {:ok, forged} = Privacy.Proof.prove(fact, sign_with: {rogue.signer.key_id, rogue.seed})
+    refute Privacy.Proof.verify(fact, forged)
+
+    # A tampered signature fails even though the fact holds.
+    refute Privacy.Proof.verify(fact, %{signed | signature: :crypto.strong_rand_bytes(64)})
+
+    # Unsigned proofs keep verifying by recomputation alone (bootstrap
+    # behavior unchanged).
+    assert {:ok, unsigned} = Privacy.Proof.prove(fact)
+    refute Map.has_key?(unsigned, :signature)
+    assert Privacy.Proof.verify(fact, unsigned)
+
+    # As-of: after revocation, the OLD signed proof still verifies; a NEW
+    # one signed by the revoked key does not.
+    {:ok, _} =
+      Log.append(
+        signed_event(gov, "RoleKeyRevoked", %{
+          "role" => "checkpoint",
+          "key_id" => ck.signer.key_id
+        })
+      )
+
+    assert Privacy.Proof.verify(fact, signed)
+
+    {:ok, post_revocation} = Privacy.Proof.prove(fact, sign_with: sign_with)
+    refute Privacy.Proof.verify(fact, post_revocation)
+  end
+
   test "Proof seam: balance_at_least", ctx do
     {:ok, _} =
       Log.append(
