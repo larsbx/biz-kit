@@ -114,8 +114,12 @@ pure-Elixir reference encoder.
 | `test/vectors/` | Committed byte-level test vectors (frozen) |
 | `lib/coop_substrate/membership/` | Membership lifecycle transition table (Phase 1B) |
 | `lib/coop_substrate/capital*` | Capital accounts: rules, fold, query API (Phase 1B) |
+| `lib/coop_substrate/throughput*`, `floor*` | Throughput/floor compute: rules, fold, queries (Phase 1C) |
+| `lib/coop_substrate/finance.ex` | Obligation-rail netting (Phase 1C) |
+| `lib/coop_substrate/privacy/` | Aggregate/Proof/JointCompute seams + day-one backings (Phase 1C) |
 | `docs/phase1a_plan.md` | Phase 1A build plan (complete; kept as the record of scope) |
 | `docs/phase1b_plan.md` | Phase 1B build plan (complete; kept as the record of scope) |
+| `docs/phase1c_plan.md` | Phase 1C build plan (complete; kept as the record of scope) |
 | `docs/handoff.md` | The build brief the plan was cut from |
 | `docs/machine.md` | Dev-host snapshot (user-local Postgres, toolchain, ports) |
 

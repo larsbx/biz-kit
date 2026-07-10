@@ -1,8 +1,8 @@
 # SUBSTRATE.md — The Substrate: Canonical Signed Event Protocol, Append-Only Log, Membership, Capital Accounts
 
-Status: Phase 1A complete; Phase 1B complete (§11–§12). This document is normative for the
-substrate. Where it deviates from the hand-off sketch, the deviation is flagged and justified
-(see §2.1 and §11.2).
+Status: Phases 1A, 1B (§11–§12), and 1C (§13–§14) complete. This document is normative for
+the substrate. Where it deviates from the hand-off sketch or the phase plans, the deviation
+is flagged and justified (see §2.1, §11.2, §13).
 
 Placeholder constants are flagged **PLACEHOLDER — awaiting charter declaration** and live in
 `CoopSubstrate.Constants`. None of them are real values.
@@ -303,14 +303,14 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Federation-scoped events** (09 §1): how an event that spans chapters is represented —
   a federation pseudo-chapter id, or a distinct scope field. Deferred to 1D; current model
   does not foreclose either.
-- **Glossary mapping to specs 00–13A** (plan step 9): the in-conversation spec documents
-  (system-term glossary per 01, `EventEnvelope` vs `AuthorizationEnvelope` naming, E-n ↔ 04
-  entity names) are **not in this repository**, so the mapping cannot be transcribed
-  faithfully. Add the specs under `docs/` and this section gets completed — flagged rather
-  than reconstructed from memory.
+- **Specs 00–13A**: the normative corpus is now unpacked at
+  `tmp/freight_coop_corpus/corpus/` (with `HANDOFF.md` as its index) but **untracked** —
+  `tmp/` is gitignored. Phase 1C grounds in it directly (§13); whether to commit the corpus
+  into the repo (or `docs/`-transcribe the glossary mapping) is an open housekeeping call.
 - **Registry governance**: production registration workflow for new event types (tests use
   the `:extra_event_types` app env; production types are compile-time data). The same applies
-  to accrual-rule implementations (`:extra_accrual_rules`).
+  to rule implementations (`:extra_accrual_rules`, `:extra_throughput_rules`,
+  `:extra_floor_rules`).
 - **Re-joining after a terminal membership state** (1B): the lifecycle allows no exit from
   `departed | retired | floor_exited | deceased` for the same (member, entity). Whether
   re-joining is a new membership record or a resurrection transition is a governance question.
@@ -320,6 +320,18 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Redemption enforcement** (1B → later): annual caps and payment-vs-balance checks are
   deferred workflow; the data structures carry the terms (§11.5) but the gate does not yet
   evaluate the capital fold.
+- **Rail settlement's entity dimension** (1C, §13.2): member-level settlement currently
+  counts toward every membership's floor — PLACEHOLDER awaiting the absent
+  throughput_and_floor spec / charter.
+- **Anti-gaming accretion** (1C → later): circular/self-dealing netting detection,
+  per-counterparty caps (needs a privacy-preserving counterparty tag — an 08 §6 ladder
+  decision), `NettingExecuted` batch discharge, exposure caps (05 P7) as gate checks.
+- **Floor enforcement** (1C → 1D): evaluation cadence; requiring `evaluation_ref` on
+  `MembershipFloorExited`; cure-window duration (undeclared charter constant).
+- **n = 1 aggregates** (1C, §13.7): single-contributor totals equal the contribution; the
+  k-anonymity gate is the declared upgrade when publication features arrive (08 §6).
+- **Query authn** (1C → 1D): own-data classification is a contract, not yet middleware;
+  the requesting-member context arrives with 1D governance/key structure.
 
 ## 9. Placeholder (constitutionalized-later) parameters
 
@@ -331,6 +343,7 @@ via future `CharterConstantDeclared` governance events:
 | `max_canonical_bytes` | 65 536 | encoder input cap (NIF safety rule, hand-off §4) |
 | `max_canonical_depth` | 32 | encoder nesting cap |
 | `default_accrual_weight_bp` | 10 000 | `capital-accrual-v1` fallback weight (§11.4) |
+| `throughput_components` | delivery/match/custody/labor_hour | recordable claim set (§13.2; settlement derives from the rail) |
 
 Phase 1B economic parameters are **versioned in-log, never hardcoded**: the accrual rule and
 its weights arrive per chapter via `AccrualRuleActivated{rule_id, params}` (the whole
@@ -338,8 +351,10 @@ its weights arrive per chapter via `AccrualRuleActivated{rule_id, params}` (the 
 `annual_cap_minor`, `method`) travel inside each `RedemptionScheduleOpened` event. Entity
 classes (`Constants.entity_classes/0`: carriers/workers/mechanics co-ops) come from
 master_design §3 via the hand-off — extending them is a governance act. Signer-role
-assignments on 1B types are PLACEHOLDER governance semantics (§11.3). 1C adds
-thresholds/windows/caps the same versioned way.
+assignments on 1B/1C types are PLACEHOLDER governance semantics (§11.3). Phase 1C tightened
+the discipline: throughput weights and floor thresholds/windows arrive **only** via gated
+`ThroughputRuleActivated`/`FloorRuleActivated` params with required fields and no code
+fallback (§13.2, §13.4).
 
 ## 10. Phase 1A acceptance status
 
@@ -471,4 +486,154 @@ Hand-off §6 [1B] items, enforced by the test suite:
     sinking fund, estate routing); any member's balance reproduced independently from
     `read_all` AND from verified stream exports; replay deterministic.
 
-**Gate:** Phase 1C (throughput/floor + privacy seams) may start.
+**Gate:** Phase 1C (throughput/floor + privacy seams) may start. *(Passed; see §13–§14.)*
+
+---
+
+## 13. Phase 1C — throughput, floor, obligation rail, privacy seams
+
+Scope: hand-off §2.4–2.5 + §4; plan and flagged decisions in `docs/phase1c_plan.md`. This is
+the first phase grounded in the **normative corpus** (`tmp/freight_coop_corpus/corpus/`,
+untracked — see §8): 08_PLATFORM (privacy mechanism ladder §6, verification doctrine §9),
+05_FINANCE (obligation-relationship rail §1.2; P5/P10/P11), 11_HARNESS (spec-shape rule; the
+harness gates workflow builds, not the substrate — the substrate is HANDOFF §5's phase gate).
+
+### 13.0 Spine
+
+```
+throughput(member, entity, window, as_of) = fold(rule_vN, component events ≤ as_of in window)
+cleared?(member, at)                      = throughput(m, [at − window_ms, at)) ≥ threshold_vN(class)
+aggregate(chapter, metric)                = Privacy.Aggregate.sum(contributions)   — seam, not sum
+settlement evidence                       = discharge events on the obligation rail — never funds
+```
+
+Everything is a pure function of (log, in-log rule version); no code path reads a clock —
+evaluation instants and windows are caller-supplied, so every verdict is `as_of`-reproducible.
+
+### 13.1 Floor lifecycle states
+
+`Membership.Lifecycle` gains `in_cure` and `hardship` (hand-off §2.4 "cure/hardship state in
+the membership machine"): `member ⇄ in_cure` (`FloorCureStarted`/`FloorCureCleared`),
+`member ⇄ hardship` (`HardshipDeclared`/`HardshipEnded`, member-signed), `in_cure →
+floor_exited`, and departure/death reachable from both. Hardship **suspends floor
+evaluation** (`floor_suspended?/1`) — enforced symmetrically at the gate
+(`FloorEvaluationRecorded` rejected) and in the query (`Floor.cleared?` returns the same
+error). `in_cure`/`hardship` remain active-for-accrual — PLACEHOLDER governance semantics,
+like probationary in 1B.
+
+### 13.2 Throughput — the compute layer
+
+`ThroughputRecorded{member_id, entity_id, component, units, occurred_ms, source_ref?}` is the
+**G0-claim carrier** (corpus 08 §4): `component ∈ Constants.throughput_components()`
+(PLACEHOLDER set; the hand-off's cited throughput_and_floor spec remains absent).
+`settlement` is deliberately not recordable — it derives from obligation-rail discharges.
+Counterparty identity is deliberately **not a field** (corpus 07 §5: edges are sovereign);
+per-counterparty caps await an 08 §6 ladder decision (§8).
+
+`Projections.Throughput` mirrors the capital fold: entries weighted by the chapter's active
+rule *at fold position* (`ThroughputRuleActivated`, gate-validated against
+`Throughput.Rules`; `Rules.WeightedSumV1` requires `default_weight_bp` in the activation —
+**no code fallback**, 00 Art. IV.2), every entry records its `rule_id`, activations apply
+forward only (as-of byte-stable, tested). Queries: `Throughput.value/5` over the half-open
+event-time window `[from_ms, to_ms)`; `entries/4` (own-data).
+
+**FLAGGED — entity dimension of rail settlement.** Obligations are member-to-member;
+throughput is per (member, entity). Discharges credit **both parties** in a member-level
+bucket (`entity = nil`), and the windowed query counts a member's rail settlement toward each
+of their memberships. After assignment the credit binds to the *current* debtor. A discharge
+before any throughput rule is active credits nothing (no weight to run) — deterministic
+either way. All PLACEHOLDER semantics awaiting the absent spec/charter.
+
+### 13.3 The obligation rail (corpus 05 §1.2)
+
+`ObligationRecorded{obligation_id, debtor_id, creditor_id, amount_minor, denomination}` /
+`ObligationAssigned{obligation_id, new_debtor_id}` / `ObligationDischarged{obligation_id}` —
+all dual-signed, `:bilateral`-classed, riding the obligation's own stream. Gate: parties
+registered, distinct, signing with their **current** keys (rotation-following, as 1B);
+obligation ids unique per chapter; assignment/discharge only while open; discharge-once;
+assignment onto the creditor rejected (it reconstructs a discharge without dual attestation —
+stratagem resistance, 08 §2). **No event type represents fund movement** (05 P11): settlement
+is external, attested by the dual-signed discharge. [LEGAL] the money-transmission boundary
+is a counsel gate before external use (corpus HANDOFF §4).
+
+**Netting** (05 P5, P10): `Finance.netting/3` — per-denomination pairwise set-off over open
+mutual obligations, `setoff = min(gross each way)`, residual net stated as (debtor, creditor,
+amount). A pure report; executing a round (batch discharge) is deferred (§8). The obligations
+state lives in the same fold the append gate holds — one fold, two consumers; the plan's
+separate `Projections.Obligations` proved unnecessary.
+
+### 13.4 The participation floor
+
+`Floor.cleared?(chapter, member, entity, at:, as_of:)` — windowed throughput (including rail
+settlement) against the active `floor-threshold-v1` params (`window_ms`,
+`default_threshold_minor`, per-class `thresholds_minor` — all REQUIRED in the activation, no
+code fallback). No-membership, no-active-rule, and hardship are distinct non-verdict states,
+not `false`. `FloorEvaluationRecorded` is representable (gate binds `rule_id` to the active
+rule) so floor exits have something to reference — but the gate does **not** yet require an
+`evaluation_ref` on `MembershipFloorExited`, and nothing automates evaluation cadence:
+deferred workflow, 1D-shaped (§8), same posture as 1B redemption enforcement.
+
+### 13.5 Privacy seams (hand-off §4, sized by corpus 08 §6)
+
+- **`Privacy.Aggregate`** — `sum/1`; backing from `:aggregate_backing` app env, default
+  `Plaintext`. Every cross-member summation routes through it: `Throughput.system_value/3`,
+  `Capital.sinking_fund_total/2`. The seam-swap test runs the identical assertion function
+  under both backings — zero caller changes (acceptance 13).
+- **`Privacy.Proof`** — `prove/2`, `verify/2`; default backing `TrustedAudit`: a proof is the
+  fact plus the pinned log position, and `verify` IS the audit (full recomputation — an old
+  proof still verifies after rules tighten, because it pinned its position). First facts:
+  `floor_cleared`, `balance_at_least`. **FLAGGED DEVIATION**: the assertion is unsigned —
+  no operator/role key exists until 1D key governance; the pinned position carries
+  auditability, the signature attaches when the key does.
+- **`Privacy.JointCompute`** — behaviour only (the hand-off's explicit instruction); the
+  first backing arrives with the first network feature.
+
+Per 08 §6/§9 no HE/ZK/enclave code exists; escalation requires a demonstrated failure of the
+plain rung.
+
+### 13.6 No-surveillance classification (hand-off invariant §0.6)
+
+The whole public query surface (`Capital`, `Throughput`, `Floor`, `Finance`,
+`Privacy.Aggregate`, `Privacy.Proof`) is enumerated in one test and classed
+`own_data | bilateral | aggregate | system`; an unclassified export **fails the suite**, so
+the review happens at the moment of addition. `:bilateral` is a fourth class beyond the
+plan's three (netting exposes only the pair's co-signed positions — corpus 07 §5).
+**FLAGGED DEVIATION**: no `for_member:` request context yet — with no authn layer it would be
+an unchecked parameter; queries are subject-keyed and the classification map is the contract
+the 1D enforcement middleware implements.
+
+### 13.7 Properties & adversarial results
+
+Plan P1–P9 all enforced by the suite (purity/forward-only P1–P3: `throughput_test`,
+`floor_test`; lifecycle exhaustiveness P4: matrix property; rail P5–P6: `obligation_rail_test`
++ the registry's fund-movement-absence check; netting P7: set-off property; seam P8:
+swap test; classification P9: enumeration test). Adversarial suite outcomes: self-crediting
+on a departed membership → gate-rejected · discharge replay / double discharge → rejected ·
+assignment after discharge → rejected · cross-denomination netting → structurally impossible
+(property-checked) · rule params smuggling a constant bypass → activations validate, required
+params have no fallback · floor evaluation under a stale rule → gate rejects non-active
+`rule_id` · own-data query for another member → classification contract (enforcement 1D) ·
+**n = 1 aggregate leakage → documented, not blocked**: a single-contributor total is that
+contributor's value; the k-anonymity gate is the declared upgrade (08 §6) when publication
+features arrive (§8).
+
+## 14. Phase 1C acceptance status
+
+Hand-off §6 [1C] items, enforced by the test suite:
+
+12. ✅ **Pure, versioned compute**: throughput and floor are pure functions of (events,
+    in-log rule version); parameters placeholder-marked and delivered via gated activation
+    events (stricter than "externally configurable" — declared before first evaluation);
+    rule changes forward-only, as-of byte-stable; v0 is the minimal fold, anti-gaming
+    graph logic deferred as planned.
+13. ✅ **Privacy seam swap**: aggregate callers depend on `Privacy.Aggregate` only; the
+    swap test runs identical assertions under plaintext and a marked stub backing with
+    zero caller changes.
+14. ✅ **No-surveillance**: the query surface is enumerated and classified; unclassified
+    exports fail; aggregate paths return bare totals; bilateral reports are shape-closed;
+    absence tested, not asserted.
+
+`cargo test` unchanged and green (1C added types, not encoding). 1A/1B suites untouched.
+
+**Gate:** Phase 1D (chapter scoping beyond the id, external checkpoints, governance/key
+structure) may start.

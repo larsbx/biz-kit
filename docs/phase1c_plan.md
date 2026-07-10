@@ -1,8 +1,14 @@
 # Phase 1C — Throughput/floor compute + privacy seams
 
-> **Status: PLANNED** (2026-07-10). Scope is the hand-off's Phase 1C (§2.4–2.5, §4);
-> acceptance = hand-off §6 items **[1C] 12–14**. Gate honored: 1B passed in full
-> (SUBSTRATE.md §12) before this was cut.
+> **Status: COMPLETE** (2026-07-10). All build steps done; acceptance items [1C] 12–14 pass
+> (`mix test` green incl. the seam-swap and no-surveillance tests; `cargo test` green — no
+> canonical-profile change). Results in SUBSTRATE.md §13–§14. Deviations from this plan,
+> each flagged there: the rule registries moved forward into step 4 (the activation gate
+> needed them); `Projections.Obligations` proved unnecessary (the gate fold serves netting);
+> the step-3 type list is eleven, not nine; the Proof assertion is unsigned until 1D keys
+> exist; no `for_member:` param yet (classification is the contract, enforcement is 1D
+> middleware); the no-surveillance classes gained `:bilateral`. Kept as the record of scope;
+> Phase 1D is next.
 
 ## Grounding — the corpus is now available
 

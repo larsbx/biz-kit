@@ -3,13 +3,15 @@
 The signed event ledger + capital-account substrate for a member-owned co-op platform:
 an append-only, tamper-evident, replayable log of Ed25519-signed canonical events that
 every other feature reads from. See `SUBSTRATE.md` (normative) and `docs/handoff.md`
-(the build brief); `docs/phase1a_plan.md` / `docs/phase1b_plan.md` are the completed phase
-build plans. New here? Start with [`docs/quickstart.md`](docs/quickstart.md).
+(the build brief); `docs/phase1a_plan.md` / `docs/phase1b_plan.md` / `docs/phase1c_plan.md`
+are the completed phase build plans. New here? Start with
+[`docs/quickstart.md`](docs/quickstart.md).
 
-**Status: Phases 1A and 1B complete** — canonical signed event protocol + append-only log,
-plus membership lifecycle (append-gated state machine) and the capital-account fold with
-in-log accrual-rule versioning and redemption structures. Phase 1C (throughput/floor +
-privacy seams) is next.
+**Status: Phases 1A, 1B, and 1C complete** — canonical signed event protocol + append-only
+log; membership lifecycle (append-gated state machine) and capital accounts with in-log rule
+versioning; throughput/floor compute, the obligation-relationship rail with netting, and the
+privacy seams (Aggregate/Proof/JointCompute). Phase 1D (chapter scoping beyond the id,
+checkpoints, governance/key structure) is next.
 
 ## What exists
 
@@ -33,6 +35,16 @@ privacy seams) is next.
   accounts as a pure fold; accrual rules versioned **in-log** (`AccrualRuleActivated`),
   applied forward-only; redemption schedule structures (FIFO, sinking fund,
   death-to-estate). All parameters placeholder-flagged, awaiting charter declaration.
+- `CoopSubstrate.Throughput` + `Floor` — windowed, in-log-versioned throughput compute and
+  the participation-floor predicate (`cleared?`), with cure/hardship lifecycle states;
+  every verdict a pure function of (log, rule version, caller-supplied instant).
+- The **obligation-relationship rail** + `Finance.netting` — dual-signed obligation /
+  assignment / discharge events (money movement stays off-platform; no fund-movement event
+  type exists) and pure per-denomination pairwise set-off over the open positions.
+- `CoopSubstrate.Privacy.{Aggregate, Proof, JointCompute}` — the staged-crypto seams:
+  plaintext and trusted-but-auditable backings today, swappable by config with zero caller
+  changes; all cross-member aggregates route through them; the public query surface is
+  classification-tested (no path returns one member's detail to another).
 
 ## Running
 
