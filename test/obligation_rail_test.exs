@@ -113,12 +113,13 @@ defmodule CoopSubstrate.ObligationRailTest do
 
     {:ok, _} = Log.append(record(ctx.alice, ctx.bob))
 
-    # Bob rotates; his OLD key can no longer attest a discharge.
+    # Bob rotates (self-signed, 1D gate); his OLD key can no longer attest a
+    # discharge.
     rotated_bob = new_member("member")
 
     {:ok, _} =
       Log.append(
-        signed_event(new_member("author"), "KeyRotated", %{
+        signed_event(as_role(ctx.bob, "author"), "KeyRotated", %{
           "member_id" => "M-bob",
           "old_key_id" => ctx.bob.signer.key_id,
           "new_key_id" => rotated_bob.signer.key_id,

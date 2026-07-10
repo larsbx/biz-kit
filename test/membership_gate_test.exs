@@ -59,6 +59,8 @@ defmodule CoopSubstrate.MembershipGateTest do
     Membership.membership(state, @chapter, @member, @entity)
   end
 
+  defp as_author(actor), do: %{actor | signer: %{actor.signer | role: "author"}}
+
   defp assert_rejected_without_persisting(envelope_or_batch, expected_reason) do
     before_head = Log.head()
 
@@ -213,12 +215,13 @@ defmodule CoopSubstrate.MembershipGateTest do
       {:not_the_members_current_key, imposter.signer.key_id}
     )
 
-    # Rotate to a new key: the OLD key is now rejected, the new one accepted.
+    # Rotate to a new key — self-signed by the current key (1D gate): the
+    # OLD key is now rejected, the new one accepted.
     rotated = new_member("member")
 
     {:ok, _} =
       Log.append(
-        signed_event(new_member("author"), "KeyRotated", %{
+        signed_event(as_author(ctx.member), "KeyRotated", %{
           "member_id" => @member,
           "old_key_id" => ctx.member.signer.key_id,
           "new_key_id" => rotated.signer.key_id,
@@ -235,6 +238,58 @@ defmodule CoopSubstrate.MembershipGateTest do
       Log.append(signed_event(rotated, "MembershipProbationStarted", membership_payload()))
 
     assert %{state: :probationary} = membership_state()
+  end
+
+  test "KeyRotated is gated: self-rotation by the current key, chained", ctx do
+    register!(ctx)
+
+    rotation = fn signer, old_key_id, next ->
+      signed_event(as_author(signer), "KeyRotated", %{
+        "member_id" => @member,
+        "old_key_id" => old_key_id,
+        "new_key_id" => next.signer.key_id,
+        "new_pubkey" => {:bytes, next.signer.pubkey}
+      })
+    end
+
+    # A hijack — foreign signer claiming the correct old_key_id — is rejected.
+    imposter = new_member("member")
+
+    assert_rejected_without_persisting(
+      rotation.(imposter, ctx.member.signer.key_id, imposter),
+      {:wrong_key_for_role, "author", imposter.signer.key_id}
+    )
+
+    # A stale old_key_id is rejected even when the signature is current.
+    assert_rejected_without_persisting(
+      rotation.(ctx.member, "k-stale", imposter),
+      {:old_key_mismatch, "k-stale", ctx.member.signer.key_id}
+    )
+
+    # Legal rotation; a second rotation must be signed by the NEWEST key.
+    second = new_member("member")
+    {:ok, _} = Log.append(rotation.(ctx.member, ctx.member.signer.key_id, second))
+
+    assert_rejected_without_persisting(
+      rotation.(ctx.member, second.signer.key_id, new_member("member")),
+      {:wrong_key_for_role, "author", ctx.member.signer.key_id}
+    )
+
+    third = new_member("member")
+    {:ok, _} = Log.append(rotation.(second, second.signer.key_id, third))
+
+    # Rotations for UNREGISTERED ids stay ungated (1A compatibility).
+    {:ok, _} =
+      Log.append(
+        signed_event(new_member("author"), "KeyRotated", %{
+          "member_id" => "member-unregistered",
+          "old_key_id" => "k-any",
+          "new_key_id" => "k-next",
+          "new_pubkey" => {:bytes, :crypto.strong_rand_bytes(32)}
+        })
+      )
+
+    assert :ok = Log.verify_chains()
   end
 
   test "dual membership: one person-key, two entities, independent records", ctx do

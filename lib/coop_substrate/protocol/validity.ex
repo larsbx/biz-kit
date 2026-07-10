@@ -42,8 +42,12 @@ defmodule CoopSubstrate.Protocol.Validity do
       per-type check). Genesis (the first governance key) is trust-on-first-
       use, self-certified; later declarations/revocations are governance-
       signed; revoking the last governance key is unrepresentable.
-    * `KeyRotated` stays ungated (1A compatibility; rotation gating is the
-      next 1D step). Everything else: no log-dependent constraints.
+    * `KeyRotated` (1D) — self-rotation: for a REGISTERED member, the
+      rotation must be signed by the member's current key and `old_key_id`
+      must match it (rotations chain). Rotations for unregistered ids stay
+      inert-and-ungated (1A compatibility; ChapterStats still records them).
+      Governance-recovery rotation (lost key) is flagged open (08 §10.3).
+      Everything else: no log-dependent constraints.
   """
 
   alias CoopSubstrate.Capital.AccrualRules
@@ -132,6 +136,20 @@ defmodule CoopSubstrate.Protocol.Validity do
 
       true ->
         :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "KeyRotated", chapter_id: ch, payload: p} = env, gate) do
+    case gate.members[{ch, p["member_id"]}] do
+      nil ->
+        :ok
+
+      %{key_id: current_key_id} = member ->
+        if p["old_key_id"] == current_key_id do
+          check_party_key(env, "author", member)
+        else
+          {:error, {:old_key_mismatch, p["old_key_id"], current_key_id}}
+        end
     end
   end
 
