@@ -1,9 +1,11 @@
 defmodule CoopSubstrate.Projections.Membership do
   @moduledoc """
-  The membership projection (Phase 1B): a chapter-scoped pure fold tracking
-  registered entities, registered members (with their *current* signing key,
-  following `KeyRotated`), membership records (class + lifecycle state), the
-  active accrual rule per chapter, and open redemption schedules.
+  The membership projection (Phase 1B, extended in 1C): a chapter-scoped pure
+  fold tracking registered entities, registered members (with their *current*
+  signing key, following `KeyRotated`), membership records (class + lifecycle
+  state), the active accrual/throughput/floor rules per chapter, open
+  redemption schedules, and obligation-rail relationships (corpus 05 §1.2:
+  current debtor, creditor, terms, open/discharged — never funds).
 
   This same fold is the **append gate's** state: `CoopSubstrate.Log` holds it
   alongside the chain head, rebuilt from the ledger on recovery and advanced
@@ -29,7 +31,10 @@ defmodule CoopSubstrate.Projections.Membership do
       members: %{},
       memberships: %{},
       active_rules: %{},
-      schedules: %{}
+      schedules: %{},
+      throughput_rules: %{},
+      floor_rules: %{},
+      obligations: %{}
     }
   end
 
@@ -73,6 +78,43 @@ defmodule CoopSubstrate.Projections.Membership do
       rule_id: p["rule_id"],
       params: p["params"]
     })
+  end
+
+  def handle_event(%Envelope{type: "ThroughputRuleActivated", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:throughput_rules, Access.key(ch)], %{
+      rule_id: p["rule_id"],
+      params: p["params"]
+    })
+  end
+
+  def handle_event(%Envelope{type: "FloorRuleActivated", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:floor_rules, Access.key(ch)], %{
+      rule_id: p["rule_id"],
+      params: p["params"]
+    })
+  end
+
+  def handle_event(%Envelope{type: "ObligationRecorded", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], %{
+      debtor_id: p["debtor_id"],
+      creditor_id: p["creditor_id"],
+      amount_minor: p["amount_minor"],
+      denomination: p["denomination"],
+      open: true
+    })
+  end
+
+  def handle_event(%Envelope{type: "ObligationAssigned", chapter_id: ch, payload: p}, state) do
+    # The gate guarantees the obligation exists and is open.
+    update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
+      %{ob | debtor_id: p["new_debtor_id"]}
+    end)
+  end
+
+  def handle_event(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p}, state) do
+    update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
+      %{ob | open: false}
+    end)
   end
 
   def handle_event(%Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p}, state) do
