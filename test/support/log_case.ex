@@ -116,6 +116,83 @@ defmodule CoopSubstrate.LogCase do
     signed
   end
 
+  @doc "A fully signed envelope with several signers (multi-role types)."
+  def multi_signed_event(actors, type, payload, attrs \\ []) when is_list(actors) do
+    attrs = Map.new(attrs)
+
+    {:ok, envelope} =
+      Envelope.new(%{
+        chapter_id: Map.get(attrs, :chapter_id, "chapter-genesis"),
+        type: type,
+        payload: payload,
+        signers: Enum.map(actors, & &1.signer),
+        auth_ref: Map.get(attrs, :auth_ref),
+        timestamp_ms: Map.get(attrs, :timestamp_ms, System.system_time(:millisecond))
+      })
+
+    Enum.reduce(actors, envelope, fn actor, env ->
+      {:ok, signed} = Envelope.sign(env, actor.signer.key_id, actor.seed)
+      signed
+    end)
+  end
+
+  @doc "MemberRegistered payload for an actor created with `new_member(\"member\")`."
+  def registration_payload(member_id, actor) do
+    %{
+      "member_id" => member_id,
+      "pubkey" => {:bytes, actor.signer.pubkey},
+      "key_id" => actor.signer.key_id
+    }
+  end
+
+  @doc """
+  Register the entity and member (skippable via `register_entity:` /
+  `register_member:` when they already exist) and advance the membership to
+  `to:` (`:invited | :probationary | :member`, default `:member`).
+  """
+  def seed_membership!(steward, member, member_id, entity_id, opts \\ []) do
+    chapter = Keyword.get(opts, :chapter_id, "chapter-genesis")
+    class = Keyword.get(opts, :class, "carriers_coop")
+    to = Keyword.get(opts, :to, :member)
+    mp = %{"member_id" => member_id, "entity_id" => entity_id}
+
+    if Keyword.get(opts, :register_entity, true) do
+      {:ok, _} =
+        CoopSubstrate.Log.append(
+          signed_event(
+            steward,
+            "EntityRegistered",
+            %{"entity_id" => entity_id, "class" => class},
+            chapter_id: chapter
+          )
+        )
+    end
+
+    if Keyword.get(opts, :register_member, true) do
+      {:ok, _} =
+        CoopSubstrate.Log.append(
+          signed_event(member, "MemberRegistered", registration_payload(member_id, member),
+            chapter_id: chapter
+          )
+        )
+    end
+
+    [
+      invited:
+        signed_event(steward, "MembershipInvited", Map.put(mp, "class", class),
+          chapter_id: chapter
+        ),
+      probationary:
+        signed_event(member, "MembershipProbationStarted", mp, chapter_id: chapter),
+      member:
+        multi_signed_event([member, steward], "MembershipConfirmed", mp, chapter_id: chapter)
+    ]
+    |> Enum.reduce_while(:ok, fn {state, env}, :ok ->
+      {:ok, _} = CoopSubstrate.Log.append(env)
+      if state == to, do: {:halt, :ok}, else: {:cont, :ok}
+    end)
+  end
+
   @doc "A fully signed TestProjectionEvent envelope."
   def signed_test_event(member, attrs \\ []) do
     attrs = Map.new(attrs)

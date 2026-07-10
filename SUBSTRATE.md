@@ -1,7 +1,8 @@
-# SUBSTRATE.md — Phase 1A: Canonical Signed Event Protocol + Append-Only Log
+# SUBSTRATE.md — The Substrate: Canonical Signed Event Protocol, Append-Only Log, Membership, Capital Accounts
 
-Status: Phase 1A in progress. This document is normative for the substrate. Where it deviates
-from the hand-off sketch, the deviation is flagged and justified (see §2.1).
+Status: Phase 1A complete; Phase 1B complete (§11–§12). This document is normative for the
+substrate. Where it deviates from the hand-off sketch, the deviation is flagged and justified
+(see §2.1 and §11.2).
 
 Placeholder constants are flagged **PLACEHOLDER — awaiting charter declaration** and live in
 `CoopSubstrate.Constants`. None of them are real values.
@@ -131,6 +132,11 @@ Bootstrap types shipped in 1A: `TestProjectionEvent`, `CorrectionRecorded` (payl
 `target_event_hash`, `reason`), `KeyRotated` (payload: `member_id`, `old_key_id`, `new_key_id`,
 `new_pubkey`), `CharterConstantDeclared` (payload: `name`, `value`, `note?`). Governance
 semantics for the latter three are Phase 1D; representability is the 1A criterion.
+
+Phase 1B added the production identity/membership/capital types (§11), a
+`{:payload_fields, prefix, [f1, f2]}` stream spec (per-(member, entity) streams), and realized
+the `validity_check/2` hook: acceptance of a type can now depend on prior log events, checked
+at the append gate (§11.3).
 
 `chapter_id` is required on every event. Federation-scoped events (09 §1) are an **open
 representation question** — not resolved in 1A.
@@ -278,8 +284,11 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   operator-held decryption key; day-one trusted encryption (when it arrives with the 1C
   privacy interfaces) lives behind those interfaces, labeled temporary.
 - **What is exported to a member when they leave?** 1A-minimal: `export_stream/1` yields the
-  raw canonical records of any stream, independently verifiable offline. Full member-export
-  semantics (which streams constitute "their data") are a 1B/1D question tied to membership.
+  raw canonical records of any stream, independently verifiable offline. 1B gives the member's
+  data a concrete shape: their `members/`, `memberships/`, `patronage/`, and `redemptions/`
+  streams (all keyed by `member_id`) plus the chapter's `accrual_rules` stream needed to
+  reproduce their balance — the capital tests reproduce a balance from exactly such an export.
+  The full export *workflow* remains 1D.
 - **What is never put in the log?** Raw secrets, private keys, other members' private detail,
   or anything that cannot live forever — the log is append-only and eternal.
   Sensitive-but-removable data must be *referenced* from events (hash pointers, as with
@@ -289,7 +298,7 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   deletes (DB-level triggers + chain audit enforce this). Redactable data is referenced, not
   embedded, so erasure outside the log cannot break the chains.
 
-## 8. Open questions (flagged, not resolved in 1A)
+## 8. Open questions (flagged, not resolved)
 
 - **Federation-scoped events** (09 §1): how an event that spans chapters is represented —
   a federation pseudo-chapter id, or a distinct scope field. Deferred to 1D; current model
@@ -300,7 +309,17 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   faithfully. Add the specs under `docs/` and this section gets completed — flagged rather
   than reconstructed from memory.
 - **Registry governance**: production registration workflow for new event types (tests use
-  the `:extra_event_types` app env; production types are compile-time data).
+  the `:extra_event_types` app env; production types are compile-time data). The same applies
+  to accrual-rule implementations (`:extra_accrual_rules`).
+- **Re-joining after a terminal membership state** (1B): the lifecycle allows no exit from
+  `departed | retired | floor_exited | deceased` for the same (member, entity). Whether
+  re-joining is a new membership record or a resurrection transition is a governance question.
+- **Steward key registry** (1B → 1D): member-role signatures on lifecycle events must come
+  from the member's currently registered key, but steward keys have no registry yet — *who
+  may act as steward* is exactly the 4a "who can author" governance question.
+- **Redemption enforcement** (1B → later): annual caps and payment-vs-balance checks are
+  deferred workflow; the data structures carry the terms (§11.5) but the gate does not yet
+  evaluate the capital fold.
 
 ## 9. Placeholder (constitutionalized-later) parameters
 
@@ -311,9 +330,16 @@ via future `CharterConstantDeclared` governance events:
 |---|---|---|
 | `max_canonical_bytes` | 65 536 | encoder input cap (NIF safety rule, hand-off §4) |
 | `max_canonical_depth` | 32 | encoder nesting cap |
+| `default_accrual_weight_bp` | 10 000 | `capital-accrual-v1` fallback weight (§11.4) |
 
-(Phase 1B/1C add the real economic parameters — accrual rules, thresholds, windows, caps —
-as versioned config, never hardcoded.)
+Phase 1B economic parameters are **versioned in-log, never hardcoded**: the accrual rule and
+its weights arrive per chapter via `AccrualRuleActivated{rule_id, params}` (the whole
+`capital-accrual-v1` linear rule is itself a PLACEHOLDER), and redemption terms (`years`,
+`annual_cap_minor`, `method`) travel inside each `RedemptionScheduleOpened` event. Entity
+classes (`Constants.entity_classes/0`: carriers/workers/mechanics co-ops) come from
+master_design §3 via the hand-off — extending them is a governance act. Signer-role
+assignments on 1B types are PLACEHOLDER governance semantics (§11.3). 1C adds
+thresholds/windows/caps the same versioned way.
 
 ## 10. Phase 1A acceptance status
 
@@ -334,4 +360,115 @@ Hand-off §6 [1A] items, all enforced by the test suite (`mix test`; Rust-side
 8. ✅ `chapter_id` required on every event (envelope layer and append gate).
 9. ✅ `KeyRotated` representable, recorded, and folded into the key-registry projection.
 
-**Gate:** Phase 1B (membership + capital accounts) may start.
+**Gate:** Phase 1B (membership + capital accounts) may start. *(Passed; see §11–§12.)*
+
+---
+
+## 11. Phase 1B — identity, membership lifecycle, capital accounts
+
+Scope: hand-off §2.2–2.3; plan and flagged decisions in `docs/phase1b_plan.md`.
+
+### 11.1 Identity, entities, membership records
+
+A member (person) is a `member_id` bound to an Ed25519 key by `MemberRegistered` —
+**self-certifying**: the declared `member`-role signer must be exactly the registered
+(pubkey, key_id), enforced at the gate. `KeyRotated` (1A) moves the *current* key; the gate
+follows rotation, so a membership event signed with a stale key is rejected even though the
+signature is cryptographically valid. Entities are declared by `EntityRegistered` with
+`class ∈ Constants.entity_classes/0`. A membership is **(member, entity, class)** — dual
+membership is two records with two independent capital accounts, never merged. Everything is
+chapter-scoped: gate and projections key by `chapter_id`; the same ids in another chapter are
+a different world (tested).
+
+### 11.2 The lifecycle machine — FLAGGED DEVIATION: pure fold, not AshStateMachine
+
+`CoopSubstrate.Membership.Lifecycle` is an exhaustive, explicit transition table (pure data +
+total `apply/2`); the full states × events matrix is property-checked:
+
+| Event | From | To |
+|---|---|---|
+| `MembershipInvited` | *(none)* | `invited` |
+| `MembershipProbationStarted` | `invited` | `probationary` |
+| `MembershipConfirmed` | `probationary` | `member` |
+| `MembershipDeparted` | `invited`, `probationary`, `member` | `departed` |
+| `MembershipRetired` | `member` | `retired` |
+| `MembershipFloorExited` | `member` | `floor_exited` |
+| `MembershipDeceased` | `probationary`, `member` | `deceased` |
+
+Terminal states are the redeemable-account states; nothing leaves them (re-joining: open
+question, §8). Flagged extrapolations beyond the hand-off's arrows: invited→departed,
+probationary→departed, probationary→deceased. Cure/hardship arrives with the 1C floor.
+
+The hand-off sketch names AshStateMachine; it is **not** adopted, for the same reason
+AshEvents was not (§3, §5): substrate state must be a pure fold over canonical bytes, and the
+*enforcement point* must be the append gate — otherwise illegal transitions could enter the
+eternal log and every replayer would need business logic to skip them. An Ash read-side
+resource can materialize from the projection when the first consumer (the stake view, a later
+cold-start step) exists; nothing here forecloses that.
+
+### 11.3 The append gate (validity realized)
+
+The 1A `validity_check/2` hook is now real: `CoopSubstrate.Protocol.Validity` checks each
+envelope against the **gate state** — a `Projections.Membership` fold (entities, members with
+current keys, membership states, active accrual rule per chapter, open schedules) held by the
+single serialized appender beside the chain head, rebuilt from the ledger on recovery, and
+threaded through each batch in order (event N sees N−1; a violation rejects the whole batch
+before anything persists). The gate state is a pure function of the log prefix, so every
+accept/reject decision is deterministic and reproducible from events alone.
+
+Checks: registration existence/uniqueness; transition legality per §11.2; invited class must
+match the entity's; member-role signatures must use the member's current key; accrual-rule
+activations must name a known rule with valid params; patronage requires an active membership
+(PLACEHOLDER: probationary accrues), an active rule, and a positive amount; schedules open
+once, only on redeemable accounts, with sane terms; payments require an open schedule.
+`KeyRotated` stays ungated (rotation governance is 1D). Signer-role assignments (steward vs
+member vs dual-signed `MembershipConfirmed`) are PLACEHOLDER governance semantics — *who may
+author* is the 1D validity workflow.
+
+### 11.4 Capital accounts — the accrual engine
+
+`Projections.CapitalAccounts` is a pure fold in the 1A projection shape, queried via
+`CoopSubstrate.Capital` (`account/4`, `balance/4`, `sinking_fund/3`, all supporting `as_of:`):
+`account(member, asOf) = fold(rule_vN, events(member, ≤ asOf))`. Value is ledger arithmetic in
+integer minor units, never appraisal.
+
+**Rule versioning is in-log.** `AccrualRuleActivated{rule_id, params}` switches the active
+rule per chapter *forward*; implementations are pure modules behind
+`Capital.AccrualRules` (registry) / `Capital.AccrualRule` (behaviour). Every accrual entry
+records the `rule_id` and the credited amount computed at fold position, so activating a new
+rule can never mutate a historical entry — tested by as-of replay across a rule change.
+`capital-accrual-v1` (`Rules.LinearV1`, weighted-linear over `weights_bp`) is a PLACEHOLDER
+formula end to end.
+
+Accounts move `:accruing → :redeemable` on any terminal exit (`:estate` with `estate_ref` for
+death-to-estate) and `→ :in_redemption` when a schedule opens. Reproducibility is tested two
+ways: an independent naive fold over `read_all`, and the same fold over independently
+*verified* stream exports merged by `global_seq` — both must equal the projection's answer.
+
+### 11.5 Redemption structures (data now, workflow later)
+
+`RedemptionScheduleOpened` carries the constitutionalizable terms (`years`,
+`annual_cap_minor`, `method: "fifo"`); `RedemptionPaid` consumes accrual entries **FIFO** and
+draws the entity's sinking fund (`SinkingFundContributed` accumulates it). No payout engine,
+cap enforcement, or eligibility logic exists yet (§8) — the data structures support
+multi-year payout, sinking-fund accounting, annual cap, FIFO, and death-to-estate, which is
+the 1B requirement.
+
+## 12. Phase 1B acceptance status
+
+Hand-off §6 [1B] items, enforced by the test suite:
+
+10. ✅ **Membership lifecycle**: exhaustive matrix property test (every undeclared
+    (state, event) pair rejected); every transition a signed event on the real log; illegal
+    transitions rejected *before persistence* with chains verifying after; dual membership
+    across entities with independent records; departed/retired/floor-exited/deceased all
+    reach redeemable-account states (deceased → estate); gate survives appender restarts;
+    member-key authenticity follows `KeyRotated`; batches atomic with intra-batch visibility;
+    chapters isolated.
+11. ✅ **Capital-account fold**: pure fold of (events, in-log rule version); rule change
+    applies forward only (as-of replay across the change is byte-stable); entries record
+    their `rule_id`; redemption structures present (schedule terms, FIFO consumption,
+    sinking fund, estate routing); any member's balance reproduced independently from
+    `read_all` AND from verified stream exports; replay deterministic.
+
+**Gate:** Phase 1C (throughput/floor + privacy seams) may start.

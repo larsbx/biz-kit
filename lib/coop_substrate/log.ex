@@ -29,7 +29,9 @@ defmodule CoopSubstrate.Log do
   use GenServer
 
   alias CoopSubstrate.Canonical
+  alias CoopSubstrate.Projections.Membership, as: Gate
   alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.Protocol.TypeRegistry
   alias CoopSubstrate.ULID
 
   @ledger "ledger"
@@ -48,9 +50,9 @@ defmodule CoopSubstrate.Log do
 
   @impl true
   def init(_opts) do
-    {head, links} = recover()
+    {head, gate, links} = recover()
     :ok = repair_links(links)
-    {:ok, head}
+    {:ok, %{head: head, gate: gate}}
   end
 
   # -- write API ---------------------------------------------------------------
@@ -200,20 +202,22 @@ defmodule CoopSubstrate.Log do
   # -- GenServer ---------------------------------------------------------------
 
   @impl true
-  def handle_call(:head, _from, %Head{} = head) do
-    {:reply, %{global_seq: head.global_seq, global_hash: head.global_hash}, head}
+  def handle_call(:head, _from, %{head: head} = state) do
+    {:reply, %{global_seq: head.global_seq, global_hash: head.global_hash}, state}
   end
 
   @impl true
-  def handle_call({:append, envelopes}, _from, %Head{} = head) do
+  def handle_call({:append, envelopes}, _from, %{head: head, gate: gate} = state) do
     with :ok <- verify_batch(envelopes),
+         :ok <- verify_validity(envelopes, gate),
          {:ok, assigned, new_head} <- assign_chains(envelopes, head),
          {:ok, event_data} <- encode_batch(assigned),
          :ok <- persist(event_data, head.global_seq) do
       link_batch(assigned, head)
-      {:reply, {:ok, assigned}, new_head}
+      new_gate = Enum.reduce(assigned, gate, &Gate.handle_event/2)
+      {:reply, {:ok, assigned}, %{state | head: new_head, gate: new_gate}}
     else
-      {:error, reason} -> {:reply, {:error, reason}, head}
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
@@ -252,6 +256,28 @@ defmodule CoopSubstrate.Log do
       :ok
     else
       {:error, :duplicate_event_id_in_batch}
+    end
+  end
+
+  # Log-dependent validity (Phase 1B; 09 gated-N): each envelope is checked
+  # against the gate state — the pure Membership fold of the log so far —
+  # advanced through the batch in order so event N sees N-1. Rejection aborts
+  # the whole batch before persistence; the advanced gate is recomputed from
+  # the assigned envelopes only after the append succeeds. (The gate fold
+  # never reads log-assigned fields, so folding unassigned envelopes here is
+  # sound.)
+  defp verify_validity(envelopes, gate) do
+    envelopes
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, gate}, fn {env, index}, {:ok, gate} ->
+      case TypeRegistry.validity_check(env, gate) do
+        :ok -> {:cont, {:ok, Gate.handle_event(env, gate)}}
+        {:error, reason} -> {:halt, {:error, {:reject, index, reason}}}
+      end
+    end)
+    |> case do
+      {:ok, _gate} -> :ok
+      error -> error
     end
   end
 
@@ -350,13 +376,14 @@ defmodule CoopSubstrate.Log do
 
   # -- recovery ----------------------------------------------------------------
 
-  # Rebuild heads from the ledger, and collect per-stream event uuids so
-  # missing links (crash between append and link) can be repaired.
+  # Rebuild heads AND the validity-gate state from the ledger in one pass,
+  # and collect per-stream event uuids so missing links (crash between append
+  # and link) can be repaired.
   defp recover do
-    initial = {%Head{}, %{}}
+    initial = {%Head{}, Gate.init(), %{}}
 
-    {:ok, {head, links}} =
-      fold_ledger(initial, fn env, bytes, {head, links} ->
+    {:ok, {head, gate, links}} =
+      fold_ledger(initial, fn env, bytes, {head, gate, links} ->
         hash = :crypto.hash(:sha256, bytes)
         {:ok, uuid} = ULID.to_uuid(env.event_id)
 
@@ -366,10 +393,12 @@ defmodule CoopSubstrate.Log do
           streams: Map.put(head.streams, env.stream_id, {env.stream_seq, hash})
         }
 
-        {head, Map.update(links, env.stream_id, [uuid], &[uuid | &1])}
+        {head, Gate.handle_event(env, gate),
+         Map.update(links, env.stream_id, [uuid], &[uuid | &1])}
       end)
 
-    {head, Map.new(links, fn {stream_id, reversed} -> {stream_id, Enum.reverse(reversed)} end)}
+    {head, gate,
+     Map.new(links, fn {stream_id, reversed} -> {stream_id, Enum.reverse(reversed)} end)}
   end
 
   defp repair_links(links) do

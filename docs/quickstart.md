@@ -112,7 +112,10 @@ pure-Elixir reference encoder.
 | `lib/coop_substrate/projections/` | Pure-fold projections |
 | `native/canonical_v1/` | Rust encoder (production implementation) |
 | `test/vectors/` | Committed byte-level test vectors (frozen) |
+| `lib/coop_substrate/membership/` | Membership lifecycle transition table (Phase 1B) |
+| `lib/coop_substrate/capital*` | Capital accounts: rules, fold, query API (Phase 1B) |
 | `docs/phase1a_plan.md` | Phase 1A build plan (complete; kept as the record of scope) |
+| `docs/phase1b_plan.md` | Phase 1B build plan (complete; kept as the record of scope) |
 | `docs/handoff.md` | The build brief the plan was cut from |
 | `docs/machine.md` | Dev-host snapshot (user-local Postgres, toolchain, ports) |
 

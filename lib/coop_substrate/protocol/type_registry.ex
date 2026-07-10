@@ -22,6 +22,16 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
   # Field checkers: :string | :int | :bytes | :hash | :pubkey | :bool | :any
   # Stream spec: {:chapter_scoped, prefix} => "<chapter_id>/<prefix>"
   #              {:payload_field, prefix, field} => "<chapter_id>/<prefix>/<payload[field]>"
+  #              {:payload_fields, prefix, fields} => "<chapter_id>/<prefix>/<f1>/<f2>/..."
+  #
+  # Signer roles on the 1B types are PLACEHOLDER governance semantics — who
+  # MAY author each type is the Phase 1D validity workflow; the roles here fix
+  # the signature-set shape only (docs/phase1b_plan.md).
+  @membership_payload %{
+    required: %{"member_id" => :string, "entity_id" => :string},
+    optional: %{}
+  }
+
   @builtin_types %{
     "TestProjectionEvent" => %{
       required_roles: ["author"],
@@ -63,6 +73,148 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         required: %{"name" => :string, "value" => :any},
         optional: %{"note" => :string}
       }
+    },
+
+    # -- Phase 1B: identity & entities (hand-off §2.2) ------------------------
+    "EntityRegistered" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "entities", "entity_id"},
+      payload: %{
+        required: %{"entity_id" => :string, "class" => :string},
+        optional: %{"name" => :string}
+      }
+    },
+    "MemberRegistered" => %{
+      required_roles: ["member"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "members", "member_id"},
+      payload: %{
+        required: %{"member_id" => :string, "pubkey" => :pubkey, "key_id" => :string},
+        optional: %{}
+      }
+    },
+
+    # -- Phase 1B: membership lifecycle (one event per transition; the legal
+    # matrix lives in CoopSubstrate.Membership.Lifecycle and is enforced at
+    # the append gate) ---------------------------------------------------------
+    "MembershipInvited" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string, "class" => :string},
+        optional: %{}
+      }
+    },
+    "MembershipProbationStarted" => %{
+      required_roles: ["member"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: @membership_payload
+    },
+    "MembershipConfirmed" => %{
+      # Dual-signed: the member and the entity steward sign the same core
+      # (the 1A multi-role envelope, exercised by a production type).
+      required_roles: ["member", "steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: @membership_payload
+    },
+    "MembershipDeparted" => %{
+      required_roles: ["member"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string},
+        optional: %{"reason" => :string}
+      }
+    },
+    "MembershipRetired" => %{
+      required_roles: ["member"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: @membership_payload
+    },
+    "MembershipFloorExited" => %{
+      # 1C computes the floor; representable now. evaluation_ref will point at
+      # the floor-evaluation event once that exists.
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string},
+        optional: %{"evaluation_ref" => :hash}
+      }
+    },
+    "MembershipDeceased" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string},
+        optional: %{"estate_ref" => :string}
+      }
+    },
+
+    # -- Phase 1B: capital accounts (hand-off §2.3) ----------------------------
+    "AccrualRuleActivated" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "accrual_rules"},
+      payload: %{
+        required: %{"rule_id" => :string, "params" => :any},
+        optional: %{"note" => :string}
+      }
+    },
+    "PatronageRecorded" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "patronage", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "kind" => :string,
+          "amount_minor" => :int
+        },
+        optional: %{"source_ref" => :hash}
+      }
+    },
+
+    # -- Phase 1B: redemption structures (data now, workflow later) ------------
+    "RedemptionScheduleOpened" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "redemptions", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "years" => :int,
+          "annual_cap_minor" => :int,
+          "method" => :string
+        },
+        optional: %{}
+      }
+    },
+    "RedemptionPaid" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_fields, "redemptions", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{"member_id" => :string, "entity_id" => :string, "amount_minor" => :int},
+        optional: %{"note" => :string}
+      }
+    },
+    "SinkingFundContributed" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "sinking_fund", "entity_id"},
+      payload: %{
+        required: %{"entity_id" => :string, "amount_minor" => :int},
+        optional: %{}
+      }
     }
   }
 
@@ -100,6 +252,19 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
             _ ->
               {:error, {:stream_field_missing, field}}
           end
+
+        {:payload_fields, prefix, fields} ->
+          fields
+          |> Enum.reduce_while({:ok, [prefix, chapter_id]}, fn field, {:ok, acc} ->
+            case payload do
+              %{^field => value} when is_binary(value) -> {:cont, {:ok, [value | acc]}}
+              _ -> {:halt, {:error, {:stream_field_missing, field}}}
+            end
+          end)
+          |> case do
+            {:ok, parts} -> {:ok, parts |> Enum.reverse() |> Enum.join("/")}
+            error -> error
+          end
       end
     end
   end
@@ -133,11 +298,13 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
   end
 
   @doc """
-  Hook for log-dependent validity (09 gated-N): a type's acceptance may later
-  depend on prior log events. Phase 1A performs no log-dependent checks.
+  Hook for log-dependent validity (09 gated-N): a type's acceptance may
+  depend on prior log events. Realized in Phase 1B by
+  `CoopSubstrate.Protocol.Validity`, checked against the append gate's fold
+  state (`CoopSubstrate.Projections.Membership`).
   """
-  @spec validity_check(struct(), term()) :: :ok
-  def validity_check(_envelope, _log_reader), do: :ok
+  @spec validity_check(struct(), term()) :: :ok | {:error, term()}
+  defdelegate validity_check(envelope, gate), to: CoopSubstrate.Protocol.Validity, as: :check
 
   defp field_valid?(:string, v), do: is_binary(v) and String.valid?(v)
 

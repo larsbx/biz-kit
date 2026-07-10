@@ -1,8 +1,11 @@
 # Phase 1B — Membership lifecycle + capital-account fold
 
-> **Status: IN PROGRESS** (started 2026-07-09). Scope is strictly the hand-off's Phase 1B
-> (§2.2–2.3); acceptance = hand-off §6 items **[1B] 10–11**. Gate honored: 1A acceptance
-> passed in full before this began (`docs/phase1a_plan.md`).
+> **Status: COMPLETE** (2026-07-09). All build steps done; both acceptance items pass
+> (`mix test` green, incl. the exhaustive transition-matrix property and independent
+> balance reproduction; `cargo test` green — no canonical-profile change). Scope was
+> strictly the hand-off's Phase 1B (§2.2–2.3); acceptance = hand-off §6 items **[1B]
+> 10–11**. Gate honored: 1A passed in full before this began. Kept as the record of
+> scope; Phase 1C is next. Results documented in SUBSTRATE.md §11–§12.
 
 The in-conversation specs 00–13A are still not in this repository (SUBSTRATE.md §8), so this
 plan is grounded in the hand-off text plus the 1A decisions already recorded in SUBSTRATE.md.
