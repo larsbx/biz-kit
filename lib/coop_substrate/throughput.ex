@@ -44,4 +44,21 @@ defmodule CoopSubstrate.Throughput do
       {:ok, Privacy.Aggregate.sum(Fold.contributions(state, chapter_id, {from_ms, to_ms}))}
     end
   end
+
+  @doc """
+  Federation-level throughput across chapters (Phase 1D; hand-off §3,
+  acceptance 15): a computation over sovereign chapter folds, never an event
+  (docs/phase1d_plan.md P2) — chapter contributions cross the line only as a
+  seam-summed total. Supports `as_of:`.
+  """
+  @spec federation_value([String.t()], {integer(), integer()}, keyword()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def federation_value(chapter_ids, {from_ms, to_ms}, opts \\ []) when is_list(chapter_ids) do
+    with {:ok, state} <- Log.replay(Fold, opts) do
+      contributions =
+        Enum.flat_map(chapter_ids, &Fold.contributions(state, &1, {from_ms, to_ms}))
+
+      {:ok, Privacy.Aggregate.sum(contributions)}
+    end
+  end
 end

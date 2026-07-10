@@ -50,7 +50,9 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:entries, 3} => :own_data,
       {:entries, 4} => :own_data,
       {:system_value, 2} => :aggregate,
-      {:system_value, 3} => :aggregate
+      {:system_value, 3} => :aggregate,
+      {:federation_value, 2} => :aggregate,
+      {:federation_value, 3} => :aggregate
     },
     Floor => %{
       {:cleared?, 4} => :own_data
