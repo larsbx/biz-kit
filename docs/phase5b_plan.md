@@ -1,9 +1,14 @@
 # Phase 5B — The boards
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the cockpit brief's Phase 5B, its final
-> phase; acceptance = brief items **[5B]**. Gate honored: [5A] passed before this began.
-> Normative outer authority: corpus 10 §5 (the five panes), P9 (breach = design finding,
-> never staffing), 08 §5 (guards — v0 counters, estimators accrete).
+> **Status: COMPLETE** (2026-07-11). Scope was the cockpit brief's Phase 5B, its final
+> phase; acceptance **[5B]** passes: every board number recomputes (identity on
+> re-call); resolutions attribute to THEIR period by signed timestamps; breach findings
+> are exactly-once per (kind, period) — the sweep is idempotent by rejection, doubly
+> (deterministic id + the period backstop); the unconfigured pane says so; a breach
+> blocks nothing (an item lands during one). **The cockpit brief is closed** — results
+> in `COCKPIT.md` (normative). All flags recorded there: ε awaits the D build's act
+> streams, checkpoint age awaits an operating decision, veto feed is an honest empty
+> seam. Gate honored: [5A] passed before this began.
 
 ## §0 Spine
 
