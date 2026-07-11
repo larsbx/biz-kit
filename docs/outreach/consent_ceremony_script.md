@@ -14,7 +14,8 @@ the place we're asking for trust.*
 [ ] HARNESS_KEYS_DIR set; steward key exists (mix harness.keys list)
 [ ] recording statute for THEIR state checked (runbook 0.1) — if unchecked, the
     recording ask below is DELETED, not improvised
-[ ] seed handover medium ready: pen + the paper slip (below), or their phone camera
+[ ] seed handover medium ready: pen + printed slips (print `seed_slip.html` — blank by
+    design; the key enters the paper only by their hand), or their phone camera
 [ ] terminal open, font large enough to read across a table
 [ ] optional demo prepared: nothing to prepare — it runs live (step 5)
 ```
