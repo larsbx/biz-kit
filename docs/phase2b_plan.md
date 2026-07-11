@@ -1,9 +1,15 @@
 # Phase 2B — The D instrument as versioned data + capture surfaces
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the Harness-D brief's Phase 2B
-> (`docs/handoff_harness_d.md` §2); acceptance = brief items **[2B]**. Gate honored: [2A]
-> passed before this began. Normative outer authority: `docs/corpus/11_HARNESS.md`
-> §1.2/§4-D/§6.3, 08 §7 (LLM boundary, normative), SUBSTRATE.md §7 (never-in-log rule).
+> **Status: COMPLETE** (2026-07-11). Scope was the Harness-D brief's Phase 2B
+> (`docs/handoff_harness_d.md` §2); acceptance **[2B]** passes: instrument versions
+> round-trip hash-identical with question-level diffs (a content change without a version
+> bump is structurally impossible); synthetic interviews produce typed findings with
+> provenance (2A machinery, exercised throughout); machine-extraction proposals are
+> demoted via the existing `CorrectionRecorded` with the original event and both chains
+> untouched; a recording without recording consent is unrepresentable. Also shipped:
+> frontier-model use unrepresentable until a dated-trigger `FrontierModelUseDeclared`
+> (08 §7). Gate honored: [2A] passed before this began. Normative outer authority:
+> `docs/corpus/11_HARNESS.md` §1.2/§4-D/§6.3, 08 §7, SUBSTRATE.md §7. Phase 2C is next.
 
 ## §0 Spine
 
