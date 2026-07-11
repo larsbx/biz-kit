@@ -19,6 +19,11 @@ disagree, the checklist wins.***
 | **window booking** | `dock_golive_checklist.md` | WE arrive inside the window — the exam points at us | no detention line without its evidence hash, even when the delay was real |
 | **referral** | `shop_golive_checklist.md` | the empty ledger, checked from dollar zero | no fee tonight or ever — the promise has no small versions |
 
+**When several fire at once:** `golive_day_checklist.md` — the orchestration
+sheet for the first load's evening: sequencing, sync points, scripted failure
+branches, and the no-cross-party-leakage rule. It adds no items and waives
+none; every checklist wins over it.
+
 **The load's other side:** `shipper_golive_checklist.md` — often the same night
 as the Face's load, split strictly: the Face checklist owns the network's gates;
 the shipper's owns HER evening from her dock (the honest acknowledgment, the
