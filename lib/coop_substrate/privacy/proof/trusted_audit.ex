@@ -25,6 +25,9 @@ defmodule CoopSubstrate.Privacy.Proof.TrustedAudit do
   alias CoopSubstrate.Projections.Membership
 
   @impl true
+  def descriptor, do: %{rung: :plain, boundary: :beam, workload: :bounded_computation}
+
+  @impl true
   def prove(fact, private_inputs) do
     as_of = Log.head().global_seq
 

@@ -31,6 +31,15 @@ defmodule CoopSubstrate.PrivacySeamTest do
       send(self(), {:aggregate_backing, __MODULE__})
       Enum.reduce(contributions, 0, &+/2)
     end
+
+    @impl true
+    def descriptor, do: %{rung: :plain, boundary: :beam, workload: :bounded_computation}
+  end
+
+  defmodule NoMetadataBacking do
+    @moduledoc "Test-only: a backing that forgot its Phase 6A descriptor."
+
+    def sum(contributions), do: Enum.sum(contributions)
   end
 
   setup do
@@ -99,6 +108,29 @@ defmodule CoopSubstrate.PrivacySeamTest do
 
     assert_aggregates()
     assert_received {:aggregate_backing, OpaqueBacking}
+  end
+
+  test "seam backings carry validated mechanism descriptors (Phase 6A)" do
+    # The day-one backings declare the plain rung on the BEAM.
+    assert {:ok, %{rung: :plain, boundary: :beam}} = Privacy.Aggregate.descriptor()
+    assert {:ok, %{rung: :plain, boundary: :beam}} = Privacy.Proof.descriptor()
+
+    # JointCompute has no backing yet — inspectable, not implicit.
+    assert {:error, :no_backing_configured} = Privacy.JointCompute.descriptor()
+
+    # A backing without metadata is a named error, not a silent gap.
+    Application.put_env(:coop_substrate, :aggregate_backing, NoMetadataBacking)
+    on_exit(fn -> Application.delete_env(:coop_substrate, :aggregate_backing) end)
+    assert {:error, {:descriptor_undeclared, NoMetadataBacking}} = Privacy.Aggregate.descriptor()
+
+    # An MPC joint-compute backing declared inside the BEAM is unrepresentable.
+    defmodule BeamMpc do
+      def descriptor, do: %{rung: :mpc, boundary: :beam, workload: :joint_evaluation}
+    end
+
+    Application.put_env(:coop_substrate, :joint_compute_backing, BeamMpc)
+    on_exit(fn -> Application.delete_env(:coop_substrate, :joint_compute_backing) end)
+    assert {:error, {:boundary_not_allowed, :mpc, :beam}} = Privacy.JointCompute.descriptor()
   end
 
   test "Proof seam: floor_cleared — prove pins a log position, verify recomputes", ctx do

@@ -10,10 +10,17 @@ defmodule CoopSubstrate.Privacy.Aggregate do
   Backing selection: `:aggregate_backing` app env; defaults to `Plaintext`.
   """
 
+  alias CoopSubstrate.Privacy.Mechanism
+
   @callback sum(contributions :: [integer()]) :: integer()
+  @callback descriptor() :: Mechanism.descriptor()
 
   @spec sum([integer()]) :: integer()
   def sum(contributions), do: backing().sum(contributions)
+
+  @doc "The configured backing's mechanism descriptor, validated (Phase 6A)."
+  @spec descriptor() :: {:ok, Mechanism.descriptor()} | {:error, term()}
+  def descriptor, do: Mechanism.describe(backing())
 
   defp backing do
     Application.get_env(:coop_substrate, :aggregate_backing, __MODULE__.Plaintext)
@@ -26,5 +33,8 @@ defmodule CoopSubstrate.Privacy.Aggregate do
 
     @impl true
     def sum(contributions), do: Enum.sum(contributions)
+
+    @impl true
+    def descriptor, do: %{rung: :plain, boundary: :beam, workload: :bounded_computation}
   end
 end

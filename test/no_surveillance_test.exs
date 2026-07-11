@@ -118,14 +118,20 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:compute, 3} => :bilateral
     },
     Privacy.Aggregate => %{
-      {:sum, 1} => :aggregate
+      {:sum, 1} => :aggregate,
+      # Mechanism metadata (Phase 6A): what the seam runs on, never member data.
+      {:descriptor, 0} => :system
     },
     Privacy.Proof => %{
       # A member proves facts about their own standing...
       {:prove, 1} => :own_data,
       {:prove, 2} => :own_data,
       # ...and anyone may verify: one boolean crosses the boundary, no detail.
-      {:verify, 2} => :system
+      {:verify, 2} => :system,
+      {:descriptor, 0} => :system
+    },
+    Privacy.JointCompute => %{
+      {:descriptor, 0} => :system
     }
   }
 

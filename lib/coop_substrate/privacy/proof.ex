@@ -15,14 +15,21 @@ defmodule CoopSubstrate.Privacy.Proof do
           | {:balance_at_least, chapter :: String.t(), member :: String.t(),
              entity :: String.t(), min_minor :: integer()}
 
+  alias CoopSubstrate.Privacy.Mechanism
+
   @callback prove(fact(), private_inputs :: keyword()) :: {:ok, term()} | {:error, term()}
   @callback verify(fact(), proof :: term()) :: boolean()
+  @callback descriptor() :: Mechanism.descriptor()
 
   @spec prove(fact(), keyword()) :: {:ok, term()} | {:error, term()}
   def prove(fact, private_inputs \\ []), do: backing().prove(fact, private_inputs)
 
   @spec verify(fact(), term()) :: boolean()
   def verify(fact, proof), do: backing().verify(fact, proof)
+
+  @doc "The configured backing's mechanism descriptor, validated (Phase 6A)."
+  @spec descriptor() :: {:ok, Mechanism.descriptor()} | {:error, term()}
+  def descriptor, do: Mechanism.describe(backing())
 
   defp backing do
     Application.get_env(:coop_substrate, :proof_backing, __MODULE__.TrustedAudit)
