@@ -19,6 +19,12 @@ disagree, the checklist wins.***
 | **window booking** | `dock_golive_checklist.md` | WE arrive inside the window — the exam points at us | no detention line without its evidence hash, even when the delay was real |
 | **referral** | `shop_golive_checklist.md` | the empty ledger, checked from dollar zero | no fee tonight or ever — the promise has no small versions |
 
+**The federation's night:** `chapter_golive_checklist.md` — the first mirrored
+handoff across two sovereign chapters: the append ordering scripted, the pair
+reconciled in the open, checkpoints exchanged, and the one-log-for-simplicity
+temptation refused by name. Presupposes the treaty, the activated corridor,
+and the boundary yard's own night one.
+
 **When several fire at once:** `golive_day_checklist.md` — the orchestration
 sheet for the first load's evening: sequencing, sync points, scripted failure
 branches, and the no-cross-party-leakage rule. It adds no items and waives
