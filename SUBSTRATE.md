@@ -305,10 +305,10 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Federation-scoped events** (09 §1): how an event that spans chapters is represented —
   a federation pseudo-chapter id, or a distinct scope field. Deferred to 1D; current model
   does not foreclose either.
-- **Specs 00–13A**: the normative corpus is now unpacked at
-  `tmp/freight_coop_corpus/corpus/` (with `HANDOFF.md` as its index) but **untracked** —
-  `tmp/` is gitignored. Phase 1C grounds in it directly (§13); whether to commit the corpus
-  into the repo (or `docs/`-transcribe the glossary mapping) is an open housekeeping call.
+- **Specs 00–13A** — *resolved*: the normative corpus is committed at
+  [`docs/corpus/`](docs/corpus/) (00–13A + PROJECT_INSTRUCTIONS, with
+  [`HANDOFF.md`](docs/corpus/HANDOFF.md) as its index, REVISION-2). The pre-refactor
+  archive stays out of the repo — provenance only, per the corpus's own convention.
 - **Registry governance**: production registration workflow for new event types (tests use
   the `:extra_event_types` app env; production types are compile-time data). The same applies
   to rule implementations (`:extra_accrual_rules`, `:extra_throughput_rules`,
@@ -506,8 +506,8 @@ Hand-off §6 [1B] items, enforced by the test suite:
 ## 13. Phase 1C — throughput, floor, obligation rail, privacy seams
 
 Scope: hand-off §2.4–2.5 + §4; plan and flagged decisions in `docs/phase1c_plan.md`. This is
-the first phase grounded in the **normative corpus** (`tmp/freight_coop_corpus/corpus/`,
-untracked — see §8): 08_PLATFORM (privacy mechanism ladder §6, verification doctrine §9),
+the first phase grounded in the **normative corpus** (`docs/corpus/` — see §8):
+08_PLATFORM (privacy mechanism ladder §6, verification doctrine §9),
 05_FINANCE (obligation-relationship rail §1.2; P5/P10/P11), 11_HARNESS (spec-shape rule; the
 harness gates workflow builds, not the substrate — the substrate is HANDOFF §5's phase gate).
 

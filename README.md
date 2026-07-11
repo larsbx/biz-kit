@@ -2,9 +2,11 @@
 
 The signed event ledger + capital-account substrate for a member-owned co-op platform:
 an append-only, tamper-evident, replayable log of Ed25519-signed canonical events that
-every other feature reads from. See `SUBSTRATE.md` (normative) and `docs/handoff.md`
-(the build brief); `docs/phase1{a,b,c,d}_plan.md` are the completed phase build plans.
-New here? Start with [`docs/quickstart.md`](docs/quickstart.md).
+every other feature reads from. See `SUBSTRATE.md` (normative for the substrate),
+[`docs/corpus/`](docs/corpus/) (the normative project corpus, 00–13A —
+[`HANDOFF.md`](docs/corpus/HANDOFF.md) is its index), and `docs/handoff.md` (the build
+brief); `docs/phase1{a,b,c,d}_plan.md` are the completed phase build plans. New here?
+Start with [`docs/quickstart.md`](docs/quickstart.md).
 
 **Status: the substrate hand-off is complete (Phases 1A–1D)** — canonical signed event
 protocol + append-only log; membership lifecycle (append-gated state machine) and capital
