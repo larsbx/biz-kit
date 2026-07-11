@@ -1,9 +1,15 @@
 # Phase 3B — Harness.Ops: capture through the gate
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the Harness.Ops brief's Phase 3B
-> (`docs/handoff_harness_ops.md` §2), its final phase; acceptance = brief items **[3B]**.
-> Gate honored: [3A] passed before this began. Covers runbook phases 3–7
-> (`docs/runbook_gate_d.md`).
+> **Status: COMPLETE** (2026-07-11). Scope was the Harness.Ops brief's Phase 3B, its
+> final phase; acceptance **[3B]** passes: the 2D end-to-end scenario runs ENTIRELY
+> through the task modules (keys/genesis through build_started, seeds and hashes captured
+> from shell output like a real handover), `status` names short legs in runbook terms
+> and goes quiet when the gate is true, a mid-batch findings rejection stops there and
+> names the entry with prior events standing, and the post-revocation flip re-blocks
+> `build_started` with the gate's term verbatim. The runbook's `## Operating` section is
+> now the primary path (iex appendix demoted to fallback). **The Harness.Ops brief is
+> closed** — the repo's next event should be field exhaust. Gate honored: [3A] passed
+> before this began.
 
 ## §0 Spine
 
