@@ -75,7 +75,8 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 
 **Phase X — Growth and exits**
 - Growth: `second_chapter_kit` → `interchapter_agreement_template` →
-  `corridor_activation_checklist`
+  `corridor_activation_checklist` → `corridor_golive_checklist` *(the first
+  relay leg — activation opens the locks; go-live runs the leg)*
 - Exits: **`offboarding_index.md`** — ten letters, the stacks, the eleven shared
   rules, the order of operations
 
