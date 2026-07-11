@@ -415,9 +415,10 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
           "section" => :string,
           "interview_id" => :string,
           "interviewee_ref" => :string,
-          "mode" => :string
+          "mode" => :string,
+          "instrument_version" => :int
         },
-        optional: %{"instrument_version" => :int}
+        optional: %{}
       }
     },
     "FindingExtracted" => %{

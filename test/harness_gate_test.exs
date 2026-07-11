@@ -50,11 +50,28 @@ defmodule CoopSubstrate.HarnessGateTest do
   defp interview(steward, id, ref, attrs \\ []) do
     payload =
       Map.merge(
-        %{"section" => "D", "interview_id" => id, "interviewee_ref" => ref, "mode" => "form"},
+        %{
+          "section" => "D",
+          "interview_id" => id,
+          "interviewee_ref" => ref,
+          "mode" => "form",
+          "instrument_version" => 1
+        },
         Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
       )
 
     signed_event(steward, "InterviewConducted", payload)
+  end
+
+  defp publish_instrument!(steward) do
+    {:ok, _} =
+      Log.append(
+        signed_event(steward, "InstrumentVersionPublished", %{
+          "section" => "D",
+          "version" => 1,
+          "tree_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+        })
+      )
   end
 
   defp finding(steward, id, interview_ref, attrs \\ []) do
@@ -136,6 +153,13 @@ defmodule CoopSubstrate.HarnessGateTest do
       {:unknown_interview_mode, "voice_agent"}
     )
 
+    # No instrument published yet: an interview cannot bind a version, so it
+    # cannot exist (the leading-question adversarial case, 11 §6.3).
+    assert_rejected(interview(ctx.steward, "I-1", "IV-1"), {:unknown_instrument_version, 1})
+
+    publish_instrument!(ctx.steward)
+    assert_rejected(interview(ctx.steward, "I-1", "IV-1", instrument_version: 2), {:unknown_instrument_version, 2})
+
     {:ok, _} = Log.append(interview(ctx.steward, "I-1", "IV-1"))
     {:ok, _} = Log.append(finding(ctx.steward, "F-1", "I-1"))
 
@@ -161,6 +185,7 @@ defmodule CoopSubstrate.HarnessGateTest do
 
   test "corroboration requires k independent, consent-active sources", ctx do
     declare_constants!(ctx.author)
+    publish_instrument!(ctx.steward)
     {:ok, _} = Log.append(consent(ctx.alice, "IV-1"))
     {:ok, _} = Log.append(consent(ctx.bob, "IV-2"))
     {:ok, _} = Log.append(interview(ctx.steward, "I-1", "IV-1"))
@@ -217,6 +242,7 @@ defmodule CoopSubstrate.HarnessGateTest do
     )
 
     declare_constants!(ctx.author)
+    publish_instrument!(ctx.steward)
     assert {:ok, false} = Harness.gate(@chapter, "D")
 
     # n_D = 2 interviews, k = 2 corroboration, c_D = 1 claim, d_D = 1 document.

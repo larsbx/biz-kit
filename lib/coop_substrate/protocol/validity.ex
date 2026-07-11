@@ -193,6 +193,13 @@ defmodule CoopSubstrate.Protocol.Validity do
       not Membership.consent_active?(gate, ch, p["interviewee_ref"]) ->
         {:error, {:no_active_consent, p["interviewee_ref"]}}
 
+      # An interview binds a PUBLISHED instrument version — unversioned
+      # questions are unrepresentable as provenance (11 §6.3; the
+      # leading-question adversarial case).
+      p["instrument_version"] < 1 or
+          p["instrument_version"] > Map.get(gate.instrument_versions, {ch, p["section"]}, 0) ->
+        {:error, {:unknown_instrument_version, p["instrument_version"]}}
+
       true ->
         :ok
     end

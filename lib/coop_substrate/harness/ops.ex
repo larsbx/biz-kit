@@ -214,12 +214,22 @@ defmodule CoopSubstrate.Harness.Ops do
   # -- capture (runbook phase 3) -----------------------------------------------------
 
   def record_interview(interview_id, interviewee_ref, section, mode) do
-    append("steward", "InterviewConducted", %{
-      "section" => section,
-      "interview_id" => interview_id,
-      "interviewee_ref" => interviewee_ref,
-      "mode" => mode
-    })
+    with {:ok, state} <- Log.replay(Membership) do
+      case Map.get(state.instrument_versions, {@chapter, section}, 0) do
+        0 ->
+          # Runbook order enforced: instrument (0.4) before capture (3).
+          {:error, {:no_instrument_published, section}}
+
+        version ->
+          append("steward", "InterviewConducted", %{
+            "section" => section,
+            "interview_id" => interview_id,
+            "interviewee_ref" => interviewee_ref,
+            "mode" => mode,
+            "instrument_version" => version
+          })
+      end
+    end
   end
 
   def record_finding(finding_id, interview_ref, kind, body) do

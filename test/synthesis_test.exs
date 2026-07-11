@@ -48,6 +48,15 @@ defmodule CoopSubstrate.SynthesisTest do
     # Carol consented to prospect_record ONLY — never synthesis material.
     grant.(carol, "IV-3", ["prospect_record"])
 
+    {:ok, _} =
+      Log.append(
+        signed_event(steward, "InstrumentVersionPublished", %{
+          "section" => "D",
+          "version" => 1,
+          "tree_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+        })
+      )
+
     for {id, ref} <- [{"I-1", "IV-1"}, {"I-2", "IV-2"}, {"I-3", "IV-3"}] do
       {:ok, _} =
         Log.append(
@@ -55,7 +64,8 @@ defmodule CoopSubstrate.SynthesisTest do
             "section" => "D",
             "interview_id" => id,
             "interviewee_ref" => ref,
-            "mode" => "chat"
+            "mode" => "chat",
+            "instrument_version" => 1
           })
         )
     end

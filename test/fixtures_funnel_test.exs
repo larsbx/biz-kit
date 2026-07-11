@@ -60,6 +60,15 @@ defmodule CoopSubstrate.FixturesFunnelTest do
         )
     end
 
+    {:ok, _} =
+      Log.append(
+        signed_event(steward, "InstrumentVersionPublished", %{
+          "section" => "D",
+          "version" => 1,
+          "tree_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+        })
+      )
+
     for {id, ref} <- [{"I-1", "IV-1"}, {"I-2", "IV-2"}] do
       {:ok, _} =
         Log.append(
@@ -67,7 +76,8 @@ defmodule CoopSubstrate.FixturesFunnelTest do
             "section" => "D",
             "interview_id" => id,
             "interviewee_ref" => ref,
-            "mode" => "form"
+            "mode" => "form",
+            "instrument_version" => 1
           })
         )
     end
@@ -202,11 +212,21 @@ defmodule CoopSubstrate.FixturesFunnelTest do
 
     {:ok, _} =
       Log.append(
+        signed_event(steward, "InstrumentVersionPublished", %{
+          "section" => "D",
+          "version" => 1,
+          "tree_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+        })
+      )
+
+    {:ok, _} =
+      Log.append(
         signed_event(steward, "InterviewConducted", %{
           "section" => "D",
           "interview_id" => "I-9",
           "interviewee_ref" => "IV-9",
-          "mode" => "call"
+          "mode" => "call",
+          "instrument_version" => 1
         })
       )
 
