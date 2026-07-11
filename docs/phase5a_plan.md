@@ -1,8 +1,16 @@
 # Phase 5A — The R-item rail + queue
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the cockpit brief's Phase 5A
-> (`docs/handoff_cockpit.md` §2); acceptance = brief items **[5A]**. Normative outer
-> authority: corpus 10 §5 (decision-ready discipline), §6 P9–P12 + adversarial suite.
+> **Status: COMPLETE** (2026-07-11). Scope was the cockpit brief's Phase 5A; acceptance
+> **[5A]** passes: an item missing any decision-ready element is unrepresentable
+> (missing fields fail at envelope construction — stronger than planned — and hollow
+> fields at the gate); the queue is a pure `{deadline_ms, item_id}`-ordered fold,
+> `as_of:`-reproducible; flooding past the declared per-process cap rejects and the cap
+> fails closed undeclared; a resolution closes exactly its open item once;
+> `returned_defect` is terminal for the id (a fresh, complete item is the only path
+> back). Both in-build corrections from the header stand (basis existence deferred to
+> the flagged full rule; item-id tie order). `mix cockpit.queue` / `cockpit.decide`
+> smoke-tested under the process shell. Normative outer authority: corpus 10 §5, §6
+> P9–P12. Phase 5B (the boards) is next.
 
 ## §0 Spine
 
