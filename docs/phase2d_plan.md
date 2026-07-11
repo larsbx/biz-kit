@@ -1,10 +1,14 @@
 # Phase 2D — Fixtures (anonymization predicate) + funnel emission
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the Harness-D brief's Phase 2D
-> (`docs/handoff_harness_d.md` §2), the brief's final phase; acceptance = brief items
-> **[2D]**. Gate honored: [2C] passed before this began. Normative outer authority:
-> `docs/corpus/11_HARNESS.md` §1.5 (fixtures), §3 (funnel unification), P2/P7;
-> `docs/corpus/12_ONBOARDING.md` §5, P6 (funnel provenance).
+> **Status: COMPLETE** (2026-07-11). Scope was the Harness-D brief's Phase 2D, its final
+> phase; acceptance **[2D]** passes: a fixture set with any predicate violation is
+> unpublishable (nothing persists); every funnel record resolves to its interviewee,
+> interview, and consent class, with post-revocation emission unrepresentable; and the
+> full real-machinery pipeline (Synthesis → adoption → Fixtures → funnel) drives gate(D)
+> true on synthetic data, lands BuildStarted, and flips false under revocation of a
+> load-bearing source. **The Harness-D brief's machinery is complete** — results in
+> `HARNESS.md` (normative); gate(D)'s real evaluation is the founder's field work.
+> Gate honored: [2C] passed before this began.
 
 ## §0 Spine
 

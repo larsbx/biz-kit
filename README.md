@@ -8,7 +8,11 @@ every other feature reads from. See `SUBSTRATE.md` (normative for the substrate)
 brief); `docs/phase1{a,b,c,d}_plan.md` are the completed phase build plans. New here?
 Start with [`docs/quickstart.md`](docs/quickstart.md).
 
-**Status: the substrate hand-off is complete (Phases 1A–1D)** — canonical signed event
+**Status: the substrate hand-off (Phases 1A–1D) and the Harness-D pipeline machinery
+(Phases 2A–2D, `HARNESS.md`) are complete.** The harness gates the dispatch build on
+field evidence: consented interviews → corroborated findings → recompilable process
+model → governance-adopted spec → anonymized fixtures → `gate(D)`. Substrate: canonical
+signed event
 protocol + append-only log; membership lifecycle (append-gated state machine) and capital
 accounts with in-log rule versioning; throughput/floor compute, the obligation-relationship
 rail with netting, and the privacy seams (Aggregate/Proof/JointCompute); full chapter
