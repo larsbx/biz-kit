@@ -1,10 +1,18 @@
 # Phase 2C — Synthesis, spec compilation, adoption binding
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the Harness-D brief's Phase 2C
-> (`docs/handoff_harness_d.md` §2); acceptance = brief items **[2C]**. Gate honored: [2B]
-> passed before this began. Normative outer authority: `docs/corpus/11_HARNESS.md`
-> §1.3–§1.4 (synthesis, spec compilation, adoption), `docs/corpus/10_AUTONOMY.md` §0–§2
-> (the H-set predicate; unclassified ⇒ block), 09 §1 (contested ⇒ N).
+> **Status: COMPLETE** (2026-07-11). Scope was the Harness-D brief's Phase 2C
+> (`docs/handoff_harness_d.md` §2); acceptance **[2C]** passes: every compiled node
+> resolves to findings in the model (provenance closure tested mechanically); tier
+> assignment is total and fail-closed (unclassified ⇒ block, contested ⇒ N, only
+> classified-enveloped reaches A); conflicts and out-of-core observations surface
+> verbatim; adoption without the latest model's hash is unrepresentable
+> (`model_hash_mismatch` tested). Also proven: the model recompiles byte-identically
+> from the log (cherry-picking is detectable), a synthesis-consentless source appears
+> nowhere, and mid-log revocation drops a core claim below k and out of the model while
+> `as_of:` reproduces the pre-revocation model exactly. One deviation from this plan,
+> minor: `publish_spec/3` takes no signing material — it appends nothing (both artifacts
+> are content-addressed stores; the only signature in the flow is the adoption itself).
+> Gate honored: [2B] passed before this began. Phase 2D is next.
 
 ## §0 Spine
 
