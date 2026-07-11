@@ -1,6 +1,7 @@
 # Outreach master index — the whole document set, tied together
 
-*58 documents, one map, two views: **the persona journey** (any person, first page
+*One map, two views (the census is `ls` — a count written here would only drift):
+**the persona journey** (any person, first page
 to last letter) and **the lifecycle arc** (any moment, which papers are live and
 which are still gated). The set's one sentence: every relationship this network can
 form has its invitation, its evidence, its ceremonies, its reckonings, and its
@@ -61,7 +62,8 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 - Shipper row: gated on the Face live
 - Yard/dock/shop rows: gated on staging demand / window listings / referral flow
 - First nights: **`golive_index.md`** — the five go-live ceremonies (load, leg,
-  trailer, window, referral), their order, and the family's shared rules
+  trailer, window, referral) plus the gifted sixth (the service co-op's first
+  call), their order, and the family's shared rules
 - Trial follow-ups: gated on the trial having RUN (each computes from the log)
 - Channel manners live in each scheduling email (bays-first, windows-respected,
   never-while-rolling, never-anchor-a-rate)
@@ -119,5 +121,5 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 
 *Provenance: this index is a table of contents, not a source — every claim above
 summarizes a document that owns it. Corpus grounding lives in each document's own
-footer. The set spans commits `dbbf592`..`8d6f328`; drafted per the standing
-doctrine set, twenty-one letters and their maps included.*
+footer. The set's history is git's to tell; the doctrines above are what every
+addition is audited against.*

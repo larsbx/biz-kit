@@ -120,4 +120,4 @@ to send:
 notes or the series doctrine they share; where an entry and its template ever
 disagree, **the template wins** (single authority per concept: the letter owns its
 letter). The doctrine's corpus roots are in each template's provenance footer;
-the family spans commits `dbbf592`..`6218593`, twentieth application and index.*
+the family's history is git's to tell.*

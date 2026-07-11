@@ -65,7 +65,7 @@ and the worker's protections holding on call one.
 
 ---
 
-*Provenance: an index of five checklists that own their own rules; the shape
-(preconditions/act/reckoning/refusals) and shared rules are theirs, stated here
-once. Family spans commits `aba16ab`..`24d58de`. Checklist-wins → single
-authority per concept, same as the offboarding and master indexes.*
+*Provenance: an index of checklists that own their own rules — five ours, one
+gifted; the shape (preconditions/act/reckoning/refusals) and shared rules are
+theirs, stated here once. The family's history is git's to tell. Checklist-wins
+→ single authority per concept, same as the offboarding and master indexes.*
