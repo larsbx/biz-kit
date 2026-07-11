@@ -61,7 +61,8 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 - Shipper row: gated on the Face live
 - Yard/dock/shop rows: gated on staging demand / window listings / referral flow
   (`yard_golive_checklist` runs the first staged trailer;
-  `dock_golive_checklist` the first window booking)
+  `dock_golive_checklist` the first window booking;
+  `shop_golive_checklist` the first referral)
 - Trial follow-ups: gated on the trial having RUN (each computes from the log)
 - Channel manners live in each scheduling email (bays-first, windows-respected,
   never-while-rolling, never-anchor-a-rate)
