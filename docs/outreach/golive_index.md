@@ -28,7 +28,10 @@ and the boundary yard's own night one.
 **When several fire at once:** `golive_day_checklist.md` — the orchestration
 sheet for the first load's evening: sequencing, sync points, scripted failure
 branches, and the no-cross-party-leakage rule. It adds no items and waives
-none; every checklist wins over it.
+none; every checklist wins over it. Its bilateral sibling,
+`chapter_golive_day_checklist.md`, conducts the mirrored-handoff evening
+across the sovereignty boundary: two coordinators, three currencies (yes/no ·
+hashes · counts), and greens that carry no attachments.
 
 **The load's other side:** `shipper_golive_checklist.md` — often the same night
 as the Face's load, split strictly: the Face checklist owns the network's gates;
