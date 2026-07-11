@@ -162,10 +162,41 @@ relationships matter more than the count.
 
 ---
 
-## Appendix — signing events from iex (until an operator CLI exists)
+## Operating — the CLI (the primary path)
 
-There is no lib-level convenience for hand-signed appends (deliberately — agents will
-have their own keys). For field use, paste this once per `iex -S mix` session:
+Every phase above is one `mix harness.*` command; rejections print the gate's error term
+verbatim, and each atom names the runbook step that was skipped. Set `HARNESS_KEYS_DIR`
+first (0600 seed files live there — flagged temporary custody, 08 §9).
+
+```sh
+mix harness.keys genesis                 # 0.2 — TOFU + declarations + checkpoint blob
+mix harness.constants --n 5 --c 4 --d 5 --k 2        # 0.3 — typed confirmation
+mix harness.instrument publish           # 0.4 — the corpus 11 §4-D seed tree
+
+mix harness.consent --ref IV-1 --classes synthesis,anonymized_fixtures,prospect_record \
+    [--recording]                        # 2 — run WITH them; hand over the printed seed
+mix harness.interview --id I-1 --interviewee IV-1 --mode call        # 3
+mix harness.findings findings.json       # 3 — batch; or --id/--interview/--kind/--body
+mix harness.document --interview I-1 --kind rate_confirmation path/to/ratecon.pdf
+mix harness.corroborate C-accept F-1 F-7 # 4 — needs k distinct people
+mix harness.conflict X-timing F-2 F-9    # 4
+mix harness.status                       # 4/7 — gate + counts + short legs, named
+
+mix harness.model publish && mix harness.model show   # 5 — read it end to end
+mix harness.spec publish classifier.json # 5 — prints the three hashes
+mix harness.adopt --spec <hex> --defaults <hex> --model <hex>   # 5 — THE signature
+
+mix harness.fixtures publish fixtures/ --denylist denylist.txt --sources I-1,I-2  # 6
+mix harness.prospect --ref P-1 --interviewee IV-1 --interview I-1                 # 6
+mix harness.build_started                # 7 — lands only when the gate is true
+mix harness.checkpoint                   # 7 — publish the blob outside this machine
+mix harness.revoke --ref IV-1 --seed-file their.seed   # anytime; terminal; may flip the gate
+```
+
+## Appendix — signing events from iex (fallback)
+
+If the CLI is unavailable, the same acts can be signed by hand. Paste this once per
+`iex -S mix` session:
 
 ```elixir
 alias CoopSubstrate.{Crypto, Log}

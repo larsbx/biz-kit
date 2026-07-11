@@ -16,8 +16,13 @@ defmodule CoopSubstrate.Harness.Ops do
 
   alias CoopSubstrate.Constants
   alias CoopSubstrate.Crypto
+  alias CoopSubstrate.Harness
+  alias CoopSubstrate.Harness.Artifacts
+  alias CoopSubstrate.Harness.Fixtures
   alias CoopSubstrate.Harness.Instrument
+  alias CoopSubstrate.Harness.Synthesis
   alias CoopSubstrate.Log
+  alias CoopSubstrate.Projections.Membership
   alias CoopSubstrate.Protocol.Envelope
 
   @chapter "chapter-genesis"
@@ -203,6 +208,170 @@ defmodule CoopSubstrate.Harness.Ops do
   def instrument_publish(tree \\ Instrument.seed_d()) do
     with {:ok, steward} <- load_signer("steward") do
       Instrument.publish(@chapter, tree, steward.key_id, steward.seed)
+    end
+  end
+
+  # -- capture (runbook phase 3) -----------------------------------------------------
+
+  def record_interview(interview_id, interviewee_ref, section, mode) do
+    append("steward", "InterviewConducted", %{
+      "section" => section,
+      "interview_id" => interview_id,
+      "interviewee_ref" => interviewee_ref,
+      "mode" => mode
+    })
+  end
+
+  def record_finding(finding_id, interview_ref, kind, body) do
+    append("steward", "FindingExtracted", %{
+      "finding_id" => finding_id,
+      "interview_ref" => interview_ref,
+      "kind" => kind,
+      "body" => body
+    })
+  end
+
+  @doc """
+  Batch findings; each is its own signed event, so a rejection stops the
+  batch AT that entry (prior events stand) and names it.
+  """
+  def record_findings(entries) do
+    Enum.reduce_while(entries, {:ok, 0}, fn entry, {:ok, count} ->
+      case record_finding(
+             entry["finding_id"],
+             entry["interview_ref"],
+             entry["kind"],
+             entry["body"]
+           ) do
+        {:ok, _} -> {:cont, {:ok, count + 1}}
+        {:error, reason} -> {:halt, {:error, {entry["finding_id"], reason, appended: count}}}
+      end
+    end)
+  end
+
+  def collect_document(interview_ref, doc_kind, binary) do
+    with {:ok, steward} <- load_signer("steward") do
+      Harness.collect_document(@chapter, interview_ref, doc_kind, binary, steward.key_id, steward.seed)
+    end
+  end
+
+  # -- corroboration (runbook phase 4) ------------------------------------------------
+
+  def corroborate(claim_ref, finding_refs) do
+    append("steward", "Corroborated", %{"claim_ref" => claim_ref, "finding_refs" => finding_refs})
+  end
+
+  def conflict(claim_ref, finding_refs) do
+    append("steward", "ConflictFlagged", %{"claim_ref" => claim_ref, "finding_refs" => finding_refs})
+  end
+
+  # -- synthesis & adoption (runbook phase 5) -----------------------------------------
+
+  def model_publish do
+    with {:ok, steward} <- load_signer("steward") do
+      Synthesis.publish_model(@chapter, "D", steward.key_id, steward.seed)
+    end
+  end
+
+  def model_show do
+    with {:ok, state} <- Log.replay(Membership),
+         hash when is_binary(hash) <-
+           state.process_models[{@chapter, "D"}] || {:error, {:nothing_compiled, "D"}},
+         {:ok, bytes} <- Artifacts.get(hash) do
+      CoopSubstrate.Canonical.decode(bytes)
+    end
+  end
+
+  def spec_publish(classifier), do: Synthesis.publish_spec(@chapter, "D", classifier)
+
+  def adopt(spec_hash, defaults_hash, model_hash) do
+    append("governance", "SpecAdopted", %{
+      "section" => "D",
+      "spec_hash" => {:bytes, spec_hash},
+      "envelope_defaults_hash" => {:bytes, defaults_hash},
+      "model_hash" => {:bytes, model_hash}
+    })
+  end
+
+  # -- fixtures & funnel (runbook phase 6) --------------------------------------------
+
+  @doc "Fixtures from a directory (every file), denylist from a lines file."
+  def fixtures_publish(dir, denylist_path, source_refs) do
+    with {:ok, steward} <- load_signer("steward"),
+         {:ok, files} <- File.ls(dir) do
+      fixtures =
+        for name <- Enum.sort(files) do
+          %{"name" => name, "content" => File.read!(Path.join(dir, name))}
+        end
+
+      denylist =
+        denylist_path
+        |> File.read!()
+        |> String.split("\n", trim: true)
+
+      Fixtures.publish(@chapter, "D", fixtures, denylist, source_refs, steward.key_id, steward.seed)
+    end
+  end
+
+  def prospect(prospect_ref, interviewee_ref, interview_ref, track) do
+    append("steward", "FunnelProspectEmitted", %{
+      "prospect_ref" => prospect_ref,
+      "interviewee_ref" => interviewee_ref,
+      "interview_ref" => interview_ref,
+      "track" => track
+    })
+  end
+
+  def honorarium(interviewee_ref, amount_minor) do
+    append("steward", "HonorariumAccrued", %{
+      "interviewee_ref" => interviewee_ref,
+      "amount_minor" => amount_minor
+    })
+  end
+
+  # -- the gate (runbook phase 7) ------------------------------------------------------
+
+  def checkpoint_emit(blob_path) do
+    with {:ok, ck} <- load_signer("checkpoint"),
+         {:ok, blob} <- Log.checkpoint(@chapter, ck.key_id, ck.seed),
+         :ok <- File.write(blob_path, blob) do
+      {:ok, blob_path}
+    end
+  end
+
+  def build_started(section), do: append("steward", "BuildStarted", %{"section" => section})
+
+  @doc """
+  The cockpit line (runbook phases 4 and 7): gate verdict + counts + the
+  short legs NAMED in runbook terms. Presentation over the gate's own
+  arithmetic — same fold, same constants, never a second judge.
+  """
+  def status(section) do
+    with {:ok, state} <- Log.replay(Membership) do
+      case Membership.harness_constants(state, @chapter, section) do
+        {:error, :constants_undeclared} ->
+          {:ok, %{gate: false, short: ["constants undeclared — runbook 0.3"]}}
+
+        {:ok, constants} ->
+          counts = Membership.harness_counts(state, @chapter, section, constants.k)
+          {:ok, verdict} = Membership.harness_gate(state, @chapter, section)
+
+          short =
+            [
+              {counts.interviews < constants.n,
+               "interviews #{counts.interviews}/#{constants.n} — runbook 1-3"},
+              {counts.corroborated < constants.c,
+               "corroborated core #{counts.corroborated}/#{constants.c} — runbook 4"},
+              {counts.documents < constants.d,
+               "documents #{counts.documents}/#{constants.d} — runbook 3"},
+              {not counts.adopted, "spec not adopted — runbook 5"},
+              {not counts.fixtures, "fixtures not published — runbook 6"}
+            ]
+            |> Enum.filter(&elem(&1, 0))
+            |> Enum.map(&elem(&1, 1))
+
+          {:ok, %{gate: verdict, counts: counts, constants: constants, short: short}}
+      end
     end
   end
 
