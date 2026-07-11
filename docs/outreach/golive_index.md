@@ -25,6 +25,11 @@ the shipper's owns HER evening from her dock (the honest acknowledgment, the
 invoice whose every line carries evidence or is absent, the lane earned at the
 disclosed price — never bought).
 
+**The fleet's night:** `carrier_golive_checklist.md` — the first load's third
+vantage point (network gates / her dock / his operation): the first tender his
+signed envelope admits, the fit shown, bypass blessed out loud, margin
+disclosed to him same-day, and the in-envelope ratio pinned at 100% forever.
+
 **The person's night:** `driver_golive_checklist.md` — the corridor go-live
 scripts a night that's new; this scripts a driver who is: first solo dispatch,
 activation chain verified never vouched, his first signature not his first
