@@ -50,8 +50,9 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 
 **Phase G — Founding (gated on the demo existing — i.e., on the hub's yes)**
 - `hub_onepager` *(the only founding paper that PRECEDES the demo — it creates it)*
-- `founding_invitation_letter` → `charter_session_agenda` →
-  `charter_session2_agenda` → `charter_session3_template` *(per waking program)*
+- `founding_invitation_letter` → `demo_day_checklist` *(the room; nothing signed
+  there)* → `charter_session_agenda` → `charter_session2_agenda` →
+  `charter_session3_template` *(per waking program)*
 - `ruling_organ_proposal` *(gated on the first contested program)*
 
 **Phase O — Operations (per persona, gated on the thing each page promises)**
