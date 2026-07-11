@@ -216,7 +216,9 @@ defmodule CoopSubstrate.Projections.Membership do
   end
 
   def handle_event(%Envelope{type: "ProcessModelCompiled", chapter_id: ch, payload: p}, state) do
-    put_in(state, [:process_models, Access.key({ch, p["section"]})], true)
+    # Stores the LATEST model's artifact hash — SpecAdopted binds to it (2C).
+    {:bytes, artifact_hash} = p["artifact_hash"]
+    put_in(state, [:process_models, Access.key({ch, p["section"]})], artifact_hash)
   end
 
   def handle_event(%Envelope{type: "SpecAdopted", chapter_id: ch, payload: p}, state) do

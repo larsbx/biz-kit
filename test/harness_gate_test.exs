@@ -198,7 +198,8 @@ defmodule CoopSubstrate.HarnessGateTest do
       signed_event(ctx.gov, "SpecAdopted", %{
         "section" => "D",
         "spec_hash" => {:bytes, :crypto.strong_rand_bytes(32)},
-        "envelope_defaults_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+        "envelope_defaults_hash" => {:bytes, :crypto.strong_rand_bytes(32)},
+        "model_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
       })
 
     assert_rejected(adopt, {:nothing_compiled, "D"})
@@ -250,20 +251,34 @@ defmodule CoopSubstrate.HarnessGateTest do
       {:harness_gate_not_passed, "D"}
     )
 
+    model_hash = :crypto.strong_rand_bytes(32)
+
     {:ok, _} =
       Log.append(
         signed_event(ctx.steward, "ProcessModelCompiled", %{
           "section" => "D",
-          "artifact_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+          "artifact_hash" => {:bytes, model_hash}
         })
       )
+
+    # Adoption binds the LATEST compiled model (2C).
+    assert_rejected(
+      signed_event(ctx.gov, "SpecAdopted", %{
+        "section" => "D",
+        "spec_hash" => {:bytes, :crypto.strong_rand_bytes(32)},
+        "envelope_defaults_hash" => {:bytes, :crypto.strong_rand_bytes(32)},
+        "model_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+      }),
+      {:model_hash_mismatch, "D"}
+    )
 
     {:ok, _} =
       Log.append(
         signed_event(ctx.gov, "SpecAdopted", %{
           "section" => "D",
           "spec_hash" => {:bytes, :crypto.strong_rand_bytes(32)},
-          "envelope_defaults_hash" => {:bytes, :crypto.strong_rand_bytes(32)}
+          "envelope_defaults_hash" => {:bytes, :crypto.strong_rand_bytes(32)},
+          "model_hash" => {:bytes, model_hash}
         })
       )
 

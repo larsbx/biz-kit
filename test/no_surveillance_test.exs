@@ -71,6 +71,16 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:put, 1} => :bilateral,
       {:get, 1} => :bilateral
     },
+    CoopSubstrate.Harness.Synthesis => %{
+      # Section-level compiled artifacts; the synthesis consent class covers
+      # the verbatim finding bodies they carry (11 P2); anonymization applies
+      # at fixtures (2D), not here.
+      {:compile_model, 2} => :system,
+      {:compile_model, 3} => :system,
+      {:publish_model, 4} => :system,
+      {:compile_spec, 2} => :system,
+      {:publish_spec, 3} => :system
+    },
     CoopSubstrate.Harness.Instrument => %{
       # Instrument trees are commons content.
       {:validate, 1} => :system,

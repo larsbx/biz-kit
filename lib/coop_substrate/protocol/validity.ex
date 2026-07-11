@@ -303,10 +303,19 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   defp type_check(%Envelope{type: "SpecAdopted", chapter_id: ch, payload: p}, gate) do
     with :ok <- check_section(p["section"]) do
-      if Map.get(gate.process_models, {ch, p["section"]}, false) do
-        :ok
-      else
-        {:error, {:nothing_compiled, p["section"]}}
+      {:bytes, claimed} = p["model_hash"]
+
+      case gate.process_models[{ch, p["section"]}] do
+        nil ->
+          {:error, {:nothing_compiled, p["section"]}}
+
+        ^claimed ->
+          :ok
+
+        _latest ->
+          # Adoption must bind the LATEST compiled model — a spec cut from
+          # stale evidence is unrepresentable (Phase 2C).
+          {:error, {:model_hash_mismatch, p["section"]}}
       end
     end
   end

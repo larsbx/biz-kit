@@ -489,6 +489,9 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
     "SpecAdopted" => %{
       # The section's ONE human signature (corpus 11 §1.4) — H2-shaped, so
       # governance-signed; the 1D registry enforces it post-bootstrap.
+      # model_hash binds the adoption to the LATEST compiled process model
+      # (Phase 2C): adopting a spec cut from stale evidence is
+      # unrepresentable.
       required_roles: ["governance"],
       disclosure_class: :commons,
       stream: {:payload_field, "harness", "section"},
@@ -496,7 +499,8 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         required: %{
           "section" => :string,
           "spec_hash" => :hash,
-          "envelope_defaults_hash" => :hash
+          "envelope_defaults_hash" => :hash,
+          "model_hash" => :hash
         },
         optional: %{}
       }
