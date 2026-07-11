@@ -72,9 +72,11 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:get, 1} => :bilateral
     },
     CoopSubstrate.Cockpit => %{
-      # The operator's own queue: process-level items, no member detail.
+      # The operator's own queue + boards: process-level, no member detail.
       {:queue, 1} => :system,
-      {:queue, 2} => :system
+      {:queue, 2} => :system,
+      {:boards, 2} => :system,
+      {:boards, 3} => :system
     },
     CoopSubstrate.Harness.Anonymization => %{
       # Pure predicate over caller-supplied text.

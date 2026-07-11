@@ -52,7 +52,8 @@ defmodule CoopSubstrate.Projections.Membership do
       extractions: %{},
       frontier_declared: %{},
       prospects: %{},
-      escalations: %{}
+      escalations: %{},
+      structural_findings: %{}
     }
   end
 
@@ -261,10 +262,20 @@ defmodule CoopSubstrate.Projections.Membership do
     })
   end
 
-  def handle_event(%Envelope{type: "EscalationResolved", chapter_id: ch, payload: p}, state) do
+  def handle_event(%Envelope{type: "EscalationResolved", chapter_id: ch, payload: p} = env, state) do
     update_in(state, [:escalations, Access.key({ch, p["item_id"]})], fn item ->
-      %{item | open: false}
+      item
+      |> Map.put(:open, false)
+      |> Map.put(:verdict, p["verdict"])
+      |> Map.put(:resolved_ms, env.timestamp_ms)
     end)
+  end
+
+  def handle_event(%Envelope{type: "StructuralFindingRaised", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:structural_findings, Access.key({ch, p["finding_id"]})], %{
+      kind: p["kind"],
+      period_ref: p["period_ref"]
+    })
   end
 
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state) do

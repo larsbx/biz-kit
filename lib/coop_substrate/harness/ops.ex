@@ -353,6 +353,29 @@ defmodule CoopSubstrate.Harness.Ops do
     append("steward", "EscalationResolved", payload)
   end
 
+  @doc """
+  The guard sweep (Phase 5B): compute B_op for the `now_ms` period and, on
+  breach, append the structural finding — exactly-once per (kind, period) is
+  the GATE's guarantee, so a re-run is idempotent by rejection (10 P9: a
+  finding, never a block, never staffing).
+  """
+  def guard_sweep(now_ms) do
+    with {:ok, %{b_op: b_op}} <- CoopSubstrate.Cockpit.boards(@chapter, now_ms) do
+      case b_op do
+        %{configured: true, breach: true, period_ref: ref, spent_minutes: spent, budget_minutes: budget} ->
+          append("steward", "StructuralFindingRaised", %{
+            "finding_id" => "F-b_op-#{ref}",
+            "kind" => "b_op_breach",
+            "period_ref" => ref,
+            "note" => "spent #{spent}min > B_op #{budget}min — tune ε levers or reclassify; never staff"
+          })
+
+        _ ->
+          {:ok, :no_breach}
+      end
+    end
+  end
+
   # -- the gate (runbook phase 7) ------------------------------------------------------
 
   def checkpoint_emit(blob_path) do

@@ -453,6 +453,26 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  defp type_check(%Envelope{type: "StructuralFindingRaised", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["kind"] not in ["b_op_breach", "epsilon_breach", "chronic_override"] ->
+        {:error, {:unknown_finding_kind, p["kind"]}}
+
+      Map.has_key?(gate.structural_findings, {ch, p["finding_id"]}) ->
+        {:error, {:finding_already_raised, p["finding_id"]}}
+
+      Enum.any?(gate.structural_findings, fn {{c, _id}, finding} ->
+        c == ch and finding.kind == p["kind"] and finding.period_ref == p["period_ref"]
+      end) ->
+        # Exactly-once per (kind, period): a re-run sweep is idempotent by
+        # rejection (10 P9; docs/phase5b_plan.md P2).
+        {:error, {:finding_exists_for_period, p["kind"], p["period_ref"]}}
+
+      true ->
+        :ok
+    end
+  end
+
   defp type_check(%Envelope{type: "BuildStarted", chapter_id: ch, payload: p}, gate) do
     with :ok <- check_section(p["section"]),
          {:ok, passed?} <- Membership.harness_gate(gate, ch, p["section"]) do

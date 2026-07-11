@@ -610,6 +610,18 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         optional: %{"reason" => :string}
       }
     },
+    "StructuralFindingRaised" => %{
+      # 10 P9: a guard breach is a DESIGN finding — it blocks nothing and
+      # staffs nothing; exactly-once per (kind, period) is structural
+      # (Phase 5B).
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "structural_findings"},
+      payload: %{
+        required: %{"finding_id" => :string, "kind" => :string, "period_ref" => :int},
+        optional: %{"note" => :string}
+      }
+    },
     "BuildStarted" => %{
       # The marker gate(section) protects: unrepresentable until the harness
       # gate is true (corpus 11 P6).
