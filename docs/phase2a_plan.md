@@ -1,9 +1,15 @@
 # Phase 2A — Harness event substrate: types, consent machine, the gate
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the Harness-D brief's Phase 2A
-> (`docs/handoff_harness_d.md` §2); acceptance = brief items **[2A]**. Gate honored: the
-> substrate hand-off (1A–1D) passed in full before this began. Normative outer authority:
-> `docs/corpus/11_HARNESS.md` (P1–P7), 08 §4/§7, 10 §0, 12 §4.
+> **Status: COMPLETE** (2026-07-11). Scope was the Harness-D brief's Phase 2A
+> (`docs/handoff_harness_d.md` §2); acceptance **[2A]** passes: gate(D) log-pure and
+> as-of-reproducible (fails closed on undeclared constants); consent revocation atomically
+> excludes a source from every fold (revoke-mid-log test flips the gate and re-rejects
+> `BuildStarted`); un-consented fixture sourcing and post-revocation use rejected at
+> append; `BuildStarted` without gate(D) unrepresentable; `voice_agent` structurally
+> absent. One correction logged in-line below (k vs c_D — the corpus's corroboration
+> threshold is the chapter-global `k`, 04 §9). Gate honored: the substrate hand-off
+> (1A–1D) passed in full before this began. Normative outer authority:
+> `docs/corpus/11_HARNESS.md` (P1–P7), 08 §4/§7, 10 §0, 12 §4. Phase 2B is next.
 
 ## §0 Spine
 
