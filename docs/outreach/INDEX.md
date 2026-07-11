@@ -45,7 +45,8 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 - Cadence: `recruitment_tracker_template` *(private dir, never committed)* ·
   `weekly_status_template` · `field_faq`
 - Closing the phase: `synthesis_day_checklist` → `fixtures_day_checklist`
-  → gate(D) evaluation (the runbook, in `docs/`)
+  → gate(D) evaluation (the runbook, in `docs/`) → `field_closeout_checklist`
+  *(both branches; hands a true gate to the D-build kickoff)*
 
 **Phase G — Founding (gated on the demo existing — i.e., on the hub's yes)**
 - `hub_onepager` *(the only founding paper that PRECEDES the demo — it creates it)*
