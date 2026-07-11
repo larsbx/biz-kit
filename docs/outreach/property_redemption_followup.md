@@ -55,6 +55,14 @@ just dishonest one layer later. Ours queues, in the open, in order."]**
   the series' standing luck-not-design humility, which after ONE cycle is the only
   honest posture.]**
 
+**[HOLDER-TENANT PARAGRAPH — include for members who also lease space the land co-op
+holds (a shop with a bay, a carrier with yard slots): "One thing your redemption does
+NOT touch: your lease. Shares and tenancy are separate relationships by design — your
+bay stays yours at the posted card, on the same terms as every member, whether you
+hold one share, the ceiling, or none. Redeeming to zero changes your landlord's
+books, never your rent, your term, or your standing at the counter. The equity was
+always optional on top of the tenancy, not a condition of it."]**
+
 **For those who redeemed in full and are leaving:** thank you, plainly. Your exit at
 full value, in order, without friction beyond the declared gates, is the best
 advertisement this structure will ever have — and your membership door stays open,
@@ -98,6 +106,15 @@ Respectfully,
   nothing that reads as solicitation. The letter reports the past; the future
   belongs to the reading-session process at the member's initiation. This rule has
   no exceptions and survives every good number.
+- **The holder-tenant paragraph** covers every persona whose T3 is "facility equity"
+  (shops with bays, carriers with yard slots — the 03 matrix): there is ONE
+  redemption letter for all of them, because there is one redemption machinery and
+  one counsel review per cycle — persona-forked redemption letters would multiply
+  the [SECURITIES] surface for zero mechanical difference (content moves, never
+  duplicates). Shares ⊥ tenancy is the paragraph's whole claim: verify it remains
+  literally true in the lease terms before including it (a lease clause that
+  conditions tenancy on shareholding would make the paragraph a lie AND violate
+  04 §3's exit-without-forfeiture spirit — flag it to governance, don't paper it).
 - **Redeemer grace**: full-exit members get the thank-you verbatim in spirit —
   their clean exit is structural proof; treat it as the asset it is.
 - **Misses after one cycle are guaranteed** — a first cycle with a clean report and
