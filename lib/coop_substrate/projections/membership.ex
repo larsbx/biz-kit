@@ -51,7 +51,8 @@ defmodule CoopSubstrate.Projections.Membership do
       charter_constants: %{},
       extractions: %{},
       frontier_declared: %{},
-      prospects: %{}
+      prospects: %{},
+      escalations: %{}
     }
   end
 
@@ -248,6 +249,22 @@ defmodule CoopSubstrate.Projections.Membership do
     put_in(state, [:prospects, Access.key({ch, p["prospect_ref"]})], %{
       interviewee_ref: p["interviewee_ref"]
     })
+  end
+
+  def handle_event(%Envelope{type: "EscalationRaised", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:escalations, Access.key({ch, p["item_id"]})], %{
+      process: p["process"],
+      act_type: p["act_type"],
+      deadline_ms: p["deadline_ms"],
+      recommendation: p["recommendation"],
+      open: true
+    })
+  end
+
+  def handle_event(%Envelope{type: "EscalationResolved", chapter_id: ch, payload: p}, state) do
+    update_in(state, [:escalations, Access.key({ch, p["item_id"]})], fn item ->
+      %{item | open: false}
+    end)
   end
 
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state) do

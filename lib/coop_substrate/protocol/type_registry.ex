@@ -576,6 +576,40 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         optional: %{}
       }
     },
+    # -- Phase 5A: the R-item rail (docs/handoff_cockpit.md; corpus 10 §5).
+    # Decision-ready is structural: an item missing packet/recommendation/
+    # bounds/compensation/deadline is unrepresentable. Approval AUTHORIZES —
+    # consuming domains append their own consequent events referencing the
+    # resolution; nothing executes here. Operator role = steward key (v0,
+    # flagged in the brief). --------------------------------------------------
+    "EscalationRaised" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "escalations", "item_id"},
+      payload: %{
+        required: %{
+          "item_id" => :string,
+          "process" => :string,
+          "act_type" => :string,
+          "packet_refs" => :any,
+          "recommendation" => :string,
+          "bounds" => :any,
+          "compensation_path" => :string,
+          "deadline_ms" => :int,
+          "basis_ref" => :hash
+        },
+        optional: %{}
+      }
+    },
+    "EscalationResolved" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "escalations", "item_id"},
+      payload: %{
+        required: %{"item_id" => :string, "verdict" => :string},
+        optional: %{"reason" => :string}
+      }
+    },
     "BuildStarted" => %{
       # The marker gate(section) protects: unrepresentable until the harness
       # gate is true (corpus 11 P6).

@@ -329,6 +329,30 @@ defmodule CoopSubstrate.Harness.Ops do
     })
   end
 
+  # -- the R-queue (cockpit brief, Phase 5A) -------------------------------------------
+
+  @doc "Raise a decision-ready R item (the gate enforces the shape, not this)."
+  def escalate(attrs) do
+    append("steward", "EscalationRaised", %{
+      "item_id" => attrs["item_id"],
+      "process" => attrs["process"],
+      "act_type" => attrs["act_type"],
+      "packet_refs" => attrs["packet_refs"],
+      "recommendation" => attrs["recommendation"],
+      "bounds" => attrs["bounds"],
+      "compensation_path" => attrs["compensation_path"],
+      "deadline_ms" => attrs["deadline_ms"],
+      "basis_ref" => attrs["basis_ref"]
+    })
+  end
+
+  @doc "Resolve an open item. Approval AUTHORIZES; it never executes the act."
+  def decide(item_id, verdict, reason \\ nil) do
+    payload = %{"item_id" => item_id, "verdict" => verdict}
+    payload = if reason, do: Map.put(payload, "reason", reason), else: payload
+    append("steward", "EscalationResolved", payload)
+  end
+
   # -- the gate (runbook phase 7) ------------------------------------------------------
 
   def checkpoint_emit(blob_path) do

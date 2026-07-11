@@ -398,6 +398,61 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  defp type_check(%Envelope{type: "EscalationRaised", chapter_id: ch, payload: p}, gate) do
+    refs = p["packet_refs"]
+
+    cond do
+      Map.has_key?(gate.escalations, {ch, p["item_id"]}) ->
+        {:error, {:item_already_raised, p["item_id"]}}
+
+      # Decision-ready shape (10 P10; basis resolution is the flagged v0
+      # limit — docs/phase5a_plan.md).
+      not (is_list(refs) and refs != []) ->
+        {:error, :packet_refs_required}
+
+      p["deadline_ms"] <= 0 ->
+        {:error, :bad_deadline}
+
+      p["process"] == "" or p["recommendation"] == "" or p["compensation_path"] == "" ->
+        {:error, :decision_ready_fields_empty}
+
+      true ->
+        # Flooding is structurally bounded (10 §6 adversarial): a declared
+        # per-chapter cap on concurrently open items per process; fails
+        # closed undeclared.
+        case gate.charter_constants[{ch, "cockpit/open_cap"}] do
+          cap when is_integer(cap) and cap > 0 ->
+            open =
+              Enum.count(gate.escalations, fn {{c, _id}, item} ->
+                c == ch and item.open and item.process == p["process"]
+              end)
+
+            if open < cap do
+              :ok
+            else
+              {:error, {:queue_flooded, p["process"], cap}}
+            end
+
+          _ ->
+            {:error, :constants_undeclared}
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "EscalationResolved", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["verdict"] not in ["approved", "declined", "returned_defect"] ->
+        {:error, {:unknown_verdict, p["verdict"]}}
+
+      true ->
+        case gate.escalations[{ch, p["item_id"]}] do
+          nil -> {:error, {:unknown_item, p["item_id"]}}
+          %{open: false} -> {:error, {:item_already_resolved, p["item_id"]}}
+          %{open: true} -> :ok
+        end
+    end
+  end
+
   defp type_check(%Envelope{type: "BuildStarted", chapter_id: ch, payload: p}, gate) do
     with :ok <- check_section(p["section"]),
          {:ok, passed?} <- Membership.harness_gate(gate, ch, p["section"]) do
