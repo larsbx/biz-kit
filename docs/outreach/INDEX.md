@@ -52,8 +52,8 @@ doctrine — in **`offboarding_index.md`**, which owns that family.
 - `hub_onepager` *(the only founding paper that PRECEDES the demo — it creates it)*
 - `founding_invitation_letter` → `demo_day_checklist` *(the room; nothing signed
   there)* → `charter_session_agenda` + `charter_day_checklist` *(agenda owns the
-  decisions; checklist owns the machinery)* → `charter_session2_agenda` →
-  `charter_session3_template` *(per waking program)*
+  decisions; checklist owns the machinery)* → `charter_session2_agenda` +
+  `session2_day_checklist` → `charter_session3_template` *(per waking program)*
 - `ruling_organ_proposal` *(gated on the first contested program)*
 
 **Phase O — Operations (per persona, gated on the thing each page promises)**
