@@ -19,6 +19,12 @@ disagree, the checklist wins.***
 | **window booking** | `dock_golive_checklist.md` | WE arrive inside the window — the exam points at us | no detention line without its evidence hash, even when the delay was real |
 | **referral** | `shop_golive_checklist.md` | the empty ledger, checked from dollar zero | no fee tonight or ever — the promise has no small versions |
 
+**A sixth night that isn't ours to run:** `mechanic_golive_checklist.md` — the
+service co-op's first call, gifted like the mechanic letters; ITS governance
+executes it under ITS charter, and where the template and their paper differ,
+their paper wins. Its exam is double: the member fixed at the declared card,
+and the worker's protections holding on call one.
+
 ## What comes before what
 
 - The **load** presupposes the D-build closeout (dispatch live, envelopes
