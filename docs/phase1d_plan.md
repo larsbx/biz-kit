@@ -1,8 +1,12 @@
 # Phase 1D — Chapter scoping (full), external checkpoints, governance/key structure
 
-> **Status: PLANNED** (2026-07-10). Scope is the hand-off's Phase 1D (§3, §4a);
-> acceptance = hand-off §6 items **[1D] 15–17**. Gate honored: 1C passed in full
-> (SUBSTRATE.md §14) before this was cut.
+> **Status: COMPLETE** (2026-07-11). All build steps done; acceptance items [1D] 15–17 pass
+> (`mix test` green; `cargo test` green — checkpoints reuse the frozen canonical profile).
+> Results in SUBSTRATE.md §15–§16. Deviations from this plan, minor and flagged there:
+> proof signing takes an explicit `sign_with: {key_id, seed}` (the seed is never in the
+> log, so "once a checkpoint key is declared" is necessarily caller-supplied), and whether
+> verifiers demand signed proofs post-bootstrap is left as verifier policy. This closes the
+> substrate hand-off (phases 1A–1D); kept as the record of scope.
 
 ## Grounding
 

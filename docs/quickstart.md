@@ -120,6 +120,7 @@ pure-Elixir reference encoder.
 | `docs/phase1a_plan.md` | Phase 1A build plan (complete; kept as the record of scope) |
 | `docs/phase1b_plan.md` | Phase 1B build plan (complete; kept as the record of scope) |
 | `docs/phase1c_plan.md` | Phase 1C build plan (complete; kept as the record of scope) |
+| `docs/phase1d_plan.md` | Phase 1D build plan (complete; kept as the record of scope) |
 | `docs/handoff.md` | The build brief the plan was cut from |
 | `docs/machine.md` | Dev-host snapshot (user-local Postgres, toolchain, ports) |
 

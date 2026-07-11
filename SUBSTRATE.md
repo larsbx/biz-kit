@@ -1,8 +1,9 @@
 # SUBSTRATE.md — The Substrate: Canonical Signed Event Protocol, Append-Only Log, Membership, Capital Accounts
 
-Status: Phases 1A, 1B (§11–§12), and 1C (§13–§14) complete. This document is normative for
-the substrate. Where it deviates from the hand-off sketch or the phase plans, the deviation
-is flagged and justified (see §2.1, §11.2, §13).
+Status: **the substrate hand-off is complete** — Phases 1A, 1B (§11–§12), 1C (§13–§14), and
+1D (§15–§16). This document is normative for the substrate. Where it deviates from the
+hand-off sketch or the phase plans, the deviation is flagged and justified (see §2.1,
+§11.2, §13, §15).
 
 Placeholder constants are flagged **PLACEHOLDER — awaiting charter declaration** and live in
 `CoopSubstrate.Constants`. None of them are real values.
@@ -265,20 +266,21 @@ representation question** — see §8.
 
 Captured now so the data model never forecloses them; enforcement workflows are Phase 1D.
 
-- **Who can rotate signing keys?** Rotation is representable and recorded in the log itself
-  (`KeyRotated`, streamed per member under `<chapter>/keys/<member_id>`). *Who may author it*
-  is a governance rule enforced at the type-registry validity hook (`validity_check/2`,
-  currently a no-op) in 1D — the registry was designed so a type's acceptance can depend on
-  prior log events without rework.
+- **Who can rotate signing keys?** *(Answered in mechanism, 1D — §15.2–15.3.)* Member keys:
+  self-rotation, signed by the member's current key, chained via `old_key_id`. Role keys
+  (`governance`/`steward`/`checkpoint`): declared and revoked by governance-signed registry
+  events, genesis by flagged trust-on-first-use. Governance-recovery rotation for a lost
+  member key is open (§8).
 - **Who can authorize a schema / canonical-profile migration?** Encoded in §1.3/§2: new
   fields require a new `schema_version`; a profile change (V1→V2) requires an explicit signed
   governance event; old events verify under their original profile forever. Readers reject
   foreign profiles/versions today (`from_full_record_term/1`), so a migration cannot happen
   silently.
-- **Who can publish checkpoints, and where?** Not built in 1A (deferred to 1D). The material
-  it needs exists: the global head (seq + hash) is cheap to read, and `event_hash` covers the
-  full record, so a signed head published outside the primary database commits the operator
-  to the entire history. `export_stream/1` + `verify_export/1` are the 1A-minimal slice.
+- **Who can publish checkpoints, and where?** *(Built, 1D — §15.4.)* Anyone holding a
+  declared `checkpoint`-role key emits `Log.checkpoint/3`; anyone with log access verifies
+  independently (`Log.verify_checkpoint/1`: chain audit + head recomputation + as-of
+  registry signature check). Where to publish is operational — any venue outside the
+  primary database commits the operator to history.
 - **Who holds decryption shares?** No encryption exists in the substrate yet, so no key to
   hold. The binding rule stands: no long-term architecture may depend on a single
   operator-held decryption key; day-one trusted encryption (when it arrives with the 1C
@@ -314,9 +316,19 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Re-joining after a terminal membership state** (1B): the lifecycle allows no exit from
   `departed | retired | floor_exited | deceased` for the same (member, entity). Whether
   re-joining is a new membership record or a resurrection transition is a governance question.
-- **Steward key registry** (1B → 1D): member-role signatures on lifecycle events must come
-  from the member's currently registered key, but steward keys have no registry yet — *who
-  may act as steward* is exactly the 4a "who can author" governance question.
+- **Steward key registry** — *resolved in 1D* (§15.2): the role-key registry with
+  bootstrap-then-enforce. What remains open is the role → **person** binding (`member_id`
+  is informational) and per-role capability classes (10 §2) — governance semantics.
+- **Genesis trust** (1D, §15.2): the first governance key per chapter is trust-on-first-use.
+  Operational mitigation (publish the genesis checkpoint out-of-band) is doctrine, not
+  mechanism.
+- **Governance-recovery rotation** (1D → later): a member's lost key currently means a lost
+  identity; social recovery / governance-signed rotation variants are open (08 §10.3).
+- **Unsigned-proof policy** (1D, §15.5): whether verifiers demand signed proofs once a
+  chapter has checkpoint keys is verifier policy — revisit when the first external verifier
+  exists.
+- **Stream-heads tree root** (1D, deferred): checkpoint covers the global head only;
+  per-stream roots await a partial-verification or sync consumer.
 - **Redemption enforcement** (1B → later): annual caps and payment-vs-balance checks are
   deferred workflow; the data structures carry the terms (§11.5) but the gate does not yet
   evaluate the capital fold.
@@ -330,8 +342,9 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   `MembershipFloorExited`; cure-window duration (undeclared charter constant).
 - **n = 1 aggregates** (1C, §13.7): single-contributor totals equal the contribution; the
   k-anonymity gate is the declared upgrade when publication features arrive (08 §6).
-- **Query authn** (1C → 1D): own-data classification is a contract, not yet middleware;
-  the requesting-member context arrives with 1D governance/key structure.
+- **Query authn** (1C → later): own-data classification is a contract, not yet middleware;
+  the requesting-member context needs an API surface, which arrives with the first consumer
+  (the stake view) — not with the substrate.
 
 ## 9. Placeholder (constitutionalized-later) parameters
 
@@ -636,4 +649,104 @@ Hand-off §6 [1C] items, enforced by the test suite:
 `cargo test` unchanged and green (1C added types, not encoding). 1A/1B suites untouched.
 
 **Gate:** Phase 1D (chapter scoping beyond the id, external checkpoints, governance/key
-structure) may start.
+structure) may start. *(Passed; see §15–§16.)*
+
+---
+
+## 15. Phase 1D — chapter scoping (full), checkpoints, governance/key structure
+
+Scope: hand-off §3 + §4a; plan and flagged decisions in `docs/phase1d_plan.md`. Grounding:
+corpus 08 §1/§9 (key custody discipline: no premature threshold crypto), 04 §7 (stateless
+roles, key-ceremony succession), 00 Art. IV/VI.
+
+### 15.1 Chapters stay implicit; the federation is a computation
+
+A chapter is its id — no chartering event gates it (04: chapters are sovereign). A second
+chapter joins with **zero** schema/registry/code change (tested by seeding two chapters
+through the unmodified 1B/1C types). Federation reach is aggregate-only:
+`Throughput.federation_value/3` sums sovereign chapter folds through the `Privacy.Aggregate`
+seam — a computation, never an event; only totals cross chapter lines. The *representation*
+of federation-scoped events (09 §1) stays open (§8).
+
+### 15.2 The role-key registry (the "who can author" answer)
+
+`RoleKeyDeclared{role, key_id, pubkey, member_id?}` / `RoleKeyRevoked{role, key_id}` on the
+chapter's `governance` stream; `role ∈ Constants.declarable_roles()` (`governance`,
+`steward`, `checkpoint` — `member` keys live in the member registry, never here). The
+registry is a fold in the gate state; a role holds **N concurrent keys** (threshold custody
+not foreclosed; none built — 08 §9).
+
+- **Genesis**: a chapter's first `governance` declaration is trust-on-first-use,
+  self-certified (the `MemberRegistered` pattern). **FLAGGED**: TOFU is the bootstrap trust
+  assumption; publishing the genesis checkpoint out-of-band is its mitigation. Before
+  genesis, nothing else in the registry is representable.
+- **Everything after is governance-signed**: a generic gate check (`check_role_keys/2`,
+  in front of every per-type check) requires every signature in a *declared* role to match
+  a currently declared key.
+- **Bootstrap-then-enforce, irreversibly**: a role never declared is unchecked (the pre-1D
+  behavior, now named — the 1A–1C suites run in bootstrap unmodified); the first declaration
+  closes the door; an emptied role stays closed until governance declares a new key.
+- **No orphaning**: revoking the last governance key is unrepresentable.
+- **FLAGGED PLACEHOLDER**: `member_id` binds role → person informationally only; *which
+  member* may act under a role key (10 §2 capability classes) remains governance semantics.
+
+### 15.3 `KeyRotated` gated — self-rotation
+
+For a registered member: signed by the member's **current** key, with `old_key_id` matching
+it — rotations chain; hijack and stale-rotation replay are unrepresentable. Unregistered ids
+stay inert-and-ungated (1A compatibility). Governance-recovery rotation (lost key, social
+recovery — 08 §10.3) is open (§8). This closes the last 1A "ungated" flag: member keys are
+governed by self-rotation, role keys by the registry.
+
+### 15.4 External checkpoints
+
+`Log.checkpoint(chapter, key_id, seed)` emits a self-contained blob: the canonical encoding
+(`CoopEventCanonicalV1`, unchanged) of
+`{schema: "CheckpointV1", chapter_id, key_id, global_seq, global_hash}` plus an Ed25519
+signature over those bytes. `Log.verify_checkpoint/1` independently audits both hash chains
+up to the claimed position, recomputes the head from raw stored bytes, and validates the
+signature against the chapter's `checkpoint` keys **as of that position** — later revocation
+never invalidates a historical attestation; a revoked key cannot attest any newer head.
+Publishing the blob outside the primary database (git, another host, a member's phone)
+commits the operator to the entire history — the 00 Art. VI detection mechanism. Emission
+does not consult the registry; verification decides trust. The stream-heads tree root is
+deferred (§8).
+
+### 15.5 Signed proofs (closes the §13.5 deviation)
+
+`TrustedAudit.prove(fact, sign_with: {key_id, seed})` signs the assertion with a
+`checkpoint`-role key; `verify` validates against the as-of registry AND still recomputes —
+signature adds authority, never replaces the audit. Unsigned proofs keep verifying by
+recomputation alone (bootstrap unchanged); whether a verifier demands signatures
+post-bootstrap is verifier policy, deliberately not encoded.
+
+### 15.6 Adversarial results
+
+Genesis race → TOFU by construction (flagged; out-of-band genesis checkpoint is the
+mitigation) · rogue steward/governance key after close → rejected · revoked/rotated-out
+governance key → rejected · orphan-governance revocation → unrepresentable · rotation hijack
+/ stale old_key_id → rejected · checkpoint by undeclared key / forged signature / forged
+head position → verification fails · ledger tampered under a checkpoint → chain audit fails
+it · proof signed by undeclared or post-revocation key → verify false; tampered signature
+false despite a true fact.
+
+## 16. Phase 1D acceptance status
+
+Hand-off §6 [1D] items, enforced by the test suite:
+
+15. ✅ **Chapter scoping (full)**: queries chapter-scoped throughout; a second chapter
+    joins with no schema change (tested); federation aggregate spans chapters via the
+    `Aggregate` seam.
+16. ✅ **Checkpoints externalizable**: signed global head emitted as a self-contained
+    canonical blob; independently verified (chain audit + head recomputation + as-of
+    registry signature check); tamper, rogue-signer, and forged-head cases fail.
+17. ✅ **Key governance not foreclosed**: roles hold N concurrent keys (threshold/
+    multi-party structure permitted, none built); zero decryption keys exist anywhere;
+    canonical-profile migration path and member-export semantics specified (§7).
+
+`cargo test` unchanged and green (checkpoints reuse the frozen profile). 1A–1C suites
+green — the pre-1D suites run in bootstrap mode by construction.
+
+**Gate:** the substrate hand-off (phases 1A–1D) is **complete**. Anything further —
+enforcement workflows, consumer surfaces, the stake view — is a new brief that reads from
+this substrate.

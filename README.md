@@ -3,15 +3,17 @@
 The signed event ledger + capital-account substrate for a member-owned co-op platform:
 an append-only, tamper-evident, replayable log of Ed25519-signed canonical events that
 every other feature reads from. See `SUBSTRATE.md` (normative) and `docs/handoff.md`
-(the build brief); `docs/phase1a_plan.md` / `docs/phase1b_plan.md` / `docs/phase1c_plan.md`
-are the completed phase build plans. New here? Start with
-[`docs/quickstart.md`](docs/quickstart.md).
+(the build brief); `docs/phase1{a,b,c,d}_plan.md` are the completed phase build plans.
+New here? Start with [`docs/quickstart.md`](docs/quickstart.md).
 
-**Status: Phases 1A, 1B, and 1C complete** — canonical signed event protocol + append-only
-log; membership lifecycle (append-gated state machine) and capital accounts with in-log rule
-versioning; throughput/floor compute, the obligation-relationship rail with netting, and the
-privacy seams (Aggregate/Proof/JointCompute). Phase 1D (chapter scoping beyond the id,
-checkpoints, governance/key structure) is next.
+**Status: the substrate hand-off is complete (Phases 1A–1D)** — canonical signed event
+protocol + append-only log; membership lifecycle (append-gated state machine) and capital
+accounts with in-log rule versioning; throughput/floor compute, the obligation-relationship
+rail with netting, and the privacy seams (Aggregate/Proof/JointCompute); full chapter
+scoping with federation aggregates, the role-key registry (bootstrap-then-enforce), gated
+key rotation, and externally verifiable checkpoints. What comes next — enforcement
+workflows, consumer surfaces, the stake view — is a new brief that reads from this
+substrate.
 
 ## What exists
 
@@ -45,6 +47,11 @@ checkpoints, governance/key structure) is next.
   plaintext and trusted-but-auditable backings today, swappable by config with zero caller
   changes; all cross-member aggregates route through them; the public query surface is
   classification-tested (no path returns one member's detail to another).
+- **Governance/key structure + checkpoints** — the role-key registry (TOFU genesis,
+  governance-signed declarations, bootstrap-then-enforce per role, N keys per role so
+  threshold custody is never foreclosed); gated self-rotation of member keys; and
+  `Log.checkpoint`/`verify_checkpoint` — an externally publishable signed global head that
+  commits the operator to the entire history.
 
 ## Running
 
