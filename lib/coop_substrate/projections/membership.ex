@@ -48,7 +48,9 @@ defmodule CoopSubstrate.Projections.Membership do
       process_models: %{},
       adoptions: %{},
       fixture_sets: %{},
-      charter_constants: %{}
+      charter_constants: %{},
+      extractions: %{},
+      frontier_declared: %{}
     }
   end
 
@@ -227,6 +229,16 @@ defmodule CoopSubstrate.Projections.Membership do
 
   def handle_event(%Envelope{type: "CharterConstantDeclared", chapter_id: ch, payload: p}, state) do
     put_in(state, [:charter_constants, Access.key({ch, p["name"]})], p["value"])
+  end
+
+  def handle_event(%Envelope{type: "MachineExtractionRecorded", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:extractions, Access.key({ch, p["proposal_id"]})], %{
+      interview_ref: p["interview_ref"]
+    })
+  end
+
+  def handle_event(%Envelope{type: "FrontierModelUseDeclared", chapter_id: ch}, state) do
+    put_in(state, [:frontier_declared, Access.key(ch)], true)
   end
 
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state) do

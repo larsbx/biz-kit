@@ -215,10 +215,39 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   defp type_check(%Envelope{type: "DocumentCollected", chapter_id: ch, payload: p}, gate) do
     with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
-      if Map.has_key?(gate.documents, {ch, p["document_id"]}) do
-        {:error, {:document_already_recorded, p["document_id"]}}
-      else
-        :ok
+      %{interviewee_ref: ref} = gate.interviews[{ch, p["interview_ref"]}]
+
+      cond do
+        Map.has_key?(gate.documents, {ch, p["document_id"]}) ->
+          {:error, {:document_already_recorded, p["document_id"]}}
+
+        # Recording intake is structural: no recording consent, no recording
+        # artifact (Phase 2B P3).
+        p["doc_kind"] == "recording" and not gate.consents[{ch, ref}].recording ->
+          {:error, {:no_recording_consent, ref}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "MachineExtractionRecorded", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
+      cond do
+        Map.has_key?(gate.extractions, {ch, p["proposal_id"]}) ->
+          {:error, {:proposal_already_recorded, p["proposal_id"]}}
+
+        # 08 §7 bounded necessity: a frontier model is unrepresentable until
+        # its dated migration trigger is declared. FLAGGED PLACEHOLDER:
+        # chapter-level any-declaration; per-purpose binding comes with real
+        # model use.
+        String.starts_with?(p["model_ref"], "frontier:") and
+            not Map.get(gate.frontier_declared, ch, false) ->
+          {:error, {:frontier_model_undeclared, p["model_ref"]}}
+
+        true ->
+          :ok
       end
     end
   end

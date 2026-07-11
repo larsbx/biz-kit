@@ -62,7 +62,23 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:gate, 2} => :system,
       {:gate, 3} => :system,
       {:counts, 2} => :system,
-      {:counts, 3} => :system
+      {:counts, 3} => :system,
+      # Intake of the interviewee's own bilateral material.
+      {:collect_document, 6} => :bilateral
+    },
+    CoopSubstrate.Harness.Artifacts => %{
+      # Raw interview material — bilateral; access middleware is 1D-shaped.
+      {:put, 1} => :bilateral,
+      {:get, 1} => :bilateral
+    },
+    CoopSubstrate.Harness.Instrument => %{
+      # Instrument trees are commons content.
+      {:validate, 1} => :system,
+      {:hash, 1} => :system,
+      {:publish, 4} => :system,
+      {:fetch, 3} => :system,
+      {:diff, 2} => :system,
+      {:seed_d, 0} => :system
     },
     Finance => %{
       {:netting, 2} => :bilateral,

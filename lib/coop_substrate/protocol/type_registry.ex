@@ -536,6 +536,24 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         optional: %{}
       }
     },
+    "MachineExtractionRecorded" => %{
+      # 08 §7: machine output is NEVER authoritative — this is a G1-shaped
+      # PROPOSAL carrying the raw artifact's hash; promotion is an explicit
+      # FindingExtracted, demotion a CorrectionRecorded (Phase 2B).
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "interviews", "interview_ref"},
+      payload: %{
+        required: %{
+          "proposal_id" => :string,
+          "interview_ref" => :string,
+          "artifact_hash" => :hash,
+          "model_ref" => :string,
+          "proposals" => :any
+        },
+        optional: %{}
+      }
+    },
     "BuildStarted" => %{
       # The marker gate(section) protects: unrepresentable until the harness
       # gate is true (corpus 11 P6).
