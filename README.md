@@ -5,8 +5,11 @@ an append-only, tamper-evident, replayable log of Ed25519-signed canonical event
 every other feature reads from. See `SUBSTRATE.md` (normative for the substrate),
 [`docs/corpus/`](docs/corpus/) (the normative project corpus, 00–13A —
 [`HANDOFF.md`](docs/corpus/HANDOFF.md) is its index), and `docs/handoff.md` (the build
-brief); `docs/phase1{a,b,c,d}_plan.md` are the completed phase build plans. New here?
-Start with [`docs/quickstart.md`](docs/quickstart.md).
+brief); `docs/phase1{a,b,c,d}_plan.md` are the completed phase build plans. The
+field/outreach document set — persona one-pagers, ceremony scripts, charter agendas,
+follow-up and offboarding letters, all corpus-grounded — lives in
+[`docs/outreach/`](docs/outreach/); [`INDEX.md`](docs/outreach/INDEX.md) is its map.
+New here? Start with [`docs/quickstart.md`](docs/quickstart.md).
 
 **Status: the substrate hand-off (Phases 1A–1D) and the Harness-D pipeline machinery
 (Phases 2A–2D, `HARNESS.md`) are complete.** The harness gates the dispatch build on
