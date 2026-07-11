@@ -525,6 +525,19 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         optional: %{}
       }
     },
+    "HonorariumPaid" => %{
+      # An ATTESTATION of external settlement (the RedemptionPaid pattern —
+      # money never moves on-platform, 05 P11). Gated on the counsel
+      # clearance constant; over-attestation unrepresentable
+      # (docs/honorarium_rail.md).
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "consents", "interviewee_ref"},
+      payload: %{
+        required: %{"interviewee_ref" => :string, "amount_minor" => :int},
+        optional: %{"note" => :string}
+      }
+    },
     "FrontierModelUseDeclared" => %{
       # 08 §7: bounded necessity with a DATED migration trigger, normative.
       required_roles: ["governance"],

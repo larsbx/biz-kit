@@ -329,6 +329,24 @@ defmodule CoopSubstrate.Harness.Ops do
     })
   end
 
+  @doc "Attest an external honorarium payout (gated on counsel clearance)."
+  def honorarium_paid(interviewee_ref, amount_minor, note \\ nil) do
+    payload = %{"interviewee_ref" => interviewee_ref, "amount_minor" => amount_minor}
+    payload = if note, do: Map.put(payload, "note", note), else: payload
+    append("steward", "HonorariumPaid", payload)
+  end
+
+  @doc "Declare (1) or withdraw (0) the counsel payout clearance."
+  def honorarium_clearance(value, note) when value in [0, 1] do
+    with {:ok, gov} <- load_signer("governance") do
+      append_with([%{gov | role: "author"}], "CharterConstantDeclared", %{
+        "name" => "honorarium/payout_cleared",
+        "value" => value,
+        "note" => note
+      })
+    end
+  end
+
   # -- the R-queue (cockpit brief, Phase 5A) -------------------------------------------
 
   @doc "Raise a decision-ready R item (the gate enforces the shape, not this)."

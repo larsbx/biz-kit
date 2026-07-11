@@ -53,7 +53,8 @@ defmodule CoopSubstrate.Projections.Membership do
       frontier_declared: %{},
       prospects: %{},
       escalations: %{},
-      structural_findings: %{}
+      structural_findings: %{},
+      honoraria: %{}
     }
   end
 
@@ -269,6 +270,22 @@ defmodule CoopSubstrate.Projections.Membership do
       |> Map.put(:verdict, p["verdict"])
       |> Map.put(:resolved_ms, env.timestamp_ms)
     end)
+  end
+
+  def handle_event(%Envelope{type: "HonorariumAccrued", chapter_id: ch, payload: p}, state) do
+    update_in(
+      state,
+      [:honoraria, Access.key({ch, p["interviewee_ref"]}, %{accrued: 0, paid: 0})],
+      &%{&1 | accrued: &1.accrued + p["amount_minor"]}
+    )
+  end
+
+  def handle_event(%Envelope{type: "HonorariumPaid", chapter_id: ch, payload: p}, state) do
+    update_in(
+      state,
+      [:honoraria, Access.key({ch, p["interviewee_ref"]}, %{accrued: 0, paid: 0})],
+      &%{&1 | paid: &1.paid + p["amount_minor"]}
+    )
   end
 
   def handle_event(%Envelope{type: "StructuralFindingRaised", chapter_id: ch, payload: p}, state) do

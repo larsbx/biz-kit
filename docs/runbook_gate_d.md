@@ -19,9 +19,12 @@ signed event; nothing here is a spreadsheet.
 - Recording consent statute for *each interviewee's state* (two-party states matter).
   The consent event carries a distinct `recording` flag; when in doubt, run interviews
   with `recording: false` and take typed notes — findings are G2 either way.
-- Honorarium treatment: `HonorariumAccrued` may be recorded now; **do not pay out**
-  until counsel clears the treatment. Early-member standing is the clean alternative
-  (corpus 11 §6.2) and costs nothing legally.
+- Honorarium treatment: accrue freely now (`mix harness.honorarium accrue ...`); payout
+  attestation is **unrepresentable** until counsel clearance is declared
+  (`mix harness.honorarium clear 1 --note "<counsel ref>"` — and `clear 0` stops it
+  again). `mix harness.honorarium list` is the tracker — a fold, never a spreadsheet
+  (docs/honorarium_rail.md). Early-member standing remains the clean alternative
+  (corpus 11 §6.2).
 - No automated outbound voice, period — the mode isn't representable. Your own phone
   calls (`mode: "call"`) are fine.
 

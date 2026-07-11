@@ -361,6 +361,29 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  defp type_check(%Envelope{type: "HonorariumPaid", chapter_id: ch, payload: p}, gate) do
+    balance = gate.honoraria[{ch, p["interviewee_ref"]}]
+
+    cond do
+      # Counsel clearance as a declared constant; declaring 0 stops payouts
+      # again (docs/honorarium_rail.md).
+      gate.charter_constants[{ch, "honorarium/payout_cleared"}] != 1 ->
+        {:error, :payout_not_cleared}
+
+      balance == nil or balance.accrued == 0 ->
+        {:error, {:nothing_accrued, p["interviewee_ref"]}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      balance.paid + p["amount_minor"] > balance.accrued ->
+        {:error, {:overpayment, p["interviewee_ref"], balance.accrued - balance.paid}}
+
+      true ->
+        :ok
+    end
+  end
+
   defp type_check(%Envelope{type: "FrontierModelUseDeclared", payload: p}, _gate) do
     # 08 §7: the migration trigger must be real — dated, with a threshold.
     if p["threshold"] > 0 and byte_size(p["date"]) > 0 and byte_size(p["metric"]) > 0 do

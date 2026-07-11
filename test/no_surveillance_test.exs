@@ -64,7 +64,10 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:counts, 2} => :system,
       {:counts, 3} => :system,
       # Intake of the interviewee's own bilateral material.
-      {:collect_document, 6} => :bilateral
+      {:collect_document, 6} => :bilateral,
+      # The honorarium tracker: interviewee-keyed money trail.
+      {:honoraria, 1} => :bilateral,
+      {:honoraria, 2} => :bilateral
     },
     CoopSubstrate.Harness.Artifacts => %{
       # Raw interview material — bilateral; access middleware is 1D-shaped.

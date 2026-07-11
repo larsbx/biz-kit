@@ -31,6 +31,28 @@ defmodule CoopSubstrate.Harness do
   end
 
   @doc """
+  The honorarium tracker (docs/honorarium_rail.md): per interviewee,
+  accrued/paid/outstanding — a pure fold, never a spreadsheet. Supports
+  `as_of:`.
+  """
+  @spec honoraria(String.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def honoraria(chapter_id, opts \\ []) do
+    with {:ok, state} <- Log.replay(Membership, opts) do
+      rows =
+        for {{^chapter_id, ref}, %{accrued: accrued, paid: paid}} <- state.honoraria do
+          %{
+            interviewee_ref: ref,
+            accrued_minor: accrued,
+            paid_minor: paid,
+            outstanding_minor: accrued - paid
+          }
+        end
+
+      {:ok, Enum.sort_by(rows, & &1.interviewee_ref)}
+    end
+  end
+
+  @doc """
   Document/recording intake (Phase 2B): store the binary out-of-log
   (content-addressed, `Harness.Artifacts`) and append the gated
   `DocumentCollected` in one step. The gate enforces consent — including
