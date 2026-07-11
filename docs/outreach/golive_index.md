@@ -25,6 +25,13 @@ the shipper's owns HER evening from her dock (the honest acknowledgment, the
 invoice whose every line carries evidence or is absent, the lane earned at the
 disclosed price — never bought).
 
+**The person's night:** `driver_golive_checklist.md` — the corridor go-live
+scripts a night that's new; this scripts a driver who is: first solo dispatch,
+activation chain verified never vouched, his first signature not his first
+exposure, and an **[OO]** bracket for the graduate whose first solo is also his
+first load under his own authority. When his night and a corridor's coincide,
+run both.
+
 **A sixth night that isn't ours to run:** `mechanic_golive_checklist.md` — the
 service co-op's first call, gifted like the mechanic letters; ITS governance
 executes it under ITS charter, and where the template and their paper differ,
