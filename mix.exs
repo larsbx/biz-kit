@@ -32,6 +32,7 @@ defmodule CoopSubstrate.MixProject do
       # Canonical log per the AshEvents spike decision (SUBSTRATE.md §3):
       # the eventstore library only — Commanded aggregates are NOT adopted.
       {:eventstore, "~> 1.4"},
+      {:jason, "~> 1.4"},
       {:stream_data, "~> 1.1", only: [:test, :dev]}
     ]
   end
