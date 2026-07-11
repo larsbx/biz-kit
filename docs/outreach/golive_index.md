@@ -19,6 +19,12 @@ disagree, the checklist wins.***
 | **window booking** | `dock_golive_checklist.md` | WE arrive inside the window — the exam points at us | no detention line without its evidence hash, even when the delay was real |
 | **referral** | `shop_golive_checklist.md` | the empty ledger, checked from dollar zero | no fee tonight or ever — the promise has no small versions |
 
+**The load's other side:** `shipper_golive_checklist.md` — often the same night
+as the Face's load, split strictly: the Face checklist owns the network's gates;
+the shipper's owns HER evening from her dock (the honest acknowledgment, the
+invoice whose every line carries evidence or is absent, the lane earned at the
+disclosed price — never bought).
+
 **A sixth night that isn't ours to run:** `mechanic_golive_checklist.md` — the
 service co-op's first call, gifted like the mechanic letters; ITS governance
 executes it under ITS charter, and where the template and their paper differ,
