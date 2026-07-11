@@ -1,9 +1,17 @@
 # Phase 3A — Harness.Ops: signing core, key custody, ceremonies
 
-> **Status: IN PROGRESS** (2026-07-11). Scope is the Harness.Ops brief's Phase 3A
-> (`docs/handoff_harness_ops.md` §2); acceptance = brief items **[3A]**. Covers runbook
-> phases 0.2–0.4 and 2 (`docs/runbook_gate_d.md`). Normative outer authority: corpus
-> 08 §9 (day-one trusted custody behind interfaces, labeled temporary), SUBSTRATE.md §15.
+> **Status: COMPLETE** (2026-07-11). Scope was the Harness.Ops brief's Phase 3A;
+> acceptance **[3A]** passes: runbook 0.2–0.4 plus a full consent ceremony run
+> end-to-end through Ops/tasks with no `iex` (genesis leaves the registry populated and
+> an externally verifiable checkpoint blob; re-run is safe — reported, not retried);
+> no interviewee seed is persisted (keys-dir snapshot unchanged by the ceremony; the
+> seed appears exactly once in the task output, regex-counted); operator key files are
+> 0600 and no return or message carries a seed; a rejected append surfaces the gate's
+> term verbatim through both Ops and the task layer. Housekeeping noted during the
+> build: `mix hex.audit` flags a pre-existing LOW advisory on transitive postgrex
+> 0.22.2 (notifications DoS) — not introduced here, owner's call to bump. Covers
+> runbook phases 0.2–0.4 and 2. Normative outer authority: corpus 08 §9,
+> SUBSTRATE.md §15. Phase 3B is next.
 
 ## §0 Spine
 
