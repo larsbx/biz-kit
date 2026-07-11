@@ -71,6 +71,17 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:put, 1} => :bilateral,
       {:get, 1} => :bilateral
     },
+    CoopSubstrate.Harness.Anonymization => %{
+      # Pure predicate over caller-supplied text.
+      {:violations, 1} => :system,
+      {:violations, 2} => :system,
+      {:anonymized?, 1} => :system,
+      {:anonymized?, 2} => :system
+    },
+    CoopSubstrate.Harness.Fixtures => %{
+      # Publishes predicate-passed (anonymized) bundles.
+      {:publish, 7} => :system
+    },
     CoopSubstrate.Harness.Synthesis => %{
       # Section-level compiled artifacts; the synthesis consent class covers
       # the verbatim finding bodies they carry (11 P2); anonymization applies

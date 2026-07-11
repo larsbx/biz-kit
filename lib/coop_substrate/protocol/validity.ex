@@ -370,6 +370,34 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  defp type_check(%Envelope{type: "FunnelProspectEmitted", chapter_id: ch, payload: p}, gate) do
+    interview = gate.interviews[{ch, p["interview_ref"]}]
+    consent = gate.consents[{ch, p["interviewee_ref"]}]
+
+    cond do
+      Map.has_key?(gate.prospects, {ch, p["prospect_ref"]}) ->
+        {:error, {:prospect_already_emitted, p["prospect_ref"]}}
+
+      p["track"] not in Constants.harness_sections() ->
+        {:error, {:unknown_track, p["track"]}}
+
+      interview == nil ->
+        {:error, {:unknown_interview, p["interview_ref"]}}
+
+      interview.interviewee_ref != p["interviewee_ref"] ->
+        {:error, {:interview_interviewee_mismatch, p["interview_ref"]}}
+
+      not match?(%{active: true}, consent) ->
+        {:error, {:no_active_consent, p["interviewee_ref"]}}
+
+      "prospect_record" not in consent.classes ->
+        {:error, {:prospect_consent_missing, p["interviewee_ref"]}}
+
+      true ->
+        :ok
+    end
+  end
+
   defp type_check(%Envelope{type: "BuildStarted", chapter_id: ch, payload: p}, gate) do
     with :ok <- check_section(p["section"]),
          {:ok, passed?} <- Membership.harness_gate(gate, ch, p["section"]) do

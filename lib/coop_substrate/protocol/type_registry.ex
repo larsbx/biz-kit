@@ -558,6 +558,24 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         optional: %{}
       }
     },
+    "FunnelProspectEmitted" => %{
+      # The harness → onboarding seam (corpus 11 §3, 12 P6): a consenting
+      # interviewee becomes a prospect with interview provenance — the lead
+      # knows why we're calling. Emission requires the prospect_record
+      # consent class, active; outreach sequencing is the 12 engine's brief.
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "funnel", "prospect_ref"},
+      payload: %{
+        required: %{
+          "prospect_ref" => :string,
+          "interviewee_ref" => :string,
+          "interview_ref" => :string,
+          "track" => :string
+        },
+        optional: %{}
+      }
+    },
     "BuildStarted" => %{
       # The marker gate(section) protects: unrepresentable until the harness
       # gate is true (corpus 11 P6).

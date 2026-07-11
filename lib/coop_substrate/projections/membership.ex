@@ -50,7 +50,8 @@ defmodule CoopSubstrate.Projections.Membership do
       fixture_sets: %{},
       charter_constants: %{},
       extractions: %{},
-      frontier_declared: %{}
+      frontier_declared: %{},
+      prospects: %{}
     }
   end
 
@@ -241,6 +242,12 @@ defmodule CoopSubstrate.Projections.Membership do
 
   def handle_event(%Envelope{type: "FrontierModelUseDeclared", chapter_id: ch}, state) do
     put_in(state, [:frontier_declared, Access.key(ch)], true)
+  end
+
+  def handle_event(%Envelope{type: "FunnelProspectEmitted", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:prospects, Access.key({ch, p["prospect_ref"]})], %{
+      interviewee_ref: p["interviewee_ref"]
+    })
   end
 
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state) do
