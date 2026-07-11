@@ -366,6 +366,186 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         required: %{"role" => :string, "key_id" => :string},
         optional: %{"reason" => :string}
       }
+    },
+
+    # -- Phase 2A: harness event substrate (docs/handoff_harness_d.md;
+    # corpus 11). Interview content is the interviewee's data: consent is
+    # the interviewee's own signature (self-certified, the MemberRegistered
+    # pattern); revocation is terminal and its exclusion is computed by the
+    # folds. Raw artifacts live OUTSIDE the log, hash-referenced. -------------
+    "InterviewConsentGranted" => %{
+      required_roles: ["interviewee"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "consents", "interviewee_ref"},
+      payload: %{
+        required: %{
+          "interviewee_ref" => :string,
+          "pubkey" => :pubkey,
+          "key_id" => :string,
+          "classes" => :any,
+          "recording" => :bool
+        },
+        optional: %{}
+      }
+    },
+    "InterviewConsentRevoked" => %{
+      required_roles: ["interviewee"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "consents", "interviewee_ref"},
+      payload: %{
+        required: %{"interviewee_ref" => :string},
+        optional: %{}
+      }
+    },
+    "ResearchBriefFiled" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "harness", "section"},
+      payload: %{
+        required: %{"section" => :string, "artifact_hash" => :hash},
+        optional: %{"citations" => :any}
+      }
+    },
+    "InterviewConducted" => %{
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "interviews", "interview_id"},
+      payload: %{
+        required: %{
+          "section" => :string,
+          "interview_id" => :string,
+          "interviewee_ref" => :string,
+          "mode" => :string
+        },
+        optional: %{"instrument_version" => :int}
+      }
+    },
+    "FindingExtracted" => %{
+      # G2 by construction (attested practitioner experience, 08 §4) — no
+      # grade field to forge; Corroborated promotes the claim to G3.
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "interviews", "interview_ref"},
+      payload: %{
+        required: %{
+          "finding_id" => :string,
+          "interview_ref" => :string,
+          "kind" => :string,
+          "body" => :string
+        },
+        optional: %{}
+      }
+    },
+    "DocumentCollected" => %{
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "interviews", "interview_ref"},
+      payload: %{
+        required: %{
+          "document_id" => :string,
+          "interview_ref" => :string,
+          "doc_kind" => :string,
+          "artifact_hash" => :hash
+        },
+        optional: %{}
+      }
+    },
+    "ConflictFlagged" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "claims", "claim_ref"},
+      payload: %{
+        required: %{"claim_ref" => :string, "finding_refs" => :any},
+        optional: %{}
+      }
+    },
+    "Corroborated" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "claims", "claim_ref"},
+      payload: %{
+        required: %{"claim_ref" => :string, "finding_refs" => :any},
+        optional: %{}
+      }
+    },
+    "InstrumentVersionPublished" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "harness", "section"},
+      payload: %{
+        required: %{"section" => :string, "version" => :int, "tree_hash" => :hash},
+        optional: %{}
+      }
+    },
+    "ProcessModelCompiled" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "harness", "section"},
+      payload: %{
+        required: %{"section" => :string, "artifact_hash" => :hash},
+        optional: %{}
+      }
+    },
+    "SpecAdopted" => %{
+      # The section's ONE human signature (corpus 11 §1.4) — H2-shaped, so
+      # governance-signed; the 1D registry enforces it post-bootstrap.
+      required_roles: ["governance"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "harness", "section"},
+      payload: %{
+        required: %{
+          "section" => :string,
+          "spec_hash" => :hash,
+          "envelope_defaults_hash" => :hash
+        },
+        optional: %{}
+      }
+    },
+    "FixtureSetPublished" => %{
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "harness", "section"},
+      payload: %{
+        required: %{"section" => :string, "fixture_hash" => :hash, "source_refs" => :any},
+        optional: %{}
+      }
+    },
+    "HonorariumAccrued" => %{
+      # Representable now; the payout workflow is [LEGAL]-gated
+      # (docs/handoff_harness_d.md §1).
+      required_roles: ["steward"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "consents", "interviewee_ref"},
+      payload: %{
+        required: %{"interviewee_ref" => :string, "amount_minor" => :int},
+        optional: %{}
+      }
+    },
+    "FrontierModelUseDeclared" => %{
+      # 08 §7: bounded necessity with a DATED migration trigger, normative.
+      required_roles: ["governance"],
+      disclosure_class: :commons,
+      stream: {:chapter_scoped, "governance"},
+      payload: %{
+        required: %{
+          "purpose" => :string,
+          "metric" => :string,
+          "threshold" => :int,
+          "date" => :string
+        },
+        optional: %{}
+      }
+    },
+    "BuildStarted" => %{
+      # The marker gate(section) protects: unrepresentable until the harness
+      # gate is true (corpus 11 P6).
+      required_roles: ["steward"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "harness", "section"},
+      payload: %{
+        required: %{"section" => :string},
+        optional: %{"ref" => :string}
+      }
     }
   }
 

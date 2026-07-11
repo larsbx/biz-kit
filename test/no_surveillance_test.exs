@@ -57,6 +57,13 @@ defmodule CoopSubstrate.NoSurveillanceTest do
     Floor => %{
       {:cleared?, 4} => :own_data
     },
+    CoopSubstrate.Harness => %{
+      # Section-level gate verdicts and counts — no member/interviewee detail.
+      {:gate, 2} => :system,
+      {:gate, 3} => :system,
+      {:counts, 2} => :system,
+      {:counts, 3} => :system
+    },
     Finance => %{
       {:netting, 2} => :bilateral,
       {:netting, 3} => :bilateral,

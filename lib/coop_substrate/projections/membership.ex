@@ -35,7 +35,20 @@ defmodule CoopSubstrate.Projections.Membership do
       throughput_rules: %{},
       floor_rules: %{},
       obligations: %{},
-      role_keys: %{}
+      role_keys: %{},
+      # Phase 2A — harness state (docs/phase2a_plan.md). Folds never delete:
+      # consent revocation flips `active` and every count below EXCLUDES
+      # inactive sources at computation time (11 P5, atomic exclusion).
+      consents: %{},
+      interviews: %{},
+      findings: %{},
+      documents: %{},
+      corroborations: %{},
+      instrument_versions: %{},
+      process_models: %{},
+      adoptions: %{},
+      fixture_sets: %{},
+      charter_constants: %{}
     }
   end
 
@@ -143,6 +156,79 @@ defmodule CoopSubstrate.Projections.Membership do
     })
   end
 
+  # -- Phase 2A: harness events -------------------------------------------------
+
+  def handle_event(%Envelope{type: "InterviewConsentGranted", chapter_id: ch, payload: p}, state) do
+    {:bytes, pubkey} = p["pubkey"]
+
+    put_in(state, [:consents, Access.key({ch, p["interviewee_ref"]})], %{
+      pubkey: pubkey,
+      key_id: p["key_id"],
+      classes: p["classes"],
+      recording: p["recording"],
+      active: true
+    })
+  end
+
+  def handle_event(%Envelope{type: "InterviewConsentRevoked", chapter_id: ch, payload: p}, state) do
+    update_in(state, [:consents, Access.key({ch, p["interviewee_ref"]})], fn consent ->
+      %{consent | active: false}
+    end)
+  end
+
+  def handle_event(%Envelope{type: "InterviewConducted", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:interviews, Access.key({ch, p["interview_id"]})], %{
+      section: p["section"],
+      interviewee_ref: p["interviewee_ref"]
+    })
+  end
+
+  def handle_event(%Envelope{type: "FindingExtracted", chapter_id: ch, payload: p}, state) do
+    # The gate guarantees the interview exists and consent is active.
+    interview = Map.fetch!(state.interviews, {ch, p["interview_ref"]})
+
+    put_in(state, [:findings, Access.key({ch, p["finding_id"]})], %{
+      interview_ref: p["interview_ref"],
+      interviewee_ref: interview.interviewee_ref,
+      section: interview.section,
+      kind: p["kind"]
+    })
+  end
+
+  def handle_event(%Envelope{type: "DocumentCollected", chapter_id: ch, payload: p}, state) do
+    interview = Map.fetch!(state.interviews, {ch, p["interview_ref"]})
+
+    put_in(state, [:documents, Access.key({ch, p["document_id"]})], %{
+      interview_ref: p["interview_ref"],
+      interviewee_ref: interview.interviewee_ref,
+      section: interview.section
+    })
+  end
+
+  def handle_event(%Envelope{type: "Corroborated", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:corroborations, Access.key({ch, p["claim_ref"]})], p["finding_refs"])
+  end
+
+  def handle_event(%Envelope{type: "InstrumentVersionPublished", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:instrument_versions, Access.key({ch, p["section"]})], p["version"])
+  end
+
+  def handle_event(%Envelope{type: "ProcessModelCompiled", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:process_models, Access.key({ch, p["section"]})], true)
+  end
+
+  def handle_event(%Envelope{type: "SpecAdopted", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:adoptions, Access.key({ch, p["section"]})], true)
+  end
+
+  def handle_event(%Envelope{type: "FixtureSetPublished", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:fixture_sets, Access.key({ch, p["section"]})], true)
+  end
+
+  def handle_event(%Envelope{type: "CharterConstantDeclared", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:charter_constants, Access.key({ch, p["name"]})], p["value"])
+  end
+
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state) do
     if Lifecycle.lifecycle_event?(type) do
       apply_lifecycle(state, ch, p, env)
@@ -184,5 +270,88 @@ defmodule CoopSubstrate.Projections.Membership do
     for {{^chapter_id, ^member_id, entity_id}, record} <- state.memberships do
       {entity_id, record}
     end
+  end
+
+  # -- Phase 2A: the harness gate (corpus 11 §2) -------------------------------
+
+  @doc """
+  `gate(section)` as a pure function of the fold: interviews ≥ n ∧
+  corroborated core ≥ c ∧ documents ≥ d ∧ adopted ∧ fixtures — every count
+  excluding revoked sources at computation time. Fails closed with
+  `:constants_undeclared` until `n/c/d` (and the corroboration threshold
+  `k`) arrive via `CharterConstantDeclared`.
+  """
+  def harness_gate(state, chapter_id, section) do
+    with {:ok, constants} <- harness_constants(state, chapter_id, section) do
+      counts = harness_counts(state, chapter_id, section, constants.k)
+
+      {:ok,
+       counts.interviews >= constants.n and counts.corroborated >= constants.c and
+         counts.documents >= constants.d and counts.adopted and counts.fixtures}
+    end
+  end
+
+  @doc "The declared gate constants for a section, or :constants_undeclared."
+  def harness_constants(state, chapter_id, section) do
+    [n, c, d] =
+      section
+      |> CoopSubstrate.Constants.harness_gate_constants()
+      |> Enum.map(&state.charter_constants[{chapter_id, &1}])
+
+    k = state.charter_constants[{chapter_id, "k"}]
+
+    if Enum.all?([n, c, d, k], &(is_integer(&1) and &1 > 0)) do
+      {:ok, %{n: n, c: c, d: d, k: k}}
+    else
+      {:error, :constants_undeclared}
+    end
+  end
+
+  @doc "Per-section gate inputs, revocation-excluded (11 P5)."
+  def harness_counts(state, chapter_id, section, k) do
+    interviews =
+      Enum.count(state.interviews, fn {{ch, _id}, interview} ->
+        ch == chapter_id and interview.section == section and
+          consent_active?(state, chapter_id, interview.interviewee_ref)
+      end)
+
+    documents =
+      Enum.count(state.documents, fn {{ch, _id}, document} ->
+        ch == chapter_id and document.section == section and
+          consent_active?(state, chapter_id, document.interviewee_ref)
+      end)
+
+    corroborated =
+      Enum.count(state.corroborations, fn {{ch, _claim}, finding_refs} ->
+        ch == chapter_id and
+          surviving_sources(state, chapter_id, section, finding_refs) >= k
+      end)
+
+    %{
+      interviews: interviews,
+      documents: documents,
+      corroborated: corroborated,
+      adopted: Map.get(state.adoptions, {chapter_id, section}, false),
+      fixtures: Map.get(state.fixture_sets, {chapter_id, section}, false)
+    }
+  end
+
+  @doc "Is this interviewee's consent granted and not revoked?"
+  def consent_active?(state, chapter_id, interviewee_ref) do
+    match?(%{active: true}, state.consents[{chapter_id, interviewee_ref}])
+  end
+
+  # Distinct consent-active interviewees behind a claim's findings — a
+  # revoked source stops counting toward corroboration (11 P5).
+  defp surviving_sources(state, chapter_id, section, finding_refs) do
+    finding_refs
+    |> Enum.map(&state.findings[{chapter_id, &1}])
+    |> Enum.filter(fn finding ->
+      finding != nil and finding.section == section and
+        consent_active?(state, chapter_id, finding.interviewee_ref)
+    end)
+    |> Enum.map(& &1.interviewee_ref)
+    |> Enum.uniq()
+    |> length()
   end
 end

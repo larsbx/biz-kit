@@ -139,6 +139,206 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # -- Phase 2A: harness events (docs/phase2a_plan.md; corpus 11) --------------
+
+  defp type_check(%Envelope{type: "InterviewConsentGranted", chapter_id: ch, payload: p} = env, gate) do
+    {:bytes, pubkey} = p["pubkey"]
+    classes = p["classes"]
+
+    cond do
+      # One grant per ref; revocation is terminal (re-participation is a new
+      # ref) — FLAGGED PLACEHOLDER consent policy.
+      Map.has_key?(gate.consents, {ch, p["interviewee_ref"]}) ->
+        {:error, {:consent_already_recorded, p["interviewee_ref"]}}
+
+      not (is_list(classes) and classes != [] and
+             Enum.all?(classes, &(&1 in Constants.consent_classes()))) ->
+        {:error, {:unknown_consent_classes, classes}}
+
+      not Enum.any?(
+        env.signers,
+        &(&1.role == "interviewee" and &1.pubkey == pubkey and &1.key_id == p["key_id"])
+      ) ->
+        {:error, :consent_must_be_self_signed}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "InterviewConsentRevoked", chapter_id: ch, payload: p} = env, gate) do
+    case gate.consents[{ch, p["interviewee_ref"]}] do
+      nil -> {:error, {:no_consent_recorded, p["interviewee_ref"]}}
+      %{active: false} -> {:error, :consent_not_active}
+      consent -> check_party_key(env, "interviewee", consent)
+    end
+  end
+
+  defp type_check(%Envelope{type: "ResearchBriefFiled", payload: p}, _gate) do
+    check_section(p["section"])
+  end
+
+  defp type_check(%Envelope{type: "InterviewConducted", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["section"] not in Constants.harness_sections() ->
+        {:error, {:unknown_section, p["section"]}}
+
+      p["mode"] not in Constants.interview_modes() ->
+        # voice_agent is structurally absent pending [LEGAL] per state.
+        {:error, {:unknown_interview_mode, p["mode"]}}
+
+      Map.has_key?(gate.interviews, {ch, p["interview_id"]}) ->
+        {:error, {:interview_already_recorded, p["interview_id"]}}
+
+      not Membership.consent_active?(gate, ch, p["interviewee_ref"]) ->
+        {:error, {:no_active_consent, p["interviewee_ref"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "FindingExtracted", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
+      cond do
+        p["kind"] not in Constants.finding_kinds() ->
+          {:error, {:unknown_finding_kind, p["kind"]}}
+
+        Map.has_key?(gate.findings, {ch, p["finding_id"]}) ->
+          {:error, {:finding_already_recorded, p["finding_id"]}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "DocumentCollected", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
+      if Map.has_key?(gate.documents, {ch, p["document_id"]}) do
+        {:error, {:document_already_recorded, p["document_id"]}}
+      else
+        :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "ConflictFlagged", chapter_id: ch, payload: p}, gate) do
+    with {:ok, _findings} <- resolve_findings(gate, ch, p["finding_refs"]), do: :ok
+  end
+
+  defp type_check(%Envelope{type: "Corroborated", chapter_id: ch, payload: p}, gate) do
+    with false <- Map.has_key?(gate.corroborations, {ch, p["claim_ref"]}),
+         {:ok, findings} <- resolve_findings(gate, ch, p["finding_refs"]) do
+      sections = findings |> Enum.map(& &1.section) |> Enum.uniq()
+
+      cond do
+        length(sections) != 1 ->
+          {:error, :mixed_sections}
+
+        Enum.any?(findings, &(not Membership.consent_active?(gate, ch, &1.interviewee_ref))) ->
+          {:error, :no_active_consent}
+
+        true ->
+          with {:ok, %{k: k}} <- Membership.harness_constants(gate, ch, hd(sections)) do
+            distinct = findings |> Enum.map(& &1.interviewee_ref) |> Enum.uniq() |> length()
+
+            if distinct >= k do
+              :ok
+            else
+              {:error, {:not_independent, distinct, k}}
+            end
+          end
+      end
+    else
+      true -> {:error, {:already_corroborated, p["claim_ref"]}}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp type_check(%Envelope{type: "InstrumentVersionPublished", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_section(p["section"]) do
+      expected = Map.get(gate.instrument_versions, {ch, p["section"]}, 0) + 1
+
+      if p["version"] == expected do
+        :ok
+      else
+        {:error, {:nonmonotonic_instrument_version, p["version"], expected}}
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "ProcessModelCompiled", payload: p}, _gate) do
+    check_section(p["section"])
+  end
+
+  defp type_check(%Envelope{type: "SpecAdopted", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_section(p["section"]) do
+      if Map.get(gate.process_models, {ch, p["section"]}, false) do
+        :ok
+      else
+        {:error, {:nothing_compiled, p["section"]}}
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "FixtureSetPublished", chapter_id: ch, payload: p}, gate) do
+    refs = p["source_refs"]
+
+    with :ok <- check_section(p["section"]) do
+      cond do
+        not (is_list(refs) and refs != [] and Enum.all?(refs, &is_binary/1)) ->
+          {:error, :bad_source_refs}
+
+        true ->
+          Enum.find_value(refs, :ok, fn interview_id ->
+            case gate.interviews[{ch, interview_id}] do
+              nil ->
+                {:error, {:unknown_interview, interview_id}}
+
+              %{interviewee_ref: ref} ->
+                consent = gate.consents[{ch, ref}]
+
+                unless match?(%{active: true}, consent) and
+                         "anonymized_fixtures" in consent.classes do
+                  {:error, {:fixture_consent_missing, ref}}
+                end
+            end
+          end)
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "HonorariumAccrued", chapter_id: ch, payload: p}, gate) do
+    cond do
+      # Owed for participation regardless of later revocation.
+      not Map.has_key?(gate.consents, {ch, p["interviewee_ref"]}) ->
+        {:error, {:no_consent_recorded, p["interviewee_ref"]}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "FrontierModelUseDeclared", payload: p}, _gate) do
+    # 08 §7: the migration trigger must be real — dated, with a threshold.
+    if p["threshold"] > 0 and byte_size(p["date"]) > 0 and byte_size(p["metric"]) > 0 do
+      :ok
+    else
+      {:error, :bad_migration_trigger}
+    end
+  end
+
+  defp type_check(%Envelope{type: "BuildStarted", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_section(p["section"]),
+         {:ok, passed?} <- Membership.harness_gate(gate, ch, p["section"]) do
+      if passed?, do: :ok, else: {:error, {:harness_gate_not_passed, p["section"]}}
+    end
+  end
+
   defp type_check(%Envelope{type: "KeyRotated", chapter_id: ch, payload: p} = env, gate) do
     case gate.members[{ch, p["member_id"]}] do
       nil ->
@@ -441,6 +641,47 @@ defmodule CoopSubstrate.Protocol.Validity do
         {:error, {:not_the_members_current_key, signer.key_id}}
       end
     end)
+  end
+
+  defp check_section(section) do
+    if section in Constants.harness_sections() do
+      :ok
+    else
+      {:error, {:unknown_section, section}}
+    end
+  end
+
+  # Sourcing from an interview requires the interview to exist and its
+  # interviewee's consent to be active — post-revocation use is
+  # unrepresentable at append (11 P5).
+  defp check_interview_source(gate, chapter_id, interview_ref) do
+    case gate.interviews[{chapter_id, interview_ref}] do
+      nil ->
+        {:error, {:unknown_interview, interview_ref}}
+
+      %{interviewee_ref: ref} ->
+        if Membership.consent_active?(gate, chapter_id, ref) do
+          :ok
+        else
+          {:error, {:no_active_consent, ref}}
+        end
+    end
+  end
+
+  defp resolve_findings(gate, chapter_id, refs) do
+    cond do
+      not (is_list(refs) and refs != [] and Enum.all?(refs, &is_binary/1)) ->
+        {:error, :bad_finding_refs}
+
+      true ->
+        findings = Enum.map(refs, &gate.findings[{chapter_id, &1}])
+
+        if Enum.any?(findings, &is_nil/1) do
+          {:error, :unknown_finding}
+        else
+          {:ok, findings}
+        end
+    end
   end
 
   defp genesis_self_certified?(%Envelope{signers: signers}, p) do

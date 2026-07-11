@@ -45,7 +45,10 @@ voice_agent      not in the interview-mode set — [LEGAL] gate encoded structur
   `FindingExtracted{finding_id, interview_ref, kind ∈ the nine 11 §1.2 kinds, body}` ·
   `DocumentCollected{document_id, interview_ref, doc_kind, artifact_hash}` ·
   `ConflictFlagged{claim_ref, finding_refs}` · `Corroborated{claim_ref, finding_refs}`
-  (≥ c_D findings from **distinct** interviewees — independence is a validity check) ·
+  (findings from ≥ **k distinct** interviewees — independence is a validity check;
+  **CORRECTION during build**: the independence threshold is the chapter-global `k`
+  (04 §9, charter constant `"k"`), NOT `c_D` — `c_D` is the *count of corroborated core
+  claims* the gate requires; an earlier draft of this plan conflated them) ·
   `InstrumentVersionPublished{section, version, tree_hash}` (monotonic per section) ·
   `ProcessModelCompiled{section, artifact_hash}` · `SpecAdopted{section, spec_hash,
   envelope_defaults_hash}` (**governance-signed** — H2-shaped per 11 §1.4; the 1D registry

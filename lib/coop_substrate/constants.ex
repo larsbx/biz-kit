@@ -48,6 +48,37 @@ defmodule CoopSubstrate.Constants do
   """
   def declarable_roles, do: ["governance", "steward", "checkpoint"]
 
+  @doc """
+  Interview consent use-classes (corpus 11 §1.2; Phase 2A). Every use of
+  interview material must be covered by a class the interviewee granted.
+  """
+  def consent_classes, do: ["synthesis", "anonymized_fixtures", "prospect_record"]
+
+  @doc "Harness sections (corpus 11 §4, priority order)."
+  def harness_sections, do: ["D", "L", "Y"]
+
+  @doc """
+  Interview modes (corpus 11 §1.2). `voice_agent` is deliberately absent —
+  automated outbound voice is [LEGAL]-gated per state
+  (docs/handoff_harness_d.md §1); enabling it is a code change behind
+  counsel, not a config flip.
+  """
+  def interview_modes, do: ["call", "chat", "form"]
+
+  @doc "Typed finding kinds (corpus 11 §1.2 FindingExtracted)."
+  def finding_kinds do
+    ~w(process_step duration pain workaround document rent exception tool term_of_art)
+  end
+
+  @doc """
+  Charter-constant names for a section's harness gate (corpus 11 §2), read
+  from `CharterConstantDeclared` events — declared before first evaluation,
+  retro-fit void. Undeclared ⇒ the gate fails closed.
+  """
+  def harness_gate_constants(section) do
+    ["harness/#{section}/n", "harness/#{section}/c", "harness/#{section}/d"]
+  end
+
   @doc "Canonical profile name carried inside every signed core."
   def canonical_profile, do: "CoopEventCanonicalV1"
 
