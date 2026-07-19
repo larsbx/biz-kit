@@ -28,8 +28,6 @@ cache:
       - native/canonical_v1/Cargo.lock
   paths:
     - deps/
-    - _build/
-    - native/canonical_v1/target/
 
 format:
   stage: verify
