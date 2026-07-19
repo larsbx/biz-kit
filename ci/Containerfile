@@ -1,4 +1,4 @@
-FROM docker.io/library/rust:1.89-bookworm AS rust
+FROM docker.io/library/rust:1.91-bookworm AS rust
 
 FROM docker.io/hexpm/elixir:1.19.4-erlang-28.3.1-debian-bookworm-20260610
 
