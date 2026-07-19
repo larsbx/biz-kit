@@ -54,12 +54,7 @@ defmodule CoopSubstrate.LogCase do
   def raw_conn do
     config = Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)
 
-    Postgrex.start_link(
-      hostname: config[:hostname],
-      port: config[:port],
-      username: config[:username],
-      database: config[:database]
-    )
+    Postgrex.start_link(Keyword.take(config, [:hostname, :port, :username, :password, :database]))
   end
 
   @doc "Run `fun` with delete protection bypassed (superuser forgery)."
