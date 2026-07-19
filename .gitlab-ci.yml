@@ -21,14 +21,6 @@ variables:
   POSTGRES_PASSWORD: postgres
   GIT_DEPTH: "20"
 
-cache:
-  key:
-    files:
-      - mix.lock
-      - native/canonical_v1/Cargo.lock
-  paths:
-    - deps/
-
 format:
   stage: verify
   services: []
