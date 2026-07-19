@@ -290,7 +290,11 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   data a concrete shape: their `members/`, `memberships/`, `patronage/`, and `redemptions/`
   streams (all keyed by `member_id`) plus the chapter's `accrual_rules` stream needed to
   reproduce their balance — the capital tests reproduce a balance from exactly such an export.
-  The full export *workflow* remains 1D.
+  The full workflow is built (6B, docs/phase6b_plan.md): `CoopSubstrate.Export.member_bundle/2`
+  assembles every member-keyed stream plus the chapter rule streams (registry-keyed, never
+  string-parsed), `Export.verify/1` checks the bundle offline with no store access, and the
+  export tests reproduce the balance from the verified bundle. Bilateral `obligations/*` pair
+  streams stay out — counterparty policy, not mechanism.
 - **What is never put in the log?** Raw secrets, private keys, other members' private detail,
   or anything that cannot live forever — the log is append-only and eternal.
   Sensitive-but-removable data must be *referenced* from events (hash pointers, as with

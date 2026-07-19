@@ -111,6 +111,12 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:diff, 2} => :system,
       {:seed_d, 0} => :system
     },
+    CoopSubstrate.Export => %{
+      # The member-departure bundle (6B): the subject's own streams only.
+      {:member_bundle, 2} => :own_data,
+      # Pure offline verification over a caller-supplied bundle.
+      {:verify, 1} => :system
+    },
     Finance => %{
       {:netting, 2} => :bilateral,
       {:netting, 3} => :bilateral,
