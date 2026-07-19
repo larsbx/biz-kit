@@ -1,9 +1,14 @@
 # Phase 6A — Secure modular substrate foundation
 
-> **Status: PLANNED**. This phase is not blocked by `gate(D)`: that gate only
-> protects the Dispatch-D build. Phase 6A returns to the substrate itself so it
-> can be reused by other applications and agents without freight-specific
-> coupling, while keeping the privacy ladder ready for HE/ZK backings.
+> **Status: COMPLETE** (2026-07-19). Scope was the secure modular substrate
+> foundation; acceptance **[6A]** passes: the mechanism ladder is typed data
+> (`Privacy.Mechanism`) with unsupported rung/boundary/workload combinations
+> unrepresentable; all three privacy seams expose validated backing descriptors
+> with caller APIs unchanged; long-running/unbounded workloads are sidecar-only
+> by data; SUBSTRATE.md §17 names the portable API surface, freight modules as
+> consumers, and the agent proof/descriptor contract. No HE/ZK/MPC/FHE code was
+> built (08 §9). This phase was never blocked by `gate(D)` — that gate only
+> protects the Dispatch-D build.
 
 ## Grounding
 
