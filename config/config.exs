@@ -8,8 +8,9 @@ config :coop_substrate, event_stores: [CoopSubstrate.EventStore]
 config :coop_substrate, CoopSubstrate.EventStore,
   serializer: CoopSubstrate.Log.Serializer,
   column_data_type: "bytea",
-  username: "postgres",
-  hostname: "localhost",
+  username: System.get_env("EVENTSTORE_USERNAME", "postgres"),
+  password: System.get_env("EVENTSTORE_PASSWORD"),
+  hostname: System.get_env("EVENTSTORE_HOST", "localhost"),
   port: 5432,
   pool_size: 5
 
