@@ -588,21 +588,28 @@ deferred workflow, 1D-shaped (§8), same posture as 1B redemption enforcement.
 
 ### 13.5 Privacy seams (hand-off §4, sized by corpus 08 §6)
 
+- **`Privacy.Mechanism`** — the mechanism ladder as typed data:
+  `plain | k_anonymity | additive_he | zk | mpc | fhe | nullifier`, each paired
+  with an allowed execution boundary (`beam | bounded_nif | dirty_nif | sidecar`)
+  and workload shape. Unsupported rung/boundary/workload combinations are
+  rejected before a backing can advertise them.
 - **`Privacy.Aggregate`** — `sum/1`; backing from `:aggregate_backing` app env, default
   `Plaintext`. Every cross-member summation routes through it: `Throughput.system_value/3`,
-  `Capital.sinking_fund_total/2`. The seam-swap test runs the identical assertion function
-  under both backings — zero caller changes (acceptance 13).
+  `Capital.sinking_fund_total/2`. Backings expose a validated mechanism descriptor.
+  The seam-swap test runs the identical assertion function under both backings —
+  zero caller changes (acceptance 13).
 - **`Privacy.Proof`** — `prove/2`, `verify/2`; default backing `TrustedAudit`: a proof is the
   fact plus the pinned log position, and `verify` IS the audit (full recomputation — an old
   proof still verifies after rules tighten, because it pinned its position). First facts:
-  `floor_cleared`, `balance_at_least`. **FLAGGED DEVIATION**: the assertion is unsigned —
-  no operator/role key exists until 1D key governance; the pinned position carries
-  auditability, the signature attaches when the key does.
+  `floor_cleared`, `balance_at_least`. Backings expose a validated mechanism descriptor.
 - **`Privacy.JointCompute`** — behaviour only (the hand-off's explicit instruction); the
-  first backing arrives with the first network feature.
+  first backing arrives with the first network feature. No default backing is implicit:
+  callers can inspect `:no_backing_configured` instead of accidentally treating trusted
+  compute as present.
 
 Per 08 §6/§9 no HE/ZK/enclave code exists; escalation requires a demonstrated failure of the
-plain rung.
+plain rung. Long-running proof generation, MPC/FHE evaluation, and unbounded-input crypto
+are `sidecar`-only by descriptor. Bounded verification may stay in BEAM/NIF territory.
 
 ### 13.6 No-surveillance classification (hand-off invariant §0.6)
 
@@ -750,3 +757,26 @@ green — the pre-1D suites run in bootstrap mode by construction.
 **Gate:** the substrate hand-off (phases 1A–1D) is **complete**. Anything further —
 enforcement workflows, consumer surfaces, the stake view — is a new brief that reads from
 this substrate.
+
+## 17. Portable substrate API boundary (Phase 6A)
+
+The stable substrate surface other applications may depend on is deliberately small:
+
+- `CoopSubstrate.Canonical` and `CoopSubstrate.Protocol.Envelope` for canonical event bytes.
+- `CoopSubstrate.Protocol.TypeRegistry` and `CoopSubstrate.Protocol.Validity` for append-gate
+  type and rule enforcement.
+- `CoopSubstrate.Log` for append, read, audit, export, and replay of the signed canonical log.
+- `CoopSubstrate.Projection` plus `lib/coop_substrate/projections/*` for pure replay folds.
+- `CoopSubstrate.Privacy.Mechanism`, `Privacy.Aggregate`, `Privacy.Proof`, and
+  `Privacy.JointCompute` for privacy mechanism descriptors and swappable privacy seams.
+- `CoopSubstrate.Checkpoint` / signed proof verification paths for portable audit facts.
+
+Freight-specific and harness-specific modules are consumers of that surface, not substrate
+core: `Capital`, `Throughput`, `Floor`, `Finance`, `Harness`, `Cockpit`, and the outreach /
+handoff documents may evolve with the freight application without changing the portable log,
+registry, replay, checkpoint, or privacy contracts.
+
+Agent-facing consumers follow the same rule: they consume checkpoints, capability facts,
+`Privacy.Proof` results, or `Privacy.JointCompute` results carrying a validated
+`Privacy.Mechanism` descriptor. They do not read raw private member streams as their
+collaboration contract.
