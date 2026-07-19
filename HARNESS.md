@@ -1,7 +1,10 @@
 # HARNESS.md — The Harness-D Pipeline (Normative)
 
 Status: **machinery complete** (Phases 2A–2D, 2026-07-11; plans under
-`docs/phase2{a,b,c,d}_plan.md`, brief at `docs/handoff_harness_d.md`). Normative for the
+`docs/phase2{a,b,c,d}_plan.md`, brief at `docs/handoff_harness_d.md`). The current spec
+stage is always the `docs/phase*_plan.md` with the highest id — each plan carries its own
+`Status:` header (PLANNED or COMPLETE with acceptance); Phase 4A stays gated on `gate(D)`
+over real field data and blocks only Dispatch-D. Normative for the
 harness pipeline; the outer authority is `docs/corpus/11_HARNESS.md` (with 08 §4/§7,
 10 §0, 12 §4–§5) — on conflict the corpus governs, flagged. Everything below rides the
 substrate (`SUBSTRATE.md`): signed events through the append gate, pure folds,

@@ -1,10 +1,14 @@
 # Phase 6B — Member data export (portable own-data bundle)
 
-> **Status: PLANNED**. Closes the oldest stated-but-unbuilt substrate item:
-> SUBSTRATE.md §7 answers "what is exported to a member when they leave" with
-> "1A-minimal `export_stream/1` … the full export *workflow* remains 1D" — and
-> 1D (chapter scoping, checkpoints, keys) never built it. Not blocked by
-> `gate(D)`; no crypto involved (08 §6 escalation stays untriggered).
+> **Status: COMPLETE** (2026-07-19). Scope was the member-departure export
+> workflow SUBSTRATE.md §7 left dangling after 1D; acceptance **[6B]**
+> passes: `CoopSubstrate.Export.member_bundle/2` assembles the member-keyed
+> streams (registry-keyed, never string-parsed) plus the chapter rule
+> streams; `verify/1` checks the bundle offline; the export tests reproduce
+> the live balance from the verified bundle, reject tampering, and prove no
+> other member's streams appear; the surface is no-surveillance classified.
+> Not blocked by `gate(D)`; no crypto involved (08 §6 escalation stays
+> untriggered).
 
 ## Grounding
 
