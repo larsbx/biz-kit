@@ -308,6 +308,7 @@ defmodule CoopSubstrate.Projections.Membership do
       entity_id: p["entity_id"],
       terms_version: p["terms_version"],
       amount_minor: p["amount_minor"],
+      lines: p["lines"],
       credited_minor: 0,
       memo_ids: [],
       rungs_stepped: 0,

@@ -121,7 +121,11 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # The carrier's own invoice, from their own custody events + terms (8C);
       # invoice_for is the pure core over caller-supplied state, same class.
       {:compute_invoice, 2} => :own_data,
-      {:invoice_for, 3} => :own_data
+      {:invoice_for, 3} => :own_data,
+      # The carrier's own demo numbers, from their whole exhaust (8D).
+      {:demo_kit, 3} => :own_data,
+      # Per-process counters only — no member detail crosses (8D).
+      {:guards, 1} => :system
     },
     CoopSubstrate.Dispatch.Parser => %{
       # Pure text parser over caller input; nothing store-derived.

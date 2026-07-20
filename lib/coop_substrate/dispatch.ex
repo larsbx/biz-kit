@@ -151,6 +151,97 @@ defmodule CoopSubstrate.Dispatch do
     max(0, div(times.departed_ms - start, 60_000) - free_minutes)
   end
 
+  @doc """
+  The demo kit (8D; 13 §3 rehearsed, 13 §6 stays gated on real books): a
+  pure fold over the carrier's WHOLE exhaust — the only inputs are
+  (chapter, member, entity), so selective compilation is unrepresentable
+  by shape. `minutes_returned` multiplies ingested statuses by the
+  charter constant `dispatch/minutes_per_check_call` and is `nil` while
+  that constant is undeclared — fails closed to "not estimable".
+  """
+  def demo_kit(chapter_id, member_id, entity_id) do
+    with {:ok, state} <- Log.replay(Membership) do
+      mine = fn records ->
+        for {{^chapter_id, _id}, r} <- records,
+            r.member_id == member_id and r.entity_id == entity_id,
+            do: r
+      end
+
+      tenders = mine.(state.tenders)
+      loads = mine.(state.loads)
+      invoices = mine.(state.invoices)
+
+      statuses = loads |> Enum.map(&length(&1.statuses)) |> Enum.sum()
+      minutes_per_call = state.charter_constants[{chapter_id, "dispatch/minutes_per_check_call"}]
+
+      invoiced = invoices |> Enum.map(& &1.amount_minor) |> Enum.sum()
+      credited = invoices |> Enum.map(& &1.credited_minor) |> Enum.sum()
+
+      detention_lines =
+        invoices |> Enum.flat_map(& &1.lines) |> Enum.filter(&(&1["kind"] == "detention"))
+
+      {:ok,
+       %{
+         tenders: %{
+           received: length(tenders),
+           accepted: Enum.count(tenders, &(&1.decided == :accepted)),
+           declined: Enum.count(tenders, &(&1.decided == :declined)),
+           undecided: Enum.count(tenders, &(&1.decided == nil))
+         },
+         loads: %{
+           dispatched: length(loads),
+           completed: Enum.count(loads, &(complete?(&1) == :ok))
+         },
+         open_book: %{
+           invoiced_minor: invoiced,
+           credited_minor: credited,
+           net_minor: invoiced - credited
+         },
+         detention: %{
+           minutes: detention_lines |> Enum.map(& &1["minutes"]) |> Enum.sum(),
+           invoiced_minor: detention_lines |> Enum.map(& &1["amount_minor"]) |> Enum.sum()
+         },
+         check_calls: %{
+           statuses_ingested: statuses,
+           minutes_returned:
+             if(is_integer(minutes_per_call), do: statuses * minutes_per_call, else: nil)
+         }
+       }}
+    end
+  end
+
+  @doc """
+  Guard counters v0 (8D; 10 §5 — surfaced, not estimated): per process,
+  decisions taken, escalations raised, and the escalation rate ε in basis
+  points over all acts. Process-level counts only; no member detail.
+  """
+  def guards(chapter_id) do
+    with {:ok, state} <- Log.replay(Membership) do
+      decided =
+        Enum.count(state.tenders, fn {{ch, _id}, t} -> ch == chapter_id and t.decided != nil end)
+
+      escalations =
+        for {{^chapter_id, _id}, item} <- state.escalations, do: item
+
+      by_process = Enum.group_by(escalations, & &1.process)
+      processes = by_process |> Map.keys() |> MapSet.new() |> MapSet.put("tender_accept")
+
+      {:ok,
+       Map.new(processes, fn process ->
+         decisions = if process == "tender_accept", do: decided, else: 0
+         raised = length(Map.get(by_process, process, []))
+         acts = decisions + raised
+
+         {process,
+          %{
+            decisions: decisions,
+            escalations: raised,
+            epsilon_bp: if(acts > 0, do: div(raised * 10_000, acts), else: nil)
+          }}
+       end)}
+    end
+  end
+
   @doc "The decision for a received tender, recomputed from the log."
   def route(chapter_id, tender_id) do
     with {:ok, state} <- Log.replay(Membership) do

@@ -1,11 +1,19 @@
 # Phase 8D — Dispatch-D under simulation: demo kit + guards v0 (the 4D slice)
 
-> **Status: PLANNED** (2026-07-20). Final sim slice under the 8A
-> authorization (operator-directed: all three remaining sim slices). Same
-> rules: real machinery, untouched gate, nothing simulated is field
-> evidence — **the demo kit compiled from a sim chapter is a rehearsal of
-> the folds, never a campaign asset** (13 §6 stays gated on the first
-> hub's real books).
+> **Status: COMPLETE** (2026-07-20). Final sim slice under the 8A
+> authorization (operator-directed: all three remaining sim slices).
+> Acceptance **[8D]** passes: `Dispatch.demo_kit/3` recompiles every
+> number from the carrier's whole exhaust with no filter shape, equal
+> across an appender restart, `minutes_returned` failing closed to nil
+> while `dispatch/minutes_per_check_call` is undeclared (1);
+> `Dispatch.guards/1` surfaces per-process decisions/escalations/ε in
+> basis points, counters only (2); both classified, no new event types
+> (3). One flagged deviation: the invoice projection entry now keeps the
+> event's `lines` (re-deriving detention would have duplicated the
+> invoice math — a bigger diff than storing what the gate already
+> verified). Same rules: real machinery, untouched gate, nothing
+> simulated is field evidence — the sim demo kit is a rehearsal of the
+> folds, never a campaign asset (13 §6 stays gated on real books).
 
 ## Grounding
 
