@@ -333,9 +333,11 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   exists.
 - **Stream-heads tree root** (1D, deferred): checkpoint covers the global head only;
   per-stream roots await a partial-verification or sync consumer.
-- **Redemption enforcement** (1B → later): annual caps and payment-vs-balance checks are
-  deferred workflow; the data structures carry the terms (§11.5) but the gate does not yet
-  evaluate the capital fold.
+- **Redemption enforcement** — *resolved in 7A* (§11.5): the gate bounds every payment by
+  the remaining balance and the per-`year_index` annual cap. Still open here: sinking-fund
+  overdraw gating (a liquidity-policy question — 04 §3 "declared liquidity gates"), and a
+  schedule-closure / `:redeemed` terminal account status (workflow for the first real
+  departure).
 - **Rail settlement's entity dimension** (1C, §13.2): member-level settlement currently
   counts toward every membership's floor — PLACEHOLDER awaiting the absent
   throughput_and_floor spec / charter.
@@ -481,10 +483,14 @@ ways: an independent naive fold over `read_all`, and the same fold over independ
 
 `RedemptionScheduleOpened` carries the constitutionalizable terms (`years`,
 `annual_cap_minor`, `method: "fifo"`); `RedemptionPaid` consumes accrual entries **FIFO** and
-draws the entity's sinking fund (`SinkingFundContributed` accumulates it). No payout engine,
-cap enforcement, or eligibility logic exists yet (§8) — the data structures support
-multi-year payout, sinking-fund accounting, annual cap, FIFO, and death-to-estate, which is
-the 1B requirement.
+draws the entity's sinking fund (`SinkingFundContributed` accumulates it). The data
+structures support multi-year payout, sinking-fund accounting, annual cap, FIFO, and
+death-to-estate, which is the 1B requirement. **Enforcement arrived in 7A**
+(docs/phase7a_plan.md): each payment carries a `year_index` (the cap's time dimension is
+the schedule year — no wall clock in any fold), and the gate bounds it by the remaining
+balance (exit without forfeiture: the exact balance always pays out) and by the year's
+cumulative cap, from its own accrual fold via the shared rule modules — tested to agree
+with the capital projection across rule changes.
 
 ## 12. Phase 1B acceptance status
 

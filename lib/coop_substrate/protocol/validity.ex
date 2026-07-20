@@ -22,8 +22,10 @@ defmodule CoopSubstrate.Protocol.Validity do
       counts), an active accrual rule for the chapter, positive amount.
     * `RedemptionScheduleOpened` — membership in a terminal (redeemable)
       state; no schedule already open; positive years/cap; known method.
-    * `RedemptionPaid` — schedule open; positive amount. (Amount-vs-balance
-      and annual-cap enforcement are deferred workflow — see the plan.)
+    * `RedemptionPaid` (7A) — schedule open; positive amount; amount within
+      the remaining balance (the gate's own accrual fold — exit without
+      forfeiture, never overdraw); `year_index` inside the schedule and the
+      year's cumulative payments within `annual_cap_minor`.
     * `SinkingFundContributed` — entity registered; positive amount.
     * `ThroughputRuleActivated` / `FloorRuleActivated` (1C) — rule known to
       the code registry, params valid.
@@ -607,12 +609,25 @@ defmodule CoopSubstrate.Protocol.Validity do
   end
 
   defp type_check(%Envelope{type: "RedemptionPaid", chapter_id: ch, payload: p}, gate) do
+    schedule = gate.schedules[{ch, p["member_id"], p["entity_id"]}]
+    balance = Membership.balance(gate, ch, p["member_id"], p["entity_id"])
+
     cond do
-      not Map.has_key?(gate.schedules, {ch, p["member_id"], p["entity_id"]}) ->
+      schedule == nil ->
         {:error, :no_open_schedule}
 
       p["amount_minor"] <= 0 ->
         {:error, :amount_must_be_positive}
+
+      p["year_index"] < 0 or p["year_index"] >= schedule.years ->
+        {:error, {:year_outside_schedule, p["year_index"], schedule.years}}
+
+      p["amount_minor"] > balance ->
+        {:error, {:amount_exceeds_balance, balance}}
+
+      Map.get(schedule.paid_by_year, p["year_index"], 0) + p["amount_minor"] >
+          schedule.annual_cap_minor ->
+        {:error, {:annual_cap_exceeded, p["year_index"]}}
 
       true ->
         :ok

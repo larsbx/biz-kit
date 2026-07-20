@@ -203,7 +203,15 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
       disclosure_class: :commons,
       stream: {:payload_fields, "redemptions", ["member_id", "entity_id"]},
       payload: %{
-        required: %{"member_id" => :string, "entity_id" => :string, "amount_minor" => :int},
+        # year_index: the 0-based payout year within the open schedule this
+        # payment draws against (7A: the annual cap's time dimension is the
+        # schedule year, not the calendar — no wall clock in any fold).
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "amount_minor" => :int,
+          "year_index" => :int
+        },
         optional: %{"note" => :string}
       }
     },

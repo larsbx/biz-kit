@@ -83,7 +83,7 @@ defmodule CoopSubstrate.Projections.CapitalAccounts do
   def handle_event(%Envelope{type: "RedemptionPaid", chapter_id: ch, payload: p} = env, state) do
     amount = p["amount_minor"]
     key = {ch, p["member_id"], p["entity_id"]}
-    payment = %{global_seq: env.global_seq, amount_minor: amount}
+    payment = %{global_seq: env.global_seq, amount_minor: amount, year_index: p["year_index"]}
 
     state
     |> update_account(key, fn account ->

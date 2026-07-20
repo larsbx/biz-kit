@@ -1,11 +1,15 @@
 # Phase 7A — Redemption enforcement (the gate evaluates the capital fold)
 
-> **Status: PLANNED** (2026-07-20). Scope is the SUBSTRATE.md §8 item
-> "Redemption enforcement (1B → later)": annual-cap and payment-vs-balance
-> checks at the append gate. Dangling since 1B (§11.5: "No payout engine,
-> cap enforcement, or eligibility logic exists yet"). Not blocked by
-> `gate(D)`; no crypto involved (deterministic arithmetic over the gate's
-> own fold — 08 §6 escalation stays untriggered).
+> **Status: COMPLETE** (2026-07-20). Scope was the SUBSTRATE.md §8 item
+> "Redemption enforcement (1B → later)". Acceptance **[7A]** passes:
+> overdraw rejected before persistence and the exact balance always paid
+> (1), per-`year_index` cap and schedule bounds enforced (2, incl. the
+> estate account), the gate's fold agreeing with `Capital.balance/3`
+> across a rule change (3), full suite green with no regression (4).
+> Two deviations from the build steps: the tests live in
+> `test/redemption_test.exs` (where redemption coverage already was, not
+> `capital_accounts_test.exs`), and §12 was left untouched — it is the
+> historical 1B acceptance record and still true as written.
 
 ## Grounding
 

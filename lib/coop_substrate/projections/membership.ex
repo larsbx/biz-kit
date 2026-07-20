@@ -21,6 +21,7 @@ defmodule CoopSubstrate.Projections.Membership do
 
   @behaviour CoopSubstrate.Projection
 
+  alias CoopSubstrate.Capital.AccrualRules
   alias CoopSubstrate.Membership.Lifecycle
   alias CoopSubstrate.Protocol.Envelope
 
@@ -32,6 +33,10 @@ defmodule CoopSubstrate.Projections.Membership do
       memberships: %{},
       active_rules: %{},
       schedules: %{},
+      # Phase 7A: the gate's own view of credited − redeemed per
+      # (chapter, member, entity), via the same shared rule modules the
+      # capital projection uses — the two folds must agree (tested).
+      balances: %{},
       throughput_rules: %{},
       floor_rules: %{},
       obligations: %{},
@@ -154,12 +159,37 @@ defmodule CoopSubstrate.Projections.Membership do
     end)
   end
 
+  def handle_event(%Envelope{type: "PatronageRecorded", chapter_id: ch, payload: p}, state) do
+    # The gate guarantees an active rule exists and the id is registered
+    # (same guarantee the capital projection relies on).
+    %{rule_id: rule_id, params: params} = Map.fetch!(state.active_rules, ch)
+    {:ok, rule} = AccrualRules.fetch(rule_id)
+    credited = rule.credit(params, p["kind"], p["amount_minor"])
+
+    update_in(
+      state,
+      [:balances, Access.key({ch, p["member_id"], p["entity_id"]}, 0)],
+      &(&1 + credited)
+    )
+  end
+
   def handle_event(%Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p}, state) do
     put_in(state, [:schedules, Access.key({ch, p["member_id"], p["entity_id"]})], %{
       years: p["years"],
       annual_cap_minor: p["annual_cap_minor"],
-      method: p["method"]
+      method: p["method"],
+      paid_by_year: %{}
     })
+  end
+
+  def handle_event(%Envelope{type: "RedemptionPaid", chapter_id: ch, payload: p}, state) do
+    key = {ch, p["member_id"], p["entity_id"]}
+
+    state
+    |> update_in([:balances, Access.key(key, 0)], &(&1 - p["amount_minor"]))
+    |> update_in([:schedules, Access.key(key), :paid_by_year], fn paid ->
+      Map.update(paid, p["year_index"], p["amount_minor"], &(&1 + p["amount_minor"]))
+    end)
   end
 
   # -- Phase 2A: harness events -------------------------------------------------
@@ -336,6 +366,11 @@ defmodule CoopSubstrate.Projections.Membership do
     for {{^chapter_id, ^member_id, entity_id}, record} <- state.memberships do
       {entity_id, record}
     end
+  end
+
+  @doc "The gate's remaining balance (credited − redeemed) for (chapter, member, entity)."
+  def balance(state, chapter_id, member_id, entity_id) do
+    Map.get(state.balances, {chapter_id, member_id, entity_id}, 0)
   end
 
   # -- Phase 2A: the harness gate (corpus 11 §2) -------------------------------
