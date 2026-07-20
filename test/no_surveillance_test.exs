@@ -117,7 +117,11 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # The carrier's own tender, routed from their own envelope.
       {:route, 2} => :own_data,
       # The carrier's own load timeline (8B).
-      {:dwell, 2} => :own_data
+      {:dwell, 2} => :own_data,
+      # The carrier's own invoice, from their own custody events + terms (8C);
+      # invoice_for is the pure core over caller-supplied state, same class.
+      {:compute_invoice, 2} => :own_data,
+      {:invoice_for, 3} => :own_data
     },
     CoopSubstrate.Dispatch.Parser => %{
       # Pure text parser over caller input; nothing store-derived.

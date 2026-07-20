@@ -1,9 +1,17 @@
 # Phase 8C — Dispatch-D under simulation: invoice, detention, dunning (the 4C slice)
 
-> **Status: PLANNED** (2026-07-20). Third sim slice under the 8A
-> authorization (operator-directed: all three remaining sim slices). Same
-> rules: real machinery, untouched gate, nothing simulated is field
-> evidence; the real `phase4c` transcribes the real adopted spec.
+> **Status: COMPLETE** (2026-07-20). Third sim slice under the 8A
+> authorization (operator-directed: all three remaining sim slices).
+> Acceptance **[8C]** passes: member-signed monotonic versioned terms (1);
+> `InvoiceIssued` equal to the gate-recomputed pure function or rejected —
+> tampered totals, stale versions, incomplete custody chains all
+> unrepresentable, one invoice per load (2); credit memos bounded by the
+> invoice with unique memo ids (3); dunning walks the cited version's
+> rungs in order exactly once, collection only after the last rung, and
+> the ladder is frozen at the invoice's terms version (4); terms/invoice
+> streams member-keyed and queries classified (5). Same rules: real
+> machinery, untouched gate, nothing simulated is field evidence; the
+> real `phase4c` transcribes the real adopted spec.
 
 ## Grounding
 

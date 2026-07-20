@@ -828,6 +828,88 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         },
         optional: %{}
       }
+    },
+
+    # -- Phase 8C: invoice, detention, dunning (docs/phase8c_plan.md; corpus
+    # 07 §6, 05 P11). Terms are versioned member-signed events; the invoice
+    # is gate-recomputed; dunning is bounded by the declared rungs; money
+    # never moves here — settlement evidence is the obligation rail. ------
+    "RateTermsDeclared" => %{
+      required_roles: ["member"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "terms", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "version" => :int,
+          "params" => :any
+        },
+        optional: %{}
+      }
+    },
+    "InvoiceIssued" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "invoices", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "invoice_id" => :string,
+          "load_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "terms_version" => :int,
+          "lines" => :any,
+          "amount_minor" => :int
+        },
+        optional: %{}
+      }
+    },
+    "CreditMemoIssued" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "invoices", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "memo_id" => :string,
+          "invoice_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "amount_minor" => :int,
+          "reason" => :string
+        },
+        optional: %{}
+      }
+    },
+    "DunningStepped" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "invoices", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "invoice_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "rung_index" => :int,
+          "rung" => :string
+        },
+        optional: %{}
+      }
+    },
+    "CollectionEscalated" => %{
+      # Always R (H4): the event marks the ladder's end; nothing renders or
+      # transmits here ([LEGAL] — docs/phase8c_plan.md).
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "invoices", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "invoice_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string
+        },
+        optional: %{}
+      }
     }
   }
 

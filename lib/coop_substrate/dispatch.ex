@@ -77,6 +77,80 @@ defmodule CoopSubstrate.Dispatch do
 
   defp dwell_minutes(_incomplete), do: nil
 
+  @doc """
+  The invoice as a pure function of custody events + declared terms (8C;
+  07 §6): linehaul from the accepted tender's parse, one detention line
+  per stop from `max(0, departed − max(arrived, appointment) − free_time)`
+  at the declared rate, under the member's current terms version. The
+  append gate recomputes this on `InvoiceIssued` — a differing invoice is
+  unrepresentable.
+  """
+  def compute_invoice(chapter_id, load_id) do
+    with {:ok, state} <- Log.replay(Membership) do
+      invoice_for(state, chapter_id, load_id)
+    end
+  end
+
+  @doc "The pure core of `compute_invoice/2`, over caller-supplied fold state."
+  def invoice_for(state, chapter_id, load_id) do
+    with {:ok, load} <- fetch_load(state, chapter_id, load_id),
+         :ok <- complete?(load),
+         {:ok, terms} <- fetch_terms(state, chapter_id, load) do
+      params = terms.versions[terms.current]
+      tender = state.tenders[{chapter_id, load.tender_id}]
+      linehaul = tender.parse.fields["rate_minor"]
+
+      detention =
+        for stop <- ["pickup", "delivery"],
+            times = load.stops[stop],
+            minutes = detention_minutes(times, params["free_time_minutes"]),
+            minutes > 0 do
+          %{
+            "kind" => "detention",
+            "stop" => stop,
+            "minutes" => minutes,
+            "amount_minor" => div(minutes * params["detention_rate_minor_per_hour"], 60)
+          }
+        end
+
+      lines = [%{"kind" => "linehaul", "amount_minor" => linehaul} | detention]
+
+      {:ok,
+       %{
+         terms_version: terms.current,
+         lines: lines,
+         amount_minor: lines |> Enum.map(& &1["amount_minor"]) |> Enum.sum()
+       }}
+    end
+  end
+
+  defp fetch_load(state, chapter_id, load_id) do
+    case state.loads[{chapter_id, load_id}] do
+      nil -> {:error, {:unknown_load, load_id}}
+      load -> {:ok, load}
+    end
+  end
+
+  defp complete?(load) do
+    if Enum.all?(["pickup", "delivery"], &Map.has_key?(load.stops[&1] || %{}, :departed_ms)) do
+      :ok
+    else
+      {:error, :load_incomplete}
+    end
+  end
+
+  defp fetch_terms(state, chapter_id, load) do
+    case state.rate_terms[{chapter_id, load.member_id, load.entity_id}] do
+      nil -> {:error, :no_rate_terms}
+      terms -> {:ok, terms}
+    end
+  end
+
+  defp detention_minutes(times, free_minutes) do
+    start = max(times.arrived_ms, Map.get(times, :appointment_ms, times.arrived_ms))
+    max(0, div(times.departed_ms - start, 60_000) - free_minutes)
+  end
+
   @doc "The decision for a received tender, recomputed from the log."
   def route(chapter_id, tender_id) do
     with {:ok, state} <- Log.replay(Membership) do

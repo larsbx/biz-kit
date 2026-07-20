@@ -49,6 +49,10 @@ defmodule CoopSubstrate.Projections.Membership do
       tenders: %{},
       # Phase 8B: loads (per-stop lifecycle + status trail, 07 §3 pattern).
       loads: %{},
+      # Phase 8C: versioned rate terms (every version kept — dunning follows
+      # the version its invoice cites) and the invoicing trail.
+      rate_terms: %{},
+      invoices: %{},
       # Phase 2A — harness state (docs/phase2a_plan.md). Folds never delete:
       # consent revocation flips `active` and every count below EXCLUDES
       # inactive sources at computation time (11 P5, atomic exclusion).
@@ -282,6 +286,56 @@ defmodule CoopSubstrate.Projections.Membership do
     update_in(state, [:loads, Access.key({ch, p["load_id"]}), :stops], fn stops ->
       Map.update(stops, p["stop"], fun.(%{}), fun)
     end)
+  end
+
+  # -- Phase 8C: invoice, detention, dunning ------------------------------------
+
+  def handle_event(%Envelope{type: "RateTermsDeclared", chapter_id: ch, payload: p}, state) do
+    update_in(
+      state,
+      [:rate_terms, Access.key({ch, p["member_id"], p["entity_id"]}, %{current: 0, versions: %{}})],
+      fn terms ->
+        %{current: p["version"], versions: Map.put(terms.versions, p["version"], p["params"])}
+      end
+    )
+  end
+
+  def handle_event(%Envelope{type: "InvoiceIssued", chapter_id: ch, payload: p}, state) do
+    state
+    |> put_in([:invoices, Access.key({ch, p["invoice_id"]})], %{
+      load_id: p["load_id"],
+      member_id: p["member_id"],
+      entity_id: p["entity_id"],
+      terms_version: p["terms_version"],
+      amount_minor: p["amount_minor"],
+      credited_minor: 0,
+      memo_ids: [],
+      rungs_stepped: 0,
+      collection: false
+    })
+    |> put_in([:loads, Access.key({ch, p["load_id"]}), :invoiced], p["invoice_id"])
+  end
+
+  def handle_event(%Envelope{type: "CreditMemoIssued", chapter_id: ch, payload: p}, state) do
+    update_in(state, [:invoices, Access.key({ch, p["invoice_id"]})], fn invoice ->
+      %{
+        invoice
+        | credited_minor: invoice.credited_minor + p["amount_minor"],
+          memo_ids: invoice.memo_ids ++ [p["memo_id"]]
+      }
+    end)
+  end
+
+  def handle_event(%Envelope{type: "DunningStepped", chapter_id: ch, payload: p}, state) do
+    update_in(
+      state,
+      [:invoices, Access.key({ch, p["invoice_id"]}), :rungs_stepped],
+      &(&1 + 1)
+    )
+  end
+
+  def handle_event(%Envelope{type: "CollectionEscalated", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:invoices, Access.key({ch, p["invoice_id"]}), :collection], true)
   end
 
   # -- Phase 2A: harness events -------------------------------------------------

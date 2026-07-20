@@ -992,6 +992,130 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # -- Phase 8C: invoice, detention, dunning (docs/phase8c_plan.md) ------------
+
+  defp type_check(%Envelope{type: "RateTermsDeclared", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+    current = gate.rate_terms[{ch, p["member_id"], p["entity_id"]}]
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      record == nil or not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record && record.state}}
+
+      p["version"] != ((current && current.current) || 0) + 1 ->
+        {:error, {:terms_version_not_monotonic, p["version"]}}
+
+      true ->
+        with :ok <- check_rate_terms_params(p["params"]) do
+          # Terms are the member's declaration, like the envelope (8A).
+          check_member_signature(env, member)
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "InvoiceIssued", chapter_id: ch, payload: p}, gate) do
+    load = gate.loads[{ch, p["load_id"]}]
+
+    cond do
+      Map.has_key?(gate.invoices, {ch, p["invoice_id"]}) ->
+        {:error, {:invoice_already_issued, p["invoice_id"]}}
+
+      load == nil ->
+        {:error, {:unknown_load, p["load_id"]}}
+
+      load.member_id != p["member_id"] or load.entity_id != p["entity_id"] ->
+        {:error, :load_party_mismatch}
+
+      Map.get(load, :invoiced) != nil ->
+        {:error, {:load_already_invoiced, Map.get(load, :invoiced)}}
+
+      true ->
+        # The invoice is reproducible or unrepresentable (07 §6, 8A pattern):
+        # the gate recomputes the pure function and demands equality.
+        case Dispatch.invoice_for(gate, ch, p["load_id"]) do
+          {:ok, computed} ->
+            cited = %{
+              terms_version: p["terms_version"],
+              lines: p["lines"],
+              amount_minor: p["amount_minor"]
+            }
+
+            if cited == computed, do: :ok, else: {:error, :invoice_mismatch}
+
+          {:error, reason} ->
+            {:error, {:invoice_not_computable, reason}}
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "CreditMemoIssued", chapter_id: ch, payload: p}, gate) do
+    case gate.invoices[{ch, p["invoice_id"]}] do
+      nil ->
+        {:error, {:unknown_invoice, p["invoice_id"]}}
+
+      invoice ->
+        cond do
+          invoice.member_id != p["member_id"] or invoice.entity_id != p["entity_id"] ->
+            {:error, :invoice_party_mismatch}
+
+          p["memo_id"] in invoice.memo_ids ->
+            {:error, {:memo_already_issued, p["memo_id"]}}
+
+          p["amount_minor"] <= 0 ->
+            {:error, :amount_must_be_positive}
+
+          invoice.credited_minor + p["amount_minor"] > invoice.amount_minor ->
+            # The compensator reverses value; it never overshoots it.
+            {:error, :credit_exceeds_invoice}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "DunningStepped", chapter_id: ch, payload: p}, gate) do
+    with {:ok, invoice, rungs} <- fetch_dunning_ladder(gate, ch, p) do
+      cond do
+        invoice.collection ->
+          {:error, :in_collection}
+
+        p["rung_index"] != invoice.rungs_stepped ->
+          {:error, {:rung_out_of_order, p["rung_index"], invoice.rungs_stepped}}
+
+        p["rung_index"] >= length(rungs) ->
+          # No step beyond the declared ladder is representable.
+          {:error, :ladder_exhausted}
+
+        p["rung"] != Enum.at(rungs, p["rung_index"]) ->
+          {:error, {:rung_mismatch, p["rung"], Enum.at(rungs, p["rung_index"])}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "CollectionEscalated", chapter_id: ch, payload: p}, gate) do
+    with {:ok, invoice, rungs} <- fetch_dunning_ladder(gate, ch, p) do
+      cond do
+        invoice.collection ->
+          {:error, :in_collection}
+
+        invoice.rungs_stepped < length(rungs) ->
+          # The ladder's end (R, H4) is reachable only through every rung.
+          {:error, {:ladder_not_exhausted, invoice.rungs_stepped, length(rungs)}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) do
     if Lifecycle.lifecycle_event?(type) do
       check_lifecycle(env, gate)
@@ -999,6 +1123,41 @@ defmodule CoopSubstrate.Protocol.Validity do
       :ok
     end
   end
+
+  defp fetch_dunning_ladder(gate, ch, p) do
+    case gate.invoices[{ch, p["invoice_id"]}] do
+      nil ->
+        {:error, {:unknown_invoice, p["invoice_id"]}}
+
+      invoice ->
+        if invoice.member_id != p["member_id"] or invoice.entity_id != p["entity_id"] do
+          {:error, :invoice_party_mismatch}
+        else
+          # Dunning follows the terms version the invoice cites, not the
+          # member's latest — the ladder is frozen at issue time.
+          terms = gate.rate_terms[{ch, invoice.member_id, invoice.entity_id}]
+          {:ok, invoice, terms.versions[invoice.terms_version]["dunning_rungs"]}
+        end
+    end
+  end
+
+  defp check_rate_terms_params(
+         %{
+           "free_time_minutes" => free,
+           "detention_rate_minor_per_hour" => rate,
+           "dunning_rungs" => rungs
+         } = params
+       )
+       when map_size(params) == 3 do
+    if is_integer(free) and free >= 0 and is_integer(rate) and rate >= 0 and
+         is_list(rungs) and rungs != [] and Enum.all?(rungs, &(is_binary(&1) and &1 != "")) do
+      :ok
+    else
+      {:error, :malformed_terms_params}
+    end
+  end
+
+  defp check_rate_terms_params(_params), do: {:error, :malformed_terms_params}
 
   # The unbroken per-stop sequence (07 §3): appointments re-recordable until
   # arrival; arrival once; departure once, after arrival, never before it.
