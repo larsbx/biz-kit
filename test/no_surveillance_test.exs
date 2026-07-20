@@ -111,6 +111,16 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:diff, 2} => :system,
       {:seed_d, 0} => :system
     },
+    CoopSubstrate.Dispatch => %{
+      # Pure decision over caller-supplied envelope + parse (8A).
+      {:decide, 2} => :system,
+      # The carrier's own tender, routed from their own envelope.
+      {:route, 2} => :own_data
+    },
+    CoopSubstrate.Dispatch.Parser => %{
+      # Pure text parser over caller input; nothing store-derived.
+      {:parse, 1} => :system
+    },
     CoopSubstrate.Export => %{
       # The member-departure bundle (6B): the subject's own streams only.
       {:member_bundle, 2} => :own_data,

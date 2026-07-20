@@ -1,10 +1,17 @@
 # Phase 8A — Dispatch-D under simulation: sim gate(D), envelope machinery, tender rail
 
-> **Status: PLANNED** (2026-07-20). Operator-directed (2026-07-20: "mock the
-> gated blockers to advance with simulations and testing"): advance the
-> Dispatch-D *machinery* (docs/handoff_dispatch_d.md Phase 4A slice) against
-> a **simulated** gate(D), without weakening the gate or presenting
-> simulation as field evidence.
+> **Status: COMPLETE** (2026-07-20). Operator-directed (2026-07-20: "mock the
+> gated blockers to advance with simulations and testing"): the Dispatch-D
+> 4A slice built against a **simulated** gate(D), the gate untouched.
+> Acceptance **[8A]** passes: `Sim.GateD.run/1` drives gate(D) true through
+> the real pipeline and the control tests keep `BuildStarted`
+> unrepresentable without evidence (1); the envelope is member-signed,
+> strictly monotonic, atomically revocable (2); accept/decline events that
+> disagree with the gate-recomputed pure decision are unrepresentable, and
+> out-of-envelope/low-grade routes reach only the R rail (3); the parser is
+> green over the published sim fixture set fetched by hash (4); envelope
+> and tender streams ride the 6B departure bundle and every new query is
+> classified (5). Full suite green (218 tests + 8 properties + 1 doctest).
 
 ## The deviation, flagged honestly
 

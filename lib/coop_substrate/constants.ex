@@ -31,6 +31,12 @@ defmodule CoopSubstrate.Constants do
   @doc "Redemption schedule method supported by the 1B data model."
   def redemption_methods, do: ["fifo"]
 
+  @doc "Dispatch envelope scopes (8A; the field sets are per-scope gate checks)."
+  def dispatch_scopes, do: ["tender_accept"]
+
+  @doc "Tender parse grades (8A; 08 §7): machine output is never authoritative."
+  def parse_grades, do: ["human", "machine"]
+
   @doc """
   Recordable throughput components (Phase 1C). `settlement` is deliberately
   absent: it derives from obligation-rail discharge events (corpus 05 §1.2),

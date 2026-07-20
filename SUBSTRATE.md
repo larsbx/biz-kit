@@ -782,9 +782,10 @@ The stable substrate surface other applications may depend on is deliberately sm
 - `CoopSubstrate.Checkpoint` / signed proof verification paths for portable audit facts.
 
 Freight-specific and harness-specific modules are consumers of that surface, not substrate
-core: `Capital`, `Throughput`, `Floor`, `Finance`, `Harness`, `Cockpit`, and the outreach /
-handoff documents may evolve with the freight application without changing the portable log,
-registry, replay, checkpoint, or privacy contracts.
+core: `Capital`, `Throughput`, `Floor`, `Finance`, `Harness`, `Cockpit`, `Dispatch` (8A,
+simulation-gated — docs/phase8a_plan.md), and the outreach / handoff documents may evolve
+with the freight application without changing the portable log, registry, replay,
+checkpoint, or privacy contracts.
 
 Agent-facing consumers follow the same rule: they consume checkpoints, capability facts,
 `Privacy.Proof` results, or `Privacy.JointCompute` results carrying a validated

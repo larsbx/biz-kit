@@ -17,7 +17,7 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
 
   import Bitwise
 
-  @type disclosure_class :: :commons | :telemetry | :edges | :bilateral
+  @type disclosure_class :: :commons | :telemetry | :edges | :bilateral | :own_data
 
   # Field checkers: :string | :int | :bytes | :hash | :pubkey | :bool | :any
   # Stream spec: {:chapter_scoped, prefix} => "<chapter_id>/<prefix>"
@@ -653,6 +653,101 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
       payload: %{
         required: %{"section" => :string},
         optional: %{"ref" => :string}
+      }
+    },
+
+    # -- Phase 8A: dispatch envelope + tender rail (docs/phase8a_plan.md;
+    # corpus 10 §0–§5, 08 §7). The envelope is the member's signature and
+    # ceiling; decision events are gate-recomputed pure functions; parses
+    # are graded, never authoritative. All streams are the carrier's own
+    # exhaust (member-keyed — they ride the 6B departure bundle). ----------
+    "EnvelopeDeclared" => %{
+      required_roles: ["member"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "envelopes", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "scope" => :string,
+          "version" => :int,
+          "params" => :any
+        },
+        optional: %{}
+      }
+    },
+    "EnvelopeRevoked" => %{
+      required_roles: ["member"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "envelopes", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "scope" => :string,
+          "version" => :int
+        },
+        optional: %{}
+      }
+    },
+    "TenderReceived" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "tenders", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "tender_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "raw_ref" => :hash
+        },
+        optional: %{}
+      }
+    },
+    "TenderParsed" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "tenders", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "tender_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "raw_ref" => :hash,
+          "grade" => :string,
+          "fields" => :any
+        },
+        optional: %{}
+      }
+    },
+    "TenderAccepted" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "tenders", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "tender_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "envelope_version" => :int,
+          "basis" => :string
+        },
+        optional: %{}
+      }
+    },
+    "TenderDeclined" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "tenders", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "tender_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "envelope_version" => :int,
+          "basis" => :string
+        },
+        optional: %{}
       }
     }
   }

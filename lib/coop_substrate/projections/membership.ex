@@ -41,6 +41,12 @@ defmodule CoopSubstrate.Projections.Membership do
       floor_rules: %{},
       obligations: %{},
       role_keys: %{},
+      # Phase 8A: the dispatch envelope + tender rail. Envelopes keep their
+      # version across revocation (10 P6: versioned, atomically revocable —
+      # monotonicity survives; `active: false` is the revoked state, never
+      # deletion). Tenders track the latest graded parse and the decision.
+      dispatch_envelopes: %{},
+      tenders: %{},
       # Phase 2A — harness state (docs/phase2a_plan.md). Folds never delete:
       # consent revocation flips `active` and every count below EXCLUDES
       # inactive sources at computation time (11 P5, atomic exclusion).
@@ -190,6 +196,52 @@ defmodule CoopSubstrate.Projections.Membership do
     |> update_in([:schedules, Access.key(key), :paid_by_year], fn paid ->
       Map.update(paid, p["year_index"], p["amount_minor"], &(&1 + p["amount_minor"]))
     end)
+  end
+
+  # -- Phase 8A: dispatch envelope + tender rail --------------------------------
+
+  def handle_event(%Envelope{type: "EnvelopeDeclared", chapter_id: ch, payload: p}, state) do
+    put_in(
+      state,
+      [:dispatch_envelopes, Access.key({ch, p["member_id"], p["entity_id"], p["scope"]})],
+      %{version: p["version"], params: p["params"], active: true}
+    )
+  end
+
+  def handle_event(%Envelope{type: "EnvelopeRevoked", chapter_id: ch, payload: p}, state) do
+    update_in(
+      state,
+      [:dispatch_envelopes, Access.key({ch, p["member_id"], p["entity_id"], p["scope"]})],
+      &%{&1 | active: false}
+    )
+  end
+
+  def handle_event(%Envelope{type: "TenderReceived", chapter_id: ch, payload: p}, state) do
+    {:bytes, raw_ref} = p["raw_ref"]
+
+    put_in(state, [:tenders, Access.key({ch, p["tender_id"]})], %{
+      member_id: p["member_id"],
+      entity_id: p["entity_id"],
+      raw_ref: raw_ref,
+      parse: nil,
+      decided: nil
+    })
+  end
+
+  def handle_event(%Envelope{type: "TenderParsed", chapter_id: ch, payload: p}, state) do
+    # Latest parse wins: a machine proposal is promotable by a later human
+    # parse (08 §7); the decision gate reads only the latest.
+    update_in(state, [:tenders, Access.key({ch, p["tender_id"]})], fn tender ->
+      %{tender | parse: %{grade: p["grade"], fields: p["fields"]}}
+    end)
+  end
+
+  def handle_event(%Envelope{type: "TenderAccepted", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:tenders, Access.key({ch, p["tender_id"]}), :decided], :accepted)
+  end
+
+  def handle_event(%Envelope{type: "TenderDeclined", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:tenders, Access.key({ch, p["tender_id"]}), :decided], :declined)
   end
 
   # -- Phase 2A: harness events -------------------------------------------------
@@ -371,6 +423,11 @@ defmodule CoopSubstrate.Projections.Membership do
   @doc "The gate's remaining balance (credited − redeemed) for (chapter, member, entity)."
   def balance(state, chapter_id, member_id, entity_id) do
     Map.get(state.balances, {chapter_id, member_id, entity_id}, 0)
+  end
+
+  @doc "The member's dispatch envelope record for a scope, or nil (8A)."
+  def dispatch_envelope(state, chapter_id, member_id, entity_id, scope) do
+    state.dispatch_envelopes[{chapter_id, member_id, entity_id, scope}]
   end
 
   # -- Phase 2A: the harness gate (corpus 11 §2) -------------------------------

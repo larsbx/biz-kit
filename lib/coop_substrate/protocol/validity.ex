@@ -27,6 +27,14 @@ defmodule CoopSubstrate.Protocol.Validity do
       forfeiture, never overdraw); `year_index` inside the schedule and the
       year's cumulative payments within `annual_cap_minor`.
     * `SinkingFundContributed` — entity registered; positive amount.
+    * Dispatch rail (8A, docs/phase8a_plan.md) — `EnvelopeDeclared` only by
+      the member's own current key, scope known, params exact, versions
+      strictly monotonic; `EnvelopeRevoked` in any membership state;
+      `TenderReceived` unique on an active membership; `TenderParsed`
+      attests the exact raw artifact with a known grade and sane fields;
+      `TenderAccepted`/`TenderDeclined` must EQUAL the recomputed pure
+      decision (out-of-envelope and low-grade routes are unrepresentable —
+      only the R rail's `EscalationRaised` carries them).
     * `ThroughputRuleActivated` / `FloorRuleActivated` (1C) — rule known to
       the code registry, params valid.
     * `ThroughputRecorded` (1C) — active membership; component in the closed
@@ -54,6 +62,7 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   alias CoopSubstrate.Capital.AccrualRules
   alias CoopSubstrate.Constants
+  alias CoopSubstrate.Dispatch
   alias CoopSubstrate.Floor
   alias CoopSubstrate.Membership.Lifecycle
   alias CoopSubstrate.Projections.Membership
@@ -786,6 +795,146 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # -- Phase 8A: dispatch envelope + tender rail (docs/phase8a_plan.md) --------
+
+  defp type_check(%Envelope{type: "EnvelopeDeclared", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    current =
+      Membership.dispatch_envelope(gate, ch, p["member_id"], p["entity_id"], p["scope"])
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      record == nil or not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record && record.state}}
+
+      p["scope"] not in Constants.dispatch_scopes() ->
+        {:error, {:unknown_envelope_scope, p["scope"]}}
+
+      p["version"] != ((current && current.version) || 0) + 1 ->
+        # Versions are strictly monotonic across revocation (10 P6).
+        {:error, {:envelope_version_not_monotonic, p["version"]}}
+
+      true ->
+        with :ok <- check_envelope_params(p["params"]) do
+          # The envelope is the member's signature and ceiling (00 Art. II):
+          # only the member's own current key declares it.
+          check_member_signature(env, member)
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "EnvelopeRevoked", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    current = Membership.dispatch_envelope(gate, ch, p["member_id"], p["entity_id"], p["scope"])
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      current == nil or not current.active ->
+        {:error, :no_active_envelope}
+
+      p["version"] != current.version ->
+        {:error, {:envelope_version_mismatch, p["version"], current.version}}
+
+      true ->
+        # Revocation is the member's own act, valid in ANY membership state —
+        # sovereignty never lapses (10 P6).
+        check_member_signature(env, member)
+    end
+  end
+
+  defp type_check(%Envelope{type: "TenderReceived", chapter_id: ch, payload: p}, gate) do
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      record == nil or not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record && record.state}}
+
+      Map.has_key?(gate.tenders, {ch, p["tender_id"]}) ->
+        {:error, {:tender_already_received, p["tender_id"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "TenderParsed", chapter_id: ch, payload: p}, gate) do
+    {:bytes, raw_ref} = p["raw_ref"]
+    fields = p["fields"]
+
+    case gate.tenders[{ch, p["tender_id"]}] do
+      nil ->
+        {:error, {:unknown_tender, p["tender_id"]}}
+
+      tender ->
+        cond do
+          tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
+            {:error, :tender_party_mismatch}
+
+          tender.decided != nil ->
+            {:error, {:tender_already_decided, tender.decided}}
+
+          raw_ref != tender.raw_ref ->
+            # A parse must attest the exact received artifact (08 §7).
+            {:error, :raw_ref_mismatch}
+
+          p["grade"] not in Constants.parse_grades() ->
+            {:error, {:unknown_parse_grade, p["grade"]}}
+
+          not (is_map(fields) and is_binary(fields["lane"]) and
+                   is_binary(fields["equipment"]) and is_integer(fields["rate_minor"]) and
+                   fields["rate_minor"] > 0) ->
+            {:error, :malformed_parse_fields}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: type, chapter_id: ch, payload: p}, gate)
+       when type in ["TenderAccepted", "TenderDeclined"] do
+    case gate.tenders[{ch, p["tender_id"]}] do
+      nil ->
+        {:error, {:unknown_tender, p["tender_id"]}}
+
+      tender ->
+        envelope =
+          Membership.dispatch_envelope(gate, ch, tender.member_id, tender.entity_id, "tender_accept")
+
+        # The gate recomputes the pure decision: a decision event that
+        # disagrees with it is unrepresentable (10 P1/P5/P8).
+        decision = Dispatch.decide(envelope, tender.parse)
+        wanted = if type == "TenderAccepted", do: :accept, else: :decline
+
+        cond do
+          tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
+            {:error, :tender_party_mismatch}
+
+          tender.decided != nil ->
+            {:error, {:tender_already_decided, tender.decided}}
+
+          match?({:escalate, _}, decision) ->
+            {:escalate, reason} = decision
+            {:error, {:decision_requires_escalation, reason}}
+
+          elem(decision, 0) != wanted ->
+            {:error, {:decision_mismatch, elem(decision, 0)}}
+
+          {wanted, p["envelope_version"], p["basis"]} != decision ->
+            {:error, :decision_basis_mismatch}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) do
     if Lifecycle.lifecycle_event?(type) do
       check_lifecycle(env, gate)
@@ -793,6 +942,24 @@ defmodule CoopSubstrate.Protocol.Validity do
       :ok
     end
   end
+
+  # Envelope params for scope "tender_accept": the exact v0 field set
+  # (docs/phase8a_plan.md — the sim defaults; the real 4A re-derives the set
+  # from the real adopted defaults artifact).
+  defp check_envelope_params(
+         %{"lanes" => lanes, "equipment" => equipment, "rate_floor_minor" => floor} = params
+       )
+       when map_size(params) == 3 do
+    if is_list(lanes) and lanes != [] and Enum.all?(lanes, &is_binary/1) and
+         is_list(equipment) and equipment != [] and Enum.all?(equipment, &is_binary/1) and
+         is_integer(floor) and floor >= 0 do
+      :ok
+    else
+      {:error, :malformed_envelope_params}
+    end
+  end
+
+  defp check_envelope_params(_params), do: {:error, :malformed_envelope_params}
 
   defp check_lifecycle(%Envelope{type: type, chapter_id: ch, payload: p} = env, gate) do
     member_key = {ch, p["member_id"]}
