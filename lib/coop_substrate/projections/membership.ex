@@ -47,6 +47,8 @@ defmodule CoopSubstrate.Projections.Membership do
       # deletion). Tenders track the latest graded parse and the decision.
       dispatch_envelopes: %{},
       tenders: %{},
+      # Phase 8B: loads (per-stop lifecycle + status trail, 07 §3 pattern).
+      loads: %{},
       # Phase 2A — harness state (docs/phase2a_plan.md). Folds never delete:
       # consent revocation flips `active` and every count below EXCLUDES
       # inactive sources at computation time (11 P5, atomic exclusion).
@@ -242,6 +244,44 @@ defmodule CoopSubstrate.Projections.Membership do
 
   def handle_event(%Envelope{type: "TenderDeclined", chapter_id: ch, payload: p}, state) do
     put_in(state, [:tenders, Access.key({ch, p["tender_id"]}), :decided], :declined)
+  end
+
+  # -- Phase 8B: dispatch + tracking --------------------------------------------
+
+  def handle_event(%Envelope{type: "LoadDispatched", chapter_id: ch, payload: p}, state) do
+    state
+    |> put_in([:loads, Access.key({ch, p["load_id"]})], %{
+      tender_id: p["tender_id"],
+      member_id: p["member_id"],
+      entity_id: p["entity_id"],
+      stops: %{},
+      statuses: []
+    })
+    |> put_in([:tenders, Access.key({ch, p["tender_id"]}), :dispatched], p["load_id"])
+  end
+
+  def handle_event(%Envelope{type: "AppointmentRecorded", chapter_id: ch, payload: p}, state) do
+    update_stop(state, ch, p, &Map.put(&1, :appointment_ms, p["appointment_ms"]))
+  end
+
+  def handle_event(%Envelope{type: "LoadArrived", chapter_id: ch, payload: p}, state) do
+    update_stop(state, ch, p, &Map.put(&1, :arrived_ms, p["occurred_ms"]))
+  end
+
+  def handle_event(%Envelope{type: "LoadDeparted", chapter_id: ch, payload: p}, state) do
+    update_stop(state, ch, p, &Map.put(&1, :departed_ms, p["occurred_ms"]))
+  end
+
+  def handle_event(%Envelope{type: "StatusRecorded", chapter_id: ch, payload: p}, state) do
+    update_in(state, [:loads, Access.key({ch, p["load_id"]}), :statuses], fn statuses ->
+      statuses ++ [%{status: p["status"], occurred_ms: p["occurred_ms"]}]
+    end)
+  end
+
+  defp update_stop(state, ch, p, fun) do
+    update_in(state, [:loads, Access.key({ch, p["load_id"]}), :stops], fn stops ->
+      Map.update(stops, p["stop"], fun.(%{}), fun)
+    end)
   end
 
   # -- Phase 2A: harness events -------------------------------------------------

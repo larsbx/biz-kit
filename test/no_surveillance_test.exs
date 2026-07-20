@@ -115,7 +115,9 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # Pure decision over caller-supplied envelope + parse (8A).
       {:decide, 2} => :system,
       # The carrier's own tender, routed from their own envelope.
-      {:route, 2} => :own_data
+      {:route, 2} => :own_data,
+      # The carrier's own load timeline (8B).
+      {:dwell, 2} => :own_data
     },
     CoopSubstrate.Dispatch.Parser => %{
       # Pure text parser over caller input; nothing store-derived.

@@ -37,6 +37,9 @@ defmodule CoopSubstrate.Constants do
   @doc "Tender parse grades (8A; 08 §7): machine output is never authoritative."
   def parse_grades, do: ["human", "machine"]
 
+  @doc "Load stops (8B; 07 §3 interchange pattern on the carrier's own stream)."
+  def load_stops, do: ["pickup", "delivery"]
+
   @doc """
   Recordable throughput components (Phase 1C). `settlement` is deliberately
   absent: it derives from obligation-rail discharge events (corpus 05 §1.2),

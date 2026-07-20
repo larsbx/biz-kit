@@ -935,11 +935,87 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # -- Phase 8B: dispatch + tracking (docs/phase8b_plan.md) --------------------
+
+  defp type_check(%Envelope{type: "LoadDispatched", chapter_id: ch, payload: p}, gate) do
+    case gate.tenders[{ch, p["tender_id"]}] do
+      nil ->
+        {:error, {:unknown_tender, p["tender_id"]}}
+
+      tender ->
+        cond do
+          tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
+            {:error, :tender_party_mismatch}
+
+          tender.decided != :accepted ->
+            # A load descends only from an accepted tender — the in-envelope
+            # assignment evidence (8A carries version + basis on the decision).
+            {:error, {:tender_not_accepted, tender.decided}}
+
+          Map.get(tender, :dispatched) != nil ->
+            {:error, {:tender_already_dispatched, Map.get(tender, :dispatched)}}
+
+          Map.has_key?(gate.loads, {ch, p["load_id"]}) ->
+            {:error, {:load_already_dispatched, p["load_id"]}}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: type, chapter_id: ch, payload: p}, gate)
+       when type in ["AppointmentRecorded", "LoadArrived", "LoadDeparted", "StatusRecorded"] do
+    time = p["occurred_ms"] || p["appointment_ms"]
+
+    case gate.loads[{ch, p["load_id"]}] do
+      nil ->
+        {:error, {:unknown_load, p["load_id"]}}
+
+      load ->
+        cond do
+          load.member_id != p["member_id"] or load.entity_id != p["entity_id"] ->
+            {:error, :load_party_mismatch}
+
+          time <= 0 ->
+            {:error, :bad_event_time}
+
+          type == "StatusRecorded" ->
+            if p["status"] == "", do: {:error, :empty_status}, else: :ok
+
+          p["stop"] not in Constants.load_stops() ->
+            {:error, {:unknown_stop, p["stop"]}}
+
+          true ->
+            check_stop_order(type, load.stops[p["stop"]] || %{}, p)
+        end
+    end
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) do
     if Lifecycle.lifecycle_event?(type) do
       check_lifecycle(env, gate)
     else
       :ok
+    end
+  end
+
+  # The unbroken per-stop sequence (07 §3): appointments re-recordable until
+  # arrival; arrival once; departure once, after arrival, never before it.
+  defp check_stop_order("AppointmentRecorded", stop, _p) do
+    if Map.has_key?(stop, :arrived_ms), do: {:error, :already_arrived}, else: :ok
+  end
+
+  defp check_stop_order("LoadArrived", stop, _p) do
+    if Map.has_key?(stop, :arrived_ms), do: {:error, :already_arrived}, else: :ok
+  end
+
+  defp check_stop_order("LoadDeparted", stop, p) do
+    cond do
+      not Map.has_key?(stop, :arrived_ms) -> {:error, :not_arrived}
+      Map.has_key?(stop, :departed_ms) -> {:error, :already_departed}
+      p["occurred_ms"] < stop.arrived_ms -> {:error, :departure_before_arrival}
+      true -> :ok
     end
   end
 

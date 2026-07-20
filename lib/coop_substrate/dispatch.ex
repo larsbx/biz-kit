@@ -53,6 +53,30 @@ defmodule CoopSubstrate.Dispatch do
     end
   end
 
+  @doc """
+  Per-stop tracking times and dwell minutes for a load (8B), purely from
+  the log — no clock reads; every time is a signed payload's.
+  """
+  def dwell(chapter_id, load_id) do
+    with {:ok, state} <- Log.replay(Membership) do
+      case state.loads[{chapter_id, load_id}] do
+        nil ->
+          {:error, {:unknown_load, load_id}}
+
+        load ->
+          {:ok,
+           Map.new(load.stops, fn {stop, times} ->
+             {stop, Map.put(times, :dwell_minutes, dwell_minutes(times))}
+           end)}
+      end
+    end
+  end
+
+  defp dwell_minutes(%{arrived_ms: arrived, departed_ms: departed}),
+    do: div(departed - arrived, 60_000)
+
+  defp dwell_minutes(_incomplete), do: nil
+
   @doc "The decision for a received tender, recomputed from the log."
   def route(chapter_id, tender_id) do
     with {:ok, state} <- Log.replay(Membership) do

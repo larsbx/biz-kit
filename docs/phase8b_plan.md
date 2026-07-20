@@ -1,10 +1,15 @@
 # Phase 8B — Dispatch-D under simulation: dispatch + tracking (the 4B slice)
 
-> **Status: PLANNED** (2026-07-20). Second sim slice under the 8A
-> authorization (operator-directed, 2026-07-20: all three remaining sim
-> slices). Same rules as 8A: the machinery is real, the gate is untouched,
-> nothing simulated is field evidence, and the real `phase4b` transcribes
-> the real adopted spec when it exists.
+> **Status: COMPLETE** (2026-07-20). Second sim slice under the 8A
+> authorization (operator-directed: all three remaining sim slices).
+> Acceptance **[8B]** passes: loads descend only from accepted tenders,
+> one per tender (1); per-stop ordering gate-enforced — no departure
+> without arrival, nothing twice, no backwards time, appointments frozen
+> at arrival (2); `Dispatch.dwell/2` folds signed payload times (3);
+> check-call types and modules structurally absent (4); load streams
+> member-keyed, queries classified (5). Same rules as 8A: the machinery
+> is real, the gate untouched, nothing simulated is field evidence, and
+> the real `phase4b` transcribes the real adopted spec when it exists.
 
 ## Grounding
 

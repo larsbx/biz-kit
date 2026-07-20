@@ -749,6 +749,85 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         },
         optional: %{}
       }
+    },
+
+    # -- Phase 8B: dispatch + tracking (docs/phase8b_plan.md; corpus 07 §3,
+    # 10 §4.1). Loads descend from accepted tenders; lifecycle ordering is
+    # gate-enforced; ingest is import-shaped (connector-free); check-call
+    # machinery is deliberately absent. -----------------------------------
+    "LoadDispatched" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "loads", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "load_id" => :string,
+          "tender_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string
+        },
+        optional: %{}
+      }
+    },
+    "AppointmentRecorded" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "loads", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "load_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "stop" => :string,
+          "appointment_ms" => :int
+        },
+        optional: %{}
+      }
+    },
+    "LoadArrived" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "loads", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "load_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "stop" => :string,
+          "occurred_ms" => :int
+        },
+        optional: %{}
+      }
+    },
+    "LoadDeparted" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "loads", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "load_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "stop" => :string,
+          "occurred_ms" => :int
+        },
+        optional: %{}
+      }
+    },
+    "StatusRecorded" => %{
+      required_roles: ["steward"],
+      disclosure_class: :own_data,
+      stream: {:payload_fields, "loads", ["member_id", "entity_id"]},
+      payload: %{
+        required: %{
+          "load_id" => :string,
+          "member_id" => :string,
+          "entity_id" => :string,
+          "status" => :string,
+          "occurred_ms" => :int
+        },
+        optional: %{}
+      }
     }
   }
 
