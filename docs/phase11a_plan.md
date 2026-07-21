@@ -1,12 +1,16 @@
 # Phase 11A — The demo/simulation entry point
 
-> **Status: PLANNED** (2026-07-21). Operator-directed: "We need an entry
-> point for the demos and simulation." The scratchpad demo run (2026-07-21)
-> proved the full simulated cycle end to end; this phase makes it a
-> first-class, repeatable entry point instead of a throwaway script. Sim
-> rules unchanged: everything runs on sim chapters with synthetic actors,
-> the gate is untouched, and nothing produced is field evidence or a
-> campaign asset.
+> **Status: COMPLETE** (2026-07-21). Operator-directed: "We need an entry
+> point for the demos and simulation." Acceptance **[11A]** passes:
+> `Sim.Demo.run/1` runs the whole cycle on a fresh sim chapter and
+> returns every number and verification verdict (1); non-sim chapter ids
+> are refused with nothing appended (2); two fresh-chapter runs coexist
+> on one store and agree on every scenario-invariant number (3);
+> `mix coop.demo` is a pure printer over the returned map, exercised
+> live (4); suite green at 243 tests + 8 properties + 1 doctest, no
+> query-surface change (5). Discoverable from HARNESS.md's status line.
+> Sim rules unchanged: synthetic actors only, the gate untouched,
+> nothing produced is field evidence or a campaign asset.
 
 ## Grounding
 
