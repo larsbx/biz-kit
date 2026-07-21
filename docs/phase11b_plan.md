@@ -1,12 +1,18 @@
 # Phase 11B — The member stake view (the composed own-data surface)
 
-> **Status: PLANNED** (2026-07-21). Scope is the consumer the briefs have
-> named since 1B without building: `docs/handoff.md` §2.3 ("real-time
-> queryable balance — the stake view will read this later") and
-> SUBSTRATE.md §8 query-authn ("the requesting-member context … arrives
-> with the first consumer (the stake view)"). Next in line per the 11A
-> deferral list; operator said continue. Read-side only; no new event
-> types; not blocked by `gate(D)`.
+> **Status: COMPLETE** (2026-07-21). Scope was the consumer the briefs
+> named since 1B. Acceptance **[11B]** passes: one call returns the whole
+> stake — identity/key, per-entity membership state, capital + redemption
+> schedule, floor verdict + windowed throughput at `at:`, own dispatch
+> numbers, own obligation edges (1); every number pinned equal to the
+> underlying module's answer, including the sim world where the dispatch
+> section IS the demo kit (2); a pair member sees only their own side of
+> the shared edge, a third member reaches nothing, a stranger errors, and
+> error states (`no_active_floor_rule`, `:no_instant_given`) are reported
+> as data, never guessed around (3); `view/2,3` classified `:own_data`,
+> suite green at 245 tests + 8 properties + 1 doctest (4). SUBSTRATE.md
+> §8 query-authn updated: the first consumer exists; requesting-member
+> enforcement still awaits the first transport.
 
 ## Grounding
 

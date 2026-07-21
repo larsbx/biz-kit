@@ -358,9 +358,11 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   spec).
 - **n = 1 aggregates** (1C, §13.7): single-contributor totals equal the contribution; the
   k-anonymity gate is the declared upgrade when publication features arrive (08 §6).
-- **Query authn** (1C → later): own-data classification is a contract, not yet middleware;
-  the requesting-member context needs an API surface, which arrives with the first consumer
-  (the stake view) — not with the substrate.
+- **Query authn** (1C → later): own-data classification is a contract, not yet middleware.
+  The first consumer now exists — `CoopSubstrate.StakeView` (11B,
+  docs/phase11b_plan.md), the composed own-data surface, subject-keyed by shape.
+  Requesting-member enforcement (signed requests) still awaits the first transport; every
+  access today is a library call.
 
 ## 9. Placeholder (constitutionalized-later) parameters
 

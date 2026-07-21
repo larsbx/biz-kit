@@ -162,6 +162,12 @@ defmodule CoopSubstrate.NoSurveillanceTest do
     },
     Privacy.JointCompute => %{
       {:descriptor, 0} => :system
+    },
+    CoopSubstrate.StakeView => %{
+      # The composed own-data surface (11B): one subject argument; the only
+      # cross-member content is the member's own dual-signed edges.
+      {:view, 2} => :own_data,
+      {:view, 3} => :own_data
     }
   }
 
