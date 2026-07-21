@@ -341,9 +341,11 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Rail settlement's entity dimension** (1C, §13.2): member-level settlement currently
   counts toward every membership's floor — PLACEHOLDER awaiting the absent
   throughput_and_floor spec / charter.
-- **Anti-gaming accretion** (1C → later): circular/self-dealing netting detection,
-  per-counterparty caps (needs a privacy-preserving counterparty tag — an 08 §6 ladder
-  decision), `NettingExecuted` batch discharge, exposure caps (05 P7) as gate checks.
+- **Anti-gaming accretion** — *resolved in 9A* (§13.3): `NettingExecuted` batch discharge
+  (gate-recomputed), exposure caps as bootstrap-then-enforce gate checks, ring visibility as
+  a bare aggregate. Still open here: per-counterparty *throughput* caps (await the absent
+  throughput_and_floor spec and, for publication, an 08 §6 ladder decision) and any
+  enforcement consequence of a nonzero ring count (R/governance).
 - **Floor enforcement** (1C → 1D): evaluation cadence; requiring `evaluation_ref` on
   `MembershipFloorExited`; cure-window duration (undeclared charter constant).
 - **n = 1 aggregates** (1C, §13.7): single-contributor totals equal the contribution; the
@@ -581,9 +583,15 @@ is a counsel gate before external use (corpus HANDOFF §4).
 
 **Netting** (05 P5, P10): `Finance.netting/3` — per-denomination pairwise set-off over open
 mutual obligations, `setoff = min(gross each way)`, residual net stated as (debtor, creditor,
-amount). A pure report; executing a round (batch discharge) is deferred (§8). The obligations
-state lives in the same fold the append gate holds — one fold, two consumers; the plan's
-separate `Projections.Obligations` proved unnecessary.
+amount). Executable since 9A (docs/phase9a_plan.md): `NettingExecuted` — dual-signed by the
+sorted pair, gate-recomputed against `Finance.compute/3` (a stale or tampered round is
+unrepresentable, zero set-off nets nothing) — closes the pair's like-denominated open
+obligations atomically and opens the residual under the same dual signature. Declared
+exposure caps (`finance/borrower_cap_minor`, `finance/funder_cap_minor` — 05 P7,
+bootstrap-then-enforce) bound `ObligationRecorded`/`ObligationAssigned`; ring visibility is
+`Finance.ring_stats/2`, an aggregate only (counts + gross value, never a member roster). The
+obligations state lives in the same fold the append gate holds — one fold, two consumers;
+the plan's separate `Projections.Obligations` proved unnecessary.
 
 ### 13.4 The participation floor
 

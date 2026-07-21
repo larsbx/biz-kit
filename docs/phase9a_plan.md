@@ -1,12 +1,18 @@
 # Phase 9A — Obligation-rail integrity: netting execution, exposure caps, ring visibility
 
-> **Status: PLANNED** (2026-07-21). Scope is the anti-gaming accretion
-> SUBSTRATE.md §8 has carried since 1C ("`NettingExecuted` batch
-> discharge, exposure caps (05 P7) as gate checks, circular/self-dealing
-> netting detection") — the oldest stated-but-unbuilt mechanism after 8D.
-> Not blocked by `gate(D)`; no crypto (deterministic arithmetic and graph
-> checks at the plain rung — 08 §6 escalation stays untriggered; the only
-> cross-member surface is a bare aggregate).
+> **Status: COMPLETE** (2026-07-21). Scope was the anti-gaming accretion
+> SUBSTRATE.md §8 carried since 1C. Acceptance **[9A]** passes: a netting
+> round equal to the recomputed set-off closes the pair's like-denominated
+> obligations atomically and opens exactly the residual — tampered
+> figures, unsorted pairs, zero set-off, and residual mismatches all
+> rejected before persistence, other denominations/pairs untouched (1);
+> caps bind on declaration, bound assignment too (an addition in the
+> acceptance's spirit — substitution moves exposure), and netting
+> execution re-opens funder headroom (2); `ring_stats/2` reports counts
+> and gross value only, zero on a ring-free rail, and self-dealing stays
+> unrepresentable (3); recomputation across an appender restart is equal
+> and chains verify (4); classifications in place (5). Full suite green
+> (230 tests + 8 properties + 1 doctest).
 
 ## Grounding
 

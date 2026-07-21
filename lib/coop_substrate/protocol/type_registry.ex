@@ -910,6 +910,32 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
         },
         optional: %{}
       }
+    },
+
+    # -- Phase 9A: netting execution (docs/phase9a_plan.md; corpus 05 §1.2,
+    # P5/P7/P10). Dual-signed by the pair (party_a < party_b, one
+    # representation); the gate recomputes Finance.compute/3 and demands
+    # equality; the residual obligation's dual signature IS this event's. --
+    "NettingExecuted" => %{
+      required_roles: ["party_a", "party_b"],
+      disclosure_class: :bilateral,
+      stream: {:payload_fields, "netting", ["party_a", "party_b"]},
+      payload: %{
+        required: %{
+          "party_a" => :string,
+          "party_b" => :string,
+          "denomination" => :string,
+          "a_to_b" => :int,
+          "b_to_a" => :int,
+          "setoff" => :int
+        },
+        optional: %{
+          "residual_obligation_id" => :string,
+          "net_debtor" => :string,
+          "net_creditor" => :string,
+          "net_minor" => :int
+        }
+      }
     }
   }
 

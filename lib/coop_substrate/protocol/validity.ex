@@ -27,6 +27,11 @@ defmodule CoopSubstrate.Protocol.Validity do
       forfeiture, never overdraw); `year_index` inside the schedule and the
       year's cumulative payments within `annual_cap_minor`.
     * `SinkingFundContributed` — entity registered; positive amount.
+    * `NettingExecuted` (9A) — pair sorted and dual-signed; the cited
+      report must EQUAL the recomputed `Finance.compute/3` set-off; the
+      residual travels all-or-nothing and matches the net; zero set-off
+      nets nothing. `ObligationRecorded`/`ObligationAssigned` additionally
+      respect declared exposure caps (05 P7, bootstrap-then-enforce).
     * Dispatch rail (8A, docs/phase8a_plan.md) — `EnvelopeDeclared` only by
       the member's own current key, scope known, params exact, versions
       strictly monotonic; `EnvelopeRevoked` in any membership state;
@@ -63,6 +68,7 @@ defmodule CoopSubstrate.Protocol.Validity do
   alias CoopSubstrate.Capital.AccrualRules
   alias CoopSubstrate.Constants
   alias CoopSubstrate.Dispatch
+  alias CoopSubstrate.Finance
   alias CoopSubstrate.Floor
   alias CoopSubstrate.Membership.Lifecycle
   alias CoopSubstrate.Projections.Membership
@@ -152,7 +158,10 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   # -- Phase 2A: harness events (docs/phase2a_plan.md; corpus 11) --------------
 
-  defp type_check(%Envelope{type: "InterviewConsentGranted", chapter_id: ch, payload: p} = env, gate) do
+  defp type_check(
+         %Envelope{type: "InterviewConsentGranted", chapter_id: ch, payload: p} = env,
+         gate
+       ) do
     {:bytes, pubkey} = p["pubkey"]
     classes = p["classes"]
 
@@ -163,7 +172,7 @@ defmodule CoopSubstrate.Protocol.Validity do
         {:error, {:consent_already_recorded, p["interviewee_ref"]}}
 
       not (is_list(classes) and classes != [] and
-             Enum.all?(classes, &(&1 in Constants.consent_classes()))) ->
+               Enum.all?(classes, &(&1 in Constants.consent_classes()))) ->
         {:error, {:unknown_consent_classes, classes}}
 
       not Enum.any?(
@@ -177,7 +186,10 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  defp type_check(%Envelope{type: "InterviewConsentRevoked", chapter_id: ch, payload: p} = env, gate) do
+  defp type_check(
+         %Envelope{type: "InterviewConsentRevoked", chapter_id: ch, payload: p} = env,
+         gate
+       ) do
     case gate.consents[{ch, p["interviewee_ref"]}] do
       nil -> {:error, {:no_consent_recorded, p["interviewee_ref"]}}
       %{active: false} -> {:error, :consent_not_active}
@@ -750,7 +762,9 @@ defmodule CoopSubstrate.Protocol.Validity do
         {:error, :amount_must_be_positive}
 
       true ->
-        with :ok <- check_party_key(env, "debtor", debtor) do
+        with :ok <-
+               check_exposure_caps(gate, ch, p["debtor_id"], p["creditor_id"], p["amount_minor"]),
+             :ok <- check_party_key(env, "debtor", debtor) do
           check_party_key(env, "creditor", creditor)
         end
     end
@@ -774,8 +788,52 @@ defmodule CoopSubstrate.Protocol.Validity do
         {:error, :self_obligation}
 
       true ->
-        with :ok <- check_party_key(env, "assignor", gate.members[{ch, obligation.debtor_id}]) do
+        # 9A: substitution moves exposure — the incoming debtor's cap
+        # applies (their concentration as creditor is unchanged, no funder
+        # check needed).
+        with :ok <-
+               check_exposure_caps(gate, ch, p["new_debtor_id"], nil, obligation.amount_minor),
+             :ok <- check_party_key(env, "assignor", gate.members[{ch, obligation.debtor_id}]) do
           check_party_key(env, "assignee", assignee)
+        end
+    end
+  end
+
+  # -- Phase 9A: netting execution + exposure caps (docs/phase9a_plan.md) ------
+
+  defp type_check(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p} = env, gate) do
+    {a, b} = {p["party_a"], p["party_b"]}
+
+    report =
+      gate.obligations
+      |> Finance.compute(ch, {a, b})
+      |> Enum.find(&(&1.denomination == p["denomination"]))
+
+    cond do
+      a >= b ->
+        # One representation per pair.
+        {:error, :pair_not_sorted}
+
+      gate.members[{ch, a}] == nil ->
+        {:error, {:unregistered_member, a}}
+
+      gate.members[{ch, b}] == nil ->
+        {:error, {:unregistered_member, b}}
+
+      report == nil or report.setoff == 0 ->
+        # A one-way position nets nothing; closing-and-reopening it would
+        # be churn, not set-off (05 §1.2).
+        {:error, :nothing_to_net}
+
+      {p["a_to_b"], p["b_to_a"], p["setoff"]} != {report.a_to_b, report.b_to_a, report.setoff} ->
+        # The gate recomputes the set-off (05 P10, the 8A pattern): a stale
+        # or tampered report is unrepresentable.
+        {:error, :netting_mismatch}
+
+      true ->
+        with :ok <- check_netting_residual(gate, ch, p, report.net),
+             :ok <- check_party_key(env, "party_a", gate.members[{ch, a}]) do
+          check_party_key(env, "party_b", gate.members[{ch, b}])
         end
     end
   end
@@ -887,7 +945,7 @@ defmodule CoopSubstrate.Protocol.Validity do
             {:error, {:unknown_parse_grade, p["grade"]}}
 
           not (is_map(fields) and is_binary(fields["lane"]) and
-                   is_binary(fields["equipment"]) and is_integer(fields["rate_minor"]) and
+                 is_binary(fields["equipment"]) and is_integer(fields["rate_minor"]) and
                    fields["rate_minor"] > 0) ->
             {:error, :malformed_parse_fields}
 
@@ -905,7 +963,13 @@ defmodule CoopSubstrate.Protocol.Validity do
 
       tender ->
         envelope =
-          Membership.dispatch_envelope(gate, ch, tender.member_id, tender.entity_id, "tender_accept")
+          Membership.dispatch_envelope(
+            gate,
+            ch,
+            tender.member_id,
+            tender.entity_id,
+            "tender_accept"
+          )
 
         # The gate recomputes the pure decision: a decision event that
         # disagrees with it is unrepresentable (10 P1/P5/P8).
@@ -1158,6 +1222,65 @@ defmodule CoopSubstrate.Protocol.Validity do
   end
 
   defp check_rate_terms_params(_params), do: {:error, :malformed_terms_params}
+
+  # 9A: the residual fields travel all-or-nothing, exactly when the round
+  # leaves a net, and must equal the recomputed net.
+  defp check_netting_residual(gate, ch, p, net) do
+    residual_keys = ["residual_obligation_id", "net_debtor", "net_creditor", "net_minor"]
+    cited = Enum.map(residual_keys, &p[&1])
+
+    case {net, cited} do
+      {nil, [nil, nil, nil, nil]} ->
+        :ok
+
+      {{debtor, creditor, amount}, [residual_id, cited_debtor, cited_creditor, cited_amount]}
+      when is_binary(residual_id) ->
+        cond do
+          {cited_debtor, cited_creditor, cited_amount} != {debtor, creditor, amount} ->
+            {:error, :residual_mismatch}
+
+          Map.has_key?(gate.obligations, {ch, residual_id}) ->
+            {:error, {:obligation_already_recorded, residual_id}}
+
+          true ->
+            :ok
+        end
+
+      _mismatch ->
+        {:error, :residual_mismatch}
+    end
+  end
+
+  # 9A exposure caps (05 P7): bootstrap-then-enforce — the rail predates the
+  # caps; a chapter's declaration is what creates the constraint. Aggregates
+  # are per-borrower (debtor side) and per-funder (creditor concentration),
+  # across denominations ("aggregate across instruments").
+  defp check_exposure_caps(gate, ch, debtor_id, creditor_id, amount) do
+    borrower_cap = gate.charter_constants[{ch, "finance/borrower_cap_minor"}]
+    funder_cap = gate.charter_constants[{ch, "finance/funder_cap_minor"}]
+
+    cond do
+      is_integer(borrower_cap) and
+          open_exposure(gate, ch, :debtor_id, debtor_id) + amount > borrower_cap ->
+        {:error, {:borrower_cap_exceeded, borrower_cap}}
+
+      creditor_id != nil and is_integer(funder_cap) and
+          open_exposure(gate, ch, :creditor_id, creditor_id) + amount > funder_cap ->
+        {:error, {:funder_cap_exceeded, funder_cap}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp open_exposure(gate, ch, side, member_id) do
+    gate.obligations
+    |> Enum.filter(fn {{c, _id}, ob} ->
+      c == ch and ob.open and Map.get(ob, side) == member_id
+    end)
+    |> Enum.map(fn {_key, ob} -> ob.amount_minor end)
+    |> Enum.sum()
+  end
 
   # The unbroken per-stop sequence (07 §3): appointments re-recordable until
   # arrival; arrival once; departure once, after arrival, never before it.

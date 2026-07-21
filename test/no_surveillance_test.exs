@@ -141,7 +141,11 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:netting, 2} => :bilateral,
       {:netting, 3} => :bilateral,
       # netting's pure core, exposed for property tests — same data class.
-      {:compute, 3} => :bilateral
+      {:compute, 3} => :bilateral,
+      # Ring visibility (9A): counts and gross value only — no member ids
+      # cross the boundary (05 §2 privacy-preserving aggregate).
+      {:ring_stats, 1} => :aggregate,
+      {:ring_stats, 2} => :aggregate
     },
     Privacy.Aggregate => %{
       {:sum, 1} => :aggregate,

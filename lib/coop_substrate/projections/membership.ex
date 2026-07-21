@@ -171,6 +171,41 @@ defmodule CoopSubstrate.Projections.Membership do
     end)
   end
 
+  # Phase 9A: an executed netting round closes every open like-denominated
+  # pair obligation atomically and opens the residual (docs/phase9a_plan.md).
+  def handle_event(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p}, state) do
+    {a, b, denom} = {p["party_a"], p["party_b"], p["denomination"]}
+
+    state =
+      update_in(state, [:obligations], fn obligations ->
+        Map.new(obligations, fn
+          {{^ch, id}, %{open: true, denomination: ^denom} = ob} ->
+            if {ob.debtor_id, ob.creditor_id} in [{a, b}, {b, a}] do
+              {{ch, id}, %{ob | open: false}}
+            else
+              {{ch, id}, ob}
+            end
+
+          entry ->
+            entry
+        end)
+      end)
+
+    case p["residual_obligation_id"] do
+      nil ->
+        state
+
+      residual_id ->
+        put_in(state, [:obligations, Access.key({ch, residual_id})], %{
+          debtor_id: p["net_debtor"],
+          creditor_id: p["net_creditor"],
+          amount_minor: p["net_minor"],
+          denomination: denom,
+          open: true
+        })
+    end
+  end
+
   def handle_event(%Envelope{type: "PatronageRecorded", chapter_id: ch, payload: p}, state) do
     # The gate guarantees an active rule exists and the id is registered
     # (same guarantee the capital projection relies on).
