@@ -975,6 +975,7 @@ defmodule CoopSubstrate.Protocol.Validity do
         # disagrees with it is unrepresentable (10 P1/P5/P8).
         decision = Dispatch.decide(envelope, tender.parse)
         wanted = if type == "TenderAccepted", do: :accept, else: :decline
+        authorization = p["authorization_item_id"]
 
         cond do
           tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
@@ -982,6 +983,14 @@ defmodule CoopSubstrate.Protocol.Validity do
 
           tender.decided != nil ->
             {:error, {:tender_already_decided, tender.decided}}
+
+          authorization != nil and not match?({:escalate, _}, decision) ->
+            # 9B: the authorized path exists only where the pure function
+            # ends — a decidable tender never wears an authorization.
+            {:error, :authorization_not_needed}
+
+          authorization != nil ->
+            check_tender_authorization(gate, ch, p, authorization)
 
           match?({:escalate, _}, decision) ->
             {:escalate, reason} = decision
@@ -996,6 +1005,37 @@ defmodule CoopSubstrate.Protocol.Validity do
           true ->
             :ok
         end
+    end
+  end
+
+  # 9B (docs/phase9b_plan.md): consumption of the 5A contract — an approved
+  # `tender/<id>` R item authorizes one decision event, marked as
+  # human-authorized (envelope_version 0, basis "r/<item>") so replay
+  # distinguishes it from a machine decision forever.
+  defp check_tender_authorization(gate, ch, p, item_id) do
+    item = gate.escalations[{ch, item_id}]
+
+    cond do
+      item_id != "tender/" <> p["tender_id"] ->
+        {:error, {:authorization_subject_mismatch, item_id}}
+
+      item == nil ->
+        {:error, {:unknown_item, item_id}}
+
+      item.open ->
+        {:error, {:item_unresolved, item_id}}
+
+      item.verdict != "approved" ->
+        {:error, {:not_authorized, item.verdict}}
+
+      item.process != "tender_accept" ->
+        {:error, {:authorization_process_mismatch, item.process}}
+
+      {p["envelope_version"], p["basis"]} != {0, "r/" <> item_id} ->
+        {:error, :authorized_decision_marking_mismatch}
+
+      true ->
+        :ok
     end
   end
 

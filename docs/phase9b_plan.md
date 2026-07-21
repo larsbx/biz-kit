@@ -1,13 +1,16 @@
 # Phase 9B — R-approval consumption: the tender rail consumes its escalations
 
-> **Status: PLANNED** (2026-07-21). Scope is the 8A plan's stated next
-> slice: "Post-approval consumption of a tender escalation (an approved R
-> item authorizing a manual accept) — the R-rail's consuming-domain
-> contract." The 5A brief defines the producing half ("Approval
-> AUTHORIZES — consuming domains append their own consequent events
-> referencing the resolution; nothing executes here"); nothing consumes
-> it today. Not blocked by `gate(D)`; no new event types; sim-arc rules
-> unchanged (real machinery, untouched gate).
+> **Status: COMPLETE** (2026-07-21). Scope was the 8A plan's stated next
+> slice: consumption of the 5A R-approval contract on the tender rail.
+> Acceptance **[9B]** passes: an approved `tender/<id>` resolution makes
+> exactly one authorized decision representable, marked
+> `envelope_version: 0` / `basis: "r/<item>"`, with wrong markings,
+> subjects, unresolved items, and declined verdicts all rejected (1);
+> unauthorized escalate-route decisions stay unrepresentable exactly as
+> in 8A (2); a decidable tender never wears an authorization (3); the
+> consumed decision closes the tender and dispatches downstream normally,
+> chains verifying (4). No new event types; no new queries. Full suite
+> green (233 tests + 8 properties + 1 doctest).
 
 ## Grounding
 

@@ -732,7 +732,9 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
           "envelope_version" => :int,
           "basis" => :string
         },
-        optional: %{}
+        # 9B: an approved R item authorizing this decision (consumption of
+        # the 5A contract; docs/phase9b_plan.md).
+        optional: %{"authorization_item_id" => :string}
       }
     },
     "TenderDeclined" => %{
@@ -747,7 +749,9 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
           "envelope_version" => :int,
           "basis" => :string
         },
-        optional: %{}
+        # 9B: an approved R item authorizing this decision (consumption of
+        # the 5A contract; docs/phase9b_plan.md).
+        optional: %{"authorization_item_id" => :string}
       }
     },
 
