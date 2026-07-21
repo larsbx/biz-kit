@@ -346,8 +346,11 @@ Captured now so the data model never forecloses them; enforcement workflows are 
   a bare aggregate. Still open here: per-counterparty *throughput* caps (await the absent
   throughput_and_floor spec and, for publication, an 08 §6 ladder decision) and any
   enforcement consequence of a nonzero ring count (R/governance).
-- **Floor enforcement** (1C → 1D): evaluation cadence; requiring `evaluation_ref` on
-  `MembershipFloorExited`; cure-window duration (undeclared charter constant).
+- **Floor enforcement** — *resolved in 10A* (§13.1): floor transitions are evidenced by
+  gate-checked evaluation references and the exit is bounded by the declared
+  `floor/cure_window_ms` (fails closed undeclared). Still open here: evaluation cadence
+  (operational) and gate-recomputed evaluation content (awaits the throughput_and_floor
+  spec).
 - **n = 1 aggregates** (1C, §13.7): single-contributor totals equal the contribution; the
   k-anonymity gate is the declared upgrade when publication features arrive (08 §6).
 - **Query authn** (1C → later): own-data classification is a contract, not yet middleware;
@@ -545,6 +548,17 @@ evaluation** (`floor_suspended?/1`) — enforced symmetrically at the gate
 (`FloorEvaluationRecorded` rejected) and in the query (`Floor.cleared?` returns the same
 error). `in_cure`/`hardship` remain active-for-accrual — PLACEHOLDER governance semantics,
 like probationary in 1B.
+
+**Enforcement arrived in 10A** (docs/phase10a_plan.md): evaluations carry an
+`evaluation_id` and their instant `at_ms`, and every floor transition is **evidenced** —
+`FloorCureStarted` cites a failing evaluation (its `at_ms` anchors the cure),
+`FloorCureCleared` a passing one after the anchor, and `MembershipFloorExited` a failing
+one at or beyond `anchor + floor/cure_window_ms` — arithmetic over signed instants, no
+clock anywhere. The exit **fails closed** while the constant is undeclared
+(member-protective, deliberately not bootstrap-then-enforce), which also closes the direct
+`member → floor_exited` path at the gate: nobody exits without being given the cure
+window. Evaluation *content* (`value`/`cleared`) stays a steward attestation auditable by
+replay — gate recomputation awaits the throughput_and_floor spec.
 
 ### 13.2 Throughput — the compute layer
 

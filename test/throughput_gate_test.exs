@@ -56,11 +56,13 @@ defmodule CoopSubstrate.ThroughputGateTest do
   defp evaluation(attrs \\ []) do
     Map.merge(
       %{
+        "evaluation_id" => "EV-" <> Integer.to_string(System.unique_integer([:positive])),
         "member_id" => @member,
         "entity_id" => @entity,
         "cleared" => true,
         "rule_id" => "floor-threshold-v1",
         "window_ms" => 604_800_000,
+        "at_ms" => 1_752_000_000_000,
         "value" => 12_000
       },
       Map.new(attrs, fn {k, v} -> {to_string(k), v} end)

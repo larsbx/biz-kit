@@ -53,6 +53,11 @@ defmodule CoopSubstrate.Projections.Membership do
       # the version its invoice cites) and the invoicing trail.
       rate_terms: %{},
       invoices: %{},
+      # Phase 10A: floor evaluations by evaluation_id (what transitions
+      # cite) and the cure anchor — the failing evaluation's at_ms that
+      # started the member's current cure.
+      floor_evaluations: %{},
+      floor_cures: %{},
       # Phase 2A — harness state (docs/phase2a_plan.md). Folds never delete:
       # consent revocation flips `active` and every count below EXCLUDES
       # inactive sources at computation time (11 P5, atomic exclusion).
@@ -317,18 +322,15 @@ defmodule CoopSubstrate.Projections.Membership do
     end)
   end
 
-  defp update_stop(state, ch, p, fun) do
-    update_in(state, [:loads, Access.key({ch, p["load_id"]}), :stops], fn stops ->
-      Map.update(stops, p["stop"], fun.(%{}), fun)
-    end)
-  end
-
   # -- Phase 8C: invoice, detention, dunning ------------------------------------
 
   def handle_event(%Envelope{type: "RateTermsDeclared", chapter_id: ch, payload: p}, state) do
     update_in(
       state,
-      [:rate_terms, Access.key({ch, p["member_id"], p["entity_id"]}, %{current: 0, versions: %{}})],
+      [
+        :rate_terms,
+        Access.key({ch, p["member_id"], p["entity_id"]}, %{current: 0, versions: %{}})
+      ],
       fn terms ->
         %{current: p["version"], versions: Map.put(terms.versions, p["version"], p["params"])}
       end
@@ -427,7 +429,10 @@ defmodule CoopSubstrate.Projections.Membership do
     put_in(state, [:corroborations, Access.key({ch, p["claim_ref"]})], p["finding_refs"])
   end
 
-  def handle_event(%Envelope{type: "InstrumentVersionPublished", chapter_id: ch, payload: p}, state) do
+  def handle_event(
+        %Envelope{type: "InstrumentVersionPublished", chapter_id: ch, payload: p},
+        state
+      ) do
     put_in(state, [:instrument_versions, Access.key({ch, p["section"]})], p["version"])
   end
 
@@ -449,7 +454,10 @@ defmodule CoopSubstrate.Projections.Membership do
     put_in(state, [:charter_constants, Access.key({ch, p["name"]})], p["value"])
   end
 
-  def handle_event(%Envelope{type: "MachineExtractionRecorded", chapter_id: ch, payload: p}, state) do
+  def handle_event(
+        %Envelope{type: "MachineExtractionRecorded", chapter_id: ch, payload: p},
+        state
+      ) do
     put_in(state, [:extractions, Access.key({ch, p["proposal_id"]})], %{
       interview_ref: p["interview_ref"]
     })
@@ -507,12 +515,46 @@ defmodule CoopSubstrate.Projections.Membership do
     })
   end
 
+  # -- Phase 10A: evidenced floor transitions -----------------------------------
+
+  def handle_event(%Envelope{type: "FloorEvaluationRecorded", chapter_id: ch, payload: p}, state) do
+    put_in(state, [:floor_evaluations, Access.key({ch, p["evaluation_id"]})], %{
+      member_id: p["member_id"],
+      entity_id: p["entity_id"],
+      cleared: p["cleared"],
+      at_ms: p["at_ms"]
+    })
+  end
+
+  def handle_event(%Envelope{type: "FloorCureStarted", chapter_id: ch, payload: p} = env, state) do
+    # The gate guarantees the cited evaluation exists, matches, and fails.
+    %{at_ms: at_ms} = state.floor_evaluations[{ch, p["evaluation_ref"]}]
+
+    state
+    |> put_in([:floor_cures, Access.key({ch, p["member_id"], p["entity_id"]})], at_ms)
+    |> apply_lifecycle(ch, p, env)
+  end
+
+  def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state)
+      when type in ["FloorCureCleared", "MembershipFloorExited"] do
+    # Leaving in_cure clears the anchor; a later cure round starts fresh.
+    state
+    |> update_in([:floor_cures], &Map.delete(&1, {ch, p["member_id"], p["entity_id"]}))
+    |> apply_lifecycle(ch, p, env)
+  end
+
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = env, state) do
     if Lifecycle.lifecycle_event?(type) do
       apply_lifecycle(state, ch, p, env)
     else
       state
     end
+  end
+
+  defp update_stop(state, ch, p, fun) do
+    update_in(state, [:loads, Access.key({ch, p["load_id"]}), :stops], fn stops ->
+      Map.update(stops, p["stop"], fun.(%{}), fun)
+    end)
   end
 
   defp apply_lifecycle(state, ch, p, %Envelope{type: type} = _env) do

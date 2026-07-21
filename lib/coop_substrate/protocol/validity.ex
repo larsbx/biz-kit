@@ -44,9 +44,14 @@ defmodule CoopSubstrate.Protocol.Validity do
       the code registry, params valid.
     * `ThroughputRecorded` (1C) — active membership; component in the closed
       set; positive units and occurred_ms; an active throughput rule.
-    * `FloorEvaluationRecorded` (1C) — membership exists, not in hardship
-      (hardship suspends the floor); rule_id is the chapter's active floor
-      rule; sane window/value.
+    * `FloorEvaluationRecorded` (1C, tightened 10A) — membership exists, not
+      in hardship (hardship suspends the floor); rule_id is the chapter's
+      active floor rule; evaluation_id unique; sane window/instant/value.
+    * Floor transitions (10A) — lifecycle legality first, then evidence:
+      cure starts on a failing evaluation (its at_ms anchors the cure),
+      clears on a passing one after the anchor, and `MembershipFloorExited`
+      needs a failing evaluation at or beyond the declared
+      `floor/cure_window_ms` (fails closed undeclared).
     * Obligation rail (1C, corpus 05 §1.2) — parties registered and distinct,
       signing with their *current* keys; obligation ids unique; assignment
       and discharge only on open obligations; discharge-once. No event
@@ -726,14 +731,31 @@ defmodule CoopSubstrate.Protocol.Validity do
       p["rule_id"] != active.rule_id ->
         {:error, {:not_the_active_floor_rule, p["rule_id"]}}
 
+      Map.has_key?(gate.floor_evaluations, {ch, p["evaluation_id"]}) ->
+        {:error, {:evaluation_already_recorded, p["evaluation_id"]}}
+
       p["window_ms"] <= 0 ->
         {:error, :bad_window}
+
+      p["at_ms"] <= 0 ->
+        {:error, :bad_event_time}
 
       p["value"] < 0 ->
         {:error, :bad_value}
 
       true ->
         :ok
+    end
+  end
+
+  # -- Phase 10A: evidenced floor transitions (docs/phase10a_plan.md) ----------
+
+  defp type_check(%Envelope{type: type, chapter_id: ch, payload: p} = env, gate)
+       when type in ["FloorCureStarted", "FloorCureCleared", "MembershipFloorExited"] do
+    # Lifecycle legality first (illegal transitions keep their 1B errors),
+    # then the evidence.
+    with :ok <- check_lifecycle(env, gate) do
+      check_floor_evidence(type, gate, ch, p)
     end
   end
 
@@ -1008,39 +1030,6 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
-  # 9B (docs/phase9b_plan.md): consumption of the 5A contract — an approved
-  # `tender/<id>` R item authorizes one decision event, marked as
-  # human-authorized (envelope_version 0, basis "r/<item>") so replay
-  # distinguishes it from a machine decision forever.
-  defp check_tender_authorization(gate, ch, p, item_id) do
-    item = gate.escalations[{ch, item_id}]
-
-    cond do
-      item_id != "tender/" <> p["tender_id"] ->
-        {:error, {:authorization_subject_mismatch, item_id}}
-
-      item == nil ->
-        {:error, {:unknown_item, item_id}}
-
-      item.open ->
-        {:error, {:item_unresolved, item_id}}
-
-      item.verdict != "approved" ->
-        {:error, {:not_authorized, item.verdict}}
-
-      item.process != "tender_accept" ->
-        {:error, {:authorization_process_mismatch, item.process}}
-
-      {p["envelope_version"], p["basis"]} != {0, "r/" <> item_id} ->
-        {:error, :authorized_decision_marking_mismatch}
-
-      true ->
-        :ok
-    end
-  end
-
-  # -- Phase 8B: dispatch + tracking (docs/phase8b_plan.md) --------------------
-
   defp type_check(%Envelope{type: "LoadDispatched", chapter_id: ch, payload: p}, gate) do
     case gate.tenders[{ch, p["tender_id"]}] do
       nil ->
@@ -1228,6 +1217,39 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # 9B (docs/phase9b_plan.md): consumption of the 5A contract — an approved
+  # `tender/<id>` R item authorizes one decision event, marked as
+  # human-authorized (envelope_version 0, basis "r/<item>") so replay
+  # distinguishes it from a machine decision forever.
+  defp check_tender_authorization(gate, ch, p, item_id) do
+    item = gate.escalations[{ch, item_id}]
+
+    cond do
+      item_id != "tender/" <> p["tender_id"] ->
+        {:error, {:authorization_subject_mismatch, item_id}}
+
+      item == nil ->
+        {:error, {:unknown_item, item_id}}
+
+      item.open ->
+        {:error, {:item_unresolved, item_id}}
+
+      item.verdict != "approved" ->
+        {:error, {:not_authorized, item.verdict}}
+
+      item.process != "tender_accept" ->
+        {:error, {:authorization_process_mismatch, item.process}}
+
+      {p["envelope_version"], p["basis"]} != {0, "r/" <> item_id} ->
+        {:error, :authorized_decision_marking_mismatch}
+
+      true ->
+        :ok
+    end
+  end
+
+  # -- Phase 8B: dispatch + tracking (docs/phase8b_plan.md) --------------------
+
   defp fetch_dunning_ladder(gate, ch, p) do
     case gate.invoices[{ch, p["invoice_id"]}] do
       nil ->
@@ -1262,6 +1284,57 @@ defmodule CoopSubstrate.Protocol.Validity do
   end
 
   defp check_rate_terms_params(_params), do: {:error, :malformed_terms_params}
+
+  # 10A: floor transitions are evidenced, not asserted. The cited evaluation
+  # must exist in the gate's own fold and match the subject; cure starts on
+  # a failing evaluation, clears on a passing one after the cure anchor, and
+  # the exit needs a failing evaluation at or beyond the declared window's
+  # end — arithmetic over signed at_ms values, no clock anywhere. The exit
+  # fails closed while `floor/cure_window_ms` is undeclared
+  # (member-protective, deliberately NOT bootstrap-then-enforce).
+  defp check_floor_evidence(type, gate, ch, p) do
+    evaluation = gate.floor_evaluations[{ch, p["evaluation_ref"]}]
+    cure_from = gate.floor_cures[{ch, p["member_id"], p["entity_id"]}]
+    window = gate.charter_constants[{ch, "floor/cure_window_ms"}]
+
+    cond do
+      evaluation == nil ->
+        {:error, {:unknown_evaluation, p["evaluation_ref"]}}
+
+      evaluation.member_id != p["member_id"] or evaluation.entity_id != p["entity_id"] ->
+        {:error, :evaluation_subject_mismatch}
+
+      type == "FloorCureStarted" ->
+        if evaluation.cleared, do: {:error, :evaluation_not_failing}, else: :ok
+
+      cure_from == nil ->
+        # Unreachable past the lifecycle check (both remaining types are
+        # legal only from in_cure, which always has an anchor); kept total.
+        {:error, :no_cure_anchor}
+
+      type == "FloorCureCleared" ->
+        cond do
+          not evaluation.cleared -> {:error, :evaluation_not_passing}
+          evaluation.at_ms <= cure_from -> {:error, :evaluation_precedes_cure}
+          true -> :ok
+        end
+
+      type == "MembershipFloorExited" ->
+        cond do
+          evaluation.cleared ->
+            {:error, :evaluation_not_failing}
+
+          not (is_integer(window) and window > 0) ->
+            {:error, :cure_window_undeclared}
+
+          evaluation.at_ms < cure_from + window ->
+            {:error, {:cure_window_not_elapsed, cure_from + window}}
+
+          true ->
+            :ok
+        end
+    end
+  end
 
   # 9A: the residual fields travel all-or-nothing, exactly when the round
   # leaves a net, and must equal the recomputed net.

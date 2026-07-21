@@ -91,11 +91,13 @@ defmodule CoopSubstrate.Phase1cTypesTest do
 
     assert {:error, {:payload_invalid, {:bad_field, "cleared"}}} =
              TypeRegistry.validate_payload("FloorEvaluationRecorded", %{
+               "evaluation_id" => "EV-1",
                "member_id" => "M-ada",
                "entity_id" => "E-carrier-1",
                "cleared" => "yes",
                "rule_id" => "floor-threshold-v1",
                "window_ms" => 1_000,
+               "at_ms" => 1_700_000_000_000,
                "value" => 5
              })
 

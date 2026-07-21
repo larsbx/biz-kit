@@ -209,7 +209,8 @@ defmodule CoopSubstrate.CapitalAccountsTest do
     exits = [
       {"M-dep", :invited, "MembershipDeparted", :member_signed, %{}, :redeemable},
       {"M-ret", :member, "MembershipRetired", :member_signed, %{}, :redeemable},
-      {"M-floor", :member, "MembershipFloorExited", :steward_signed, %{}, :redeemable},
+      {"M-floor", :member, "MembershipFloorExited", :steward_signed,
+       %{"evaluation_ref" => "EV-floor-2"}, :redeemable},
       {"M-dec", :member, "MembershipDeceased", :steward_signed, %{"estate_ref" => "estate-9"},
        :estate}
     ]
@@ -224,6 +225,60 @@ defmodule CoopSubstrate.CapitalAccountsTest do
 
       if from == :member do
         patronage!(ctx.steward, "delivery", 100, member_id: member_id)
+      end
+
+      if exit_type == "MembershipFloorExited" do
+        # 10A: the floor exit is evidenced and routes through the cure
+        # window — failing evaluation, cure, failing evaluation at the
+        # window's end.
+        t0 = 1_752_000_000_000
+        week = 604_800_000
+        author = new_member("author")
+
+        {:ok, _} =
+          Log.append(
+            signed_event(ctx.steward, "FloorRuleActivated", %{
+              "rule_id" => "floor-threshold-v1",
+              "params" => %{"window_ms" => week, "default_threshold_minor" => 100}
+            })
+          )
+
+        {:ok, _} =
+          Log.append(
+            signed_event(author, "CharterConstantDeclared", %{
+              "name" => "floor/cure_window_ms",
+              "value" => week
+            })
+          )
+
+        evaluate = fn id, at_ms ->
+          {:ok, _} =
+            Log.append(
+              signed_event(ctx.steward, "FloorEvaluationRecorded", %{
+                "evaluation_id" => id,
+                "member_id" => member_id,
+                "entity_id" => @entity,
+                "cleared" => false,
+                "rule_id" => "floor-threshold-v1",
+                "window_ms" => week,
+                "at_ms" => at_ms,
+                "value" => 0
+              })
+            )
+        end
+
+        evaluate.("EV-floor-1", t0)
+
+        {:ok, _} =
+          Log.append(
+            signed_event(ctx.steward, "FloorCureStarted", %{
+              "member_id" => member_id,
+              "entity_id" => @entity,
+              "evaluation_ref" => "EV-floor-1"
+            })
+          )
+
+        evaluate.("EV-floor-2", t0 + week)
       end
 
       payload = Map.merge(%{"member_id" => member_id, "entity_id" => @entity}, extra)

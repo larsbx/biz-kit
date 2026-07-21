@@ -1,12 +1,21 @@
 # Phase 10A — Floor enforcement: evidenced transitions and the cure window
 
-> **Status: PLANNED** (2026-07-21). Scope is the SUBSTRATE.md §8 item
-> carried since 1C ("Floor enforcement (1C → 1D): evaluation cadence;
-> requiring `evaluation_ref` on `MembershipFloorExited`; cure-window
-> duration (undeclared charter constant)") — the oldest remaining
-> stated-but-unbuilt mechanism. Not blocked by `gate(D)`; no crypto; no
-> governance decision (the cure-window *value* stays a charter
-> declaration; this phase only makes the mechanism demand it).
+> **Status: COMPLETE** (2026-07-21). Scope was the SUBSTRATE.md §8 item
+> carried since 1C. Acceptance **[10A]** passes: cure starts only on the
+> member's own failing evaluation, ids one-shot (1); the exit fails
+> closed without `floor/cure_window_ms` and opens only citing a failing
+> evaluation at or beyond the window, closing the direct
+> member→floor_exited path (2); recovery needs a passing evaluation
+> after the cure anchor and later rounds anchor fresh (3); hardship
+> symmetry regression-pinned (4); no new queries, suite green at 237
+> tests + 8 properties + 1 doctest (5). One flagged deviation from the
+> build sketch: evaluations are keyed and cited by a new required
+> `evaluation_id`, NOT by event hash — the gate fold must stay valid
+> over unassigned envelopes (its documented invariant; `event_hash`
+> covers log-assigned chain fields), and every gate-resolved reference
+> in the system is a payload id. The clause-grouping compiler warnings
+> in the projection and validity modules were regrouped away (no
+> behavior change), per step 6.
 
 ## Grounding
 

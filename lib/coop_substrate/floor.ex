@@ -9,9 +9,10 @@ defmodule CoopSubstrate.Floor do
   any member can reproduce their own floor verdict from events alone
   (docs/phase1c_plan.md P1). The evaluation instant `at:` is caller-supplied;
   nothing here reads a clock. Hardship suspends evaluation (same rule the
-  append gate enforces on `FloorEvaluationRecorded`). Enforcement — cure
-  cadence, requiring an evaluation on `MembershipFloorExited` — is deferred
-  workflow (plan: 1D-shaped), not this query's job.
+  append gate enforces on `FloorEvaluationRecorded`). Enforcement lives at
+  the gate since 10A (docs/phase10a_plan.md): floor transitions cite
+  evaluations by id and the exit is bounded by the declared cure window —
+  this query stays the pure verdict a recorded evaluation attests.
   """
 
   alias CoopSubstrate.Floor.Rules

@@ -137,14 +137,19 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
       payload: @membership_payload
     },
     "MembershipFloorExited" => %{
-      # 1C computes the floor; representable now. evaluation_ref will point at
-      # the floor-evaluation event once that exists.
+      # 10A: the exit is evidenced — evaluation_ref cites the failing
+      # FloorEvaluationRecorded (by evaluation_id) at or beyond the cure
+      # window's end; checked at the gate (docs/phase10a_plan.md).
       required_roles: ["steward"],
       disclosure_class: :commons,
       stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
       payload: %{
-        required: %{"member_id" => :string, "entity_id" => :string},
-        optional: %{"evaluation_ref" => :hash}
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "evaluation_ref" => :string
+        },
+        optional: %{}
       }
     },
     "MembershipDeceased" => %{
@@ -228,21 +233,31 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
     # -- Phase 1C: floor lifecycle (transitions in Membership.Lifecycle,
     # enforced at the gate like every lifecycle event) -------------------------
     "FloorCureStarted" => %{
+      # 10A: a failing evaluation starts the cure (gate-checked by evaluation_id).
       required_roles: ["steward"],
       disclosure_class: :commons,
       stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
       payload: %{
-        required: %{"member_id" => :string, "entity_id" => :string},
-        optional: %{"evaluation_ref" => :hash}
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "evaluation_ref" => :string
+        },
+        optional: %{}
       }
     },
     "FloorCureCleared" => %{
+      # 10A: a passing evaluation after the cure anchor clears it (gate-checked by evaluation_id).
       required_roles: ["steward"],
       disclosure_class: :commons,
       stream: {:payload_fields, "memberships", ["member_id", "entity_id"]},
       payload: %{
-        required: %{"member_id" => :string, "entity_id" => :string},
-        optional: %{"evaluation_ref" => :hash}
+        required: %{
+          "member_id" => :string,
+          "entity_id" => :string,
+          "evaluation_ref" => :string
+        },
+        optional: %{}
       }
     },
     "HardshipDeclared" => %{
@@ -300,12 +315,18 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
       disclosure_class: :telemetry,
       stream: {:payload_fields, "floor", ["member_id", "entity_id"]},
       payload: %{
+        # 10A: evaluation_id is what floor transitions cite (gate-resolved
+        # references are ids, never event hashes); at_ms is the evaluation
+        # instant — the caller-supplied `at:` the verdict is about, and the
+        # anchor every cure-window computation uses.
         required: %{
+          "evaluation_id" => :string,
           "member_id" => :string,
           "entity_id" => :string,
           "cleared" => :bool,
           "rule_id" => :string,
           "window_ms" => :int,
+          "at_ms" => :int,
           "value" => :int
         },
         optional: %{}

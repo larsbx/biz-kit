@@ -45,6 +45,51 @@ defmodule CoopSubstrate.MembershipGateTest do
 
   defp membership_payload, do: %{"member_id" => @member, "entity_id" => @entity}
 
+  # -- Phase 10A floor-evidence helpers ---------------------------------------
+
+  @t0 1_752_000_000_000
+  @week 604_800_000
+
+  defp floor_rule!(steward) do
+    {:ok, _} =
+      Log.append(
+        signed_event(steward, "FloorRuleActivated", %{
+          "rule_id" => "floor-threshold-v1",
+          "params" => %{"window_ms" => @week, "default_threshold_minor" => 100}
+        })
+      )
+  end
+
+  defp cure_window!(window_ms \\ @week) do
+    author = new_member("author")
+
+    {:ok, _} =
+      Log.append(
+        signed_event(author, "CharterConstantDeclared", %{
+          "name" => "floor/cure_window_ms",
+          "value" => window_ms
+        })
+      )
+  end
+
+  defp evaluate!(steward, id, cleared, at_ms) do
+    {:ok, _} =
+      Log.append(
+        signed_event(steward, "FloorEvaluationRecorded", %{
+          "evaluation_id" => id,
+          "member_id" => @member,
+          "entity_id" => @entity,
+          "cleared" => cleared,
+          "rule_id" => "floor-threshold-v1",
+          "window_ms" => @week,
+          "at_ms" => at_ms,
+          "value" => if(cleared, do: 200, else: 0)
+        })
+      )
+  end
+
+  defp evidenced(ref), do: Map.put(membership_payload(), "evaluation_ref", ref)
+
   defp invite(steward, attrs \\ []) do
     signed_event(
       steward,
@@ -371,17 +416,26 @@ defmodule CoopSubstrate.MembershipGateTest do
 
   test "cure round-trip: member → in_cure → member, and in_cure → floor_exited", ctx do
     :ok = seed_membership!(ctx.steward, ctx.member, @member, @entity)
+    floor_rule!(ctx.steward)
+    cure_window!()
 
-    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", membership_payload()))
+    # 10A: transitions are evidenced — cure starts on a failing evaluation.
+    evaluate!(ctx.steward, "EV-1", false, @t0)
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", evidenced("EV-1")))
     assert %{state: :in_cure} = membership_state()
 
-    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureCleared", membership_payload()))
+    evaluate!(ctx.steward, "EV-2", true, @t0 + 1_000)
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureCleared", evidenced("EV-2")))
     assert %{state: :member} = membership_state()
 
-    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", membership_payload()))
+    evaluate!(ctx.steward, "EV-3", false, @t0 + 2_000)
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", evidenced("EV-3")))
+
+    # The exit needs a failing evaluation at or beyond the window's end.
+    evaluate!(ctx.steward, "EV-4", false, @t0 + 2_000 + @week)
 
     {:ok, _} =
-      Log.append(signed_event(ctx.steward, "MembershipFloorExited", membership_payload()))
+      Log.append(signed_event(ctx.steward, "MembershipFloorExited", evidenced("EV-4")))
 
     assert %{state: :floor_exited} = membership_state()
     assert :ok = Log.verify_chains()
@@ -394,13 +448,13 @@ defmodule CoopSubstrate.MembershipGateTest do
     assert %{state: :hardship} = membership_state()
 
     assert_rejected_without_persisting(
-      signed_event(ctx.steward, "FloorCureStarted", membership_payload()),
+      signed_event(ctx.steward, "FloorCureStarted", evidenced("EV-x")),
       {:illegal_transition, "FloorCureStarted", :hardship}
     )
 
     # Floor exit from hardship is illegal too (hardship suspends the floor).
     assert_rejected_without_persisting(
-      signed_event(ctx.steward, "MembershipFloorExited", membership_payload()),
+      signed_event(ctx.steward, "MembershipFloorExited", evidenced("EV-x")),
       {:illegal_transition, "MembershipFloorExited", :hardship}
     )
 
@@ -421,8 +475,10 @@ defmodule CoopSubstrate.MembershipGateTest do
 
   test "departure and death remain reachable from cure and hardship", ctx do
     :ok = seed_membership!(ctx.steward, ctx.member, @member, @entity)
+    floor_rule!(ctx.steward)
 
-    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", membership_payload()))
+    evaluate!(ctx.steward, "EV-1", false, @t0)
+    {:ok, _} = Log.append(signed_event(ctx.steward, "FloorCureStarted", evidenced("EV-1")))
     {:ok, _} = Log.append(signed_event(ctx.member, "MembershipDeparted", membership_payload()))
     assert %{state: :departed} = membership_state()
   end
