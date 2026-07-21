@@ -326,8 +326,13 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Genesis trust** (1D, §15.2): the first governance key per chapter is trust-on-first-use.
   Operational mitigation (publish the genesis checkpoint out-of-band) is doctrine, not
   mechanism.
-- **Governance-recovery rotation** (1D → later): a member's lost key currently means a lost
-  identity; social recovery / governance-signed rotation variants are open (08 §10.3).
+- **Governance-recovery rotation** — *resolved in 10B* (docs/phase10b_plan.md): a lost key
+  is recoverable via `KeyRecoveryRotated` — an approved, consumable-once `key_recovery` R
+  item (identity evidence on the log), a governance signature the declared registry
+  validates (unrepresentable in genesis-trust chapters), and the new key certifying its own
+  possession; the lost key is never consulted. Still open: social recovery (guardian
+  thresholds — 08 §6 gated on demonstrated failure of this rung) and a challenge/delay
+  window (needs a time authority; own-stream visibility + R review is v0).
 - **Unsigned-proof policy** (1D, §15.5): whether verifiers demand signed proofs once a
   chapter has checkpoint keys is verifier policy — revisit when the first external verifier
   exists.

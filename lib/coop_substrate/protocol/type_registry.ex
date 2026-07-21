@@ -961,6 +961,26 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
           "net_minor" => :int
         }
       }
+    },
+
+    # -- Phase 10B: governance recovery rotation (docs/phase10b_plan.md;
+    # SUBSTRATE §8 / 08 §10.3). A lost key is not a lost identity: an
+    # approved R item (identity evidence), a governance signature against
+    # the declared registry, and the NEW key certifying its own possession —
+    # no single actor can rotate someone's identity. -----------------------
+    "KeyRecoveryRotated" => %{
+      required_roles: ["member", "governance"],
+      disclosure_class: :commons,
+      stream: {:payload_field, "keys", "member_id"},
+      payload: %{
+        required: %{
+          "member_id" => :string,
+          "new_key_id" => :string,
+          "new_pubkey" => :pubkey,
+          "authorization_item_id" => :string
+        },
+        optional: %{}
+      }
     }
   }
 

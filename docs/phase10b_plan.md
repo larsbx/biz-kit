@@ -1,14 +1,20 @@
 # Phase 10B — Governance recovery rotation: a lost key is not a lost identity
 
-> **Status: PLANNED** (2026-07-21). Scope is the SUBSTRATE.md §8 item
-> flagged since 1D: "a member's lost key currently means a lost identity;
-> social recovery / governance-signed rotation variants are open
-> (08 §10.3)." This phase builds the **governance-signed variant** as v0
-> mechanism and defers social recovery. Not blocked by `gate(D)`; no new
-> cryptography (08 §6: social recovery would mean threshold/guardian
-> crypto with no demonstrated failure of the lighter rung — the lighter
-> rung here is signatures we already have plus review structure we
-> already built).
+> **Status: COMPLETE** (2026-07-21). Scope was the SUBSTRATE.md §8 item
+> flagged since 1D; the **governance-signed variant** is built, social
+> recovery deferred per 08 §6. Acceptance **[10B]** passes: the full path
+> lands and the lost key is immediately dead while the recovered key
+> signs and later self-rotates (1); every leg rejects independently —
+> undeclared governance, missing/unresolved/declined items, subject
+> mismatch, old-key stand-ins, undeclared governance signers, and
+> `new == current` (2); recovery repeats with fresh evidence but a
+> consumed item never re-authorizes (3); no query-surface change (4).
+> One hardening beyond the plan text, flagged: "consumable once by
+> construction" was insufficient — after a SECOND recovery, the first
+> approved item would have authorized rolling the member back to the
+> prior key on stale authority. The projection now marks the cited item
+> `consumed` and the gate rejects consumed items outright. Full suite
+> green (240 tests + 8 properties + 1 doctest).
 
 ## Grounding
 

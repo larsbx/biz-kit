@@ -538,6 +538,58 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # -- Phase 10B: governance recovery rotation (docs/phase10b_plan.md) ---------
+  # No single actor rotates an identity: an approved, unconsumed R item
+  # naming exactly this member and key; a governance signature the declared
+  # registry validates (check_role_keys — recovery is unrepresentable while
+  # governance is undeclared); and the new key certifying its own possession.
+  # The lost key is deliberately not consulted.
+  defp type_check(%Envelope{type: "KeyRecoveryRotated", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    {:bytes, new_pubkey} = p["new_pubkey"]
+    item_id = p["authorization_item_id"]
+    item = gate.escalations[{ch, item_id}]
+    governance = gate.role_keys[{ch, "governance"}]
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      governance == nil or map_size(governance) == 0 ->
+        {:error, :governance_undeclared}
+
+      p["new_key_id"] == member.key_id or new_pubkey == member.pubkey ->
+        {:error, :new_key_is_current}
+
+      item_id != "recovery/" <> p["member_id"] <> "/" <> p["new_key_id"] ->
+        {:error, {:authorization_subject_mismatch, item_id}}
+
+      item == nil ->
+        {:error, {:unknown_item, item_id}}
+
+      item.open ->
+        {:error, {:item_unresolved, item_id}}
+
+      item.verdict != "approved" ->
+        {:error, {:not_authorized, item.verdict}}
+
+      item.process != "key_recovery" ->
+        {:error, {:authorization_process_mismatch, item.process}}
+
+      Map.get(item, :consumed, false) ->
+        {:error, {:item_consumed, item_id}}
+
+      not Enum.any?(
+        env.signers,
+        &(&1.role == "member" and &1.pubkey == new_pubkey and &1.key_id == p["new_key_id"])
+      ) ->
+        {:error, :recovery_must_be_self_certified}
+
+      true ->
+        :ok
+    end
+  end
+
   defp type_check(%Envelope{type: "KeyRotated", chapter_id: ch, payload: p} = env, gate) do
     case gate.members[{ch, p["member_id"]}] do
       nil ->

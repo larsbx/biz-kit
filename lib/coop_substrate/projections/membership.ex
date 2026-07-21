@@ -115,6 +115,22 @@ defmodule CoopSubstrate.Projections.Membership do
     end
   end
 
+  def handle_event(%Envelope{type: "KeyRecoveryRotated", chapter_id: ch, payload: p}, state) do
+    # 10B: the member's current key changes (the KeyRotated shape) and the
+    # authorizing R item is consumed — an old approval can never authorize
+    # rolling the member back to a prior key.
+    {:bytes, pubkey} = p["new_pubkey"]
+
+    state
+    |> put_in([:members, Access.key({ch, p["member_id"]})], %{
+      pubkey: pubkey,
+      key_id: p["new_key_id"]
+    })
+    |> update_in([:escalations, Access.key({ch, p["authorization_item_id"]})], fn item ->
+      Map.put(item, :consumed, true)
+    end)
+  end
+
   def handle_event(%Envelope{type: "AccrualRuleActivated", chapter_id: ch, payload: p}, state) do
     put_in(state, [:active_rules, Access.key(ch)], %{
       rule_id: p["rule_id"],
