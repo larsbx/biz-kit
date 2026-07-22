@@ -32,6 +32,7 @@ defmodule CoopSubstrate.Log do
   alias CoopSubstrate.Crypto
   alias CoopSubstrate.Projections.Membership, as: Gate
   alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.Protocol.StreamRoot
   alias CoopSubstrate.Protocol.TypeRegistry
   alias CoopSubstrate.ULID
 
@@ -165,13 +166,19 @@ defmodule CoopSubstrate.Log do
         {:error, :empty_log}
 
       %{global_seq: seq, global_hash: hash} ->
+        # 12A: V2 adds the stream-heads root, so an exported bundle can
+        # prove completeness offline (docs/phase12a_plan.md). V1 blobs
+        # verify forever (the §1.3 spirit applied to the blob format).
+        {:ok, heads} = stream_heads(chapter_id, as_of: seq)
+
         {:ok, body} =
           Canonical.encode(%{
-            "schema" => "CheckpointV1",
+            "schema" => "CheckpointV2",
             "chapter_id" => chapter_id,
             "key_id" => key_id,
             "global_seq" => seq,
-            "global_hash" => {:bytes, hash}
+            "global_hash" => {:bytes, hash},
+            "stream_heads_root" => {:bytes, StreamRoot.root(heads)}
           })
 
         Canonical.encode(%{
@@ -179,6 +186,30 @@ defmodule CoopSubstrate.Log do
           "signature" => {:bytes, Crypto.sign(body, seed)}
         })
     end
+  end
+
+  @doc """
+  The chapter's per-stream last-event hashes as of `as_of:` (default: the
+  whole log) — the leaves the checkpoint's stream-heads root commits to
+  (12A). A pure fold over the ledger.
+  """
+  @spec stream_heads(String.t(), keyword()) :: {:ok, %{String.t() => binary()}} | {:error, term()}
+  def stream_heads(chapter_id, opts \\ []) do
+    limit = Keyword.get(opts, :as_of, :infinity)
+    prefix = chapter_id <> "/"
+
+    fold_ledger(
+      %{},
+      fn env, _bytes, heads ->
+        if String.starts_with?(env.stream_id, prefix) do
+          {:ok, hash} = Envelope.event_hash(env)
+          Map.put(heads, env.stream_id, hash)
+        else
+          heads
+        end
+      end,
+      limit
+    )
   end
 
   @doc """
@@ -206,6 +237,21 @@ defmodule CoopSubstrate.Log do
 
         not Crypto.verify(body, signature, declared) ->
           {:error, :bad_signature}
+
+        cp.stream_heads_root != nil ->
+          # V2 (12A): the stream-heads root must recompute from the ledger
+          # as of the attested position.
+          case stream_heads(cp.chapter_id, as_of: cp.global_seq) do
+            {:ok, heads} ->
+              if StreamRoot.root(heads) == cp.stream_heads_root do
+                :ok
+              else
+                {:error, :stream_root_mismatch}
+              end
+
+            {:error, _} = error ->
+              error
+          end
 
         true ->
           :ok
@@ -243,7 +289,33 @@ defmodule CoopSubstrate.Log do
          "global_hash" => {:bytes, hash}
        }}
       when is_integer(seq) and seq > 0 ->
-        {:ok, %{chapter_id: chapter_id, key_id: key_id, global_seq: seq, global_hash: hash}}
+        {:ok,
+         %{
+           chapter_id: chapter_id,
+           key_id: key_id,
+           global_seq: seq,
+           global_hash: hash,
+           stream_heads_root: nil
+         }}
+
+      {:ok,
+       %{
+         "schema" => "CheckpointV2",
+         "chapter_id" => chapter_id,
+         "key_id" => key_id,
+         "global_seq" => seq,
+         "global_hash" => {:bytes, hash},
+         "stream_heads_root" => {:bytes, root}
+       }}
+      when is_integer(seq) and seq > 0 ->
+        {:ok,
+         %{
+           chapter_id: chapter_id,
+           key_id: key_id,
+           global_seq: seq,
+           global_hash: hash,
+           stream_heads_root: root
+         }}
 
       {:ok, _other} ->
         {:error, :malformed_checkpoint}
@@ -263,9 +335,13 @@ defmodule CoopSubstrate.Log do
   def replay(projection, opts \\ []) when is_atom(projection) do
     limit = Keyword.get(opts, :as_of, :infinity)
 
-    fold_ledger(projection.init(), fn env, _bytes, state ->
-      projection.handle_event(env, state)
-    end, limit)
+    fold_ledger(
+      projection.init(),
+      fn env, _bytes, state ->
+        projection.handle_event(env, state)
+      end,
+      limit
+    )
   end
 
   @doc """

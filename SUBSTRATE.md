@@ -336,8 +336,12 @@ Captured now so the data model never forecloses them; enforcement workflows are 
 - **Unsigned-proof policy** (1D, §15.5): whether verifiers demand signed proofs once a
   chapter has checkpoint keys is verifier policy — revisit when the first external verifier
   exists.
-- **Stream-heads tree root** (1D, deferred): checkpoint covers the global head only;
-  per-stream roots await a partial-verification or sync consumer.
+- **Stream-heads tree root** — *resolved in 12A* (§15.4): the partial-verification consumer
+  turned out to be the 6B departure bundle. `CheckpointV2` carries a Merkle root over the
+  chapter's per-stream heads; `Export.anchor/2` + `verify_anchored/2` prove bundle
+  COMPLETENESS offline (prefix truncation was undetectable before). Still open: the sync/
+  replication consumer, in-band checkpoint-key derivation, and as-of anchored exports
+  (dispute-workflow trigger).
 - **Redemption enforcement** — *resolved in 7A* (§11.5): the gate bounds every payment by
   the remaining balance and the per-`year_index` annual cap. Still open here: sinking-fund
   overdraw gating (a liquidity-policy question — 04 §3 "declared liquidity gates"), and a
@@ -755,8 +759,17 @@ signature against the chapter's `checkpoint` keys **as of that position** — la
 never invalidates a historical attestation; a revoked key cannot attest any newer head.
 Publishing the blob outside the primary database (git, another host, a member's phone)
 commits the operator to the entire history — the 00 Art. VI detection mechanism. Emission
-does not consult the registry; verification decides trust. The stream-heads tree root is
-deferred (§8).
+does not consult the registry; verification decides trust.
+
+**12A** (docs/phase12a_plan.md): emission is now `CheckpointV2` — V1 plus
+`stream_heads_root`, a domain-separated SHA-256 Merkle root over the chapter's per-stream
+last-event hashes (`Log.stream_heads/2`, sorted leaves; a tree, not a list, so inclusion
+proofs leak sibling hashes only and never the roster). `verify_checkpoint/1` recomputes the
+root for V2 and verifies V1 blobs forever. `Export.anchor(bundle, blob)` attaches the
+checkpoint plus per-stream inclusion proofs at export time;
+`Export.verify_anchored(bundle, checkpoint_pubkey)` is fully offline and rejects a withheld
+stream tail — completing the §7 "verify offline forever" promise with completeness, not
+just consistency. The checkpoint pubkey travels out-of-band (the §15.2 doctrine).
 
 ### 15.5 Signed proofs (closes the §13.5 deviation)
 

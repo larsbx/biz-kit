@@ -1,15 +1,19 @@
 # Phase 12A — Anchored exports: stream-heads root on checkpoints
 
-> **Status: PLANNED** (2026-07-22). Scope is the SUBSTRATE.md §8 item
-> deferred in 1D — "checkpoint covers the global head only; per-stream
-> roots await a partial-verification or sync consumer" — whose
-> precondition the 6B departure bundle has since met: the bundle IS the
-> partial-verification consumer. Today a prefix-truncated stream still
-> verifies offline (chains and signatures hold on any prefix; withheld
-> tail events are undetectable), which quietly weakens the §7/§14
-> "verify offline forever" promise. Not blocked by `gate(D)`; no new
-> cryptographic primitive (a SHA-256 hash tree over data already hashed —
-> the chains themselves are hash chains; 08 §6 untriggered).
+> **Status: COMPLETE** (2026-07-22). Scope was the §8 stream-heads
+> deferral, whose consumer condition the 6B bundle had met. Acceptance
+> **[12A]** passes: the truncation gap is proven real (a tail-stripped
+> stream passes 6B `verify/1`) and closed (`verify_anchored/2` rejects it
+> with the exact stream) (1); the honest path verifies fully offline from
+> (bundle, checkpoint pubkey) alone, and a stream stripped of its proof
+> cannot ride silently (2); `CheckpointV2` round-trips with root
+> recomputation, hand-built V1 blobs still verify, V1 cannot anchor, and
+> stale anchors error rather than attest the wrong position (3); the
+> anchor names no stream beyond the member's own — proofs are bare
+> 32-byte sibling hashes, pinned including a no-"M-bob"-anywhere check
+> (4); classified own_data/system, suite green at 248 tests + 8
+> properties + 1 doctest (5). The HARNESS.md discovery rule now says
+> highest **numeric** phase id (lexical ordering broke at double digits).
 
 ## Grounding
 

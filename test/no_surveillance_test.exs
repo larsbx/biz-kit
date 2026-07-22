@@ -135,7 +135,12 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # The member-departure bundle (6B): the subject's own streams only.
       {:member_bundle, 2} => :own_data,
       # Pure offline verification over a caller-supplied bundle.
-      {:verify, 1} => :system
+      {:verify, 1} => :system,
+      # 12A: anchoring attaches proofs to the subject's own bundle
+      # (sibling hashes only — no other stream ids); anchored verification
+      # is pure over caller input.
+      {:anchor, 2} => :own_data,
+      {:verify_anchored, 2} => :system
     },
     Finance => %{
       {:netting, 2} => :bilateral,
