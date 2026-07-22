@@ -1,14 +1,19 @@
 # Phase 12B — Self-contained bundle trust: in-band checkpoint-key derivation
 
-> **Status: PLANNED** (2026-07-22). Scope is 12A's named follow-up:
-> `verify_anchored` currently needs the checkpoint public key delivered
-> out-of-band, so the departure bundle is not fully self-contained — the
-> member must safeguard a key file beside it. The chapter's `governance`
-> stream already carries the whole role-key history from genesis; bundled
-> and anchored, it lets the member derive the checkpoint key OFFLINE with
-> only the genesis fingerprint as trust root — the same TOFU root §15.2
-> already documents, recordable at join. Read-side only; no new event
-> types; not blocked by `gate(D)`; no new cryptography.
+> **Status: COMPLETE** (2026-07-22). Scope was 12A's named follow-up.
+> Acceptance **[12B]** passes: a bundle verifies with NO key material —
+> the governance stream rides every bundle, the checkpoint key derives
+> offline, and the result states its genesis trust root; pinning the
+> fingerprint works and a wrong pin dies `:genesis_mismatch` (1);
+> derivation replays the 1D rules as-of the checkpoint position — an old
+> anchor survives its key's later revocation, a rotation carries new
+> anchors, and a checkpoint signed by a revoked key derives to
+> not-declared without consulting the operator's gate (2); a governance
+> history truncated to hide a revocation fails its own anchor proof (3);
+> the 12A `checkpoint_pubkey:` path is unchanged and governance-less
+> bundles fail derivation distinctly rather than degrading (4);
+> classifications hold, suite green at 252 tests + 8 properties + 1
+> doctest (5).
 
 ## Grounding
 

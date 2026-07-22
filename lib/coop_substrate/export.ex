@@ -21,8 +21,11 @@ defmodule CoopSubstrate.Export do
   alias CoopSubstrate.Protocol.TypeRegistry
 
   # Chapter-scoped commons streams a member needs to re-derive their own
-  # balances/values/floor verdicts from the bundle alone (SUBSTRATE.md §7).
-  @rule_streams ~w(accrual_rules throughput_rules floor_rules)
+  # balances/values/floor verdicts from the bundle alone (SUBSTRATE.md §7) —
+  # plus, since 12B, the governance stream: the bundle carries its own trust
+  # chain (role-key history from the genesis TOFU declaration), so the
+  # checkpoint key derives offline.
+  @commons_streams ~w(accrual_rules throughput_rules floor_rules governance)
 
   @type bundle :: %{
           chapter_id: String.t(),
@@ -47,9 +50,9 @@ defmodule CoopSubstrate.Export do
             uniq: true,
             do: env.stream_id
 
-      rule_streams = Enum.map(@rule_streams, &(chapter_id <> "/" <> &1))
+      commons_streams = Enum.map(@commons_streams, &(chapter_id <> "/" <> &1))
 
-      (member_streams ++ rule_streams)
+      (member_streams ++ commons_streams)
       |> Enum.reduce_while({:ok, %{}}, fn stream_id, {:ok, acc} ->
         case Log.export_stream(stream_id) do
           {:ok, []} -> {:cont, {:ok, acc}}
@@ -104,44 +107,152 @@ defmodule CoopSubstrate.Export do
   end
 
   @doc """
-  Fully offline verification of an anchored bundle given only the
-  chapter's checkpoint public key (distributed out-of-band, the §15.2
-  doctrine): the 6B per-stream discipline, then every stream's LAST event
-  hash must prove into the checkpoint's signed stream-heads root — a
-  withheld tail is detectable. Returns the decoded envelopes per stream.
+  Fully offline verification of an anchored bundle: the 6B per-stream
+  discipline, every stream's LAST event hash proven into the checkpoint's
+  stream-heads root (a withheld tail is detectable — 12A), and the
+  checkpoint signature authenticated (12B):
+
+    * default — the checkpoint key is DERIVED from the bundled governance
+      stream by replaying the 1D role-key rules offline (genesis
+      self-certified, successors governance-signed, keys as-of the
+      checkpoint position). The result carries the derived genesis key —
+      trust-on-first-use stated, never hidden.
+    * `genesis_pubkey:` — same derivation, with the genesis key pinned to
+      the member's recorded fingerprint (`:genesis_mismatch` otherwise).
+    * `checkpoint_pubkey:` — the 12A out-of-band path, unchanged.
+
+  Returns `{:ok, %{streams: decoded_envelopes, genesis_key: pubkey | nil}}`.
   """
-  @spec verify_anchored(map(), binary()) :: {:ok, map()} | {:error, term()}
-  def verify_anchored(
-        %{streams: streams, anchor: %{checkpoint: blob, proofs: proofs}},
-        checkpoint_pubkey
-      ) do
+  @spec verify_anchored(map(), keyword()) :: {:ok, map()} | {:error, term()}
+  def verify_anchored(bundle, opts \\ [])
+
+  def verify_anchored(%{streams: streams, anchor: %{checkpoint: blob, proofs: proofs}}, opts) do
     with {:ok, body, cp} <- decode_checkpoint(blob),
-         :ok <- checkpoint_signed?(body, blob, checkpoint_pubkey),
-         {:ok, verified} <- verify(%{streams: streams}) do
-      streams
-      |> Map.keys()
-      |> Enum.reduce_while(:ok, fn stream_id, :ok ->
-        {:ok, head} = verified[stream_id] |> List.last() |> Envelope.event_hash()
-
-        cond do
-          proofs[stream_id] == nil ->
-            {:halt, {:error, {:stream_unanchored, stream_id}}}
-
-          not StreamRoot.proven?(stream_id, head, proofs[stream_id], cp.stream_heads_root) ->
-            {:halt, {:error, {:stream_head_mismatch, stream_id}}}
-
-          true ->
-            {:cont, :ok}
-        end
-      end)
-      |> case do
-        :ok -> {:ok, verified}
-        error -> error
-      end
+         {:ok, verified} <- verify(%{streams: streams}),
+         :ok <- streams_proven(streams, verified, proofs, cp),
+         {:ok, genesis} <- authenticate_checkpoint(body, blob, cp, verified, opts) do
+      {:ok, %{streams: verified, genesis_key: genesis}}
     end
   end
 
-  def verify_anchored(_bundle, _pubkey), do: {:error, :not_anchored}
+  def verify_anchored(_bundle, _opts), do: {:error, :not_anchored}
+
+  defp streams_proven(streams, verified, proofs, cp) do
+    streams
+    |> Map.keys()
+    |> Enum.reduce_while(:ok, fn stream_id, :ok ->
+      {:ok, head} = verified[stream_id] |> List.last() |> Envelope.event_hash()
+
+      cond do
+        proofs[stream_id] == nil ->
+          {:halt, {:error, {:stream_unanchored, stream_id}}}
+
+        not StreamRoot.proven?(stream_id, head, proofs[stream_id], cp.stream_heads_root) ->
+          {:halt, {:error, {:stream_head_mismatch, stream_id}}}
+
+        true ->
+          {:cont, :ok}
+      end
+    end)
+  end
+
+  # 12B: authenticate the checkpoint signature. The in-band paths derive
+  # the key from the (already proof-verified) governance stream — the loop
+  # is sound because forging an alternative governance history requires
+  # the genesis key, the trust boundary documented since 1D.
+  defp authenticate_checkpoint(body, blob, cp, verified, opts) do
+    case Keyword.fetch(opts, :checkpoint_pubkey) do
+      {:ok, pubkey} ->
+        with :ok <- checkpoint_signed?(body, blob, pubkey), do: {:ok, nil}
+
+      :error ->
+        case verified[cp.chapter_id <> "/governance"] do
+          nil ->
+            {:error, :no_governance_stream}
+
+          governance ->
+            with {:ok, keys, genesis} <- derive_role_keys(governance, cp.global_seq),
+                 :ok <- genesis_pinned?(genesis, opts),
+                 {:ok, declared} <- fetch_checkpoint_key(keys, cp),
+                 :ok <- checkpoint_signed?(body, blob, declared) do
+              {:ok, genesis}
+            end
+        end
+    end
+  end
+
+  # The 1D role-key discipline replayed OFFLINE over verified envelopes —
+  # the verifier re-checks the rules rather than trusting the operator's
+  # gate. Keys are taken as-of the checkpoint position: later revocation
+  # never invalidates a historical attestation (§15.4, offline).
+  defp derive_role_keys(envelopes, as_of_seq) do
+    envelopes
+    |> Enum.take_while(&(&1.global_seq <= as_of_seq))
+    |> Enum.reduce_while({:ok, %{}, nil}, fn env, {:ok, keys, genesis} ->
+      case role_key_step(env, keys, genesis) do
+        {:ok, keys, genesis} -> {:cont, {:ok, keys, genesis}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp role_key_step(%{type: "RoleKeyDeclared", payload: p} = env, keys, genesis) do
+    {:bytes, pubkey} = p["pubkey"]
+
+    cond do
+      genesis == nil ->
+        # Genesis: the first declaration is the governance key itself,
+        # self-certified (the signer IS the declared key).
+        if p["role"] == "governance" and
+             Enum.any?(
+               env.signers,
+               &(&1.role == "governance" and &1.pubkey == pubkey and &1.key_id == p["key_id"])
+             ) do
+          {:ok, put_role_key(keys, "governance", p["key_id"], pubkey), pubkey}
+        else
+          {:error, :invalid_genesis}
+        end
+
+      governance_signed?(env, keys) ->
+        {:ok, put_role_key(keys, p["role"], p["key_id"], pubkey), genesis}
+
+      true ->
+        {:error, {:unauthorized_role_event, env.global_seq}}
+    end
+  end
+
+  defp role_key_step(%{type: "RoleKeyRevoked", payload: p} = env, keys, genesis) do
+    if genesis != nil and governance_signed?(env, keys) do
+      {:ok, update_in(keys, [p["role"]], &Map.delete(&1 || %{}, p["key_id"])), genesis}
+    else
+      {:error, {:unauthorized_role_event, env.global_seq}}
+    end
+  end
+
+  defp role_key_step(_other, keys, genesis), do: {:ok, keys, genesis}
+
+  defp governance_signed?(env, keys) do
+    declared = Map.get(keys, "governance", %{})
+    Enum.any?(env.signers, &(&1.role == "governance" and declared[&1.key_id] == &1.pubkey))
+  end
+
+  defp put_role_key(keys, role, key_id, pubkey) do
+    Map.update(keys, role, %{key_id => pubkey}, &Map.put(&1, key_id, pubkey))
+  end
+
+  defp genesis_pinned?(genesis, opts) do
+    case Keyword.fetch(opts, :genesis_pubkey) do
+      {:ok, pinned} -> if pinned == genesis, do: :ok, else: {:error, :genesis_mismatch}
+      :error -> :ok
+    end
+  end
+
+  defp fetch_checkpoint_key(keys, cp) do
+    case get_in(keys, ["checkpoint", cp.key_id]) do
+      nil -> {:error, {:checkpoint_key_not_declared, cp.chapter_id, cp.key_id}}
+      pubkey -> {:ok, pubkey}
+    end
+  end
 
   defp decode_checkpoint(blob) do
     with {:ok, %{"body" => {:bytes, body}, "signature" => {:bytes, _sig}}} <-
@@ -150,10 +261,12 @@ defmodule CoopSubstrate.Export do
           %{
             "schema" => "CheckpointV2",
             "chapter_id" => chapter_id,
+            "key_id" => key_id,
             "global_seq" => seq,
             "stream_heads_root" => {:bytes, root}
           }} <- Canonical.decode(body) do
-      {:ok, body, %{chapter_id: chapter_id, global_seq: seq, stream_heads_root: root}}
+      {:ok, body,
+       %{chapter_id: chapter_id, key_id: key_id, global_seq: seq, stream_heads_root: root}}
     else
       {:ok, %{"schema" => "CheckpointV1"}} -> {:error, :checkpoint_not_anchorable}
       {:ok, _other} -> {:error, :malformed_checkpoint}

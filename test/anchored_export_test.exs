@@ -72,14 +72,16 @@ defmodule CoopSubstrate.AnchoredExportTest do
     anchored = anchored_bundle!(ctx.ck)
     pubkey = ctx.ck.signer.pubkey
 
-    assert {:ok, verified} = Export.verify_anchored(anchored, pubkey)
+    assert {:ok, %{streams: verified, genesis_key: nil}} =
+             Export.verify_anchored(anchored, checkpoint_pubkey: pubkey)
+
     assert Map.has_key?(verified, "#{@chapter}/patronage/M-ada/#{@entity}")
 
     # The wrong key proves nothing.
     stranger = new_member("checkpoint")
 
     assert {:error, :bad_checkpoint_signature} =
-             Export.verify_anchored(anchored, stranger.signer.pubkey)
+             Export.verify_anchored(anchored, checkpoint_pubkey: stranger.signer.pubkey)
 
     # Withhold the LAST patronage record: the 6B checks still pass — the
     # gap this phase closes was real — but the anchor catches it.
@@ -89,13 +91,16 @@ defmodule CoopSubstrate.AnchoredExportTest do
     assert {:ok, _} = Export.verify(truncated)
 
     assert {:error, {:stream_head_mismatch, ^stream}} =
-             Export.verify_anchored(truncated, pubkey)
+             Export.verify_anchored(truncated, checkpoint_pubkey: pubkey)
 
     # A stream stripped of its proof cannot ride along silently.
     unproven = update_in(anchored, [:anchor, :proofs], &Map.delete(&1, stream))
-    assert {:error, {:stream_unanchored, ^stream}} = Export.verify_anchored(unproven, pubkey)
 
-    assert {:error, :not_anchored} = Export.verify_anchored(Map.delete(anchored, :anchor), pubkey)
+    assert {:error, {:stream_unanchored, ^stream}} =
+             Export.verify_anchored(unproven, checkpoint_pubkey: pubkey)
+
+    assert {:error, :not_anchored} =
+             Export.verify_anchored(Map.delete(anchored, :anchor), checkpoint_pubkey: pubkey)
   end
 
   test "checkpoints: V2 round-trips with root recomputation; V1 blobs stay valid; stale anchors error",

@@ -140,6 +140,7 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # (sibling hashes only — no other stream ids); anchored verification
       # is pure over caller input.
       {:anchor, 2} => :own_data,
+      {:verify_anchored, 1} => :system,
       {:verify_anchored, 2} => :system
     },
     Finance => %{

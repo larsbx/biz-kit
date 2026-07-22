@@ -767,9 +767,17 @@ last-event hashes (`Log.stream_heads/2`, sorted leaves; a tree, not a list, so i
 proofs leak sibling hashes only and never the roster). `verify_checkpoint/1` recomputes the
 root for V2 and verifies V1 blobs forever. `Export.anchor(bundle, blob)` attaches the
 checkpoint plus per-stream inclusion proofs at export time;
-`Export.verify_anchored(bundle, checkpoint_pubkey)` is fully offline and rejects a withheld
-stream tail — completing the §7 "verify offline forever" promise with completeness, not
-just consistency. The checkpoint pubkey travels out-of-band (the §15.2 doctrine).
+`Export.verify_anchored/2` is fully offline and rejects a withheld stream tail — completing
+the §7 "verify offline forever" promise with completeness, not just consistency.
+
+**12B** (docs/phase12b_plan.md): the bundle carries its own trust chain — the chapter's
+`governance` stream rides every bundle (completeness-anchored like any stream), and
+`verify_anchored` derives the checkpoint key OFFLINE by replaying the 1D role-key rules
+over the verified envelopes (genesis self-certified, successors governance-signed, keys
+as-of the checkpoint position — §15.4's rule, member-checkable). The genesis fingerprint
+is the only out-of-band bit: pass `genesis_pubkey:` to pin it, or read it off the result
+(trust-on-first-use stated, never hidden). `checkpoint_pubkey:` keeps the 12A explicit
+path for governance-less bundles.
 
 ### 15.5 Signed proofs (closes the §13.5 deviation)
 

@@ -87,7 +87,7 @@
 ## Explicitly deferred
 
 - In-band checkpoint-key derivation (bundling the governance stream) —
-  the out-of-band doctrine covers v0.
+  the out-of-band doctrine covers v0. *(Taken up and resolved in 12B.)*
 - As-of anchored exports (dispute-workflow trigger, unchanged).
 - Sync/replication uses of the root (the other §8 consumer; a later
   brief).
