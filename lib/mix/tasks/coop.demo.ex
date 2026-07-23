@@ -48,15 +48,20 @@ defmodule Mix.Tasks.Coop.Demo do
     row("demo_kit", r.demo_kit)
     row("guards", r.guards)
 
+    section("The member's stake view (11B — one call, own data by shape)")
+    row("stake_view", r.stake_view)
+
     section("Obligation rail (9A — netting + ring aggregates)")
     row("netting before", r.netting.report_before)
     row("rings before", r.netting.rings_before)
     row("netting after executed round", r.netting.report_after)
     row("rings after", r.netting.rings_after)
 
-    section("Portability + honesty")
+    section("Portability + honesty (6B baseline; 12A/12B current strength)")
     row("departure bundle streams", r.bundle_streams)
-    row("bundle offline verification", r.verifications.bundle_offline)
+    row("bundle offline verification (6B baseline)", r.verifications.bundle_offline)
+    row("anchored, SELF-CONTAINED verification (12B)", r.verifications.bundle_anchored)
+    row("derived genesis matches the sim root", r.verifications.genesis)
     row("chain audit", r.verifications.chains)
   end
 

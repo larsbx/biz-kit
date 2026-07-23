@@ -58,10 +58,27 @@ defmodule CoopSubstrate.Sim.GateD do
     steward = actor("steward")
     carrier = actor("member")
     gov = actor("governance")
+    checkpoint = actor("checkpoint")
     author = actor("author")
     alice = actor("interviewee")
     bob = actor("interviewee")
     {key_id, seed} = {steward.signer.key_id, steward.seed}
+
+    # 13A: the sim world carries a real trust chain — genesis governance
+    # (self-certified TOFU) and a checkpoint key, declared before any
+    # governance-signed act, so the demo can anchor and verify bundles
+    # self-contained. Steward/author stay bootstrap (undeclared).
+    append!(chapter_id, gov, "RoleKeyDeclared", %{
+      "role" => "governance",
+      "key_id" => gov.signer.key_id,
+      "pubkey" => {:bytes, gov.signer.pubkey}
+    })
+
+    append!(chapter_id, gov, "RoleKeyDeclared", %{
+      "role" => "checkpoint",
+      "key_id" => checkpoint.signer.key_id,
+      "pubkey" => {:bytes, checkpoint.signer.pubkey}
+    })
 
     for {name, value} <- %{
           "harness/D/n" => 2,
@@ -160,6 +177,7 @@ defmodule CoopSubstrate.Sim.GateD do
       steward: steward,
       carrier: carrier,
       governance: gov,
+      checkpoint: checkpoint,
       member_id: @member_id,
       entity_id: @entity_id,
       spec_hash: spec_hash,

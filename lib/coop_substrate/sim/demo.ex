@@ -32,6 +32,7 @@ defmodule CoopSubstrate.Sim.Demo do
   alias CoopSubstrate.Log
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.Sim.GateD
+  alias CoopSubstrate.StakeView
 
   @t0 1_752_000_000_000
   @minute 60_000
@@ -192,9 +193,37 @@ defmodule CoopSubstrate.Sim.Demo do
     # The obligation rail: a ring, then an executed netting round (9A).
     netting = run_obligation_rail!(ch)
 
-    # Portability + honesty: the departure bundle verifies offline and the
-    # whole log's chains audit clean.
+    # The member's own answer to "what do I have?" (11B) — trimmed to the
+    # run-invariant facts; agreement with the demo kit is asserted, and
+    # per-run-random key ids stay out of the result.
+    {:ok, stake} = StakeView.view(ch, ctx.member_id, at: @t0)
+    entity = stake.memberships[ctx.entity_id]
+
+    stake_section = %{
+      membership_state: entity.state,
+      capital_balance_minor: entity.capital.balance_minor,
+      obligation_edges: length(stake.obligations),
+      dispatch_agrees: entity.dispatch == kit
+    }
+
+    # Portability + honesty at the CURRENT strength (12A/12B): checkpoint,
+    # anchor, and verify the bundle self-contained — no key material passed
+    # in — then check the derived genesis against the sim's own root. The
+    # 6B plain verification stays alongside as the baseline it is.
+    {:ok, checkpoint_blob} =
+      Log.checkpoint(ch, ctx.checkpoint.signer.key_id, ctx.checkpoint.seed)
+
     {:ok, bundle} = Export.member_bundle(ch, ctx.member_id)
+    {:ok, anchored} = Export.anchor(bundle, checkpoint_blob)
+
+    {anchored_verdict, genesis_verdict} =
+      case Export.verify_anchored(anchored) do
+        {:ok, %{genesis_key: genesis}} ->
+          {:ok, if(genesis == ctx.governance.signer.pubkey, do: :ok, else: :mismatch)}
+
+        {:error, reason} ->
+          {{:error, reason}, :not_derived}
+      end
 
     %{
       chapter_id: ch,
@@ -209,10 +238,13 @@ defmodule CoopSubstrate.Sim.Demo do
       invoice: invoice,
       demo_kit: kit,
       guards: guards,
+      stake_view: stake_section,
       netting: netting,
-      bundle_streams: bundle.streams |> Map.keys() |> Enum.sort(),
+      bundle_streams: anchored.streams |> Map.keys() |> Enum.sort(),
       verifications: %{
         bundle_offline: with({:ok, _} <- Export.verify(bundle), do: :ok),
+        bundle_anchored: anchored_verdict,
+        genesis: genesis_verdict,
         chains: Log.verify_chains()
       }
     }

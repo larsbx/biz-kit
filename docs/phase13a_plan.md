@@ -1,14 +1,15 @@
 # Phase 13A — Demo currency: the canonical scenario demonstrates the current promises
 
-> **Status: PLANNED** (2026-07-23). The 11A entry point froze at the 6B
-> verification strength: `mix coop.demo` still shows plain bundle
-> verification while the shipped promise is 12A/12B completeness-anchored,
-> SELF-CONTAINED verification; the sim world declares no governance or
-> checkpoint keys, so the trust chain never appears; the 11B stake view is
-> absent. 11A's own rule — "the demo asserts its own honesty; a demo that
-> doesn't verify isn't a demo" — makes currency an obligation: the
-> canonical scenario must verify at the strength the system actually has.
-> Sim-only; no substrate changes; not blocked by `gate(D)`.
+> **Status: COMPLETE** (2026-07-23). Acceptance **[13A]** passes: the
+> result carries the upgraded verdicts all `:ok` — 6B baseline, 12B
+> anchored self-contained verification, derived genesis matching the sim
+> root, chain audit — plus the trimmed stake section with
+> `dispatch_agrees: true` (1); the sim chapter's `governance` stream
+> rides the bundle (8 streams) and `mix coop.demo` prints the new
+> sections as a pure printer, exercised live (2); the 11A acceptance
+> holds — sim boundary structural, two fresh runs agree on every
+> invariant number (3); full suite green at 252 tests + 8 properties +
+> 1 doctest, no substrate or query-surface change (4).
 
 ## Grounding
 

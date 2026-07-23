@@ -41,8 +41,26 @@ defmodule CoopSubstrate.SimDemoTest do
     assert r.netting.rings_after == %{"USD" => %{rings: 1, gross_minor: 160_000}}
     assert [%{setoff: 60_000, net: {"M-ada", "M-bob", 40_000}}] = r.netting.report_before
 
-    assert length(r.bundle_streams) == 7
-    assert r.verifications == %{bundle_offline: :ok, chains: :ok}
+    # 13A: the stake view rides the result (trimmed to invariant facts)…
+    assert r.stake_view == %{
+             membership_state: :member,
+             capital_balance_minor: 0,
+             obligation_edges: 0,
+             dispatch_agrees: true
+           }
+
+    # …the governance stream rides the bundle, and verification is at the
+    # CURRENT strength: anchored, self-contained, genesis derived and
+    # matching the sim root.
+    assert "chapter-sim-acceptance/governance" in r.bundle_streams
+    assert length(r.bundle_streams) == 8
+
+    assert r.verifications == %{
+             bundle_offline: :ok,
+             bundle_anchored: :ok,
+             genesis: :ok,
+             chains: :ok
+           }
   end
 
   test "the sim boundary is structural: non-sim chapters are refused, nothing appended" do
