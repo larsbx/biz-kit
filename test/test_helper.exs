@@ -13,4 +13,11 @@ Application.put_env(:coop_substrate, :extra_event_types, %{
   }
 })
 
+# Leave no ledger behind. Tests that forge history (`@tag :tampers_ledger`) end
+# on records the application cannot boot against; handing one to the next run
+# wedges it at `Log.init/1`, before the reset that would clear it can run.
+ExUnit.after_suite(fn _results ->
+  CoopSubstrate.LogCase.truncate_store!()
+end)
+
 ExUnit.start()

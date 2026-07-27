@@ -116,7 +116,9 @@ defmodule CoopSubstrate.CockpitBoardsTest do
   end
 
   test "unconfigured B_op says so; boards still render" do
-    reset_log(%{})
+    # Mid-test reset: the store primitives, not the `reset_log` lifecycle hook.
+    truncate_store!()
+    restart_log()
 
     author = new_member("author")
 

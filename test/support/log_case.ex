@@ -9,6 +9,8 @@ defmodule CoopSubstrate.LogCase do
 
   use ExUnit.CaseTemplate
 
+  import ExUnit.Callbacks, only: [on_exit: 1]
+
   alias CoopSubstrate.Crypto
   alias CoopSubstrate.Protocol.Envelope
 
@@ -20,7 +22,28 @@ defmodule CoopSubstrate.LogCase do
     end
   end
 
-  def reset_log(_context) do
+  def reset_log(context) do
+    truncate_store!()
+    restart_log()
+
+    # Check on the way out as well as resetting on the way in. Resetting only
+    # on entry means the last test to run leaves its ledger behind, and a
+    # forged record there is not stale-data noise: `Log.recover/0` folds the
+    # whole ledger during application start and raises on the first undecodable
+    # record, so the next run cannot boot — and `reset_log` never gets to run to
+    # clear it. This attributes the breakage to the test that caused it; the
+    # `after_suite` hook in `test/test_helper.exs` clears the store once at the
+    # end (truncating per-test would double the suite's reset cost for nothing,
+    # since the next test's setup truncates anyway).
+    on_exit(fn ->
+      unless context[:tampers_ledger], do: assert_ledger_intact!()
+    end)
+
+    :ok
+  end
+
+  @doc "Truncate the event store back to an empty, initialised state."
+  def truncate_store! do
     {:ok, conn} = raw_conn()
 
     Postgrex.transaction(conn, fn conn ->
@@ -40,8 +63,33 @@ defmodule CoopSubstrate.LogCase do
     end)
 
     GenServer.stop(conn)
-    restart_log()
     :ok
+  end
+
+  @doc """
+  Fail the test that leaves a ledger the application cannot boot against.
+
+  A test that forges history must not hand that history to the next run. Tests
+  which deliberately end on a forged ledger declare `@tag :tampers_ledger`;
+  the exception has to be stated, not assumed.
+  """
+  def assert_ledger_intact! do
+    CoopSubstrate.Log.read_all()
+    :ok
+  rescue
+    error ->
+      reraise("""
+              this test left a ledger the application cannot boot against:
+
+                  #{Exception.message(error)}
+
+              `CoopSubstrate.Log.recover/0` folds the entire ledger during
+              application start and raises on the first undecodable record, so
+              this residue makes the next run unstartable — and the reset that
+              would clear it never gets to run.
+
+              If the forged state is deliberate, declare it: `@tag :tampers_ledger`.
+              """, __STACKTRACE__)
   end
 
   def restart_log do

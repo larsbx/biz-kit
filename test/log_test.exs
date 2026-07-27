@@ -256,6 +256,8 @@ defmodule CoopSubstrate.LogTest do
   # any stored record is detected, and untampered logs never false-positive.
   # DB-bound, so runs are few; the example-based tests above cover the
   # adversarial (validly re-signed) forgery in depth.
+  # Ends on a deliberately corrupted record; see LogCase.assert_ledger_intact!/0.
+  @tag :tampers_ledger
   property "any byte-level tamper of any event is detected; clean logs verify" do
     check all(
             event_count <- StreamData.integer(2..4),
@@ -264,7 +266,10 @@ defmodule CoopSubstrate.LogTest do
             max_runs: 8
           ) do
       victim = min(victim, event_count)
-      reset_log(nil)
+      # Mid-property reset: the store primitives, not the `reset_log` lifecycle
+      # hook, which would register a teardown per iteration.
+      truncate_store!()
+      restart_log()
 
       member = new_member()
 

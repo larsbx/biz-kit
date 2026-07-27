@@ -39,7 +39,15 @@ defmodule CoopSubstrate.MixProject do
 
   defp aliases do
     [
-      test: ["event_store.create --quiet", "event_store.init --quiet", "test"]
+      # Drop first: the ledger is folded in full at app boot (Log.init/1 ->
+      # recover/0), and one undecodable record raises there, so leftover state
+      # from a previous run takes down the whole suite, not just one test.
+      test: [
+        "event_store.drop --quiet",
+        "event_store.create --quiet",
+        "event_store.init --quiet",
+        "test"
+      ]
     ]
   end
 end

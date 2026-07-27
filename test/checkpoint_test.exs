@@ -115,6 +115,8 @@ defmodule CoopSubstrate.CheckpointTest do
              Log.verify_checkpoint(new_blob)
   end
 
+  # Ends on a deliberately forged record; see LogCase.assert_ledger_intact!/0.
+  @tag :tampers_ledger
   test "a tampered ledger fails checkpoint verification", ctx do
     blob = checkpoint!(ctx.ck)
     assert :ok = Log.verify_checkpoint(blob)

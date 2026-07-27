@@ -158,8 +158,9 @@ representation question** — not resolved in 1A.
 
 Hand-off §1.7 makes AshEvents (0.7.0, on Ash 3.29.x) the *default* choice but requires a spike
 answering five questions (plus atomic multi-event append, added by the plan for 06 P3 batch
-semantics) before committing to it. The spike lives at `spikes/ash_events_spike/`
-(`mix run spike_run.exs` reproduces every finding empirically; kept as documentation).
+semantics) before committing to it. The spike was extracted into the standalone
+`Orchestrator` repo at `/home/admin-papa/orchestrator` and removed from this
+repository; the findings below are retained as documentation.
 
 ### 3.1 Spike findings (AshEvents 0.7.0)
 
