@@ -41,7 +41,7 @@ class ReviewAgentTest(unittest.TestCase):
 
     def test_requires_every_deterministic_job(self):
         responses = iter([
-            [{"id": 7, "sha": "abc"}],
+            [{"id": 7, "sha": "abc", "status": "success"}],
             [{"name": "format", "status": "success"},
              {"name": "elixir-test", "status": "success"},
              {"name": "rust-test", "status": "success"}],
@@ -52,6 +52,20 @@ class ReviewAgentTest(unittest.TestCase):
             self.assertTrue(AGENT.deterministic_ci_passed("api", "project", "token", 1, "abc"))
         finally:
             AGENT.request_json = original
+
+    def test_rejects_non_successful_pipeline(self):
+        original = AGENT.request_json
+        AGENT.request_json = lambda *args, **kwargs: [{"id": 7, "sha": "abc", "status": "running"}]
+        try:
+            self.assertFalse(AGENT.deterministic_ci_passed("api", "project", "token", 1, "abc"))
+        finally:
+            AGENT.request_json = original
+
+    def test_rejects_boolean_line_number(self):
+        review = self.valid()
+        review["findings"][0]["line"] = True
+        with self.assertRaisesRegex(ValueError, "positive"):
+            AGENT.validate_review(review, "abc")
 
     def test_neutralizes_gitlab_quick_actions(self):
         safe = AGENT.safe_text("evidence\n/merge\n  /approve\n/close")

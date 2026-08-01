@@ -61,7 +61,7 @@ def validate_review(review, expected_sha):
         if (not isinstance(finding["path"], str) or "\n" in finding["path"] or
                 finding["path"].startswith(("/", ".."))):
             raise ValueError("finding path must be repository-relative")
-        if not isinstance(finding["line"], int) or finding["line"] < 1:
+        if type(finding["line"]) is not int or finding["line"] < 1:
             raise ValueError("finding line must be positive")
         if not all(isinstance(finding[key], str) and finding[key].strip() for key in ("evidence", "fix")):
             raise ValueError("finding evidence and fix are required")
@@ -141,7 +141,7 @@ def deterministic_ci_passed(api, project, token, iid, sha):
         f"{api}/projects/{project}/merge_requests/{iid}/pipelines?per_page=20", token
     )
     pipeline = next((item for item in pipelines if item.get("sha") == sha), None)
-    if not pipeline:
+    if not pipeline or pipeline.get("status") != "success":
         return False
     jobs = request_json(f"{api}/projects/{project}/pipelines/{pipeline['id']}/jobs?per_page=100", token)
     states = {job["name"]: job["status"] for job in jobs}
@@ -165,13 +165,11 @@ def review_mr(api, project, token, bot_username, mr):
     diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs"
     diffs = request_pages(diffs_url, token)
     incomplete = [item.get("new_path", "unknown") for item in diffs
-                  if not item.get("generated_file", False) and
-                  (item.get("collapsed") or item.get("too_large") or not item.get("diff"))]
+                  if item.get("collapsed") or item.get("too_large") or not item.get("diff")]
     if incomplete:
         raise RuntimeError(f"GitLab omitted diff content for: {', '.join(incomplete[:10])}")
     changes = "\n\n".join(
         f"FILE {item['new_path']}\n{item.get('diff', '')}" for item in diffs
-        if not item.get("generated_file", False)
     )
     if not changes or len(changes) > 200_000:
         raise RuntimeError("empty or oversized merge-request diff")
