@@ -78,3 +78,16 @@ cd native/canonical_v1 && cargo test   # independent Rust-side vector verificati
 Database credentials live in `config/{dev,test}.exs`. The dev host's
 environment (user-local Postgres, toolchain, network) is documented in
 [`docs/machine.md`](docs/machine.md).
+
+## Merge-request review agent
+
+A host-side poller reviews open GitLab merge requests after deterministic CI. Credentials
+remain outside the repository and runner, so merge-request code cannot read them. The
+agent runs Pi with all tools, skills, extensions, context files, and session persistence
+disabled; only the bounded GitLab diff is supplied as untrusted text.
+
+The agent cannot push, approve, resolve discussions, or merge. It validates strict JSON,
+checks the merge-request head after inference, updates one summary note, publishes an
+`agent-review` commit status, and fails closed on malformed output or a stale SHA.
+The tracked systemd units in `ops/systemd/` run the poller once per minute; review waits
+until the merge request's deterministic pipeline succeeds.

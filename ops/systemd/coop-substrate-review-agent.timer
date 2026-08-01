@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll GitLab merge requests for automated review
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Persistent=true
+Unit=coop-substrate-review-agent.service
+
+[Install]
+WantedBy=timers.target
