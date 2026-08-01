@@ -88,7 +88,9 @@ disabled; only the bounded GitLab diff is supplied as untrusted text.
 
 The agent cannot push, approve, resolve discussions, or merge. It validates strict JSON,
 checks the merge-request head after inference, updates one summary note, publishes an
-`agent-review` commit status, and fails closed on malformed output or a stale SHA.
+authenticated bot note, and fails closed on malformed output or a stale SHA. The pilot is
+advisory: deterministic CI and human approval remain the merge gates because GitLab
+requires broader Developer authority to publish commit statuses.
 The tracked systemd units in `ops/systemd/` run the poller once per minute; review waits
 until the merge request's deterministic pipeline succeeds. They are user units guarded
 by `ConditionUser=admin-papa`, not system units. The GitLab token belongs to a Reporter

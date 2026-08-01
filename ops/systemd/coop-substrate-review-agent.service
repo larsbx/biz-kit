@@ -10,11 +10,7 @@ ExecStart=/usr/bin/python3 /home/admin-papa/coop_substrate/scripts/gitlab_review
 Environment=HOME=/home/admin-papa
 Environment=PATH=/home/admin-papa/.local/bin:/home/admin-papa/.npm-global/bin:/usr/local/bin:/usr/bin
 NoNewPrivileges=true
-PrivateDevices=true
 PrivateTmp=true
-ProtectControlGroups=true
-ProtectKernelModules=true
-ProtectKernelTunables=true
 ProtectSystem=strict
 ProtectHome=read-only
 

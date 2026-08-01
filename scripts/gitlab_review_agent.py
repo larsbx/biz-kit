@@ -28,7 +28,7 @@ def request_json(url, token, *, method="GET", body=None):
             return json.load(response)
     except urllib.error.HTTPError as error:
         detail = error.read().decode(errors="replace")[:1000]
-        raise RuntimeError(f"HTTP {error.code} from GitLab: {detail}") from error
+        raise RuntimeError(f"HTTP {error.code} from {url}: {detail}") from error
 
 
 def request_pages(url, token, limit=10):
@@ -124,11 +124,6 @@ def render(review):
     return "\n".join(lines)
 
 
-def status(api, project, sha, token, state, description):
-    query = urllib.parse.urlencode({"state": state, "name": "agent-review", "description": description[:255]})
-    request_json(f"{api}/projects/{project}/statuses/{sha}?{query}", token, method="POST")
-
-
 def mr_identity(mr):
     refs = mr.get("diff_refs") or {}
     identity = {
@@ -139,12 +134,6 @@ def mr_identity(mr):
     if not all(identity.values()):
         raise RuntimeError("merge request lacks a complete diff identity")
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-
-
-def terminal_status(api, project, token, sha):
-    statuses = request_pages(f"{api}/projects/{project}/repository/commits/{sha}/statuses", token)
-    match = next((item for item in statuses if item.get("name") == "agent-review"), None)
-    return match and match.get("status") in {"success", "failed"}
 
 
 def deterministic_ci_passed(api, project, token, iid, sha):
@@ -169,12 +158,10 @@ def review_mr(api, project, token, bot_username, mr):
     existing = next((note for note in notes if MARKER in note.get("body", "") and
                      note.get("author", {}).get("username") == bot_username), None)
     if (existing and f"Reviewed `{sha}`" in existing["body"] and
-            f"Diff identity `{identity}`" in existing["body"] and
-            terminal_status(api, project, token, sha)):
+            f"Diff identity `{identity}`" in existing["body"]):
         return
     if not deterministic_ci_passed(api, project, token, iid, sha):
         return
-    status(api, project, sha, token, "pending", "Host-isolated AI review is running")
     diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs"
     diffs = request_pages(diffs_url, token)
     incomplete = [item.get("new_path", "unknown") for item in diffs
@@ -197,8 +184,6 @@ def review_mr(api, project, token, bot_username, mr):
         request_json(f"{notes_url}/{existing['id']}", token, method="PUT", body=body)
     else:
         request_json(notes_url, token, method="POST", body=body)
-    state = "failed" if review["verdict"] == "blocked" else "success"
-    status(api, project, sha, token, state, f"AI review verdict: {review['verdict']}")
 
 
 def main():
@@ -219,11 +204,6 @@ def main():
         except Exception as error:
             failures += 1
             print(f"MR !{mr.get('iid', '?')} review failed closed: {error}", file=sys.stderr)
-            if mr.get("sha"):
-                try:
-                    status(api, project, mr["sha"], token, "failed", f"Review agent failed: {error}")
-                except Exception as status_error:
-                    print(f"could not publish failure status: {status_error}", file=sys.stderr)
     return 1 if failures else 0
 
 
