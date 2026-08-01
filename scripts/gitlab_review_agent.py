@@ -107,6 +107,18 @@ def status(api, project, sha, token, state, description):
     request_json(f"{api}/projects/{project}/statuses/{sha}?{query}", token, method="POST")
 
 
+def deterministic_ci_passed(api, project, token, iid, sha):
+    pipelines = request_json(
+        f"{api}/projects/{project}/merge_requests/{iid}/pipelines?per_page=20", token
+    )
+    pipeline = next((item for item in pipelines if item.get("sha") == sha), None)
+    if not pipeline:
+        return False
+    jobs = request_json(f"{api}/projects/{project}/pipelines/{pipeline['id']}/jobs?per_page=100", token)
+    states = {job["name"]: job["status"] for job in jobs}
+    return all(states.get(name) == "success" for name in ("format", "elixir-test", "rust-test"))
+
+
 def review_mr(api, project, token, mr):
     iid, sha = mr["iid"], mr["sha"]
     notes_url = f"{api}/projects/{project}/merge_requests/{iid}/notes"
@@ -114,11 +126,7 @@ def review_mr(api, project, token, mr):
     existing = next((note for note in notes if MARKER in note.get("body", "")), None)
     if existing and f"Reviewed `{sha}`" in existing["body"]:
         return
-    pipelines = request_json(
-        f"{api}/projects/{project}/merge_requests/{iid}/pipelines?per_page=20", token
-    )
-    source_pipeline = next((item for item in pipelines if item.get("sha") == sha), None)
-    if not source_pipeline or source_pipeline.get("status") != "success":
+    if not deterministic_ci_passed(api, project, token, iid, sha):
         return
     status(api, project, sha, token, "pending", "Host-isolated AI review is running")
     diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs?per_page=100"

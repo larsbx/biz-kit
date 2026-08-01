@@ -39,6 +39,20 @@ class ReviewAgentTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             AGENT.parse_model_output(payload.replace('"abc"', '"old"'), "abc")
 
+    def test_requires_every_deterministic_job(self):
+        responses = iter([
+            [{"id": 7, "sha": "abc"}],
+            [{"name": "format", "status": "success"},
+             {"name": "elixir-test", "status": "success"},
+             {"name": "rust-test", "status": "success"}],
+        ])
+        original = AGENT.request_json
+        AGENT.request_json = lambda *args, **kwargs: next(responses)
+        try:
+            self.assertTrue(AGENT.deterministic_ci_passed("api", "project", "token", 1, "abc"))
+        finally:
+            AGENT.request_json = original
+
 
 if __name__ == "__main__":
     unittest.main()
