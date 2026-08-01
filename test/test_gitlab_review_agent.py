@@ -85,6 +85,24 @@ class ReviewAgentTest(unittest.TestCase):
         spoofed = "summary " + metadata + "\nreal trailing content"
         self.assertFalse(spoofed.rstrip().endswith(metadata))
 
+    def test_finding_line_must_be_in_changed_hunk(self):
+        review = self.valid()
+        with self.assertRaisesRegex(ValueError, "changed hunks"):
+            AGENT.validate_review(review, "abc", {"lib/example.ex": {10, 11}})
+
+    def test_safe_text_neutralizes_mentions_markdown_html_and_bidi(self):
+        rendered = AGENT.safe_text("@group [link](https://x) <b>x</b>\u202e/merge")
+        self.assertNotIn("@group", rendered)
+        self.assertNotIn("[link]", rendered)
+        self.assertNotIn("<b>", rendered)
+        self.assertNotIn("\u202e", rendered)
+
+    def test_changed_lines_parses_old_and_new_ranges(self):
+        lines = AGENT.changed_lines([{"old_path": "old", "new_path": "new",
+                                      "diff": "@@ -3,2 +7,3 @@ context\n-old\n+new"}])
+        self.assertEqual({3, 4}, lines["old"])
+        self.assertEqual({7, 8, 9}, lines["new"])
+
     def test_neutralizes_gitlab_quick_actions(self):
         safe = AGENT.safe_text("evidence\n/merge\n  /approve\n/close")
         for line in safe.splitlines()[1:]:

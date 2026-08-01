@@ -5,6 +5,9 @@ import json
 import os
 import pathlib
 import hashlib
+import html
+import re
+import unicodedata
 import subprocess
 import sys
 import urllib.error
@@ -44,7 +47,7 @@ def request_pages(url, token, limit=10):
     raise RuntimeError("GitLab response exceeded pagination limit")
 
 
-def validate_review(review, expected_sha, allowed_paths=None):
+def validate_review(review, expected_sha, allowed_lines=None):
     if not isinstance(review, dict) or set(review) != {"sha", "verdict", "summary", "findings"}:
         raise ValueError("review must contain exactly sha, verdict, summary, and findings")
     if review["sha"] != expected_sha:
@@ -62,10 +65,12 @@ def validate_review(review, expected_sha, allowed_paths=None):
                 any(ord(character) < 32 or character in "\u2028\u2029" for character in finding["path"]) or
                 finding["path"].startswith(("/", ".."))):
             raise ValueError("finding path must be repository-relative")
-        if allowed_paths is not None and finding["path"] not in allowed_paths:
+        if allowed_lines is not None and finding["path"] not in allowed_lines:
             raise ValueError("finding path is not part of the merge-request diff")
         if type(finding["line"]) is not int or finding["line"] < 1:
             raise ValueError("finding line must be positive")
+        if allowed_lines is not None and finding["line"] not in allowed_lines[finding["path"]]:
+            raise ValueError("finding line is outside the changed hunks")
         if not all(isinstance(finding[key], str) and finding[key].strip() for key in ("evidence", "fix")):
             raise ValueError("finding evidence and fix are required")
     severities = {finding["severity"] for finding in review["findings"]}
@@ -92,23 +97,42 @@ UNTRUSTED CHANGES END
 """
 
 
-def parse_model_output(output, sha, allowed_paths=None):
+def parse_model_output(output, sha, allowed_lines=None):
     text = output.strip()
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1])
         if text.lstrip().startswith("json\n"):
             text = text.lstrip()[5:]
-    return validate_review(json.loads(text), sha, allowed_paths)
+    return validate_review(json.loads(text), sha, allowed_lines)
 
 
 def safe_text(value):
-    value = "".join(character for character in value if character in "\n\t" or ord(character) >= 32)
-    return "\n".join(("\u200b" + line if line.lstrip().startswith("/") else line)
+    value = "".join(character for character in value
+                    if character in "\n\t" or (ord(character) >= 32 and
+                                                unicodedata.category(character) != "Cf"))
+    value = html.escape(value, quote=True).replace("@", "&#64;")
+    value = re.sub(r"([\\`*_{\[\]()#+.!|>~-])", r"\\\1", value)
+    return "\n".join(("\\" + line if line.lstrip().startswith("/") else line)
                      for line in value.splitlines())
 
 
-def call_model(sha, changes, allowed_paths):
+def changed_lines(diffs):
+    lines = {}
+    hunk = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
+    for item in diffs:
+        old_lines, new_lines = set(), set()
+        for match in hunk.finditer(item.get("diff", "")):
+            old_start, old_count = int(match[1]), int(match[2] or 1)
+            new_start, new_count = int(match[3]), int(match[4] or 1)
+            old_lines.update(range(old_start, old_start + old_count))
+            new_lines.update(range(new_start, new_start + new_count))
+        lines.setdefault(item["old_path"], set()).update(old_lines)
+        lines.setdefault(item["new_path"], set()).update(new_lines)
+    return lines
+
+
+def call_model(sha, changes, allowed_lines):
     command = os.environ.get("REVIEW_PI_COMMAND", "/home/admin-papa/.local/bin/pi-openai")
     arguments = [command, "--no-tools", "--no-skills", "--no-extensions", "--no-context-files",
                  "--no-session", "--thinking", "high", "--print"]
@@ -119,7 +143,7 @@ def call_model(sha, changes, allowed_paths):
         raise RuntimeError("Pi review timed out") from error
     except subprocess.CalledProcessError as error:
         raise RuntimeError(f"Pi review exited with status {error.returncode}") from error
-    return parse_model_output(result.stdout, sha, allowed_paths)
+    return parse_model_output(result.stdout, sha, allowed_lines)
 
 
 def render(review):
@@ -156,7 +180,7 @@ def deterministic_ci_pipeline(api, project, token, iid, sha):
     pipeline = next((item for item in pipelines if item.get("sha") == sha), None)
     if not pipeline or pipeline.get("status") != "success":
         return None
-    jobs = request_json(f"{api}/projects/{project}/pipelines/{pipeline['id']}/jobs?per_page=100", token)
+    jobs = request_pages(f"{api}/projects/{project}/pipelines/{pipeline['id']}/jobs", token)
     states = {job["name"]: job["status"] for job in jobs}
     return pipeline["id"] if all(states.get(name) == "success" for name in
                                  ("format", "elixir-test", "rust-test")) else None
@@ -181,18 +205,18 @@ def review_mr(api, project, token, bot_username, mr):
     diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs"
     diffs = request_pages(diffs_url, token)
     incomplete = [item.get("new_path", "unknown") for item in diffs
-                  if item.get("collapsed") or item.get("too_large")]
+                  if item.get("collapsed") or item.get("too_large") or not item.get("diff")]
     if incomplete:
         raise RuntimeError(f"GitLab omitted diff content for: {', '.join(incomplete[:10])}")
     changes = "\n\n".join(
         (f"FILE {item['old_path']} -> {item['new_path']} "
          f"new={item.get('new_file', False)} deleted={item.get('deleted_file', False)} "
-         f"renamed={item.get('renamed_file', False)}\n{item.get('diff', '')}") for item in diffs
+         f"renamed={item.get('renamed_file', False)} generated={item.get('generated_file', False)} "
+         f"old_mode={item.get('a_mode')} new_mode={item.get('b_mode')}\n{item.get('diff', '')}") for item in diffs
     )
     if not changes or len(changes) > 200_000:
         raise RuntimeError("empty or oversized merge-request diff")
-    allowed_paths = {item["new_path"] for item in diffs} | {item["old_path"] for item in diffs}
-    review = call_model(sha, changes, allowed_paths)
+    review = call_model(sha, changes, changed_lines(diffs))
     current = request_json(mr_url, token)
     final_identity = mr_identity(current)
     if current["sha"] != sha or final_identity != identity:
