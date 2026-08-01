@@ -149,9 +149,10 @@ def deterministic_ci_passed(api, project, token, iid, sha):
 
 
 def review_mr(api, project, token, bot_username, mr):
-    iid, sha = mr["iid"], mr["sha"]
+    iid = mr["iid"]
     mr_url = f"{api}/projects/{project}/merge_requests/{iid}"
     current = request_json(mr_url, token)
+    sha = current["sha"]
     identity = mr_identity(current)
     notes_url = f"{api}/projects/{project}/merge_requests/{iid}/notes"
     notes = request_pages(notes_url, token)
@@ -175,8 +176,11 @@ def review_mr(api, project, token, bot_username, mr):
         raise RuntimeError("empty or oversized merge-request diff")
     review = call_model(sha, changes)
     current = request_json(mr_url, token)
-    if current["sha"] != sha or mr_identity(current) != identity:
-        raise RuntimeError("merge-request diff identity changed during review")
+    final_identity = mr_identity(current)
+    if current["sha"] != sha or final_identity != identity:
+        raise RuntimeError(
+            f"merge-request diff identity changed during review: {identity} -> {final_identity}"
+        )
     body = {"body": render(review) + f"\n\nDiff identity `{identity}`."}
     if existing:
         request_json(f"{notes_url}/{existing['id']}", token, method="PUT", body=body)
