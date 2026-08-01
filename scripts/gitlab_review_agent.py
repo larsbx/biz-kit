@@ -10,6 +10,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 
 MARKER = "<!-- coop-substrate-review-agent -->"
 SEVERITIES = {"blocking", "important", "suggestion"}
@@ -44,7 +45,7 @@ def request_pages(url, token, limit=10):
     raise RuntimeError("GitLab response exceeded pagination limit")
 
 
-def validate_review(review, expected_sha):
+def validate_review(review, expected_sha, allowed_paths=None):
     if not isinstance(review, dict) or set(review) != {"sha", "verdict", "summary", "findings"}:
         raise ValueError("review must contain exactly sha, verdict, summary, and findings")
     if review["sha"] != expected_sha:
@@ -58,13 +59,21 @@ def validate_review(review, expected_sha):
             raise ValueError("invalid finding fields")
         if finding["severity"] not in SEVERITIES:
             raise ValueError("invalid finding severity")
-        if (not isinstance(finding["path"], str) or "\n" in finding["path"] or
+        if (not isinstance(finding["path"], str) or "`" in finding["path"] or
+                any(ord(character) < 32 or character in "\u2028\u2029" for character in finding["path"]) or
                 finding["path"].startswith(("/", ".."))):
             raise ValueError("finding path must be repository-relative")
+        if allowed_paths is not None and finding["path"] not in allowed_paths:
+            raise ValueError("finding path is not part of the merge-request diff")
         if type(finding["line"]) is not int or finding["line"] < 1:
             raise ValueError("finding line must be positive")
         if not all(isinstance(finding[key], str) and finding[key].strip() for key in ("evidence", "fix")):
             raise ValueError("finding evidence and fix are required")
+    severities = {finding["severity"] for finding in review["findings"]}
+    if review["verdict"] == "pass" and severities:
+        raise ValueError("pass verdict cannot contain findings")
+    if ("blocking" in severities) != (review["verdict"] == "blocked"):
+        raise ValueError("blocking findings and blocked verdict must agree")
     return review
 
 
@@ -84,14 +93,14 @@ UNTRUSTED CHANGES END
 """
 
 
-def parse_model_output(output, sha):
+def parse_model_output(output, sha, allowed_paths=None):
     text = output.strip()
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1])
         if text.lstrip().startswith("json\n"):
             text = text.lstrip()[5:]
-    return validate_review(json.loads(text), sha)
+    return validate_review(json.loads(text), sha, allowed_paths)
 
 
 def safe_text(value):
@@ -100,13 +109,18 @@ def safe_text(value):
                      for line in value.splitlines())
 
 
-def call_model(sha, changes):
+def call_model(sha, changes, allowed_paths):
     command = os.environ.get("REVIEW_PI_COMMAND", "/home/admin-papa/.local/bin/pi-openai")
-    result = subprocess.run([
-        command, "--no-tools", "--no-skills", "--no-extensions", "--no-context-files",
-        "--no-session", "--thinking", "high", "--print", prompt(sha, changes),
-    ], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
-    return parse_model_output(result.stdout, sha)
+    arguments = [command, "--no-tools", "--no-skills", "--no-extensions", "--no-context-files",
+                 "--no-session", "--thinking", "high", "--print"]
+    try:
+        result = subprocess.run(arguments, input=prompt(sha, changes), check=True, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError("Pi review timed out") from error
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"Pi review exited with status {error.returncode}") from error
+    return parse_model_output(result.stdout, sha, allowed_paths)
 
 
 def render(review):
@@ -136,16 +150,22 @@ def mr_identity(mr):
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
-def deterministic_ci_passed(api, project, token, iid, sha):
+def deterministic_ci_pipeline(api, project, token, iid, sha, base_sha):
     pipelines = request_json(
         f"{api}/projects/{project}/merge_requests/{iid}/pipelines?per_page=20", token
     )
     pipeline = next((item for item in pipelines if item.get("sha") == sha), None)
     if not pipeline or pipeline.get("status") != "success":
-        return False
+        return None
+    base = request_json(f"{api}/projects/{project}/repository/commits/{base_sha}", token)
+    pipeline_time = datetime.fromisoformat(pipeline["created_at"].replace("Z", "+00:00"))
+    base_time = datetime.fromisoformat(base["committed_date"].replace("Z", "+00:00"))
+    if pipeline_time < base_time:
+        return None
     jobs = request_json(f"{api}/projects/{project}/pipelines/{pipeline['id']}/jobs?per_page=100", token)
     states = {job["name"]: job["status"] for job in jobs}
-    return all(states.get(name) == "success" for name in ("format", "elixir-test", "rust-test"))
+    return pipeline["id"] if all(states.get(name) == "success" for name in
+                                 ("format", "elixir-test", "rust-test")) else None
 
 
 def review_mr(api, project, token, bot_username, mr):
@@ -161,7 +181,9 @@ def review_mr(api, project, token, bot_username, mr):
     if (existing and f"Reviewed `{sha}`" in existing["body"] and
             f"Diff identity `{identity}`" in existing["body"]):
         return
-    if not deterministic_ci_passed(api, project, token, iid, sha):
+    base_sha = current["diff_refs"]["base_sha"]
+    pipeline_id = deterministic_ci_pipeline(api, project, token, iid, sha, base_sha)
+    if not pipeline_id:
         return
     diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs"
     diffs = request_pages(diffs_url, token)
@@ -174,13 +196,16 @@ def review_mr(api, project, token, bot_username, mr):
     )
     if not changes or len(changes) > 200_000:
         raise RuntimeError("empty or oversized merge-request diff")
-    review = call_model(sha, changes)
+    allowed_paths = {item["new_path"] for item in diffs} | {item["old_path"] for item in diffs}
+    review = call_model(sha, changes, allowed_paths)
     current = request_json(mr_url, token)
     final_identity = mr_identity(current)
     if current["sha"] != sha or final_identity != identity:
         raise RuntimeError(
             f"merge-request diff identity changed during review: {identity} -> {final_identity}"
         )
+    if deterministic_ci_pipeline(api, project, token, iid, sha, base_sha) != pipeline_id:
+        raise RuntimeError("accepted deterministic pipeline changed during review")
     body = {"body": render(review) + f"\n\nDiff identity `{identity}`."}
     if existing:
         request_json(f"{notes_url}/{existing['id']}", token, method="PUT", body=body)

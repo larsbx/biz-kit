@@ -41,7 +41,8 @@ class ReviewAgentTest(unittest.TestCase):
 
     def test_requires_every_deterministic_job(self):
         responses = iter([
-            [{"id": 7, "sha": "abc", "status": "success"}],
+            [{"id": 7, "sha": "abc", "status": "success", "created_at": "2026-08-01T01:00:00Z"}],
+            {"committed_date": "2026-08-01T00:00:00Z"},
             [{"name": "format", "status": "success"},
              {"name": "elixir-test", "status": "success"},
              {"name": "rust-test", "status": "success"}],
@@ -49,7 +50,7 @@ class ReviewAgentTest(unittest.TestCase):
         original = AGENT.request_json
         AGENT.request_json = lambda *args, **kwargs: next(responses)
         try:
-            self.assertTrue(AGENT.deterministic_ci_passed("api", "project", "token", 1, "abc"))
+            self.assertEqual(7, AGENT.deterministic_ci_pipeline("api", "project", "token", 1, "abc", "base"))
         finally:
             AGENT.request_json = original
 
@@ -57,7 +58,7 @@ class ReviewAgentTest(unittest.TestCase):
         original = AGENT.request_json
         AGENT.request_json = lambda *args, **kwargs: [{"id": 7, "sha": "abc", "status": "running"}]
         try:
-            self.assertFalse(AGENT.deterministic_ci_passed("api", "project", "token", 1, "abc"))
+            self.assertIsNone(AGENT.deterministic_ci_pipeline("api", "project", "token", 1, "abc", "base"))
         finally:
             AGENT.request_json = original
 
@@ -65,6 +66,19 @@ class ReviewAgentTest(unittest.TestCase):
         review = self.valid()
         review["findings"][0]["line"] = True
         with self.assertRaisesRegex(ValueError, "positive"):
+            AGENT.validate_review(review, "abc")
+
+    def test_rejects_path_not_in_diff_and_markdown_controls(self):
+        for path in ("other.ex", "lib/evil`\n/merge"):
+            review = self.valid()
+            review["findings"][0]["path"] = path
+            with self.assertRaises(ValueError):
+                AGENT.validate_review(review, "abc", {"lib/example.ex"})
+
+    def test_rejects_contradictory_verdict(self):
+        review = self.valid()
+        review["verdict"] = "pass"
+        with self.assertRaisesRegex(ValueError, "pass verdict"):
             AGENT.validate_review(review, "abc")
 
     def test_neutralizes_gitlab_quick_actions(self):
