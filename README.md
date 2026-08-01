@@ -95,3 +95,8 @@ The tracked systemd units in `ops/systemd/` run the poller once per minute; revi
 until the merge request's deterministic pipeline succeeds. They are user units guarded
 by `ConditionUser=admin-papa`, not system units. The GitLab token belongs to a Reporter
 project bot that cannot approve, close, push, or merge.
+
+The CI prerequisite proves the source commit's existing deterministic jobs; it is not a
+claim that GitLab CE tested a merged-results commit. The review itself is bound to the
+current head, target branch/project, and complete GitLab diff identity before and after
+inference.

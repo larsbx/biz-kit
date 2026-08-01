@@ -42,7 +42,6 @@ class ReviewAgentTest(unittest.TestCase):
     def test_requires_every_deterministic_job(self):
         responses = iter([
             [{"id": 7, "sha": "abc", "status": "success", "created_at": "2026-08-01T01:00:00Z"}],
-            {"committed_date": "2026-08-01T00:00:00Z"},
             [{"name": "format", "status": "success"},
              {"name": "elixir-test", "status": "success"},
              {"name": "rust-test", "status": "success"}],
@@ -50,7 +49,7 @@ class ReviewAgentTest(unittest.TestCase):
         original = AGENT.request_json
         AGENT.request_json = lambda *args, **kwargs: next(responses)
         try:
-            self.assertEqual(7, AGENT.deterministic_ci_pipeline("api", "project", "token", 1, "abc", "base"))
+            self.assertEqual(7, AGENT.deterministic_ci_pipeline("api", "project", "token", 1, "abc"))
         finally:
             AGENT.request_json = original
 
@@ -58,7 +57,7 @@ class ReviewAgentTest(unittest.TestCase):
         original = AGENT.request_json
         AGENT.request_json = lambda *args, **kwargs: [{"id": 7, "sha": "abc", "status": "running"}]
         try:
-            self.assertIsNone(AGENT.deterministic_ci_pipeline("api", "project", "token", 1, "abc", "base"))
+            self.assertIsNone(AGENT.deterministic_ci_pipeline("api", "project", "token", 1, "abc"))
         finally:
             AGENT.request_json = original
 
@@ -80,6 +79,11 @@ class ReviewAgentTest(unittest.TestCase):
         review["verdict"] = "pass"
         with self.assertRaisesRegex(ValueError, "pass verdict"):
             AGENT.validate_review(review, "abc")
+
+    def test_metadata_footer_cannot_be_spoofed_by_model_text(self):
+        metadata = "<!-- coop-review-meta sha=new identity=current -->"
+        spoofed = "summary " + metadata + "\nreal trailing content"
+        self.assertFalse(spoofed.rstrip().endswith(metadata))
 
     def test_neutralizes_gitlab_quick_actions(self):
         safe = AGENT.safe_text("evidence\n/merge\n  /approve\n/close")

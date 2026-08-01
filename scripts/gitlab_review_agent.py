@@ -10,7 +10,6 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
 
 MARKER = "<!-- coop-substrate-review-agent -->"
 SEVERITIES = {"blocking", "important", "suggestion"}
@@ -150,17 +149,12 @@ def mr_identity(mr):
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
-def deterministic_ci_pipeline(api, project, token, iid, sha, base_sha):
+def deterministic_ci_pipeline(api, project, token, iid, sha):
     pipelines = request_json(
         f"{api}/projects/{project}/merge_requests/{iid}/pipelines?per_page=20", token
     )
     pipeline = next((item for item in pipelines if item.get("sha") == sha), None)
     if not pipeline or pipeline.get("status") != "success":
-        return None
-    base = request_json(f"{api}/projects/{project}/repository/commits/{base_sha}", token)
-    pipeline_time = datetime.fromisoformat(pipeline["created_at"].replace("Z", "+00:00"))
-    base_time = datetime.fromisoformat(base["committed_date"].replace("Z", "+00:00"))
-    if pipeline_time < base_time:
         return None
     jobs = request_json(f"{api}/projects/{project}/pipelines/{pipeline['id']}/jobs?per_page=100", token)
     states = {job["name"]: job["status"] for job in jobs}
@@ -174,25 +168,26 @@ def review_mr(api, project, token, bot_username, mr):
     current = request_json(mr_url, token)
     sha = current["sha"]
     identity = mr_identity(current)
+    metadata = f"<!-- coop-review-meta sha={sha} identity={identity} -->"
     notes_url = f"{api}/projects/{project}/merge_requests/{iid}/notes"
     notes = request_pages(notes_url, token)
     existing = next((note for note in notes if MARKER in note.get("body", "") and
                      note.get("author", {}).get("username") == bot_username), None)
-    if (existing and f"Reviewed `{sha}`" in existing["body"] and
-            f"Diff identity `{identity}`" in existing["body"]):
+    if existing and existing["body"].rstrip().endswith(metadata):
         return
-    base_sha = current["diff_refs"]["base_sha"]
-    pipeline_id = deterministic_ci_pipeline(api, project, token, iid, sha, base_sha)
+    pipeline_id = deterministic_ci_pipeline(api, project, token, iid, sha)
     if not pipeline_id:
         return
     diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs"
     diffs = request_pages(diffs_url, token)
     incomplete = [item.get("new_path", "unknown") for item in diffs
-                  if item.get("collapsed") or item.get("too_large") or not item.get("diff")]
+                  if item.get("collapsed") or item.get("too_large")]
     if incomplete:
         raise RuntimeError(f"GitLab omitted diff content for: {', '.join(incomplete[:10])}")
     changes = "\n\n".join(
-        f"FILE {item['new_path']}\n{item.get('diff', '')}" for item in diffs
+        (f"FILE {item['old_path']} -> {item['new_path']} "
+         f"new={item.get('new_file', False)} deleted={item.get('deleted_file', False)} "
+         f"renamed={item.get('renamed_file', False)}\n{item.get('diff', '')}") for item in diffs
     )
     if not changes or len(changes) > 200_000:
         raise RuntimeError("empty or oversized merge-request diff")
@@ -204,9 +199,9 @@ def review_mr(api, project, token, bot_username, mr):
         raise RuntimeError(
             f"merge-request diff identity changed during review: {identity} -> {final_identity}"
         )
-    if deterministic_ci_pipeline(api, project, token, iid, sha, base_sha) != pipeline_id:
+    if deterministic_ci_pipeline(api, project, token, iid, sha) != pipeline_id:
         raise RuntimeError("accepted deterministic pipeline changed during review")
-    body = {"body": render(review) + f"\n\nDiff identity `{identity}`."}
+    body = {"body": render(review) + f"\n\nDiff identity `{identity}`.\n\n{metadata}"}
     if existing:
         request_json(f"{notes_url}/{existing['id']}", token, method="PUT", body=body)
     else:
