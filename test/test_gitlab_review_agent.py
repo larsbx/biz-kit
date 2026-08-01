@@ -53,6 +53,28 @@ class ReviewAgentTest(unittest.TestCase):
         finally:
             AGENT.request_json = original
 
+    def test_neutralizes_gitlab_quick_actions(self):
+        safe = AGENT.safe_text("evidence\n/merge\n  /approve\n/close")
+        for line in safe.splitlines()[1:]:
+            self.assertFalse(line.lstrip().startswith("/"))
+
+    def test_diff_identity_binds_target_and_all_shas(self):
+        mr = {"target_branch": "main", "target_project_id": 1, "diff_refs": {
+            "base_sha": "base", "head_sha": "head", "start_sha": "start"}}
+        identity = AGENT.mr_identity(mr)
+        mr["target_branch"] = "release"
+        self.assertNotEqual(identity, AGENT.mr_identity(mr))
+
+    def test_rejects_truncated_diff_path(self):
+        responses = iter([[{"new_path": "a", "diff": "x"}] * 100] * 10)
+        original = AGENT.request_json
+        AGENT.request_json = lambda *args, **kwargs: next(responses)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "pagination limit"):
+                AGENT.request_pages("api", "token")
+        finally:
+            AGENT.request_json = original
+
 
 if __name__ == "__main__":
     unittest.main()

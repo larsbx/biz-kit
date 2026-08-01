@@ -90,4 +90,6 @@ The agent cannot push, approve, resolve discussions, or merge. It validates stri
 checks the merge-request head after inference, updates one summary note, publishes an
 `agent-review` commit status, and fails closed on malformed output or a stale SHA.
 The tracked systemd units in `ops/systemd/` run the poller once per minute; review waits
-until the merge request's deterministic pipeline succeeds.
+until the merge request's deterministic pipeline succeeds. They are user units guarded
+by `ConditionUser=admin-papa`, not system units. The GitLab token belongs to a Reporter
+project bot that cannot approve, close, push, or merge.

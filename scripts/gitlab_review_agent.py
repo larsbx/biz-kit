@@ -4,6 +4,7 @@
 import json
 import os
 import pathlib
+import hashlib
 import subprocess
 import sys
 import urllib.error
@@ -30,6 +31,19 @@ def request_json(url, token, *, method="GET", body=None):
         raise RuntimeError(f"HTTP {error.code} from GitLab: {detail}") from error
 
 
+def request_pages(url, token, limit=10):
+    items = []
+    for page in range(1, limit + 1):
+        separator = "&" if "?" in url else "?"
+        batch = request_json(f"{url}{separator}per_page=100&page={page}", token)
+        if not isinstance(batch, list):
+            raise RuntimeError("paginated GitLab response is not a list")
+        items.extend(batch)
+        if len(batch) < 100:
+            return items
+    raise RuntimeError("GitLab response exceeded pagination limit")
+
+
 def validate_review(review, expected_sha):
     if not isinstance(review, dict) or set(review) != {"sha", "verdict", "summary", "findings"}:
         raise ValueError("review must contain exactly sha, verdict, summary, and findings")
@@ -44,7 +58,8 @@ def validate_review(review, expected_sha):
             raise ValueError("invalid finding fields")
         if finding["severity"] not in SEVERITIES:
             raise ValueError("invalid finding severity")
-        if not isinstance(finding["path"], str) or finding["path"].startswith(("/", "..")):
+        if (not isinstance(finding["path"], str) or "\n" in finding["path"] or
+                finding["path"].startswith(("/", ".."))):
             raise ValueError("finding path must be repository-relative")
         if not isinstance(finding["line"], int) or finding["line"] < 1:
             raise ValueError("finding line must be positive")
@@ -79,6 +94,12 @@ def parse_model_output(output, sha):
     return validate_review(json.loads(text), sha)
 
 
+def safe_text(value):
+    value = "".join(character for character in value if character in "\n\t" or ord(character) >= 32)
+    return "\n".join(("\u200b" + line if line.lstrip().startswith("/") else line)
+                     for line in value.splitlines())
+
+
 def call_model(sha, changes):
     command = os.environ.get("REVIEW_PI_COMMAND", "/home/admin-papa/.local/bin/pi-openai")
     result = subprocess.run([
@@ -89,13 +110,14 @@ def call_model(sha, changes):
 
 
 def render(review):
-    lines = [MARKER, f"## Automated review: {review['verdict']}", "", review["summary"], "",
+    lines = [MARKER, f"## Automated review: {review['verdict']}", "", safe_text(review["summary"]), "",
              f"Reviewed `{review['sha']}` with the host-isolated Pi audit agent."]
     if review["findings"]:
         lines += ["", "### Findings"]
         for finding in review["findings"]:
             lines += ["", f"- **{finding['severity']}** `{finding['path']}:{finding['line']}`",
-                      f"  - Evidence: {finding['evidence']}", f"  - Fix: {finding['fix']}"]
+                      f"  - Evidence: {safe_text(finding['evidence'])}",
+                      f"  - Fix: {safe_text(finding['fix'])}"]
     else:
         lines += ["", "No actionable findings."]
     lines += ["", "_Advisory findings; deterministic CI and human approval remain authoritative._"]
@@ -105,6 +127,24 @@ def render(review):
 def status(api, project, sha, token, state, description):
     query = urllib.parse.urlencode({"state": state, "name": "agent-review", "description": description[:255]})
     request_json(f"{api}/projects/{project}/statuses/{sha}?{query}", token, method="POST")
+
+
+def mr_identity(mr):
+    refs = mr.get("diff_refs") or {}
+    identity = {
+        "base_sha": refs.get("base_sha"), "head_sha": refs.get("head_sha"),
+        "start_sha": refs.get("start_sha"), "target_branch": mr.get("target_branch"),
+        "target_project_id": mr.get("target_project_id"),
+    }
+    if not all(identity.values()):
+        raise RuntimeError("merge request lacks a complete diff identity")
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
+def terminal_status(api, project, token, sha):
+    statuses = request_pages(f"{api}/projects/{project}/repository/commits/{sha}/statuses", token)
+    match = next((item for item in statuses if item.get("name") == "agent-review"), None)
+    return match and match.get("status") in {"success", "failed"}
 
 
 def deterministic_ci_passed(api, project, token, iid, sha):
@@ -119,18 +159,29 @@ def deterministic_ci_passed(api, project, token, iid, sha):
     return all(states.get(name) == "success" for name in ("format", "elixir-test", "rust-test"))
 
 
-def review_mr(api, project, token, mr):
+def review_mr(api, project, token, bot_username, mr):
     iid, sha = mr["iid"], mr["sha"]
+    mr_url = f"{api}/projects/{project}/merge_requests/{iid}"
+    current = request_json(mr_url, token)
+    identity = mr_identity(current)
     notes_url = f"{api}/projects/{project}/merge_requests/{iid}/notes"
-    notes = request_json(notes_url + "?per_page=100", token)
-    existing = next((note for note in notes if MARKER in note.get("body", "")), None)
-    if existing and f"Reviewed `{sha}`" in existing["body"]:
+    notes = request_pages(notes_url, token)
+    existing = next((note for note in notes if MARKER in note.get("body", "") and
+                     note.get("author", {}).get("username") == bot_username), None)
+    if (existing and f"Reviewed `{sha}`" in existing["body"] and
+            f"Diff identity `{identity}`" in existing["body"] and
+            terminal_status(api, project, token, sha)):
         return
     if not deterministic_ci_passed(api, project, token, iid, sha):
         return
     status(api, project, sha, token, "pending", "Host-isolated AI review is running")
-    diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs?per_page=100"
-    diffs = request_json(diffs_url, token)
+    diffs_url = f"{api}/projects/{project}/merge_requests/{iid}/diffs"
+    diffs = request_pages(diffs_url, token)
+    incomplete = [item.get("new_path", "unknown") for item in diffs
+                  if not item.get("generated_file", False) and
+                  (item.get("collapsed") or item.get("too_large") or not item.get("diff"))]
+    if incomplete:
+        raise RuntimeError(f"GitLab omitted diff content for: {', '.join(incomplete[:10])}")
     changes = "\n\n".join(
         f"FILE {item['new_path']}\n{item.get('diff', '')}" for item in diffs
         if not item.get("generated_file", False)
@@ -138,10 +189,10 @@ def review_mr(api, project, token, mr):
     if not changes or len(changes) > 200_000:
         raise RuntimeError("empty or oversized merge-request diff")
     review = call_model(sha, changes)
-    current = request_json(f"{api}/projects/{project}/merge_requests/{iid}", token)
-    if current["sha"] != sha:
-        raise RuntimeError("merge-request head changed during review")
-    body = {"body": render(review)}
+    current = request_json(mr_url, token)
+    if current["sha"] != sha or mr_identity(current) != identity:
+        raise RuntimeError("merge-request diff identity changed during review")
+    body = {"body": render(review) + f"\n\nDiff identity `{identity}`."}
     if existing:
         request_json(f"{notes_url}/{existing['id']}", token, method="PUT", body=body)
     else:
@@ -153,15 +204,18 @@ def review_mr(api, project, token, mr):
 def main():
     api = os.environ.get("REVIEW_GITLAB_API", "http://127.0.0.1:8929/api/v4")
     project = urllib.parse.quote(os.environ.get("REVIEW_GITLAB_PROJECT", "root/coop_substrate"), safe="")
-    token_path = pathlib.Path(os.environ.get("REVIEW_GITLAB_TOKEN_FILE", "/home/admin-papa/.config/icm-kb/gitlab-token"))
+    token_path = pathlib.Path(os.environ.get(
+        "REVIEW_GITLAB_TOKEN_FILE", "/home/admin-papa/.config/gitlab-review/coop-substrate-token"
+    ))
     token = token_path.read_text().strip()
     if not token:
         raise RuntimeError("GitLab token file is empty")
-    mrs = request_json(f"{api}/projects/{project}/merge_requests?state=opened&per_page=100", token)
+    bot_username = request_json(f"{api}/user", token)["username"]
+    mrs = request_pages(f"{api}/projects/{project}/merge_requests?state=opened", token)
     failures = 0
     for mr in mrs:
         try:
-            review_mr(api, project, token, mr)
+            review_mr(api, project, token, bot_username, mr)
         except Exception as error:
             failures += 1
             print(f"MR !{mr.get('iid', '?')} review failed closed: {error}", file=sys.stderr)
