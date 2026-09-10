@@ -46,7 +46,13 @@ defmodule CoopSubstrate.Cockpit do
          queue: %{
            open: Enum.count(items, & &1.open),
            nearest_deadline_ms:
-             items |> Enum.filter(& &1.open) |> Enum.map(& &1.deadline_ms) |> Enum.min(fn -> nil end)
+             Enum.reduce(items, nil, fn item, acc ->
+               if item.open do
+                 if acc == nil or item.deadline_ms < acc, do: item.deadline_ms, else: acc
+               else
+                 acc
+               end
+             end)
          },
          processes: process_board(items),
          b_op: b_op_board(state, chapter_id, items, now_ms),
@@ -73,10 +79,8 @@ defmodule CoopSubstrate.Cockpit do
         defects: Enum.count(resolved, &(&1[:verdict] == "returned_defect")),
         # Chronic approval ⇒ the bound is too tight; chronic decline ⇒ the
         # agent logic is wrong (10 §5) — computable before ε's denominator is.
-        approval_rate:
-          (resolved != [] && Float.round(approved / length(resolved), 2)) || nil,
-        act_heat:
-          process_items |> Enum.frequencies_by(& &1.act_type) |> Enum.sort() |> Map.new()
+        approval_rate: (resolved != [] && Float.round(approved / length(resolved), 2)) || nil,
+        act_heat: process_items |> Enum.frequencies_by(& &1.act_type) |> Enum.sort() |> Map.new()
       }
     end)
   end
