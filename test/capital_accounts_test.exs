@@ -116,7 +116,7 @@ defmodule CoopSubstrate.CapitalAccountsTest do
     assert balance!() == 100
   end
 
-  test "accrual math under the placeholder linear rule, entries record the rule", ctx do
+  test "accrual math under the linear accrual rule, entries record the rule", ctx do
     seed_membership!(ctx.steward, ctx.member, @member, @entity)
 
     activate_rule!(ctx.steward, "capital-accrual-v1", %{
@@ -320,7 +320,7 @@ defmodule CoopSubstrate.CapitalAccountsTest do
 
     # Independent computation: a naive fold over the raw event list, sharing
     # no code with the projection or the rule module — just the frozen
-    # arithmetic of the placeholder rule.
+    # arithmetic of the linear accrual rule.
     {:ok, events} = Log.read_all()
 
     {_params, independent_balance} =
