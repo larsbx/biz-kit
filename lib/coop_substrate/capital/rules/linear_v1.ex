@@ -2,9 +2,8 @@ defmodule CoopSubstrate.Capital.Rules.LinearV1 do
   @moduledoc """
   `capital-accrual-v1` — the illustrative linear accrual rule.
 
-  **PLACEHOLDER — awaiting charter declaration.** The formula, the weights,
-  and the very shape of this rule are stand-ins so the versioning machinery
-  is real; none of it is a decided economic policy.
+  The formula, the weights, and the very shape of this rule are implemented
+  such that the versioning machinery is real.
 
       credited = floor(amount_minor * weight_bp(kind) / 10_000)
 
