@@ -93,7 +93,7 @@ defmodule CoopSubstrate.CapitalAccountsTest do
       )
     end
 
-    # :invited is not an accruing state (probationary+ counts).
+    # :invited is not an accruing state (PLACEHOLDER: probationary+ counts).
     assert {:error, {:reject, 0, {:membership_not_active, :invited}}} =
              Log.append(event.(%{}))
 
