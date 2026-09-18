@@ -21,6 +21,8 @@ defmodule Dispatch.Audit.Changes.ChainHash do
 
   @impl Ash.Resource.Change
   def change(changeset, _opts, _context) do
+    tenant = changeset.tenant || Ash.Changeset.get_attribute(changeset, :tenant_id)
+    lock_tenant_chain!(tenant)
     previous = previous_hash(changeset)
 
     changeset
@@ -28,6 +30,16 @@ defmodule Dispatch.Audit.Changes.ChainHash do
     |> then(fn cs ->
       Ash.Changeset.force_change_attribute(cs, :event_hash, compute_hash(cs, previous))
     end)
+  end
+
+  # The lock is transaction-scoped, so every append for one tenant observes the
+  # predecessor committed by the append before it. Different tenants retain
+  # independent concurrency.
+  defp lock_tenant_chain!(tenant) do
+    Dispatch.Repo.query!(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+      [to_string(tenant)]
+    )
   end
 
   defp previous_hash(changeset) do

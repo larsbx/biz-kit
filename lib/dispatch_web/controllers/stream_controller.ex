@@ -22,18 +22,22 @@ defmodule DispatchWeb.StreamController do
   @doc "The carrier-scoped operations roster stream."
   @spec operations(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def operations(conn, _params) do
-    case Operations.open(conn.assigns.actor) do
-      {:ok, session, snapshot} ->
-        opened = open_stream(conn)
+    topic = "operations:#{conn.assigns.actor.role_assignment.organization_id}"
 
-        case write(opened, snapshot) do
-          :closed -> opened
-          written -> operations_loop(written, session)
-        end
+    with_subscription(topic, fn ->
+      case Operations.open(conn.assigns.actor) do
+        {:ok, session, snapshot} ->
+          opened = open_stream(conn)
 
-      {:error, :not_found} ->
-        conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
-    end
+          case write(opened, snapshot) do
+            :closed -> opened
+            written -> operations_run(written, session)
+          end
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
+      end
+    end)
   end
 
   @doc """
@@ -48,22 +52,22 @@ defmodule DispatchWeb.StreamController do
   def participant(conn, %{"participant_id" => participant_id}) do
     last_event_id = List.first(get_req_header(conn, "last-event-id"))
 
-    case Participant.open(conn.assigns.actor, participant_id, last_event_id: last_event_id) do
-      {:ok, session, snapshot} ->
-        opened = open_stream(conn)
+    with_subscription("participant:#{participant_id}", fn ->
+      case Participant.open(conn.assigns.actor, participant_id, last_event_id: last_event_id) do
+        {:ok, session, snapshot} ->
+          opened = open_stream(conn)
 
-        # A client can be gone before the snapshot lands — it opened the stream
-        # and navigated away. Piping a failed write straight into the loop would
-        # subscribe to a topic on behalf of a socket that no longer exists, then
-        # crash on the first tick.
-        case write(opened, snapshot) do
-          :closed -> opened
-          written -> loop(written, session)
-        end
+          # A client can be gone before the snapshot lands — it opened the
+          # stream and navigated away.
+          case write(opened, snapshot) do
+            :closed -> opened
+            written -> run(written, session)
+          end
 
-      {:error, :not_found} ->
-        conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
-    end
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
+      end
+    end)
   end
 
   defp open_stream(conn) do
@@ -74,18 +78,6 @@ defmodule DispatchWeb.StreamController do
     # events arrive, eventually, in one batch, which is not a live stream.
     |> put_resp_header("x-accel-buffering", "no")
     |> send_chunked(200)
-  end
-
-  # Subscribing after the snapshot would drop anything that happened while it
-  # rendered; subscribing before means a redundant patch at worst.
-  defp loop(conn, session) do
-    :ok = Phoenix.PubSub.subscribe(Dispatch.PubSub, topic(session))
-
-    try do
-      run(conn, session)
-    after
-      Phoenix.PubSub.unsubscribe(Dispatch.PubSub, topic(session))
-    end
   end
 
   defp run(conn, session) do
@@ -125,16 +117,6 @@ defmodule DispatchWeb.StreamController do
     end
   end
 
-  defp operations_loop(conn, session) do
-    :ok = Phoenix.PubSub.subscribe(Dispatch.PubSub, operations_topic(session))
-
-    try do
-      operations_run(conn, session)
-    after
-      Phoenix.PubSub.unsubscribe(Dispatch.PubSub, operations_topic(session))
-    end
-  end
-
   defp operations_run(conn, session) do
     receive do
       {:outbox, _payload} -> operations_advance(conn, session, :refresh)
@@ -156,6 +138,16 @@ defmodule DispatchWeb.StreamController do
     end
   end
 
-  defp topic(session), do: "participant:#{session.participant_id}"
-  defp operations_topic(session), do: "operations:#{session.organization_id}"
+  # Subscription precedes snapshot construction. An overlapping mutation may
+  # therefore cause one redundant refresh, but can never fall into the gap
+  # between the snapshot query and listener registration.
+  defp with_subscription(topic, fun) do
+    :ok = Phoenix.PubSub.subscribe(Dispatch.PubSub, topic)
+
+    try do
+      fun.()
+    after
+      Phoenix.PubSub.unsubscribe(Dispatch.PubSub, topic)
+    end
+  end
 end

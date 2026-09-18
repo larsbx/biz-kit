@@ -105,9 +105,17 @@ defmodule Dispatch.Operations.Declarations do
   def by_id(_actor, _event_id), do: nil
 
   defp create(actor, input) do
-    ParticipantStatusEvent
-    |> Ash.Changeset.for_create(:declare, input, actor: actor, tenant: actor.tenant_id)
-    |> Ash.create()
+    Dispatch.Repo.transaction(fn ->
+      case create_event(actor, input) do
+        {:ok, event} ->
+          record_audit!(actor, event)
+          enqueue_stream_refreshes!(actor, event)
+          event
+
+        {:error, error} ->
+          Dispatch.Repo.rollback(error)
+      end
+    end)
     |> case do
       {:ok, event} ->
         {:ok, :created, event}
@@ -121,6 +129,53 @@ defmodule Dispatch.Operations.Declarations do
           {matched_on, event} -> reconcile(matched_on, event, input)
         end
     end
+  end
+
+  defp create_event(actor, input) do
+    ParticipantStatusEvent
+    |> Ash.Changeset.for_create(:declare, input, actor: actor, tenant: actor.tenant_id)
+    |> Ash.create()
+  end
+
+  defp record_audit!(actor, event) do
+    Dispatch.Audit.AuditEvent
+    |> Ash.Changeset.for_create(:record, %{
+      tenant_id: actor.tenant_id,
+      event_type: "status.declared",
+      actor_type: actor.principal_type,
+      actor_id: actor.principal_id,
+      role_assignment_id: actor.role_assignment.id,
+      subject_type: "participant",
+      subject_id: event.participant_id,
+      occurred_at: event.recorded_at,
+      correlation_id: event.correlation_id,
+      payload_json: %{
+        "event_id" => event.id,
+        "status" => to_string(event.status),
+        "source" => to_string(event.source)
+      }
+    })
+    |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
+  end
+
+  defp enqueue_stream_refreshes!(actor, event) do
+    now = DateTime.utc_now()
+
+    [
+      {"participant:#{event.participant_id}", %{"event_id" => event.id}},
+      {"operations:#{actor.role_assignment.organization_id}", %{"event_id" => event.id}}
+    ]
+    |> Enum.each(fn {topic, payload} ->
+      %Dispatch.Outbox.Event{
+        id: Ash.UUID.generate(),
+        tenant_id: actor.tenant_id,
+        topic: topic,
+        event_type: "status.declared",
+        payload: payload,
+        occurred_at: now
+      }
+      |> Dispatch.Repo.insert!()
+    end)
   end
 
   # The ID is taken, and the lookup above — scoped to this participant's own

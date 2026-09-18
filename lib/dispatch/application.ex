@@ -19,6 +19,7 @@ defmodule Dispatch.Application do
       Dispatch.Telemetry,
       Dispatch.Repo,
       {Phoenix.PubSub, name: Dispatch.PubSub},
+      Dispatch.Outbox.Publisher,
       {Finch,
        name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: transport_opts()]]}},
       # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
