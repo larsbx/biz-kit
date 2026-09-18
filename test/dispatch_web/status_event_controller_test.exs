@@ -257,9 +257,174 @@ defmodule DispatchWeb.StatusEventControllerTest do
     end
   end
 
+  describe "Section 24.1: an assignment must belong to the caller" do
+    test "a declaration naming another participant's assignment is refused", ctx do
+      %{participant: other} = Fixtures.person(ctx.tenant, ctx.org)
+      theirs = Fixtures.assignment_record(ctx.tenant, ctx.org, other)
+
+      conn =
+        post("/v1/me/status-events", declaration(%{"assignment_id" => theirs.id}),
+          token: ctx.token
+        )
+
+      assert conn.status == 422
+      assert [] = read_events(ctx)
+    end
+
+    test "a declaration naming an assignment in another tenant is refused", ctx do
+      elsewhere = Fixtures.carrier()
+      %{participant: stranger} = Fixtures.person(elsewhere.id, elsewhere)
+      theirs = Fixtures.assignment_record(elsewhere.id, elsewhere, stranger)
+
+      # The sharper case: a tenant-A event linked to a tenant-B assignment would
+      # corrupt assignment-scoped history across the tenant boundary.
+      conn =
+        post("/v1/me/status-events", declaration(%{"assignment_id" => theirs.id}),
+          token: ctx.token
+        )
+
+      assert conn.status == 422
+      assert [] = read_events(ctx)
+    end
+
+    test "a declaration naming the caller's own assignment is accepted", ctx do
+      mine = Fixtures.assignment_record(ctx.tenant, ctx.org, ctx.driver)
+
+      conn =
+        post("/v1/me/status-events", declaration(%{"assignment_id" => mine.id}), token: ctx.token)
+
+      assert conn.status == 201
+      assert Jason.decode!(conn.resp_body)["event"]["assignment_id"] == mine.id
+    end
+  end
+
+  describe "Section 22.3: a device sequence belongs to a device the caller owns" do
+    test "a declaration naming another participant's device is refused", ctx do
+      %{participant: other} = Fixtures.person(ctx.tenant, ctx.org)
+      theirs = Fixtures.device(ctx.tenant, other)
+
+      conn =
+        post(
+          "/v1/me/status-events",
+          declaration(%{"device_id" => theirs.id, "device_sequence" => 1}),
+          token: ctx.token
+        )
+
+      assert conn.status == 422
+      assert [] = read_events(ctx)
+    end
+
+    test "a declaration naming a revoked device is refused", ctx do
+      device = Fixtures.device(ctx.tenant, ctx.driver)
+
+      device
+      |> Ash.Changeset.for_update(:revoke, %{})
+      |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+
+      conn =
+        post(
+          "/v1/me/status-events",
+          declaration(%{"device_id" => device.id, "device_sequence" => 1}),
+          token: ctx.token
+        )
+
+      # Section 13 makes revocation lost-device handling. A revoked handset
+      # must not keep consuming sequence numbers.
+      assert conn.status == 422
+      assert [] = read_events(ctx)
+    end
+
+    test "a declaration naming a device in another tenant is refused", ctx do
+      elsewhere = Fixtures.carrier()
+      %{participant: stranger} = Fixtures.person(elsewhere.id, elsewhere)
+      theirs = Fixtures.device(elsewhere.id, stranger)
+
+      # `devices.installation_id` and the status-event sequence index are both
+      # global (Section 22.3), so an unchecked device ID lets one tenant consume
+      # another tenant's sequence numbers.
+      conn =
+        post(
+          "/v1/me/status-events",
+          declaration(%{"device_id" => theirs.id, "device_sequence" => 1}),
+          token: ctx.token
+        )
+
+      assert conn.status == 422
+      assert [] = read_events(ctx)
+    end
+
+    test "a declaration naming the caller's own active device is accepted", ctx do
+      device = Fixtures.device(ctx.tenant, ctx.driver)
+
+      conn =
+        post(
+          "/v1/me/status-events",
+          declaration(%{"device_id" => device.id, "device_sequence" => 1}),
+          token: ctx.token
+        )
+
+      assert conn.status == 201
+      assert Jason.decode!(conn.resp_body)["event"]["device_id"] == device.id
+    end
+  end
+
+  describe "Section 24.1: the client-assigned event_id" do
+    test "is persisted as the event's identity", ctx do
+      id = Ash.UUID.generate()
+
+      conn = post("/v1/me/status-events", declaration(%{"event_id" => id}), token: ctx.token)
+
+      assert conn.status == 201
+      # The contract calls it client-assigned. A field the server accepts and
+      # discards is worse than one it never advertised: an offline client
+      # reconciling by ID would never find its own event.
+      assert Jason.decode!(conn.resp_body)["event"]["id"] == id
+    end
+
+    test "replaying the same event_id returns the original event, not a second one", ctx do
+      id = Ash.UUID.generate()
+      body = declaration(%{"event_id" => id})
+
+      first = post("/v1/me/status-events", body, token: ctx.token)
+      second = post("/v1/me/status-events", body, token: ctx.token)
+
+      assert first.status == 201
+      assert second.status == 201
+      assert Jason.decode!(second.resp_body)["event"]["id"] == id
+      assert length(read_events(ctx)) == 1
+    end
+  end
+
+  describe "Section 24.1: a client-assigned event_id claimed by someone else" do
+    test "is refused as a conflict, not a server error, and discloses nothing", ctx do
+      %{user: other_user, participant: other} = Fixtures.person(ctx.tenant, ctx.org)
+
+      Fixtures.assignment(ctx.tenant, ctx.org, other, "DRIVER",
+        definition: Fixtures.role_definition_for(ctx.tenant, ctx.assignment)
+      )
+
+      id = Ash.UUID.generate()
+
+      mine = post("/v1/me/status-events", declaration(%{"event_id" => id}), token: ctx.token)
+      assert mine.status == 201
+
+      # A UUIDv7 collision is not reachable by accident, but a deliberate one
+      # must not surface as a 500 — nor tell the caller whose event it is.
+      theirs =
+        post("/v1/me/status-events", declaration(%{"event_id" => id}),
+          token: StaticVerifier.token_for(other_user.oidc_subject)
+        )
+
+      assert theirs.status == 409
+      problem = Jason.decode!(theirs.resp_body)
+      assert problem["code"] == "EVENT_ID_CONFLICT"
+      refute problem["detail"] =~ ctx.driver.id
+    end
+  end
+
   describe "device sequences (Sections 22.3, 24.1)" do
     test "a retry with the same content returns the original event", ctx do
-      device = Ash.UUID.generate()
+      device = Fixtures.device(ctx.tenant, ctx.driver).id
       body = declaration(%{"device_id" => device, "device_sequence" => 412})
 
       first = post("/v1/me/status-events", body, token: ctx.token)
@@ -276,7 +441,7 @@ defmodule DispatchWeb.StatusEventControllerTest do
     end
 
     test "the same sequence with different content is a conflict", ctx do
-      device = Ash.UUID.generate()
+      device = Fixtures.device(ctx.tenant, ctx.driver).id
       at = DateTime.utc_now() |> DateTime.to_iso8601()
 
       first =

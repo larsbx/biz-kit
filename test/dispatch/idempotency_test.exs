@@ -26,6 +26,21 @@ defmodule Dispatch.IdempotencyTest do
 
   defp key, do: "key-" <> Ash.UUID.generate()
 
+  # Ages a claim's last update past the in-progress lease, standing in for the
+  # process that took it having died.
+  defp age_claim(ctx, key) do
+    import Ecto.Query, only: [from: 2]
+
+    past = DateTime.add(DateTime.utc_now(), -60 * 60, :second)
+
+    from(r in Dispatch.Idempotency.Record,
+      where:
+        r.idempotency_key == ^key and
+          r.role_assignment_id == type(^ctx.actor.role_assignment.id, :binary_id)
+    )
+    |> Dispatch.Repo.update_all(set: [updated_at: past])
+  end
+
   # Ages a stored record past its retention window without invoking the sweep,
   # so the test is about the read path rather than about the sweep.
   defp expire(ctx, key) do
@@ -69,6 +84,34 @@ defmodule Dispatch.IdempotencyTest do
       assert {:proceed, _claim_id} = Idempotency.claim(ctx.actor, k, body)
       # This is the race: the same request, arriving while the first is still in
       # flight. Letting it proceed would execute the mutation twice.
+      assert {:error, :in_progress} = Idempotency.claim(ctx.actor, k, body)
+    end
+
+    test "a claim orphaned by a crash becomes retryable, not stuck for a day", ctx do
+      k = key()
+      body = %{"status" => "AT_PICKUP"}
+
+      # The window this closes: the mutation committed, then the process died
+      # before `complete/3` ran. Without a lease the key stays IN_PROGRESS for
+      # the full retention window, so every retry is refused and the client's
+      # only way forward — a fresh key — duplicates the mutation.
+      assert {:proceed, _orphaned} = Idempotency.claim(ctx.actor, k, body)
+      assert {:error, :in_progress} = Idempotency.claim(ctx.actor, k, body)
+
+      age_claim(ctx, k)
+
+      assert {:proceed, _recovered} = Idempotency.claim(ctx.actor, k, body)
+    end
+
+    test "a claim still within its lease is not stolen from the request holding it", ctx do
+      k = key()
+      body = %{"status" => "AT_PICKUP"}
+
+      assert {:proceed, _held} = Idempotency.claim(ctx.actor, k, body)
+
+      # The lease must not be so eager that an ordinary slow request loses its
+      # claim to a retry and runs the mutation twice — which is the exact
+      # failure the ledger exists to prevent.
       assert {:error, :in_progress} = Idempotency.claim(ctx.actor, k, body)
     end
 

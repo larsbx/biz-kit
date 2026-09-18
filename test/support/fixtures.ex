@@ -15,7 +15,17 @@ defmodule Dispatch.Support.Fixtures do
   """
 
   alias Dispatch.Access.{Actor, SeedManifest}
-  alias Dispatch.Accounts.{Organization, Participant, RoleAssignment, RoleDefinition, User}
+
+  alias Dispatch.Accounts.{
+    Device,
+    Organization,
+    Participant,
+    RoleAssignment,
+    RoleDefinition,
+    User
+  }
+
+  alias Dispatch.Fleet.{Assignment, Load}
 
   @doc "A name-unique suffix, so fixtures can be built repeatedly in one run."
   @spec unique(String.t()) :: String.t()
@@ -122,6 +132,56 @@ defmodule Dispatch.Support.Fixtures do
   def actor(tenant, org, subject, key, opts \\ []) do
     {:ok, actor} = Actor.from_assignment(assignment(tenant, org, subject, key, opts))
     actor
+  end
+
+  @doc "An active device registered to `participant`."
+  @spec device(Ash.UUID.t(), Participant.t()) :: Device.t()
+  def device(tenant, participant) do
+    Device
+    |> Ash.Changeset.for_create(:register, %{
+      tenant_id: tenant,
+      participant_id: participant.id,
+      installation_id: unique("installation"),
+      public_key: Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  @doc """
+  A planned operational assignment for `operator`.
+
+  Named `assignment_record` because `assignment/5` above builds a *role*
+  assignment. The two are different things Section 22 keeps apart: authority
+  versus a trip.
+  """
+  @spec assignment_record(Ash.UUID.t(), Organization.t(), Participant.t(), keyword()) ::
+          Assignment.t()
+  def assignment_record(tenant, org, operator, opts \\ []) do
+    load =
+      Keyword.get_lazy(opts, :load, fn ->
+        Load
+        |> Ash.Changeset.for_create(:create_load, %{
+          tenant_id: tenant,
+          carrier_organization_id: org.id,
+          external_reference: unique("LOAD")
+        })
+        |> Ash.create!(authorize?: false, tenant: tenant)
+      end)
+
+    Assignment
+    |> Ash.Changeset.for_create(:plan, %{
+      tenant_id: tenant,
+      load_id: load.id,
+      operator_participant_id: operator.id,
+      starts_at: Keyword.get(opts, :starts_at, DateTime.utc_now())
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  @doc "The role definition an existing assignment was granted from."
+  @spec role_definition_for(Ash.UUID.t(), RoleAssignment.t()) :: RoleDefinition.t()
+  def role_definition_for(tenant, %RoleAssignment{} = assignment) do
+    Ash.get!(RoleDefinition, assignment.role_definition_id, authorize?: false, tenant: tenant)
   end
 
   defp scope_for("DRIVER"), do: :SELF

@@ -48,7 +48,12 @@ defmodule Dispatch.Operations.ParticipantStatusEvent do
   end
 
   attributes do
-    uuid_v7_primary_key :id
+    # Writable because Section 24.1's payload calls the identifier client-assigned
+    # and Section 19.2 mandates UUIDv7, which a handset can generate offline.
+    # That pairing is the point: an outbox entry carries the ID it will have on
+    # the server, so a client that loses the response can still reconcile.
+    # Omitted, the default generator supplies one.
+    uuid_v7_primary_key :id, writable?: true
 
     attribute :tenant_id, :uuid, allow_nil?: false, public?: true
     attribute :participant_id, :uuid, allow_nil?: false, public?: true
@@ -125,6 +130,12 @@ defmodule Dispatch.Operations.ParticipantStatusEvent do
 
   validations do
     validate {Dispatch.Operations.Validations.StatusDeclaration, []}
+
+    # Section 24.1 requires a supplied assignment to belong to the declaring
+    # participant, and Section 22.3's globally unique device sequence makes the
+    # same true of a device. Both are references a caller supplies, so both are
+    # checked against what that caller owns.
+    validate {Dispatch.Operations.Validations.ReferencedRows, []}, on: [:create]
   end
 
   actions do
@@ -137,6 +148,11 @@ defmodule Dispatch.Operations.ParticipantStatusEvent do
       """
 
       accept [
+        # Section 24.1's payload calls this `event_id` and describes it as
+        # client-assigned. Accepting it is what makes an offline client able to
+        # reconcile by the ID it already recorded; generating a new one would
+        # leave that field advertised and meaningless.
+        :id,
         :tenant_id,
         :participant_id,
         :role_assignment_id,

@@ -135,6 +135,14 @@ defmodule DispatchWeb.StatusEventController do
       {:ok, _created_or_duplicate, event} ->
         conn |> put_status(:created) |> json(body(conn, event))
 
+      {:error, :event_id_conflict} ->
+        Problem.send(
+          conn,
+          409,
+          "EVENT_ID_CONFLICT",
+          "This event_id is already in use. Choose another."
+        )
+
       {:error, :device_sequence_conflict} ->
         Problem.send(
           conn,
@@ -223,6 +231,7 @@ defmodule DispatchWeb.StatusEventController do
          {:ok, sequence} <- integer(params["device_sequence"]) do
       {:ok,
        %{
+         id: params["event_id"],
          status: params["status"],
          occurred_at: occurred_at,
          note: params["note"],

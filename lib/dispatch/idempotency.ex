@@ -36,6 +36,12 @@ defmodule Dispatch.Idempotency do
 
   @retention_hours 24
 
+  # How long a claim may sit `IN_PROGRESS` before another request may take it
+  # over. Longer than any request this service should take, so a slow but living
+  # request never loses its claim; far shorter than the retention window, so a
+  # claim orphaned by a crash does not block its key for a day.
+  @lease_seconds 120
+
   @typedoc "A claim outcome: run the mutation, or answer from the ledger."
   @type claim ::
           {:proceed, claim_id :: Ash.UUID.t()}
@@ -181,7 +187,14 @@ defmodule Dispatch.Idempotency do
   # a day-old response indefinitely if the job were paused or had never run.
   defp resolve(%Record{expires_at: expires_at} = record, actor, key, hash, body, attempts) do
     if DateTime.compare(DateTime.utc_now(), expires_at) == :lt do
-      live(record, hash)
+      case live(record, hash) do
+        # The claim's holder is gone. Taking the row over rather than deleting
+        # and re-inserting keeps its identity stable, so a straggler that wakes
+        # up and calls `complete/3` writes the response this request would have
+        # stored anyway — the hash matched, so it is the same request.
+        :expired_lease -> take_over(record, actor, key, hash, body, attempts)
+        answer -> answer
+      end
     else
       # Past the window. The row is removed rather than ignored, because the
       # unique index would otherwise keep refusing the retry that replaces it.
@@ -192,13 +205,44 @@ defmodule Dispatch.Idempotency do
     end
   end
 
-  # Lost the insert race to a concurrent copy of the same request that has not
-  # answered yet. A 409 is honest: the client should retry, and inventing a
-  # response would mean guessing what the other request is about to store.
-  defp live(%Record{request_hash: hash, state: "IN_PROGRESS"}, hash), do: {:error, :in_progress}
+  # Conditional on the row still looking abandoned, so two retries arriving
+  # together cannot both take the claim: the loser updates zero rows and is
+  # answered as in-progress on the next pass.
+  defp take_over(record, actor, key, hash, body, attempts) do
+    deadline = DateTime.add(DateTime.utc_now(), -@lease_seconds, :second)
+
+    from(r in Record,
+      where:
+        r.id == type(^record.id, :binary_id) and r.state == "IN_PROGRESS" and
+          r.updated_at <= ^deadline
+    )
+    |> Dispatch.Repo.update_all(set: [updated_at: DateTime.utc_now()])
+    |> case do
+      {1, _taken} -> {:proceed, record.id}
+      {0, _lost} -> resolve_existing(actor, key, hash, body, attempts)
+    end
+  end
+
+  # An `IN_PROGRESS` claim means one of two things, and they need opposite
+  # answers. Either a concurrent copy of this request is still running — a 409
+  # is honest, since inventing a response would mean guessing what that request
+  # is about to store — or the process holding it died between committing its
+  # mutation and recording the response, in which case refusing every retry for
+  # the full retention window is the worse outcome: the client's only way
+  # forward is then a fresh key, which duplicates the mutation.
+  #
+  # The lease tells them apart by age. Nothing else can: a dead process leaves
+  # no mark, and the row looks identical either way.
+  defp live(%Record{request_hash: hash, state: "IN_PROGRESS"} = record, hash) do
+    if expired_lease?(record), do: :expired_lease, else: {:error, :in_progress}
+  end
 
   defp live(%Record{request_hash: hash, response_status: status, response_body: body}, hash),
     do: {:replay, status, body}
 
   defp live(%Record{}, _different_hash), do: {:error, :key_reused}
+
+  defp expired_lease?(%Record{updated_at: updated_at}) do
+    DateTime.diff(DateTime.utc_now(), updated_at, :second) > @lease_seconds
+  end
 end

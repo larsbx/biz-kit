@@ -13,9 +13,29 @@ defmodule Dispatch.Identity.Tokens.Oidc do
   is the confused-deputy attack `OIDC_AUDIENCE` exists to stop.
 
   Keys are cached with a bounded lifetime rather than forever, so a rotated
-  signing key is picked up without a restart. A cache miss on an unknown `kid`
-  forces one refresh — that is what makes rotation work at all — but exactly
-  one, so unknown key IDs cannot be used to drive unbounded outbound requests.
+  signing key is picked up without a restart.
+
+  ## Refreshing without becoming an amplifier
+
+  An unknown `kid` has to be able to force a refresh — that is the whole
+  mechanism by which a rotated key becomes usable without a restart. Doing it
+  once *per request* is the trap: verification runs before any authentication
+  has succeeded, so anyone able to reach the endpoint could drive one discovery
+  call and one JWKS fetch, each with its own timeout, simply by inventing key
+  IDs. The cost lands on this service's connection pool and on the issuer, and
+  no valid token is needed to spend it.
+
+  So refreshes are throttled in two directions, because either alone is
+  sidesteppable:
+
+  - a **miss record** per unknown `kid`, so repeating one is answered from
+    memory; and
+  - a **cooldown** on refresh attempts as such, so rotating the invented `kid`
+    does not simply rotate past the first.
+
+  Both are short — a rotation must still be picked up promptly — and neither
+  affects keys already cached, so suppression never becomes an outage of its
+  own.
   """
 
   @behaviour Dispatch.Identity.Tokens.Verifier
@@ -26,6 +46,12 @@ defmodule Dispatch.Identity.Tokens.Oidc do
 
   @cache_ttl_ms :timer.minutes(10)
   @request_timeout_ms 5_000
+
+  # Long enough that a burst of invented key IDs costs one fetch rather than
+  # thousands; short enough that a genuine rotation is picked up within a minute
+  # of the first token that needs it.
+  @refresh_cooldown_ms :timer.seconds(30)
+  @miss_ttl_ms :timer.seconds(60)
 
   # Asymmetric only. Accepting an HMAC algorithm would make the published JWKS a
   # *signing* key, letting anyone who can read it mint tokens; `none` would
@@ -109,19 +135,111 @@ defmodule Dispatch.Identity.Tokens.Oidc do
     end
   end
 
+  @doc """
+  Whether `kid` was recently looked up and not found.
+
+  Public so a test can assert the miss was *recorded*, rather than inferring it
+  from a timing difference.
+  """
+  @spec recent_miss?(String.t()) :: boolean()
+  def recent_miss?(kid) do
+    case :persistent_term.get({__MODULE__, :jwks}, nil) do
+      %{misses: misses} -> fresh?(Map.get(misses, kid), @miss_ttl_ms)
+      _no_cache -> false
+    end
+  end
+
+  @doc "Whether a refresh attempt is currently within its cooldown."
+  @spec refresh_suppressed?() :: boolean()
+  def refresh_suppressed? do
+    case :persistent_term.get({__MODULE__, :jwks}, nil) do
+      %{attempted_at: at} -> fresh?(at, @refresh_cooldown_ms)
+      _no_cache -> false
+    end
+  end
+
+  @doc """
+  How many outbound refresh attempts this cache has made.
+
+  The quantity the throttle exists to bound, exposed so a test can assert the
+  bound directly instead of asserting the mechanism that is supposed to produce
+  it — a test of the mechanism passes even when the mechanism is bypassed.
+  """
+  @spec refresh_attempts() :: non_neg_integer()
+  def refresh_attempts do
+    case :persistent_term.get({__MODULE__, :jwks}, nil) do
+      %{attempts: count} -> count
+      _no_cache -> 0
+    end
+  end
+
   defp signing_key(kid) do
     case cached_key(kid) do
-      {:ok, jwk} ->
-        {:ok, jwk}
-
-      :error ->
-        with :ok <- refresh_keys(), {:ok, jwk} <- cached_key(kid) do
-          {:ok, jwk}
-        else
-          {:error, :unavailable} -> {:error, :unavailable}
-          _still_unknown -> {:error, :invalid_token}
-        end
+      {:ok, jwk} -> {:ok, jwk}
+      :error -> refresh_for(kid)
     end
+  end
+
+  # A `kid` already looked up and not found is refused from memory. Without
+  # this, one invented key ID repeated is one outbound fetch repeated.
+  defp refresh_for(kid) do
+    cond do
+      recent_miss?(kid) ->
+        {:error, :invalid_token}
+
+      refresh_suppressed?() ->
+        {:error, :invalid_token}
+
+      true ->
+        attempt_refresh(kid)
+    end
+  end
+
+  defp attempt_refresh(kid) do
+    note_attempt()
+
+    with :ok <- refresh_keys(), {:ok, jwk} <- cached_key(kid) do
+      {:ok, jwk}
+    else
+      {:error, :unavailable} ->
+        note_miss(kid)
+        {:error, :unavailable}
+
+      _still_unknown ->
+        note_miss(kid)
+        {:error, :invalid_token}
+    end
+  end
+
+  defp fresh?(nil, _ttl_ms), do: false
+
+  defp fresh?(at, ttl_ms), do: System.monotonic_time(:millisecond) - at < ttl_ms
+
+  defp note_attempt do
+    update_cache(fn cache ->
+      cache
+      |> Map.put(:attempted_at, System.monotonic_time(:millisecond))
+      |> Map.update(:attempts, 1, &(&1 + 1))
+    end)
+  end
+
+  defp note_miss(kid) do
+    update_cache(fn cache ->
+      # Bounded, so a long run of invented key IDs cannot grow this without
+      # limit. Expired entries are dropped on the way past.
+      misses =
+        cache
+        |> Map.get(:misses, %{})
+        |> Map.filter(fn {_kid, at} -> fresh?(at, @miss_ttl_ms) end)
+        |> Map.put(kid, System.monotonic_time(:millisecond))
+
+      Map.put(cache, :misses, misses)
+    end)
+  end
+
+  defp update_cache(fun) do
+    cache = :persistent_term.get({__MODULE__, :jwks}, %{keys: %{}, misses: %{}})
+    :persistent_term.put({__MODULE__, :jwks}, fun.(cache))
   end
 
   defp cached_key(kid) do
@@ -139,10 +257,14 @@ defmodule Dispatch.Identity.Tokens.Oidc do
   defp refresh_keys do
     with {:ok, jwks_uri} <- discover_jwks_uri(),
          {:ok, %{"keys" => keys}} when is_list(keys) <- get_json(jwks_uri) do
-      :persistent_term.put({__MODULE__, :jwks}, %{
-        fetched_at: System.monotonic_time(:millisecond),
-        keys: usable_keys(keys)
-      })
+      update_cache(fn cache ->
+        cache
+        |> Map.put(:fetched_at, System.monotonic_time(:millisecond))
+        |> Map.put(:keys, usable_keys(keys))
+        # A successful fetch clears the miss record: the keys it could not find
+        # before may be exactly the ones that just arrived.
+        |> Map.put(:misses, %{})
+      end)
 
       :ok
     else

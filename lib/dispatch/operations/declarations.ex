@@ -42,9 +42,10 @@ defmodule Dispatch.Operations.Declarations do
           {:ok, :created, ParticipantStatusEvent.t()}
           | {:ok, :duplicate, ParticipantStatusEvent.t()}
           | {:error, :device_sequence_conflict}
+          | {:error, :event_id_conflict}
           | {:error, Ash.Error.t()}
 
-  @accepted ~w(status occurred_at note assignment_id location_sample_id
+  @accepted ~w(id status occurred_at note assignment_id location_sample_id
                supersedes_event_id device_id device_sequence correlation_id)a
 
   # What makes two declarations the same declaration. Deliberately excludes
@@ -65,6 +66,10 @@ defmodule Dispatch.Operations.Declarations do
     input =
       attrs
       |> Map.take(@accepted)
+      # An absent client ID must leave the attribute unset so the resource's own
+      # UUIDv7 generator supplies one. Passing an explicit `nil` would override
+      # the default and fail on `allow_nil?` instead.
+      |> Map.reject(fn {key, value} -> key == :id and is_nil(value) end)
       |> Map.merge(%{
         tenant_id: actor.tenant_id,
         participant_id: actor.principal_id,
@@ -76,6 +81,28 @@ defmodule Dispatch.Operations.Declarations do
       event -> reconcile(event, input)
     end
   end
+
+  @doc """
+  The declaration this actor already recorded under `event_id`, if any.
+
+  Section 24.1 calls the ID client-assigned, which only means something if a
+  replay under the same ID resolves to the same event. The lookup is scoped to
+  the actor's own records, so a guessed ID belonging to somebody else is not
+  found and the write then fails on the primary key rather than disclosing that
+  the row exists.
+  """
+  @spec by_id(Actor.t(), Ash.UUID.t()) :: ParticipantStatusEvent.t() | nil
+  def by_id(%Actor{} = actor, event_id) when is_binary(event_id) do
+    ParticipantStatusEvent
+    |> Ash.Query.filter(id == ^event_id and participant_id == ^actor.principal_id)
+    |> Ash.read_one(actor: actor, tenant: actor.tenant_id)
+    |> case do
+      {:ok, event} -> event
+      {:error, _reason} -> nil
+    end
+  end
+
+  def by_id(_actor, _event_id), do: nil
 
   defp create(actor, input) do
     ParticipantStatusEvent
@@ -90,11 +117,28 @@ defmodule Dispatch.Operations.Declarations do
         # above and this write. Re-reading is what turns that race into the
         # replay Section 24.1 specifies rather than a spurious error.
         case existing(actor, input) do
-          nil -> {:error, error}
+          nil -> classify(error, input)
           event -> reconcile(event, input)
         end
     end
   end
+
+  # The ID is taken, and the lookup above — scoped to this participant's own
+  # records — did not find it, so it belongs to somebody else. That is a
+  # conflict, not a validation failure, and the caller learns only that: whose
+  # event it is stays out of the response.
+  defp classify(error, %{id: event_id}) when is_binary(event_id) do
+    if Enum.any?(errors(error), &(Map.get(&1, :field) == :id)) do
+      {:error, :event_id_conflict}
+    else
+      {:error, error}
+    end
+  end
+
+  defp classify(error, _no_client_id), do: {:error, error}
+
+  defp errors(%{errors: errors}) when is_list(errors), do: errors
+  defp errors(_error), do: []
 
   defp reconcile(event, input) do
     if identifying(event) == identifying(input) do
@@ -104,12 +148,21 @@ defmodule Dispatch.Operations.Declarations do
     end
   end
 
+  # Two ways a declaration can already exist: the client named its ID, or the
+  # device sequence pins it. The ID is checked first because it is exact —
+  # Section 24.1 makes it the client's own handle on the event.
+  defp existing(actor, %{id: event_id} = input) when is_binary(event_id) do
+    by_id(actor, event_id) || by_device_sequence(actor, input)
+  end
+
+  defp existing(actor, input), do: by_device_sequence(actor, input)
+
   # A declaration without a device sequence cannot duplicate one: Section 22.3's
   # uniqueness is on the pair, and a portal declaration carries neither.
-  defp existing(_actor, %{device_id: nil}), do: nil
-  defp existing(_actor, %{device_sequence: nil}), do: nil
+  defp by_device_sequence(_actor, %{device_id: nil}), do: nil
+  defp by_device_sequence(_actor, %{device_sequence: nil}), do: nil
 
-  defp existing(actor, %{device_id: device_id, device_sequence: sequence}) do
+  defp by_device_sequence(actor, %{device_id: device_id, device_sequence: sequence}) do
     ParticipantStatusEvent
     |> Ash.Query.filter(device_id == ^device_id and device_sequence == ^sequence)
     |> Ash.read_one(actor: actor, tenant: actor.tenant_id)
@@ -122,7 +175,7 @@ defmodule Dispatch.Operations.Declarations do
     end
   end
 
-  defp existing(_actor, _no_device), do: nil
+  defp by_device_sequence(_actor, _no_device), do: nil
 
   defp identifying(%ParticipantStatusEvent{} = event) do
     event |> Map.from_struct() |> identifying()

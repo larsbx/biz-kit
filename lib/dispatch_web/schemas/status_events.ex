@@ -16,7 +16,14 @@ defmodule DispatchWeb.Schemas.StatusEventRequest do
     title: "StatusEventRequest",
     type: :object,
     properties: %{
-      event_id: %Schema{type: :string, format: :uuid, description: "Client-assigned event ID."},
+      event_id: %Schema{
+        type: :string,
+        format: :uuid,
+        description:
+          "Client-assigned UUIDv7. Becomes the stored event's ID, so an offline " <>
+            "client can reconcile by the identifier it recorded before uploading. " <>
+            "Omitted, the server assigns one. Already in use: 409 EVENT_ID_CONFLICT."
+      },
       assignment_id: %Schema{type: :string, format: :uuid},
       status: %Schema{type: :string, enum: Enum.map(Status.all(), &Atom.to_string/1)},
       occurred_at: %Schema{

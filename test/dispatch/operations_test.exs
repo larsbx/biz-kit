@@ -176,8 +176,9 @@ defmodule Dispatch.OperationsTest do
 
     test "a repeated device sequence is refused", ctx do
       # Section 14: a handset that uploads, loses the response and retries must
-      # not produce two declarations.
-      device_id = Ash.UUID.generate()
+      # not produce two declarations. A registered device, because a sequence
+      # only belongs to one the declaring participant owns.
+      device_id = Fixtures.device(ctx.tenant, ctx.driver).id
 
       assert {:ok, _first} =
                declare(ctx.actor, ctx.driver, %{
