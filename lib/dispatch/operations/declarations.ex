@@ -143,7 +143,7 @@ defmodule Dispatch.Operations.Declarations do
     _audit =
       Dispatch.Audit.AuditEvent
       |> Ash.Changeset.for_create(:record, %{
-      tenant_id: actor.tenant_id,
+        tenant_id: actor.tenant_id,
         event_type: "status.declared",
         actor_type: actor.principal_type,
         actor_id: actor.principal_id,
