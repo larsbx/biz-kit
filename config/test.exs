@@ -58,3 +58,7 @@ config :dispatch, Oban, testing: :manual
 
 config :logger, level: :warning
 config :phoenix, :plug_init_mode, :runtime
+
+# Tests drive the publisher synchronously from the sandbox-owning process.
+# The production default remains supervised polling.
+config :dispatch, :start_outbox_publisher, false

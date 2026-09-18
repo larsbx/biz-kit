@@ -18,8 +18,8 @@ defmodule Dispatch.Application do
     children = [
       Dispatch.Telemetry,
       Dispatch.Repo,
-      {Phoenix.PubSub, name: Dispatch.PubSub},
-      Dispatch.Outbox.Publisher,
+      {Phoenix.PubSub, name: Dispatch.PubSub}
+    ] ++ outbox_children() ++ [
       {Finch,
        name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: transport_opts()]]}},
       # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
@@ -29,6 +29,14 @@ defmodule Dispatch.Application do
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Dispatch.Supervisor)
+  end
+
+  defp outbox_children do
+    if Application.get_env(:dispatch, :start_outbox_publisher, true) do
+      [Dispatch.Outbox.Publisher]
+    else
+      []
+    end
   end
 
   # Section 23.1 makes the OIDC issuer's published keys the root of trust for

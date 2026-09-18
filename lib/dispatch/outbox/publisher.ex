@@ -49,9 +49,10 @@ defmodule Dispatch.Outbox.Publisher do
         now = DateTime.utc_now()
 
         Enum.each(events, fn event ->
-          :ok = Phoenix.PubSub.broadcast(Dispatch.PubSub, event.topic, {:outbox, event.payload})
+          _broadcast =
+            Phoenix.PubSub.broadcast(Dispatch.PubSub, event.topic, {:outbox, event.payload})
 
-          {1, nil} =
+          _updated =
             from(e in Event, where: e.id == type(^event.id, :binary_id))
             |> Dispatch.Repo.update_all(
               set: [published_at: now],
