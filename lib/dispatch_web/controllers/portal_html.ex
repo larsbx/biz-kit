@@ -18,6 +18,20 @@ defmodule DispatchWeb.PortalHTML do
   attr :actor, :any, required: true
   attr :assignments, :list, default: []
 
+  @doc "The carrier-scoped operations overview."
+  @spec operations(map()) :: Phoenix.LiveView.Rendered.t()
+  def operations(assigns) do
+    ~H"""
+    <Layouts.root page_title="Operations" actor={@actor} assignments={@assignments}>
+      <Operations.operations_page view={@view} />
+    </Layouts.root>
+    """
+  end
+
+  attr :view, :any, required: true
+  attr :actor, :any, required: true
+  attr :assignments, :list, default: []
+
   @doc "A shipper's or receiver's stop page."
   @spec partner_stop(map()) :: Phoenix.LiveView.Rendered.t()
   def partner_stop(assigns) do
