@@ -68,11 +68,80 @@ counterparties =
     organization
   end
 
+# A load with two stops and its party relationships, so a developer has
+# something to authorize against. Section 22.2 makes the party rows the second
+# half of every LOAD- and STOP-scoped decision, and a tenant with roles but no
+# relationships cannot exercise that path at all.
+[broker_org, shipper_org, receiver_org] = counterparties
+
+{:ok, demo_load} =
+  Dispatch.Fleet.Load
+  |> Ash.Changeset.for_create(:create_load, %{
+    tenant_id: tenant,
+    carrier_organization_id: carrier.id,
+    broker_organization_id: broker_org.id,
+    external_reference: "NW-48213",
+    commodity_text: "Palletised dry goods",
+    status: :BOOKED,
+    currency: "USD",
+    agreed_rate_minor: 185_000
+  })
+  |> Ash.create(authorize?: false, tenant: tenant)
+
+stops =
+  for {kind, sequence, address, org} <- [
+        {:PICKUP, 1, "1 Mill Road, Cascade WA", shipper_org},
+        {:DELIVERY, 2, "400 Harbor Way, Portland OR", receiver_org}
+      ] do
+    {:ok, stop} =
+      Dispatch.Fleet.Stop
+      |> Ash.Changeset.for_create(:add, %{
+        tenant_id: tenant,
+        load_id: demo_load.id,
+        sequence: sequence,
+        kind: kind,
+        address_text: address
+      })
+      |> Ash.create(authorize?: false, tenant: tenant)
+
+    {:ok, _stop_party} =
+      Dispatch.Fleet.StopParty
+      |> Ash.Changeset.for_create(:add, %{
+        tenant_id: tenant,
+        stop_id: stop.id,
+        organization_id: org.id,
+        relationship: if(kind == :PICKUP, do: :SHIPPER, else: :RECEIVER),
+        starts_at: DateTime.utc_now()
+      })
+      |> Ash.create(authorize?: false, tenant: tenant)
+
+    stop
+  end
+
+for {org, relationship} <- [
+      {broker_org, :BROKER},
+      {shipper_org, :SHIPPER},
+      {receiver_org, :RECEIVER},
+      {carrier, :CARRIER}
+    ] do
+  {:ok, _load_party} =
+    Dispatch.Fleet.LoadParty
+    |> Ash.Changeset.for_create(:add, %{
+      tenant_id: tenant,
+      load_id: demo_load.id,
+      organization_id: org.id,
+      relationship: relationship,
+      starts_at: DateTime.utc_now()
+    })
+    |> Ash.create(authorize?: false, tenant: tenant)
+end
+
 IO.puts("""
 Seeded:
   tenant          #{carrier.name} (#{tenant})
   role profiles   #{definitions |> Enum.map(& &1.key) |> Enum.join(", ")}
   counterparties  #{counterparties |> Enum.map(& &1.name) |> Enum.join(", ")}
+  load            #{demo_load.external_reference} with #{length(stops)} stops and 4 load parties
 
 No participants or role assignments are seeded. Section 23.2 derives authority
 from an assignment, so creating one here would grant access that no test or

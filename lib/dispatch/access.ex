@@ -114,7 +114,8 @@ defmodule Dispatch.Access do
 
   A `true` here is necessary but never sufficient for a load or stop: Section
   22.2 additionally requires a matching active `load_parties` or `stop_parties`
-  row, which the resources that own those relationships check.
+  row. `Dispatch.Access.Party.permits?/4` is the conjunction of both halves and
+  is what an authorization decision over a load or stop should call.
   """
   @spec in_scope?(RoleAssignment.t(), {atom(), Ash.UUID.t() | nil}) :: boolean()
   def in_scope?(%RoleAssignment{scope_type: scope_type}, {subject_type, _subject_id})

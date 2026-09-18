@@ -20,7 +20,11 @@ config :dispatch,
 # timestamptz in PostgreSQL.
 config :dispatch, Dispatch.Repo,
   migration_primary_key: [name: :id, type: :uuid],
-  migration_timestamps: [type: :utc_datetime_usec]
+  migration_timestamps: [type: :utc_datetime_usec],
+  # Section 28.2: PostGIS is canonical, and `geography` columns need the Geo
+  # extension registered with Postgrex or every position write fails at the
+  # driver.
+  types: Dispatch.PostgresTypes
 
 config :dispatch, DispatchWeb.Endpoint,
   url: [host: "localhost"],

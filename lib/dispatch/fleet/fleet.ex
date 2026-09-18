@@ -7,12 +7,18 @@ defmodule Dispatch.Fleet do
   role assignment and a matching active party row, so an organization kind, a
   phone number, or a caller's claim never grants access on its own.
 
-  Slice 1 onward adds resources; the domain itself is declared from Slice 0 so
-  each one has a named home rather than being invented under deadline.
   """
 
   use Ash.Domain
 
   resources do
+    resource Dispatch.Fleet.Vehicle
+    resource Dispatch.Fleet.Trailer
+    resource Dispatch.Fleet.Load
+    resource Dispatch.Fleet.LoadParty
+    resource Dispatch.Fleet.Stop
+    resource Dispatch.Fleet.StopParty
+    resource Dispatch.Fleet.Assignment
+    resource Dispatch.Fleet.AssignmentContact
   end
 end
