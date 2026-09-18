@@ -36,8 +36,13 @@ defmodule DispatchWeb.SessionController do
   def create(conn, %{"token" => token}) when is_binary(token) do
     case Verifier.verify(token) do
       {:ok, %{subject: subject}} ->
+        # `renew: true` renews the session id and *keeps* its contents, so a
+        # previous user's selection would survive into this one. It would then
+        # be presented on the next request, fail to resolve, and sign the new
+        # user straight back out — a correct sign-in that looks broken.
         conn
         |> configure_session(renew: true)
+        |> clear_session()
         |> put_session(PortalSession.subject_key(), subject)
         |> redirect_to("/select-role")
 

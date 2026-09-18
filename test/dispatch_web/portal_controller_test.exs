@@ -43,6 +43,7 @@ defmodule DispatchWeb.PortalControllerTest do
 
     %{user: shipper_user, participant: shipper} = Fixtures.person(tenant, shipper_org)
     assignment = Fixtures.assignment(tenant, shipper_org, shipper, "SHIPPER", scope_id: pickup.id)
+    %{participant: carrier_side} = Fixtures.person(tenant, carrier, user: shipper_user)
 
     %{
       tenant: tenant,
@@ -52,6 +53,7 @@ defmodule DispatchWeb.PortalControllerTest do
       pickup: pickup,
       delivery: delivery,
       shipper_user: shipper_user,
+      shipper_participant: carrier_side,
       assignment: assignment
     }
   end
@@ -111,6 +113,76 @@ defmodule DispatchWeb.PortalControllerTest do
 
       assert conn.status == 302
       assert get_resp_header(conn, "location") == ["/login"]
+    end
+  end
+
+  describe "a principal holding several assignments" do
+    setup ctx do
+      # A second assignment in the same tenant, so the session cannot resolve
+      # one without being told which — the exact state the switcher exists for.
+      second = Fixtures.assignment(ctx.tenant, ctx.carrier, ctx.shipper_participant, "DISPATCHER")
+      Map.put(ctx, :second_assignment, second)
+    end
+
+    test "reaches the role switcher instead of looping", ctx do
+      # `/select-role` must be reachable *without* a resolved actor: it is how
+      # one is chosen. Guarding it with the plug that demands one sends the
+      # multi-assignment user round in circles — and only them, which is why a
+      # single-assignment test suite never sees it.
+      conn =
+        get("/select-role",
+          session: [{PortalSession.subject_key(), ctx.shipper_user.oidc_subject}]
+        )
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "role_assignment_id"
+    end
+
+    test "a page request with no selection redirects once, to a page that renders", ctx do
+      conn =
+        get("/partner/stops/#{ctx.pickup.id}",
+          session: [{PortalSession.subject_key(), ctx.shipper_user.oidc_subject}]
+        )
+
+      assert conn.status == 302
+      assert [target] = get_resp_header(conn, "location")
+
+      landed =
+        get(target, session: [{PortalSession.subject_key(), ctx.shipper_user.oidc_subject}])
+
+      # The redirect target must not redirect again to itself.
+      assert landed.status == 200
+    end
+  end
+
+  describe "signing in over an existing session" do
+    test "does not carry the previous selection into the new subject's session", ctx do
+      %{user: other_user, participant: other} = Fixtures.person(ctx.tenant, ctx.carrier)
+      Fixtures.assignment(ctx.tenant, ctx.carrier, other, "DISPATCHER")
+
+      form =
+        get("/login",
+          session: [
+            {PortalSession.subject_key(), ctx.shipper_user.oidc_subject},
+            {PortalSession.assignment_key(), ctx.assignment.id}
+          ]
+        )
+
+      [_all, csrf] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, form.resp_body)
+
+      # A browser that already selected a role signs in as somebody else.
+      # `renew: true` renews the session id and keeps its contents, so the
+      # previous user's assignment would still be sitting there — and the new
+      # user's perfectly valid sign-in would present it, fail, and look broken.
+      signed_in =
+        post_form(form, "/session", %{
+          "token" => StaticVerifier.token_for(other_user.oidc_subject),
+          "_csrf_token" => csrf
+        })
+
+      assert signed_in.status == 302
+      assert get_session(signed_in, PortalSession.subject_key()) == other_user.oidc_subject
+      refute get_session(signed_in, PortalSession.assignment_key())
     end
   end
 

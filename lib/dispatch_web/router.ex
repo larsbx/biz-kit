@@ -99,11 +99,29 @@ defmodule DispatchWeb.Router do
     delete "/session", SessionController, :delete
   end
 
+  # Role selection sits between the two: it needs an authenticated subject and
+  # must *not* require a resolved actor, because choosing one is what it is for.
+  # Guarding it with `PortalSession` sends exactly the multi-assignment users who
+  # need the switcher into a redirect loop — and only them, so a suite built on
+  # single-assignment fixtures never meets it.
+  pipeline :portal_choosing do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers, @portal_headers
+    plug :put_no_store
+    plug DispatchWeb.Plugs.RequireSubject
+  end
+
   scope "/", DispatchWeb do
-    pipe_through :portal
+    pipe_through :portal_choosing
 
     get "/select-role", SessionController, :select_role
     post "/select-role", SessionController, :choose_role
+  end
+
+  scope "/", DispatchWeb do
+    pipe_through :portal
 
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/partner/stops/:stop_id", PortalController, :partner_stop

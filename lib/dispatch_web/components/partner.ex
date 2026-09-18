@@ -60,8 +60,11 @@ defmodule DispatchWeb.Components.Partner do
     """
   end
 
+  # Section 22.2 permits three kinds. Handling two of them turns valid persisted
+  # data into a 500 on a page a partner is entitled to see.
   defp kind_label(:PICKUP), do: "Pickup"
   defp kind_label(:DELIVERY), do: "Delivery"
+  defp kind_label(:OTHER), do: "Stop"
 
   defp readiness_label(nil), do: "Not reported"
   defp readiness_label(state), do: state |> to_string() |> String.replace("_", " ")

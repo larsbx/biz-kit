@@ -164,6 +164,18 @@ defmodule DispatchWeb.ViewModels.PartnerStopViewTest do
       assert PartnerStopView.build(ctx.actor, their_stop.id) == {:error, :not_found}
     end
 
+    test "revoking the role assignment removes access immediately", ctx do
+      assert {:ok, _view} = PartnerStopView.build(ctx.actor, ctx.pickup.id)
+
+      Fixtures.revoke(ctx.tenant, ctx.actor.role_assignment)
+
+      # An Actor holds its assignment as a value, so this only fails closed if
+      # the view re-reads it. The HTTP path resolves an actor per request and
+      # would mask the omission entirely — which is how it went missing here
+      # once already, and why the check belongs at this level too.
+      assert PartnerStopView.build(ctx.actor, ctx.pickup.id) == {:error, :not_found}
+    end
+
     test "ending the party relationship removes access immediately", ctx do
       assert {:ok, _view} = PartnerStopView.build(ctx.actor, ctx.pickup.id)
 
@@ -172,6 +184,55 @@ defmodule DispatchWeb.ViewModels.PartnerStopViewTest do
       # Section 33.2: removing a stop_parties relationship invalidates related
       # access immediately, not at the next login.
       assert PartnerStopView.build(ctx.actor, ctx.pickup.id) == {:error, :not_found}
+    end
+  end
+
+  describe "acceptance criterion 17: the selected scope bounds the stop, not the organization" do
+    setup ctx do
+      # The case the earlier tests could not reach: the same partner
+      # organization is party to *both* stops. Being party is then no longer
+      # enough to tell them apart — only the assignment's scope does.
+      Fixtures.stop_party(ctx.tenant, ctx.delivery, ctx.shipper_org, :RECEIVER)
+      ctx
+    end
+
+    test "a stop the organization is party to but the assignment is not scoped to", ctx do
+      # Criterion 17: a shipper "sees one pickup stop ... but cannot view a
+      # delivery stop". Party-to-the-organization would show both.
+      assert PartnerStopView.build(ctx.actor, ctx.delivery.id) == {:error, :not_found}
+    end
+
+    test "the scoped stop still resolves", ctx do
+      assert {:ok, view} = PartnerStopView.build(ctx.actor, ctx.pickup.id)
+      assert view.stop_id == ctx.pickup.id
+    end
+
+    test "an assignment scoped to the other stop sees that one and not this one", ctx do
+      %{participant: receiver} = Fixtures.person(ctx.tenant, ctx.shipper_org)
+
+      other_actor =
+        Fixtures.actor(ctx.tenant, ctx.shipper_org, receiver, "RECEIVER",
+          scope_id: ctx.delivery.id
+        )
+
+      assert {:ok, view} = PartnerStopView.build(other_actor, ctx.delivery.id)
+      assert view.stop_id == ctx.delivery.id
+      assert PartnerStopView.build(other_actor, ctx.pickup.id) == {:error, :not_found}
+    end
+  end
+
+  describe "every stop kind the resource permits" do
+    test "an OTHER stop builds like any other", ctx do
+      # Section 22.2 allows PICKUP, DELIVERY and OTHER. A view or component that
+      # handles two of the three turns valid persisted data into a 500.
+      other = Fixtures.stop(ctx.tenant, ctx.load, :OTHER, sequence: 3)
+      Fixtures.stop_party(ctx.tenant, other, ctx.shipper_org, :SHIPPER)
+
+      %{participant: person} = Fixtures.person(ctx.tenant, ctx.shipper_org)
+      actor = Fixtures.actor(ctx.tenant, ctx.shipper_org, person, "SHIPPER", scope_id: other.id)
+
+      assert {:ok, view} = PartnerStopView.build(actor, other.id)
+      assert view.kind == :OTHER
     end
   end
 

@@ -36,6 +36,7 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
   """
 
   alias Dispatch.Access.{Actor, Party}
+  alias Dispatch.Identity.PrincipalResolution
   alias Dispatch.Fleet.Stop
   alias DispatchWeb.ViewModels.FactSummary
 
@@ -74,9 +75,9 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
   """
   @spec build(Actor.t(), Ash.UUID.t()) :: {:ok, t()} | {:error, :not_found}
   def build(%Actor{} = actor, stop_id) when is_binary(stop_id) do
-    with true <- Actor.can?(actor, "stop.read"),
+    with {:ok, actor} <- PrincipalResolution.revalidate(actor),
          {:ok, stop} <- fetch(actor, stop_id),
-         true <- party?(actor, stop) do
+         true <- permitted?(actor, stop) do
       {:ok, from(stop)}
     else
       _nothing_to_report -> {:error, :not_found}
@@ -102,11 +103,20 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
   # re-reading it here is what makes Section 33.2's "immediately" true: the
   # assignment's scope says which stop was granted, not whether the grant still
   # stands.
-  defp party?(actor, stop) do
-    Party.party_to_stop?(stop.id, actor.role_assignment.organization_id,
-      tenant: actor.tenant_id,
-      at: actor.at
-    )
+
+  # Three conditions, and `Party.permits?/4` is the one place that holds all
+  # three together: the capability, the assignment's *scope* covering this stop,
+  # and a live party row.
+  #
+  # An earlier version checked the capability and the party row by hand and left
+  # the scope out. That reads as sufficient — a shipper organization party to
+  # this stop, holding `stop.read` — and it is not. When the same organization
+  # is party to two stops, being party stops distinguishing them and only the
+  # scope does. Acceptance criterion 17 says a shipper sees its pickup stop and
+  # not the delivery stop on the same load, which is exactly the case a
+  # hand-rolled conjunction loses.
+  defp permitted?(actor, stop) do
+    Party.permits?(actor.role_assignment, "stop.read", {:STOP, stop.id}, at: actor.at)
   end
 
   defp from(%Stop{} = stop) do
