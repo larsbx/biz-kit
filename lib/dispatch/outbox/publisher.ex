@@ -35,7 +35,8 @@ defmodule Dispatch.Outbox.Publisher do
   @doc "Publishes one bounded batch; public for deterministic integration tests."
   @spec publish_pending() :: non_neg_integer()
   def publish_pending do
-    Dispatch.Repo.transaction(fn ->
+    {:ok, count} =
+      Dispatch.Repo.transaction(fn ->
       events =
         from(e in Event,
           where: is_nil(e.published_at),
@@ -48,21 +49,20 @@ defmodule Dispatch.Outbox.Publisher do
       now = DateTime.utc_now()
 
       Enum.each(events, fn event ->
-        Phoenix.PubSub.broadcast(Dispatch.PubSub, event.topic, {:outbox, event.payload})
+        :ok = Phoenix.PubSub.broadcast(Dispatch.PubSub, event.topic, {:outbox, event.payload})
 
-        from(e in Event, where: e.id == type(^event.id, :binary_id))
-        |> Dispatch.Repo.update_all(
+        {1, nil} =
+          from(e in Event, where: e.id == type(^event.id, :binary_id))
+          |> Dispatch.Repo.update_all(
           set: [published_at: now],
           inc: [attempt_count: 1]
         )
       end)
 
-      length(events)
-    end)
-    |> case do
-      {:ok, count} -> count
-      {:error, _reason} -> 0
-    end
+        length(events)
+      end)
+
+    count
   end
 
   defp schedule, do: Process.send_after(self(), :poll, @poll_ms)

@@ -138,7 +138,10 @@ defmodule Dispatch.Operations.Declarations do
   end
 
   defp record_audit!(actor, event) do
-    Dispatch.Audit.AuditEvent
+    # REVIEWED-UNAUTHORIZED: this is the audit record of an already-authorized
+    # mutation. It must be written even when the actor cannot read audit data.
+    _audit =
+      Dispatch.Audit.AuditEvent
     |> Ash.Changeset.for_create(:record, %{
       tenant_id: actor.tenant_id,
       event_type: "status.declared",
@@ -155,7 +158,9 @@ defmodule Dispatch.Operations.Declarations do
         "source" => to_string(event.source)
       }
     })
-    |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
+      |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
+
+    :ok
   end
 
   defp enqueue_stream_refreshes!(actor, event) do
@@ -166,15 +171,16 @@ defmodule Dispatch.Operations.Declarations do
       {"operations:#{actor.role_assignment.organization_id}", %{"event_id" => event.id}}
     ]
     |> Enum.each(fn {topic, payload} ->
-      %Dispatch.Outbox.Event{
+      _outbox =
+        %Dispatch.Outbox.Event{
         id: Ash.UUID.generate(),
         tenant_id: actor.tenant_id,
         topic: topic,
         event_type: "status.declared",
         payload: payload,
         occurred_at: now
-      }
-      |> Dispatch.Repo.insert!()
+        }
+        |> Dispatch.Repo.insert!()
     end)
   end
 
