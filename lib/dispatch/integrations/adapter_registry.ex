@@ -22,6 +22,7 @@ defmodule Dispatch.Integrations.AdapterRegistry do
           | :router
           | :map_presentation
           | :face_verifier
+          | :token_verifier
 
   @ports %{
     messaging: %{
@@ -73,6 +74,15 @@ defmodule Dispatch.Integrations.AdapterRegistry do
       env: "FACE_VERIFIER_ADAPTER",
       config: [:identity, :face_verifier],
       behaviour: Dispatch.Identity.Face.Verifier
+    },
+    # Section 23.1's resource-server side. A port for the same reason as the
+    # rest: a test must be able to mint a token without an identity provider,
+    # and the startup validation below is what stops that shortcut reaching
+    # production.
+    token_verifier: %{
+      env: "TOKEN_VERIFIER_ADAPTER",
+      config: [:identity, :token_verifier],
+      behaviour: Dispatch.Identity.Tokens.Verifier
     }
   }
 

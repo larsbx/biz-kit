@@ -110,7 +110,11 @@ defmodule Dispatch.Config do
   @nonproduction_namespaces [
     "Dispatch.Integrations.Comms.Unconfigured",
     "Dispatch.Integrations.Geo.Unconfigured",
-    "Dispatch.Integrations.Agent.Fake"
+    "Dispatch.Integrations.Agent.Fake",
+    # Compiled only from `test/support`, so a production release cannot load one
+    # — but naming the namespace means a misconfiguration fails as a legible
+    # violation rather than as an undefined-module crash on the first request.
+    "Dispatch.Support."
   ]
 
   defp validate_nonproduction_adapters(false), do: []

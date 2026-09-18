@@ -61,6 +61,12 @@ defmodule Dispatch.MixProject do
       {:open_api_spex, "~> 3.21"},
       {:jason, "~> 1.4"},
 
+      # Outbound HTTP, used directly for OIDC key discovery (Section 23.1).
+      # Declared here rather than relied on transitively: the TLS trust store
+      # below is what makes token verification sound.
+      {:finch, "~> 0.19"},
+      {:castore, "~> 1.0"},
+
       # Observability (Section 32).
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.1"},

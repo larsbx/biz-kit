@@ -28,6 +28,16 @@ defmodule Dispatch.ConfigTest do
 
   defp codes(env), do: Config.validate(env: env) |> Enum.map(& &1.code) |> Enum.sort()
 
+  # Violations naming one environment variable. Several ports are unconfigured
+  # in the test environment on purpose, so a blanket assertion would be about
+  # whichever of them happened to fail rather than about the one under test.
+  defp codes(env, key) do
+    Config.validate(env: env)
+    |> Enum.filter(&(&1.key == key))
+    |> Enum.map(& &1.code)
+    |> Enum.sort()
+  end
+
   test "the development configuration is valid" do
     assert Config.validate(env: :test) == []
   end
@@ -65,6 +75,46 @@ defmodule Dispatch.ConfigTest do
     test "development-only adapters are rejected in production but allowed elsewhere" do
       refute "ADAPTER_NOT_PRODUCTION_SAFE" in codes(:test)
       assert "ADAPTER_NOT_PRODUCTION_SAFE" in codes(:prod)
+    end
+  end
+
+  @verifier_env "TOKEN_VERIFIER_ADAPTER"
+
+  describe "the token verifier (Section 23.1)" do
+    defp with_verifier(module) do
+      base = Application.get_env(:dispatch, :identity, [])
+      Application.put_env(:dispatch, :identity, Keyword.put(base, :token_verifier, module))
+    end
+
+    test "the test double is selected here and refused in production" do
+      # The suite runs against a verifier that accepts an unsigned token naming
+      # its own claims. That is the single most dangerous thing in this
+      # repository if it ever reaches a deployment, so the check that stops it
+      # gets a test of its own rather than being left to the namespace
+      # convention that makes it work.
+      assert Dispatch.Identity.Tokens.Verifier.impl() ==
+               Dispatch.Support.Tokens.StaticVerifier
+
+      assert codes(:test, @verifier_env) == []
+      assert codes(:prod, @verifier_env) == ["ADAPTER_NOT_PRODUCTION_SAFE"]
+    end
+
+    test "the production verifier passes in production" do
+      with_verifier(Dispatch.Identity.Tokens.Oidc)
+
+      assert codes(:prod, @verifier_env) == []
+    end
+
+    test "a module that is not a verifier at all is a violation" do
+      with_verifier(Dispatch.Config)
+
+      assert codes(:test, @verifier_env) == ["ADAPTER_BEHAVIOUR_MISMATCH"]
+    end
+
+    test "an unset verifier is a violation rather than a silent default" do
+      with_verifier(nil)
+
+      assert codes(:test, @verifier_env) == ["ADAPTER_UNCONFIGURED"]
     end
   end
 

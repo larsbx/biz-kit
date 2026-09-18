@@ -19,10 +19,26 @@ defmodule Dispatch.Application do
       Dispatch.Telemetry,
       Dispatch.Repo,
       {Phoenix.PubSub, name: Dispatch.PubSub},
+      {Finch, name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: tls_opts()]]}},
       DispatchWeb.Endpoint
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Dispatch.Supervisor)
+  end
+
+  # Section 23.1 makes the OIDC issuer's published keys the root of trust for
+  # every authenticated request, so the connection that fetches them verifies
+  # its peer. Stated here rather than inherited from a library default: a
+  # transitive dependency changing that default must not silently change this.
+  defp tls_opts do
+    [
+      verify: :verify_peer,
+      cacertfile: CAStore.file_path(),
+      depth: 3,
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ]
   end
 
   @impl Application

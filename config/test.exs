@@ -29,7 +29,10 @@ config :dispatch, :agent,
 config :dispatch, :identity,
   face_verifier: Dispatch.Identity.Face.DisabledVerifier,
   face_1_to_1_enabled: false,
-  face_challenge_ttl_seconds: 120
+  face_challenge_ttl_seconds: 120,
+  # Compiled from test/support only. Section 31's startup validation refuses
+  # anything in that namespace in production, so this shortcut cannot escape.
+  token_verifier: Dispatch.Support.Tokens.StaticVerifier
 
 config :dispatch, :breakglass,
   max_ttl_seconds: 1_800,

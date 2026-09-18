@@ -1,8 +1,14 @@
 defmodule DispatchWeb.Router do
   @moduledoc """
-  Route table. Slice 0 publishes only the health surface of Section 32; the
-  `/v1`, `/ui`, `/providers`, and portal routes are added by the slices that
-  implement their authorization.
+  Route table.
+
+  The `/v1` machine API of Section 24 and the health surface of Section 32 are
+  published here. The `/ui` portal, `/providers` webhooks, and break-glass
+  routes are added by the slices that implement their authorization.
+
+  Section 24.5 keeps `/v1` and `/ui` separate deliberately: `/v1` is JSON for
+  machines and `/ui` is HTML or Datastar SSE for the portal. They are different
+  pipelines, not different content negotiation on one.
   """
 
   use Phoenix.Router
@@ -21,11 +27,32 @@ defmodule DispatchWeb.Router do
     plug DispatchWeb.Plugs.DiagnosticAuth
   end
 
+  # Section 23.2 separates authentication from authorization, and the pipeline
+  # mirrors that: `Authenticate` establishes who is calling, `ResolveActor`
+  # selects the single role assignment they act under (Section 24.6), and the
+  # Ash policies behind each action decide what that assignment permits. No step
+  # can stand in for the next.
+  pipeline :api do
+    plug :accepts, ["json"]
+    plug :put_no_store
+    plug DispatchWeb.Plugs.Authenticate
+    plug DispatchWeb.Plugs.ResolveActor
+  end
+
   scope "/health", DispatchWeb do
     pipe_through :health
 
     get "/live", HealthController, :live
     get "/ready", HealthController, :ready
+  end
+
+  scope "/v1", DispatchWeb do
+    pipe_through :api
+
+    # Section 24.1: the canonical self-service route and the DRIVER
+    # compatibility projection. Both reach the same controller function.
+    post "/me/status-events", StatusEventController, :create
+    post "/driver/status-events", StatusEventController, :create_driver
   end
 
   scope "/health", DispatchWeb do

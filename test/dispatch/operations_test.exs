@@ -12,11 +12,10 @@ defmodule Dispatch.OperationsTest do
 
   use ExUnit.Case, async: false
 
-  alias Dispatch.Access.Actor
-  alias Dispatch.Access.SeedManifest
-  alias Dispatch.Accounts.{Organization, Participant, RoleAssignment, RoleDefinition, User}
+  alias Dispatch.Accounts.RoleAssignment
   alias Dispatch.Audit.AuditEvent
   alias Dispatch.Operations.ParticipantStatusEvent
+  alias Dispatch.Support.Fixtures
 
   require Ash.Query
 
@@ -26,65 +25,11 @@ defmodule Dispatch.OperationsTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
   end
 
-  defp unique(prefix), do: "#{prefix}-#{System.unique_integer([:positive])}"
+  defp carrier, do: Fixtures.carrier()
 
-  defp carrier do
-    Organization
-    |> Ash.Changeset.for_create(:register, %{name: unique("Carrier"), kind: :CARRIER})
-    |> Ash.create!(authorize?: false)
-  end
+  defp participant(tenant, org), do: Fixtures.participant(tenant, org)
 
-  defp participant(tenant, org) do
-    user =
-      User
-      |> Ash.Changeset.for_create(:register, %{
-        oidc_subject: unique("sub"),
-        display_name: "Person"
-      })
-      |> Ash.create!(authorize?: false)
-
-    Participant
-    |> Ash.Changeset.for_create(:enroll, %{
-      tenant_id: tenant,
-      user_id: user.id,
-      home_organization_id: org.id,
-      public_name: "Person"
-    })
-    |> Ash.create!(authorize?: false, tenant: tenant)
-  end
-
-  defp actor_for(tenant, org, subject, key) do
-    {:ok, manifest} = SeedManifest.fetch(key)
-
-    definition =
-      RoleDefinition
-      |> Ash.Changeset.for_create(:seed, %{
-        tenant_id: tenant,
-        key: manifest.key,
-        label: manifest.label,
-        capabilities_json: manifest.capabilities,
-        constraints_json: manifest.constraints,
-        profile_module: inspect(manifest.profile_module)
-      })
-      |> Ash.create!(authorize?: false, tenant: tenant)
-
-    assignment =
-      RoleAssignment
-      |> Ash.Changeset.for_create(:grant, %{
-        tenant_id: tenant,
-        principal_type: :PARTICIPANT,
-        principal_id: subject.id,
-        organization_id: org.id,
-        role_definition_id: definition.id,
-        scope_type: if(key == "DRIVER", do: :SELF, else: :ORGANIZATION),
-        starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
-      })
-      |> Ash.create!(authorize?: false, tenant: tenant)
-      |> Ash.load!([:role_definition], authorize?: false, tenant: tenant)
-
-    {:ok, actor} = Actor.from_assignment(assignment)
-    actor
-  end
+  defp actor_for(tenant, org, subject, key), do: Fixtures.actor(tenant, org, subject, key)
 
   defp declare(actor, subject, attrs) do
     ParticipantStatusEvent

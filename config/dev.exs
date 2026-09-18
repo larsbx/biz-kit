@@ -34,7 +34,8 @@ config :dispatch, :agent,
 config :dispatch, :identity,
   face_verifier: Dispatch.Identity.Face.DisabledVerifier,
   face_1_to_1_enabled: false,
-  face_challenge_ttl_seconds: 120
+  face_challenge_ttl_seconds: 120,
+  token_verifier: Dispatch.Identity.Tokens.Oidc
 
 config :dispatch, :breakglass,
   max_ttl_seconds: 1_800,
