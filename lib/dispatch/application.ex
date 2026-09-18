@@ -15,18 +15,22 @@ defmodule Dispatch.Application do
     # Section 31: fail closed before anything binds a port or opens a pool.
     Dispatch.Config.validate!()
 
-    children = [
-      Dispatch.Telemetry,
-      Dispatch.Repo,
-      {Phoenix.PubSub, name: Dispatch.PubSub}
-    ] ++ outbox_children() ++ [
-      {Finch,
-       name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: transport_opts()]]}},
-      # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
-      # into a burst of outbound fetches. Started after Finch, which it uses.
-      Dispatch.Identity.Tokens.KeyStore,
-      DispatchWeb.Endpoint
-    ]
+    children =
+      [
+        Dispatch.Telemetry,
+        Dispatch.Repo,
+        {Phoenix.PubSub, name: Dispatch.PubSub}
+      ] ++
+        outbox_children() ++
+        [
+          {Finch,
+           name: Dispatch.Finch,
+           pools: %{default: [conn_opts: [transport_opts: transport_opts()]]}},
+          # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
+          # into a burst of outbound fetches. Started after Finch, which it uses.
+          Dispatch.Identity.Tokens.KeyStore,
+          DispatchWeb.Endpoint
+        ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Dispatch.Supervisor)
   end

@@ -71,7 +71,7 @@ defmodule Dispatch.Operations.Declarations do
       # the default and fail on `allow_nil?` instead.
       |> Map.reject(fn {key, value} -> key == :id and is_nil(value) end)
       |> Map.merge(%{
-        tenant_id: actor.tenant_id,
+          tenant_id: actor.tenant_id,
         participant_id: actor.principal_id,
         role_assignment_id: actor.role_assignment.id
       })
@@ -142,22 +142,23 @@ defmodule Dispatch.Operations.Declarations do
     # mutation. It must be written even when the actor cannot read audit data.
     _audit =
       Dispatch.Audit.AuditEvent
-    |> Ash.Changeset.for_create(:record, %{
+      |> Ash.Changeset.for_create(:record, %{
       tenant_id: actor.tenant_id,
-      event_type: "status.declared",
-      actor_type: actor.principal_type,
-      actor_id: actor.principal_id,
-      role_assignment_id: actor.role_assignment.id,
-      subject_type: "participant",
-      subject_id: event.participant_id,
-      occurred_at: event.recorded_at,
-      correlation_id: event.correlation_id,
-      payload_json: %{
-        "event_id" => event.id,
-        "status" => to_string(event.status),
-        "source" => to_string(event.source)
-      }
-    })
+        event_type: "status.declared",
+        actor_type: actor.principal_type,
+        actor_id: actor.principal_id,
+        role_assignment_id: actor.role_assignment.id,
+        subject_type: "participant",
+        subject_id: event.participant_id,
+        occurred_at: event.recorded_at,
+        correlation_id: event.correlation_id,
+        payload_json: %{
+          "event_id" => event.id,
+          "status" => to_string(event.status),
+          "source" => to_string(event.source)
+        }
+      })
+      # REVIEWED-UNAUTHORIZED: audit append follows an authorized mutation.
       |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
 
     :ok
@@ -173,12 +174,12 @@ defmodule Dispatch.Operations.Declarations do
     |> Enum.each(fn {topic, payload} ->
       _outbox =
         %Dispatch.Outbox.Event{
-        id: Ash.UUID.generate(),
-        tenant_id: actor.tenant_id,
-        topic: topic,
-        event_type: "status.declared",
-        payload: payload,
-        occurred_at: now
+          id: Ash.UUID.generate(),
+          tenant_id: actor.tenant_id,
+          topic: topic,
+          event_type: "status.declared",
+          payload: payload,
+          occurred_at: now
         }
         |> Dispatch.Repo.insert!()
     end)
