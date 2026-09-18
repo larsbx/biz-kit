@@ -1,0 +1,7 @@
+Oban workers (Section 21.3) arrive with the slices that need durable work:
+provider sends, route refreshes, AI callbacks, retention deletion, and outbox
+publication. Jobs invoke named Ash actions and never update resource tables
+directly.
+
+This file exists because git does not track empty directories, and Section 20
+requires this one to be present in a fresh checkout.

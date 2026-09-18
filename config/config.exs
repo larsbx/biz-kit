@@ -1,6 +1,17 @@
 import Config
 
+# The seven domains of Section 21.2. Registering them here is what lets Ash
+# resolve a resource to its domain and check code interfaces at compile time.
 config :dispatch,
+  ash_domains: [
+    Dispatch.Accounts,
+    Dispatch.Fleet,
+    Dispatch.Operations,
+    Dispatch.Communications,
+    Dispatch.Identity,
+    Dispatch.Audit,
+    Dispatch.Integrations
+  ],
   ecto_repos: [Dispatch.Repo],
   environment: config_env(),
   generators: [timestamp_type: :utc_datetime_usec]
