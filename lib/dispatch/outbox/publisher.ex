@@ -37,27 +37,27 @@ defmodule Dispatch.Outbox.Publisher do
   def publish_pending do
     {:ok, count} =
       Dispatch.Repo.transaction(fn ->
-      events =
-        from(e in Event,
-          where: is_nil(e.published_at),
-          order_by: [asc: e.occurred_at, asc: e.id],
-          limit: @batch_size,
-          lock: "FOR UPDATE SKIP LOCKED"
-        )
-        |> Dispatch.Repo.all()
+        events =
+          from(e in Event,
+            where: is_nil(e.published_at),
+            order_by: [asc: e.occurred_at, asc: e.id],
+            limit: @batch_size,
+            lock: "FOR UPDATE SKIP LOCKED"
+          )
+          |> Dispatch.Repo.all()
 
-      now = DateTime.utc_now()
+        now = DateTime.utc_now()
 
-      Enum.each(events, fn event ->
-        :ok = Phoenix.PubSub.broadcast(Dispatch.PubSub, event.topic, {:outbox, event.payload})
+        Enum.each(events, fn event ->
+          :ok = Phoenix.PubSub.broadcast(Dispatch.PubSub, event.topic, {:outbox, event.payload})
 
-        {1, nil} =
-          from(e in Event, where: e.id == type(^event.id, :binary_id))
-          |> Dispatch.Repo.update_all(
-          set: [published_at: now],
-          inc: [attempt_count: 1]
-        )
-      end)
+          {1, nil} =
+            from(e in Event, where: e.id == type(^event.id, :binary_id))
+            |> Dispatch.Repo.update_all(
+              set: [published_at: now],
+              inc: [attempt_count: 1]
+            )
+        end)
 
         length(events)
       end)
