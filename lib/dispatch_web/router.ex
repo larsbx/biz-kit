@@ -46,6 +46,48 @@ defmodule DispatchWeb.Router do
     get "/ready", HealthController, :ready
   end
 
+  # Section 26.1: scripts from this origin only, and no inline scripts. The
+  # Datastar bundle is served from `priv/static/vendor`, so `self` is the whole
+  # allowance a first-release portal needs; Section 28.5's map adapter is what
+  # will widen it, and Section 26.1 requires that widening to be a CSP change
+  # with a test rather than an edit to a page template.
+  pipeline :portal do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_portal_headers
+    plug DispatchWeb.Plugs.PortalSession
+  end
+
+  # Sign-in and role selection cannot require a resolved actor: they are how one
+  # is obtained. Same headers and CSRF protection, no actor.
+  pipeline :portal_public do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_portal_headers
+  end
+
+  scope "/", DispatchWeb do
+    pipe_through :portal_public
+
+    get "/login", SessionController, :login
+    post "/session", SessionController, :create
+    delete "/session", SessionController, :delete
+  end
+
+  scope "/", DispatchWeb do
+    pipe_through :portal
+
+    get "/select-role", SessionController, :select_role
+    post "/select-role", SessionController, :choose_role
+
+    # Section 4.3's primary routes. Section 26.2 fixes the paths.
+    get "/partner/stops/:stop_id", PortalController, :partner_stop
+    get "/operations/participants/:participant_id", PortalController, :operations_participant
+    get "/operations/drivers/:driver_id", PortalController, :operations_driver
+  end
+
   scope "/v1", DispatchWeb do
     pipe_through :api
 
@@ -65,5 +107,21 @@ defmodule DispatchWeb.Router do
     conn
     |> put_resp_header("cache-control", "no-store")
     |> put_resp_header("referrer-policy", "no-referrer")
+  end
+
+  # Section 24.7 requires `no-store` and `no-referrer` on portal responses, and
+  # Section 26.1 prohibits inline scripts — which is what makes the absence of
+  # `unsafe-inline` here load-bearing rather than tidy.
+  defp put_portal_headers(conn, _opts) do
+    conn
+    |> put_resp_header("cache-control", "no-store")
+    |> put_resp_header("referrer-policy", "no-referrer")
+    |> put_resp_header("x-content-type-options", "nosniff")
+    |> put_resp_header("x-frame-options", "DENY")
+    |> put_resp_header(
+      "content-security-policy",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " <>
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    )
   end
 end

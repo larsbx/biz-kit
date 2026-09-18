@@ -75,6 +75,67 @@ defmodule Dispatch.Identity.PrincipalResolution do
   end
 
   @doc """
+  The assignments this subject may select between, for the role switcher.
+
+  Identifiers and labels only. Section 4.3's switcher needs to name the choices;
+  it does not need — and must not carry — anything about what each one permits.
+  """
+  @spec selectable(String.t(), keyword()) :: [%{id: Ash.UUID.t(), label: String.t()}]
+  def selectable(subject, opts \\ []) do
+    at = Keyword.get(opts, :at, DateTime.utc_now())
+
+    with {:ok, user} <- fetch_user(subject) do
+      user.id
+      |> contexts(at)
+      |> Enum.map(&label_for(&1, at))
+      |> Enum.reject(&is_nil/1)
+    else
+      _unknown -> []
+    end
+  end
+
+  defp label_for(context, at) do
+    case fetch_assignment(context, at) do
+      {:ok, assignment} ->
+        %{id: assignment.id, label: assignment.role_definition.label}
+
+      _gone ->
+        nil
+    end
+  end
+
+  @doc """
+  Re-reads an actor's assignment and reports whether its authority still stands.
+
+  An `Actor` is a value: it holds the assignment as it was when the actor was
+  built, and `Dispatch.Access.can?/3` answers from that struct. Over a single
+  HTTP request that is exactly right — the request resolved its actor moments
+  ago. Anything that *holds* an actor is a different matter. Section 33.2
+  requires a revoked assignment to fail closed "across REST, Datastar, agent
+  tools, jobs, and SSE reconnects", and a stream open for an hour would
+  otherwise keep answering from the authority it was born with.
+
+  So anything long-lived, and any read that outlives its request, calls this
+  first. It returns a *fresh* actor rather than a boolean, because the answer to
+  "is this still valid" and the value to act under should not be two separate
+  things that can disagree.
+  """
+  @spec revalidate(Actor.t(), keyword()) :: {:ok, Actor.t()} | {:error, error()}
+  def revalidate(%Actor{} = actor, opts \\ []) do
+    at = Keyword.get(opts, :at, DateTime.utc_now())
+
+    context = %{
+      role_assignment_id: actor.role_assignment.id,
+      tenant_id: actor.tenant_id,
+      participant_id: actor.principal_id
+    }
+
+    with {:ok, assignment} <- fetch_assignment(context, at) do
+      Actor.from_assignment(assignment, at: at)
+    end
+  end
+
+  @doc """
   The authority contexts `user_id` holds at `at`, as identifiers only.
 
   Untenanted by necessity — see the module documentation. Kept as a projection

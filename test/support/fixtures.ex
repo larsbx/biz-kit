@@ -25,7 +25,9 @@ defmodule Dispatch.Support.Fixtures do
     User
   }
 
-  alias Dispatch.Fleet.{Assignment, Load}
+  alias Dispatch.Fleet.{Assignment, Load, Stop, StopParty}
+
+  require Ash.Query
 
   @doc "A name-unique suffix, so fixtures can be built repeatedly in one run."
   @spec unique(String.t()) :: String.t()
@@ -119,6 +121,9 @@ defmodule Dispatch.Support.Fixtures do
       organization_id: org.id,
       role_definition_id: definition.id,
       scope_type: Keyword.get(opts, :scope_type, scope_for(key)),
+      # A STOP- or LOAD-scoped profile is meaningless without the subject it is
+      # scoped to, so the fixture requires one rather than silently granting a
+      # wider scope than the manifest declares.
       scope_id: Keyword.get(opts, :scope_id),
       starts_at: Keyword.get(opts, :starts_at, DateTime.add(DateTime.utc_now(), -3600, :second)),
       ends_at: Keyword.get(opts, :ends_at)
@@ -184,6 +189,95 @@ defmodule Dispatch.Support.Fixtures do
     Ash.get!(RoleDefinition, assignment.role_definition_id, authorize?: false, tenant: tenant)
   end
 
-  defp scope_for("DRIVER"), do: :SELF
-  defp scope_for(_organization_wide), do: :ORGANIZATION
+  @doc "An organization of `kind` in `tenant`."
+  @spec organization(Ash.UUID.t(), atom()) :: Organization.t()
+  def organization(_tenant, kind) do
+    Organization
+    |> Ash.Changeset.for_create(:register, %{name: unique(to_string(kind)), kind: kind})
+    |> Ash.create!(authorize?: false)
+  end
+
+  @doc "A load for `carrier`, with whatever commercial terms a test needs."
+  @spec load(Ash.UUID.t(), Organization.t(), keyword()) :: Load.t()
+  def load(tenant, carrier, opts \\ []) do
+    Load
+    |> Ash.Changeset.for_create(
+      :create_load,
+      %{
+        tenant_id: tenant,
+        carrier_organization_id: carrier.id,
+        external_reference: unique("LOAD")
+      }
+      |> Map.merge(Map.new(Keyword.take(opts, ~w(commodity_text currency agreed_rate_minor)a)))
+    )
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  @doc "A stop on `load`."
+  @spec stop(Ash.UUID.t(), Load.t(), atom(), keyword()) :: Stop.t()
+  def stop(tenant, load, kind, opts \\ []) do
+    Stop
+    |> Ash.Changeset.for_create(:add, %{
+      tenant_id: tenant,
+      load_id: load.id,
+      sequence: Keyword.get(opts, :sequence, 1),
+      kind: kind,
+      address_text: Keyword.get(opts, :address_text, unique("address")),
+      window_start: Keyword.get(opts, :window_start, DateTime.utc_now()),
+      window_end: Keyword.get(opts, :window_end, DateTime.add(DateTime.utc_now(), 3600, :second)),
+      contact_name: Keyword.get(opts, :contact_name, "Gate"),
+      contact_phone_e164: Keyword.get(opts, :contact_phone_e164)
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  @doc "An active party relationship between `organization` and `stop`."
+  @spec stop_party(Ash.UUID.t(), Stop.t(), Organization.t(), atom()) :: StopParty.t()
+  def stop_party(tenant, stop, organization, relationship) do
+    StopParty
+    |> Ash.Changeset.for_create(:add, %{
+      tenant_id: tenant,
+      stop_id: stop.id,
+      organization_id: organization.id,
+      relationship: relationship,
+      starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  @doc """
+  Ends every active party relationship between `organization` and `stop`.
+
+  Section 33.2 requires that removing the relationship invalidate access
+  immediately, so a test needs to be able to remove it mid-flight.
+  """
+  @spec end_stop_party(Ash.UUID.t(), Stop.t(), Organization.t()) :: :ok
+  def end_stop_party(tenant, stop, organization) do
+    StopParty
+    |> Ash.Query.filter(stop_id == ^stop.id and organization_id == ^organization.id)
+    |> Ash.read!(authorize?: false, tenant: tenant)
+    |> Enum.each(fn party ->
+      party
+      |> Ash.Changeset.for_update(:end_relationship, %{})
+      |> Ash.update!(authorize?: false, tenant: tenant)
+    end)
+  end
+
+  @doc "Revokes a role assignment, so a test can end a grant mid-flight."
+  @spec revoke(Ash.UUID.t(), RoleAssignment.t()) :: RoleAssignment.t()
+  def revoke(tenant, %RoleAssignment{} = assignment) do
+    assignment
+    |> Ash.Changeset.for_update(:revoke, %{})
+    |> Ash.update!(authorize?: false, tenant: tenant)
+  end
+
+  # Read from the manifest rather than guessed. Section 23.2 declares each
+  # profile's scope type there, and a fixture that assumed `ORGANIZATION` for
+  # everything but `DRIVER` would grant `SHIPPER` a wider scope than the
+  # specification gives it — which is exactly the kind of test-only over-grant
+  # that makes an authorization test pass for the wrong reason.
+  defp scope_for(key) do
+    {:ok, manifest} = SeedManifest.fetch(key)
+    manifest.scope_type
+  end
 end
