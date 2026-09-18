@@ -19,7 +19,8 @@ defmodule Dispatch.Application do
       Dispatch.Telemetry,
       Dispatch.Repo,
       {Phoenix.PubSub, name: Dispatch.PubSub},
-      {Finch, name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: tls_opts()]]}},
+      {Finch,
+       name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: transport_opts()]]}},
       # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
       # into a burst of outbound fetches. Started after Finch, which it uses.
       Dispatch.Identity.Tokens.KeyStore,
@@ -33,6 +34,14 @@ defmodule Dispatch.Application do
   # every authenticated request, so the connection that fetches them verifies
   # its peer. Stated here rather than inherited from a library default: a
   # transitive dependency changing that default must not silently change this.
+  # The connect allowance is read from configuration rather than written here,
+  # because `Dispatch.Identity.Tokens.Oidc` sizes its refresh deadline against
+  # the same number; two copies would drift and the deadline would silently
+  # become too short.
+  defp transport_opts do
+    [timeout: Dispatch.Identity.Tokens.Oidc.connect_timeout_ms()] ++ tls_opts()
+  end
+
   defp tls_opts do
     [
       verify: :verify_peer,

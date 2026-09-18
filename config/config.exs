@@ -42,6 +42,14 @@ config :logger, :default_formatter,
 # unbounded in bytes, since one grapheme can carry unlimited combining marks.
 config :ash, default_string_length_count: :codepoints
 
+# How long an outbound connection may take to establish. Named here because two
+# places must agree on it: the Finch pool that enforces it, and
+# `Dispatch.Identity.Tokens.Oidc`, whose refresh budget is computed from it. A
+# connect timeout left to a library default is unbounded in practice, and any
+# deadline sized against the other two timeouts alone would be wrong by however
+# long a connection took.
+config :dispatch, :http_connect_timeout_ms, 3_000
+
 config :phoenix, :json_library, Jason
 
 # Section 21.3: one queue, FIFO by insertion. Section 27.6 forbids priority

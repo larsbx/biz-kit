@@ -33,9 +33,12 @@ defmodule Dispatch.Identity.Tokens.KeyStore do
   # of the first token that needs it.
   @cooldown_ms :timer.seconds(30)
 
-  # Generous next to one discovery call plus one JWKS fetch, so a caller queued
-  # behind a slow refresh waits for its answer instead of failing separately.
-  @call_timeout_ms 15_000
+  # Derived from the work it covers, never chosen next to it. A deadline shorter
+  # than one refresh's worst case does not bound anything: it abandons a caller
+  # with `:unavailable` for a key that was about to arrive, while the refresh
+  # continues unobserved — and every caller queued behind shares the same
+  # undersized deadline. The margin is for queueing and the reply itself.
+  @queue_margin_ms 5_000
 
   @doc false
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -50,12 +53,22 @@ defmodule Dispatch.Identity.Tokens.KeyStore do
   """
   @spec ensure(String.t()) :: {:ok, JOSE.JWK.t()} | {:error, :invalid_token | :unavailable}
   def ensure(kid) do
-    GenServer.call(__MODULE__, {:ensure, kid}, @call_timeout_ms)
+    GenServer.call(__MODULE__, {:ensure, kid}, call_timeout_ms())
   catch
     # A refresh slower than the call timeout, or a store not running. Neither is
     # a reason to admit a token whose key could not be confirmed.
     :exit, _reason -> {:error, :unavailable}
   end
+
+  @doc """
+  How long `ensure/1` waits, which is the refresh budget plus room to queue.
+
+  Public so a test can assert it still covers `Oidc.refresh_budget_ms/0` — the
+  two are only correct together, and nothing else would notice them drifting
+  apart.
+  """
+  @spec call_timeout_ms() :: pos_integer()
+  def call_timeout_ms, do: Oidc.refresh_budget_ms() + @queue_margin_ms
 
   @doc false
   @impl GenServer

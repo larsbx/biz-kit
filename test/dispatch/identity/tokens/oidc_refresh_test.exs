@@ -136,6 +136,29 @@ defmodule Dispatch.Identity.Tokens.OidcRefreshTest do
     assert reason in [:invalid_token, :unavailable]
   end
 
+  describe "the refresh deadline" do
+    test "covers the worst case of the work it waits on" do
+      # These two are only correct together. A call timeout shorter than one
+      # refresh's worst case does not bound anything — it abandons the caller
+      # with `:unavailable` for a key that was about to arrive, while the
+      # refresh continues unobserved behind it. Nothing else in the suite would
+      # notice them drifting apart, because the timing that separates them only
+      # appears against a slow issuer.
+      assert Dispatch.Identity.Tokens.KeyStore.call_timeout_ms() > Oidc.refresh_budget_ms()
+    end
+
+    test "counts the connect allowance, not only the pool and receive waits" do
+      # The allowance that is easiest to forget: it lives on the Finch pool
+      # rather than on the request, and left to a library default it is
+      # unbounded — which would make any deadline sized from the other two
+      # timeouts wrong by however long a connection took to establish.
+      connect = Application.get_env(:dispatch, :http_connect_timeout_ms)
+
+      assert is_integer(connect) and connect > 0
+      assert Oidc.refresh_budget_ms() >= 2 * connect
+    end
+  end
+
   test "a known kid still verifies while refreshes are suppressed", ctx do
     assert {:error, _reason} = Oidc.verify(token(ctx.private, "unknown-kid"))
 
