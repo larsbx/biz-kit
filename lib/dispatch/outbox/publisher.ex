@@ -35,7 +35,7 @@ defmodule Dispatch.Outbox.Publisher do
   @doc "Publishes one bounded batch; public for deterministic integration tests."
   @spec publish_pending() :: non_neg_integer()
   def publish_pending do
-    {:ok, count} =
+    result =
       Dispatch.Repo.transaction(fn ->
         events =
           from(e in Event,
@@ -62,7 +62,10 @@ defmodule Dispatch.Outbox.Publisher do
         length(events)
       end)
 
-    count
+    case result do
+      {:ok, count} -> count
+      {:error, reason} -> exit({:outbox_publish_failed, reason})
+    end
   end
 
   defp schedule, do: Process.send_after(self(), :poll, @poll_ms)
