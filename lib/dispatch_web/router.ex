@@ -15,6 +15,27 @@ defmodule DispatchWeb.Router do
 
   import Plug.Conn
 
+  # Passed through Phoenix's own `put_secure_browser_headers` rather than set by
+  # hand. Writing the headers directly worked and cost the framework's baseline —
+  # and a scanner reading the pipeline could not tell a deliberate set from a
+  # forgotten one, which is a fair complaint: the next person adding a pipeline
+  # has the same trouble.
+  #
+  # Section 26.1 prohibits inline scripts, which is what makes the absence of
+  # `unsafe-inline` here load-bearing rather than tidy, and Section 24.7 wants
+  # `no-referrer` rather than the framework's cross-origin default.
+  @portal_headers %{
+    "content-security-policy" =>
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " <>
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "referrer-policy" => "no-referrer",
+    # The framework defaults this to SAMEORIGIN, which would disagree with the
+    # `frame-ancestors 'none'` above. Modern browsers take the CSP and ignore
+    # this header, so the disagreement is invisible until one does not — and a
+    # reader comparing the two has no way to tell which was intended.
+    "x-frame-options" => "DENY"
+  }
+
   pipeline :health do
     plug :accepts, ["json"]
     plug :put_no_store
@@ -55,7 +76,8 @@ defmodule DispatchWeb.Router do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :protect_from_forgery
-    plug :put_portal_headers
+    plug :put_secure_browser_headers, @portal_headers
+    plug :put_no_store
     plug DispatchWeb.Plugs.PortalSession
   end
 
@@ -65,7 +87,8 @@ defmodule DispatchWeb.Router do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :protect_from_forgery
-    plug :put_portal_headers
+    plug :put_secure_browser_headers, @portal_headers
+    plug :put_no_store
   end
 
   scope "/", DispatchWeb do
@@ -107,21 +130,5 @@ defmodule DispatchWeb.Router do
     conn
     |> put_resp_header("cache-control", "no-store")
     |> put_resp_header("referrer-policy", "no-referrer")
-  end
-
-  # Section 24.7 requires `no-store` and `no-referrer` on portal responses, and
-  # Section 26.1 prohibits inline scripts — which is what makes the absence of
-  # `unsafe-inline` here load-bearing rather than tidy.
-  defp put_portal_headers(conn, _opts) do
-    conn
-    |> put_resp_header("cache-control", "no-store")
-    |> put_resp_header("referrer-policy", "no-referrer")
-    |> put_resp_header("x-content-type-options", "nosniff")
-    |> put_resp_header("x-frame-options", "DENY")
-    |> put_resp_header(
-      "content-security-policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " <>
-        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-    )
   end
 end

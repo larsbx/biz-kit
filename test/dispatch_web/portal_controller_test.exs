@@ -182,6 +182,11 @@ defmodule DispatchWeb.PortalControllerTest do
 
       assert get_resp_header(conn, "cache-control") == ["no-store"]
       assert get_resp_header(conn, "referrer-policy") == ["no-referrer"]
+      assert get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+
+      # Must agree with `frame-ancestors 'none'` above: a browser that honours
+      # only one of them should reach the same conclusion either way.
+      assert get_resp_header(conn, "x-frame-options") == ["DENY"]
     end
 
     test "reference only static assets that exist", ctx do

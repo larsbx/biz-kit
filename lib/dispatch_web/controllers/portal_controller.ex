@@ -19,14 +19,13 @@ defmodule DispatchWeb.PortalController do
   import Plug.Conn
 
   alias Dispatch.Identity.PrincipalResolution
-  alias DispatchWeb.Components.{Layouts, Operations, Partner}
   alias DispatchWeb.ViewModels.{OperationsParticipantView, PartnerStopView}
 
   @doc "A shipper's or receiver's stop page (Section 4.3)."
   @spec partner_stop(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def partner_stop(conn, %{"stop_id" => stop_id}) do
     case PartnerStopView.build(conn.assigns.actor, stop_id) do
-      {:ok, view} -> render_page(conn, "Stop", &Partner.stop_page/1, %{view: view})
+      {:ok, view} -> page(conn, :partner_stop, view)
       {:error, :not_found} -> not_found(conn)
     end
   end
@@ -35,11 +34,8 @@ defmodule DispatchWeb.PortalController do
   @spec operations_participant(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def operations_participant(conn, %{"participant_id" => participant_id}) do
     case OperationsParticipantView.build(conn.assigns.actor, participant_id) do
-      {:ok, view} ->
-        render_page(conn, "Participant", &Operations.participant_page/1, %{view: view})
-
-      {:error, :not_found} ->
-        not_found(conn)
+      {:ok, view} -> page(conn, :operations_participant, view)
+      {:error, :not_found} -> not_found(conn)
     end
   end
 
@@ -54,34 +50,21 @@ defmodule DispatchWeb.PortalController do
     operations_participant(conn, %{"participant_id" => driver_id})
   end
 
+  defp page(conn, template, view) do
+    render(conn, template,
+      view: view,
+      actor: conn.assigns.actor,
+      assignments: switchable_assignments(conn)
+    )
+  end
+
   # One response for "no such row", "not yours", and "not in your tenant".
   # Acceptance criterion 19 requires an unrelated subject to bear no
   # existence-bearing metadata, and a 403 here would be exactly that metadata.
   defp not_found(conn) do
     conn
     |> put_status(:not_found)
-    |> put_resp_content_type("text/html")
-    |> send_resp(404, "<!DOCTYPE html><html lang=\"en\"><body><h1>Not found</h1></body></html>")
-  end
-
-  defp render_page(conn, title, component, assigns) do
-    actor = conn.assigns.actor
-
-    html =
-      Layouts.root(%{
-        page_title: title,
-        actor: actor,
-        assignments: switchable_assignments(conn),
-        inner_block: [
-          %{__slot__: :inner_block, inner_block: fn _arg, _slot -> component.(assigns) end}
-        ]
-      })
-      |> Phoenix.HTML.Safe.to_iodata()
-
-    conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header("cache-control", "no-store")
-    |> send_resp(200, html)
+    |> render(:not_found)
   end
 
   # What the switcher may offer: the assignments this principal actually holds,

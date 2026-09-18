@@ -24,7 +24,7 @@ defmodule DispatchWeb.SessionController do
 
   @doc "The sign-in page."
   @spec login(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def login(conn, _params), do: page(conn, 200, login_form())
+  def login(conn, _params), do: render(conn, :login, message: nil)
 
   @doc """
   Exchanges a verified token for a session.
@@ -44,11 +44,13 @@ defmodule DispatchWeb.SessionController do
       {:error, _reason} ->
         # One message for every reason, as Section 24.7 requires of reason
         # codes: which part of the token failed is more use to an attacker.
-        page(conn, 401, login_form("Sign-in failed."))
+        conn |> put_status(:unauthorized) |> render(:login, message: "Sign-in failed.")
     end
   end
 
-  def create(conn, _params), do: page(conn, 400, login_form("A token is required."))
+  def create(conn, _params) do
+    conn |> put_status(:bad_request) |> render(:login, message: "A token is required.")
+  end
 
   @doc "Ends the session."
   @spec delete(Plug.Conn.t(), map()) :: Plug.Conn.t()
@@ -63,7 +65,7 @@ defmodule DispatchWeb.SessionController do
   @spec select_role(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def select_role(conn, _params) do
     subject = get_session(conn, PortalSession.subject_key())
-    page(conn, 200, role_form(PrincipalResolution.selectable(subject)))
+    render(conn, :select_role, assignments: PrincipalResolution.selectable(subject), message: nil)
   end
 
   @doc "Records the selection. Only assignments the principal holds are offered or accepted."
@@ -78,10 +80,11 @@ defmodule DispatchWeb.SessionController do
         |> redirect_to(landing_for(actor))
 
       {:error, _not_held} ->
-        page(
-          conn,
-          403,
-          role_form(PrincipalResolution.selectable(subject), "That role is not available.")
+        conn
+        |> put_status(:forbidden)
+        |> render(:select_role,
+          assignments: PrincipalResolution.selectable(subject),
+          message: "That role is not available."
         )
     end
   end
@@ -100,56 +103,7 @@ defmodule DispatchWeb.SessionController do
   defp redirect_to(conn, path) do
     conn
     |> put_resp_header("location", path)
-    |> page(302, ~s(<p><a href="#{Plug.HTML.html_escape(path)}">Continue</a></p>))
-  end
-
-  defp page(conn, status, body) do
-    conn
-    |> put_resp_content_type("text/html")
-    |> send_resp(status, """
-    <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Dispatch</title></head>\
-    <body>#{body}</body></html>\
-    """)
-  end
-
-  # Section 26.4 requires CSRF protection on every action form. The token is
-  # rendered here rather than left to the pipeline because `protect_from_forgery`
-  # only *checks* it — a form without one fails for everybody, including the
-  # legitimate user, which is how this requirement usually surfaces.
-  defp csrf_field do
-    ~s(<input type="hidden" name="_csrf_token" value="#{Plug.CSRFProtection.get_csrf_token()}" />)
-  end
-
-  defp alert(nil), do: ""
-  defp alert(message), do: ~s(<p role="alert">#{Plug.HTML.html_escape(message)}</p>)
-
-  defp login_form(message \\ nil) do
-    """
-    #{alert(message)}
-    <form method="post" action="/session">
-      #{csrf_field()}
-      <label for="token">Access token</label>
-      <input id="token" name="token" type="password" autocomplete="off" />
-      <button type="submit">Sign in</button>
-    </form>
-    """
-  end
-
-  defp role_form(assignments, message \\ nil) do
-    options =
-      Enum.map_join(assignments, "", fn assignment ->
-        ~s(<option value="#{Plug.HTML.html_escape(assignment.id)}">) <>
-          Plug.HTML.html_escape(assignment.label) <> "</option>"
-      end)
-
-    """
-    #{alert(message)}
-    <form method="post" action="/select-role">
-      #{csrf_field()}
-      <label for="role_assignment_id">Acting as</label>
-      <select id="role_assignment_id" name="role_assignment_id">#{options}</select>
-      <button type="submit">Continue</button>
-    </form>
-    """
+    |> put_status(:found)
+    |> render(:redirect, to: path)
   end
 end
