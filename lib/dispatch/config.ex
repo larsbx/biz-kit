@@ -231,24 +231,51 @@ defmodule Dispatch.Config do
         []
       end
 
-    # Section 25.6 makes DisabledFaceVerifier the default; a production
-    # deployment that leaves face matching off must actually select it.
-    adapter_violation =
-      if production? and not enabled? and
-           AdapterRegistry.selected(:face_verifier) != Dispatch.Identity.Face.DisabledVerifier do
-        [
-          violation(
-            "FACE_ADAPTER_INCONSISTENT",
-            "FACE_VERIFIER_ADAPTER",
-            "Must be Dispatch.Identity.Face.DisabledVerifier while FACE_1_TO_1_ENABLED=false."
-          )
-        ]
-      else
-        []
-      end
+    # The adapter and the flag must agree in both directions, and the disabled
+    # verifier is not a valid adapter for an enabled feature: Section 7.4 has it
+    # answer every challenge `ENROLLMENT_REQUIRED`, so this pairing would leave
+    # face matching switched on with nobody able to pass it. Section 31 requires
+    # failing closed when matching is enabled without a valid adapter.
+    adapter_violation = validate_face_adapter(production?, enabled?)
 
     ttl_violation ++ enablement_violations ++ adapter_violation
   end
+
+  @disabled_verifier Dispatch.Identity.Face.DisabledVerifier
+
+  defp validate_face_adapter(_production?, true = _enabled?) do
+    if AdapterRegistry.selected(:face_verifier) == @disabled_verifier do
+      [
+        violation(
+          "FACE_ADAPTER_INCONSISTENT",
+          "FACE_VERIFIER_ADAPTER",
+          "#{inspect(@disabled_verifier)} refuses every challenge and cannot serve " <>
+            "FACE_1_TO_1_ENABLED=true; select an approved verifier or disable the feature."
+        )
+      ]
+    else
+      []
+    end
+  end
+
+  # Section 25.6 makes the disabled verifier the default. A production
+  # deployment that leaves matching off must actually select it, so a real
+  # verifier cannot sit wired up behind a false flag.
+  defp validate_face_adapter(true = _production?, false = _enabled?) do
+    if AdapterRegistry.selected(:face_verifier) == @disabled_verifier do
+      []
+    else
+      [
+        violation(
+          "FACE_ADAPTER_INCONSISTENT",
+          "FACE_VERIFIER_ADAPTER",
+          "Must be #{inspect(@disabled_verifier)} while FACE_1_TO_1_ENABLED=false."
+        )
+      ]
+    end
+  end
+
+  defp validate_face_adapter(_production?, _enabled?), do: []
 
   defp violation(code, key, detail), do: %{code: code, key: key, detail: detail}
 end

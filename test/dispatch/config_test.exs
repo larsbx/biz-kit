@@ -128,6 +128,32 @@ defmodule Dispatch.ConfigTest do
       assert "FACE_ENABLED_WITHOUT_POLICY" in codes(:test)
     end
 
+    test "enabling face matching while the disabled verifier is selected is a violation" do
+      # The disabled verifier answers every challenge ENROLLMENT_REQUIRED, so
+      # this pairing means the feature is on and nobody can ever be verified.
+      # Section 31 requires startup to fail closed when matching is enabled
+      # without a valid adapter, and the default adapter is not one.
+      base = Application.get_env(:dispatch, :identity)
+
+      Application.put_env(
+        :dispatch,
+        :identity,
+        base
+        |> Keyword.put(:face_1_to_1_enabled, true)
+        |> Keyword.put(:face_verifier, Dispatch.Identity.Face.DisabledVerifier)
+        |> Keyword.put(:manifest_public_key, "key")
+        |> Keyword.put(:face_attestation_retention_days, "30")
+        |> Keyword.put(:consent_text_version, "v1")
+        |> Keyword.put(:jurisdiction_policy_version, "v1")
+      )
+
+      codes = codes(:test)
+
+      # Every policy value is present, so this must be the only thing missing.
+      refute "FACE_ENABLED_WITHOUT_POLICY" in codes
+      assert "FACE_ADAPTER_INCONSISTENT" in codes
+    end
+
     test "FACE_1_TO_1_ENABLED defaults to false and pairs with the disabled verifier" do
       identity = Application.get_env(:dispatch, :identity)
 
