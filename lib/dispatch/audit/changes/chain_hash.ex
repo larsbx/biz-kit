@@ -36,10 +36,13 @@ defmodule Dispatch.Audit.Changes.ChainHash do
   # predecessor committed by the append before it. Different tenants retain
   # independent concurrency.
   defp lock_tenant_chain!(tenant) do
-    Dispatch.Repo.query!(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
-      [to_string(tenant)]
-    )
+    _result =
+      Dispatch.Repo.query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        [to_string(tenant)]
+      )
+
+    :ok
   end
 
   defp previous_hash(changeset) do
