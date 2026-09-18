@@ -1,12 +1,12 @@
 defmodule Dispatch.OutboxTest do
   use ExUnit.Case, async: false
 
+  import Ecto.Query, only: [from: 2]
+
   alias Dispatch.Audit.AuditEvent
   alias Dispatch.Operations.Declarations
   alias Dispatch.Outbox.{Event, Publisher}
   alias Dispatch.Support.Fixtures
-
-  import Ecto.Query, only: [from: 2]
 
   @moduletag :integration
 

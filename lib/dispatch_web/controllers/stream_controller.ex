@@ -35,7 +35,10 @@ defmodule DispatchWeb.StreamController do
           end
 
         {:error, :not_found} ->
-          conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
+          conn
+          |> put_status(:not_found)
+          |> put_resp_content_type("text/html")
+          |> send_resp(404, "")
       end
     end)
   end
@@ -65,7 +68,10 @@ defmodule DispatchWeb.StreamController do
           end
 
         {:error, :not_found} ->
-          conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
+          conn
+          |> put_status(:not_found)
+          |> put_resp_content_type("text/html")
+          |> send_resp(404, "")
       end
     end)
   end

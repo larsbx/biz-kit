@@ -16,6 +16,7 @@ defmodule Dispatch.Outbox.Publisher do
   @poll_ms 250
   @batch_size 100
 
+  @spec start_link(term()) :: GenServer.on_start()
   def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
 
   @impl GenServer
