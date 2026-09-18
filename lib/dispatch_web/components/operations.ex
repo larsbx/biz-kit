@@ -49,4 +49,41 @@ defmodule DispatchWeb.Components.Operations do
     </section>
     """
   end
+  attr :view, :any, required: true
+
+  @doc "The carrier-scoped operations overview of Sections 4.4 and 26.3."
+  @spec operations_page(map()) :: Phoenix.LiveView.Rendered.t()
+  def operations_page(assigns) do
+    ~H"""
+    <main id="operations-page">
+      <h1>Operations</h1>
+      <.operations_roster view={@view} />
+    </main>
+    """
+  end
+
+  attr :view, :any, required: true
+
+  @doc "The independently patchable operations roster."
+  @spec operations_roster(map()) :: Phoenix.LiveView.Rendered.t()
+  def operations_roster(assigns) do
+    ~H"""
+    <section id="operations-roster" aria-live="polite">
+      <h2>Operational participants</h2>
+      <p :if={@view.participants == []}>No operational participants.</p>
+      <ul :if={@view.participants != []}>
+        <li :for={participant <- @view.participants} id={"operations-participant-#{participant.participant_id}"}>
+          <a href={"/operations/participants/#{participant.participant_id}"}>
+            {participant.public_name}
+          </a>
+          <span class="participant-state">{participant.status}</span>
+          <span :if={participant.current_status} class="participant-current-status">
+            {participant.current_status.value}
+            <.summary_badge summary={participant.current_status} />
+          </span>
+        </li>
+      </ul>
+    </section>
+    """
+  end
 end

@@ -17,7 +17,24 @@ defmodule DispatchWeb.StreamController do
   import Plug.Conn
 
   alias DispatchWeb.Datastar
-  alias DispatchWeb.Streams.Participant
+  alias DispatchWeb.Streams.{Operations, Participant}
+
+  @doc "The carrier-scoped operations roster stream."
+  @spec operations(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def operations(conn, _params) do
+    case Operations.open(conn.assigns.actor) do
+      {:ok, session, snapshot} ->
+        opened = open_stream(conn)
+
+        case write(opened, snapshot) do
+          :closed -> opened
+          written -> operations_loop(written, session)
+        end
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> put_resp_content_type("text/html") |> send_resp(404, "")
+    end
+  end
 
   @doc """
   The live participant stream.
@@ -108,5 +125,37 @@ defmodule DispatchWeb.StreamController do
     end
   end
 
+  defp operations_loop(conn, session) do
+    :ok = Phoenix.PubSub.subscribe(Dispatch.PubSub, operations_topic(session))
+
+    try do
+      operations_run(conn, session)
+    after
+      Phoenix.PubSub.unsubscribe(Dispatch.PubSub, operations_topic(session))
+    end
+  end
+
+  defp operations_run(conn, session) do
+    receive do
+      {:outbox, _payload} -> operations_advance(conn, session, :refresh)
+    after
+      Datastar.heartbeat_interval_ms() -> operations_advance(conn, session, :heartbeat)
+    end
+  end
+
+  defp operations_advance(conn, session, reason) do
+    case Operations.tick(session, reason) do
+      {:emit, chunk, session} ->
+        case write(conn, chunk) do
+          :closed -> conn
+          written -> operations_run(written, session)
+        end
+
+      {:close, :unauthorized} ->
+        conn
+    end
+  end
+
   defp topic(session), do: "participant:#{session.participant_id}"
+  defp operations_topic(session), do: "operations:#{session.organization_id}"
 end

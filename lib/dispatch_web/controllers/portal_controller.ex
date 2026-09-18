@@ -19,7 +19,16 @@ defmodule DispatchWeb.PortalController do
   import Plug.Conn
 
   alias Dispatch.Identity.PrincipalResolution
-  alias DispatchWeb.ViewModels.{OperationsParticipantView, PartnerStopView}
+  alias DispatchWeb.ViewModels.{OperationsParticipantView, OperationsView, PartnerStopView}
+
+  @doc "The carrier-scoped operations overview (Section 4.4)."
+  @spec operations(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def operations(conn, _params) do
+    case OperationsView.build(conn.assigns.actor) do
+      {:ok, view} -> page(conn, :operations, view)
+      {:error, :not_found} -> not_found(conn)
+    end
+  end
 
   @doc "A shipper's or receiver's stop page (Section 4.3)."
   @spec partner_stop(Plug.Conn.t(), map()) :: Plug.Conn.t()
