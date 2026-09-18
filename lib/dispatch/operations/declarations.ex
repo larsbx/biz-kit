@@ -71,7 +71,7 @@ defmodule Dispatch.Operations.Declarations do
       # the default and fail on `allow_nil?` instead.
       |> Map.reject(fn {key, value} -> key == :id and is_nil(value) end)
       |> Map.merge(%{
-          tenant_id: actor.tenant_id,
+        tenant_id: actor.tenant_id,
         participant_id: actor.principal_id,
         role_assignment_id: actor.role_assignment.id
       })
