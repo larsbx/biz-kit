@@ -57,13 +57,13 @@ defmodule Dispatch.Config do
   defp validate_adapters do
     Enum.flat_map(AdapterRegistry.port_keys(), fn key ->
       meta = AdapterRegistry.port(key)
-      validate_port(key, meta, AdapterRegistry.selected(key))
+      validate_port(meta, AdapterRegistry.selected(key))
     end)
   end
 
   # A descriptor-name port names a browser-side adapter (Section 28.5), so it is
   # checked against an allowlist rather than loaded as a module.
-  defp validate_port(_key, %{kind: :name} = meta, value) do
+  defp validate_port(%{kind: :name} = meta, value) do
     cond do
       is_nil(value) ->
         [violation("ADAPTER_UNCONFIGURED", meta.env, "No provider is selected.")]
@@ -82,7 +82,7 @@ defmodule Dispatch.Config do
     end
   end
 
-  defp validate_port(_key, meta, module) do
+  defp validate_port(meta, module) do
     cond do
       is_nil(module) ->
         [violation("ADAPTER_UNCONFIGURED", meta.env, "No adapter module is selected.")]

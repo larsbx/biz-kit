@@ -17,4 +17,16 @@ defmodule Dispatch.Repo do
   def min_pg_version do
     %Version{major: 16, minor: 0, patch: 0}
   end
+
+  @doc """
+  Tenants for schema-based multitenancy.
+
+  Section 22 gives every operational table a `tenant_id` column, so this
+  application uses attribute-based multitenancy and never creates a schema per
+  tenant. The list is therefore empty rather than unimplemented: nothing should
+  call this, and if something does, an empty result is correct rather than a
+  crash.
+  """
+  @impl AshPostgres.Repo
+  def all_tenants, do: []
 end

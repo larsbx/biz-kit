@@ -55,7 +55,14 @@ defmodule Dispatch.Release do
     Application.fetch_env!(@app, :ecto_repos)
   end
 
+  # `Application.load/1` returns `{:error, {:already_loaded, _}}` when the
+  # release has started the application, which is normal for `bin/dispatch eval`.
+  # Any other error is a genuine failure and must not be swallowed.
   defp load_app do
-    Application.load(@app)
+    case Application.load(@app) do
+      :ok -> :ok
+      {:error, {:already_loaded, @app}} -> :ok
+      {:error, reason} -> raise "could not load #{@app}: #{inspect(reason)}"
+    end
   end
 end

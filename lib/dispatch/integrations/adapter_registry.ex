@@ -145,7 +145,7 @@ defmodule Dispatch.Integrations.AdapterRegistry do
          %{
            env: meta.env,
            selected: module && to_string_value(module),
-           implements_behaviour: meta.kind == :module and implements?(module, meta.behaviour)
+           implements_behaviour: meta.kind == :module && implements?(module, meta.behaviour)
          }}
       end)
 
@@ -166,11 +166,11 @@ defmodule Dispatch.Integrations.AdapterRegistry do
       behaviour in List.flatten(module.module_info(:attributes)[:behaviour] || [])
   end
 
+  # A module is reported as `Dispatch.Integrations...` and a descriptor name as
+  # `google`, so the two kinds of port stay distinguishable in the report.
   defp to_string_value(value) when is_atom(value) do
     if Atom.to_string(value) =~ ~r/^Elixir\./, do: inspect(value), else: to_string(value)
   end
-
-  defp to_string_value(value), do: to_string(value)
 
   defp selected_module_names do
     module_port_keys()

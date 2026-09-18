@@ -49,6 +49,19 @@ defmodule Dispatch.ConfigTest do
       assert "ADAPTER_BEHAVIOUR_MISMATCH" in codes(:test)
     end
 
+    test "a descriptor-name port is checked against an allowlist, not loaded as a module" do
+      base = Application.get_env(:dispatch, :geo)
+
+      # Section 28.5 selects the portal map adapter in the browser, so the
+      # server holds a name. It must not be validated as a module.
+      Application.put_env(:dispatch, :geo, Keyword.put(base, :map_presentation, :maplibre))
+      assert Config.validate(env: :test) == []
+
+      Application.put_env(:dispatch, :geo, Keyword.put(base, :map_presentation, :leaflet))
+      assert "ADAPTER_NOT_ALLOWED" in codes(:test)
+      refute "ADAPTER_NOT_COMPILED" in codes(:test)
+    end
+
     test "development-only adapters are rejected in production but allowed elsewhere" do
       refute "ADAPTER_NOT_PRODUCTION_SAFE" in codes(:test)
       assert "ADAPTER_NOT_PRODUCTION_SAFE" in codes(:prod)
