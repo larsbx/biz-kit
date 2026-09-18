@@ -123,6 +123,11 @@ defmodule DispatchWeb.Router do
   scope "/", DispatchWeb do
     pipe_through :portal
 
+    # Section 24.5's live endpoints. Same pipeline as the pages they patch,
+    # because a stream is not a lesser surface: it carries the same fragments to
+    # the same viewer and must be authorized the same way.
+    get "/ui/participants/:participant_id/stream", StreamController, :participant
+
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     get "/operations/participants/:participant_id", PortalController, :operations_participant
