@@ -78,7 +78,7 @@ defmodule Dispatch.Operations.Declarations do
 
     case existing(actor, input) do
       nil -> create(actor, input)
-      event -> reconcile(event, input)
+      {matched_on, event} -> reconcile(matched_on, event, input)
     end
   end
 
@@ -118,7 +118,7 @@ defmodule Dispatch.Operations.Declarations do
         # replay Section 24.1 specifies rather than a spurious error.
         case existing(actor, input) do
           nil -> classify(error, input)
-          event -> reconcile(event, input)
+          {matched_on, event} -> reconcile(matched_on, event, input)
         end
     end
   end
@@ -140,19 +140,28 @@ defmodule Dispatch.Operations.Declarations do
   defp errors(%{errors: errors}) when is_list(errors), do: errors
   defp errors(_error), do: []
 
-  defp reconcile(event, input) do
+  # Which lookup found the row decides which conflict this is. Reporting a
+  # device-sequence conflict for a request that carried no device would send a
+  # client looking at a field it never sent.
+  defp reconcile(matched_on, event, input) do
     if identifying(event) == identifying(input) do
       {:ok, :duplicate, event}
     else
-      {:error, :device_sequence_conflict}
+      {:error, conflict_for(matched_on)}
     end
   end
+
+  defp conflict_for(:id), do: :event_id_conflict
+  defp conflict_for(:device_sequence), do: :device_sequence_conflict
 
   # Two ways a declaration can already exist: the client named its ID, or the
   # device sequence pins it. The ID is checked first because it is exact —
   # Section 24.1 makes it the client's own handle on the event.
   defp existing(actor, %{id: event_id} = input) when is_binary(event_id) do
-    by_id(actor, event_id) || by_device_sequence(actor, input)
+    case by_id(actor, event_id) do
+      nil -> by_device_sequence(actor, input)
+      event -> {:id, event}
+    end
   end
 
   defp existing(actor, input), do: by_device_sequence(actor, input)
@@ -167,7 +176,8 @@ defmodule Dispatch.Operations.Declarations do
     |> Ash.Query.filter(device_id == ^device_id and device_sequence == ^sequence)
     |> Ash.read_one(actor: actor, tenant: actor.tenant_id)
     |> case do
-      {:ok, event} -> event
+      {:ok, nil} -> nil
+      {:ok, event} -> {:device_sequence, event}
       # A sequence taken in another tenant is invisible here, and must stay so.
       # Returning nil lets the write attempt fail on the index, which surfaces
       # as an error rather than as a cross-tenant disclosure.

@@ -6,18 +6,37 @@ defmodule Dispatch.Idempotency do
   > request hash, response status, and response body for 24 hours. Reuse with a
   > different request hash returns `409 IDEMPOTENCY_KEY_REUSED`.
 
+  ## The mutation and its record commit together
+
+  `execute/4` runs the claim, the mutation, and the stored response inside one
+  transaction. That is the whole design, and it is what makes the guarantee
+  real rather than nearly real.
+
+  The tempting shape is a claim, then the mutation, then a separate write
+  recording the response. It has a window: a process that dies between the
+  mutation and the record leaves a key claimed with no response behind it.
+  Nothing can then tell — from the row, later — whether the mutation ran. A
+  lease on such a claim only chooses which way to be wrong: refuse the retry
+  and the key is dead until it expires, or let it through and the mutation runs
+  twice. Neither is idempotency; they are two ways of not having it.
+
+  In one transaction the question does not arise. Either both are durable or
+  neither is, and a process that dies takes its claim down with the work.
+
   ## Why a reservation rather than a lookup
 
-  The obvious implementation — look for a stored response, run the mutation if
-  there is none, store the result — has a race exactly where it matters. Two
-  copies of the same request arriving together both find nothing and both run.
-  A handset retrying over a flaky link is the *normal* case here (Section 14's
-  offline outbox), so that race is not hypothetical.
+  Look-then-write races exactly where it matters: two copies of one request
+  arriving together both find nothing and both run. A handset retrying over a
+  flaky link is the *normal* case (Section 14's offline outbox), so this is not
+  hypothetical.
 
-  So the key is claimed first, in one `INSERT ... ON CONFLICT DO NOTHING`. The
-  request that wins the insert runs the mutation; anything else sees a row and
-  is answered from it. The claim and the stored response are the same row, so
-  there is no window in which a key is taken but unrecorded.
+  The key is therefore claimed first, by `INSERT ... ON CONFLICT DO NOTHING`
+  against the unique index. A concurrent copy blocks on that uncommitted row
+  rather than racing past it, and when the first transaction ends it sees the
+  outcome: the stored response if the first committed, or a free key if it
+  rolled back. The wait is bounded by `lock_timeout`, so a request cannot be
+  held behind a pathologically slow one — it is answered as in-progress
+  instead.
 
   ## What "the same request" means
 
@@ -36,101 +55,61 @@ defmodule Dispatch.Idempotency do
 
   @retention_hours 24
 
-  # How long a claim may sit `IN_PROGRESS` before another request may take it
-  # over. Longer than any request this service should take, so a slow but living
-  # request never loses its claim; far shorter than the retention window, so a
-  # claim orphaned by a crash does not block its key for a day.
-  @lease_seconds 120
+  # How long a request waits for a concurrent copy of itself to finish before
+  # being answered as in-progress. Generous next to any request this service
+  # should serve, short enough that one pathological request cannot pile up
+  # every retry behind it.
+  @lock_timeout "3s"
 
-  @typedoc "A claim outcome: run the mutation, or answer from the ledger."
-  @type claim ::
-          {:proceed, claim_id :: Ash.UUID.t()}
-          | {:replay, status :: pos_integer(), body :: map()}
-          | {:error, :key_reused}
-          | {:error, :in_progress}
+  @typedoc "What a mutation reports: an HTTP status and the body to store."
+  @type outcome :: {:ok, pos_integer(), map()} | {:error, term()}
 
-  @doc """
-  Claims `key` for this actor and request body.
-
-  Returns `{:proceed, claim_id}` for the caller that must run the mutation and
-  then call `complete/3`. Every other outcome is an answer in itself.
-  """
-  @spec claim(Actor.t(), String.t(), term()) :: claim()
-  def claim(%Actor{} = actor, key, request_body), do: attempt(actor, key, request_body, 2)
-
-  defp attempt(actor, key, request_body, attempts) when attempts > 0 do
-    hash = request_hash(request_body)
-    now = DateTime.utc_now()
-    id = Ash.UUID.generate()
-
-    entry = %{
-      id: id,
-      tenant_id: actor.tenant_id,
-      role_assignment_id: actor.role_assignment.id,
-      idempotency_key: key,
-      request_hash: hash,
-      state: "IN_PROGRESS",
-      created_at: now,
-      updated_at: now,
-      expires_at: DateTime.add(now, @retention_hours, :hour)
-    }
-
-    case Dispatch.Repo.insert_all(Record, [entry],
-           on_conflict: :nothing,
-           conflict_target: [:tenant_id, :role_assignment_id, :idempotency_key]
-         ) do
-      {1, _inserted} -> {:proceed, id}
-      {0, _conflict} -> resolve_existing(actor, key, hash, request_body, attempts - 1)
-    end
-  end
-
-  # Only reachable if rows keep expiring between the insert and the read, which
-  # cannot go on. Refusing beats looping.
-  defp attempt(_actor, _key, _request_body, _exhausted), do: {:error, :in_progress}
+  @typedoc "An answer to a request, whether it ran the mutation or not."
+  @type result :: outcome() | {:error, :key_reused} | {:error, :in_progress}
 
   @doc """
-  Stores the response for a claimed key.
+  Runs `fun` under `key`, storing its response for replay.
 
-  Called after the mutation succeeds. A mutation that fails leaves the claim
-  `IN_PROGRESS` and is released by `abandon/1`, because storing a failure would
-  make a transient error permanent for 24 hours.
+  `fun` returns `{:ok, status, body}` for a response worth storing, or
+  `{:error, reason}` for a rejection. A rejection rolls the transaction back,
+  which releases the key *and* undoes whatever the mutation had written — so a
+  corrected retry may reuse the key, and a failed attempt leaves nothing
+  behind. Section 24 stores responses, not attempts.
+
+  A `nil` key runs `fun` directly. Section 24 says every mutation *accepts*
+  `Idempotency-Key`; the ledger is how the ones that send it are honoured, not
+  a way to require it.
   """
-  @spec complete(Ash.UUID.t(), pos_integer(), map()) :: :ok
-  def complete(claim_id, status, body) do
-    from(r in Record, where: r.id == type(^claim_id, :binary_id))
-    |> Dispatch.Repo.update_all(
-      set: [
-        state: "COMPLETED",
-        response_status: status,
-        response_body: body,
-        updated_at: DateTime.utc_now()
-      ]
-    )
+  @spec execute(Actor.t(), String.t() | nil, term(), (-> outcome())) :: result()
+  def execute(actor, key, request_body, fun)
 
-    :ok
+  def execute(%Actor{}, nil, _request_body, fun), do: fun.()
+
+  def execute(%Actor{} = actor, key, request_body, fun) when is_binary(key) do
+    Dispatch.Repo.transaction(fn ->
+      with {:proceed, claim_id} <- claim(actor, key, request_body),
+           {:ok, status, body} = ok <- fun.() do
+        complete(claim_id, status, body)
+        ok
+      else
+        # The claim and anything the mutation wrote go back together. Storing a
+        # failure would make a transient client error permanent for a day.
+        {:error, _reason} = error -> Dispatch.Repo.rollback(error)
+        {:replay, status, body} -> {:ok, status, body}
+      end
+    end)
+    |> unwrap()
   end
 
-  @doc """
-  Releases a claim whose mutation did not produce a stored response.
-
-  The key becomes usable again. That is the right outcome for a rejected or
-  failed request: the client's retry should be allowed to succeed, and Section
-  24 stores *responses*, not attempts.
-  """
-  @spec abandon(Ash.UUID.t()) :: :ok
-  def abandon(claim_id) do
-    from(r in Record,
-      where: r.id == type(^claim_id, :binary_id) and r.state == "IN_PROGRESS"
-    )
-    |> Dispatch.Repo.delete_all()
-
-    :ok
-  end
+  # `Repo.transaction/1` wraps the committed value and hands back a rollback
+  # value unchanged; both are already the shape a caller expects.
+  defp unwrap({:ok, result}), do: result
+  defp unwrap({:error, result}), do: result
 
   @doc """
   Deletes records past their retention window.
 
-  Reclaims space. It is not what enforces the bound — `claim/3` refuses to
+  Reclaims space. It is not what enforces the bound — `execute/4` refuses to
   replay an expired row whether or not this has run — so a paused sweep costs
   storage rather than correctness.
   """
@@ -166,6 +145,65 @@ defmodule Dispatch.Idempotency do
   defp canonicalize(list) when is_list(list), do: Enum.map(list, &canonicalize/1)
   defp canonicalize(other), do: other
 
+  defp claim(actor, key, request_body, attempts \\ 2)
+
+  defp claim(actor, key, request_body, attempts) when attempts > 0 do
+    hash = request_hash(request_body)
+    now = DateTime.utc_now()
+    id = Ash.UUID.generate()
+
+    entry = %{
+      id: id,
+      tenant_id: actor.tenant_id,
+      role_assignment_id: actor.role_assignment.id,
+      idempotency_key: key,
+      request_hash: hash,
+      state: "IN_PROGRESS",
+      created_at: now,
+      updated_at: now,
+      expires_at: DateTime.add(now, @retention_hours, :hour)
+    }
+
+    # Bounded, so a request blocked behind a concurrent copy of itself is
+    # answered rather than held. The setting is local to this transaction.
+    %Postgrex.Result{} = Dispatch.Repo.query!("SET LOCAL lock_timeout = '#{@lock_timeout}'")
+
+    case Dispatch.Repo.insert_all(Record, [entry],
+           on_conflict: :nothing,
+           conflict_target: [:tenant_id, :role_assignment_id, :idempotency_key]
+         ) do
+      {1, _inserted} -> {:proceed, id}
+      {0, _conflict} -> resolve_existing(actor, key, hash, request_body, attempts - 1)
+    end
+  rescue
+    # The concurrent copy outlived the lock timeout. It is still running, and
+    # its answer is the one this request wants — so this is in-progress, not a
+    # failure to report.
+    error in Postgrex.Error ->
+      if lock_timeout?(error), do: {:error, :in_progress}, else: reraise(error, __STACKTRACE__)
+  end
+
+  # Only reachable if rows keep expiring between the insert and the read, which
+  # cannot go on. Refusing beats looping.
+  defp claim(_actor, _key, _request_body, _exhausted), do: {:error, :in_progress}
+
+  defp lock_timeout?(%Postgrex.Error{postgres: %{code: code}}), do: code == :lock_not_available
+  defp lock_timeout?(_error), do: false
+
+  defp complete(claim_id, status, body) do
+    from(r in Record, where: r.id == type(^claim_id, :binary_id))
+    |> Dispatch.Repo.update_all(
+      set: [
+        state: "COMPLETED",
+        response_status: status,
+        response_body: body,
+        updated_at: DateTime.utc_now()
+      ]
+    )
+
+    :ok
+  end
+
   defp resolve_existing(actor, key, hash, request_body, attempts) do
     query =
       from(r in Record,
@@ -176,8 +214,8 @@ defmodule Dispatch.Idempotency do
       )
 
     case Dispatch.Repo.one(query) do
-      nil -> attempt(actor, key, request_body, attempts)
-      record -> resolve(record, actor, key, hash, request_body, attempts)
+      nil -> claim(actor, key, request_body, attempts)
+      record -> resolve(record, actor, key, request_body, hash, attempts)
     end
   end
 
@@ -185,64 +223,27 @@ defmodule Dispatch.Idempotency do
   # bounds storage at twenty-four hours, and a bound that only holds while a
   # sweep is running is not a bound: a stale row would otherwise keep replaying
   # a day-old response indefinitely if the job were paused or had never run.
-  defp resolve(%Record{expires_at: expires_at} = record, actor, key, hash, body, attempts) do
+  defp resolve(%Record{expires_at: expires_at} = record, actor, key, body, hash, attempts) do
     if DateTime.compare(DateTime.utc_now(), expires_at) == :lt do
-      case live(record, hash) do
-        # The claim's holder is gone. Taking the row over rather than deleting
-        # and re-inserting keeps its identity stable, so a straggler that wakes
-        # up and calls `complete/3` writes the response this request would have
-        # stored anyway — the hash matched, so it is the same request.
-        :expired_lease -> take_over(record, actor, key, hash, body, attempts)
-        answer -> answer
-      end
+      live(record, hash)
     else
       # Past the window. The row is removed rather than ignored, because the
       # unique index would otherwise keep refusing the retry that replaces it.
       from(r in Record, where: r.id == type(^record.id, :binary_id))
       |> Dispatch.Repo.delete_all()
 
-      attempt(actor, key, body, attempts)
+      claim(actor, key, body, attempts)
     end
   end
 
-  # Conditional on the row still looking abandoned, so two retries arriving
-  # together cannot both take the claim: the loser updates zero rows and is
-  # answered as in-progress on the next pass.
-  defp take_over(record, actor, key, hash, body, attempts) do
-    deadline = DateTime.add(DateTime.utc_now(), -@lease_seconds, :second)
-
-    from(r in Record,
-      where:
-        r.id == type(^record.id, :binary_id) and r.state == "IN_PROGRESS" and
-          r.updated_at <= ^deadline
-    )
-    |> Dispatch.Repo.update_all(set: [updated_at: DateTime.utc_now()])
-    |> case do
-      {1, _taken} -> {:proceed, record.id}
-      {0, _lost} -> resolve_existing(actor, key, hash, body, attempts)
-    end
-  end
-
-  # An `IN_PROGRESS` claim means one of two things, and they need opposite
-  # answers. Either a concurrent copy of this request is still running — a 409
-  # is honest, since inventing a response would mean guessing what that request
-  # is about to store — or the process holding it died between committing its
-  # mutation and recording the response, in which case refusing every retry for
-  # the full retention window is the worse outcome: the client's only way
-  # forward is then a fresh key, which duplicates the mutation.
-  #
-  # The lease tells them apart by age. Nothing else can: a dead process leaves
-  # no mark, and the row looks identical either way.
-  defp live(%Record{request_hash: hash, state: "IN_PROGRESS"} = record, hash) do
-    if expired_lease?(record), do: :expired_lease, else: {:error, :in_progress}
-  end
+  # A committed row always carries its response, because `execute/4` writes both
+  # in one transaction. An `IN_PROGRESS` row visible to another transaction is
+  # therefore not a crashed request — it is a caller that took a claim outside
+  # `execute/4`, and answering it as in-progress is the conservative reading.
+  defp live(%Record{request_hash: hash, state: "IN_PROGRESS"}, hash), do: {:error, :in_progress}
 
   defp live(%Record{request_hash: hash, response_status: status, response_body: body}, hash),
     do: {:replay, status, body}
 
   defp live(%Record{}, _different_hash), do: {:error, :key_reused}
-
-  defp expired_lease?(%Record{updated_at: updated_at}) do
-    DateTime.diff(DateTime.utc_now(), updated_at, :second) > @lease_seconds
-  end
 end

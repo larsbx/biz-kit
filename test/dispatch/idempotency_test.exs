@@ -1,17 +1,21 @@
 defmodule Dispatch.IdempotencyTest do
   @moduledoc """
-  Section 24's ledger, at the level the HTTP tests cannot reach: concurrency and
-  the twenty-four hour bound.
+  Section 24's ledger, at the level the HTTP tests cannot reach: what happens
+  when a mutation fails, when two copies arrive together, and when the process
+  running one dies partway.
 
-  The race is the reason this module exists. A handset retrying over a flaky
-  link is the normal case (Section 14's offline outbox), so two copies of one
-  request arriving together is not a corner case to note — it is the case.
+  The last is the reason `execute/4` uses a transaction. A claim written
+  separately from the mutation it guards has a window in which a key is taken
+  and nothing records whether the work happened — and no later reader can tell.
   """
 
   use ExUnit.Case, async: false
 
   alias Dispatch.Idempotency
+  alias Dispatch.Operations.ParticipantStatusEvent
   alias Dispatch.Support.Fixtures
+
+  require Ash.Query
 
   @moduletag :integration
 
@@ -21,116 +25,139 @@ defmodule Dispatch.IdempotencyTest do
     org = Fixtures.carrier()
     driver = Fixtures.participant(org.id, org)
 
-    %{org: org, tenant: org.id, actor: Fixtures.actor(org.id, org, driver, "DRIVER")}
+    %{
+      org: org,
+      tenant: org.id,
+      driver: driver,
+      actor: Fixtures.actor(org.id, org, driver, "DRIVER")
+    }
   end
 
   defp key, do: "key-" <> Ash.UUID.generate()
 
-  # Ages a claim's last update past the in-progress lease, standing in for the
-  # process that took it having died.
-  defp age_claim(ctx, key) do
-    import Ecto.Query, only: [from: 2]
-
-    past = DateTime.add(DateTime.utc_now(), -60 * 60, :second)
-
-    from(r in Dispatch.Idempotency.Record,
-      where:
-        r.idempotency_key == ^key and
-          r.role_assignment_id == type(^ctx.actor.role_assignment.id, :binary_id)
-    )
-    |> Dispatch.Repo.update_all(set: [updated_at: past])
+  # A mutation that actually writes, so "did the work survive?" is a question
+  # the database can answer rather than one the test asserts about itself.
+  defp declare(ctx, status) do
+    fn ->
+      case Dispatch.Operations.Declarations.declare(ctx.actor, %{
+             status: status,
+             occurred_at: DateTime.utc_now()
+           }) do
+        {:ok, _how, event} -> {:ok, 201, %{"id" => event.id}}
+        {:error, reason} -> {:error, reason}
+      end
+    end
   end
 
-  # Ages a stored record past its retention window without invoking the sweep,
-  # so the test is about the read path rather than about the sweep.
-  defp expire(ctx, key) do
-    import Ecto.Query, only: [from: 2]
-
-    past = DateTime.add(DateTime.utc_now(), -60, :second)
-
-    from(r in Dispatch.Idempotency.Record,
-      where:
-        r.idempotency_key == ^key and
-          r.role_assignment_id == type(^ctx.actor.role_assignment.id, :binary_id)
-    )
-    |> Dispatch.Repo.update_all(set: [expires_at: past])
+  defp events(ctx) do
+    ParticipantStatusEvent
+    |> Ash.Query.filter(participant_id == ^ctx.driver.id)
+    |> Ash.read!(authorize?: false, tenant: ctx.tenant)
   end
 
-  describe "claiming a key" do
-    test "the first claim proceeds and a replay returns the stored response", ctx do
+  describe "running a mutation under a key" do
+    test "the first call runs it and a replay returns the stored response", ctx do
       k = key()
       body = %{"status" => "AT_PICKUP"}
 
-      assert {:proceed, claim_id} = Idempotency.claim(ctx.actor, k, body)
-      assert :ok = Idempotency.complete(claim_id, 201, %{"event" => %{"id" => "abc"}})
+      assert {:ok, 201, %{"id" => id}} =
+               Idempotency.execute(ctx.actor, k, body, declare(ctx, :AT_PICKUP))
 
-      assert {:replay, 201, %{"event" => %{"id" => "abc"}}} =
-               Idempotency.claim(ctx.actor, k, body)
+      # The replay must not run the mutation again, and must answer with what
+      # the first call stored rather than with a fresh result that resembles it.
+      assert {:ok, 201, %{"id" => ^id}} =
+               Idempotency.execute(ctx.actor, k, body, fn ->
+                 flunk("the mutation ran a second time")
+               end)
+
+      assert length(events(ctx)) == 1
     end
 
-    test "a key reused for different content is refused", ctx do
+    test "a key reused for different content is refused without running", ctx do
       k = key()
 
-      assert {:proceed, claim_id} = Idempotency.claim(ctx.actor, k, %{"status" => "AT_PICKUP"})
-      :ok = Idempotency.complete(claim_id, 201, %{})
+      assert {:ok, 201, _body} =
+               Idempotency.execute(
+                 ctx.actor,
+                 k,
+                 %{"status" => "AT_PICKUP"},
+                 declare(ctx, :AT_PICKUP)
+               )
 
-      assert {:error, :key_reused} = Idempotency.claim(ctx.actor, k, %{"status" => "LOADING"})
+      assert {:error, :key_reused} =
+               Idempotency.execute(ctx.actor, k, %{"status" => "LOADING"}, fn ->
+                 flunk("the mutation ran under a reused key")
+               end)
+
+      assert length(events(ctx)) == 1
     end
 
-    test "a second claim before the first completes is refused, not run twice", ctx do
-      k = key()
-      body = %{"status" => "AT_PICKUP"}
-
-      assert {:proceed, _claim_id} = Idempotency.claim(ctx.actor, k, body)
-      # This is the race: the same request, arriving while the first is still in
-      # flight. Letting it proceed would execute the mutation twice.
-      assert {:error, :in_progress} = Idempotency.claim(ctx.actor, k, body)
-    end
-
-    test "a claim orphaned by a crash becomes retryable, not stuck for a day", ctx do
-      k = key()
-      body = %{"status" => "AT_PICKUP"}
-
-      # The window this closes: the mutation committed, then the process died
-      # before `complete/3` ran. Without a lease the key stays IN_PROGRESS for
-      # the full retention window, so every retry is refused and the client's
-      # only way forward — a fresh key — duplicates the mutation.
-      assert {:proceed, _orphaned} = Idempotency.claim(ctx.actor, k, body)
-      assert {:error, :in_progress} = Idempotency.claim(ctx.actor, k, body)
-
-      age_claim(ctx, k)
-
-      assert {:proceed, _recovered} = Idempotency.claim(ctx.actor, k, body)
-    end
-
-    test "a claim still within its lease is not stolen from the request holding it", ctx do
-      k = key()
-      body = %{"status" => "AT_PICKUP"}
-
-      assert {:proceed, _held} = Idempotency.claim(ctx.actor, k, body)
-
-      # The lease must not be so eager that an ordinary slow request loses its
-      # claim to a retry and runs the mutation twice — which is the exact
-      # failure the ledger exists to prevent.
-      assert {:error, :in_progress} = Idempotency.claim(ctx.actor, k, body)
-    end
-
-    test "an abandoned claim frees the key for a retry", ctx do
+    test "a rejected mutation releases the key and leaves nothing behind", ctx do
       k = key()
 
-      assert {:proceed, claim_id} = Idempotency.claim(ctx.actor, k, %{"status" => "DELAYED"})
-      :ok = Idempotency.abandon(claim_id)
+      # DELAYED without a note is refused by Section 24.1's validation.
+      assert {:error, _reason} =
+               Idempotency.execute(ctx.actor, k, %{"status" => "DELAYED"}, declare(ctx, :DELAYED))
 
-      assert {:proceed, _again} = Idempotency.claim(ctx.actor, k, %{"status" => "DELAYED"})
+      assert events(ctx) == []
+
+      # The same key, now carrying work that succeeds. Storing the failure would
+      # have made a transient client error permanent for twenty-four hours.
+      assert {:ok, 201, _body} =
+               Idempotency.execute(
+                 ctx.actor,
+                 k,
+                 %{"status" => "AT_PICKUP"},
+                 declare(ctx, :AT_PICKUP)
+               )
     end
 
     test "two actors may hold the same key string", ctx do
       other = Fixtures.participant(ctx.tenant, ctx.org)
-      theirs = Fixtures.actor(ctx.tenant, ctx.org, other, "DISPATCHER")
-      k = "shared"
+      theirs = Fixtures.actor(ctx.tenant, ctx.org, other, "DRIVER")
 
-      assert {:proceed, _mine} = Idempotency.claim(ctx.actor, k, %{})
-      assert {:proceed, _theirs} = Idempotency.claim(theirs, k, %{})
+      assert {:ok, 201, _mine} =
+               Idempotency.execute(ctx.actor, "shared", %{}, fn -> {:ok, 201, %{}} end)
+
+      assert {:ok, 201, _theirs} =
+               Idempotency.execute(theirs, "shared", %{}, fn -> {:ok, 201, %{}} end)
+    end
+
+    test "a key is optional; without one the mutation simply runs", ctx do
+      assert {:ok, 201, _first} =
+               Idempotency.execute(ctx.actor, nil, %{}, declare(ctx, :AT_PICKUP))
+
+      assert {:ok, 201, _second} =
+               Idempotency.execute(ctx.actor, nil, %{}, declare(ctx, :LOADING))
+
+      assert length(events(ctx)) == 2
+    end
+  end
+
+  describe "a process that dies partway" do
+    test "leaves neither a claimed key nor a half-finished mutation", ctx do
+      k = key()
+      body = %{"status" => "AT_PICKUP"}
+
+      # The window that a separate claim-then-record design cannot close: the
+      # mutation committed, the response was never written. Here the transaction
+      # takes both down together, so there is nothing to reconcile afterwards.
+      assert catch_exit(
+               Idempotency.execute(ctx.actor, k, body, fn ->
+                 Dispatch.Operations.Declarations.declare(ctx.actor, %{
+                   status: :AT_PICKUP,
+                   occurred_at: DateTime.utc_now()
+                 })
+
+                 exit(:killed)
+               end)
+             ) == :killed
+
+      assert events(ctx) == []
+
+      # And the key is free, because nothing was ever durably claimed under it.
+      assert {:ok, 201, _body} = Idempotency.execute(ctx.actor, k, body, declare(ctx, :AT_PICKUP))
+      assert length(events(ctx)) == 1
     end
   end
 
@@ -156,37 +183,41 @@ defmodule Dispatch.IdempotencyTest do
       k = key()
       body = %{"status" => "AT_PICKUP"}
 
-      {:proceed, claim_id} = Idempotency.claim(ctx.actor, k, body)
-      :ok = Idempotency.complete(claim_id, 201, %{"event" => %{"id" => "old"}})
+      assert {:ok, 201, %{"id" => first}} =
+               Idempotency.execute(ctx.actor, k, body, declare(ctx, :AT_PICKUP))
 
       # Age the row past its window without sweeping. If expiry were enforced
       # only by the sweep, a paused job would leave a day-old response replaying
-      # forever — which is a correctness bug wearing a housekeeping costume.
+      # forever — a correctness bug wearing a housekeeping costume.
       expire(ctx, k)
 
-      assert {:proceed, _fresh} = Idempotency.claim(ctx.actor, k, body)
-    end
+      assert {:ok, 201, %{"id" => second}} =
+               Idempotency.execute(ctx.actor, k, body, declare(ctx, :AT_PICKUP))
 
-    test "an expired record does not block a key's reuse for other content", ctx do
-      k = key()
-
-      {:proceed, claim_id} = Idempotency.claim(ctx.actor, k, %{"status" => "AT_PICKUP"})
-      :ok = Idempotency.complete(claim_id, 201, %{})
-      expire(ctx, k)
-
-      assert {:proceed, _fresh} = Idempotency.claim(ctx.actor, k, %{"status" => "LOADING"})
+      refute first == second
     end
 
     test "purges records past their window and keeps the rest", ctx do
-      {:proceed, claim_id} = Idempotency.claim(ctx.actor, key(), %{})
-      :ok = Idempotency.complete(claim_id, 201, %{})
+      assert {:ok, 201, _body} =
+               Idempotency.execute(ctx.actor, key(), %{}, fn -> {:ok, 201, %{}} end)
 
-      # Nothing is expired yet, so a sweep now must leave it alone.
       assert Idempotency.purge_expired(DateTime.utc_now()) == 0
 
-      # A day and a minute later it is past the bound.
       later = DateTime.add(DateTime.utc_now(), 24 * 60 * 60 + 60, :second)
       assert Idempotency.purge_expired(later) == 1
     end
+  end
+
+  defp expire(ctx, key) do
+    import Ecto.Query, only: [from: 2]
+
+    past = DateTime.add(DateTime.utc_now(), -60, :second)
+
+    from(r in Dispatch.Idempotency.Record,
+      where:
+        r.idempotency_key == ^key and
+          r.role_assignment_id == type(^ctx.actor.role_assignment.id, :binary_id)
+    )
+    |> Dispatch.Repo.update_all(set: [expires_at: past])
   end
 end

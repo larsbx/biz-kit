@@ -87,100 +87,88 @@ defmodule DispatchWeb.StatusEventController do
   def create_driver(conn, params), do: declare(conn, params)
 
   defp declare(conn, params) do
-    with {:ok, attrs} <- parse(params) do
-      with_idempotency(conn, params, fn -> record(conn, attrs) end)
-    else
-      {:error, field} ->
-        Problem.send(conn, 400, "MALFORMED_REQUEST", "#{field} is not a valid value.")
+    case parse(params) do
+      {:ok, attrs} -> respond(conn, run(conn, params, attrs))
+      {:error, field} -> respond(conn, {:error, {:malformed, field}})
     end
   end
 
-  # Section 24: the key is optional, and a request without one simply executes.
-  # The ledger is not a way to make clients send keys; it is a way to honour the
-  # ones that do.
-  defp with_idempotency(conn, params, run) do
+  # Section 21.1 keeps this layer to transport, and that is what makes the
+  # transaction below possible: the mutation reports a status and a body rather
+  # than writing to the connection, so the ledger can commit the response with
+  # the work that produced it. Rendering happens afterwards, outside.
+  defp run(conn, params, attrs) do
+    actor = conn.assigns.actor
+
+    # Section 24: the key is optional, and a request without one simply runs.
+    # The ledger is not a way to make clients send keys; it is how the ones that
+    # do are honoured.
+    Idempotency.execute(actor, idempotency_key(conn), params, fn ->
+      case Declarations.declare(actor, attrs) do
+        {:ok, _created_or_duplicate, event} -> {:ok, 201, body(actor, event)}
+        {:error, reason} -> {:error, reason}
+      end
+    end)
+  end
+
+  defp idempotency_key(conn) do
     case get_req_header(conn, "idempotency-key") do
-      [] ->
-        run.()
-
-      [key | _rest] ->
-        case Idempotency.claim(conn.assigns.actor, key, params) do
-          {:proceed, claim_id} -> settle(conn, claim_id, run)
-          {:replay, status, body} -> conn |> put_status(status) |> json(body)
-          {:error, :key_reused} -> reused(conn)
-          {:error, :in_progress} -> in_progress(conn)
-        end
+      [key | _rest] -> key
+      [] -> nil
     end
   end
 
-  # Only a stored *response* is replayable, so a rejection releases the key and
-  # the client's corrected retry is allowed to use it. Storing failures would
-  # make a transient error permanent for twenty-four hours.
-  defp settle(_conn, claim_id, run) do
-    conn = run.()
+  defp respond(conn, {:ok, status, body}), do: conn |> put_status(status) |> json(body)
 
-    case conn.status do
-      status when status in 200..299 ->
-        Idempotency.complete(claim_id, status, Jason.decode!(conn.resp_body))
-        conn
+  defp respond(conn, {:error, {:malformed, field}}),
+    do: Problem.send(conn, 400, "MALFORMED_REQUEST", "#{field} is not a valid value.")
 
-      _rejected ->
-        Idempotency.abandon(claim_id)
-        conn
-    end
-  end
+  defp respond(conn, {:error, :event_id_conflict}),
+    do:
+      Problem.send(
+        conn,
+        409,
+        "EVENT_ID_CONFLICT",
+        "This event_id is already in use. Choose another."
+      )
 
-  defp record(conn, attrs) do
-    case Declarations.declare(conn.assigns.actor, attrs) do
-      {:ok, _created_or_duplicate, event} ->
-        conn |> put_status(:created) |> json(body(conn, event))
+  defp respond(conn, {:error, :device_sequence_conflict}),
+    do:
+      Problem.send(
+        conn,
+        409,
+        "DEVICE_SEQUENCE_CONFLICT",
+        "This device sequence already carries a different declaration."
+      )
 
-      {:error, :event_id_conflict} ->
-        Problem.send(
-          conn,
-          409,
-          "EVENT_ID_CONFLICT",
-          "This event_id is already in use. Choose another."
-        )
+  defp respond(conn, {:error, :key_reused}),
+    do:
+      Problem.send(
+        conn,
+        409,
+        "IDEMPOTENCY_KEY_REUSED",
+        "This idempotency key was used for a different request."
+      )
 
-      {:error, :device_sequence_conflict} ->
-        Problem.send(
-          conn,
-          409,
-          "DEVICE_SEQUENCE_CONFLICT",
-          "This device sequence already carries a different declaration."
-        )
+  defp respond(conn, {:error, :in_progress}),
+    do:
+      Problem.send(
+        conn,
+        409,
+        "IDEMPOTENCY_KEY_IN_PROGRESS",
+        "An identical request is still being processed; retry shortly."
+      )
 
-      {:error, %Ash.Error.Forbidden{}} ->
-        Problem.send(conn, 403, "FORBIDDEN", "This role assignment cannot declare a status.")
+  defp respond(conn, {:error, %Ash.Error.Forbidden{}}),
+    do: Problem.send(conn, 403, "FORBIDDEN", "This role assignment cannot declare a status.")
 
-      {:error, error} ->
-        Problem.send(conn, 422, "VALIDATION_FAILED", validation_detail(error))
-    end
-  end
-
-  defp reused(conn) do
-    Problem.send(
-      conn,
-      409,
-      "IDEMPOTENCY_KEY_REUSED",
-      "This idempotency key was used for a different request."
-    )
-  end
-
-  defp in_progress(conn) do
-    Problem.send(
-      conn,
-      409,
-      "IDEMPOTENCY_KEY_IN_PROGRESS",
-      "An identical request is still being processed; retry shortly."
-    )
-  end
+  defp respond(conn, {:error, error}),
+    do: Problem.send(conn, 422, "VALIDATION_FAILED", validation_detail(error))
 
   # Section 24.1's `201` body: the stored event and the resulting status. A
   # duplicate returns the original event, which is what makes it the *original*
   # `201` body rather than a second one that merely looks alike.
-  defp body(conn, event) do
+  defp body(actor, event) do
     %{
       event: %{
         id: event.id,
@@ -198,7 +186,7 @@ defmodule DispatchWeb.StatusEventController do
         device_id: event.device_id,
         device_sequence: event.device_sequence
       },
-      current_status: current_status(conn, event)
+      current_status: current_status(actor, event)
     }
   end
 
@@ -206,9 +194,7 @@ defmodule DispatchWeb.StatusEventController do
   # written: an offline declaration uploaded late does not supersede a newer one
   # already recorded. Reading it back rather than echoing the input is what
   # keeps that true.
-  defp current_status(conn, event) do
-    actor = conn.assigns.actor
-
+  defp current_status(actor, event) do
     latest =
       case Dispatch.Operations.ParticipantStatusEvent.current(event.participant_id,
              actor: actor,

@@ -20,6 +20,9 @@ defmodule Dispatch.Application do
       Dispatch.Repo,
       {Phoenix.PubSub, name: Dispatch.PubSub},
       {Finch, name: Dispatch.Finch, pools: %{default: [conn_opts: [transport_opts: tls_opts()]]}},
+      # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
+      # into a burst of outbound fetches. Started after Finch, which it uses.
+      Dispatch.Identity.Tokens.KeyStore,
       DispatchWeb.Endpoint
     ]
 

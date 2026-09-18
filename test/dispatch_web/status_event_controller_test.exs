@@ -395,6 +395,33 @@ defmodule DispatchWeb.StatusEventControllerTest do
     end
   end
 
+  describe "Section 24.1: a changed replay of an event_id" do
+    test "conflicts on the event ID, not on a device sequence it never sent", ctx do
+      id = Ash.UUID.generate()
+      at = DateTime.utc_now() |> DateTime.to_iso8601()
+
+      first =
+        post("/v1/me/status-events", declaration(%{"event_id" => id, "occurred_at" => at}),
+          token: ctx.token
+        )
+
+      assert first.status == 201
+
+      changed =
+        post(
+          "/v1/me/status-events",
+          declaration(%{"event_id" => id, "occurred_at" => at, "status" => "AT_PICKUP"}),
+          token: ctx.token
+        )
+
+      assert changed.status == 409
+      # The request carried no device at all. Naming a device-sequence conflict
+      # would send a client looking at a field it never sent.
+      assert Jason.decode!(changed.resp_body)["code"] == "EVENT_ID_CONFLICT"
+      assert length(read_events(ctx)) == 1
+    end
+  end
+
   describe "Section 24.1: a client-assigned event_id claimed by someone else" do
     test "is refused as a conflict, not a server error, and discloses nothing", ctx do
       %{user: other_user, participant: other} = Fixtures.person(ctx.tenant, ctx.org)
