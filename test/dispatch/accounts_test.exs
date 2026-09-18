@@ -227,6 +227,45 @@ defmodule Dispatch.AccountsTest do
     end
   end
 
+  describe "Section 22 optimistic concurrency" do
+    test "two stale copies cannot both revoke the same assignment" do
+      carrier = organization()
+      person = user()
+      subject = participant(carrier.id, person, carrier)
+      definition = role_definition(carrier.id, "DRIVER")
+
+      assignment =
+        RoleAssignment
+        |> Ash.Changeset.for_create(:grant, %{
+          tenant_id: carrier.id,
+          principal_type: :PARTICIPANT,
+          principal_id: subject.id,
+          organization_id: carrier.id,
+          role_definition_id: definition.id,
+          scope_type: :SELF,
+          starts_at: DateTime.utc_now()
+        })
+        |> Ash.create!(authorize?: false, tenant: carrier.id)
+
+      first_copy = assignment
+      stale_copy = assignment
+
+      updated =
+        first_copy
+        |> Ash.Changeset.for_update(:revoke, %{expected_version: 0})
+        |> Ash.update!(authorize?: false, tenant: carrier.id)
+
+      assert updated.version == 1
+
+      assert {:error, error} =
+               stale_copy
+               |> Ash.Changeset.for_update(:revoke, %{expected_version: 0})
+               |> Ash.update(authorize?: false, tenant: carrier.id)
+
+      assert Exception.message(error) =~ ~r/stale|changed/i
+    end
+  end
+
   describe "Section 23.2 role definition constraints" do
     test "a manifest with a non-canonical capability is rejected" do
       carrier = organization()

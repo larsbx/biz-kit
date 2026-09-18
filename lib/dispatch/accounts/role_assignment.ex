@@ -185,6 +185,7 @@ defmodule Dispatch.Accounts.RoleAssignment do
       change set_attribute(:status, :REVOKED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
       change Dispatch.Accounts.Changes.IncrementVersion
+      change optimistic_lock(:version)
     end
   end
 

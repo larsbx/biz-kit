@@ -1,14 +1,11 @@
 defmodule Dispatch.Accounts.Changes.IncrementVersion do
   @moduledoc """
-  Optimistic concurrency for mutable aggregates (Section 22).
+  Validates the caller's expected aggregate version (Section 22).
 
-  Section 22 requires named update actions to take `expected_version`, a
-  resource change to increment `version`, and a mismatch to return
-  `STALE_VERSION`. Two operators editing the same assignment would otherwise
-  produce a last-write-wins result with no record that anything was lost.
-
-  `expected_version` is optional here so an internal action can update without
-  a read-modify-write cycle; when it is supplied it is enforced.
+  The action's `optimistic_lock(:version)` change performs the load-bearing
+  database compare-and-increment. This change preserves the API contract:
+  when a caller supplies `expected_version`, a mismatch against the version
+  they loaded is reported as `STALE_VERSION` before the update is attempted.
   """
 
   use Ash.Resource.Change
@@ -19,10 +16,10 @@ defmodule Dispatch.Accounts.Changes.IncrementVersion do
 
     case Ash.Changeset.get_argument(changeset, :expected_version) do
       nil ->
-        Ash.Changeset.force_change_attribute(changeset, :version, current + 1)
+        changeset
 
       ^current ->
-        Ash.Changeset.force_change_attribute(changeset, :version, current + 1)
+        changeset
 
       _mismatch ->
         Ash.Changeset.add_error(
