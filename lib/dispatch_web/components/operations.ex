@@ -49,6 +49,7 @@ defmodule DispatchWeb.Components.Operations do
     </section>
     """
   end
+
   attr :view, :any, required: true
 
   @doc "The carrier-scoped operations overview of Sections 4.4 and 26.3."
@@ -72,7 +73,10 @@ defmodule DispatchWeb.Components.Operations do
       <h2>Operational participants</h2>
       <p :if={@view.participants == []}>No operational participants.</p>
       <ul :if={@view.participants != []}>
-        <li :for={participant <- @view.participants} id={"operations-participant-#{participant.participant_id}"}>
+        <li
+          :for={participant <- @view.participants}
+          id={"operations-participant-#{participant.participant_id}"}
+        >
           <a href={"/operations/participants/#{participant.participant_id}"}>
             {participant.public_name}
           </a>
