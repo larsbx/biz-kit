@@ -35,6 +35,16 @@ config :dispatch, :breakglass,
   max_ttl_seconds: 1_800,
   nonprod_single_user_mode: true
 
+# Section 23.2: only these compiled modules may be named by a role definition.
+config :dispatch, :role_profile_module_allowlist, [
+  Dispatch.Access.Roles.Driver,
+  Dispatch.Access.Roles.Admin,
+  Dispatch.Access.Roles.Dispatcher,
+  Dispatch.Access.Roles.Shipper,
+  Dispatch.Access.Roles.Receiver,
+  Dispatch.Access.Roles.Broker
+]
+
 config :dispatch, :diagnostics_token, String.duplicate("test-diagnostics-token", 2)
 
 config :dispatch, Oban, testing: :manual

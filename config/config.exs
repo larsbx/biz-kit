@@ -33,6 +33,11 @@ config :logger, :default_formatter,
   format: {Dispatch.LogFormatter, :format},
   metadata: [:request_id, :correlation_id, :tenant_id]
 
+# Section 24.1 bounds a status note at 1,000 Unicode code points, so lengths are
+# counted in code points everywhere. Graphemes would leave `max_length`
+# unbounded in bytes, since one grapheme can carry unlimited combining marks.
+config :ash, default_string_length_count: :codepoints
+
 config :phoenix, :json_library, Jason
 
 # Section 21.3: one queue, FIFO by insertion. Section 27.6 forbids priority

@@ -7,12 +7,18 @@ defmodule Dispatch.Accounts do
   requires reusable named policy checks over capabilities and scope, so a role
   is data this domain validates, never a branch in a request handler.
 
-  Slice 1 onward adds resources; the domain itself is declared from Slice 0 so
-  each one has a named home rather than being invented under deadline.
   """
 
   use Ash.Domain
 
   resources do
+    resource Dispatch.Accounts.Organization
+    resource Dispatch.Accounts.User
+    resource Dispatch.Accounts.OrganizationMembership
+    resource Dispatch.Accounts.Participant
+    resource Dispatch.Accounts.RoleDefinition
+    resource Dispatch.Accounts.RoleAssignment
+    resource Dispatch.Accounts.Device
+    resource Dispatch.Accounts.Contact
   end
 end

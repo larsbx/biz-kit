@@ -77,9 +77,21 @@ config :dispatch, :breakglass,
 
 # Section 23.2: only modules compiled into the release and listed here may be
 # referenced by role_definitions.profile_module.
-config :dispatch,
-       :role_profile_module_allowlist,
-       System.get_env("ROLE_PROFILE_MODULE_ALLOWLIST", "") |> String.split(",", trim: true)
+#
+# Set only when the variable is present. An unset variable must not overwrite
+# the compile-time list: doing so narrowed the development allowlist to nothing
+# and made every role definition fail validation, which reads as a seed bug
+# rather than a configuration one.
+if allowlist = System.get_env("ROLE_PROFILE_MODULE_ALLOWLIST") do
+  modules =
+    allowlist
+    |> String.split(",", trim: true)
+    |> Enum.map(&Module.concat([String.trim(&1)]))
+
+  if modules != [] do
+    config :dispatch, :role_profile_module_allowlist, modules
+  end
+end
 
 if config_env() == :prod do
   config :dispatch, Dispatch.Repo,
