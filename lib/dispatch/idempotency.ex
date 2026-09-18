@@ -86,19 +86,29 @@ defmodule Dispatch.Idempotency do
   def execute(%Actor{}, nil, _request_body, fun), do: fun.()
 
   def execute(%Actor{} = actor, key, request_body, fun) when is_binary(key) do
-    Dispatch.Repo.transaction(fn ->
-      with {:proceed, claim_id} <- claim(actor, key, request_body),
-           {:ok, status, body} = ok <- fun.() do
-        complete(claim_id, status, body)
-        ok
-      else
-        # The claim and anything the mutation wrote go back together. Storing a
-        # failure would make a transient client error permanent for a day.
-        {:error, _reason} = error -> Dispatch.Repo.rollback(error)
-        {:replay, status, body} -> {:ok, status, body}
-      end
-    end)
-    |> unwrap()
+    try do
+      Dispatch.Repo.transaction(fn ->
+        with {:proceed, claim_id} <- claim(actor, key, request_body),
+             {:ok, status, body} = ok <- fun.() do
+          complete(claim_id, status, body)
+          ok
+        else
+          # The claim and anything the mutation wrote go back together. Storing a
+          # failure would make a transient client error permanent for a day.
+          {:error, _reason} = error -> Dispatch.Repo.rollback(error)
+          {:replay, status, body} -> {:ok, status, body}
+        end
+      end)
+      |> unwrap()
+    rescue
+      # A lock timeout aborts PostgreSQL's transaction. Translate it only after
+      # Repo.transaction/1 has rolled that transaction back; rescuing inside
+      # claim/4 would leave every later statement in an aborted transaction.
+      error in Postgrex.Error ->
+        if lock_timeout?(error),
+          do: {:error, :in_progress},
+          else: reraise(error, __STACKTRACE__)
+    end
   end
 
   # `Repo.transaction/1` wraps the committed value and hands back a rollback
@@ -175,12 +185,6 @@ defmodule Dispatch.Idempotency do
       {1, _inserted} -> {:proceed, id}
       {0, _conflict} -> resolve_existing(actor, key, hash, request_body, attempts - 1)
     end
-  rescue
-    # The concurrent copy outlived the lock timeout. It is still running, and
-    # its answer is the one this request wants — so this is in-progress, not a
-    # failure to report.
-    error in Postgrex.Error ->
-      if lock_timeout?(error), do: {:error, :in_progress}, else: reraise(error, __STACKTRACE__)
   end
 
   # Only reachable if rows keep expiring between the insert and the read, which

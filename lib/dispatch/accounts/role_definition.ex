@@ -117,9 +117,12 @@ defmodule Dispatch.Accounts.RoleDefinition do
         :status
       ]
 
+      # Re-provisioning may refresh presentation text, but never authority.
+      # Capability, constraint, module, or status changes require an explicit
+      # new-version migration and reassignment plan.
       upsert? true
       upsert_identity :unique_tenant_key
-      upsert_fields [:label, :capabilities_json, :constraints_json, :profile_module, :status]
+      upsert_fields [:label]
     end
 
     read :active do
