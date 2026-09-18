@@ -35,10 +35,16 @@ defmodule Dispatch.Access.Roles.Base do
       def validate_status_transition(_current, _requested, _context),
         do: {:error, :status_not_declarable_by_role}
 
+      # Section 22.2: one active assignment unless a profile says otherwise.
+      @impl Dispatch.Access.RoleProfile
+      def allows_concurrent_assignments?,
+        do: unquote(Keyword.get(opts, :concurrent_assignments, false))
+
       defoverridable capabilities: 1,
                      operations_projection: 1,
                      android_features: 1,
-                     validate_status_transition: 3
+                     validate_status_transition: 3,
+                     allows_concurrent_assignments?: 0
     end
   end
 end

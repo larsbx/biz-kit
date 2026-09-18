@@ -37,6 +37,10 @@ config :dispatch, :breakglass,
 
 # Section 23.2: only these compiled modules may be named by a role definition.
 config :dispatch, :role_profile_module_allowlist, [
+  # Test-only, compiled from test/support. Section 22.2 lets profiles other than
+  # DRIVER declare a different assignment cardinality; without a second profile
+  # that branch cannot be exercised at all.
+  Dispatch.Support.Roles.Courier,
   Dispatch.Access.Roles.Driver,
   Dispatch.Access.Roles.Admin,
   Dispatch.Access.Roles.Dispatcher,

@@ -119,6 +119,18 @@
     },
     {
       "allow_nil?": false,
+      "default": "true",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "operator_exclusive",
+      "type": "boolean"
+    },
+    {
+      "allow_nil?": false,
       "default": "\"PLANNED\"",
       "generated?": false,
       "precision": null,
@@ -172,7 +184,7 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "CEA51155B2C0781216585B75CFEF4D69E85897AF4C62410CEE867ABD64B991EE",
+  "hash": "39A26CD3F10C1733AF6FA81C9C72A8081A1C6971AAA20E4507350BE2F9FCB326",
   "identities": [
     {
       "all_tenants?": false,
@@ -186,7 +198,7 @@
       ],
       "name": "one_active_per_operator",
       "nils_distinct?": true,
-      "where": "status = 'ACTIVE'"
+      "where": "status = 'ACTIVE' AND operator_exclusive"
     }
   ],
   "multitenancy": {

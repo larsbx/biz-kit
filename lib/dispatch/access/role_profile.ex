@@ -45,6 +45,26 @@ defmodule Dispatch.Access.RoleProfile do
   @callback operations_projection(RoleAssignment.t()) :: atom()
 
   @doc """
+  Whether an operator holding this profile may run several assignments at once.
+
+  Section 22.2 limits an operator to one `ACTIVE` assignment "for the initial
+  `DRIVER` role profile", and says other profiles "may declare a different
+  cardinality constraint through reviewed application policy and a matching
+  database constraint". The profile module is that reviewed policy, so this is
+  where the declaration belongs; `Dispatch.Fleet.Assignment` carries the answer
+  as a column so the database constraint can be partial on it.
+
+  Defaults to `false` — one assignment at a time. A profile that has not thought
+  about concurrency should inherit the restrictive answer, because the cost of
+  being wrong is asymmetric: Section 6.1 scopes location collection to the
+  active assignment and Section 25.2 attributes queued offline events to it, so
+  an unintended second active assignment makes those attributions ambiguous,
+  while an unintended restriction merely blocks an activation with a clear
+  error.
+  """
+  @callback allows_concurrent_assignments?() :: boolean()
+
+  @doc """
   The allowlisted profile modules, from `ROLE_PROFILE_MODULE_ALLOWLIST`.
 
   Section 31 fails startup when a seeded or active definition references

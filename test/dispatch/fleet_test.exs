@@ -79,6 +79,61 @@ defmodule Dispatch.FleetTest do
     |> Ash.create!(authorize?: false, tenant: tenant)
   end
 
+  defp role_definition(tenant, key, profile_module, capabilities) do
+    RoleDefinition
+    |> Ash.Changeset.for_create(:seed, %{
+      tenant_id: tenant,
+      key: key,
+      label: key,
+      capabilities_json: capabilities,
+      profile_module: inspect(profile_module)
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  defp grant(tenant, organization, subject, definition, scope_type, scope_id) do
+    RoleAssignment
+    |> Ash.Changeset.for_create(:grant, %{
+      tenant_id: tenant,
+      principal_type: :PARTICIPANT,
+      principal_id: subject.id,
+      organization_id: organization.id,
+      role_definition_id: definition.id,
+      scope_type: scope_type,
+      scope_id: scope_id,
+      starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+    |> Ash.load!([:role_definition], authorize?: false, tenant: tenant)
+  end
+
+  defp plan_for(tenant, carrier, operator, role_grant) do
+    attrs = %{
+      tenant_id: tenant,
+      load_id: load(tenant, carrier).id,
+      operator_participant_id: operator.id,
+      starts_at: DateTime.utc_now()
+    }
+
+    attrs =
+      if role_grant, do: Map.put(attrs, :operator_role_assignment_id, role_grant.id), else: attrs
+
+    Assignment
+    |> Ash.Changeset.for_create(:plan, attrs)
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  defp activate(assignment, tenant) do
+    assignment
+    |> Ash.Changeset.for_update(:activate, %{})
+    |> Ash.update(authorize?: false, tenant: tenant)
+  end
+
+  defp activate!(assignment, tenant) do
+    {:ok, activated} = activate(assignment, tenant)
+    activated
+  end
+
   defp assignment_for(tenant, organization, key, scope_type, scope_id) do
     {:ok, manifest} = SeedManifest.fetch(key)
 
@@ -282,48 +337,89 @@ defmodule Dispatch.FleetTest do
       assert {:ok, _reinstated} = add.()
     end
 
-    test "at most one ACTIVE assignment per operator participant" do
+    test "the DRIVER profile permits one ACTIVE assignment per operator" do
       carrier = organization()
       tenant = carrier.id
       operator = participant(tenant, carrier)
-      first_load = load(tenant, carrier)
-      second_load = load(tenant, carrier)
 
-      plan = fn subject_load ->
-        Assignment
-        |> Ash.Changeset.for_create(:plan, %{
-          tenant_id: tenant,
-          load_id: subject_load.id,
-          operator_participant_id: operator.id,
-          starts_at: DateTime.utc_now()
-        })
-        |> Ash.create!(authorize?: false, tenant: tenant)
-      end
+      driver_role =
+        role_definition(tenant, "DRIVER", Dispatch.Access.Roles.Driver, ["status.declare.self"])
 
-      first = plan.(first_load)
-      second = plan.(second_load)
+      driver_grant = grant(tenant, carrier, operator, driver_role, :SELF, nil)
+
+      first = plan_for(tenant, carrier, operator, driver_grant)
+      second = plan_for(tenant, carrier, operator, driver_grant)
 
       # Planning two is fine; running two is not. Section 6.1 scopes location
       # collection to the active assignment, so two would make a sample
       # unattributable.
-      activated =
-        first
-        |> Ash.Changeset.for_update(:activate, %{})
-        |> Ash.update!(authorize?: false, tenant: tenant)
+      activated = activate!(first, tenant)
 
-      assert {:error, _conflict} =
-               second
-               |> Ash.Changeset.for_update(:activate, %{})
-               |> Ash.update(authorize?: false, tenant: tenant)
+      assert {:error, _conflict} = activate(second, tenant)
+
+      second
+      |> Ash.Changeset.for_update(:cancel, %{})
+      |> Ash.update!(authorize?: false, tenant: tenant)
 
       activated
       |> Ash.Changeset.for_update(:complete, %{})
       |> Ash.update!(authorize?: false, tenant: tenant)
 
-      assert {:ok, _now_allowed} =
-               second
-               |> Ash.Changeset.for_update(:activate, %{})
-               |> Ash.update(authorize?: false, tenant: tenant)
+      third = plan_for(tenant, carrier, operator, driver_grant)
+      assert {:ok, _now_allowed} = activate(third, tenant)
+    end
+
+    test "a profile declaring concurrency is not bound by the index" do
+      # Section 22.2 scopes the rule to DRIVER and lets other profiles declare a
+      # different cardinality. A universal index would block work the
+      # specification permits, which is the failure this test exists to catch.
+      carrier = organization()
+      tenant = carrier.id
+      operator = participant(tenant, carrier)
+
+      courier_role =
+        role_definition(tenant, "COURIER", Dispatch.Support.Roles.Courier, ["status.declare.self"])
+
+      courier_grant = grant(tenant, carrier, operator, courier_role, :SELF, nil)
+
+      first = plan_for(tenant, carrier, operator, courier_grant)
+      second = plan_for(tenant, carrier, operator, courier_grant)
+
+      assert %{operator_exclusive: false} = first
+
+      assert {:ok, _one} = activate(first, tenant)
+      assert {:ok, _and_another} = activate(second, tenant)
+    end
+
+    test "an omitted role assignment keeps the restrictive default" do
+      # The flag is derived, never asserted. A caller that says nothing — or
+      # names a role assignment that cannot be resolved — gets the restriction,
+      # because relaxing it on a lookup failure would be a fail-open.
+      carrier = organization()
+      tenant = carrier.id
+      operator = participant(tenant, carrier)
+
+      unnamed = plan_for(tenant, carrier, operator, nil)
+      assert %{operator_exclusive: true} = unnamed
+
+      unresolvable =
+        Assignment
+        |> Ash.Changeset.for_create(:plan, %{
+          tenant_id: tenant,
+          load_id: load(tenant, carrier).id,
+          operator_participant_id: participant(tenant, carrier).id,
+          starts_at: DateTime.utc_now(),
+          operator_role_assignment_id: Ash.UUID.generate()
+        })
+        |> Ash.create!(authorize?: false, tenant: tenant)
+
+      assert unresolvable.operator_exclusive
+    end
+
+    test "the flag cannot be set by the caller" do
+      # Section 22.2 makes cardinality a matter of reviewed application policy,
+      # so opting out must not be possible by asserting it does not apply.
+      refute :operator_exclusive in Ash.Resource.Info.action(Assignment, :plan).accept
     end
   end
 

@@ -3,16 +3,23 @@ defmodule Dispatch.Fleet.Assignment do
   A participant's work on one load with one vehicle (Section 22.2).
 
   Section 22.2 permits at most one `ACTIVE` assignment per operator participant
-  under the initial `DRIVER` profile, enforced by a partial unique index. The
-  constraint is not bookkeeping: Section 6.1 scopes location collection to the
-  active assignment, and Section 25.2's offline outbox attributes queued events
-  to it, so two simultaneously active assignments would make "which trip is this
-  sample for" unanswerable.
+  **for the initial `DRIVER` role profile**, and says other profiles "may
+  declare a different cardinality constraint through reviewed application policy
+  and a matching database constraint".
 
-  Section 22.2 also notes that other role profiles may declare a different
-  cardinality through reviewed application policy *and a matching database
-  constraint* — the index is scoped to the profiles that need it rather than
-  assumed universal.
+  Both halves are load-bearing. The restriction is not bookkeeping: Section 6.1
+  scopes location collection to the active assignment and Section 25.2's offline
+  outbox attributes queued events to it, so two simultaneously active
+  assignments would make "which trip is this sample for" unanswerable. But
+  applying it to every profile would be wrong in the other direction — a
+  dispatcher, or a future courier or team-driver profile, has no such limit, and
+  a universal index would block work the specification permits.
+
+  `operator_exclusive` carries the deciding profile's answer onto the row, so
+  the unique index is partial on it. That is the "matching database constraint":
+  the rule lives in the database rather than in application code a bulk import
+  could bypass, while applying only to the profiles that declare it. It defaults
+  to `true`, so a caller that says nothing gets the restrictive behaviour.
   """
 
   use Ash.Resource,
@@ -24,7 +31,9 @@ defmodule Dispatch.Fleet.Assignment do
     table "assignments"
     repo Dispatch.Repo
 
-    identity_wheres_to_sql one_active_per_operator: "status = 'ACTIVE'"
+    # Partial on both columns: the rule binds only while an assignment is active
+    # *and* only for profiles that declare exclusivity (Section 22.2).
+    identity_wheres_to_sql one_active_per_operator: "status = 'ACTIVE' AND operator_exclusive"
   end
 
   multitenancy do
@@ -44,6 +53,17 @@ defmodule Dispatch.Fleet.Assignment do
     attribute :starts_at, :utc_datetime_usec, allow_nil?: false, public?: true
     attribute :ends_at, :utc_datetime_usec, public?: true
 
+    attribute :operator_exclusive, :boolean do
+      description """
+      Whether the operator's role profile limits them to one active assignment
+      (Section 22.2). Derived from that profile, never supplied by the caller.
+      """
+
+      default true
+      allow_nil? false
+      public? false
+    end
+
     attribute :status, :atom do
       constraints one_of: [:PLANNED, :ACTIVE, :COMPLETED, :CANCELLED]
       default :PLANNED
@@ -57,8 +77,11 @@ defmodule Dispatch.Fleet.Assignment do
   end
 
   identities do
-    # Section 22.2: at most one ACTIVE assignment per operator participant.
-    identity :one_active_per_operator, [:operator_participant_id], where: expr(status == :ACTIVE)
+    # Section 22.2: at most one ACTIVE assignment per operator participant, for
+    # profiles that declare exclusivity. A profile permitting concurrency sets
+    # `operator_exclusive` false and falls outside the index entirely.
+    identity :one_active_per_operator, [:operator_participant_id],
+      where: expr(status == :ACTIVE and operator_exclusive == true)
   end
 
   relationships do
@@ -76,7 +99,18 @@ defmodule Dispatch.Fleet.Assignment do
     defaults [:read]
 
     create :plan do
-      description "Creates a PLANNED assignment. Planning does not start a trip."
+      description """
+      Creates a PLANNED assignment. Planning does not start a trip.
+
+      `operator_role_assignment_id` names the role the operator is assigned
+      under and decides whether Section 22.2's one-active-assignment rule
+      applies. It is an argument rather than an accepted attribute because the
+      answer is derived from the profile, never asserted: a caller must not be
+      able to opt out of the restriction by claiming it does not apply. Omitted,
+      the restrictive default stands.
+      """
+
+      argument :operator_role_assignment_id, :uuid
 
       accept [
         :tenant_id,
@@ -89,6 +123,7 @@ defmodule Dispatch.Fleet.Assignment do
       ]
 
       change set_attribute(:status, :PLANNED)
+      change Dispatch.Fleet.Changes.DeriveOperatorExclusivity
     end
 
     read :active do

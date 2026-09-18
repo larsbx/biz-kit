@@ -62,6 +62,7 @@ defmodule Dispatch.Repo.Migrations.LoadsStopsAndParties do
       add :trailer_id, :uuid
       add :starts_at, :utc_datetime_usec, null: false
       add :ends_at, :utc_datetime_usec
+      add :operator_exclusive, :boolean, null: false, default: true
       add :status, :text, null: false, default: "PLANNED"
 
       add :created_at, :utc_datetime_usec,
@@ -120,7 +121,7 @@ defmodule Dispatch.Repo.Migrations.LoadsStopsAndParties do
 
     create unique_index(:assignments, [:tenant_id, :operator_participant_id],
              name: "assignments_one_active_per_operator_index",
-             where: "(status = 'ACTIVE')"
+             where: "(status = 'ACTIVE' AND operator_exclusive)"
            )
 
     alter table(:load_parties) do
@@ -406,6 +407,7 @@ defmodule Dispatch.Repo.Migrations.LoadsStopsAndParties do
       remove :updated_at
       remove :created_at
       remove :status
+      remove :operator_exclusive
       remove :ends_at
       remove :starts_at
       remove :trailer_id
