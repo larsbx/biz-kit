@@ -5,6 +5,7 @@ defmodule Eatsbot.Extensions.TelegramBot.Notifier do
   alias Eatsbot.Extensions.TelegramBot
   alias Phoenix.PubSub
   @topic "delivery:updated"
+  @promotion_topic "promotion:announced"
 
   alias Telegex.Type.{InlineKeyboardMarkup, InlineKeyboardButton}
 
@@ -16,6 +17,7 @@ defmodule Eatsbot.Extensions.TelegramBot.Notifier do
   def init(_) do
     pubsub = Application.fetch_env!(:eatsbot, :pubsub)
     PubSub.subscribe(pubsub, @topic)
+    PubSub.subscribe(pubsub, @promotion_topic)
     {:ok, nil}
   end
 
@@ -114,6 +116,20 @@ defmodule Eatsbot.Extensions.TelegramBot.Notifier do
         parse_mode: "MarkdownV2"
       )
     end)
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(%{topic: @promotion_topic, payload: %{data: promotion}}, state) do
+    text = TelegramBot.Marketing.promotion(promotion)
+
+    promotion.branch_id
+    |> EatsbotCore.Marketing.Subscriber.subscribed_to_branch!(
+      actor: EatsbotCore.Deliveries.Actors.private()
+    )
+    |> Enum.filter(&(&1.channel == :telegram))
+    |> Enum.each(&Telegex.send_message(&1.address, text))
 
     {:noreply, state}
   end

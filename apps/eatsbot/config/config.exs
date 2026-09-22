@@ -72,6 +72,7 @@ config :eatsbot,
     EatsbotCore.Products,
     EatsbotCore.Carts,
     EatsbotCore.Brands,
+    EatsbotCore.Marketing,
     Eatsbot.Accounts,
     Eatsbot.Extensions.TelegramBot.Ash.Users
   ],
