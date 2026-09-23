@@ -41,6 +41,10 @@ defmodule Eatsbot.Extensions.TelegramBot do
         pipe_through :telegram_bot_api
         post "/telegram", Controller, :update
       end
+
+      scope "/", Eatsbot.Extensions.TelegramBot do
+        get "/t/:code", TouchpointController, :show
+      end
     end
   end
 

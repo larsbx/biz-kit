@@ -20,6 +20,18 @@ if System.get_env("PHX_SERVER") do
   config :eatsbot, EatsbotWeb.Endpoint, server: true
 end
 
+# Marketing agent: public base URL encoded on counter NFC/QR stickers and the
+# bot they deep-link into (see EatsbotCore.Marketing for all options).
+config :eatsbot,
+       EatsbotCore.Marketing,
+       Enum.reject(
+         [
+           public_url: System.get_env("PUBLIC_URL"),
+           telegram_bot_username: System.get_env("TELEGRAM_BOT_USERNAME")
+         ],
+         &is_nil(elem(&1, 1))
+       )
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
