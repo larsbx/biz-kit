@@ -19,6 +19,10 @@ defmodule EatsbotCore.Marketing.Subscriber do
     table "marketing_subscribers"
     repo Eatsbot.Repo
 
+    foreign_key_names [
+      {:id, "marketing_visits_subscriber_id_fkey", "has visits (the commission ledger)"}
+    ]
+
     references do
       reference :branch, on_delete: :delete
     end

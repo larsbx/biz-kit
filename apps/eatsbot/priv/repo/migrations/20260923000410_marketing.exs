@@ -73,7 +73,7 @@ defmodule Eatsbot.Repo.Migrations.Marketing do
                name: "marketing_visits_subscriber_id_fkey",
                type: :uuid,
                prefix: "public",
-               on_delete: :delete_all
+               on_delete: :restrict
              )
 
       modify :touchpoint_id,
@@ -82,7 +82,7 @@ defmodule Eatsbot.Repo.Migrations.Marketing do
                name: "marketing_visits_touchpoint_id_fkey",
                type: :uuid,
                prefix: "public",
-               on_delete: :delete_all
+               on_delete: :restrict
              )
     end
 

@@ -28,9 +28,10 @@ defmodule EatsbotCore.Marketing.Visit do
     table "marketing_visits"
     repo Eatsbot.Repo
 
+    # Visits are the commission ledger: never cascade-delete them.
     references do
-      reference :subscriber, on_delete: :delete
-      reference :touchpoint, on_delete: :delete
+      reference :subscriber, on_delete: :restrict
+      reference :touchpoint, on_delete: :restrict
       reference :promotion, on_delete: :nilify
     end
   end
@@ -69,6 +70,12 @@ defmodule EatsbotCore.Marketing.Visit do
     update :record_redemption do
       require_atomic? false
       argument :amount, :money, allow_nil?: false
+
+      validate fn %{arguments: %{amount: amount}}, _context ->
+        if Money.positive?(amount),
+          do: :ok,
+          else: {:error, field: :amount, message: "must be positive"}
+      end
 
       validate fn changeset, _context ->
         if Attribution.redeemable?(

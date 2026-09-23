@@ -23,6 +23,10 @@ defmodule EatsbotCore.Marketing.Touchpoint do
     table "marketing_touchpoints"
     repo Eatsbot.Repo
 
+    foreign_key_names [
+      {:id, "marketing_visits_touchpoint_id_fkey", "has visits (the commission ledger)"}
+    ]
+
     references do
       reference :branch, on_delete: :delete
     end

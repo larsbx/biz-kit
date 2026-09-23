@@ -156,6 +156,16 @@ defmodule EatsbotCore.MarketingTest do
       assert {:error, _} = Visit.redeem(code, Money.new!(:CLP, 1_000), actor: @actor)
     end
 
+    test "rejects non-positive amounts", %{touchpoint: touchpoint} do
+      %{code: code} = check_in(touchpoint)
+
+      for amount <- [0, -500] do
+        assert {:error, _} = Visit.redeem(code, Money.new!(:CLP, amount), actor: @actor)
+      end
+
+      assert [%{status: :checked_in}] = Ash.read!(Visit, actor: @actor)
+    end
+
     test "statement sums commission per currency for a branch",
          %{branch: branch, touchpoint: touchpoint, promotion: promotion} do
       for address <- ["1", "2"] do
@@ -174,6 +184,19 @@ defmodule EatsbotCore.MarketingTest do
 
       assert %{CLP: total} = Visit.statement!(branch.id, from, to, actor: @actor)
       assert Money.equal?(total, Money.new!(:CLP, 4_000))
+    end
+  end
+
+  describe "audit trail" do
+    test "touchpoints and subscribers with visits cannot be destroyed",
+         %{touchpoint: touchpoint} do
+      %{code: code} = check_in(touchpoint)
+      Visit.redeem!(code, Money.new!(:CLP, 1_000), actor: @actor)
+      [subscriber] = Ash.read!(Subscriber, actor: @actor)
+
+      assert {:error, _} = Ash.destroy(touchpoint, actor: @actor)
+      assert {:error, _} = Ash.destroy(subscriber, actor: @actor)
+      assert [%{status: :redeemed}] = Ash.read!(Visit, actor: @actor)
     end
   end
 
