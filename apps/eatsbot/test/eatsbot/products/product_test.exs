@@ -3,12 +3,12 @@ defmodule ProductTest do
 
   alias EatsbotCore.Products.{Product, Option, Collection, Type}
 
-  describe "product lifecycle" do
-    setup do
-      admin = Eatsbot.Accounts.User.create!(%{email: "admin@example.com", admin?: true})
-      {:ok, admin: admin}
-    end
+  # Product policies authorize on the actor's access level, not on a User record.
+  setup do
+    {:ok, admin: EatsbotCore.Deliveries.Actors.admin()}
+  end
 
+  describe "product lifecycle" do
     test "creates product with discount rules and prices", %{admin: admin} do
       product =
         Product.create!(
@@ -35,9 +35,7 @@ defmodule ProductTest do
   end
 
   describe "product variants" do
-    setup do
-      admin = Eatsbot.Accounts.User.create!(%{email: "admin@example.com", admin?: true})
-
+    setup %{admin: admin} do
       product =
         Product.create!(
           %{

@@ -14,6 +14,11 @@ defmodule EatsbotWeb.GraphqlSchema do
     # Custom Absinthe queries can be placed here
   end
 
+  # AshGraphql only attaches the domains' mutations when this block exists.
+  mutation do
+    # Custom Absinthe mutations can be placed here
+  end
+
   object :money do
     field(:amount, non_null(:decimal))
     field(:currency, non_null(:string))
