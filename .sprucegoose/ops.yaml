@@ -54,6 +54,6 @@ roadmaps:
             - id: inbox-triage
               kind: openclaw
               title: Triage the pending inbox
-              definition_of_done: Every pending inbox item is resolved (inbox done), dropped with a reason (inbox drop), or turned into an instantiated task whose ID is recorded; inbox list --state pending is empty.
+              definition_of_done: Every pending inbox item is dropped with a reason (inbox drop), resolved (inbox done), or first turned into an instantiated task that carries the capture via task link TASK_ID inbox CAPTURE_ID and then resolved; inbox list --state pending is empty.
               depends_on: []
               input: {}
