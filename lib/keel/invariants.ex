@@ -6,15 +6,17 @@ defmodule Keel.Invariants do
   `Keel.Org.epochs/1`). A violation is `{name, t | nil, detail}`; repeats of the
   same `{name, detail}` across epochs are reported once, at the earliest `t`.
   """
-  alias Keel.{Body, Capability, Graph, Interval, Line, Org, Party, Role, Seat, Stake, Unit}
+  alias Keel.{Body, Capability, Class, Graph, Interval, Line, Org, Party, Role, Seat, Stake, Unit}
 
-  @static [:references, :kinds, :intervals, :stakes, :unit_forest]
+  @static [:references, :kinds, :intervals, :stakes, :unit_forest, :classes, :voices]
   @temporal [
     :reports_acyclic,
     :delegation_acyclic,
     :attenuation,
     :seat_limits,
-    :agent_accountability
+    :agent_accountability,
+    :eligibility,
+    :ownership_acyclic
   ]
 
   def names, do: @static ++ @temporal
@@ -52,7 +54,11 @@ defmodule Keel.Invariants do
   defp refs(%Body{id: i, of: e}), do: [{i, e, :entity}]
   defp refs(%Seat{party: p, role: r} = s), do: [{s, p, Party}, {s, r, Role}]
   defp refs(%Line{kind: :reports, from: f, to: t} = l), do: [{l, f, Role}, {l, t, [Role, Body]}]
-  defp refs(%Line{from: f, to: t} = l), do: [{l, f, Role}, {l, t, Role}]
+  defp refs(%Line{from: f, to: t} = l), do: [{l, f, [Role, Body]}, {l, t, [Role, Body]}]
+
+  defp refs(%Class{id: i, of: e} = c),
+    do: [{i, e, :entity}] ++ for(x <- [Class.employer(c)], x, do: {i, x, :entity})
+
   defp refs(%Stake{holder: h, in: e} = s), do: [{s, h, Party}, {s, e, :entity}]
 
   defp sort?(node, sorts) when is_list(sorts), do: Enum.any?(sorts, &sort?(node, &1))
@@ -66,9 +72,14 @@ defmodule Keel.Invariants do
       do: {:party_kind, p}
     ) ++
       for(%Line{kind: k} = l <- Org.edges(org, Line), k not in Line.kinds(), do: {:line_kind, l}) ++
-      for %Body{members: m, weight: w} = b <- Org.nodes(org, Body),
-          not (Body.weight?(w) and match?({s, _} when s in [:seats, :stake], m)),
-          do: {:body_shape, b}
+      for(
+        %Body{members: m, weight: w} = b <- Org.nodes(org, Body),
+        not (Body.weight?(w) and match?({s, _} when s in [:seats, :stake], m)),
+        do: {:body_shape, b}
+      ) ++
+      for %Class{eligible: el} = c <- Org.nodes(org, Class),
+          not (el in [:any, :employees] or match?({:employees, _}, el)),
+          do: {:class_shape, c}
   end
 
   def intervals(org),
@@ -95,6 +106,24 @@ defmodule Keel.Invariants do
     cycles(parents) ++ cross
   end
 
+  def classes(org) do
+    org
+    |> Org.nodes(Class)
+    |> Enum.group_by(&{&1.of, &1.name})
+    |> Enum.flat_map(fn {k, cs} -> if length(cs) > 1, do: [{:duplicate, k}], else: [] end)
+  end
+
+  @doc "No two bodies of one entity voice equivalent matters (so the most specific voice is unique)."
+  def voices(org) do
+    vs = for %Body{id: b, of: e, voices: xs} <- Org.nodes(org, Body), v <- xs, do: {e, b, v}
+
+    for {e, b1, v} <- vs,
+        {^e, b2, w} <- vs,
+        b1 < b2,
+        Capability.covers?(v, w) and Capability.covers?(w, v),
+        do: {:clash, e, b1, b2, v}
+  end
+
   ## Temporal
 
   def reports_acyclic(org, t), do: cycles(Org.graph(org, :reports, t))
@@ -106,7 +135,7 @@ defmodule Keel.Invariants do
   """
   def attenuation(org, t) do
     for %Line{kind: :delegates, from: f, to: to, grants: gs} <- Org.edges(org, Line, t),
-        match?(%Role{}, Org.get(org, f)),
+        match?(%{grants: _}, Org.get(org, f)),
         have <- [Org.effective(org, f, t)],
         g <- gs,
         not Capability.covered?(have, g),
@@ -130,6 +159,26 @@ defmodule Keel.Invariants do
         not Graph.reaches?(reports, r, &answerable?(org, &1, t)),
         uniq: true,
         do: {:unaccountable, p, r}
+  end
+
+  @doc "Holders of employee-only classes are employed (seated) by the class's employer at `t`."
+  def eligibility(org, t) do
+    for %Class{of: e, name: c} = cls <- Org.nodes(org, Class),
+        emp <- [Class.employer(cls)],
+        emp != nil,
+        %Stake{in: ^e, class: ^c, holder: h} <- Org.edges(org, Stake, t),
+        not Org.employs?(org, emp, h, t),
+        uniq: true,
+        do: {:ineligible, h, e, c}
+  end
+
+  @doc "Entity-to-entity holdings form a DAG, so look-through voting is well-founded."
+  def ownership_acyclic(org, t) do
+    org
+    |> Org.edges(Stake, t)
+    |> Enum.filter(&match?(%Party{kind: :entity}, Org.get(org, &1.holder)))
+    |> Enum.map(&{&1.holder, &1.in})
+    |> cycles()
   end
 
   defp answerable?(org, id, t) do

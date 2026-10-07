@@ -17,6 +17,19 @@ defmodule Keel.Role do
   defstruct [:id, :unit, grants: [], seats: :any, name: nil]
 end
 
+defmodule Keel.Class do
+  @moduledoc """
+  A stake class `name` of entity `of`, with an eligibility rule:
+  `:any` | `:employees` (of `of`) | `{:employees, entity}`. Stakes of a class with
+  no `Class` node are unrestricted.
+  """
+  defstruct [:id, :of, :name, eligible: :any]
+
+  def employer(%__MODULE__{eligible: :employees, of: e}), do: e
+  def employer(%__MODULE__{eligible: {:employees, e}}), do: e
+  def employer(%__MODULE__{}), do: nil
+end
+
 defmodule Keel.Body do
   @moduledoc """
   A collective decision-maker of entity `of`.
@@ -25,9 +38,22 @@ defmodule Keel.Body do
     * `weight`  — `:per_capita` | `{:units, class}`
     * `quorum`  — `{n, d}`: present weight / eligible weight ≥ n/d
     * `pass`    — `{:gt | :ge, {n, d}}` over weight cast yes / (yes + no)
+    * `grants`  — matters it may decide (`[]` = advisory, zero input); may delegate like a role
+    * `voices`  — matters on which this body casts its entity's vote elsewhere (look-through);
+      the most specific voice wins
   """
   @weights [:per_capita]
-  defstruct [:id, :of, :members, weight: :per_capita, quorum: {1, 2}, pass: {:gt, {1, 2}}]
+  defstruct [
+    :id,
+    :of,
+    :members,
+    weight: :per_capita,
+    quorum: {1, 2},
+    pass: {:gt, {1, 2}},
+    grants: [:*],
+    voices: []
+  ]
+
   def weight?(w), do: w in @weights or match?({:units, _}, w)
 end
 
@@ -40,10 +66,10 @@ end
 
 defmodule Keel.Line do
   @moduledoc """
-  A directed relation between roles.
+  A directed relation between roles and bodies.
 
-    * `:reports`   — `from` answers to `to` (a role or a body)
-    * `:delegates` — `from` confers `grants` on `to`; must attenuate
+    * `:reports`   — role `from` answers to `to` (a role or a body)
+    * `:delegates` — `from` confers `grants` on `to` (each a role or a body); must attenuate
   """
   @kinds [:reports, :delegates]
   defstruct [:from, :to, kind: :reports, grants: [], during: %Keel.Interval{}]

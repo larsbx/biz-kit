@@ -1,13 +1,13 @@
 defmodule Keel.Org do
   @moduledoc """
-  An organization: an immutable graph of nodes (`Party`, `Unit`, `Role`, `Body`),
+  An organization: an immutable graph of nodes (`Party`, `Unit`, `Role`, `Body`, `Class`),
   keyed by globally unique id, and temporal edges (`Seat`, `Line`, `Stake`).
 
   All queries are pure functions of `(org, t)` — the snapshot at instant `t`.
   """
-  alias Keel.{Body, Capability, Interval, Line, Party, Role, Seat, Stake, Unit}
+  alias Keel.{Body, Capability, Class, Interval, Line, Party, Role, Seat, Stake, Unit}
 
-  @nodes [Party, Unit, Role, Body]
+  @nodes [Party, Unit, Role, Body, Class]
   @edges [Seat, Line, Stake]
   @origin Date.new!(-9999, 1, 1)
 
@@ -47,12 +47,32 @@ defmodule Keel.Org do
   def graph(org, kind, t),
     do: for(%Line{kind: ^kind, from: f, to: to} <- edges(org, Line, t), do: {f, to})
 
-  @doc "Intrinsic grants of `role` plus everything delegated to it at `t`."
-  def effective(org, role, t) do
+  @doc "Intrinsic grants of a role or body plus everything delegated to it at `t`."
+  def effective(org, id, t) do
     delegated =
-      for %Line{kind: :delegates, to: ^role, grants: gs} <- edges(org, Line, t), g <- gs, do: g
+      for %Line{kind: :delegates, to: ^id, grants: gs} <- edges(org, Line, t), g <- gs, do: g
 
-    Enum.uniq(get(org, role).grants ++ delegated)
+    Enum.uniq(get(org, id).grants ++ delegated)
+  end
+
+  @doc "`p` holds a seat in some role of entity `e` at `t`."
+  def employs?(org, e, p, t),
+    do: Enum.any?(roles(org, p, t), &match?(%Unit{of: ^e}, get(org, get(org, &1).unit)))
+
+  @doc "The body of entity `e` with the most specific voice covering `matter`, or `nil`."
+  def voice(org, e, matter) do
+    pairs =
+      for %Body{of: ^e, id: b, voices: vs} <- nodes(org, Body),
+          v <- vs,
+          Capability.covers?(v, matter),
+          do: {b, v}
+
+    case Enum.find(pairs, fn {_, v} ->
+           Enum.all?(pairs, fn {_, w} -> Capability.covers?(w, v) end)
+         end) do
+      {b, _} -> b
+      nil -> nil
+    end
   end
 
   def capabilities(org, party, t),

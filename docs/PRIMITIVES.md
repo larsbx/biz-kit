@@ -8,7 +8,8 @@
 | Party | 𝒫 | `Keel.Party` | `kind : 𝒫 → {person, entity, agent}`; `𝒫ₑ ≔ kind⁻¹(entity)` |
 | Unit | 𝒰 | `Keel.Unit` | `of : 𝒰 → 𝒫ₑ`, `parent : 𝒰 ⇀ 𝒰` |
 | Role | ℛ | `Keel.Role` | `unit : ℛ → 𝒰`, `grants : ℛ → 𝒫(𝒞)`, `seats : ℛ → ℕ⁺ ∪ {∞}` |
-| Body | ℬ | `Keel.Body` | `of : ℬ → 𝒫ₑ`, members selector, weight, quorum `q ∈ ℚ`, pass `(⋈, θ)`, `⋈ ∈ {>, ≥}` |
+| Body | ℬ | `Keel.Body` | `of : ℬ → 𝒫ₑ`, members selector, weight, quorum `q ∈ ℚ`, pass `(⋈, θ)`, `⋈ ∈ {>, ≥}`, `grants : ℬ → 𝒫(𝒞)` (default `{*}`), `voices : ℬ → 𝒫(𝒞)` (default `∅`) |
+| Class | 𝒦 | `Keel.Class` | `of : 𝒦 → 𝒫ₑ`, `name`, `employer : 𝒦 ⇀ 𝒫ₑ` (`eligible: :employees \| {:employees, e}`) |
 | Capability | 𝒞 | `Keel.Capability` | preorder `⊒` (below) |
 
 Node ids share one namespace. Edges carry a validity interval:
@@ -16,7 +17,7 @@ Node ids share one namespace. Edges carry a validity interval:
 ```
 Seat      ⊆ 𝒫 × ℛ × I                      p holds r
 Line_rep  ⊆ ℛ × (ℛ ∪ ℬ) × I                r answers to x
-Line_del  ⊆ ℛ × ℛ × 𝒫(𝒞) × I               r confers G on r'
+Line_del  ⊆ (ℛ ∪ ℬ) × (ℛ ∪ ℬ) × 𝒫(𝒞) × I   x confers G on x'
 Stake     ⊆ 𝒫 × 𝒫ₑ × Class × ℕ⁺ × I        p holds n units of class c in e
 ```
 
@@ -36,7 +37,9 @@ H ⊒ c  ⟺  ∃h ∈ H. h ⊒ c
 
 ```
 holders(r)  = { p | (p, r) ∈ Seat_t }
-eff(r)      = grants(r) ∪ ⋃{ G | (r', r, G) ∈ Line_del,t }
+eff(x)      = grants(x) ∪ ⋃{ G | (x', x, G) ∈ Line_del,t }        x ∈ ℛ ∪ ℬ
+employs(e, p) ⟺ ∃(p, r) ∈ Seat_t. of(unit(r)) = e
+voice(e, m) = the b ∈ ℬ, of(b) = e, whose v ∈ voices(b) with v ⊒ m is ⊒-least
 caps(p)     = ⋃{ eff(r) | (p, r) ∈ Seat_t }
 members(b)  = holders(R)                       if b selects {:seats, R}
             = { p | (p, of(b), c, _) ∈ Stake_t }  if b selects {:stake, c}
@@ -44,11 +47,17 @@ w_b(p)      = 1                                 per_capita
             = Σ{ n | (p, of(b), c, n) ∈ Stake_t }  {:units, c}
 ```
 
-Decision with votes `v : 𝒫 ⇀ {yes, no, abstain}`, `W(S) = Σ_{p∈S∩members(b)} w_b(p)`:
+Decision of body `b` on matter `m` with votes `v : 𝒫 ⇀ {yes, no, abstain}`:
 
 ```
-inquorate  ⟺  W(dom v) < q · W(members)
-carried    ⟺  ¬inquorate ∧ Y + N > 0 ∧ Y ⋈ θ·(Y + N)      Y = W(v⁻¹ yes), N = W(v⁻¹ no)
+ultra_vires ⟺  eff(b) ⋣ m                                   (checked first; `grants = []` ⇒ zero input)
+v̂(p)        = v(p)                                          if p ∈ dom v
+            = ⌜decide(voice(p, m), m, v)⌝                    if kind(p) = entity, voice defined
+            = ⊥                                             otherwise
+              ⌜carried⌝ = yes, ⌜failed⌝ = no, else ⊥
+W(S)        = Σ_{p ∈ S ∩ members(b)} w_b(p)
+inquorate   ⟺  W(dom v̂) < q · W(members)
+carried     ⟺  ¬inquorate ∧ Y + N > 0 ∧ Y ⋈ θ·(Y + N)      Y = W(v̂⁻¹ yes), N = W(v̂⁻¹ no)
 ```
 
 Arithmetic is exact (integer cross-multiplication of rationals).
@@ -64,6 +73,8 @@ Static:
 | I3 | `intervals` | every edge interval is non-empty |
 | I4 | `stakes` | units ∈ ℕ⁺ |
 | I5 | `unit_forest` | `parent` is acyclic and `of(parent(u)) = of(u)` |
+| I11 | `classes` | `(of, name)` is unique over 𝒦 |
+| I12 | `voices` | no two bodies of one entity hold ⊒-equivalent voices |
 
 Temporal, ∀t:
 
@@ -74,6 +85,8 @@ Temporal, ∀t:
 | I8 | `attenuation` | `(r, r', G) ∈ Line_del,t ⟹ ∀g ∈ G. eff(r) ⊒ g` |
 | I9 | `seat_limits` | `|holders(r)| ≤ seats(r)` |
 | I10 | `agent_accountability` | `kind(p) = agent ∧ (p, r) ∈ Seat_t ⟹ r →*_rep x` with some non-agent in `holders(x)` or `members(x)` |
+| I13 | `eligibility` | `k ∈ 𝒦, employer(k) = e', (p, of(k), name(k), _) ∈ Stake_t ⟹ employs(e', p)` |
+| I14 | `ownership_acyclic` | `{ (p, e) ∈ Stake_t │ kind(p) = entity }` is a DAG |
 
 **Lemma (epochs).** `σ_t` is constant on each `[eᵢ, eᵢ₊₁)` where `e₀ = −∞`
 (represented by `Date.new!(-9999, 1, 1)`) and `e₁ < e₂ < …` are the finite
@@ -91,6 +104,22 @@ I7 is necessary, not merely tidy: with `a ⇄ b` each delegating `hire` and
 neither granted it, `eff(a) = eff(b) = {hire}` satisfies I8 point-wise while
 authority comes from nowhere (`test/invariants_test.exs`, "launders").
 
+**Lemma (voice is well-defined).** Every two capabilities covering a common
+`m` are ⊒-comparable (case analysis on `m`: only `*` covers `*`; `k` is covered
+by `*, k`; `(k, n)` by `*, k, (k, a ≥ n)` — each a chain). So the voices of `e`
+covering `m` form a chain, whose least element is unique up to ⊒-equivalence,
+and I12 removes equivalent pairs across bodies. ∎
+
+**Lemma (look-through terminates).** Each recursive step moves from a body of
+`e` to a member entity `p` with `(p, e) ∈ Stake_t`; under I14 that relation is
+a finite DAG, so the recursion is well-founded. The implementation also carries
+the set of visited entities, so even an org violating I14 decides (a revisited
+entity is absent). ∎
+
+Employee is deliberately minimal: `employs(e, p)` iff `p` holds *some* seat in a
+role of `e` at `t`. A narrower notion (only roles marked as employment) would be
+a refinement of `employs`, not a new primitive.
+
 ## Generalization: forms are configurations
 
 | Form | Control | Economics | Executive answers to |
@@ -98,12 +127,15 @@ authority comes from nowhere (`test/invariants_test.exs`, "launders").
 | Sole proprietorship | owners body, `{:units, :equity}`, one holder | same stake | owners |
 | Partnership / LLC | owners body, `{:units, :equity}` | same stake | owners |
 | Corporation | shareholders `{:units, :common}` → board `{:seats, director}` per capita | `:common` | board |
-| Worker co-op | assembly `{:stake, :membership}` per capita | `:capital`, separate class | assembly |
+| Consumer co-op | assembly `{:stake, :membership}` per capita | `:capital`, separate class | assembly |
+| Worker co-op | as consumer co-op, with `:membership` employees-only (I13) | `:capital` | assembly |
+| ESOP / EOT | owners body holds the trust; trust votes by look-through: trustees voice `*`, beneficiaries voice reserved matters | `:beneficial` in the trust, employees of the company only | board |
+| Advisory board | `Body` with `grants: []` | — | decides nothing (`ultra_vires`) |
 | Holding | subsidiary's owners body has an entity member | entity stake | composition of two corporations |
 | Department | `Unit` under `hq`; head has no intrinsic grants | — | superior role, which delegates |
 | Agent staff | agent `Party` seated in a role | — | I10: a chain ending in a non-agent |
 
-Each row is a test in `test/forms_test.exs` that builds the form and asserts
+Each row is a test in `test/forms_test.exs` or `test/employee_ownership_test.exs` that builds the form and asserts
 `Invariants.check/1 == []`. One person holding several roles (owner-operator)
 needs no special case: `Seat` is a relation, not a function.
 

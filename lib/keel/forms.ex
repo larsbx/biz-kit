@@ -6,7 +6,7 @@ defmodule Keel.Forms do
   namespaced by entity (`{e, :hq}`, `{e, dept, :head}`), so forms compose by
   list concatenation — a holding company is two corporations, not a new form.
   """
-  alias Keel.{Body, Line, Party, Role, Seat, Stake, Unit}
+  alias Keel.{Body, Class, Line, Party, Role, Seat, Stake, Unit}
 
   def entity(e), do: [%Party{id: e, kind: :entity}, %Unit{id: {e, :hq}, of: e, kind: :entity}]
 
@@ -59,6 +59,61 @@ defmodule Keel.Forms do
         do: %Stake{holder: p, in: e, class: :capital, units: u}
       ) ++
       executive(e, :manager, [manager], {e, :assembly}, 1)
+  end
+
+  @doc """
+  Worker co-operative: a co-op whose membership class is employees-only. Every
+  member is seated as `{e, :worker}`; a stake outliving the seat is a violation.
+  """
+  def worker_cooperative(e, members, manager, opts \\ []) do
+    cooperative(e, members, manager, opts) ++
+      [
+        %Class{id: {e, :class, :membership}, of: e, name: :membership, eligible: :employees},
+        %Role{id: {e, :worker}, unit: {e, :hq}}
+      ] ++ for(p <- members, do: %Seat{party: p, role: {e, :worker}})
+  end
+
+  @doc """
+  Employee trust (ESOP / EOT) for `company`: an entity, run by `trustee`, whose
+  `:beneficial` units may be held only by employees of `company`.
+
+  The trust votes its holdings by look-through: the trustee voices every matter
+  (`:*`); beneficiaries voice the more specific `reserved` matters, weighted by
+  allocation (`weight: :per_capita` for equal-share trusts).
+  """
+  def employee_trust(
+        trust,
+        company,
+        trustee,
+        allocations,
+        reserved,
+        weight \\ {:units, :beneficial}
+      ) do
+    entity(trust) ++
+      [
+        %Class{
+          id: {trust, :class, :beneficial},
+          of: trust,
+          name: :beneficial,
+          eligible: {:employees, company}
+        },
+        %Role{id: {trust, :trustee}, unit: {trust, :hq}, grants: [:administer], seats: 1},
+        %Seat{party: trustee, role: {trust, :trustee}},
+        %Body{
+          id: {trust, :trustees},
+          of: trust,
+          members: {:seats, [{trust, :trustee}]},
+          voices: [:*]
+        },
+        %Body{
+          id: {trust, :beneficiaries},
+          of: trust,
+          members: {:stake, :beneficial},
+          weight: weight,
+          voices: reserved
+        }
+      ] ++
+      for {p, u} <- allocations, do: %Stake{holder: p, in: trust, class: :beneficial, units: u}
   end
 
   @doc "A department whose head holds only what `superior` delegates."

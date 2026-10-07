@@ -11,13 +11,15 @@ defmodule Keel.FormsTest do
   test "sole proprietorship" do
     org = valid!([people([:ann]), Forms.sole_proprietorship(:shop, :ann)])
     assert Org.can?(org, :ann, :anything, @t)
-    assert {:carried, _} = Decision.decide(org, {:shop, :owners}, %{ann: :yes}, @t)
+    assert {:carried, _} = Decision.decide(org, {:shop, :owners}, :resolve, %{ann: :yes}, @t)
   end
 
   test "partnership / LLC: control follows units" do
     org = valid!([people([:ann, :bob]), Forms.partnership(:llc, [{:ann, 51}, {:bob, 49}])])
     assert Enum.sort(Org.holders(org, {:llc, :manager}, @t)) == [:ann, :bob]
-    assert {:carried, _} = Decision.decide(org, {:llc, :owners}, %{ann: :yes, bob: :no}, @t)
+
+    assert {:carried, _} =
+             Decision.decide(org, {:llc, :owners}, :resolve, %{ann: :yes, bob: :no}, @t)
   end
 
   test "corporation: shareholders → board → CEO" do
@@ -27,7 +29,9 @@ defmodule Keel.FormsTest do
         Forms.corporation(:corp, [{:ann, 900}, {:bob, 100}], [:bob, :cat], :dan)
       ])
 
-    assert {:failed, _} = Decision.decide(org, {:corp, :board}, %{bob: :yes, cat: :no}, @t)
+    assert {:failed, _} =
+             Decision.decide(org, {:corp, :board}, :resolve, %{bob: :yes, cat: :no}, @t)
+
     assert Org.can?(org, :dan, :hire, @t)
     refute Org.can?(org, :cat, :hire, @t)
   end
@@ -44,7 +48,13 @@ defmodule Keel.FormsTest do
     assert Org.members(org, {:coop, :assembly}, @t) == %{ann: 1, bob: 1, cat: 1}
 
     assert {:failed, _} =
-             Decision.decide(org, {:coop, :assembly}, %{ann: :yes, bob: :no, cat: :no}, @t)
+             Decision.decide(
+               org,
+               {:coop, :assembly},
+               :resolve,
+               %{ann: :yes, bob: :no, cat: :no},
+               @t
+             )
   end
 
   test "membership ends in time without mutating history" do
