@@ -8,11 +8,25 @@ defmodule Keel.Forms do
   """
   alias Keel.{Body, Class, Line, Party, Role, Seat, Stake, Unit}
 
+  @fundamental [:sell, :merge, :dissolve, :amend_charter]
+
+  @doc "Matters reserved to the owners (or members) by default: those that end or remake the company."
+  def fundamental, do: @fundamental
+
   def entity(e), do: [%Party{id: e, kind: :entity}, %Unit{id: {e, :hq}, of: e, kind: :entity}]
 
-  @doc "Stakes of `class` plus the owners' body, weighted by units."
-  def owners(e, holdings, class \\ :equity) do
-    [%Body{id: {e, :owners}, of: e, members: {:stake, class}, weight: {:units, class}}] ++
+  @doc "Stakes of `class` plus the owners' body, weighted by units, reserving `reserves`."
+  def owners(e, holdings, class \\ :equity, reserves \\ @fundamental) do
+    [
+      %Body{
+        id: {e, :owners},
+        of: e,
+        members: {:stake, class},
+        weight: {:units, class},
+        grants: [:*],
+        reserves: reserves
+      }
+    ] ++
       for {p, units} <- holdings, do: %Stake{holder: p, in: e, class: class, units: units}
   end
 
@@ -24,8 +38,12 @@ defmodule Keel.Forms do
     ] ++ for p <- parties, do: %Seat{party: p, role: {e, role}}
   end
 
+  @doc "Nothing is reserved: owner and executive coincide, so a reservation would only add friction."
   def sole_proprietorship(e, owner),
-    do: entity(e) ++ owners(e, [{owner, 1}]) ++ executive(e, :principal, [owner], {e, :owners}, 1)
+    do:
+      entity(e) ++
+        owners(e, [{owner, 1}], :equity, []) ++
+        executive(e, :principal, [owner], {e, :owners}, 1)
 
   @doc "Partnership / LLC. `partners :: [{party, units}]`; managers default to all partners."
   def partnership(e, partners, managers \\ nil) do
@@ -40,7 +58,7 @@ defmodule Keel.Forms do
       [
         %Role{id: {e, :director}, unit: {e, :hq}, grants: [:govern], seats: length(directors)},
         %Line{from: {e, :director}, to: {e, :owners}},
-        %Body{id: {e, :board}, of: e, members: {:seats, [{e, :director}]}}
+        %Body{id: {e, :board}, of: e, members: {:seats, [{e, :director}]}, grants: [:*]}
       ] ++
       for(d <- directors, do: %Seat{party: d, role: {e, :director}}) ++
       executive(e, :ceo, [ceo], {e, :board}, 1)
@@ -52,7 +70,16 @@ defmodule Keel.Forms do
   """
   def cooperative(e, members, manager, opts \\ []) do
     entity(e) ++
-      [%Body{id: {e, :assembly}, of: e, members: {:stake, :membership}, weight: :per_capita}] ++
+      [
+        %Body{
+          id: {e, :assembly},
+          of: e,
+          members: {:stake, :membership},
+          weight: :per_capita,
+          grants: [:*],
+          reserves: @fundamental
+        }
+      ] ++
       for(p <- members, do: %Stake{holder: p, in: e, class: :membership}) ++
       for(
         {p, u} <- Keyword.get(opts, :capital, %{}),
@@ -77,9 +104,10 @@ defmodule Keel.Forms do
   Employee trust (ESOP / EOT) for `company`: an entity, run by `trustee`, whose
   `:beneficial` units may be held only by employees of `company`.
 
-  The trust votes its holdings by look-through: the trustee voices every matter
-  (`:*`); beneficiaries voice the more specific `reserved` matters, weighted by
-  allocation (`weight: :per_capita` for equal-share trusts).
+  The trust votes its holdings by look-through: beneficiaries voice the
+  `reserved` matters, weighted by allocation (`weight: :per_capita` for
+  equal-share trusts); the trustee voices every matter (`:*`) and votes the
+  holding whenever beneficiaries fail to reach a decision (undirected shares).
   """
   def employee_trust(
         trust,
@@ -103,6 +131,7 @@ defmodule Keel.Forms do
           id: {trust, :trustees},
           of: trust,
           members: {:seats, [{trust, :trustee}]},
+          grants: [:*],
           voices: [:*]
         },
         %Body{
@@ -110,6 +139,7 @@ defmodule Keel.Forms do
           of: trust,
           members: {:stake, :beneficial},
           weight: weight,
+          grants: reserved,
           voices: reserved
         }
       ] ++

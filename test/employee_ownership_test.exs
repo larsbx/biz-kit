@@ -99,11 +99,6 @@ defmodule Keel.EmployeeOwnershipTest do
                Decision.decide(silent, {:co, :owners}, :elect, %{tee: :yes}, @t)
     end
 
-    test "an explicit vote by an entity overrides look-through" do
-      assert {:carried, _} =
-               Decision.decide(esop(), {:co, :owners}, :sell, %{trust: :yes, ann: :no}, @t)
-    end
-
     test "two bodies of one entity may not voice the same matter" do
       clash = %Body{
         id: :clash,

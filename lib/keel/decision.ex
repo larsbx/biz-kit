@@ -4,14 +4,16 @@ defmodule Keel.Decision do
   `t`, in exact rational arithmetic.
 
   `votes :: %{party => :yes | :no | :abstain}`; votes by non-members are ignored.
-  A member entity without an explicit vote votes by look-through: the outcome of
-  its own voicing body (`Keel.Org.voice/3`) on the same matter and votes —
-  `:carried → :yes`, `:failed → :no`, otherwise absent.
+  A member entity with bodies voicing the matter votes by look-through, never
+  directly: its voicing bodies (`Keel.Org.voices/3`) decide on the same matter
+  and votes, most specific first, and the first to reach a decision gives the
+  entity's vote (`:carried → :yes`, `:failed → :no`); if none does, the entity is
+  absent. An entity with no voicing body (outside the model) votes directly.
 
-  Returns `{:ultra_vires, nil}` when the body's effective grants do not cover the
-  matter, else `{:carried | :failed | :inquorate, tally}`.
+  Returns `{:ultra_vires, nil}` when the body is not competent for the matter
+  (`Keel.Org.competent?/4`), else `{:carried | :failed | :inquorate, tally}`.
   """
-  alias Keel.{Body, Capability, Org, Party}
+  alias Keel.{Body, Org, Party}
 
   def decide(org, body_id, matter, votes, t),
     do: decide(org, body_id, matter, votes, t, MapSet.new([Org.get(org, body_id).of]))
@@ -19,7 +21,7 @@ defmodule Keel.Decision do
   defp decide(org, body_id, matter, votes, t, seen) do
     %Body{quorum: {qn, qd}, pass: {op, {n, d}}} = body = Org.get(org, body_id)
 
-    if Capability.covered?(Org.effective(org, body_id, t), matter) do
+    if Org.competent?(org, body, matter, t) do
       cast =
         for {p, w} <- Org.members(org, body, t), do: {vote(org, p, matter, votes, t, seen), w}
 
@@ -51,20 +53,21 @@ defmodule Keel.Decision do
   end
 
   defp vote(org, p, matter, votes, t, seen) do
-    with :error <- Map.fetch(votes, p),
-         %Party{kind: :entity} <- Org.get(org, p),
-         false <- MapSet.member?(seen, p),
-         b when b != nil <- Org.voice(org, p, matter) do
-      case decide(org, b, matter, votes, t, MapSet.put(seen, p)) do
-        {:carried, _} -> :yes
-        {:failed, _} -> :no
-        _ -> nil
-      end
-    else
-      {:ok, v} -> v
-      _ -> nil
+    case {Org.get(org, p), Org.voices(org, p, matter)} do
+      {%Party{kind: :entity}, [_ | _] = bodies} ->
+        if not MapSet.member?(seen, p) do
+          seen = MapSet.put(seen, p)
+          Enum.find_value(bodies, &verdict(decide(org, &1, matter, votes, t, seen)))
+        end
+
+      _ ->
+        Map.get(votes, p)
     end
   end
+
+  defp verdict({:carried, _}), do: :yes
+  defp verdict({:failed, _}), do: :no
+  defp verdict(_), do: nil
 
   defp meets?(:gt, a, b), do: a > b
   defp meets?(:ge, a, b), do: a >= b

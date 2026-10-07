@@ -10,7 +10,7 @@ staff are all configurations of the same eight sorts.
 | `Party` — person \| entity \| agent | `Seat` — party holds role |
 | `Unit` — container, forest per entity | `Line` — `:reports` / `:delegates` between roles |
 | `Role` — grants + seat limit | `Stake` — units of a class in an entity |
-| `Body` — decision rule, scope (`grants`), look-through `voices` | |
+| `Body` — decision rule, scope (`grants`, fail-closed), exclusive `reserves`, look-through `voices` | |
 | `Class` — stake class with eligibility (e.g. employees only) | |
 
 ```elixir
@@ -27,11 +27,11 @@ org =
 ```
 
 - `Keel.Org` — construction and snapshot queries (`holders`, `capabilities`, `can?`, `members`)
-- `Keel.Invariants` — fourteen named well-formedness checks, evaluated at every epoch
+- `Keel.Invariants` — fifteen named well-formedness checks, evaluated at every epoch
 - `Keel.Decision` — scoped quorum / threshold decisions in exact rationals, with look-through voting by owning entities
 - `Keel.Forms` — canonical forms; compose by list concatenation
 
-The formal model, invariants and their soundness lemmas: [`docs/PRIMITIVES.md`](docs/PRIMITIVES.md).
+The formal model, invariants, soundness lemmas and the record of policy amendments: [`docs/PRIMITIVES.md`](docs/PRIMITIVES.md).
 
 ```sh
 mix test

@@ -11,7 +11,7 @@ defmodule Keel.DecisionTest do
       %Stake{holder: :a, in: :co, class: :x, units: 70},
       %Stake{holder: :b, in: :co, class: :x, units: 20},
       %Stake{holder: :c, in: :co, class: :x, units: 10},
-      struct!(Body, [id: :g, of: :co, members: {:stake, :x}] ++ body_opts)
+      struct!(Body, [id: :g, of: :co, members: {:stake, :x}, grants: [:*]] ++ body_opts)
     ])
   end
 

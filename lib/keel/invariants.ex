@@ -8,7 +8,7 @@ defmodule Keel.Invariants do
   """
   alias Keel.{Body, Capability, Class, Graph, Interval, Line, Org, Party, Role, Seat, Stake, Unit}
 
-  @static [:references, :kinds, :intervals, :stakes, :unit_forest, :classes, :voices]
+  @static [:references, :kinds, :intervals, :stakes, :unit_forest, :classes, :voices, :reserves]
   @temporal [
     :reports_acyclic,
     :delegation_acyclic,
@@ -113,15 +113,39 @@ defmodule Keel.Invariants do
     |> Enum.flat_map(fn {k, cs} -> if length(cs) > 1, do: [{:duplicate, k}], else: [] end)
   end
 
-  @doc "No two bodies of one entity voice equivalent matters (so the most specific voice is unique)."
+  @doc "No two bodies of one entity voice equivalent matters (so voices form a strict chain)."
   def voices(org) do
-    vs = for %Body{id: b, of: e, voices: xs} <- Org.nodes(org, Body), v <- xs, do: {e, b, v}
-
-    for {e, b1, v} <- vs,
-        {^e, b2, w} <- vs,
-        b1 < b2,
+    for {e, b1, b2, v, w} <- overlaps(org, :voices),
         Capability.covers?(v, w) and Capability.covers?(w, v),
         do: {:clash, e, b1, b2, v}
+  end
+
+  @doc """
+  Every reservation is decidable by its body (else the matter is deadlocked), and
+  no two bodies of one entity reserve overlapping matters (else authority is contested).
+  """
+  def reserves(org) do
+    undecidable =
+      for %Body{id: b, grants: g, reserves: rs} <- Org.nodes(org, Body),
+          r <- rs,
+          not Capability.covered?(g, r),
+          do: {:undecidable, b, r}
+
+    contested =
+      for {e, b1, b2, v, w} <- overlaps(org, :reserves),
+          Capability.covers?(v, w) or Capability.covers?(w, v),
+          do: {:contested, e, b1, b2, v, w}
+
+    undecidable ++ contested
+  end
+
+  defp overlaps(org, field) do
+    xs =
+      for %Body{id: b, of: e} = body <- Org.nodes(org, Body),
+          v <- Map.fetch!(body, field),
+          do: {e, b, v}
+
+    for {e, b1, v} <- xs, {^e, b2, w} <- xs, b1 < b2, do: {e, b1, b2, v, w}
   end
 
   ## Temporal

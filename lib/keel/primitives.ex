@@ -34,13 +34,14 @@ defmodule Keel.Body do
   @moduledoc """
   A collective decision-maker of entity `of`.
 
-    * `members` — `{:seats, [role_id]}` (holders of those roles) | `{:stake, class}` (holders of that class)
-    * `weight`  — `:per_capita` | `{:units, class}`
-    * `quorum`  — `{n, d}`: present weight / eligible weight ≥ n/d
-    * `pass`    — `{:gt | :ge, {n, d}}` over weight cast yes / (yes + no)
-    * `grants`  — matters it may decide (`[]` = advisory, zero input); may delegate like a role
-    * `voices`  — matters on which this body casts its entity's vote elsewhere (look-through);
-      the most specific voice wins
+    * `members`  — `{:seats, [role_id]}` (holders of those roles) | `{:stake, class}` (holders of that class)
+    * `weight`   — `:per_capita` | `{:units, class}`
+    * `quorum`   — `{n, d}`: present weight / eligible weight ≥ n/d
+    * `pass`     — `{:gt | :ge, {n, d}}` over weight cast yes / (yes + no)
+    * `grants`   — matters it may decide; fail-closed (`[]`, advisory) unless granted; may delegate like a role
+    * `reserves` — matters of its entity that *only* this body may decide; no role may exercise them
+    * `voices`   — matters on which this body casts its entity's vote elsewhere (look-through);
+      the most specific voice that reaches a decision wins
   """
   @weights [:per_capita]
   defstruct [
@@ -50,7 +51,8 @@ defmodule Keel.Body do
     weight: :per_capita,
     quorum: {1, 2},
     pass: {:gt, {1, 2}},
-    grants: [:*],
+    grants: [],
+    reserves: [],
     voices: []
   ]
 

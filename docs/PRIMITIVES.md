@@ -8,7 +8,7 @@
 | Party | 𝒫 | `Keel.Party` | `kind : 𝒫 → {person, entity, agent}`; `𝒫ₑ ≔ kind⁻¹(entity)` |
 | Unit | 𝒰 | `Keel.Unit` | `of : 𝒰 → 𝒫ₑ`, `parent : 𝒰 ⇀ 𝒰` |
 | Role | ℛ | `Keel.Role` | `unit : ℛ → 𝒰`, `grants : ℛ → 𝒫(𝒞)`, `seats : ℛ → ℕ⁺ ∪ {∞}` |
-| Body | ℬ | `Keel.Body` | `of : ℬ → 𝒫ₑ`, members selector, weight, quorum `q ∈ ℚ`, pass `(⋈, θ)`, `⋈ ∈ {>, ≥}`, `grants : ℬ → 𝒫(𝒞)` (default `{*}`), `voices : ℬ → 𝒫(𝒞)` (default `∅`) |
+| Body | ℬ | `Keel.Body` | `of : ℬ → 𝒫ₑ`, members selector, weight, quorum `q ∈ ℚ`, pass `(⋈, θ)`, `⋈ ∈ {>, ≥}`, `grants : ℬ → 𝒫(𝒞)` (default `∅`, fail-closed), `reserves : ℬ → 𝒫(𝒞)` (default `∅`), `voices : ℬ → 𝒫(𝒞)` (default `∅`) |
 | Class | 𝒦 | `Keel.Class` | `of : 𝒦 → 𝒫ₑ`, `name`, `employer : 𝒦 ⇀ 𝒫ₑ` (`eligible: :employees \| {:employees, e}`) |
 | Capability | 𝒞 | `Keel.Capability` | preorder `⊒` (below) |
 
@@ -39,8 +39,12 @@ H ⊒ c  ⟺  ∃h ∈ H. h ⊒ c
 holders(r)  = { p | (p, r) ∈ Seat_t }
 eff(x)      = grants(x) ∪ ⋃{ G | (x', x, G) ∈ Line_del,t }        x ∈ ℛ ∪ ℬ
 employs(e, p) ⟺ ∃(p, r) ∈ Seat_t. of(unit(r)) = e
-voice(e, m) = the b ∈ ℬ, of(b) = e, whose v ∈ voices(b) with v ⊒ m is ⊒-least
-caps(p)     = ⋃{ eff(r) | (p, r) ∈ Seat_t }
+voices(e, m) = ⟨b₁, b₂, …⟩ bodies of e with some v ∈ voices(b) ⊒ m, most specific v first
+caps(p)     = ⋃{ eff(r) | (p, r) ∈ Seat_t }                        (raw, before reservation)
+ent(x)      = of(unit(x)) for x ∈ ℛ,  of(x) for x ∈ ℬ
+rsv(e, m)   ⟺ ∃b ∈ ℬ. of(b) = e ∧ reserves(b) ⊒ m
+can(p, m)   ⟺ ∃(p, r) ∈ Seat_t. eff(r) ⊒ m ∧ ¬rsv(ent(r), m)
+comp(b, m)  ⟺ eff(b) ⊒ m ∧ (reserves(b) ⊒ m ∨ ¬rsv(of(b), m))
 members(b)  = holders(R)                       if b selects {:seats, R}
             = { p | (p, of(b), c, _) ∈ Stake_t }  if b selects {:stake, c}
 w_b(p)      = 1                                 per_capita
@@ -50,10 +54,9 @@ w_b(p)      = 1                                 per_capita
 Decision of body `b` on matter `m` with votes `v : 𝒫 ⇀ {yes, no, abstain}`:
 
 ```
-ultra_vires ⟺  eff(b) ⋣ m                                   (checked first; `grants = []` ⇒ zero input)
-v̂(p)        = v(p)                                          if p ∈ dom v
-            = ⌜decide(voice(p, m), m, v)⌝                    if kind(p) = entity, voice defined
-            = ⊥                                             otherwise
+ultra_vires ⟺  ¬comp(b, m)                                  (checked first; `grants = []` ⇒ zero input)
+v̂(p)        = first defined ⌜decide(bᵢ, m, v)⌝ over voices(p, m)   if kind(p) = entity ∧ voices(p, m) ≠ ⟨⟩
+            = v(p)                                          otherwise (v(p) = ⊥ if p ∉ dom v)
               ⌜carried⌝ = yes, ⌜failed⌝ = no, else ⊥
 W(S)        = Σ_{p ∈ S ∩ members(b)} w_b(p)
 inquorate   ⟺  W(dom v̂) < q · W(members)
@@ -75,6 +78,7 @@ Static:
 | I5 | `unit_forest` | `parent` is acyclic and `of(parent(u)) = of(u)` |
 | I11 | `classes` | `(of, name)` is unique over 𝒦 |
 | I12 | `voices` | no two bodies of one entity hold ⊒-equivalent voices |
+| I15 | `reserves` | `reserves(b) ⊆⊒ grants(b)` (decidable), and reservations of distinct bodies of one entity are pairwise ⊒-incomparable (uncontested) |
 
 Temporal, ∀t:
 
@@ -104,11 +108,17 @@ I7 is necessary, not merely tidy: with `a ⇄ b` each delegating `hire` and
 neither granted it, `eff(a) = eff(b) = {hire}` satisfies I8 point-wise while
 authority comes from nowhere (`test/invariants_test.exs`, "launders").
 
-**Lemma (voice is well-defined).** Every two capabilities covering a common
-`m` are ⊒-comparable (case analysis on `m`: only `*` covers `*`; `k` is covered
-by `*, k`; `(k, n)` by `*, k, (k, a ≥ n)` — each a chain). So the voices of `e`
-covering `m` form a chain, whose least element is unique up to ⊒-equivalence,
-and I12 removes equivalent pairs across bodies. ∎
+**Lemma (voice order is well-defined).** Every two capabilities covering a
+common `m` are ⊒-comparable (case analysis on `m`: only `*` covers `*`; `k` is
+covered by `*, k`; `(k, n)` by `*, k, (k, a ≥ n)` — each a chain). So the voices
+of `e` covering `m` form a chain, totally ordered by specificity, and I12 removes
+equivalent pairs across bodies. ∎
+
+**Lemma (reservation is sound and live).** Under I15, for every reserved `m` of
+`e` exactly one body `b` of `e` has `reserves(b) ⊒ m` (two would hold comparable
+reservations), `comp(b, m)` holds (decidability), and `comp(b', m)` fails for
+every other body `b'` of `e`, as does `can(p, m)` for every role of `e`. So a
+reserved matter has exactly one decider: never none (deadlock), never two. ∎
 
 **Lemma (look-through terminates).** Each recursive step moves from a body of
 `e` to a member entity `p` with `(p, e) ∈ Stake_t`; under I14 that relation is
@@ -129,7 +139,7 @@ a refinement of `employs`, not a new primitive.
 | Corporation | shareholders `{:units, :common}` → board `{:seats, director}` per capita | `:common` | board |
 | Consumer co-op | assembly `{:stake, :membership}` per capita | `:capital`, separate class | assembly |
 | Worker co-op | as consumer co-op, with `:membership` employees-only (I13) | `:capital` | assembly |
-| ESOP / EOT | owners body holds the trust; trust votes by look-through: trustees voice `*`, beneficiaries voice reserved matters | `:beneficial` in the trust, employees of the company only | board |
+| ESOP / EOT | owners body holds the trust; trust votes by look-through: beneficiaries voice reserved matters, trustee voices `*` and votes undirected holdings | `:beneficial` in the trust, employees of the company only | board |
 | Advisory board | `Body` with `grants: []` | — | decides nothing (`ultra_vires`) |
 | Holding | subsidiary's owners body has an entity member | entity stake | composition of two corporations |
 | Department | `Unit` under `hq`; head has no intrinsic grants | — | superior role, which delegates |
@@ -138,6 +148,19 @@ a refinement of `employs`, not a new primitive.
 Each row is a test in `test/forms_test.exs` or `test/employee_ownership_test.exs` that builds the form and asserts
 `Invariants.check/1 == []`. One person holding several roles (owner-operator)
 needs no special case: `Seat` is a relation, not a function.
+
+## Amendments
+
+Policies that were formally present but did not function, each with the
+harmful outcome it permitted. Regression tests: `test/amendments_test.exs`.
+
+| # | Previous policy | Harmful outcome | Amendment |
+| --- | --- | --- | --- |
+| A1 | Executive roles held `*`; bodies had no exclusive matters | Owner votes on a sale were decorative: the CEO could sell an employee-owned company unilaterally, and the board could approve it | `Body.reserves`; `can` and `comp` exclude matters reserved to another body. Corporations, partnerships and co-ops reserve `fundamental/0` (`sell, merge, dissolve, amend_charter`) to owners / members by default. Sole proprietorships reserve nothing (owner = executive) |
+| A2 | An explicit vote recorded for an entity overrode look-through | Pass-through was bypassable: recording `trust: :yes` silenced the beneficiaries | An entity with a voicing body for the matter always votes by look-through; direct votes count only for entities outside the model |
+| A3 | Only the most specific voice was consulted; its inquorum made the entity absent | Disengaged beneficiaries left the parent inquorate on every reserved matter, indefinitely — the company could never sell, merge or dissolve | Voices are tried most specific first; the first to reach a decision speaks (ESOP practice: the trustee votes undirected shares). Engaged beneficiaries still prevail |
+| A4 | `Body.grants` defaulted to `*` | Any body declared ad hoc was plenary (fail-open) | Default `[]` (fail-closed); authority must be granted |
+| A5 | — (new with A1) | A reservation its body cannot decide is a permanent deadlock; two bodies reserving overlapping matters contest authority | Invariant I15 |
 
 ## Scope
 

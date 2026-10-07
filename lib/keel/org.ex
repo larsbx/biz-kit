@@ -59,26 +59,48 @@ defmodule Keel.Org do
   def employs?(org, e, p, t),
     do: Enum.any?(roles(org, p, t), &match?(%Unit{of: ^e}, get(org, get(org, &1).unit)))
 
-  @doc "The body of entity `e` with the most specific voice covering `matter`, or `nil`."
-  def voice(org, e, matter) do
-    pairs =
-      for %Body{of: ^e, id: b, voices: vs} <- nodes(org, Body),
-          v <- vs,
-          Capability.covers?(v, matter),
-          do: {b, v}
+  @doc "Bodies of entity `e` voicing `matter`, most specific first (a chain, by I12)."
+  def voices(org, e, matter) do
+    for(
+      %Body{of: ^e, id: b, voices: vs} <- nodes(org, Body),
+      v <- vs,
+      Capability.covers?(v, matter),
+      do: {b, v}
+    )
+    |> Enum.sort(fn {_, v}, {_, w} -> Capability.covers?(w, v) end)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.uniq()
+  end
 
-    case Enum.find(pairs, fn {_, v} ->
-           Enum.all?(pairs, fn {_, w} -> Capability.covers?(w, v) end)
-         end) do
-      {b, _} -> b
-      nil -> nil
+  @doc "The entity a role or body acts for."
+  def entity_of(org, id) do
+    case get(org, id) do
+      %Role{unit: u} -> get(org, u).of
+      %Body{of: e} -> e
     end
   end
 
+  @doc "`matter` is reserved to some body of entity `e`."
+  def reserved?(org, e, matter),
+    do: Enum.any?(nodes(org, Body), &(&1.of == e and Capability.covered?(&1.reserves, matter)))
+
+  @doc "Body `b` may decide `matter` at `t`: within its grants, and not reserved to another body."
+  def competent?(org, %Body{id: id, of: e, reserves: rs}, matter, t),
+    do:
+      Capability.covered?(effective(org, id, t), matter) and
+        (Capability.covered?(rs, matter) or not reserved?(org, e, matter))
+
+  @doc "Raw capabilities from seats and delegation, before reservations (see `can?/4`)."
   def capabilities(org, party, t),
     do: org |> roles(party, t) |> Enum.flat_map(&effective(org, &1, t)) |> Enum.uniq()
 
-  def can?(org, party, need, t), do: Capability.covered?(capabilities(org, party, t), need)
+  @doc "Some role `party` holds covers `need`, and `need` is not reserved to a body of that role's entity."
+  def can?(org, party, need, t) do
+    Enum.any?(roles(org, party, t), fn r ->
+      Capability.covered?(effective(org, r, t), need) and
+        not reserved?(org, entity_of(org, r), need)
+    end)
+  end
 
   @doc "Eligible members of a body at `t`, mapped to their voting weight."
   def members(org, %Body{of: e, members: sel, weight: w}, t) do
