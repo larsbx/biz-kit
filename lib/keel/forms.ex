@@ -1,0 +1,75 @@
+defmodule Keel.Forms do
+  @moduledoc """
+  Canonical company forms as plain lists of Keel primitives.
+
+  Forms create structure, not people: callers declare the parties. Ids are
+  namespaced by entity (`{e, :hq}`, `{e, dept, :head}`), so forms compose by
+  list concatenation — a holding company is two corporations, not a new form.
+  """
+  alias Keel.{Body, Line, Party, Role, Seat, Stake, Unit}
+
+  def entity(e), do: [%Party{id: e, kind: :entity}, %Unit{id: {e, :hq}, of: e, kind: :entity}]
+
+  @doc "Stakes of `class` plus the owners' body, weighted by units."
+  def owners(e, holdings, class \\ :equity) do
+    [%Body{id: {e, :owners}, of: e, members: {:stake, class}, weight: {:units, class}}] ++
+      for {p, units} <- holdings, do: %Stake{holder: p, in: e, class: class, units: units}
+  end
+
+  @doc "A single plenary role: seated by `parties`, answering to `superior`."
+  def executive(e, role, parties, superior, seats \\ :any) do
+    [
+      %Role{id: {e, role}, unit: {e, :hq}, grants: [:*], seats: seats},
+      %Line{from: {e, role}, to: superior}
+    ] ++ for p <- parties, do: %Seat{party: p, role: {e, role}}
+  end
+
+  def sole_proprietorship(e, owner),
+    do: entity(e) ++ owners(e, [{owner, 1}]) ++ executive(e, :principal, [owner], {e, :owners}, 1)
+
+  @doc "Partnership / LLC. `partners :: [{party, units}]`; managers default to all partners."
+  def partnership(e, partners, managers \\ nil) do
+    managers = managers || Enum.map(partners, &elem(&1, 0))
+    entity(e) ++ owners(e, partners) ++ executive(e, :manager, managers, {e, :owners})
+  end
+
+  @doc "Shareholders elect a board (per capita), which oversees a CEO."
+  def corporation(e, shareholders, directors, ceo) do
+    entity(e) ++
+      owners(e, shareholders, :common) ++
+      [
+        %Role{id: {e, :director}, unit: {e, :hq}, grants: [:govern], seats: length(directors)},
+        %Line{from: {e, :director}, to: {e, :owners}},
+        %Body{id: {e, :board}, of: e, members: {:seats, [{e, :director}]}}
+      ] ++
+      for(d <- directors, do: %Seat{party: d, role: {e, :director}}) ++
+      executive(e, :ceo, [ceo], {e, :board}, 1)
+  end
+
+  @doc """
+  Co-operative: one member, one vote — control by `:membership`, economics by
+  `:capital` (`opts[:capital] :: %{party => units}`), never conflated.
+  """
+  def cooperative(e, members, manager, opts \\ []) do
+    entity(e) ++
+      [%Body{id: {e, :assembly}, of: e, members: {:stake, :membership}, weight: :per_capita}] ++
+      for(p <- members, do: %Stake{holder: p, in: e, class: :membership}) ++
+      for(
+        {p, u} <- Keyword.get(opts, :capital, %{}),
+        do: %Stake{holder: p, in: e, class: :capital, units: u}
+      ) ++
+      executive(e, :manager, [manager], {e, :assembly}, 1)
+  end
+
+  @doc "A department whose head holds only what `superior` delegates."
+  def department(e, d, superior, grants) do
+    head = {e, d, :head}
+
+    [
+      %Unit{id: {e, d}, of: e, parent: {e, :hq}, kind: :department},
+      %Role{id: head, unit: {e, d}, seats: 1},
+      %Line{from: head, to: superior},
+      %Line{kind: :delegates, from: superior, to: head, grants: grants}
+    ]
+  end
+end
