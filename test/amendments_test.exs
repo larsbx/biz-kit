@@ -56,14 +56,96 @@ defmodule Keel.AmendmentsTest do
     end
   end
 
-  describe "A3 — disengagement does not paralyse the company" do
-    test "if beneficiaries are inquorate, the trustee votes the undirected holding" do
-      assert {:carried, _} = Decision.decide(esop(), {:co, :owners}, :sell, %{tee: :yes}, @t)
+  describe "A3 — no one sells what they do not fully own" do
+    test "the trustee holds title, not ownership: it can never sell" do
+      assert {:failed, _} = Decision.decide(esop(), {:co, :owners}, :sell, %{tee: :yes}, @t)
     end
 
-    test "engaged beneficiaries still prevail over the trustee" do
+    test "owner-employees must engage: an absent owner is a refusal" do
+      assert {:failed, _} = Decision.decide(esop(), {:co, :owners}, :sell, %{ann: :yes}, @t)
+
       assert {:failed, _} =
-               Decision.decide(esop(), {:co, :owners}, :sell, %{tee: :yes, ann: :no}, @t)
+               Decision.decide(esop(), {:co, :owners}, :merge, %{ann: :yes, bob: :abstain}, @t)
+
+      assert {:carried, _} =
+               Decision.decide(esop(), {:co, :owners}, :sell, %{ann: :yes, bob: :yes}, @t)
+    end
+
+    test "a majority is not the whole: a 51% partner cannot sell" do
+      org = Org.new([people([:ann, :bob]), Forms.partnership(:llc, [{:ann, 51}, {:bob, 49}])])
+      assert {:failed, _} = Decision.decide(org, {:llc, :owners}, :sell, %{ann: :yes}, @t)
+
+      assert {:failed, _} =
+               Decision.decide(org, {:llc, :owners}, :dissolve, %{ann: :yes, bob: :no}, @t)
+    end
+
+    test "every co-op member must consent" do
+      org =
+        Org.new([
+          people([:ann, :bob, :cat]),
+          Forms.worker_cooperative(:wc, [:ann, :bob, :cat], :ann)
+        ])
+
+      assert {:failed, _} =
+               Decision.decide(org, {:wc, :assembly}, :sell, %{ann: :yes, bob: :yes}, @t)
+    end
+
+    test "acting alone requires holding everything" do
+      sole = Org.new([people([:ann]), Forms.sole_proprietorship(:s, :ann)])
+      assert Org.can?(sole, :ann, :sell, @t)
+
+      hired =
+        Org.new([
+          people([:ann, :mgr]),
+          Forms.sole_proprietorship(:s, :ann),
+          %Seat{party: :mgr, role: {:s, :principal}, during: Keel.Interval.new(~D[2027-01-01])}
+        ])
+
+      refute Org.can?(hired, :mgr, :sell, ~D[2027-06-01])
+      refute Org.can?(hired, :mgr, :*, ~D[2027-06-01])
+      assert Org.can?(hired, :mgr, :hire, ~D[2027-06-01])
+    end
+
+    test "a body of seats can never decide a sale, whatever its grants" do
+      org = Org.new([people([:ann]), Forms.sole_proprietorship(:s, :ann)])
+      seats = %Body{id: :b, of: :s, members: {:seats, [{:s, :principal}]}, grants: [:*]}
+
+      assert {:ultra_vires, nil} =
+               Decision.decide(Org.put(org, seats), :b, :sell, %{ann: :yes}, @t)
+    end
+
+    test "structures where only non-owners could speak to a sale are flagged" do
+      seats = [
+        %Body{
+          id: :b,
+          of: :s,
+          members: {:seats, [{:s, :principal}]},
+          grants: [:*],
+          reserves: [:sell]
+        }
+      ]
+
+      assert names(Org.new([people([:ann]), Forms.sole_proprietorship(:s, :ann), seats])) == [
+               :alienation
+             ]
+
+      trustee_only = %Body{
+        id: :t2,
+        of: :trust,
+        members: {:seats, [{:trust, :trustee}]},
+        grants: [:*],
+        voices: [:*]
+      }
+
+      org =
+        Org.new([
+          people([:tee]),
+          Forms.entity(:trust),
+          %Keel.Role{id: {:trust, :trustee}, unit: {:trust, :hq}},
+          trustee_only
+        ])
+
+      assert :alienation in names(org)
     end
   end
 
@@ -87,11 +169,15 @@ defmodule Keel.AmendmentsTest do
       do: struct!(Body, [id: id, of: :s, members: {:seats, [{:s, :principal}]}] ++ opts)
 
     test "a body cannot reserve what it may not decide (permanent deadlock)" do
-      assert names(shop(body(:b, reserves: [:sell]))) == [:reserves]
+      assert names(shop(body(:b, reserves: [:amend_charter]))) == [:reserves]
     end
 
     test "two bodies cannot reserve overlapping matters (contested authority)" do
-      both = [body(:x, grants: [:*], reserves: [:sell]), body(:y, grants: [:*], reserves: [:*])]
+      both = [
+        body(:x, grants: [:*], reserves: [:amend_charter]),
+        body(:y, grants: [:*], reserves: [:amend_charter])
+      ]
+
       assert names(shop(both)) == [:reserves]
     end
   end

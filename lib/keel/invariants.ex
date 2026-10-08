@@ -8,7 +8,17 @@ defmodule Keel.Invariants do
   """
   alias Keel.{Body, Capability, Class, Graph, Interval, Line, Org, Party, Role, Seat, Stake, Unit}
 
-  @static [:references, :kinds, :intervals, :stakes, :unit_forest, :classes, :voices, :reserves]
+  @static [
+    :references,
+    :kinds,
+    :intervals,
+    :stakes,
+    :unit_forest,
+    :classes,
+    :voices,
+    :reserves,
+    :alienation
+  ]
   @temporal [
     :reports_acyclic,
     :delegation_acyclic,
@@ -137,6 +147,16 @@ defmodule Keel.Invariants do
           do: {:contested, e, b1, b2, v, w}
 
     undecidable ++ contested
+  end
+
+  @doc "Every body that reserves, or first voices, an alienation matter is composed of owners."
+  def alienation(org) do
+    for %Body{id: b, of: e, reserves: rs, members: m} <- Org.nodes(org, Body),
+        a <- Capability.alienation(),
+        Capability.covered?(rs, a) or List.first(Org.voices(org, e, a)) == b,
+        not match?({:stake, _}, m),
+        uniq: true,
+        do: {:non_owner, b, a}
   end
 
   defp overlaps(org, field) do

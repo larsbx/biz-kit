@@ -103,7 +103,7 @@ defmodule Keel.EmployeeOwnershipTest do
       clash = %Body{
         id: :clash,
         of: :trust,
-        members: {:seats, [{:trust, :trustee}]},
+        members: {:stake, :beneficial},
         voices: [:sell]
       }
 

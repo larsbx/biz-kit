@@ -43,8 +43,11 @@ voices(e, m) = ⟨b₁, b₂, …⟩ bodies of e with some v ∈ voices(b) ⊒ m
 caps(p)     = ⋃{ eff(r) | (p, r) ∈ Seat_t }                        (raw, before reservation)
 ent(x)      = of(unit(x)) for x ∈ ℛ,  of(x) for x ∈ ℬ
 rsv(e, m)   ⟺ ∃b ∈ ℬ. of(b) = e ∧ reserves(b) ⊒ m
-can(p, m)   ⟺ ∃(p, r) ∈ Seat_t. eff(r) ⊒ m ∧ ¬rsv(ent(r), m)
-comp(b, m)  ⟺ eff(b) ⊒ m ∧ (reserves(b) ⊒ m ∨ ¬rsv(of(b), m))
+𝒜           = {sell, merge, dissolve}                           alienation: disposing of the owners' property
+alien(m)    ⟺ ∃a ∈ 𝒜. a ⊒ m ∨ m ⊒ a
+whole(e, p) ⟺ ∅ ≠ { h │ (h, e, _, _) ∈ Stake_t } = {p}
+can(p, m)   ⟺ ∃(p, r) ∈ Seat_t. eff(r) ⊒ m ∧ ¬rsv(ent(r), m) ∧ (alien(m) ⟹ whole(ent(r), p))
+comp(b, m)  ⟺ eff(b) ⊒ m ∧ (reserves(b) ⊒ m ∨ ¬rsv(of(b), m)) ∧ (alien(m) ⟹ members(b) = {:stake, _})
 members(b)  = holders(R)                       if b selects {:seats, R}
             = { p | (p, of(b), c, _) ∈ Stake_t }  if b selects {:stake, c}
 w_b(p)      = 1                                 per_capita
@@ -55,12 +58,13 @@ Decision of body `b` on matter `m` with votes `v : 𝒫 ⇀ {yes, no, abstain}`:
 
 ```
 ultra_vires ⟺  ¬comp(b, m)                                  (checked first; `grants = []` ⇒ zero input)
-v̂(p)        = first defined ⌜decide(bᵢ, m, v)⌝ over voices(p, m)   if kind(p) = entity ∧ voices(p, m) ≠ ⟨⟩
+v̂(p)        = ⌜decide(b₁, m, v)⌝, b₁ the head of voices(p, m)   if kind(p) = entity ∧ voices(p, m) ≠ ⟨⟩  (no fallback)
             = v(p)                                          otherwise (v(p) = ⊥ if p ∉ dom v)
               ⌜carried⌝ = yes, ⌜failed⌝ = no, else ⊥
 W(S)        = Σ_{p ∈ S ∩ members(b)} w_b(p)
 inquorate   ⟺  W(dom v̂) < q · W(members)
-carried     ⟺  ¬inquorate ∧ Y + N > 0 ∧ Y ⋈ θ·(Y + N)      Y = W(v̂⁻¹ yes), N = W(v̂⁻¹ no)
+carried     ⟺  Y = W(members) > 0                            if alien(m)  (full consent; absence refuses)
+            ⟺  ¬inquorate ∧ Y + N > 0 ∧ Y ⋈ θ·(Y + N)      otherwise;  Y = W(v̂⁻¹ yes), N = W(v̂⁻¹ no)
 ```
 
 Arithmetic is exact (integer cross-multiplication of rationals).
@@ -78,6 +82,7 @@ Static:
 | I5 | `unit_forest` | `parent` is acyclic and `of(parent(u)) = of(u)` |
 | I11 | `classes` | `(of, name)` is unique over 𝒦 |
 | I12 | `voices` | no two bodies of one entity hold ⊒-equivalent voices |
+| I16 | `alienation` | a body that reserves, or heads `voices(e, a)` for, some `a ∈ 𝒜` has `members = {:stake, _}` |
 | I15 | `reserves` | `reserves(b) ⊆⊒ grants(b)` (decidable), and reservations of distinct bodies of one entity are pairwise ⊒-incomparable (uncontested) |
 
 Temporal, ∀t:
@@ -130,6 +135,15 @@ Employee is deliberately minimal: `employs(e, p)` iff `p` holds *some* seat in a
 role of `e` at `t`. A narrower notion (only roles marked as employment) would be
 a refinement of `employs`, not a new primitive.
 
+**Lemma (no alienation without full ownership).** If `alien(m)`, then
+(i) a party acting alone can (`can(p, m)`) only when it is the sole holder of
+every stake in the entity; (ii) a body carries `m` only when it is composed of
+stakeholders and every unit of its eligible weight votes yes — at each level of
+look-through, since an entity's yes is itself a full-consent carry of its most
+specific voicing body, and a non-stake body is not competent (`comp`). Hence any
+carried alienation is consented to by all ultimate owners. A trustee (seat-based)
+can never supply that consent; I16 flags structures where only it could speak. ∎
+
 ## Generalization: forms are configurations
 
 | Form | Control | Economics | Executive answers to |
@@ -139,7 +153,7 @@ a refinement of `employs`, not a new primitive.
 | Corporation | shareholders `{:units, :common}` → board `{:seats, director}` per capita | `:common` | board |
 | Consumer co-op | assembly `{:stake, :membership}` per capita | `:capital`, separate class | assembly |
 | Worker co-op | as consumer co-op, with `:membership` employees-only (I13) | `:capital` | assembly |
-| ESOP / EOT | owners body holds the trust; trust votes by look-through: beneficiaries voice reserved matters, trustee voices `*` and votes undirected holdings | `:beneficial` in the trust, employees of the company only | board |
+| ESOP / EOT | owners body holds the trust; trust votes by look-through: beneficiaries voice alienation and reserved matters (full consent for alienation), trustee voices everything else | `:beneficial` in the trust, employees of the company only | board |
 | Advisory board | `Body` with `grants: []` | — | decides nothing (`ultra_vires`) |
 | Holding | subsidiary's owners body has an entity member | entity stake | composition of two corporations |
 | Department | `Unit` under `hq`; head has no intrinsic grants | — | superior role, which delegates |
@@ -158,7 +172,7 @@ harmful outcome it permitted. Regression tests: `test/amendments_test.exs`.
 | --- | --- | --- | --- |
 | A1 | Executive roles held `*`; bodies had no exclusive matters | Owner votes on a sale were decorative: the CEO could sell an employee-owned company unilaterally, and the board could approve it | `Body.reserves`; `can` and `comp` exclude matters reserved to another body. Corporations, partnerships and co-ops reserve `fundamental/0` (`sell, merge, dissolve, amend_charter`) to owners / members by default. Sole proprietorships reserve nothing (owner = executive) |
 | A2 | An explicit vote recorded for an entity overrode look-through | Pass-through was bypassable: recording `trust: :yes` silenced the beneficiaries | An entity with a voicing body for the matter always votes by look-through; direct votes count only for entities outside the model |
-| A3 | Only the most specific voice was consulted; its inquorum made the entity absent | Disengaged beneficiaries left the parent inquorate on every reserved matter, indefinitely — the company could never sell, merge or dissolve | Voices are tried most specific first; the first to reach a decision speaks (ESOP practice: the trustee votes undirected shares). Engaged beneficiaries still prevail |
+| A3 | Sale, merger and dissolution followed ordinary majority-of-votes-cast rules; an interim amendment let the trustee vote when beneficiaries were inquorate | Owners who did not fully own could dispose of the whole: a 51% partner could sell, a quorum-plus-one of co-op members could dissolve, a trustee (title holder, not owner) could sell an employee-owned company | **No one sells what they do not fully own.** Alienation (`sell, merge, dissolve`) carries only with the consent of the entire ownership — an absent or abstaining owner is a refusal, so owner-employees must engage. Only stakeholder bodies are competent; a role may alienate only if its holder owns the entity outright. Look-through has no fallback. Invariant I16 |
 | A4 | `Body.grants` defaulted to `*` | Any body declared ad hoc was plenary (fail-open) | Default `[]` (fail-closed); authority must be granted |
 | A5 | — (new with A1) | A reservation its body cannot decide is a permanent deadlock; two bodies reserving overlapping matters contest authority | Invariant I15 |
 

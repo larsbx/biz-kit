@@ -6,7 +6,7 @@ defmodule Keel.Forms do
   namespaced by entity (`{e, :hq}`, `{e, dept, :head}`), so forms compose by
   list concatenation — a holding company is two corporations, not a new form.
   """
-  alias Keel.{Body, Class, Line, Party, Role, Seat, Stake, Unit}
+  alias Keel.{Body, Capability, Class, Line, Party, Role, Seat, Stake, Unit}
 
   @fundamental [:sell, :merge, :dissolve, :amend_charter]
 
@@ -104,10 +104,10 @@ defmodule Keel.Forms do
   Employee trust (ESOP / EOT) for `company`: an entity, run by `trustee`, whose
   `:beneficial` units may be held only by employees of `company`.
 
-  The trust votes its holdings by look-through: beneficiaries voice the
-  `reserved` matters, weighted by allocation (`weight: :per_capita` for
-  equal-share trusts); the trustee voices every matter (`:*`) and votes the
-  holding whenever beneficiaries fail to reach a decision (undirected shares).
+  The trust votes its holdings by look-through: beneficiaries voice alienation
+  (always) plus the `reserved` matters, weighted by allocation (`weight:
+  :per_capita` for equal-share trusts); the trustee voices everything else. The
+  trustee holds title, not ownership, so it never votes on a sale.
   """
   def employee_trust(
         trust,
@@ -139,8 +139,8 @@ defmodule Keel.Forms do
           of: trust,
           members: {:stake, :beneficial},
           weight: weight,
-          grants: reserved,
-          voices: reserved
+          grants: Enum.uniq(Capability.alienation() ++ reserved),
+          voices: Enum.uniq(Capability.alienation() ++ reserved)
         }
       ] ++
       for {p, u} <- allocations, do: %Stake{holder: p, in: trust, class: :beneficial, units: u}

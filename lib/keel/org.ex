@@ -84,21 +84,36 @@ defmodule Keel.Org do
   def reserved?(org, e, matter),
     do: Enum.any?(nodes(org, Body), &(&1.of == e and Capability.covered?(&1.reserves, matter)))
 
-  @doc "Body `b` may decide `matter` at `t`: within its grants, and not reserved to another body."
-  def competent?(org, %Body{id: id, of: e, reserves: rs}, matter, t),
+  @doc """
+  Body `b` may decide `matter` at `t`: within its grants, not reserved to another
+  body, and — for alienation — composed of the owners themselves (`{:stake, _}`).
+  """
+  def competent?(org, %Body{id: id, of: e, reserves: rs, members: m}, matter, t),
     do:
       Capability.covered?(effective(org, id, t), matter) and
-        (Capability.covered?(rs, matter) or not reserved?(org, e, matter))
+        (Capability.covered?(rs, matter) or not reserved?(org, e, matter)) and
+        (match?({:stake, _}, m) or not Capability.alienating?(matter))
+
+  @doc "`p` holds every stake in entity `e` at `t` (and there is at least one)."
+  def owns_all?(org, e, p, t) do
+    holders = for %Stake{in: ^e, holder: h} <- edges(org, Stake, t), do: h
+    holders != [] and Enum.all?(holders, &(&1 == p))
+  end
 
   @doc "Raw capabilities from seats and delegation, before reservations (see `can?/4`)."
   def capabilities(org, party, t),
     do: org |> roles(party, t) |> Enum.flat_map(&effective(org, &1, t)) |> Enum.uniq()
 
-  @doc "Some role `party` holds covers `need`, and `need` is not reserved to a body of that role's entity."
+  @doc """
+  Some role `party` holds covers `need`, `need` is not reserved to a body of that
+  role's entity, and — for alienation — `party` owns that entity outright.
+  """
   def can?(org, party, need, t) do
     Enum.any?(roles(org, party, t), fn r ->
-      Capability.covered?(effective(org, r, t), need) and
-        not reserved?(org, entity_of(org, r), need)
+      e = entity_of(org, r)
+
+      Capability.covered?(effective(org, r, t), need) and not reserved?(org, e, need) and
+        (owns_all?(org, e, party, t) or not Capability.alienating?(need))
     end)
   end
 

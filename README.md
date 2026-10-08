@@ -27,7 +27,7 @@ org =
 ```
 
 - `Keel.Org` — construction and snapshot queries (`holders`, `capabilities`, `can?`, `members`)
-- `Keel.Invariants` — fifteen named well-formedness checks, evaluated at every epoch
+- `Keel.Invariants` — sixteen named well-formedness checks, evaluated at every epoch
 - `Keel.Decision` — scoped quorum / threshold decisions in exact rationals, with look-through voting by owning entities
 - `Keel.Forms` — canonical forms; compose by list concatenation
 
