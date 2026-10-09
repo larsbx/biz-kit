@@ -242,13 +242,13 @@ defmodule EatsbotWeb.DependencySecurityTest do
   end
 
   test "magic-link sign-in and logout reject requests without CSRF", %{conn: conn} do
-    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+    assert_error_sent 403, fn ->
       conn
       |> put_private(:plug_skip_csrf_protection, false)
       |> post("/auth/user/magic_link", %{"user" => %{"token" => "invalid"}})
     end
 
-    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+    assert_error_sent 403, fn ->
       conn
       |> put_private(:plug_skip_csrf_protection, false)
       |> delete(~p"/sign-out")

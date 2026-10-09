@@ -95,7 +95,8 @@ config :eatsbot, EatsbotWeb.Endpoint,
   render_errors: [
     formats: [html: EatsbotWeb.ErrorHTML, json: EatsbotWeb.ErrorJSON],
     root_layout: {EatsbotWeb.Layouts, "root.html"},
-    layout: {EatsbotWeb.Layouts, "app.html"}
+    # Error assigns do not carry the browser layout's required flash state.
+    layout: false
   ],
   pubsub_server: Eatsbot.PubSub,
   live_view: [signing_salt: "x8OTxxKq"]

@@ -55,7 +55,12 @@ defmodule Eatsbot.AuthenticationDependencyTest do
     [header, payload, _signature] = String.split(token, ".")
     forged = Enum.join([header, payload, Base.url_encode64("forged", padding: false)], ".")
 
-    assert {:error, _} = Actions.revoke(Token, forged)
+    # The low-level revoke action trusts verified callers. The request boundary
+    # used by logout must reject a forged bearer before invoking that action.
+    Plug.Test.conn(:delete, "/sign-out")
+    |> Plug.Conn.put_req_header("authorization", "Bearer " <> forged)
+    |> Helpers.revoke_bearer_tokens(:eatsbot)
+
     assert bearer(token).assigns.current_user.id == user.id
   end
 

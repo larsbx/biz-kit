@@ -221,5 +221,6 @@ defmodule Eatsbot.DependencyMigrationRehearsalTest do
     |> AshAuthentication.Plug.Helpers.retrieve_from_bearer(:eatsbot)
   end
 
-  defp query(sql, params \\ []), do: Ecto.Adapters.SQL.query!(Repo, sql, params)
+  defp query(sql, params \\ []),
+    do: Ecto.Adapters.SQL.query!(Repo.get_dynamic_repo(), sql, params)
 end
