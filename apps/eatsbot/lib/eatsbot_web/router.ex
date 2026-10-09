@@ -33,7 +33,17 @@ defmodule EatsbotWeb.Router do
   end
 
   pipeline :admin do
-    plug :basic_auth, username: "admin", password: System.get_env("ADMIN_API_KEY")
+    plug :admin_basic_auth
+  end
+
+  defp admin_basic_auth(conn, _opts) do
+    case System.get_env("ADMIN_API_KEY") do
+      password when is_binary(password) and password != "" ->
+        basic_auth(conn, username: "admin", password: password)
+
+      _ ->
+        conn |> request_basic_auth() |> Plug.Conn.halt()
+    end
   end
 
   scope "/", EatsbotWeb do
