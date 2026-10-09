@@ -70,5 +70,10 @@ defmodule EatsbotWeb.Deliveries.DeliveryAuthPlug do
   end
 
   @spec admin?(String.t()) :: boolean()
-  defp admin?(token), do: token == System.get_env("ADMIN_API_KEY")
+  defp admin?(token) do
+    case System.get_env("ADMIN_API_KEY") do
+      key when is_binary(key) and key != "" -> Plug.Crypto.secure_compare(token, key)
+      _ -> false
+    end
+  end
 end
