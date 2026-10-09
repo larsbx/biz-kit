@@ -1,0 +1,145 @@
+schema_version: 1
+project:
+  key: openclaw-system
+  name: OpenClaw System
+roadmaps:
+  - key: sprucegoose-control-plane-convergence
+    name: SpruceGoose Control Plane Convergence
+    workflows:
+      - id: sprucegoose-convergence-v1
+        name: SpruceGoose Convergence v1
+        definition:
+          schema_version: 1
+          tasks:
+            - id: authority-contract
+              kind: openclaw
+              title: Establish the authority contract
+              definition_of_done: The constitutive, operative, evidentiary, and projection authorities are explicit and reviewed.
+              depends_on: []
+              input: {}
+            - id: knowledge-projection
+              kind: openclaw
+              title: Project constitutive knowledge
+              definition_of_done: Repository definitions are verified and materialized with exact immutable source bindings.
+              depends_on: [authority-contract]
+              input: {}
+            - id: artifact-boundary-signer
+              kind: openclaw
+              title: Establish immutable artifact custody and independent signing
+              definition_of_done: Content-addressed artifact storage and a signer isolated from derivation executors pass positive, substitution-refusal, overwrite-refusal, secret-custody, recovery, and repository-publication checks without granting deployment authority.
+              depends_on: [knowledge-projection]
+              input: {}
+            - id: repository-relevance-sweep
+              kind: openclaw
+              title: Sweep stale SpruceGoose repository material
+              definition_of_done: Every tracked file is classified against current source and live state; stale audits and superseded documents are deleted or moved into an explicit non-authoritative archive with Git recovery; current-state documentation is updated; focused and full checks pass; scoped commits are pushed with exact local/remote parity.
+              depends_on: [knowledge-projection]
+              input: {}
+            - id: current-state-audit
+              kind: openclaw
+              title: Audit current SpruceGoose authority-plane state
+              definition_of_done: An evidence-backed, read-only audit compares the current repository, deployed service, constitutive bindings, operative ledger, projections, and legacy epoch against the governed authority contract; findings include severity, proof, limitations, and separately governed remediation boundaries.
+              depends_on: [authority-contract]
+              input: {}
+            - id: ada-runtime-diagnosis
+              kind: openclaw
+              title: Diagnose Ada production response failure
+              definition_of_done: Read-only checks identify the current Ada failure boundary across the Mama Hermes service, messaging consumer, gateway, and provider authentication; sanitized finding, reproducible regression evidence, and the governing SOP reference are attached; no remediation or credential mutation occurs.
+              depends_on: []
+              input: {}
+            - id: ada-runtime-model-repair
+              kind: openclaw
+              title: Restore Ada with a supported Codex model
+              definition_of_done: Mama Hermes uses a ChatGPT Codex-supported model; the production gateway is restarted through its governed user service; health, provider authentication, Telegram routing, and a bounded inference smoke test pass; rollback configuration is retained and no credential is exposed or replaced.
+              depends_on: [ada-runtime-diagnosis]
+              input: {}
+            - id: constitutive-mutation-lockdown
+              kind: openclaw
+              title: Lock constitutive hierarchy mutations to repository blueprints
+              definition_of_done: Production Project, Roadmap, and Workflow creation, rename, and removal are unavailable outside exact verified BlueprintRevision application; existing hierarchy rows remain readable; isolated bootstrap and migration compatibility are explicit; Ash actions, CLI refusal, PostgreSQL constraints where applicable, compiled-CLI dogfood, and positive/refusal regressions pass.
+              depends_on: [knowledge-projection]
+              input: {}
+            - id: constitutional-vertical-slice
+              kind: openclaw
+              title: Implement one constitutional authorization path
+              definition_of_done: One typed OntologyVersion through Proposition, Claim/Evidence, Justification, Norm/Grant, Resolution, Authorization, and EffectIntent path binds exact constitutive roots and passes positive, substitution, missing-root, stale-grant, and unauthorized-effect refusal tests without executing a real effect.
+              depends_on: [authority-contract]
+              input: {}
+            - id: certified-event-ledger-shadow
+              kind: openclaw
+              title: Add the certified PostgreSQL EventLedger in shadow mode
+              definition_of_done: PostgreSQL appends immutable ordered certified events with exact content identity and idempotency, refuses conflicting reuse and mutation, verifies required constitutive roots, retains mutable tables as authority during shadow mode, and passes migration, concurrency, recovery, and compiled-CLI dogfood gates.
+              depends_on: [constitutive-mutation-lockdown, constitutional-vertical-slice]
+              input: {}
+            - id: certified-event-shadow-append
+              kind: openclaw
+              title: Append certified shadow events transactionally
+              definition_of_done: Every accepted mutation in the baseline replay scope appends one root-valid certified candidate event in the same transaction; reconciliation detects missing, duplicate, reordered, or invalid events; mutable rows remain authority; positive, rollback, concurrency, recovery, and compiled-CLI dogfood gates pass.
+              depends_on: [certified-event-ledger-shadow]
+              input: {}
+            - id: grandfathered-baseline
+              kind: openclaw
+              title: Bind the grandfathered legacy baseline
+              definition_of_done: One content-addressed immutable baseline snapshot records the exact final legacy position and schema, one GrandfatheredStateAccepted certified event binds it, excluded fixtures remain quarantined, no legacy row receives invented provenance, and backup, restore, verification, and refusal gates pass.
+              depends_on: [certified-event-shadow-append]
+              input: {}
+            - id: deterministic-replay-parity
+              kind: openclaw
+              title: Prove deterministic replay and projection parity
+              definition_of_done: Empty-state rebuild, restart, concurrent shadow append completeness, dual-read parity, lag health, direct-projection-write refusal, and rollback to the legacy reader and writer pass without deleting certified events.
+              depends_on: [grandfathered-baseline]
+              input: {}
+            - id: projector-event-routing
+              kind: openclaw
+              title: Route certified events by projection scope
+              definition_of_done: The authoritative-task projector applies supported task mutations, advances across valid certified non-task events without projecting them, and fails closed on malformed or unsupported task mutations; focused, full, replay, recovery, migration, compiled-CLI, deployment, zero-lag, and parity gates pass without deleting certified events or transferring authority.
+              depends_on: [deterministic-replay-parity]
+              input: {}
+            - id: postgresql-ga-readiness-diagnosis
+              kind: openclaw
+              title: Diagnose PostgreSQL GA upgrade readiness
+              definition_of_done: Read-only source, package, extension, migration, backup, restore, rollback, and application-compatibility checks identify a supported PostgreSQL GA target and an evidence-backed upgrade boundary; finding, regression, and SOP references are attached; no package, service, database, credential, or production configuration is mutated.
+              depends_on: [projector-event-routing]
+              input: {}
+            - id: certified-derivation-receipts
+              kind: openclaw
+              title: Bind derivation permits and certify immutable outcomes
+              definition_of_done: Derivation permits bind the exact ontology, schema, norm, policy, grant and revocation epoch, agent charter, interpreter, and evidence-policy roots; claim and completion no longer mutate permit authority; one append-only certified receipt records each terminal outcome; substitution, stale-epoch, duplicate, mutation, rollback, concurrency, migration, compiled-CLI, full regression, deployment, and live verification gates pass.
+              depends_on: [deterministic-replay-parity, constitutional-vertical-slice]
+              input: {}
+            - id: ooda-shadow
+              kind: openclaw
+              title: Shadow the Pi OODA path
+              definition_of_done: Pi decisions run in shadow mode with parity and refusal evidence.
+              depends_on: [knowledge-projection]
+              input: {}
+            - id: taskflow-shadow
+              kind: openclaw
+              title: Shadow TaskFlow execution
+              definition_of_done: TaskFlow execution is shadowed by SpruceGoose with resumability and parity evidence.
+              depends_on: [authority-contract]
+              input: {}
+            - id: sprucegoose-sole-writer
+              kind: openclaw
+              title: Make SpruceGoose the sole writer
+              definition_of_done: New governed task admission and lifecycle writes occur only through SpruceGoose.
+              depends_on: [ooda-shadow, taskflow-shadow]
+              input: {}
+            - id: runtime-capability-transfer
+              kind: openclaw
+              title: Transfer bounded runtime capabilities
+              definition_of_done: Typed bounded executors replace generic runtime authority and pass positive and refusal canaries.
+              depends_on: [sprucegoose-sole-writer]
+              input: {}
+            - id: canary-cutover
+              kind: openclaw
+              title: Canary the authority cutover
+              definition_of_done: Forward event authority and deterministic projections pass replay, recovery, and parity canaries.
+              depends_on: [runtime-capability-transfer, projector-event-routing]
+              input: {}
+            - id: legacy-retirement
+              kind: openclaw
+              title: Retire legacy writers
+              definition_of_done: Superseded writers are disabled after rollback-safe cutover evidence is retained.
+              depends_on: [canary-cutover]
+              input: {}

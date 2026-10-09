@@ -1,0 +1,10 @@
+{
+  "capabilities": ["dispatch.assignment.create", "worker.availability.verify"],
+  "tool_sorts": ["dispatch.write", "dispatch.read"],
+  "purpose": "dispatch:*",
+  "recipient_classes": ["non_delegating_worker", "task_delegator"],
+  "maximum_inherited_depth": 2,
+  "minimum_evidence_grade": 2,
+  "autonomous_effect_ceiling": "dispatch-assignment",
+  "freshness": "current-charter-and-epoch"
+}

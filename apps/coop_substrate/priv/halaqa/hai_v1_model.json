@@ -1,0 +1,8 @@
+{
+  "model": "coop_substrate.halaqa_buzz_bridge",
+  "version": "1.0.0-rc1",
+  "canonical_profile": "CoopEventCanonicalV1",
+  "effect_authority": "sanad-resolve-check",
+  "interface_authority": "buzz-collaboration-only",
+  "vertical_slice": "cooperative-dispatch-assignment"
+}

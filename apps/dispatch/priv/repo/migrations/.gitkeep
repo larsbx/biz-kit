@@ -1,0 +1,5 @@
+Generated migrations are reviewed into this directory (Section 22); production
+never auto-migrates on boot.
+
+The directory must exist before AshPostgres will run, so this file keeps it in a
+fresh checkout — git does not track empty directories.

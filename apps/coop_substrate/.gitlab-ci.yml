@@ -1,0 +1,46 @@
+stages:
+  - verify
+
+default:
+  image:
+    name: localhost/coop-substrate-ci:elixir-1.19.4-rust-1.91
+    pull_policy: if-not-present
+  tags:
+    - coop-substrate
+  interruptible: true
+  before_script:
+    - mix deps.get
+
+variables:
+  MIX_ENV: test
+  EVENTSTORE_HOST: postgres
+  EVENTSTORE_USERNAME: postgres
+  EVENTSTORE_PASSWORD: postgres
+  POSTGRES_DB: postgres
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  GIT_DEPTH: "20"
+
+format:
+  stage: verify
+  services: []
+  before_script: []
+  script:
+    - mix format --check-formatted config/config.exs
+    - git diff --check
+
+elixir-test:
+  stage: verify
+  services:
+    - name: docker.io/library/postgres:16-bookworm
+      alias: postgres
+  script:
+    - until pg_isready -h postgres -U postgres; do sleep 1; done
+    - mix test
+
+rust-test:
+  stage: verify
+  services: []
+  before_script: []
+  script:
+    - cargo test --manifest-path native/canonical_v1/Cargo.toml

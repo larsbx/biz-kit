@@ -1,0 +1,57 @@
+defmodule CoopSubstrate.MixProject do
+  use Mix.Project
+
+  def project do
+    [
+      app: :coop_substrate,
+      build_path: "../../_build",
+      config_path: "../../config/config.exs",
+      deps_path: "../../deps",
+      lockfile: "../../mix.lock",
+      version: "0.1.0",
+      elixir: "~> 1.19",
+      start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
+      aliases: aliases(),
+      deps: deps()
+    ]
+  end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  # Run "mix help compile.app" to learn about applications.
+  def application do
+    [
+      extra_applications: [:logger],
+      mod: {CoopSubstrate.Application, []}
+    ]
+  end
+
+  # Run "mix help deps" to learn about dependencies.
+  defp deps do
+    [
+      {:rustler, "~> 0.36"},
+      {:cbor, "~> 1.0"},
+      # Canonical log per the AshEvents spike decision (SUBSTRATE.md §3):
+      # the eventstore library only — Commanded aggregates are NOT adopted.
+      {:eventstore, "~> 1.4"},
+      {:jason, "~> 1.4"},
+      {:stream_data, "~> 1.1", only: [:test, :dev]}
+    ]
+  end
+
+  defp aliases do
+    [
+      # Drop first: the ledger is folded in full at app boot (Log.init/1 ->
+      # recover/0), and one undecodable record raises there, so leftover state
+      # from a previous run takes down the whole suite, not just one test.
+      test: [
+        "event_store.drop --quiet",
+        "event_store.create --quiet",
+        "event_store.init --quiet",
+        "test"
+      ]
+    ]
+  end
+end

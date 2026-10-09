@@ -1,0 +1,99 @@
+{
+  "ed25519_pubkey_hex": "2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12",
+  "ed25519_seed_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+  "note": "Committed vectors locking the canonical profile. Ed25519 key is test-only. Signatures are over the canonical bytes.",
+  "profile": "CoopEventCanonicalV1",
+  "vectors": [
+    {
+      "canonical_hex": "a963696e74182a636e65673a000f423f637374726568656c6c6f646c69737484016374776f43030303f6646e756c6cf665627974657344deadbeef66626f6f6c5f66f466626f6f6c5f74f5666e6573746564a16464656570a166646565706572813b7fffffffffffffff",
+      "name": "primitive-grabbag",
+      "sha256_hex": "d9c531f2284954b51db7da6a422c524aa374c9130eaeb3312e3d95beaf5c62a7",
+      "sig_hex": "dcb84dfd07f172d007dc1ad87b4dfeec0aba2b862085c5bffad4504c733575b81eab2a68dd4f769716d568f8d282feb448e85db9a1cba1e3f6683519f897bf01",
+      "term": {
+        "bool_f": false,
+        "bool_t": true,
+        "bytes": { "__bytes__": "deadbeef" },
+        "int": 42,
+        "list": [1,"two",{ "__bytes__": "030303" },null],
+        "neg": -1000000,
+        "nested": {
+          "deep": {
+            "deeper": [-9223372036854775808]
+          }
+        },
+        "null": null,
+        "str": "hello"
+      }
+    },
+    {
+      "canonical_hex": "8c002017181818ff19010019ffff1a000100001affffffff1b00000001000000001b7fffffffffffffff3b7fffffffffffffff",
+      "name": "int-boundaries",
+      "sha256_hex": "c38500fea4a2ca4cb3db8b3ea6f2616de4765b8142ea4eb61820b95f09d56bc2",
+      "sig_hex": "7b343c1f2286cdcdbac7330d4210a476190fce2cc782d4f1d69ad2e38a9502d7f63586a45438025ce9680546a5d57cbcd51ac4fdc964cf5fbfca1502172b2705",
+      "term": [0,-1,23,24,255,256,65535,65536,4294967295,4294967296,9223372036854775807,-9223372036854775808]
+    },
+    {
+      "canonical_hex": "84a0806040",
+      "name": "empty-structures",
+      "sha256_hex": "02ecf2dbc59ebf174a6913981bb38b14a4e8d4804ecd3c4a7dab28b863e809f8",
+      "sig_hex": "87448a81097ab76e653e62ca7c6aa33f2d4df73d8c7add0568055bac522ddb75454838e8c1fca767361f6c1615f0d254b787411ca73bef925470e010879d4709",
+      "term": [
+        {},
+        [],
+        "",
+        { "__bytes__": "" }
+      ]
+    },
+    {
+      "canonical_hex": "a56004616101616202617a0562616103",
+      "name": "key-ordering",
+      "sha256_hex": "8371a3f50700a3329d398791fdc9b2f3e0aad8711a635017d40cb4e1561989db",
+      "sig_hex": "50cb167226c8f3780582f1b9660a4d64ec1f70b681c377315a01a09fd3a816e0968c5a07d5a44e782db9694999f1f9834dfd89baf9bf140ea1a5f7714f13be09",
+      "term": {
+        "": 4,
+        "a": 1,
+        "aa": 3,
+        "b": 2,
+        "z": 5
+      }
+    },
+    {
+      "canonical_hex": "a463636a6b63e6b0b4636e666362c3a9636e66646365cc8165656d6f6a6964f09f9a9a",
+      "name": "unicode-exact-bytes",
+      "sha256_hex": "9aaadd62b52d28df56a1e99a68513c08fe4dda4726fb07722b61d0131bb9bf4b",
+      "sig_hex": "daae8e860aa6ce795ab8735d151d10eafda71ff38c4bed465c1552b4c0efb1022bd6b581d49f745235976d47daf0449cf2502398c1a270b50f6ee3a71c241c08",
+      "term": {
+        "cjk": "水",
+        "emoji": "🚚",
+        "nfc": "é",
+        "nfd": "é"
+      }
+    },
+    {
+      "canonical_hex": "a96474797065735465737450726f6a656374696f6e4576656e74677061796c6f6164a2646e6f74656e766563746f7220666978747572656c616d6f756e745f6d696e6f72193039677369676e65727381a364726f6c6566617574686f72666b65795f696471746573742d766563746f722d6b65792d31667075626b657958202152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db1268617574685f726566f6686576656e745f6964781a303141525a334e44454b545356345252464651363947354641566a636861707465725f69646f636861707465722d67656e657369736c74696d657374616d705f6d731b0000019077fd30006e736368656d615f76657273696f6e6f4576656e74456e76656c6f706556317163616e6f6e6963616c5f70726f66696c6574436f6f704576656e7443616e6f6e6963616c5631",
+      "name": "envelope-core",
+      "sha256_hex": "93f9bff31a0ead6bef86d530c56ebd8721053cf821c0307221f8dca28113d462",
+      "sig_hex": "e3209d00b1433a09f67d3fecd4bdf00fd337e441bdae0a384a3456222a9e0abaacedd578ffe52d070536e5430ca3d445ca3eab4a47759a080ccd61528350c00d",
+      "term": {
+        "auth_ref": null,
+        "canonical_profile": "CoopEventCanonicalV1",
+        "chapter_id": "chapter-genesis",
+        "event_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        "payload": {
+          "amount_minor": 12345,
+          "note": "vector fixture"
+        },
+        "schema_version": "EventEnvelopeV1",
+        "signers": [
+          {
+            "key_id": "test-vector-key-1",
+            "pubkey": { "__bytes__": "2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12" },
+            "role": "author"
+          }
+        ],
+        "timestamp_ms": 1720000000000,
+        "type": "TestProjectionEvent"
+      }
+    }
+  ]
+}

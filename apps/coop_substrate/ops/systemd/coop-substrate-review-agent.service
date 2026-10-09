@@ -1,0 +1,18 @@
+[Unit]
+Description=Host-isolated GitLab merge-request review agent
+After=gitlab-local.service network-online.target
+ConditionUser=admin-papa
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/admin-papa/projects/coop_substrate
+ExecStart=/usr/bin/python3 /home/admin-papa/projects/coop_substrate/scripts/gitlab_review_agent.py
+Environment=HOME=/home/admin-papa
+Environment=PATH=/home/admin-papa/.local/bin:/home/admin-papa/.npm-global/bin:/usr/local/bin:/usr/bin
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=default.target
