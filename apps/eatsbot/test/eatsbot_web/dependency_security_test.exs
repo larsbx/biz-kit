@@ -100,10 +100,25 @@ defmodule EatsbotWeb.DependencySecurityTest do
     refute Map.has_key?(session, "unrelated_user")
   end
 
-  test "signing out revokes the browser token", %{conn: conn} do
+  test "signing out requires confirmation and revokes the browser token", %{conn: conn} do
     conn = admin_session(conn)
     token = get_session(conn, "user_token")
     conn = get(conn, ~p"/sign-out")
+
+    assert html_response(conn, 200) =~ "Sign out"
+    assert get_session(conn, "user_token") == token
+
+    [csrf_token] =
+      conn.resp_body
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("form[action='/sign-out'] input[name='_csrf_token']")
+      |> LazyHTML.attribute("value")
+
+    conn =
+      conn
+      |> recycle()
+      |> put_private(:plug_skip_csrf_protection, false)
+      |> delete(~p"/sign-out", %{"_csrf_token" => csrf_token})
 
     assert redirected_to(conn) == "/"
     refute get_session(conn, "user_token")

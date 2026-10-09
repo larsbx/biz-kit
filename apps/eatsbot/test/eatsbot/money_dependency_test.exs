@@ -8,7 +8,13 @@ defmodule Eatsbot.MoneyDependencyTest do
     amount = Decimal.new("12.3401")
 
     product =
-      Product.create!(%{name: "Money compatibility", state: :enabled, sku: "MONEY-COMPAT"},
+      Product.create!(
+        %{
+          name: "Money compatibility",
+          description: "Fractional price fixture",
+          state: :enabled,
+          sku: "MONEY-COMPAT"
+        },
         actor: admin
       )
       |> Product.update_price!(%{currency: :USD, amount: amount}, actor: admin)
@@ -23,7 +29,13 @@ defmodule Eatsbot.MoneyDependencyTest do
 
     Gettext.with_locale("es", fn ->
       product =
-        Product.create!(%{name: "Canonical amount", state: :enabled, sku: "MONEY-STRING"},
+        Product.create!(
+          %{
+            name: "Canonical amount",
+            description: "Canonical decimal fixture",
+            state: :enabled,
+            sku: "MONEY-STRING"
+          },
           actor: admin
         )
         |> Product.update_price!(%{currency: :USD, amount: "12.34"}, actor: admin)
