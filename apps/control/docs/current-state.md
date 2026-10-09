@@ -1,0 +1,199 @@
+# Current state
+
+Verified 2026-08-22 under task `tsk-20260822T230747Z-f2749517`.
+
+## Production authority
+
+- Mama runs the persistent SpruceGoose OTP service. The deployed application
+  commit is
+  `3a2dc6359fddd1f3d22d5ff633ad351ff290c30a`; its tree is
+  `876e8492bde221dc30709b4c1a09f28ddae7d906`. The governed release retained the
+  deployed database major and the deterministic authoritative-task projection,
+  and added immutable certified derivation outcomes without transferring task
+  read or write authority.
+- The thin `sprucegoose` client talks to the owner-only Unix socket. Direct
+  application startup is not a normal operator path and must refuse while the
+  authority marker names Mama.
+- Ash/PostgreSQL owns projects, roadmaps, workflows, task instances, lifecycle
+  transitions, actors, grants, receipts, permits, and evidence links.
+- Repository-bound BlueprintRevisions and TaskDefinitions are the reviewed
+  admission surface. Mutable operator task creation is retired.
+- Direct Project, Roadmap, and Workflow creation, rename, and removal commands
+  are absent from the supported CLI and refuse through legacy entry points.
+  Exact verified `blueprint apply` operations may create a repository-defined
+  Project and materialize its hierarchy in one transaction. Invalid manifests
+  roll back the Project and BlueprintRevision together. Existing hierarchy
+  rows remain readable.
+
+## Runtime integration boundary
+
+SpruceGoose core exposes a provider-neutral, versioned runtime-state port and
+stores immutable shadow-snapshot envelopes. An envelope contains only an
+adapter identity, opaque external run identity, monotonic revision, normalized
+status and checkpoint, bounded digests, child-work count, and its governed
+SpruceGoose task link. Provider payloads, commands, session formats, and APIs
+remain outside the core boundary in replaceable edge adapters.
+
+Imports are idempotent for identical revisions and refuse conflicting content.
+Parity reads compare only the normalized contract, and PostgreSQL refuses
+snapshot updates and deletes. Production canaries proved import, retry,
+conflict refusal, direct-write refusal, restart recovery, parity after restart,
+and five concurrent clients. Runtime execution authority has not moved to
+SpruceGoose, and this contract does not depend on OpenClaw, TaskFlow, Pi, or
+any other specific provider.
+
+The production database is a PostgreSQL beta, which is an explicit deviation:
+operationally verified, not a supported GA baseline. Three documents in this
+tree said "PostgreSQL 19 Beta 2" while the live system was on a different beta
+major, so no version is stated here until one has been read off the running
+server and recorded with its evidence.
+
+The schema no longer *requires* a beta. `CREATE PROPERTY GRAPH` was the only
+SQL/PGQ dependency and it made the schema uncreatable on every GA release — no
+developer, CI runner, or recovery environment could build the database at all.
+Dependency edges are now selected relationally, so the GA upgrade is an
+ordinary upgrade rather than a blocked one.
+
+## Artifact boundary
+
+- Successful artifact verification records a digest-bound permit and stores
+  immutable content-addressed bytes.
+- Every new derivation permit binds the exact ontology, schema, norm, policy,
+  grant/revocation epoch, agent-charter, interpreter, and evidence-policy
+  roots. The root set participates in the deterministic permit identity.
+  Existing pre-root permits remain readable with null roots; no historical
+  provenance was fabricated.
+- Permits no longer carry mutable execution progress or terminal results.
+  Each execution can append at most one immutable, content-addressed outcome
+  receipt and one `DerivationOutcomeCertified` ledger event with the same
+  roots. The receipt and event commit together, retries refuse, and PostgreSQL
+  rejects permit or receipt updates and deletes. The resource does still
+  *declare* `state`, `executor_id`, `evidence_digest`, `artifact_digest`,
+  `failure_reason`, `claimed_at`, and `completed_at`: with no update action
+  these are dead fields rather than live state, but they remain on the public
+  read surface until they are removed.
+- A handler that aborts its transaction — a PostgreSQL exception rather than an
+  Elixir one — still records a typed failed outcome. The handler call runs in a
+  savepoint, so the receipt is writable whatever the handler did. A failure to
+  *record* an outcome retries; `derivation reschedule` returns a permit left
+  without a terminal receipt to the queue, and refuses once one exists.
+- A root-managed `artifact-signer` identity holds the Ed25519 private key. The
+  SpruceGoose/Oban executor cannot read or replace it.
+- The signer has no IP network, no CAS write access, no repository, build, or
+  deployment credentials, and no SpruceGoose mutation role. It signs only a
+  succeeded, digest-matching `verify_artifact` permit.
+- The signer deployment is bound to
+  `root/woodpecker-deploy@7c12ab7130e28dc6fddafcdc327ab058cd2161b3`.
+
+## Delivery architecture status
+
+Forgejo is the source authority. Woodpecker runs loopback-only CI and governed
+release builds. The SpruceGoose Oban executor performs the bounded derivation
+actions. SpruceGoose governs task admission, verification permits, and
+deployment authorization. Independent signing and immutable CAS custody are
+live.
+
+Assured Mode is **not** claimed. OpenShip or an approved equivalent realization
+plane is not deployed, the dedicated isolated build runner is incomplete, and
+the full fourteen paired permit/refuse acceptance matrix has not passed as one
+release gate.
+
+## Deployment domain
+
+`SpruceGoose.Deployment` now owns release acceptance, deployment lifecycle,
+human-approved single-use execution authorizations, and execution tracking,
+with one authoritative record per deployment and a linked certified event
+stream behind it (see [`deployment-domain.md`](deployment-domain.md)). The
+native deployment control plane is subsumed by it. No production or staging
+deployment has yet been executed through this domain; the scripted host
+adapter has been exercised only against a stand-in script.
+
+## Authority-cutover status
+
+The first persistence-independent kernel seam is implemented under convergence
+task `tsk-20260821T142417Z-10cd15e2`. It provides typed SHA-256 content
+identities, certified events whose identity excludes mutable delivery
+metadata, ArtifactStore and EventLedger ports, and reference in-memory
+adapters. Focused tests prove altered-content and wrong-adapter refusal plus
+idempotent append only for byte-identical events.
+
+The release also contains `SpruceGoose.Kernel.Constitution`, which builds one
+content-addressed path from a root set through proposition, evidence, claim,
+justification, norm, grant, resolution, authorization, and an unexecuted
+`EffectIntent`. Two things must be said plainly about it.
+
+It has no caller outside its own test. Nothing in the CLI, the ledger, the
+projector, or any Ash action reaches it, so it is code that ships rather than
+behaviour the system exhibits.
+
+And it derives none of the questions it appears to answer: `claim_supported?`,
+`evidence_status`, `ontology_norm_compatible?`, `authority`, `conflicts`, and
+the lists that `defined_predicate?/1` and `bound_referent?/1` check against are
+all fields the caller supplies. `authorize/2` is a total function of its
+arguments and reads no store. What it provides is a tamper-evident record that
+a caller asserted a set of premises — real, and not the independently
+answerable constitutional questions the v0.2 audit requires. Its disposition is
+[decision D-4](decisions/2026-09-08-kernel-and-ledger-shape.md).
+
+The deployed PostgreSQL EventLedger appends immutable, per-stream ordered
+certified events with exact content identities, root-shape validation, and
+conflict-safe idempotency. Two qualifications belong with that claim: the
+events carry whole aggregate snapshots rather than certified transitions, so
+replay is last-write-wins and a dropped event is invisible whenever a later
+snapshot survives; and "required constitutional roots" is a check that eight
+named strings are 64-hex, not that they resolve to anything. See decisions
+[D-2](decisions/2026-09-08-kernel-and-ledger-shape.md) and
+[D-3](decisions/2026-09-08-kernel-and-ledger-shape.md). Database constraints recheck identities and
+required roots, and a trigger refuses updates and deletes. Its recovery,
+separate-session concurrency, retry, and conflict behavior has passed. The
+supported mutation path now appends one root-valid candidate event in the same
+transaction as each accepted mutation in the baseline replay scope; a refused
+append rolls the mutation back. Reconciliation checks task outbox coverage and
+contiguous stream positions. The accepted grandfathered baseline binds one
+exact legacy snapshot to one `GrandfatheredStateAccepted` event without
+inventing historical events or roots.
+
+The deterministic authoritative-task projector rebuilds its explicit public
+task schema from that baseline plus contiguous certified events. It routes
+supported task mutations into the projection, advances across valid certified
+non-task events without projecting them, and fails closed on malformed task
+mutations. The projector-owned PostgreSQL materialization refuses
+direct insert, update, and delete operations unless the projector enables its
+transaction-local write flag. The empty-state gate also proved that the legacy
+reader and transactional writer remain available while the materialization is
+absent, and that rebuilding does not delete certified events.
+
+Current reconciliation is healthy at 141 certified events, zero missing task
+events, and zero malformed streams. Production rebuilt 708 tasks through
+authority-stream position 140 with digest integrity, dual-read parity, and
+zero lag. Direct projection writes refuse, restart preserves parity, five
+concurrent clients pass, and no certified event was deleted.
+
+This is not a production historical-authority cutover. Mutable workflow rows
+remain the read and write authority. A bounded non-Jimbo canary, observation
+window, explicit authority-transfer decision, and rollback gates remain
+required before any reader or writer moves. Jimbo is excluded from the first
+cutover wave, and `openclaw-system` will move last.
+
+## Repository documentation policy
+
+This page is the only document that claims to describe the live overall state.
+Implementation documents describe durable contracts. Operational runbooks
+describe procedures. Dated audits are retained only while they are an active
+conformance baseline; superseded reports and generated evidence belong in Git
+history or owner-only external custody, not in the working tree.
+
+The active conformance baseline is
+[`audits/2026-08-21-abstract-deontic-kernel-v0.2.md`](audits/2026-08-21-abstract-deontic-kernel-v0.2.md),
+with work ordered by
+[`abstract-kernel-remediation-plan.md`](abstract-kernel-remediation-plan.md).
+
+[`audits/2026-09-08-project-audit.md`](audits/2026-09-08-project-audit.md) is
+also active, with outcomes recorded in its
+[remediation plan](audit-remediation-plan-2026-09-08.md) and the four
+architectural decisions it raised in
+[`decisions/2026-09-08-kernel-and-ledger-shape.md`](decisions/2026-09-08-kernel-and-ledger-shape.md). It re-checks that baseline against the delivered source, and
+records reproducibility, security, and correctness findings from a build and
+test run outside the production host. It makes no claim about live state:
+production was not reachable from the audit environment. Its work is ordered by
+[`audit-remediation-plan-2026-09-08.md`](audit-remediation-plan-2026-09-08.md).

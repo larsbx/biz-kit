@@ -1,0 +1,602 @@
+defmodule SpruceGoose.CLITest do
+  use ExUnit.Case, async: true
+
+  alias SpruceGoose.CLI
+  alias SpruceGoose.CLI.Command
+  alias SpruceGoose.SopGate
+  alias SpruceGoose.TaskId
+
+  test "returns scoped help for every command family and rejects unknown families" do
+    families =
+      ~w(id project blueprint roadmap workflow task dep todo board column filter inbox ledger runtime outbox derivation deployment)
+
+    for family <- families, help_arg <- ["help", "--help"] do
+      assert {:ok, help} = CLI.run([family, help_arg])
+      assert help.command == family
+      assert help.usage == "sprucegoose #{family} <command> [args]"
+      assert help.forms != []
+    end
+
+    assert {:ok, task_help} = CLI.run(["task", "--help"])
+
+    refute Enum.any?(task_help.forms, &String.starts_with?(&1, "add "))
+
+    assert "instantiate --project KEY --roadmap KEY --workflow ID --blueprint REVISION --definition KEY --priority N [--type task|diagnosis]" in task_help.forms
+
+    assert "list [--state S] [--project KEY] [--roadmap KEY] [--workflow ID] [--type T] [--label L] [--assignee A] [--priority N] [--text T]" in task_help.forms
+
+    assert {:error, :usage} = CLI.run(["unknown", "--help"])
+    assert {:ok, root_help} = CLI.run(["--help"])
+    assert root_help.usage == "sprucegoose <command> [args]"
+    assert {:ok, %{version: _}} = CLI.run(["--version"])
+  end
+
+  test "parses only provider-neutral versioned runtime envelopes" do
+    digest = "sha256:" <> String.duplicate("a", 64)
+
+    envelope = %{
+      "protocol_version" => 1,
+      "adapter" => "example-runtime/v1",
+      "external_id" => "run-1",
+      "revision" => 4,
+      "status" => "waiting",
+      "checkpoint" => "approval",
+      "owner_context_digest" => digest,
+      "state_digest" => digest,
+      "wait_digest" => digest,
+      "child_task_count" => 2
+    }
+
+    json = Jason.encode!(envelope)
+
+    assert {:ok, {:shadow_runtime, "tsk-20260822T210000Z-1234abcd", parsed}} =
+             Command.parse(["runtime", "shadow", "tsk-20260822T210000Z-1234abcd", json])
+
+    assert parsed.adapter == "example-runtime/v1"
+
+    assert {:ok, {:parity_runtime, _, ^parsed}} =
+             Command.parse(["runtime", "parity", "tsk-20260822T210000Z-1234abcd", json])
+
+    assert {:error, "invalid runtime envelope"} =
+             Command.parse([
+               "runtime",
+               "shadow",
+               "tsk-20260822T210000Z-1234abcd",
+               Jason.encode!(Map.put(envelope, "provider_payload", %{}))
+             ])
+
+    assert {:error, "invalid runtime envelope"} =
+             Command.parse(["runtime", "shadow", "tsk-20260822T210000Z-1234abcd", "{"])
+  end
+
+  test "generates and validates the spec task ID schema" do
+    now = ~U[2026-07-27 01:23:51Z]
+    id = TaskId.generate(now, <<0xEA, 0x5B, 0xA1, 0xB1>>)
+
+    assert id == "tsk-20260727T012351Z-ea5ba1b1"
+    assert TaskId.valid?(id)
+    refute TaskId.valid?("tsk-20260231T012351Z-ea5ba1b1")
+    refute TaskId.valid?("tsk-20260727T012351Z-EA5BA1B1")
+    refute TaskId.valid?("114")
+  end
+
+  test "parses failed-event inspection and replay commands" do
+    assert {:ok, :list_failed_outbox} = Command.parse(["outbox", "failed"])
+
+    assert {:ok, {:replay_outbox, "ad6cb708-3d90-47de-a701-19a45689f7ee"}} =
+             Command.parse(["outbox", "replay", "ad6cb708-3d90-47de-a701-19a45689f7ee"])
+
+    assert {:error, :usage} = Command.parse(["outbox", "replay"])
+  end
+
+  test "parses typed derivation admission and inspection" do
+    digest = String.duplicate("d", 64)
+
+    assert {:ok, {:admit_derivation, attrs}} =
+             Command.parse([
+               "derivation",
+               "admit",
+               "--task",
+               "tsk-20260821T120000Z-1234abcd",
+               "--source-event",
+               "forgejo:delivery-1",
+               "--forge-instance",
+               "mama-forgejo",
+               "--repository",
+               "root/sprucegoose",
+               "--commit",
+               String.duplicate("a", 40),
+               "--tree",
+               String.duplicate("b", 40),
+               "--ref",
+               "refs/heads/staging",
+               "--pipeline-digest",
+               String.duplicate("c", 64),
+               "--ontology-root",
+               "sha256:" <> digest,
+               "--schema-root",
+               "sha256:" <> digest,
+               "--norm-root",
+               "sha256:" <> digest,
+               "--policy-root",
+               "sha256:" <> digest,
+               "--grant-epoch-root",
+               "sha256:" <> digest,
+               "--agent-charter-root",
+               "sha256:" <> digest,
+               "--interpreter-root",
+               "sha256:" <> digest,
+               "--evidence-policy-root",
+               "sha256:" <> digest,
+               "--action",
+               "verify_artifact",
+               "--input-artifact",
+               digest
+             ])
+
+    assert attrs.action == :verify_artifact
+    assert attrs.input_artifact_digest == digest
+    assert attrs.roots["grant_epoch"] == "sha256:" <> digest
+
+    assert {:ok, {:show_derivation, "drv-abc"}} =
+             Command.parse(["derivation", "show", "drv-abc"])
+
+    assert {:error, "invalid derivation admit arguments"} =
+             Command.parse(["derivation", "admit", "--action", "shell"])
+  end
+
+  test "parses the deployment command family into actor-bound verbs" do
+    hex = "sha256:" <> String.duplicate("1", 64)
+
+    assert {:ok, {:deployment, :accept_release, %{project: "sprucegoose", attrs: attrs}}} =
+             Command.parse(
+               ~w(deployment release-accept sprucegoose --forge-instance mama --repository root/sprucegoose --commit) ++
+                 [
+                   String.duplicate("a", 40),
+                   "--pipeline-number",
+                   "7",
+                   "--pipeline-digest",
+                   String.duplicate("c", 64),
+                   "--archive",
+                   hex,
+                   "--image",
+                   hex
+                 ]
+             )
+
+    assert attrs.pipeline_number == 7
+    assert attrs.artifacts == %{archive: hex, image: hex}
+
+    assert {:error, "invalid deployment release-accept arguments"} =
+             Command.parse(~w(deployment release-accept sprucegoose --commit abc))
+
+    assert {:ok,
+            {:deployment, :create, %{release_id: "rel-x", environment: :production, pinned: true}}} =
+             Command.parse(~w(deployment create rel-x production --pinned))
+
+    assert {:error, :usage} = Command.parse(~w(deployment create rel-x prod))
+
+    assert {:ok, {:deployment, :stage, %{deployment_id: "dpl-1"}}} =
+             Command.parse(~w(deployment stage dpl-1))
+
+    assert {:ok, {:deployment, :cancel, %{deployment_id: "dpl-1", reason: "stop"}}} =
+             Command.parse(~w(deployment cancel dpl-1 stop))
+
+    assert {:ok, {:deployment, :observe_health, %{status: :unhealthy, detail: "probe failed"}}} =
+             Command.parse(["deployment", "observe-health", "dpl-1", "unhealthy", "probe failed"])
+
+    assert {:ok,
+            {:deployment, :authorize,
+             %{
+               deployment_id: "dpl-1",
+               attrs: %{
+                 action: :execute_rollback,
+                 approval_reference: "sop-1",
+                 target_deployment_id: "dpl-0",
+                 ttl_seconds: 60
+               }
+             }}} =
+             Command.parse(
+               ~w(deployment authorize dpl-1 --action execute_rollback --reference sop-1 --target dpl-0 --ttl 60)
+             )
+
+    assert {:error, "invalid deployment action"} =
+             Command.parse(~w(deployment authorize dpl-1 --action sudo --reference r))
+
+    routing =
+      Jason.encode!(%{
+        observation: %{
+          observed_at: "2026-09-10T12:00:00Z",
+          hostname: "h",
+          resolved_addresses: ["1.1.1.1"],
+          certificate: %{not_after: "2026-12-01T00:00:00Z", sans: ["h"], trusted: true},
+          route: %{upstream: "u", state: "active"},
+          recovery: %{restore_verified: true, config_backup: "b"}
+        },
+        expected: %{hostname: "h", address: "1.1.1.1", upstream: "u"}
+      })
+
+    assert {:ok, {:deployment, :request, %{authorization_id: "dpa-1", opts: opts}}} =
+             Command.parse([
+               "deployment",
+               "request",
+               "dpa-1",
+               "--routing",
+               routing,
+               "--recovery-verified"
+             ])
+
+    assert %DateTime{} = opts[:routing].observation.observed_at
+    assert opts[:routing].observation.certificate.trusted == true
+    assert opts[:policy] == %{recovery: %{restore_verified: true}}
+
+    assert {:error, message} =
+             Command.parse(["deployment", "request", "dpa-1", "--routing", "{}"])
+
+    assert message =~ "routing evidence"
+
+    assert {:ok, {:deployment, :list, %{project: "sprucegoose"}}} =
+             Command.parse(~w(deployment list --project sprucegoose))
+
+    assert {:ok, {:deployment, :events, %{deployment_id: "dpl-1"}}} =
+             Command.parse(~w(deployment events dpl-1))
+
+    assert {:ok, {:deployment, :reconcile, %{operation_id: "dpo-1"}}} =
+             Command.parse(~w(deployment reconcile dpo-1))
+
+    assert {:error, :usage} = Command.parse(~w(deployment execute dpl-1))
+  end
+
+  test "unbound task add is retired from the public command surface" do
+    assert {:error, message} = Command.parse(["task", "add", "Legacy task"])
+    assert message =~ "retired"
+    assert message =~ "task instantiate"
+  end
+
+  test "task instantiation requires an exact blueprint and definition key" do
+    assert {:ok, {:instantiate_task, task}} =
+             Command.parse([
+               "task",
+               "instantiate",
+               "--project",
+               "pi",
+               "--roadmap",
+               "delivery",
+               "--workflow",
+               "release-v1",
+               "--blueprint",
+               "bpr-abc",
+               "--definition",
+               "test",
+               "--priority",
+               "1"
+             ])
+
+    assert task.blueprint == "bpr-abc"
+    assert task.definition == "test"
+    assert task.priority == 1
+    assert task.task_type == :task
+
+    assert {:error, "--definition is required"} =
+             Command.parse([
+               "task",
+               "instantiate",
+               "--project",
+               "pi",
+               "--roadmap",
+               "delivery",
+               "--workflow",
+               "release-v1",
+               "--blueprint",
+               "bpr-abc",
+               "--priority",
+               "1"
+             ])
+  end
+
+  test "refuses legacy hierarchy admission commands" do
+    for argv <- [
+          ["project", "add", "dogfood", "Dogfood"],
+          ["roadmap", "add", "dogfood", "dev", "Development"],
+          ["workflow", "add", "--project", "dogfood", "--roadmap", "dev"]
+        ] do
+      assert {:error, message} = Command.parse(argv)
+      assert message =~ "verified repository blueprint"
+    end
+  end
+
+  test "parses hierarchy read commands with optional scope filters" do
+    assert {:ok, :list_projects} = Command.parse(["project", "list"])
+    assert {:ok, {:show_project, "pi"}} = Command.parse(["project", "show", "pi"])
+    assert {:ok, {:view_project, "pi"}} = Command.parse(["project", "view", "pi"])
+
+    assert {:ok, {:register_blueprint, "pi", "root/pi", "commit", ".sprucegoose/project.yaml"}} =
+             Command.parse([
+               "blueprint",
+               "register",
+               "pi",
+               "root/pi",
+               "commit",
+               ".sprucegoose/project.yaml"
+             ])
+
+    assert {:ok, {:apply_blueprint, "pi", "root/pi", "commit", ".sprucegoose/project.yaml"}} =
+             Command.parse([
+               "blueprint",
+               "apply",
+               "pi",
+               "root/pi",
+               "commit",
+               ".sprucegoose/project.yaml"
+             ])
+
+    assert {:ok, {:list_roadmaps, nil}} = Command.parse(["roadmap", "list"])
+
+    assert {:ok, {:list_roadmaps, "pi"}} =
+             Command.parse(["roadmap", "list", "--project", "pi"])
+
+    assert {:ok, {:show_roadmap, "pi", "pi-platform-governance"}} =
+             Command.parse(["roadmap", "show", "pi", "pi-platform-governance"])
+
+    assert {:ok, {:list_workflows, nil, nil}} = Command.parse(["workflow", "list"])
+
+    assert {:ok, {:list_workflows, "pi", nil}} =
+             Command.parse(["workflow", "list", "--project", "pi"])
+
+    assert {:ok, {:list_workflows, nil, "dashboard"}} =
+             Command.parse(["workflow", "list", "--roadmap", "dashboard"])
+
+    assert {:ok, {:list_workflows, "pi", "pi-platform-governance"}} =
+             Command.parse([
+               "workflow",
+               "list",
+               "--project",
+               "pi",
+               "--roadmap",
+               "pi-platform-governance"
+             ])
+
+    assert {:ok, {:show_workflow, "pi", "pi-platform-governance", "pi-icm-doc-accuracy"}} =
+             Command.parse([
+               "workflow",
+               "show",
+               "pi",
+               "pi-platform-governance",
+               "pi-icm-doc-accuracy"
+             ])
+  end
+
+  test "parses dependency graph query commands" do
+    task_id = "tsk-20260810T142243Z-66915779"
+
+    assert {:ok, {:task_blockers, ^task_id}} =
+             Command.parse(["task", "blockers", task_id])
+
+    assert {:ok, {:task_impact, ^task_id}} =
+             Command.parse(["task", "impact", task_id])
+
+    assert {:ok, {:workflow_critical_path, "openclaw-system", "convergence", "v1"}} =
+             Command.parse([
+               "workflow",
+               "critical-path",
+               "openclaw-system",
+               "convergence",
+               "v1"
+             ])
+  end
+
+  test "hierarchy read commands reject stray arguments and unknown options" do
+    assert {:error, :usage} = Command.parse(["project", "list", "extra"])
+    assert {:error, :usage} = Command.parse(["project", "show"])
+    assert {:error, :usage} = Command.parse(["roadmap", "show", "pi"])
+    assert {:error, :usage} = Command.parse(["workflow", "show", "pi", "roadmap"])
+
+    assert {:error, "invalid list arguments"} = Command.parse(["roadmap", "list", "pi"])
+
+    assert {:error, "invalid list arguments"} =
+             Command.parse(["workflow", "list", "--bogus", "x"])
+  end
+
+  test "retired task add refuses every legacy argument shape" do
+    base = [
+      "task",
+      "add",
+      "--project",
+      "pi",
+      "--roadmap",
+      "roadmap",
+      "--workflow",
+      "workflow",
+      "--priority",
+      "3",
+      "--dod",
+      "done",
+      "--sop",
+      SopGate.path()
+    ]
+
+    for args <- [base, base ++ ["--type", "shell", "x"]] do
+      assert {:error, message} = Command.parse(args)
+      assert message =~ "task add is retired"
+      assert message =~ "task instantiate"
+    end
+  end
+
+  test "parses operator lifecycle commands" do
+    id = "tsk-20260727T044500Z-1234abcd"
+
+    assert {:ok, {:list_tasks, %{state: "waiting"}}} =
+             Command.parse(["task", "list", "--state", "waiting"])
+
+    assert {:ok, {:transition_task, ^id, :proposed, nil}} =
+             Command.parse(["task", "propose", id])
+
+    assert {:ok, {:transition_task, ^id, :queued, nil}} = Command.parse(["task", "queue", id])
+    assert {:ok, {:transition_task, ^id, :ready, nil}} = Command.parse(["task", "ready", id])
+
+    assert {:ok, {:transition_task, ^id, :in_progress, nil}} =
+             Command.parse(["task", "start", id])
+
+    assert {:ok, {:transition_task, ^id, :waiting, "operator review"}} =
+             Command.parse(["task", "wait", id, "operator", "review"])
+
+    assert {:ok, {:link_task, ^id, "evidence", "/tmp/proof"}} =
+             Command.parse(["task", "link", id, "evidence", "/tmp/proof"])
+
+    assert {:ok, {:acknowledge_sop, ^id, sop_path}} =
+             Command.parse(["task", "acknowledge-sop", id, SopGate.path()])
+
+    assert sop_path == SopGate.path()
+
+    assert {:ok, {:record_artifact_receipt, ^id, "prototype", "/tmp/prototype", "telegram:6680"}} =
+             Command.parse([
+               "task",
+               "artifact-receipt",
+               id,
+               "prototype",
+               "/tmp/prototype",
+               "telegram:6680"
+             ])
+
+    assert {:ok, {:transition_task, ^id, :completed, nil}} = Command.parse(["task", "done", id])
+
+    assert {:ok, {:transition_task, ^id, :cancelled, "superseded"}} =
+             Command.parse(["task", "cancel", id, "superseded"])
+
+    assert {:error, :usage} = Command.parse(["task", "cancel", id])
+  end
+
+  test "parses governed Kanban commands" do
+    assert {:ok, {:add_board, "pi", "buzz", "integration", "main", "Main board"}} =
+             Command.parse(["board", "add", "pi", "buzz", "integration", "main", "Main", "board"])
+
+    assert {:ok, {:list_boards, "pi", "buzz", "integration"}} =
+             Command.parse(["board", "list", "pi", "buzz", "integration"])
+
+    assert {:ok, {:add_column, "board-id", "ready", "1", "ready", "Ready work"}} =
+             Command.parse(["column", "add", "board-id", "ready", "1", "ready", "Ready", "work"])
+
+    assert {:ok, {:move_task, "task-id", "board-id", "column-id", "a0"}} =
+             Command.parse(["task", "move", "task-id", "board-id", "column-id", "a0"])
+
+    assert {:ok, {:update_task_metadata, "task-id", ~s({"priority":2})}} =
+             Command.parse(["task", "metadata", "task-id", ~s({"priority":2})])
+
+    assert {:ok, {:add_filter, "board-id", "mine", ~s({"assignee":"jimbo"})}} =
+             Command.parse(["filter", "add", "board-id", "mine", ~s({"assignee":"jimbo"})])
+
+    assert {:ok, {:apply_filter, "filter-id"}} =
+             Command.parse(["filter", "apply", "filter-id"])
+  end
+
+  test "parses rename and removal commands for projection entities" do
+    assert {:ok, {:rename_board, "board-id", "Main board"}} =
+             Command.parse(["board", "rename", "board-id", "Main", "board"])
+
+    assert {:ok, {:remove_board, "board-id"}} =
+             Command.parse(["board", "remove", "board-id"])
+
+    assert {:ok, {:rename_column, "column-id", "In review"}} =
+             Command.parse(["column", "rename", "column-id", "In", "review"])
+
+    assert {:ok, {:remove_column, "column-id"}} =
+             Command.parse(["column", "remove", "column-id"])
+
+    assert {:ok, {:remove_filter, "filter-id"}} =
+             Command.parse(["filter", "remove", "filter-id"])
+
+    id = "tsk-20260727T044500Z-1234abcd"
+
+    assert {:ok, {:remove_todo, ^id, "todo-abc"}} =
+             Command.parse(["todo", "remove", id, "todo-abc"])
+
+    # --remove must win over the positional link clause.
+    assert {:ok, {:unlink_task, ^id, "evidence", "/tmp/proof"}} =
+             Command.parse(["task", "link", id, "--remove", "evidence", "/tmp/proof"])
+
+    assert {:ok, {:link_task, ^id, "evidence", "/tmp/proof"}} =
+             Command.parse(["task", "link", id, "evidence", "/tmp/proof"])
+  end
+
+  test "rename and removal commands reject missing names and stray arguments" do
+    assert {:error, :usage} = Command.parse(["board", "rename", "board-id"])
+    assert {:error, :usage} = Command.parse(["column", "rename", "column-id"])
+    assert {:error, :usage} = Command.parse(["filter", "remove"])
+    assert {:error, :usage} = Command.parse(["todo", "remove", "tsk-20260727T044500Z-1234abcd"])
+  end
+
+  test "parses dependency authoring commands" do
+    id = "tsk-20260727T044500Z-1234abcd"
+    predecessor = "tsk-20260727T044500Z-abcd1234"
+
+    assert {:ok, {:list_dependencies, ^id}} = Command.parse(["dep", "list", id])
+
+    assert {:ok, {:add_dependency, ^id, ^predecessor}} =
+             Command.parse(["dep", "add", id, "--after", predecessor])
+
+    assert {:ok, {:remove_dependency, ^id, ^predecessor}} =
+             Command.parse(["dep", "remove", id, "--after", predecessor])
+  end
+
+  test "dependency commands fail closed on malformed arguments" do
+    id = "tsk-20260727T044500Z-1234abcd"
+
+    assert {:error, "--after is required"} = Command.parse(["dep", "add", id])
+    assert {:error, "--after is required"} = Command.parse(["dep", "remove", id])
+
+    assert {:error, "invalid dependency arguments"} =
+             Command.parse(["dep", "add", id, "--after", "x", "stray"])
+
+    assert {:error, "invalid dependency arguments"} =
+             Command.parse(["dep", "add", id, "--bogus", "x"])
+
+    assert {:error, :usage} = Command.parse(["dep", "list"])
+    assert {:error, :usage} = Command.parse(["dep", "bogus", id])
+  end
+
+  test "parses fail-closed inbox capture" do
+    assert {:ok, {:add_inbox, "Unclassified operator note"}} =
+             Command.parse(["inbox", "add", "Unclassified", "operator", "note"])
+
+    assert {:ok, {:list_inbox, nil}} = Command.parse(["inbox", "list"])
+    assert {:error, :usage} = Command.parse(["inbox", "add"])
+  end
+
+  test "parses inbox triage commands" do
+    assert {:ok, {:list_inbox, "all"}} = Command.parse(["inbox", "list", "--state", "all"])
+
+    assert {:ok, {:list_inbox, "resolved"}} =
+             Command.parse(["inbox", "list", "--state", "resolved"])
+
+    assert {:ok, {:resolve_inbox, "inbox-abc", nil}} =
+             Command.parse(["inbox", "done", "inbox-abc"])
+
+    assert {:ok, {:drop_inbox, "inbox-abc", "not actionable"}} =
+             Command.parse(["inbox", "drop", "inbox-abc", "not", "actionable"])
+
+    assert {:error, message} = Command.parse(["inbox", "promote", "inbox-abc"])
+    assert message =~ "retired"
+    assert message =~ "task instantiate"
+  end
+
+  test "inbox triage commands fail closed on malformed arguments" do
+    assert {:error, :usage} = Command.parse(["inbox", "done"])
+    assert {:error, :usage} = Command.parse(["inbox", "drop", "inbox-abc"])
+    assert {:error, "invalid list arguments"} = Command.parse(["inbox", "list", "stray"])
+
+    assert {:error, message} = Command.parse(["inbox", "promote", "inbox-abc", "stray"])
+    assert message =~ "retired"
+  end
+
+  test "parses subordinate TODO commands" do
+    id = "tsk-20260727T044500Z-1234abcd"
+
+    assert {:ok, {:add_todo, ^id, "Attach evidence"}} =
+             Command.parse(["todo", "add", id, "Attach", "evidence"])
+
+    assert {:ok, {:list_todos, ^id}} = Command.parse(["todo", "list", id])
+
+    assert {:ok, {:complete_todo, ^id, "todo-abc"}} =
+             Command.parse(["todo", "done", id, "todo-abc"])
+  end
+end

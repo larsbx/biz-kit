@@ -1,0 +1,10 @@
+_build/
+deps/
+*.ez
+/sprucegoose
+/sprucegoose-direct
+/ci-evidence/
+.elixir_ls/
+graphify-out/
+backups/
+.infisical.json
