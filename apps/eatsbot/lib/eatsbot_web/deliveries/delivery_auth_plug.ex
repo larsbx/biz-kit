@@ -51,12 +51,22 @@ defmodule EatsbotWeb.Deliveries.DeliveryAuthPlug do
   @spec generate_actor(atom()) :: %{access_level: atom()}
   defp generate_actor(:admin), do: EatsbotCore.Deliveries.Actors.admin()
 
-  @spec generate_actor(atom(), EatsbotCore.Deliveries.Delivery.t()) :: %{access_level: atom()}
-  defp generate_actor(token, %{public_auth_key: public_key, private_auth_key: private_key}) do
-    cond do
-      token == public_key -> EatsbotCore.Deliveries.Actors.public()
-      token == private_key -> EatsbotCore.Deliveries.Actors.private()
-    end
+  @spec generate_actor(String.t(), EatsbotCore.Deliveries.Delivery.t()) :: %{
+          access_level: atom(),
+          delivery_id: String.t()
+        }
+  defp generate_actor(token, %{
+         id: delivery_id,
+         public_auth_key: public_key,
+         private_auth_key: private_key
+       }) do
+    actor =
+      cond do
+        token == public_key -> EatsbotCore.Deliveries.Actors.public()
+        token == private_key -> EatsbotCore.Deliveries.Actors.private()
+      end
+
+    Map.put(actor, :delivery_id, delivery_id)
   end
 
   @spec admin?(String.t()) :: boolean()

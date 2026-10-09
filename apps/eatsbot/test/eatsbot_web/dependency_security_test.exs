@@ -56,6 +56,51 @@ defmodule EatsbotWeb.DependencySecurityTest do
     refute response["data"]
   end
 
+  test "delivery credentials cannot read another delivery", %{conn: conn} do
+    own = EatsbotCore.Deliveries.Delivery.empty!(authorize?: false)
+    other = EatsbotCore.Deliveries.Delivery.empty!(authorize?: false)
+
+    query =
+      "query { own: getDelivery(id: \"#{own.id}\") { id } other: getDelivery(id: \"#{other.id}\") { id } }"
+
+    Enum.each([own.public_auth_key, own.private_auth_key], fn token ->
+      response =
+        conn
+        |> put_req_header("authorization", "Bearer " <> token)
+        |> post(~p"/gql", %{query: query})
+        |> json_response(200)
+
+      assert get_in(response, ["data", "own", "id"]) == own.id
+      refute get_in(response, ["data", "other"])
+    end)
+  end
+
+  test "private delivery credentials cannot change another delivery", %{conn: conn} do
+    own = EatsbotCore.Deliveries.Delivery.empty!(authorize?: false)
+
+    other =
+      EatsbotCore.Deliveries.Delivery.empty!(authorize?: false)
+      |> EatsbotCore.Deliveries.Delivery.update_state!(:In_Preparation, authorize?: false)
+      |> EatsbotCore.Deliveries.Delivery.update_state!(:Ready_To_Pickup, authorize?: false)
+      |> EatsbotCore.Deliveries.Delivery.update_state!(:In_Delivery, authorize?: false)
+
+    query =
+      "mutation { updateLocation(id: \"#{other.id}\", input: { currentLatitude: 12.0, currentLongitude: 34.0 }) { result { id } errors { message } } }"
+
+    response =
+      conn
+      |> put_req_header("authorization", "Bearer " <> own.private_auth_key)
+      |> post(~p"/gql", %{query: query})
+      |> json_response(200)
+
+    refute get_in(response, ["data", "updateLocation", "result"])
+    assert [_ | _] = get_in(response, ["data", "updateLocation", "errors"])
+
+    persisted = Ash.get!(EatsbotCore.Deliveries.Delivery, other.id, authorize?: false)
+    assert persisted.current_latitude == other.current_latitude
+    assert persisted.current_longitude == other.current_longitude
+  end
+
   test "unknown filter names produce validation errors", %{conn: conn} do
     query =
       "query { getAvailableProducts(filter: { unknownDependencyFilter: true }) { id } }"

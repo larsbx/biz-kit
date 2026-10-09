@@ -277,6 +277,12 @@ defmodule EatsbotCore.Deliveries.Delivery do
       description "update access is limited to users private access"
       authorize_if actor_attribute_equals(:access_level, :private)
     end
+
+    policy action_type([:read, :update]) do
+      description "delivery credentials are limited to their own delivery"
+      authorize_if expr(is_nil(^actor(:delivery_id)))
+      authorize_if expr(id == ^actor(:delivery_id))
+    end
   end
 
   pub_sub do
