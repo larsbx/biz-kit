@@ -76,14 +76,6 @@ defmodule EatsbotCore.Products.Price do
     end
   end
 
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :money, :money, public?: true, allow_nil?: false
-
-    timestamps()
-  end
-
   validations do
     validate fn changeset, _context ->
       case Ash.Changeset.get_attribute(changeset, :money) do
@@ -94,6 +86,14 @@ defmodule EatsbotCore.Products.Price do
           :ok
       end
     end
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :money, :money, public?: true, allow_nil?: false
+
+    timestamps()
   end
 
   relationships do

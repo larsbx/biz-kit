@@ -31,13 +31,12 @@ Enum.each(product_names, fn product_name ->
     product ->
       Repo.delete!(product)
   end
-
 end)
 
-old_brand = EatsbotCore.Brands.Brand |> Ash.read_one!
+old_brand = EatsbotCore.Brands.Brand |> Ash.read_one!()
 if old_brand, do: Repo.delete!(old_brand)
 
-old_branch = EatsbotCore.Brands.Branch |> Ash.read_one!
+old_branch = EatsbotCore.Brands.Branch |> Ash.read_one!()
 if old_branch, do: Repo.delete!(old_branch)
 
 brand = EatsbotCore.Brands.Brand.create!(%{name: "Sushi"}, authorize?: false)

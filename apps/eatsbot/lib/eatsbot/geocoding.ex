@@ -2,6 +2,19 @@ defmodule Eatsbot.Geocoding do
   @moduledoc """
   Module for geocoding. It uses the Nominatim API as a fallback. It can be changed through config.
   """
+  @max_body_bytes 256 * 1024
+
+  defmodule ResponseTooLargeError do
+    defexception message: "Geocoding response exceeds 256 KiB"
+  end
+
+  defmodule ProviderError do
+    defexception [:status]
+
+    @impl true
+    def message(%{status: status}), do: "Geocoding provider returned HTTP #{status}"
+  end
+
   def query(query_string) do
     case Eatsbot.GeocodingStore.get_cached(query_string) do
       {:ok, result} -> result
@@ -22,12 +35,36 @@ defmodule Eatsbot.Geocoding do
     # add token if it exists, for compatible API services such as LocationIQ
     params = [q: query_string, format: "json"] ++ if token, do: [token: token], else: []
 
-    # return only first result
-    [result | _tail] =
-      Application.get_env(:eatsbot, :req_impl, Req).get!(endpoint, params: params).body
+    response =
+      Application.get_env(:eatsbot, :req_impl, Req).get!(endpoint,
+        params: params,
+        compressed: false,
+        decode_body: false,
+        redirect: false,
+        retry: false,
+        receive_timeout: 5_000,
+        request_timeout: 10_000,
+        into: &collect_response/2
+      )
+
+    if Map.get(response, :status, 200) != 200 do
+      raise ProviderError, status: response.status
+    end
+
+    # Streaming disables Req's automatic decoding. Decode only bounded JSON.
+    body = if is_binary(response.body), do: Jason.decode!(response.body), else: response.body
+    [result | _tail] = body
 
     Eatsbot.GeocodingStore.save_in_cache(query_string, result)
     result
+  end
+
+  defp collect_response({:data, data}, {request, response}) do
+    if byte_size(response.body) + byte_size(data) > @max_body_bytes do
+      raise ResponseTooLargeError
+    end
+
+    {:cont, {request, %{response | body: response.body <> data}}}
   end
 end
 

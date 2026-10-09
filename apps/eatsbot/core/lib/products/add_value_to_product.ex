@@ -5,7 +5,9 @@ defmodule EatsbotCore.Products.AddValueToProduct do
     with {:ok, %{options: options} = record} <- changeset |> ensure_option_exists(option),
          option_record when not is_nil(option_record) <- Enum.find(options, &(&1.name == option)),
          {:ok, _} <-
-           EatsbotCore.Products.Option.add_value(option_record, %{value: value}, authorize?: false) do
+           EatsbotCore.Products.Option.add_value(option_record, %{value: value},
+             authorize?: false
+           ) do
       {:ok, record}
     else
       nil -> {:error, :option_not_found}

@@ -27,14 +27,21 @@ defmodule Eatsbot.Extensions.TelegramBot.Marketing do
       )
 
   def redeemed(%{code: code, amount: amount}),
-    do: gettext("Visit {code} redeemed: {amount}.", code: code, amount: Money.to_string!(amount))
+    do:
+      gettext("Visit %{code} redeemed: %{amount}.",
+        code: code,
+        amount:
+          Money.to_string!(amount,
+            locale: Gettext.get_locale(Eatsbot.Extensions.TelegramBot.Gettext)
+          )
+      )
 
   def invalid_touchpoint, do: gettext("Sorry, this sticker is not valid anymore.")
   def unsubscribed, do: gettext("Done. You will not receive promotions anymore.")
   def redeem_usage, do: gettext("Usage: /redeem CODE AMOUNT, e.g. /redeem AB12CD 12500")
   def redeem_failed, do: gettext("Code not found, expired or already redeemed.")
 
-  defp show_code(code), do: gettext("Show this code at the counter: {code}", code: code)
+  defp show_code(code), do: gettext("Show this code at the counter: %{code}", code: code)
   defp opt_out, do: gettext("Send /stop to stop receiving promotions.")
 
   @doc "Parses `CODE AMOUNT`; the amount is a positive integer or dot-decimal."

@@ -1,6 +1,7 @@
 defmodule EatsbotWeb.Deliveries.DeliveryAuthPlug do
   @moduledoc """
-  Sets actor of the request, based on the authorization token passed through headers. If there's no authorization header, it returns the conn unmodified. If there's an invalid token, it crashes.
+  Sets the delivery actor from a recognized credential. Invalid credentials
+  leave the request unauthenticated so resource policies can reject it.
   """
   @behaviour Plug
   import Plug.Conn
@@ -20,7 +21,7 @@ defmodule EatsbotWeb.Deliveries.DeliveryAuthPlug do
   def call(conn, _opts) do
     with false <- Map.has_key?(conn.assigns, :actor),
          ["Bearer " <> token] <- get_req_header(conn, "authorization"),
-         {actor, resource} <- get_token_data(token) do
+         {:ok, actor, resource} <- get_token_data(token) do
       conn
       |> assign(:resource, resource)
       |> assign(:actor, actor)
@@ -31,15 +32,19 @@ defmodule EatsbotWeb.Deliveries.DeliveryAuthPlug do
   end
 
   @spec get_token_data(String.t()) ::
-          {%{access_level: atom()}, EatsbotCore.Deliveries.Delivery.t()}
+          {:ok, %{access_level: atom()}, EatsbotCore.Deliveries.Delivery.t() | nil} | :error
   def get_token_data(token) do
-    cond do
-      admin?(token) ->
-        # admin token isn't related to a resource, so it returns nil
-        {generate_actor(:admin), nil}
-
-      [resource] = EatsbotCore.Deliveries.Delivery.get_via_token!(token, authorize?: false) ->
-        {generate_actor(token, resource), resource}
+    if admin?(token) do
+      # The admin credential is not bound to a delivery.
+      {:ok, generate_actor(:admin), nil}
+    else
+      with {:ok, _uuid} <- Ecto.UUID.cast(token),
+           {:ok, [resource]} <-
+             EatsbotCore.Deliveries.Delivery.get_via_token(token, authorize?: false) do
+        {:ok, generate_actor(token, resource), resource}
+      else
+        _ -> :error
+      end
     end
   end
 

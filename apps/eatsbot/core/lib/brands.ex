@@ -3,7 +3,7 @@ defmodule EatsbotCore.Brands do
   Store the Brand associated.
   """
 
-  use Ash.Domain, 
+  use Ash.Domain,
     otp_app: :eatsbot,
     extensions: [AshGraphql, AshAdmin.Domain],
     validate_config_inclusion?: false

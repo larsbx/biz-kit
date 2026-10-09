@@ -20,7 +20,7 @@ defmodule CartTest do
 
     option = Product.get_or_create_option!(product, "Color", authorize?: false)
     Option.add_value!(option, "Red", authorize?: false)
-    
+
     product =
       product
       |> Ash.load!(options: [:option_values])
@@ -28,7 +28,7 @@ defmodule CartTest do
       |> Ash.load!(variants: [:prices])
 
     variant = hd(product.variants)
-    
+
     {:ok, product: product, variant: variant}
   end
 
@@ -36,14 +36,15 @@ defmodule CartTest do
     test "adds variant to cart", %{variant: variant} do
       cart = Cart.create!()
       %{cart_lines: [line]} = Cart.add_variant!(cart, variant.id, 2, "Handle with care")
-      
+
       assert line.quantity == 2
       assert line.notes == "Handle with care"
     end
 
     test "performs checkout with delivery", %{variant: variant} do
-      cart = Cart.create!()
-      |> Cart.add_variant!(variant.id, 1, "")
+      cart =
+        Cart.create!()
+        |> Cart.add_variant!(variant.id, 1, "")
 
       delivery_public_token =
         Cart.checkout_delivery!(
@@ -58,8 +59,8 @@ defmodule CartTest do
             delivery_order: %{}
           }
         )
+
       assert EatsbotCore.Deliveries.Delivery.get_via_token(delivery_public_token)
     end
   end
 end
-

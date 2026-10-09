@@ -5,13 +5,6 @@ defmodule Eatsbot.Extensions.TelegramBot.Cldr do
   use Cldr, EatsbotCore.CldrConfig.common(Eatsbot.Extensions.TelegramBot.Gettext)
 end
 
-defmodule Eatsbot.Extensions.TelegramBot.Gettext.Interpolation do
-  @moduledoc """
-  Define an interpolation module for ICU messages
-  """
-  use Cldr.Gettext.Interpolation, cldr_backend: Eatsbot.Extensions.TelegramBot.Cldr
-end
-
 defmodule Eatsbot.Extensions.TelegramBot.Gettext do
   @moduledoc """
   A module providing Internationalization with a gettext-based API.
@@ -36,6 +29,5 @@ defmodule Eatsbot.Extensions.TelegramBot.Gettext do
   See the [Gettext Docs](https://hexdocs.pm/gettext) for detailed usage.
   """
   use Gettext.Backend,
-    otp_app: :eatsbot_extension_telegram_bot,
-    interpolation: Eatsbot.Extensions.TelegramBot.Gettext.Interpolation
+    otp_app: :eatsbot_extension_telegram_bot
 end

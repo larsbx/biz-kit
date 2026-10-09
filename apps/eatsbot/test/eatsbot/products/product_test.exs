@@ -42,7 +42,7 @@ defmodule ProductTest do
             name: "Test Product",
             description: "Description",
             state: :enabled,
-            sku: "TEST_SKU",
+            sku: "TEST_SKU"
           },
           actor: admin
         )
@@ -54,7 +54,7 @@ defmodule ProductTest do
     test "generates variants from options", %{product: product, admin: admin} do
       option1 = Product.get_or_create_option!(product, "Color", actor: admin)
       option2 = Product.get_or_create_option!(product, "Size", actor: admin)
-      
+
       Enum.reduce(["Red", "Blue"], option1, fn val, acc ->
         Option.add_value!(acc, val, actor: admin)
       end)
@@ -71,12 +71,17 @@ defmodule ProductTest do
 
   describe "collections" do
     test "adds product to collection", %{admin: admin} do
-      product = Product.create!(%{
+      product =
+        Product.create!(
+          %{
             name: "Test Product",
             description: "Description",
             state: :enabled,
-            sku: "TEST_SKU",
-          }, actor: admin)
+            sku: "TEST_SKU"
+          },
+          actor: admin
+        )
+
       %{id: collection_id} = Collection.create!(%{name: "Featured"}, actor: admin)
 
       updated_product = Product.add_to_collection!(product, collection_id, actor: admin)
@@ -91,4 +96,3 @@ defmodule ProductTest do
     end
   end
 end
-

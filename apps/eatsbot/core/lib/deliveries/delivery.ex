@@ -51,10 +51,6 @@ defmodule EatsbotCore.Deliveries.Delivery do
   postgres do
     table "deliveries"
     repo Eatsbot.Repo
-
-    references do
-      reference :state_history, on_delete: :delete
-    end
   end
 
   field_policies do

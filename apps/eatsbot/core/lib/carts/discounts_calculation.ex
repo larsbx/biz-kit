@@ -51,7 +51,7 @@ defmodule EatsbotCore.Carts.DiscountsCalculation do
            method: :x_for_y,
            method_data: %{"buy_x" => buy_x, "for_price_of_y" => for_price_of_y}
          },
-         %{quantity: quantity} = cart_line,
+         %{quantity: quantity},
          normal_price
        ) do
     # quantity of complete bundles that can be formed
@@ -113,7 +113,7 @@ defmodule EatsbotCore.Carts.DiscountsCalculation do
        when quantity >= buy_x,
        do: true
 
-  defp rule_applies?(%{method_data: %{"buy_x" => buy_x}}, _cart_line),
+  defp rule_applies?(%{method_data: %{"buy_x" => _buy_x}}, _cart_line),
     do: false
 
   defp rule_applies?(%{method: :x_for_fixed_price, method_data: %{"quantity_x" => quantity_x}}, %{
@@ -122,7 +122,7 @@ defmodule EatsbotCore.Carts.DiscountsCalculation do
        when quantity >= quantity_x,
        do: true
 
-  defp rule_applies?(%{method: :x_for_fixed_price}, %{quantity: quantity}),
+  defp rule_applies?(%{method: :x_for_fixed_price}, %{quantity: _quantity}),
     do: true
 
   defp rule_applies?(rule, _cart_line) do

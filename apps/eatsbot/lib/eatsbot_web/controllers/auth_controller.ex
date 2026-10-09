@@ -49,7 +49,7 @@ defmodule EatsbotWeb.AuthController do
     return_to = get_session(conn, :return_to) || ~p"/"
 
     conn
-    |> clear_session()
+    |> clear_session(:eatsbot)
     |> put_flash(:info, gettext("You are now signed out"))
     |> redirect(to: return_to)
   end

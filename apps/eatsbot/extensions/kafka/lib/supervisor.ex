@@ -11,7 +11,7 @@ defmodule Eatsbot.Extensions.Kafka.Supervisor do
       id: __MODULE__,
       start: {__MODULE__, :start_link, [opts]},
       type: :supervisor,
-      restart: :permanent,
+      restart: :permanent
     }
   end
 end

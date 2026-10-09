@@ -37,7 +37,6 @@ defmodule Eatsbot.Extensions.Prometheus.PromEx do
       {:prom_ex, "phoenix.json"},
       {:prom_ex, "ecto.json"},
       {:prom_ex, "phoenix_live_view.json"},
-
       {:eatsbot_extension_prometheus, "/dashboards/deliveries.json"}
     ]
   end

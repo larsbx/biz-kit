@@ -6,7 +6,7 @@ defmodule Eatsbot.Extensions.Kafka.Driver do
   @behaviour EatsbotCore.Kafka
 
   @spec produce(String.t(), String.t(), term()) :: :ok | {:error, term()}
-  def produce(topic, message, opts \\ []) do
+  def produce(topic, message, _opts \\ []) do
     KafkaEx.produce(%KafkaEx.Protocol.Produce.Request{
       topic: topic,
       partition: 0,
