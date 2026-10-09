@@ -37,6 +37,14 @@ defmodule Keel.Class do
   def employer(%__MODULE__{}), do: nil
 end
 
+defmodule Keel.Asset do
+  @moduledoc """
+  Property of entity `of`: `quantity ∈ ℕ⁺` units, `divisible` in kind or not.
+  Division on dissolution follows `Keel.Ownership.partition/4`.
+  """
+  defstruct [:id, :of, quantity: 1, divisible: false, name: nil]
+end
+
 defmodule Keel.Body do
   @moduledoc """
   A collective decision-maker of entity `of`.

@@ -10,6 +10,7 @@
 | Role | ℛ | `Keel.Role` | `unit : ℛ → 𝒰`, `grants : ℛ → 𝒫(𝒞)`, `seats : ℛ → ℕ⁺ ∪ {∞}` |
 | Body | ℬ | `Keel.Body` | `of : ℬ → 𝒫ₑ`, members selector, weight, quorum `q ∈ ℚ`, pass `(⋈, θ)`, `⋈ ∈ {>, ≥}`, `grants : ℬ → 𝒫(𝒞)` (default `∅`, fail-closed), `reserves : ℬ → 𝒫(𝒞)` (default `∅`), `voices : ℬ → 𝒫(𝒞)` (default `∅`) |
 | Class | 𝒦 | `Keel.Class` | `of : 𝒦 → 𝒫ₑ`, `name`, `employer : 𝒦 ⇀ 𝒫ₑ` (`eligible: :employees \| {:employees, e}`), `tenure ∈ {binding, revocable}` (*lāzim* / *jāʾiz*), `preemption ∈ 𝔹` (*shufʿa*) |
+| Asset | 𝒳 | `Keel.Asset` | `of : 𝒳 → 𝒫ₑ`, `quantity ∈ ℕ⁺`, `divisible ∈ 𝔹` |
 | Capability | 𝒞 | `Keel.Capability` | preorder `⊒` (below) |
 
 Node ids share one namespace. Edges carry a validity interval:
@@ -87,6 +88,7 @@ Static:
 | I11 | `classes` | `(of, name)` is unique over 𝒦 |
 | I12 | `voices` | no two bodies of one entity hold ⊒-equivalent voices |
 | I17 | `mandates` | `(p, b, _) ∈ Line_man,t ⟹ members(b) = {:stake, _} ∧ p ∈ members_t(b)` |
+| I18 | `assets` | `quantity ∈ ℕ⁺`, `divisible ∈ 𝔹` (references by I1) |
 | I16 | `alienation` | a body that reserves, or heads `voices(e, a)` for, some `a ∈ 𝒜` has `members = {:stake, _}` |
 | I15 | `reserves` | `reserves(b) ⊆⊒ grants(b)` (decidable), and reservations of distinct bodies of one entity are pairwise ⊒-incomparable (uncontested) |
 
@@ -162,10 +164,27 @@ transfer(p, q, e, c, n, t)    defined ⟺ n ∈ ℕ⁺ ∧ n ≤ holding_t(p, e,
             = ∅                       otherwise
 preempt(sale, T)              defined ⟺ ∅ ≠ T ⊆ claimants ∧ ∀k ∈ T. H ∣ n·h_k
   each k ∈ T takes n·h_k / H from the buyer,  h_k = holding_t(k, e, c),  H = Σ_T h_k
+
+partition(e, c, t)            h_p = holding_t(p, e, c),  H = Σ h_p
+  allot(p, x) = ⌊q_x · h_p / H⌋        for divisible x ∈ 𝒳 of e  (in kind, qisma)
+  sell(x)     = q_x − Σ_p allot(p, x)   (indivisible x: all of it; compelled sale)
+  proceeds(p) = h_p / H                 (exact, reduced)
+dissolve(b, v, c, t)          defined ⟺ decide(b, dissolve, v, t) = carried;
+                              closes every stake in of(b) at t, returns partition(of(b), c, t)
 ```
+
+Transfers consume the sender's current stakes soonest-expiring first; each moved
+unit, and each remainder, keeps the end date of the stake it came from.
 
 **Lemma (conservation).** `transfer` and `preempt` preserve `Σ_p holding_t(p, e, c)`
 for every `t`; `withdraw` reduces it by exactly the withdrawer's holding. ∎
+
+**Lemma (partition).** For every asset `x`: `Σ_p allot(p, x) + sell(x) = q_x`;
+`allot(p, x) · H ≤ q_x · h_p < (allot(p, x) + 1) · H` (each owner receives the
+floor of their exact share in kind); `Σ_p proceeds(p) = 1`. ∎
+
+All four ownership lemmas are property-tested (`test/properties_test.exs`,
+`test/partition_test.exs`, StreamData).
 
 **Lemma (majority only by consent).** For `alien(m)`, an owner `p` who votes
 other than yes can be outvoted only if `p ∈ M_b(m)`, i.e. only by `p`'s own

@@ -8,11 +8,20 @@ defmodule Keel.Ownership do
   current stakes are closed at `t` and successors opened, so history before
   `t` is unchanged. Stakes opened here are open-ended.
   """
-  alias Keel.{Class, Interval, Invariants, Org, Stake}
+  alias Keel.{Asset, Body, Class, Decision, Interval, Invariants, Org, Stake}
 
   defmodule Transfer do
     @moduledoc "A completed transfer of `units` of `class` in `in` at `at`; `claimants` may pre-empt it."
     defstruct [:from, :to, :in, :class, :units, :at, price: nil, claimants: []]
+  end
+
+  defmodule Partition do
+    @moduledoc """
+    A division plan: `allot` in kind (`party => [{asset, n}]`), `sell` what cannot
+    be divided exactly (`[{asset, n}]`), and each party's exact `proceeds` share
+    of the sale as a reduced fraction `{num, den}`.
+    """
+    defstruct allot: %{}, sell: [], proceeds: %{}
   end
 
   def revocable?(org, e, class), do: match?(%Class{tenure: :revocable}, Org.class(org, e, class))
@@ -109,6 +118,69 @@ defmodule Keel.Ownership do
            {:ok, acc, _} = transfer(acc, buyer, p, e, c, div(n * h, total), t)
            acc
          end)}
+    end
+  end
+
+  @doc """
+  Division of `e`'s assets among holders of `class` at `t`, pro rata to holdings
+  (*qisma*). Each holder receives the floor of their exact share of every
+  divisible asset in kind; indivisible assets and remainders are sold (compelled
+  sale), with proceeds shared exactly. Conserves every asset.
+  """
+  def partition(org, e, class, t) do
+    shares = for p <- holders(org, e, class, t), do: {p, Org.holding(org, p, e, class, t)}
+    total = Enum.sum(for {_, h} <- shares, do: h)
+    assets = org |> Org.nodes(Asset) |> Enum.filter(&(&1.of == e)) |> Enum.sort_by(& &1.id)
+
+    in_kind =
+      for %Asset{id: a, quantity: q, divisible: true} <- assets,
+          total > 0,
+          {p, h} <- shares,
+          n <- [div(q * h, total)],
+          n > 0,
+          do: {p, a, n}
+
+    given = Enum.group_by(in_kind, fn {_, a, _} -> a end, fn {_, _, n} -> n end)
+
+    %Partition{
+      allot: Enum.group_by(in_kind, fn {p, _, _} -> p end, fn {_, a, n} -> {a, n} end),
+      sell:
+        for(
+          %Asset{id: a, quantity: q} <- assets,
+          r <- [q - Enum.sum(Map.get(given, a, []))],
+          r > 0,
+          do: {a, r}
+        ),
+      proceeds: Map.new(shares, fn {p, h} -> {p, reduce(h, total)} end)
+    }
+  end
+
+  defp reduce(a, b), do: {div(a, Integer.gcd(a, b)), div(b, Integer.gcd(a, b))}
+
+  @doc """
+  Dissolve the entity of `body_id` at `t` if the body carries `:dissolve` on
+  `votes` (any one holder suffices in a revocable entity): every stake in it is
+  closed at `t`, and the `class` partition at `t` is returned.
+  """
+  def dissolve(org, body_id, votes, class, t) do
+    %Body{of: e} = Org.get(org, body_id)
+
+    case Decision.decide(org, body_id, :dissolve, votes, t) do
+      {:carried, _} ->
+        held =
+          for %Stake{in: ^e, holder: h, class: c} <- Org.edges(org, Stake, t),
+              uniq: true,
+              do: {h, c}
+
+        closed =
+          Enum.reduce(held, org, fn {h, c}, acc ->
+            move(acc, h, nil, e, c, Org.holding(acc, h, e, c, t), t)
+          end)
+
+        {:ok, closed, partition(org, e, class, t)}
+
+      _ ->
+        {:error, :not_carried}
     end
   end
 

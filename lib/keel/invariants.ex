@@ -6,7 +6,21 @@ defmodule Keel.Invariants do
   `Keel.Org.epochs/1`). A violation is `{name, t | nil, detail}`; repeats of the
   same `{name, detail}` across epochs are reported once, at the earliest `t`.
   """
-  alias Keel.{Body, Capability, Class, Graph, Interval, Line, Org, Party, Role, Seat, Stake, Unit}
+  alias Keel.{
+    Asset,
+    Body,
+    Capability,
+    Class,
+    Graph,
+    Interval,
+    Line,
+    Org,
+    Party,
+    Role,
+    Seat,
+    Stake,
+    Unit
+  }
 
   @static [
     :references,
@@ -17,7 +31,8 @@ defmodule Keel.Invariants do
     :classes,
     :voices,
     :reserves,
-    :alienation
+    :alienation,
+    :assets
   ]
   @temporal [
     :reports_acyclic,
@@ -72,6 +87,7 @@ defmodule Keel.Invariants do
     do: [{i, e, :entity}] ++ for(x <- [Class.employer(c)], x, do: {i, x, :entity})
 
   defp refs(%Stake{holder: h, in: e} = s), do: [{s, h, Party}, {s, e, :entity}]
+  defp refs(%Asset{id: i, of: e}), do: [{i, e, :entity}]
 
   defp sort?(node, sorts) when is_list(sorts), do: Enum.any?(sorts, &sort?(node, &1))
   defp sort?(node, :entity), do: match?(%Party{kind: :entity}, node)
@@ -117,6 +133,12 @@ defmodule Keel.Invariants do
           do: {:cross_entity, i, p}
 
     cycles(parents) ++ cross
+  end
+
+  def assets(org) do
+    for %Asset{quantity: q, divisible: d} = a <- Org.nodes(org, Asset),
+        not (is_integer(q) and q > 0 and is_boolean(d)),
+        do: {:shape, a}
   end
 
   def classes(org) do

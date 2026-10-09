@@ -1,13 +1,13 @@
 defmodule Keel.Org do
   @moduledoc """
-  An organization: an immutable graph of nodes (`Party`, `Unit`, `Role`, `Body`, `Class`),
+  An organization: an immutable graph of nodes (`Party`, `Unit`, `Role`, `Body`, `Class`, `Asset`),
   keyed by globally unique id, and temporal edges (`Seat`, `Line`, `Stake`).
 
   All queries are pure functions of `(org, t)` — the snapshot at instant `t`.
   """
-  alias Keel.{Body, Capability, Class, Interval, Line, Party, Role, Seat, Stake, Unit}
+  alias Keel.{Asset, Body, Capability, Class, Interval, Line, Party, Role, Seat, Stake, Unit}
 
-  @nodes [Party, Unit, Role, Body, Class]
+  @nodes [Party, Unit, Role, Body, Class, Asset]
   @edges [Seat, Line, Stake]
   @origin Date.new!(-9999, 1, 1)
 
