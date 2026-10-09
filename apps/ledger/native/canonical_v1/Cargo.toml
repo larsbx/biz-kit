@@ -1,0 +1,19 @@
+[package]
+name = "canonical_v1"
+version = "0.1.0"
+edition = "2021"
+authors = ["coop_substrate"]
+description = "CoopEventCanonicalV1 canonical encoder (production implementation)"
+
+[lib]
+name = "canonical_v1"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rustler = "0.38"
+sha2 = "0.10"
+
+[dev-dependencies]
+serde_json = "1"
+hex = "0.4"
+ed25519-dalek = "2"

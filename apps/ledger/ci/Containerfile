@@ -1,0 +1,19 @@
+FROM docker.io/library/rust:1.91-bookworm AS rust
+
+FROM docker.io/hexpm/elixir:1.19.4-erlang-28.3.1-debian-bookworm-20260610
+
+COPY --from=rust /usr/local/cargo /usr/local/cargo
+COPY --from=rust /usr/local/rustup /usr/local/rustup
+
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential ca-certificates git postgresql-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/local/cargo/bin/cargo /usr/local/bin/cargo \
+    && ln -s /usr/local/cargo/bin/rustc /usr/local/bin/rustc \
+    && ln -s /usr/local/cargo/bin/rustup /usr/local/bin/rustup \
+    && mix local.hex --force \
+    && mix local.rebar --force

@@ -1,0 +1,1583 @@
+defmodule CoopSubstrate.Protocol.Validity do
+  @moduledoc """
+  Log-dependent validity (Phase 1B) — the realization of the 1A registry
+  hook (09 gated-N): whether an envelope is acceptable can depend on prior
+  log events. Checked at the append gate, before persistence, against the
+  gate state (a `CoopSubstrate.Projections.Membership` fold of the log
+  prefix, plus earlier events in the same batch), so illegal facts never
+  enter the eternal log.
+
+  Checks per type:
+
+    * `EntityRegistered` — known class, id not already registered.
+    * `MemberRegistered` — id not already registered; self-certifying: the
+      declared `member`-role signer must be exactly the registered
+      (pubkey, key_id).
+    * Membership lifecycle events — member and entity registered; transition
+      legal per `Membership.Lifecycle`; invited class matches the entity's;
+      and every `member`-role signature must come from the member's
+      *currently registered* key (steward keys have no registry yet — 1D).
+    * `AccrualRuleActivated` — rule known to the code registry, params valid.
+    * `PatronageRecorded` — active membership (PLACEHOLDER: probationary
+      counts), an active accrual rule for the chapter, positive amount.
+    * `RedemptionScheduleOpened` — membership in a terminal (redeemable)
+      state; no schedule already open; positive years/cap; known method.
+    * `RedemptionPaid` (7A) — schedule open; positive amount; amount within
+      the remaining balance (the gate's own accrual fold — exit without
+      forfeiture, never overdraw); `year_index` inside the schedule and the
+      year's cumulative payments within `annual_cap_minor`.
+    * `SinkingFundContributed` — entity registered; positive amount.
+    * `NettingExecuted` (9A) — pair sorted and dual-signed; the cited
+      report must EQUAL the recomputed `Finance.compute/3` set-off; the
+      residual travels all-or-nothing and matches the net; zero set-off
+      nets nothing. `ObligationRecorded`/`ObligationAssigned` additionally
+      respect declared exposure caps (05 P7, bootstrap-then-enforce).
+    * Dispatch rail (8A, docs/phase8a_plan.md) — `EnvelopeDeclared` only by
+      the member's own current key, scope known, params exact, versions
+      strictly monotonic; `EnvelopeRevoked` in any membership state;
+      `TenderReceived` unique on an active membership; `TenderParsed`
+      attests the exact raw artifact with a known grade and sane fields;
+      `TenderAccepted`/`TenderDeclined` must EQUAL the recomputed pure
+      decision (out-of-envelope and low-grade routes are unrepresentable —
+      only the R rail's `EscalationRaised` carries them).
+    * `ThroughputRuleActivated` / `FloorRuleActivated` (1C) — rule known to
+      the code registry, params valid.
+    * `ThroughputRecorded` (1C) — active membership; component in the closed
+      set; positive units and occurred_ms; an active throughput rule.
+    * `FloorEvaluationRecorded` (1C, tightened 10A) — membership exists, not
+      in hardship (hardship suspends the floor); rule_id is the chapter's
+      active floor rule; evaluation_id unique; sane window/instant/value.
+    * Floor transitions (10A) — lifecycle legality first, then evidence:
+      cure starts on a failing evaluation (its at_ms anchors the cure),
+      clears on a passing one after the anchor, and `MembershipFloorExited`
+      needs a failing evaluation at or beyond the declared
+      `floor/cure_window_ms` (fails closed undeclared).
+    * Obligation rail (1C, corpus 05 §1.2) — parties registered and distinct,
+      signing with their *current* keys; obligation ids unique; assignment
+      and discharge only on open obligations; discharge-once. No event
+      represents fund movement (05 P11) — settlement is attestation only.
+    * Role-key registry (1D) — bootstrap-then-enforce: once a chapter has
+      ever declared keys for a role, every signature in that role must match
+      a currently declared key (`check_role_keys/2`, runs before every
+      per-type check). Genesis (the first governance key) is trust-on-first-
+      use, self-certified; later declarations/revocations are governance-
+      signed; revoking the last governance key is unrepresentable.
+    * `KeyRotated` (1D) — self-rotation: for a REGISTERED member, the
+      rotation must be signed by the member's current key and `old_key_id`
+      must match it (rotations chain). Rotations for unregistered ids stay
+      inert-and-ungated (1A compatibility; ChapterStats still records them).
+      Governance-recovery rotation (lost key) is flagged open (08 §10.3).
+      Everything else: no log-dependent constraints.
+  """
+
+  alias CoopSubstrate.Capital.AccrualRules
+  alias CoopSubstrate.Constants
+  alias CoopSubstrate.Dispatch
+  alias CoopSubstrate.Finance
+  alias CoopSubstrate.Floor
+  alias CoopSubstrate.Membership.Lifecycle
+  alias CoopSubstrate.Projections.Membership
+  alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.Throughput
+
+  @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
+  def check(%Envelope{} = env, gate) do
+    with :ok <- check_role_keys(env, gate) do
+      type_check(env, gate)
+    end
+  end
+
+  # Bootstrap-then-enforce (Phase 1D, docs/phase1d_plan.md P4): once a chapter
+  # has EVER declared keys for a role, every signature in that role must match
+  # a currently declared key. Roles never declared are unchecked (bootstrap
+  # mode — the pre-1D behavior, now named). `member` is never in this
+  # registry; member keys are checked against the member registry as before.
+  defp check_role_keys(%Envelope{signers: signers, chapter_id: ch}, gate) do
+    Enum.find_value(signers, :ok, fn signer ->
+      case gate.role_keys[{ch, signer.role}] do
+        nil ->
+          nil
+
+        keys ->
+          unless Map.get(keys, signer.key_id) == signer.pubkey do
+            {:error, {:role_key_not_declared, signer.role, signer.key_id}}
+          end
+      end
+    end)
+  end
+
+  # -- Phase 1D: the role-key registry itself ----------------------------------
+
+  defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do
+    governance = gate.role_keys[{ch, "governance"}]
+    declared = gate.role_keys[{ch, p["role"]}] || %{}
+
+    cond do
+      p["role"] not in Constants.declarable_roles() ->
+        {:error, {:undeclarable_role, p["role"]}}
+
+      Map.has_key?(declared, p["key_id"]) ->
+        {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
+
+      governance == nil and p["role"] != "governance" ->
+        # No governance exists yet: the only representable declaration is the
+        # genesis governance key itself.
+        {:error, :genesis_required}
+
+      governance == nil ->
+        # Genesis: trust-on-first-use, self-certified (the MemberRegistered
+        # pattern) — flagged in docs/phase1d_plan.md; the mitigation is
+        # publishing the genesis checkpoint out-of-band.
+        if genesis_self_certified?(env, p) do
+          :ok
+        else
+          {:error, :genesis_must_be_self_signed}
+        end
+
+      true ->
+        # Post-genesis: the governance-role signature was already validated
+        # against the registry by check_role_keys/2.
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "RoleKeyRevoked", chapter_id: ch, payload: p}, gate) do
+    governance = gate.role_keys[{ch, "governance"}]
+    declared = gate.role_keys[{ch, p["role"]}] || %{}
+
+    cond do
+      governance == nil ->
+        {:error, :genesis_required}
+
+      not Map.has_key?(declared, p["key_id"]) ->
+        {:error, {:unknown_role_key, p["role"], p["key_id"]}}
+
+      p["role"] == "governance" and map_size(governance) == 1 ->
+        # A chapter can never orphan its own governance (P4).
+        {:error, :cannot_orphan_governance}
+
+      true ->
+        :ok
+    end
+  end
+
+  # -- Phase 2A: harness events (docs/phase2a_plan.md; corpus 11) --------------
+
+  defp type_check(
+         %Envelope{type: "InterviewConsentGranted", chapter_id: ch, payload: p} = env,
+         gate
+       ) do
+    {:bytes, pubkey} = p["pubkey"]
+    classes = p["classes"]
+
+    cond do
+      # One grant per ref; revocation is terminal (re-participation is a new
+      # ref) — FLAGGED PLACEHOLDER consent policy.
+      Map.has_key?(gate.consents, {ch, p["interviewee_ref"]}) ->
+        {:error, {:consent_already_recorded, p["interviewee_ref"]}}
+
+      not (is_list(classes) and classes != [] and
+               Enum.all?(classes, &(&1 in Constants.consent_classes()))) ->
+        {:error, {:unknown_consent_classes, classes}}
+
+      not Enum.any?(
+        env.signers,
+        &(&1.role == "interviewee" and &1.pubkey == pubkey and &1.key_id == p["key_id"])
+      ) ->
+        {:error, :consent_must_be_self_signed}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(
+         %Envelope{type: "InterviewConsentRevoked", chapter_id: ch, payload: p} = env,
+         gate
+       ) do
+    case gate.consents[{ch, p["interviewee_ref"]}] do
+      nil -> {:error, {:no_consent_recorded, p["interviewee_ref"]}}
+      %{active: false} -> {:error, :consent_not_active}
+      consent -> check_party_key(env, "interviewee", consent)
+    end
+  end
+
+  defp type_check(%Envelope{type: "ResearchBriefFiled", payload: p}, _gate) do
+    check_section(p["section"])
+  end
+
+  defp type_check(%Envelope{type: "InterviewConducted", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["section"] not in Constants.harness_sections() ->
+        {:error, {:unknown_section, p["section"]}}
+
+      p["mode"] not in Constants.interview_modes() ->
+        # voice_agent is structurally absent pending [LEGAL] per state.
+        {:error, {:unknown_interview_mode, p["mode"]}}
+
+      Map.has_key?(gate.interviews, {ch, p["interview_id"]}) ->
+        {:error, {:interview_already_recorded, p["interview_id"]}}
+
+      not Membership.consent_active?(gate, ch, p["interviewee_ref"]) ->
+        {:error, {:no_active_consent, p["interviewee_ref"]}}
+
+      # An interview binds a PUBLISHED instrument version — unversioned
+      # questions are unrepresentable as provenance (11 §6.3; the
+      # leading-question adversarial case).
+      p["instrument_version"] < 1 or
+          p["instrument_version"] > Map.get(gate.instrument_versions, {ch, p["section"]}, 0) ->
+        {:error, {:unknown_instrument_version, p["instrument_version"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "FindingExtracted", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
+      cond do
+        p["kind"] not in Constants.finding_kinds() ->
+          {:error, {:unknown_finding_kind, p["kind"]}}
+
+        Map.has_key?(gate.findings, {ch, p["finding_id"]}) ->
+          {:error, {:finding_already_recorded, p["finding_id"]}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "DocumentCollected", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
+      %{interviewee_ref: ref} = gate.interviews[{ch, p["interview_ref"]}]
+
+      cond do
+        Map.has_key?(gate.documents, {ch, p["document_id"]}) ->
+          {:error, {:document_already_recorded, p["document_id"]}}
+
+        # Recording intake is structural: no recording consent, no recording
+        # artifact (Phase 2B P3).
+        p["doc_kind"] == "recording" and not gate.consents[{ch, ref}].recording ->
+          {:error, {:no_recording_consent, ref}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "MachineExtractionRecorded", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_interview_source(gate, ch, p["interview_ref"]) do
+      cond do
+        Map.has_key?(gate.extractions, {ch, p["proposal_id"]}) ->
+          {:error, {:proposal_already_recorded, p["proposal_id"]}}
+
+        # 08 §7 bounded necessity: a frontier model is unrepresentable until
+        # its dated migration trigger is declared. FLAGGED PLACEHOLDER:
+        # chapter-level any-declaration; per-purpose binding comes with real
+        # model use.
+        String.starts_with?(p["model_ref"], "frontier:") and
+            not Map.get(gate.frontier_declared, ch, false) ->
+          {:error, {:frontier_model_undeclared, p["model_ref"]}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "ConflictFlagged", chapter_id: ch, payload: p}, gate) do
+    with {:ok, _findings} <- resolve_findings(gate, ch, p["finding_refs"]), do: :ok
+  end
+
+  defp type_check(%Envelope{type: "Corroborated", chapter_id: ch, payload: p}, gate) do
+    with false <- Map.has_key?(gate.corroborations, {ch, p["claim_ref"]}),
+         {:ok, findings} <- resolve_findings(gate, ch, p["finding_refs"]) do
+      sections = findings |> Enum.map(& &1.section) |> Enum.uniq()
+
+      cond do
+        length(sections) != 1 ->
+          {:error, :mixed_sections}
+
+        Enum.any?(findings, &(not Membership.consent_active?(gate, ch, &1.interviewee_ref))) ->
+          {:error, :no_active_consent}
+
+        true ->
+          with {:ok, %{k: k}} <- Membership.harness_constants(gate, ch, hd(sections)) do
+            distinct = findings |> Enum.map(& &1.interviewee_ref) |> Enum.uniq() |> length()
+
+            if distinct >= k do
+              :ok
+            else
+              {:error, {:not_independent, distinct, k}}
+            end
+          end
+      end
+    else
+      true -> {:error, {:already_corroborated, p["claim_ref"]}}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp type_check(%Envelope{type: "InstrumentVersionPublished", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_section(p["section"]) do
+      expected = Map.get(gate.instrument_versions, {ch, p["section"]}, 0) + 1
+
+      if p["version"] == expected do
+        :ok
+      else
+        {:error, {:nonmonotonic_instrument_version, p["version"], expected}}
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "ProcessModelCompiled", payload: p}, _gate) do
+    check_section(p["section"])
+  end
+
+  defp type_check(%Envelope{type: "SpecAdopted", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_section(p["section"]) do
+      {:bytes, claimed} = p["model_hash"]
+
+      case gate.process_models[{ch, p["section"]}] do
+        nil ->
+          {:error, {:nothing_compiled, p["section"]}}
+
+        ^claimed ->
+          :ok
+
+        _latest ->
+          # Adoption must bind the LATEST compiled model — a spec cut from
+          # stale evidence is unrepresentable (Phase 2C).
+          {:error, {:model_hash_mismatch, p["section"]}}
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "FixtureSetPublished", chapter_id: ch, payload: p}, gate) do
+    refs = p["source_refs"]
+
+    with :ok <- check_section(p["section"]) do
+      cond do
+        not (is_list(refs) and refs != [] and Enum.all?(refs, &is_binary/1)) ->
+          {:error, :bad_source_refs}
+
+        true ->
+          Enum.find_value(refs, :ok, fn interview_id ->
+            case gate.interviews[{ch, interview_id}] do
+              nil ->
+                {:error, {:unknown_interview, interview_id}}
+
+              %{interviewee_ref: ref} ->
+                consent = gate.consents[{ch, ref}]
+
+                unless match?(%{active: true}, consent) and
+                         "anonymized_fixtures" in consent.classes do
+                  {:error, {:fixture_consent_missing, ref}}
+                end
+            end
+          end)
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "HonorariumAccrued", chapter_id: ch, payload: p}, gate) do
+    cond do
+      # Owed for participation regardless of later revocation.
+      not Map.has_key?(gate.consents, {ch, p["interviewee_ref"]}) ->
+        {:error, {:no_consent_recorded, p["interviewee_ref"]}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "HonorariumPaid", chapter_id: ch, payload: p}, gate) do
+    balance = gate.honoraria[{ch, p["interviewee_ref"]}]
+
+    cond do
+      # Counsel clearance as a declared constant; declaring 0 stops payouts
+      # again (docs/honorarium_rail.md).
+      gate.charter_constants[{ch, "honorarium/payout_cleared"}] != 1 ->
+        {:error, :payout_not_cleared}
+
+      balance == nil or balance.accrued == 0 ->
+        {:error, {:nothing_accrued, p["interviewee_ref"]}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      balance.paid + p["amount_minor"] > balance.accrued ->
+        {:error, {:overpayment, p["interviewee_ref"], balance.accrued - balance.paid}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "FrontierModelUseDeclared", payload: p}, _gate) do
+    # 08 §7: the migration trigger must be real — dated, with a threshold.
+    if p["threshold"] > 0 and byte_size(p["date"]) > 0 and byte_size(p["metric"]) > 0 do
+      :ok
+    else
+      {:error, :bad_migration_trigger}
+    end
+  end
+
+  defp type_check(%Envelope{type: "FunnelProspectEmitted", chapter_id: ch, payload: p}, gate) do
+    interview = gate.interviews[{ch, p["interview_ref"]}]
+    consent = gate.consents[{ch, p["interviewee_ref"]}]
+
+    cond do
+      Map.has_key?(gate.prospects, {ch, p["prospect_ref"]}) ->
+        {:error, {:prospect_already_emitted, p["prospect_ref"]}}
+
+      p["track"] not in Constants.harness_sections() ->
+        {:error, {:unknown_track, p["track"]}}
+
+      interview == nil ->
+        {:error, {:unknown_interview, p["interview_ref"]}}
+
+      interview.interviewee_ref != p["interviewee_ref"] ->
+        {:error, {:interview_interviewee_mismatch, p["interview_ref"]}}
+
+      not match?(%{active: true}, consent) ->
+        {:error, {:no_active_consent, p["interviewee_ref"]}}
+
+      "prospect_record" not in consent.classes ->
+        {:error, {:prospect_consent_missing, p["interviewee_ref"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "EscalationRaised", chapter_id: ch, payload: p}, gate) do
+    refs = p["packet_refs"]
+
+    cond do
+      Map.has_key?(gate.escalations, {ch, p["item_id"]}) ->
+        {:error, {:item_already_raised, p["item_id"]}}
+
+      # Decision-ready shape (10 P10; basis resolution is the flagged v0
+      # limit — docs/phase5a_plan.md).
+      not (is_list(refs) and refs != []) ->
+        {:error, :packet_refs_required}
+
+      p["deadline_ms"] <= 0 ->
+        {:error, :bad_deadline}
+
+      p["process"] == "" or p["recommendation"] == "" or p["compensation_path"] == "" ->
+        {:error, :decision_ready_fields_empty}
+
+      true ->
+        # Flooding is structurally bounded (10 §6 adversarial): a declared
+        # per-chapter cap on concurrently open items per process; fails
+        # closed undeclared.
+        case gate.charter_constants[{ch, "cockpit/open_cap"}] do
+          cap when is_integer(cap) and cap > 0 ->
+            open =
+              Enum.count(gate.escalations, fn {{c, _id}, item} ->
+                c == ch and item.open and item.process == p["process"]
+              end)
+
+            if open < cap do
+              :ok
+            else
+              {:error, {:queue_flooded, p["process"], cap}}
+            end
+
+          _ ->
+            {:error, :constants_undeclared}
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "EscalationResolved", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["verdict"] not in ["approved", "declined", "returned_defect"] ->
+        {:error, {:unknown_verdict, p["verdict"]}}
+
+      true ->
+        case gate.escalations[{ch, p["item_id"]}] do
+          nil -> {:error, {:unknown_item, p["item_id"]}}
+          %{open: false} -> {:error, {:item_already_resolved, p["item_id"]}}
+          %{open: true} -> :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "StructuralFindingRaised", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["kind"] not in ["b_op_breach", "epsilon_breach", "chronic_override"] ->
+        {:error, {:unknown_finding_kind, p["kind"]}}
+
+      Map.has_key?(gate.structural_findings, {ch, p["finding_id"]}) ->
+        {:error, {:finding_already_raised, p["finding_id"]}}
+
+      Enum.any?(gate.structural_findings, fn {{c, _id}, finding} ->
+        c == ch and finding.kind == p["kind"] and finding.period_ref == p["period_ref"]
+      end) ->
+        # Exactly-once per (kind, period): a re-run sweep is idempotent by
+        # rejection (10 P9; docs/phase5b_plan.md P2).
+        {:error, {:finding_exists_for_period, p["kind"], p["period_ref"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "BuildStarted", chapter_id: ch, payload: p}, gate) do
+    with :ok <- check_section(p["section"]),
+         {:ok, passed?} <- Membership.harness_gate(gate, ch, p["section"]) do
+      if passed?, do: :ok, else: {:error, {:harness_gate_not_passed, p["section"]}}
+    end
+  end
+
+  # -- Phase 10B: governance recovery rotation (docs/phase10b_plan.md) ---------
+  # No single actor rotates an identity: an approved, unconsumed R item
+  # naming exactly this member and key; a governance signature the declared
+  # registry validates (check_role_keys — recovery is unrepresentable while
+  # governance is undeclared); and the new key certifying its own possession.
+  # The lost key is deliberately not consulted.
+  defp type_check(%Envelope{type: "KeyRecoveryRotated", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    {:bytes, new_pubkey} = p["new_pubkey"]
+    item_id = p["authorization_item_id"]
+    item = gate.escalations[{ch, item_id}]
+    governance = gate.role_keys[{ch, "governance"}]
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      governance == nil or map_size(governance) == 0 ->
+        {:error, :governance_undeclared}
+
+      p["new_key_id"] == member.key_id or new_pubkey == member.pubkey ->
+        {:error, :new_key_is_current}
+
+      item_id != "recovery/" <> p["member_id"] <> "/" <> p["new_key_id"] ->
+        {:error, {:authorization_subject_mismatch, item_id}}
+
+      item == nil ->
+        {:error, {:unknown_item, item_id}}
+
+      item.open ->
+        {:error, {:item_unresolved, item_id}}
+
+      item.verdict != "approved" ->
+        {:error, {:not_authorized, item.verdict}}
+
+      item.process != "key_recovery" ->
+        {:error, {:authorization_process_mismatch, item.process}}
+
+      Map.get(item, :consumed, false) ->
+        {:error, {:item_consumed, item_id}}
+
+      not Enum.any?(
+        env.signers,
+        &(&1.role == "member" and &1.pubkey == new_pubkey and &1.key_id == p["new_key_id"])
+      ) ->
+        {:error, :recovery_must_be_self_certified}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "KeyRotated", chapter_id: ch, payload: p} = env, gate) do
+    case gate.members[{ch, p["member_id"]}] do
+      nil ->
+        :ok
+
+      %{key_id: current_key_id} = member ->
+        if p["old_key_id"] == current_key_id do
+          check_party_key(env, "author", member)
+        else
+          {:error, {:old_key_mismatch, p["old_key_id"], current_key_id}}
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "EntityRegistered", chapter_id: ch, payload: p}, gate) do
+    cond do
+      p["class"] not in Constants.entity_classes() ->
+        {:error, {:unknown_entity_class, p["class"]}}
+
+      Map.has_key?(gate.entities, {ch, p["entity_id"]}) ->
+        {:error, {:entity_already_registered, p["entity_id"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "MemberRegistered", chapter_id: ch, payload: p} = env, gate) do
+    {:bytes, pubkey} = p["pubkey"]
+
+    cond do
+      Map.has_key?(gate.members, {ch, p["member_id"]}) ->
+        {:error, {:member_already_registered, p["member_id"]}}
+
+      not Enum.any?(
+        env.signers,
+        &(&1.role == "member" and &1.pubkey == pubkey and &1.key_id == p["key_id"])
+      ) ->
+        {:error, :registration_must_be_self_signed}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "AccrualRuleActivated", payload: p}, _gate) do
+    with {:ok, module} <- AccrualRules.fetch(p["rule_id"]) do
+      module.validate_params(p["params"])
+    end
+  end
+
+  defp type_check(%Envelope{type: "PatronageRecorded", chapter_id: ch, payload: p}, gate) do
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      record == nil ->
+        {:error, {:no_membership, p["member_id"], p["entity_id"]}}
+
+      not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record.state}}
+
+      not Map.has_key?(gate.active_rules, ch) ->
+        {:error, {:no_active_accrual_rule, ch}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p}, gate) do
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      record == nil ->
+        {:error, {:no_membership, p["member_id"], p["entity_id"]}}
+
+      not Lifecycle.terminal?(record.state) ->
+        {:error, {:account_not_redeemable, record.state}}
+
+      Map.has_key?(gate.schedules, {ch, p["member_id"], p["entity_id"]}) ->
+        {:error, :schedule_already_open}
+
+      p["years"] <= 0 or p["annual_cap_minor"] <= 0 ->
+        {:error, :bad_schedule_terms}
+
+      p["method"] not in Constants.redemption_methods() ->
+        {:error, {:unknown_redemption_method, p["method"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "RedemptionPaid", chapter_id: ch, payload: p}, gate) do
+    schedule = gate.schedules[{ch, p["member_id"], p["entity_id"]}]
+    balance = Membership.balance(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      schedule == nil ->
+        {:error, :no_open_schedule}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      p["year_index"] < 0 or p["year_index"] >= schedule.years ->
+        {:error, {:year_outside_schedule, p["year_index"], schedule.years}}
+
+      p["amount_minor"] > balance ->
+        {:error, {:amount_exceeds_balance, balance}}
+
+      Map.get(schedule.paid_by_year, p["year_index"], 0) + p["amount_minor"] >
+          schedule.annual_cap_minor ->
+        {:error, {:annual_cap_exceeded, p["year_index"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "SinkingFundContributed", chapter_id: ch, payload: p}, gate) do
+    cond do
+      not Map.has_key?(gate.entities, {ch, p["entity_id"]}) ->
+        {:error, {:unregistered_entity, p["entity_id"]}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      true ->
+        :ok
+    end
+  end
+
+  # -- Phase 1C: throughput & floor (docs/phase1c_plan.md step 4) --------------
+
+  defp type_check(%Envelope{type: "ThroughputRuleActivated", payload: p}, _gate) do
+    with {:ok, module} <- Throughput.Rules.fetch(p["rule_id"]) do
+      module.validate_params(p["params"])
+    end
+  end
+
+  defp type_check(%Envelope{type: "FloorRuleActivated", payload: p}, _gate) do
+    with {:ok, module} <- Floor.Rules.fetch(p["rule_id"]) do
+      module.validate_params(p["params"])
+    end
+  end
+
+  defp type_check(%Envelope{type: "ThroughputRecorded", chapter_id: ch, payload: p}, gate) do
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      record == nil ->
+        {:error, {:no_membership, p["member_id"], p["entity_id"]}}
+
+      not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record.state}}
+
+      p["component"] not in Constants.throughput_components() ->
+        {:error, {:unknown_component, p["component"]}}
+
+      p["units"] <= 0 ->
+        {:error, :units_must_be_positive}
+
+      p["occurred_ms"] <= 0 ->
+        {:error, :bad_occurred_ms}
+
+      not Map.has_key?(gate.throughput_rules, ch) ->
+        {:error, {:no_active_throughput_rule, ch}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "FloorEvaluationRecorded", chapter_id: ch, payload: p}, gate) do
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+    active = gate.floor_rules[ch]
+
+    cond do
+      record == nil ->
+        {:error, {:no_membership, p["member_id"], p["entity_id"]}}
+
+      Lifecycle.floor_suspended?(record.state) ->
+        {:error, :floor_suspended_by_hardship}
+
+      active == nil ->
+        {:error, {:no_active_floor_rule, ch}}
+
+      p["rule_id"] != active.rule_id ->
+        {:error, {:not_the_active_floor_rule, p["rule_id"]}}
+
+      Map.has_key?(gate.floor_evaluations, {ch, p["evaluation_id"]}) ->
+        {:error, {:evaluation_already_recorded, p["evaluation_id"]}}
+
+      p["window_ms"] <= 0 ->
+        {:error, :bad_window}
+
+      p["at_ms"] <= 0 ->
+        {:error, :bad_event_time}
+
+      p["value"] < 0 ->
+        {:error, :bad_value}
+
+      true ->
+        :ok
+    end
+  end
+
+  # -- Phase 10A: evidenced floor transitions (docs/phase10a_plan.md) ----------
+
+  defp type_check(%Envelope{type: type, chapter_id: ch, payload: p} = env, gate)
+       when type in ["FloorCureStarted", "FloorCureCleared", "MembershipFloorExited"] do
+    # Lifecycle legality first (illegal transitions keep their 1B errors),
+    # then the evidence.
+    with :ok <- check_lifecycle(env, gate) do
+      check_floor_evidence(type, gate, ch, p)
+    end
+  end
+
+  # -- Phase 1C: the obligation rail (corpus 05 §1.2; P11 — attestation, never
+  # funds). Party signatures must use each party's CURRENT registered key,
+  # following rotation, exactly as membership events do. ------------------------
+
+  defp type_check(%Envelope{type: "ObligationRecorded", chapter_id: ch, payload: p} = env, gate) do
+    debtor = gate.members[{ch, p["debtor_id"]}]
+    creditor = gate.members[{ch, p["creditor_id"]}]
+
+    cond do
+      Map.has_key?(gate.obligations, {ch, p["obligation_id"]}) ->
+        {:error, {:obligation_already_recorded, p["obligation_id"]}}
+
+      p["debtor_id"] == p["creditor_id"] ->
+        {:error, :self_obligation}
+
+      debtor == nil ->
+        {:error, {:unregistered_member, p["debtor_id"]}}
+
+      creditor == nil ->
+        {:error, {:unregistered_member, p["creditor_id"]}}
+
+      p["amount_minor"] <= 0 ->
+        {:error, :amount_must_be_positive}
+
+      true ->
+        with :ok <-
+               check_exposure_caps(gate, ch, p["debtor_id"], p["creditor_id"], p["amount_minor"]),
+             :ok <- check_party_key(env, "debtor", debtor) do
+          check_party_key(env, "creditor", creditor)
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "ObligationAssigned", chapter_id: ch, payload: p} = env, gate) do
+    obligation = gate.obligations[{ch, p["obligation_id"]}]
+    assignee = gate.members[{ch, p["new_debtor_id"]}]
+
+    cond do
+      obligation == nil ->
+        {:error, {:no_such_obligation, p["obligation_id"]}}
+
+      not obligation.open ->
+        {:error, :obligation_discharged}
+
+      assignee == nil ->
+        {:error, {:unregistered_member, p["new_debtor_id"]}}
+
+      p["new_debtor_id"] == obligation.creditor_id ->
+        {:error, :self_obligation}
+
+      true ->
+        # 9A: substitution moves exposure — the incoming debtor's cap
+        # applies (their concentration as creditor is unchanged, no funder
+        # check needed).
+        with :ok <-
+               check_exposure_caps(gate, ch, p["new_debtor_id"], nil, obligation.amount_minor),
+             :ok <- check_party_key(env, "assignor", gate.members[{ch, obligation.debtor_id}]) do
+          check_party_key(env, "assignee", assignee)
+        end
+    end
+  end
+
+  # -- Phase 9A: netting execution + exposure caps (docs/phase9a_plan.md) ------
+
+  defp type_check(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p} = env, gate) do
+    {a, b} = {p["party_a"], p["party_b"]}
+
+    report =
+      gate.obligations
+      |> Finance.compute(ch, {a, b})
+      |> Enum.find(&(&1.denomination == p["denomination"]))
+
+    cond do
+      a >= b ->
+        # One representation per pair.
+        {:error, :pair_not_sorted}
+
+      gate.members[{ch, a}] == nil ->
+        {:error, {:unregistered_member, a}}
+
+      gate.members[{ch, b}] == nil ->
+        {:error, {:unregistered_member, b}}
+
+      report == nil or report.setoff == 0 ->
+        # A one-way position nets nothing; closing-and-reopening it would
+        # be churn, not set-off (05 §1.2).
+        {:error, :nothing_to_net}
+
+      {p["a_to_b"], p["b_to_a"], p["setoff"]} != {report.a_to_b, report.b_to_a, report.setoff} ->
+        # The gate recomputes the set-off (05 P10, the 8A pattern): a stale
+        # or tampered report is unrepresentable.
+        {:error, :netting_mismatch}
+
+      true ->
+        with :ok <- check_netting_residual(gate, ch, p, report.net),
+             :ok <- check_party_key(env, "party_a", gate.members[{ch, a}]) do
+          check_party_key(env, "party_b", gate.members[{ch, b}])
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env, gate) do
+    case gate.obligations[{ch, p["obligation_id"]}] do
+      nil ->
+        {:error, {:no_such_obligation, p["obligation_id"]}}
+
+      %{open: false} ->
+        {:error, :obligation_discharged}
+
+      %{debtor_id: debtor_id, creditor_id: creditor_id} ->
+        with :ok <- check_party_key(env, "debtor", gate.members[{ch, debtor_id}]) do
+          check_party_key(env, "creditor", gate.members[{ch, creditor_id}])
+        end
+    end
+  end
+
+  # -- Phase 8A: dispatch envelope + tender rail (docs/phase8a_plan.md) --------
+
+  defp type_check(%Envelope{type: "EnvelopeDeclared", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    current =
+      Membership.dispatch_envelope(gate, ch, p["member_id"], p["entity_id"], p["scope"])
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      record == nil or not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record && record.state}}
+
+      p["scope"] not in Constants.dispatch_scopes() ->
+        {:error, {:unknown_envelope_scope, p["scope"]}}
+
+      p["version"] != ((current && current.version) || 0) + 1 ->
+        # Versions are strictly monotonic across revocation (10 P6).
+        {:error, {:envelope_version_not_monotonic, p["version"]}}
+
+      true ->
+        with :ok <- check_envelope_params(p["params"]) do
+          # The envelope is the member's signature and ceiling (00 Art. II):
+          # only the member's own current key declares it.
+          check_member_signature(env, member)
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "EnvelopeRevoked", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    current = Membership.dispatch_envelope(gate, ch, p["member_id"], p["entity_id"], p["scope"])
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      current == nil or not current.active ->
+        {:error, :no_active_envelope}
+
+      p["version"] != current.version ->
+        {:error, {:envelope_version_mismatch, p["version"], current.version}}
+
+      true ->
+        # Revocation is the member's own act, valid in ANY membership state —
+        # sovereignty never lapses (10 P6).
+        check_member_signature(env, member)
+    end
+  end
+
+  defp type_check(%Envelope{type: "TenderReceived", chapter_id: ch, payload: p}, gate) do
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      record == nil or not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record && record.state}}
+
+      Map.has_key?(gate.tenders, {ch, p["tender_id"]}) ->
+        {:error, {:tender_already_received, p["tender_id"]}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp type_check(%Envelope{type: "TenderParsed", chapter_id: ch, payload: p}, gate) do
+    {:bytes, raw_ref} = p["raw_ref"]
+    fields = p["fields"]
+
+    case gate.tenders[{ch, p["tender_id"]}] do
+      nil ->
+        {:error, {:unknown_tender, p["tender_id"]}}
+
+      tender ->
+        cond do
+          tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
+            {:error, :tender_party_mismatch}
+
+          tender.decided != nil ->
+            {:error, {:tender_already_decided, tender.decided}}
+
+          raw_ref != tender.raw_ref ->
+            # A parse must attest the exact received artifact (08 §7).
+            {:error, :raw_ref_mismatch}
+
+          p["grade"] not in Constants.parse_grades() ->
+            {:error, {:unknown_parse_grade, p["grade"]}}
+
+          not (is_map(fields) and is_binary(fields["lane"]) and
+                 is_binary(fields["equipment"]) and is_integer(fields["rate_minor"]) and
+                   fields["rate_minor"] > 0) ->
+            {:error, :malformed_parse_fields}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: type, chapter_id: ch, payload: p}, gate)
+       when type in ["TenderAccepted", "TenderDeclined"] do
+    case gate.tenders[{ch, p["tender_id"]}] do
+      nil ->
+        {:error, {:unknown_tender, p["tender_id"]}}
+
+      tender ->
+        envelope =
+          Membership.dispatch_envelope(
+            gate,
+            ch,
+            tender.member_id,
+            tender.entity_id,
+            "tender_accept"
+          )
+
+        # The gate recomputes the pure decision: a decision event that
+        # disagrees with it is unrepresentable (10 P1/P5/P8).
+        decision = Dispatch.decide(envelope, tender.parse)
+        wanted = if type == "TenderAccepted", do: :accept, else: :decline
+        authorization = p["authorization_item_id"]
+
+        cond do
+          tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
+            {:error, :tender_party_mismatch}
+
+          tender.decided != nil ->
+            {:error, {:tender_already_decided, tender.decided}}
+
+          authorization != nil and not match?({:escalate, _}, decision) ->
+            # 9B: the authorized path exists only where the pure function
+            # ends — a decidable tender never wears an authorization.
+            {:error, :authorization_not_needed}
+
+          authorization != nil ->
+            check_tender_authorization(gate, ch, p, authorization)
+
+          match?({:escalate, _}, decision) ->
+            {:escalate, reason} = decision
+            {:error, {:decision_requires_escalation, reason}}
+
+          elem(decision, 0) != wanted ->
+            {:error, {:decision_mismatch, elem(decision, 0)}}
+
+          {wanted, p["envelope_version"], p["basis"]} != decision ->
+            {:error, :decision_basis_mismatch}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "LoadDispatched", chapter_id: ch, payload: p}, gate) do
+    case gate.tenders[{ch, p["tender_id"]}] do
+      nil ->
+        {:error, {:unknown_tender, p["tender_id"]}}
+
+      tender ->
+        cond do
+          tender.member_id != p["member_id"] or tender.entity_id != p["entity_id"] ->
+            {:error, :tender_party_mismatch}
+
+          tender.decided != :accepted ->
+            # A load descends only from an accepted tender — the in-envelope
+            # assignment evidence (8A carries version + basis on the decision).
+            {:error, {:tender_not_accepted, tender.decided}}
+
+          Map.get(tender, :dispatched) != nil ->
+            {:error, {:tender_already_dispatched, Map.get(tender, :dispatched)}}
+
+          Map.has_key?(gate.loads, {ch, p["load_id"]}) ->
+            {:error, {:load_already_dispatched, p["load_id"]}}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: type, chapter_id: ch, payload: p}, gate)
+       when type in ["AppointmentRecorded", "LoadArrived", "LoadDeparted", "StatusRecorded"] do
+    time = p["occurred_ms"] || p["appointment_ms"]
+
+    case gate.loads[{ch, p["load_id"]}] do
+      nil ->
+        {:error, {:unknown_load, p["load_id"]}}
+
+      load ->
+        cond do
+          load.member_id != p["member_id"] or load.entity_id != p["entity_id"] ->
+            {:error, :load_party_mismatch}
+
+          time <= 0 ->
+            {:error, :bad_event_time}
+
+          type == "StatusRecorded" ->
+            if p["status"] == "", do: {:error, :empty_status}, else: :ok
+
+          p["stop"] not in Constants.load_stops() ->
+            {:error, {:unknown_stop, p["stop"]}}
+
+          true ->
+            check_stop_order(type, load.stops[p["stop"]] || %{}, p)
+        end
+    end
+  end
+
+  # -- Phase 8C: invoice, detention, dunning (docs/phase8c_plan.md) ------------
+
+  defp type_check(%Envelope{type: "RateTermsDeclared", chapter_id: ch, payload: p} = env, gate) do
+    member = gate.members[{ch, p["member_id"]}]
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+    current = gate.rate_terms[{ch, p["member_id"], p["entity_id"]}]
+
+    cond do
+      member == nil ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      record == nil or not Lifecycle.active?(record.state) ->
+        {:error, {:membership_not_active, record && record.state}}
+
+      p["version"] != ((current && current.current) || 0) + 1 ->
+        {:error, {:terms_version_not_monotonic, p["version"]}}
+
+      true ->
+        with :ok <- check_rate_terms_params(p["params"]) do
+          # Terms are the member's declaration, like the envelope (8A).
+          check_member_signature(env, member)
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "InvoiceIssued", chapter_id: ch, payload: p}, gate) do
+    load = gate.loads[{ch, p["load_id"]}]
+
+    cond do
+      Map.has_key?(gate.invoices, {ch, p["invoice_id"]}) ->
+        {:error, {:invoice_already_issued, p["invoice_id"]}}
+
+      load == nil ->
+        {:error, {:unknown_load, p["load_id"]}}
+
+      load.member_id != p["member_id"] or load.entity_id != p["entity_id"] ->
+        {:error, :load_party_mismatch}
+
+      Map.get(load, :invoiced) != nil ->
+        {:error, {:load_already_invoiced, Map.get(load, :invoiced)}}
+
+      true ->
+        # The invoice is reproducible or unrepresentable (07 §6, 8A pattern):
+        # the gate recomputes the pure function and demands equality.
+        case Dispatch.invoice_for(gate, ch, p["load_id"]) do
+          {:ok, computed} ->
+            cited = %{
+              terms_version: p["terms_version"],
+              lines: p["lines"],
+              amount_minor: p["amount_minor"]
+            }
+
+            if cited == computed, do: :ok, else: {:error, :invoice_mismatch}
+
+          {:error, reason} ->
+            {:error, {:invoice_not_computable, reason}}
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "CreditMemoIssued", chapter_id: ch, payload: p}, gate) do
+    case gate.invoices[{ch, p["invoice_id"]}] do
+      nil ->
+        {:error, {:unknown_invoice, p["invoice_id"]}}
+
+      invoice ->
+        cond do
+          invoice.member_id != p["member_id"] or invoice.entity_id != p["entity_id"] ->
+            {:error, :invoice_party_mismatch}
+
+          p["memo_id"] in invoice.memo_ids ->
+            {:error, {:memo_already_issued, p["memo_id"]}}
+
+          p["amount_minor"] <= 0 ->
+            {:error, :amount_must_be_positive}
+
+          invoice.credited_minor + p["amount_minor"] > invoice.amount_minor ->
+            # The compensator reverses value; it never overshoots it.
+            {:error, :credit_exceeds_invoice}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  defp type_check(%Envelope{type: "DunningStepped", chapter_id: ch, payload: p}, gate) do
+    with {:ok, invoice, rungs} <- fetch_dunning_ladder(gate, ch, p) do
+      cond do
+        invoice.collection ->
+          {:error, :in_collection}
+
+        p["rung_index"] != invoice.rungs_stepped ->
+          {:error, {:rung_out_of_order, p["rung_index"], invoice.rungs_stepped}}
+
+        p["rung_index"] >= length(rungs) ->
+          # No step beyond the declared ladder is representable.
+          {:error, :ladder_exhausted}
+
+        p["rung"] != Enum.at(rungs, p["rung_index"]) ->
+          {:error, {:rung_mismatch, p["rung"], Enum.at(rungs, p["rung_index"])}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: "CollectionEscalated", chapter_id: ch, payload: p}, gate) do
+    with {:ok, invoice, rungs} <- fetch_dunning_ladder(gate, ch, p) do
+      cond do
+        invoice.collection ->
+          {:error, :in_collection}
+
+        invoice.rungs_stepped < length(rungs) ->
+          # The ladder's end (R, H4) is reachable only through every rung.
+          {:error, {:ladder_not_exhausted, invoice.rungs_stepped, length(rungs)}}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) do
+    if Lifecycle.lifecycle_event?(type) do
+      check_lifecycle(env, gate)
+    else
+      :ok
+    end
+  end
+
+  # 9B (docs/phase9b_plan.md): consumption of the 5A contract — an approved
+  # `tender/<id>` R item authorizes one decision event, marked as
+  # human-authorized (envelope_version 0, basis "r/<item>") so replay
+  # distinguishes it from a machine decision forever.
+  defp check_tender_authorization(gate, ch, p, item_id) do
+    item = gate.escalations[{ch, item_id}]
+
+    cond do
+      item_id != "tender/" <> p["tender_id"] ->
+        {:error, {:authorization_subject_mismatch, item_id}}
+
+      item == nil ->
+        {:error, {:unknown_item, item_id}}
+
+      item.open ->
+        {:error, {:item_unresolved, item_id}}
+
+      item.verdict != "approved" ->
+        {:error, {:not_authorized, item.verdict}}
+
+      item.process != "tender_accept" ->
+        {:error, {:authorization_process_mismatch, item.process}}
+
+      {p["envelope_version"], p["basis"]} != {0, "r/" <> item_id} ->
+        {:error, :authorized_decision_marking_mismatch}
+
+      true ->
+        :ok
+    end
+  end
+
+  # -- Phase 8B: dispatch + tracking (docs/phase8b_plan.md) --------------------
+
+  defp fetch_dunning_ladder(gate, ch, p) do
+    case gate.invoices[{ch, p["invoice_id"]}] do
+      nil ->
+        {:error, {:unknown_invoice, p["invoice_id"]}}
+
+      invoice ->
+        if invoice.member_id != p["member_id"] or invoice.entity_id != p["entity_id"] do
+          {:error, :invoice_party_mismatch}
+        else
+          # Dunning follows the terms version the invoice cites, not the
+          # member's latest — the ladder is frozen at issue time.
+          terms = gate.rate_terms[{ch, invoice.member_id, invoice.entity_id}]
+          {:ok, invoice, terms.versions[invoice.terms_version]["dunning_rungs"]}
+        end
+    end
+  end
+
+  defp check_rate_terms_params(
+         %{
+           "free_time_minutes" => free,
+           "detention_rate_minor_per_hour" => rate,
+           "dunning_rungs" => rungs
+         } = params
+       )
+       when map_size(params) == 3 do
+    if is_integer(free) and free >= 0 and is_integer(rate) and rate >= 0 and
+         is_list(rungs) and rungs != [] and Enum.all?(rungs, &(is_binary(&1) and &1 != "")) do
+      :ok
+    else
+      {:error, :malformed_terms_params}
+    end
+  end
+
+  defp check_rate_terms_params(_params), do: {:error, :malformed_terms_params}
+
+  # 10A: floor transitions are evidenced, not asserted. The cited evaluation
+  # must exist in the gate's own fold and match the subject; cure starts on
+  # a failing evaluation, clears on a passing one after the cure anchor, and
+  # the exit needs a failing evaluation at or beyond the declared window's
+  # end — arithmetic over signed at_ms values, no clock anywhere. The exit
+  # fails closed while `floor/cure_window_ms` is undeclared
+  # (member-protective, deliberately NOT bootstrap-then-enforce).
+  defp check_floor_evidence(type, gate, ch, p) do
+    evaluation = gate.floor_evaluations[{ch, p["evaluation_ref"]}]
+    cure_from = gate.floor_cures[{ch, p["member_id"], p["entity_id"]}]
+    window = gate.charter_constants[{ch, "floor/cure_window_ms"}]
+
+    cond do
+      evaluation == nil ->
+        {:error, {:unknown_evaluation, p["evaluation_ref"]}}
+
+      evaluation.member_id != p["member_id"] or evaluation.entity_id != p["entity_id"] ->
+        {:error, :evaluation_subject_mismatch}
+
+      type == "FloorCureStarted" ->
+        if evaluation.cleared, do: {:error, :evaluation_not_failing}, else: :ok
+
+      cure_from == nil ->
+        # Unreachable past the lifecycle check (both remaining types are
+        # legal only from in_cure, which always has an anchor); kept total.
+        {:error, :no_cure_anchor}
+
+      type == "FloorCureCleared" ->
+        cond do
+          not evaluation.cleared -> {:error, :evaluation_not_passing}
+          evaluation.at_ms <= cure_from -> {:error, :evaluation_precedes_cure}
+          true -> :ok
+        end
+
+      type == "MembershipFloorExited" ->
+        cond do
+          evaluation.cleared ->
+            {:error, :evaluation_not_failing}
+
+          not (is_integer(window) and window > 0) ->
+            {:error, :cure_window_undeclared}
+
+          evaluation.at_ms < cure_from + window ->
+            {:error, {:cure_window_not_elapsed, cure_from + window}}
+
+          true ->
+            :ok
+        end
+    end
+  end
+
+  # 9A: the residual fields travel all-or-nothing, exactly when the round
+  # leaves a net, and must equal the recomputed net.
+  defp check_netting_residual(gate, ch, p, net) do
+    residual_keys = ["residual_obligation_id", "net_debtor", "net_creditor", "net_minor"]
+    cited = Enum.map(residual_keys, &p[&1])
+
+    case {net, cited} do
+      {nil, [nil, nil, nil, nil]} ->
+        :ok
+
+      {{debtor, creditor, amount}, [residual_id, cited_debtor, cited_creditor, cited_amount]}
+      when is_binary(residual_id) ->
+        cond do
+          {cited_debtor, cited_creditor, cited_amount} != {debtor, creditor, amount} ->
+            {:error, :residual_mismatch}
+
+          Map.has_key?(gate.obligations, {ch, residual_id}) ->
+            {:error, {:obligation_already_recorded, residual_id}}
+
+          true ->
+            :ok
+        end
+
+      _mismatch ->
+        {:error, :residual_mismatch}
+    end
+  end
+
+  # 9A exposure caps (05 P7): bootstrap-then-enforce — the rail predates the
+  # caps; a chapter's declaration is what creates the constraint. Aggregates
+  # are per-borrower (debtor side) and per-funder (creditor concentration),
+  # across denominations ("aggregate across instruments").
+  defp check_exposure_caps(gate, ch, debtor_id, creditor_id, amount) do
+    borrower_cap = gate.charter_constants[{ch, "finance/borrower_cap_minor"}]
+    funder_cap = gate.charter_constants[{ch, "finance/funder_cap_minor"}]
+
+    cond do
+      is_integer(borrower_cap) and
+          open_exposure(gate, ch, :debtor_id, debtor_id) + amount > borrower_cap ->
+        {:error, {:borrower_cap_exceeded, borrower_cap}}
+
+      creditor_id != nil and is_integer(funder_cap) and
+          open_exposure(gate, ch, :creditor_id, creditor_id) + amount > funder_cap ->
+        {:error, {:funder_cap_exceeded, funder_cap}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp open_exposure(gate, ch, side, member_id) do
+    gate.obligations
+    |> Enum.filter(fn {{c, _id}, ob} ->
+      c == ch and ob.open and Map.get(ob, side) == member_id
+    end)
+    |> Enum.map(fn {_key, ob} -> ob.amount_minor end)
+    |> Enum.sum()
+  end
+
+  # The unbroken per-stop sequence (07 §3): appointments re-recordable until
+  # arrival; arrival once; departure once, after arrival, never before it.
+  defp check_stop_order("AppointmentRecorded", stop, _p) do
+    if Map.has_key?(stop, :arrived_ms), do: {:error, :already_arrived}, else: :ok
+  end
+
+  defp check_stop_order("LoadArrived", stop, _p) do
+    if Map.has_key?(stop, :arrived_ms), do: {:error, :already_arrived}, else: :ok
+  end
+
+  defp check_stop_order("LoadDeparted", stop, p) do
+    cond do
+      not Map.has_key?(stop, :arrived_ms) -> {:error, :not_arrived}
+      Map.has_key?(stop, :departed_ms) -> {:error, :already_departed}
+      p["occurred_ms"] < stop.arrived_ms -> {:error, :departure_before_arrival}
+      true -> :ok
+    end
+  end
+
+  # Envelope params for scope "tender_accept": the exact v0 field set
+  # (docs/phase8a_plan.md — the sim defaults; the real 4A re-derives the set
+  # from the real adopted defaults artifact).
+  defp check_envelope_params(
+         %{"lanes" => lanes, "equipment" => equipment, "rate_floor_minor" => floor} = params
+       )
+       when map_size(params) == 3 do
+    if is_list(lanes) and lanes != [] and Enum.all?(lanes, &is_binary/1) and
+         is_list(equipment) and equipment != [] and Enum.all?(equipment, &is_binary/1) and
+         is_integer(floor) and floor >= 0 do
+      :ok
+    else
+      {:error, :malformed_envelope_params}
+    end
+  end
+
+  defp check_envelope_params(_params), do: {:error, :malformed_envelope_params}
+
+  defp check_lifecycle(%Envelope{type: type, chapter_id: ch, payload: p} = env, gate) do
+    member_key = {ch, p["member_id"]}
+    entity = gate.entities[{ch, p["entity_id"]}]
+    record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
+
+    cond do
+      not Map.has_key?(gate.members, member_key) ->
+        {:error, {:unregistered_member, p["member_id"]}}
+
+      entity == nil ->
+        {:error, {:unregistered_entity, p["entity_id"]}}
+
+      type == "MembershipInvited" and p["class"] != entity.class ->
+        {:error, {:class_mismatch, p["class"], entity.class}}
+
+      true ->
+        with {:ok, _next} <- Lifecycle.apply(record && record.state, type) do
+          check_member_signature(env, gate.members[member_key])
+        end
+    end
+  end
+
+  # Every member-role signer on a lifecycle event must be the member's
+  # currently registered key — a signature from a stale or foreign key is
+  # rejected even though it is cryptographically valid.
+  defp check_member_signature(%Envelope{signers: signers}, %{pubkey: pubkey, key_id: key_id}) do
+    signers
+    |> Enum.filter(&(&1.role == "member"))
+    |> Enum.find_value(:ok, fn signer ->
+      unless signer.pubkey == pubkey and signer.key_id == key_id do
+        {:error, {:not_the_members_current_key, signer.key_id}}
+      end
+    end)
+  end
+
+  defp check_section(section) do
+    if section in Constants.harness_sections() do
+      :ok
+    else
+      {:error, {:unknown_section, section}}
+    end
+  end
+
+  # Sourcing from an interview requires the interview to exist and its
+  # interviewee's consent to be active — post-revocation use is
+  # unrepresentable at append (11 P5).
+  defp check_interview_source(gate, chapter_id, interview_ref) do
+    case gate.interviews[{chapter_id, interview_ref}] do
+      nil ->
+        {:error, {:unknown_interview, interview_ref}}
+
+      %{interviewee_ref: ref} ->
+        if Membership.consent_active?(gate, chapter_id, ref) do
+          :ok
+        else
+          {:error, {:no_active_consent, ref}}
+        end
+    end
+  end
+
+  defp resolve_findings(gate, chapter_id, refs) do
+    cond do
+      not (is_list(refs) and refs != [] and Enum.all?(refs, &is_binary/1)) ->
+        {:error, :bad_finding_refs}
+
+      true ->
+        findings = Enum.map(refs, &gate.findings[{chapter_id, &1}])
+
+        if Enum.any?(findings, &is_nil/1) do
+          {:error, :unknown_finding}
+        else
+          {:ok, findings}
+        end
+    end
+  end
+
+  defp genesis_self_certified?(%Envelope{signers: signers}, p) do
+    {:bytes, pubkey} = p["pubkey"]
+
+    Enum.any?(
+      signers,
+      &(&1.role == "governance" and &1.pubkey == pubkey and &1.key_id == p["key_id"])
+    )
+  end
+
+  # Same discipline for obligation-rail parties: every signer carrying the
+  # role must be that party's currently registered key.
+  defp check_party_key(%Envelope{signers: signers}, role, %{pubkey: pubkey, key_id: key_id}) do
+    signers
+    |> Enum.filter(&(&1.role == role))
+    |> Enum.find_value(:ok, fn signer ->
+      unless signer.pubkey == pubkey and signer.key_id == key_id do
+        {:error, {:wrong_key_for_role, role, signer.key_id}}
+      end
+    end)
+  end
+end
