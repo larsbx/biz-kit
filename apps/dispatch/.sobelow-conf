@@ -1,0 +1,12 @@
+# Sobelow configuration.
+#
+# Sobelow locates the router by convention; this application's router is at a
+# non-default path, so it is named explicitly. Without it the scan silently
+# skips every router-based check and reports a clean run.
+[
+  router: "lib/dispatch_web/router.ex",
+  verbose: true,
+  private: false,
+  skip: false,
+  exit: "low"
+]

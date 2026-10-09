@@ -1,0 +1,9 @@
+HEEx function components (Section 26.5) arrive with Slice 1, including the
+`<.fact_badge>` that Section 26.3 makes mandatory on every fact fragment.
+
+Components receive plain immutable view-model structs built from already
+authorized Ash results; Section 26.5 forbids them from running Ash queries or
+touching raw Ecto schemas.
+
+This file exists because git does not track empty directories, and Section 20
+requires this one to be present in a fresh checkout.
