@@ -74,10 +74,11 @@ defmodule EatsbotCore.Carts.Cart do
         cart =
           Ash.get!(EatsbotCore.Carts.Cart, cart_id, load: [cart_lines: [:variant]])
 
-        %{public_auth_key: public_auth_key} = EatsbotCore.Deliveries.Delivery.initialize!(
-          Map.merge(delivery_input, %{delivery_order: cart_to_map(cart)}),
-          authorize?: false
-        )
+        %{public_auth_key: public_auth_key} =
+          EatsbotCore.Deliveries.Delivery.initialize!(
+            Map.merge(delivery_input, %{delivery_order: cart_to_map(cart)}),
+            authorize?: false
+          )
 
         {:ok, public_auth_key}
       end

@@ -88,7 +88,9 @@ defmodule EatsbotCore.Products.Product.VariantGenerator do
 
   # Create all variants within a transaction for atomicity
   defp create_variants_in_transaction(changesets) do
-    Eatsbot.Repo.transaction(fn ->
+    repo = AshPostgres.DataLayer.Info.repo(EatsbotCore.Products.Variant)
+
+    repo.transaction(fn ->
       Enum.reduce_while(changesets, [], fn changeset, acc ->
         case Ash.create(changeset) do
           {:ok, variant} ->
@@ -96,7 +98,7 @@ defmodule EatsbotCore.Products.Product.VariantGenerator do
 
           {:error, error} ->
             # Rollback the transaction on any error
-            Eatsbot.Repo.rollback(error)
+            repo.rollback(error)
         end
       end)
       |> Enum.reverse()

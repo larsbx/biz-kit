@@ -28,6 +28,11 @@ input DeliveryStateChangesFilterComment {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -41,6 +46,11 @@ input DeliveryStateChangesFilterNewState {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -54,6 +64,11 @@ input DeliveryStateChangesFilterOldState {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -67,6 +82,8 @@ input DeliveryStateChangesFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input DeliveryStateChangesFilterInput {
@@ -199,6 +216,9 @@ type MutationError {
 
   "The field or fields that produced the error"
   fields: [String!]
+
+  "The path to the field that produced the error"
+  path: [String!]
 }
 
 enum CartLineSortField {
@@ -218,6 +238,8 @@ input CartLineFilterCartId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input CartLineFilterVariantId {
@@ -229,6 +251,8 @@ input CartLineFilterVariantId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input CartLineFilterNotes {
@@ -240,6 +264,11 @@ input CartLineFilterNotes {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -253,6 +282,8 @@ input CartLineFilterQuantity {
   greaterThan: Int
   lessThanOrEqual: Int
   greaterThanOrEqual: Int
+  isDistinctFrom: Int
+  isNotDistinctFrom: Int
 }
 
 input CartLineFilterId {
@@ -264,6 +295,8 @@ input CartLineFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input CartLineFilterInput {
@@ -336,6 +369,11 @@ input CartFilterCurrency {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -349,6 +387,8 @@ input CartFilterStatus {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
 }
 
 input CartFilterId {
@@ -360,6 +400,8 @@ input CartFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input CartFilterInput {
@@ -400,6 +442,8 @@ input BranchFilterBrandId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input BranchFilterLongitude {
@@ -411,6 +455,8 @@ input BranchFilterLongitude {
   greaterThan: Float
   lessThanOrEqual: Float
   greaterThanOrEqual: Float
+  isDistinctFrom: Float
+  isNotDistinctFrom: Float
 }
 
 input BranchFilterLatitude {
@@ -422,6 +468,8 @@ input BranchFilterLatitude {
   greaterThan: Float
   lessThanOrEqual: Float
   greaterThanOrEqual: Float
+  isDistinctFrom: Float
+  isNotDistinctFrom: Float
 }
 
 input BranchFilterAddress {
@@ -433,6 +481,11 @@ input BranchFilterAddress {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -446,6 +499,11 @@ input BranchFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -459,6 +517,8 @@ input BranchFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input BranchFilterInput {
@@ -493,6 +553,11 @@ input BrandFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -506,6 +571,8 @@ input BrandFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input BrandFilterInput {
@@ -532,6 +599,11 @@ input TypeFilterDescription {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -545,6 +617,11 @@ input TypeFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -558,6 +635,8 @@ input TypeFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input TypeFilterInput {
@@ -592,6 +671,8 @@ input PriceFilterVariantId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input PriceFilterProductId {
@@ -603,6 +684,8 @@ input PriceFilterProductId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input PriceFilterMoney {
@@ -614,6 +697,8 @@ input PriceFilterMoney {
   greaterThan: MoneyInput
   lessThanOrEqual: MoneyInput
   greaterThanOrEqual: MoneyInput
+  isDistinctFrom: MoneyInput
+  isNotDistinctFrom: MoneyInput
 }
 
 input PriceFilterId {
@@ -625,6 +710,8 @@ input PriceFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input PriceFilterInput {
@@ -669,6 +756,8 @@ input OptionValueFilterVariantId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input OptionValueFilterOptionId {
@@ -680,6 +769,8 @@ input OptionValueFilterOptionId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input OptionValueFilterValue {
@@ -691,6 +782,11 @@ input OptionValueFilterValue {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -704,6 +800,8 @@ input OptionValueFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input OptionValueFilterInput {
@@ -748,6 +846,8 @@ input ProductOptionFilterProductId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input ProductOptionFilterDescription {
@@ -759,6 +859,11 @@ input ProductOptionFilterDescription {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -772,6 +877,11 @@ input ProductOptionFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -785,6 +895,8 @@ input ProductOptionFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input ProductOptionFilterInput {
@@ -856,6 +968,8 @@ input CollectionFilterIsBrand {
   greaterThan: Boolean
   lessThanOrEqual: Boolean
   greaterThanOrEqual: Boolean
+  isDistinctFrom: Boolean
+  isNotDistinctFrom: Boolean
 }
 
 input CollectionFilterImage {
@@ -867,6 +981,11 @@ input CollectionFilterImage {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -880,6 +999,11 @@ input CollectionFilterDescription {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -893,6 +1017,11 @@ input CollectionFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -906,6 +1035,8 @@ input CollectionFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input CollectionFilterInput {
@@ -949,6 +1080,8 @@ input VariantFilterProductId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input VariantFilterSku {
@@ -960,6 +1093,11 @@ input VariantFilterSku {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -973,6 +1111,11 @@ input VariantFilterDescription {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -986,6 +1129,11 @@ input VariantFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -999,6 +1147,8 @@ input VariantFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input VariantFilterInput {
@@ -1104,6 +1254,8 @@ input ProductFilterTypeId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input ProductFilterState {
@@ -1115,6 +1267,8 @@ input ProductFilterState {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
 }
 
 input ProductFilterSku {
@@ -1126,6 +1280,11 @@ input ProductFilterSku {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -1139,6 +1298,11 @@ input ProductFilterDescription {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -1152,6 +1316,11 @@ input ProductFilterName {
   greaterThan: String
   lessThanOrEqual: String
   greaterThanOrEqual: String
+  contains: String
+  isDistinctFrom: String
+  isNotDistinctFrom: String
+  stringEndsWith: String
+  stringStartsWith: String
   like: String
   ilike: String
 }
@@ -1165,6 +1334,8 @@ input ProductFilterId {
   greaterThan: ID
   lessThanOrEqual: ID
   greaterThanOrEqual: ID
+  isDistinctFrom: ID
+  isNotDistinctFrom: ID
 }
 
 input ProductFilterInput {
@@ -1312,7 +1483,7 @@ input MoneyInput {
 type RootMutationType {
   createCart(input: CreateCartInput): CreateCartResult!
   cartAddVariant(id: ID!, input: CartAddVariantInput!): CartAddVariantResult!
-  cartCheckoutDelivery(input: CartCheckoutDeliveryInput): String!
+  cartCheckoutDelivery(input: CartCheckoutDeliveryInput!): String!
   initDelivery(input: InitDeliveryInput!): InitDeliveryResult!
   updateState(id: ID!, input: UpdateStateInput): UpdateStateResult!
   updateLocation(id: ID!, input: UpdateLocationInput): UpdateLocationResult!

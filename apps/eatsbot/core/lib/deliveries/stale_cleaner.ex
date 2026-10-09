@@ -61,9 +61,7 @@ defmodule EatsbotCore.Deliveries.StaleCleaner do
               timestamp: NaiveDateTime.utc_now()
             }
 
-            Logger.error(
-              "Failed to update delivery #{delivery.id} to stale: #{inspect(reason)}"
-            )
+            Logger.error("Failed to update delivery #{delivery.id} to stale: #{inspect(reason)}")
 
             {success, errors + 1, [error_detail | error_list]}
         end

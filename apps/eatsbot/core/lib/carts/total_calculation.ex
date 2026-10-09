@@ -9,8 +9,8 @@ defmodule EatsbotCore.Carts.TotalCalculation do
     do: [cart_lines: [:subtotal]]
 
   @impl true
-  def calculate(carts, opts, _atom) do
-    Enum.map(carts, fn %{cart_lines: cart_lines} = cart ->
+  def calculate(carts, _opts, _atom) do
+    Enum.map(carts, fn %{cart_lines: cart_lines} ->
       {:ok, result} =
         cart_lines |> Enum.map(fn cart_line -> cart_line.subtotal end) |> Money.sum()
 
@@ -40,7 +40,7 @@ defmodule EatsbotCore.Carts.TotalCalculation do
   def handle_rule(
         %{
           type: :manual,
-          data: %{enabled: false, discount: discount}
+          data: %{enabled: false, discount: _discount}
         },
         cart_line
       ),
@@ -93,7 +93,7 @@ defmodule EatsbotCore.Carts.TotalCalculation do
       do: calculate_price(discount, cart_line, method)
 
   def handle_rule(
-        %{type: :quantity, data: %{more_than: more_than, discount: discount}},
+        %{type: :quantity, data: %{more_than: _more_than, discount: _discount}},
         %{quantity: _line_quantity} = cart_line
       ),
       do: get_normal_price(cart_line)

@@ -16,12 +16,14 @@ defmodule Eatsbot.Accounts.User do
       token_resource Eatsbot.Accounts.Token
       signing_secret Eatsbot.Secrets
       store_all_tokens? true
+      require_token_presence_for_authentication? true
     end
 
     strategies do
       magic_link do
         identity_field :email
         registration_enabled? true
+        require_interaction? true
 
         sender Eatsbot.Accounts.User.Senders.SendMagicLinkEmail
       end

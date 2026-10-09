@@ -51,10 +51,6 @@ defmodule EatsbotCore.Deliveries.Delivery do
   postgres do
     table "deliveries"
     repo Eatsbot.Repo
-
-    references do
-      reference :state_history, on_delete: :delete
-    end
   end
 
   field_policies do
@@ -280,6 +276,12 @@ defmodule EatsbotCore.Deliveries.Delivery do
     policy action_type(:update) do
       description "update access is limited to users private access"
       authorize_if actor_attribute_equals(:access_level, :private)
+    end
+
+    policy action_type([:read, :update]) do
+      description "delivery credentials are limited to their own delivery"
+      authorize_if expr(is_nil(^actor(:delivery_id)))
+      authorize_if expr(id == ^actor(:delivery_id))
     end
   end
 

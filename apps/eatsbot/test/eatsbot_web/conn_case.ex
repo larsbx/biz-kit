@@ -38,9 +38,11 @@ defmodule EatsbotWeb.ConnCase do
         authorize?: false
       )
 
+    {:ok, token, _claims} = AshAuthentication.Jwt.token_for_user(user)
+
     conn
     |> fetch_session
-    |> put_session("user", AshAuthentication.user_to_subject(user))
+    |> put_session("user_token", token)
     |> put_session("tenant", nil)
     |> put_session("context", nil)
   end

@@ -31,7 +31,7 @@ config :eatsbot, EatsbotWeb.Endpoint,
 
 config :eatsbot,
   extensions:
-    (if System.get_env("ENABLE_KAFKA") == "true", do: [Eatsbot.Extensions.Kafka], else: []),
+    if(System.get_env("ENABLE_KAFKA") == "true", do: [Eatsbot.Extensions.Kafka], else: []),
   token_signing_secret: "U635EKPRXu35QYRpGZEZVN93UasSAl3t"
 
 config :eatsbot, Eatsbot.Extensions.Prometheus.PromEx,

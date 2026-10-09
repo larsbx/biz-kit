@@ -77,12 +77,14 @@ defmodule DeliveryTest do
     test "authorized read" do
       %{id: id} = EatsbotCore.Deliveries.Delivery.empty!(authorize?: false)
 
-      EatsbotCore.Deliveries.Delivery |> Ash.get!(id, actor: EatsbotCore.Deliveries.Actors.public())
+      EatsbotCore.Deliveries.Delivery
+      |> Ash.get!(id, actor: EatsbotCore.Deliveries.Actors.public())
 
       EatsbotCore.Deliveries.Delivery
       |> Ash.get!(id, actor: EatsbotCore.Deliveries.Actors.private())
 
-      EatsbotCore.Deliveries.Delivery |> Ash.get!(id, actor: EatsbotCore.Deliveries.Actors.public())
+      EatsbotCore.Deliveries.Delivery
+      |> Ash.get!(id, actor: EatsbotCore.Deliveries.Actors.public())
     end
 
     test "unauthorized update" do

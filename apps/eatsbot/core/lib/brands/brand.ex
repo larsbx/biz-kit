@@ -28,7 +28,6 @@ defmodule EatsbotCore.Brands.Brand do
     notifiers: [EatsbotCore.Kafka.AshNotifier]
 
   use Gettext, backend: EatsbotCore.Gettext
-  alias Ash.Changeset
 
   graphql do
     type :brand

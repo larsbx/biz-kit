@@ -33,7 +33,17 @@ defmodule EatsbotWeb.Router do
   end
 
   pipeline :admin do
-    plug :basic_auth, username: "admin", password: System.get_env("ADMIN_API_KEY")
+    plug :admin_basic_auth
+  end
+
+  defp admin_basic_auth(conn, _opts) do
+    case System.get_env("ADMIN_API_KEY") do
+      password when is_binary(password) and password != "" ->
+        basic_auth(conn, username: "admin", password: password)
+
+      _ ->
+        conn |> request_basic_auth() |> Plug.Conn.halt()
+    end
   end
 
   scope "/", EatsbotWeb do
@@ -59,11 +69,15 @@ defmodule EatsbotWeb.Router do
     forward "/playground",
             Absinthe.Plug.GraphiQL,
             schema: Module.concat(["EatsbotWeb.GraphqlSchema"]),
+            analyze_complexity: true,
+            max_complexity: 1_000,
             interface: :playground
 
     forward "/",
             Absinthe.Plug,
-            schema: Module.concat(["EatsbotWeb.GraphqlSchema"])
+            schema: Module.concat(["EatsbotWeb.GraphqlSchema"]),
+            analyze_complexity: true,
+            max_complexity: 1_000
   end
 
   scope "/", EatsbotWeb do
@@ -72,6 +86,14 @@ defmodule EatsbotWeb.Router do
     get "/", PageController, :home
 
     live "/map", MapLive
+
+    magic_sign_in_route(Eatsbot.Accounts.User, :magic_link,
+      auth_routes_prefix: "/auth",
+      path: "/auth/user/magic_link",
+      token_as_route_param?: false,
+      overrides: [AshAuthentication.Phoenix.Overrides.Default]
+    )
+
     auth_routes AuthController, Eatsbot.Accounts.User, path: "/auth"
     sign_out_route AuthController
 

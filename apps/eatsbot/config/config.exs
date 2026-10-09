@@ -8,8 +8,17 @@
 import Config
 
 config :ex_cldr, default_backend: Eatsbot.Cldr
+# Internal decimal strings use a dot; presentation passes the Gettext locale.
+config :localize,
+  default_locale: :en,
+  supported_locales: [:en, :es],
+  otp_app: :eatsbot,
+  allow_runtime_locale_download: false
+
+config :ex_money, auto_start_exchange_rate_service: false
 
 config :ash,
+  default_string_length_count: :codepoints,
   allow_forbidden_field_for_relationships_by_default?: true,
   include_embedded_source_by_default?: false,
   show_keysets_for_all_actions?: false,
@@ -86,7 +95,8 @@ config :eatsbot, EatsbotWeb.Endpoint,
   render_errors: [
     formats: [html: EatsbotWeb.ErrorHTML, json: EatsbotWeb.ErrorJSON],
     root_layout: {EatsbotWeb.Layouts, "root.html"},
-    layout: {EatsbotWeb.Layouts, "app.html"}
+    # Error assigns do not carry the browser layout's required flash state.
+    layout: false
   ],
   pubsub_server: Eatsbot.PubSub,
   live_view: [signing_salt: "x8OTxxKq"]

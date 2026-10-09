@@ -95,7 +95,7 @@ defmodule Eatsbot.Extensions.TelegramBot.Done do
     {:done, %{context | payload: message}}
   end
 
-  defp response_from_available([current_delivery] = available_to_mark, context, user_id) do
+  defp response_from_available([current_delivery], context, user_id) do
     message = Message.send_message(user_id, mark_delivery_done(current_delivery))
 
     {:done, %{context | payload: message}}

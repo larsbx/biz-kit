@@ -26,7 +26,9 @@ defmodule Eatsbot.Extensions.TelegramBot.ReceiveLocation do
            | payload:
                TelegramBot.Message.send_message(
                  user_id,
-                 gettext("No active deliveries found. Please start one by using `/new {token}` or stop sharing location.")
+                 gettext(
+                   "No active deliveries found. Please start one by using `/new {token}` or stop sharing location."
+                 )
                )
          }}
 

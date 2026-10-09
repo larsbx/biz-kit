@@ -11,7 +11,7 @@
 #   - https://pkgs.org/ - resource for finding needed packages
 #   - Ex: hexpm/elixir:1.18.1-erlang-26.2.5.21-debian-bookworm-20260610-slim
 #
-ARG ELIXIR_VERSION=1.18.1
+ARG ELIXIR_VERSION=1.18.4
 # >= 26.2.5.8 (OTP-19240): older patches reject builds.hex.pm's CA chain in `mix local.hex`
 ARG OTP_VERSION=26.2.5.21
 ARG DEBIAN_VERSION=bookworm-20260610-slim
@@ -37,13 +37,10 @@ ENV MIX_ENV="prod"
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
-
 COPY config config
-
 COPY extensions extensions
-
 COPY core core
+RUN mix deps.get --only $MIX_ENV --check-locked
 
 COPY priv priv
 
@@ -51,20 +48,14 @@ COPY lib lib
 
 COPY assets assets
 
-WORKDIR /app/core
-RUN mix deps.get
-RUN mix compile
-
-WORKDIR /app
-
-RUN mix deps.get
 RUN mix deps.compile
 
 # compile assets
 RUN mix assets.deploy
 
 # Compile the release
-RUN mix compile
+RUN mix compile --warnings-as-errors
+RUN mix localize.download_locales
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/

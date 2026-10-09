@@ -5,13 +5,6 @@ defmodule Eatsbot.Cldr do
   use Cldr, EatsbotCore.CldrConfig.common(Eatsbot.Gettext)
 end
 
-defmodule Eatsbot.Gettext.Interpolation do
-  @moduledoc """
-  Define an interpolation module for ICU messages
-  """
-  use Cldr.Gettext.Interpolation, cldr_backend: Eatsbot.Cldr
-end
-
 defmodule Eatsbot.Gettext do
   @moduledoc """
   A module providing Internationalization with a gettext-based API.
@@ -35,5 +28,5 @@ defmodule Eatsbot.Gettext do
 
   See the [Gettext Docs](https://hexdocs.pm/gettext) for detailed usage.
   """
-  use Gettext.Backend, otp_app: :eatsbot, interpolation: Eatsbot.Gettext.Interpolation
+  use Gettext.Backend, otp_app: :eatsbot
 end

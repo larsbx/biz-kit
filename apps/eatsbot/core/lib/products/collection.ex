@@ -97,7 +97,7 @@ defmodule EatsbotCore.Products.Collection do
 
     attribute :is_brand, :boolean do
       allow_nil? false
-      default(false)
+      default false
       public? true
     end
 

@@ -37,7 +37,7 @@ defmodule Eatsbot.Extensions.TelegramBot.Notifier do
       ) do
     Telegex.send_message(
       user_data["user_id"],
-      gettext("There's a problem with the delivery {display_id}. Please contact the business.",
+      gettext("There's a problem with the delivery %{display_id}. Please contact the business.",
         display_id: display_id
       )
     )
@@ -65,7 +65,7 @@ defmodule Eatsbot.Extensions.TelegramBot.Notifier do
       user_data["user_id"],
       gettext(
         """
-        The problem with delivery {display_id} was solved.
+        The problem with delivery %{display_id} was solved.
 
         You can continue sharing the live location for it. If it's already being shared, no further action is needed.
         """,
@@ -98,10 +98,10 @@ defmodule Eatsbot.Extensions.TelegramBot.Notifier do
         user_id,
         gettext(
           """
-          A new delivery (*{display_id}*) is ready to be picked up.
+          A new delivery (*%{display_id}*) is ready to be picked up.
 
-          Details: *{details}*
-          Address: *{address}*.
+          Details: *%{details}*
+          Address: *%{address}*.
           """,
           display_id: display_id,
           address: address || gettext("No address provided"),
