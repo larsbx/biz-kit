@@ -30,7 +30,7 @@ defmodule SpruceGoose.MixProject do
       spruce_goose: [
         applications: [spruce_goose: :permanent],
         include_erts: true,
-        runtime_config_path: "config/runtime.exs",
+        runtime_config_path: "../../config/runtime.exs",
         strip_beams: false
       ]
     ]
