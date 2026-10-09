@@ -6,6 +6,10 @@ defmodule Dispatch.MixProject do
   def project do
     [
       app: :dispatch,
+      build_path: "../../_build",
+      config_path: "../../config/config.exs",
+      deps_path: "../../deps",
+      lockfile: "../../mix.lock",
       version: @version,
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -44,7 +48,7 @@ defmodule Dispatch.MixProject do
       {:ash, "~> 3.0"},
       {:ash_postgres, "~> 2.10"},
       {:ash_phoenix, "~> 2.0"},
-      {:ash_authentication, "~> 4.0"},
+      {:ash_authentication, "~> 5.0-rc"},
       {:ash_oban, "~> 0.4"},
       {:ash_state_machine, "~> 0.2"},
       {:ash_cloak, "~> 0.1"},
