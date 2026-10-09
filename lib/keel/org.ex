@@ -15,7 +15,10 @@ defmodule Keel.Org do
   @type t :: %__MODULE__{nodes: %{term => struct}, edges: [struct]}
 
   @doc "Build from a (possibly nested) list of primitives."
-  def new(items \\ []), do: items |> List.flatten() |> Enum.reduce(%__MODULE__{}, &put(&2, &1))
+  def new(items \\ []), do: put_all(%__MODULE__{}, items)
+
+  @doc "Add a (possibly nested) list of primitives."
+  def put_all(org, items), do: items |> List.flatten() |> Enum.reduce(org, &put(&2, &1))
 
   def put(%__MODULE__{nodes: nodes} = org, %mod{id: id} = node) when mod in @nodes do
     if Map.has_key?(nodes, id), do: raise(ArgumentError, "duplicate id #{inspect(id)}")

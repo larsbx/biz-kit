@@ -118,6 +118,36 @@ defmodule Keel.OwnershipTest do
     end
   end
 
+  describe "terms travel with units" do
+    @term ~D[2027-01-01]
+
+    defp termed(stakes) do
+      Org.new([people([:ann, :out]), Forms.entity(:co), stakes])
+    end
+
+    defp held(org, p, t), do: Org.holding(org, p, :co, :equity, t)
+
+    test "a transferred unit keeps the end date of the stake it came from" do
+      org = termed([%Stake{holder: :ann, in: :co, units: 50, during: Interval.new(nil, @term)}])
+      {:ok, moved, _} = Ownership.transfer(org, :ann, :out, :co, :equity, 10, @later)
+      assert {held(moved, :ann, @later), held(moved, :out, @later)} == {40, 10}
+      assert {held(moved, :ann, @term), held(moved, :out, @term)} == {0, 0}
+      assert held(moved, :ann, @t) == 50
+    end
+
+    test "mixed terms are consumed soonest-expiring first" do
+      org =
+        termed([
+          %Stake{holder: :ann, in: :co, units: 30},
+          %Stake{holder: :ann, in: :co, units: 20, during: Interval.new(nil, @term)}
+        ])
+
+      {:ok, moved, _} = Ownership.transfer(org, :ann, :out, :co, :equity, 25, @later)
+      assert {held(moved, :ann, @later), held(moved, :out, @later)} == {25, 25}
+      assert {held(moved, :ann, ~D[2027-06-01]), held(moved, :out, ~D[2027-06-01])} == {25, 5}
+    end
+  end
+
   describe "pre-emption (shufʿa)" do
     defp pre, do: llc([], preemption: true)
 

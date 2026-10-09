@@ -29,9 +29,15 @@ defmodule Keel.Ownership do
       for %Stake{holder: ^p, in: ^e, class: c} <- Org.edges(org, Stake, t), uniq: true, do: c
 
     cond do
-      classes == [] -> {:error, :not_owner}
-      not Enum.all?(classes, &revocable?(org, e, &1)) -> {:error, :binding}
-      true -> {:ok, Enum.reduce(classes, org, &rebalance(&2, p, e, &1, t, 0))}
+      classes == [] ->
+        {:error, :not_owner}
+
+      not Enum.all?(classes, &revocable?(org, e, &1)) ->
+        {:error, :binding}
+
+      true ->
+        {:ok,
+         Enum.reduce(classes, org, &move(&2, p, nil, e, &1, Org.holding(&2, p, e, &1, t), t))}
     end
   end
 
@@ -52,10 +58,7 @@ defmodule Keel.Ownership do
         {:error, {:insufficient, held}}
 
       true ->
-        moved =
-          org
-          |> rebalance(from, e, class, t, held - units)
-          |> rebalance(to, e, class, t, Org.holding(org, to, e, class, t) + units)
+        moved = move(org, from, to, e, class, units, t)
 
         if {:ineligible, to, e, class} in Invariants.eligibility(moved, t) do
           {:error, :ineligible}
@@ -109,26 +112,38 @@ defmodule Keel.Ownership do
     end
   end
 
-  # Close `p`'s current `class` stakes in `e` at `t` and open one of `units` (if any).
-  defp rebalance(org, p, e, class, t, units) do
-    edges =
-      Enum.flat_map(org.edges, fn
-        %Stake{holder: ^p, in: ^e, class: ^class, during: i} = s ->
-          cond do
-            not Interval.contains?(i, t) -> [s]
-            i.from != nil and Date.compare(i.from, t) == :eq -> []
-            true -> [%{s | during: %{i | to: t}}]
-          end
-
-        x ->
-          [x]
+  # Move `n` units of `class` in `e` from `from` to `to` (`nil` relinquishes) at `t`.
+  # `from`'s current stakes are consumed soonest-expiring first; each is closed at
+  # `t`, and its remainder and moved units continue to that stake's own end.
+  defp move(org, from, to, e, class, n, t) do
+    {current, rest} =
+      Enum.split_with(org.edges, fn s ->
+        match?(%Stake{holder: ^from, in: ^e, class: ^class}, s) and
+          Interval.contains?(s.during, t)
       end)
 
-    successor =
-      for u <- [units],
-          u > 0,
-          do: %Stake{holder: p, in: e, class: class, units: u, during: Interval.new(t)}
+    {pieces, 0} =
+      current
+      |> Enum.sort(&expires_first?(&1.during.to, &2.during.to))
+      |> Enum.flat_map_reduce(n, fn %Stake{units: u, during: i} = s, left ->
+        take = min(left, u)
+        later = %{i | from: t}
 
-    %{org | edges: successor ++ edges}
+        {for(
+           piece <- [
+             (i.from == nil or Date.compare(i.from, t) == :lt) and %{s | during: %{i | to: t}},
+             u > take and %{s | units: u - take, during: later},
+             to != nil and take > 0 and %{s | holder: to, units: take, during: later}
+           ],
+           piece,
+           do: piece
+         ), left - take}
+      end)
+
+    %{org | edges: pieces ++ rest}
   end
+
+  defp expires_first?(_, nil), do: true
+  defp expires_first?(nil, _), do: false
+  defp expires_first?(a, b), do: Date.compare(a, b) != :gt
 end

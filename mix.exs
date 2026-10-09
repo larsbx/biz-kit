@@ -7,7 +7,7 @@ defmodule Keel.MixProject do
       version: "0.1.0",
       elixir: "~> 1.14",
       start_permanent: false,
-      deps: []
+      deps: [{:stream_data, "~> 1.1", only: :test}]
     ]
   end
 
