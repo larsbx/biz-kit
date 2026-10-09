@@ -79,8 +79,12 @@ defmodule EatsbotCore.Products.Price do
   validations do
     validate fn changeset, _context ->
       case Ash.Changeset.get_attribute(changeset, :money) do
-        %Money{amount: amount} when amount <= 0 ->
-          {:error, field: :money, message: "price amount must be positive"}
+        %Money{amount: amount} ->
+          if Decimal.gt?(amount, 0) do
+            :ok
+          else
+            {:error, field: :money, message: "price amount must be positive"}
+          end
 
         _ ->
           :ok
