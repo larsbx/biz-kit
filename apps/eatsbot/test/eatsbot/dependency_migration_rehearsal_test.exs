@@ -91,26 +91,26 @@ defmodule Eatsbot.DependencyMigrationRehearsalTest do
       assert token_rows() == original
       assert primary_key() == ["id", "jti"]
 
-      # An error after the keeper UPDATE must also undo that UPDATE and the DDL.
+      # Consolidation succeeds, then an external reference blocks the key DDL.
+      # This tests Ecto's transaction across statements, not just CTE atomicity.
       query("""
-      CREATE FUNCTION rehearsal_fail_delete() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN RAISE EXCEPTION 'rehearsal failure'; END;
-      $$
+      CREATE TABLE rehearsal_token_refs (
+        token_id uuid, jti text,
+        FOREIGN KEY (token_id, jti) REFERENCES tokens (id, jti)
+      )
       """)
 
-      query("""
-      CREATE TRIGGER rehearsal_fail_delete BEFORE DELETE ON tokens
-      FOR EACH ROW EXECUTE FUNCTION rehearsal_fail_delete()
-      """)
+      query("INSERT INTO rehearsal_token_refs SELECT id, jti FROM tokens WHERE jti = $1", [
+        valid_claims["jti"]
+      ])
 
-      assert_raise Postgrex.Error, ~r/rehearsal failure/, fn ->
+      assert_raise Postgrex.Error, ~r/other objects depend/, fn ->
         Ecto.Migrator.run(Repo, :up, all: true, log: false)
       end
 
       assert token_rows() == original
       assert primary_key() == ["id", "jti"]
-      query("DROP TRIGGER rehearsal_fail_delete ON tokens")
-      query("DROP FUNCTION rehearsal_fail_delete()")
+      query("DROP TABLE rehearsal_token_refs")
 
       Ecto.Migrator.run(Repo, :up, all: true, log: false)
       assert primary_key() == ["jti"]
