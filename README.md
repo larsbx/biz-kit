@@ -40,13 +40,27 @@ mix compile
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 ```
 
+dispatch's test database connects as the Postgres role `dispatch`; create it
+(`create role dispatch login superuser;`) on a fresh cluster.
+
+Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
+
+| App | Result |
+| --- | --- |
+| keel | 84 tests, 8 properties, 0 failures |
+| coop_substrate | 282 tests, 8 properties, 1 doctest, 0 failures |
+| dispatch (with integration tier) | 261 tests, 2 doctests, 0 failures |
+| spruce_goose | 523 tests, 0 failures (8 `:separate_sessions` excluded by default) |
+
 ## Configuration
 
 - `config/config.exs` imports each app's own `apps/<app>/config/config.exs`,
   which in turn imports its per-environment files.
 - `config/runtime.exs` is the single runtime file for the release (releases
   read one runtime file and it may not import others). It holds one section per
-  app, moved verbatim from the apps' former `runtime.exs` files.
+  app, moved verbatim from the apps' former `runtime.exs` files. A production
+  boot therefore needs every app's required variables; spruce_goose's runtime
+  tests supply the other apps' with inert values (`SpruceGoose.UmbrellaRuntime`).
 
 ## Merge decisions
 
