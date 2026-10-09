@@ -72,6 +72,17 @@ defmodule Keel.Org do
     |> Enum.uniq()
   end
 
+  @doc "The `Class` node for stake class `name` of entity `e`, or `nil`."
+  def class(org, e, name),
+    do: Enum.find(nodes(org, Class), &(&1.of == e and &1.name == name))
+
+  @doc "Units of `class` in entity `e` held by `p` at `t`."
+  def holding(org, p, e, class, t),
+    do:
+      Enum.sum(
+        for %Stake{holder: ^p, in: ^e, class: ^class, units: u} <- edges(org, Stake, t), do: u
+      )
+
   @doc "The entity a role or body acts for."
   def entity_of(org, id) do
     case get(org, id) do

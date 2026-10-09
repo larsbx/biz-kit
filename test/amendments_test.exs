@@ -76,7 +76,7 @@ defmodule Keel.AmendmentsTest do
       assert {:failed, _} = Decision.decide(org, {:llc, :owners}, :sell, %{ann: :yes}, @t)
 
       assert {:failed, _} =
-               Decision.decide(org, {:llc, :owners}, :dissolve, %{ann: :yes, bob: :no}, @t)
+               Decision.decide(org, {:llc, :owners}, :merge, %{ann: :yes, bob: :no}, @t)
     end
 
     test "every co-op member must consent" do

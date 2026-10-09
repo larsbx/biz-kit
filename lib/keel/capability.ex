@@ -18,7 +18,7 @@ defmodule Keel.Capability do
   @doc "`need` is covered by some capability in `have`."
   def covered?(have, need), do: Enum.any?(have, &covers?(&1, need))
 
-  @alienation [:sell, :merge, :dissolve]
+  @alienation [:sell, :merge]
 
   @doc "Matters that dispose of the owners' property: only the whole ownership may decide them."
   def alienation, do: @alienation

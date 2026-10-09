@@ -9,7 +9,7 @@
 | Unit | 𝒰 | `Keel.Unit` | `of : 𝒰 → 𝒫ₑ`, `parent : 𝒰 ⇀ 𝒰` |
 | Role | ℛ | `Keel.Role` | `unit : ℛ → 𝒰`, `grants : ℛ → 𝒫(𝒞)`, `seats : ℛ → ℕ⁺ ∪ {∞}` |
 | Body | ℬ | `Keel.Body` | `of : ℬ → 𝒫ₑ`, members selector, weight, quorum `q ∈ ℚ`, pass `(⋈, θ)`, `⋈ ∈ {>, ≥}`, `grants : ℬ → 𝒫(𝒞)` (default `∅`, fail-closed), `reserves : ℬ → 𝒫(𝒞)` (default `∅`), `voices : ℬ → 𝒫(𝒞)` (default `∅`) |
-| Class | 𝒦 | `Keel.Class` | `of : 𝒦 → 𝒫ₑ`, `name`, `employer : 𝒦 ⇀ 𝒫ₑ` (`eligible: :employees \| {:employees, e}`) |
+| Class | 𝒦 | `Keel.Class` | `of : 𝒦 → 𝒫ₑ`, `name`, `employer : 𝒦 ⇀ 𝒫ₑ` (`eligible: :employees \| {:employees, e}`), `tenure ∈ {binding, revocable}` (*lāzim* / *jāʾiz*), `preemption ∈ 𝔹` (*shufʿa*) |
 | Capability | 𝒞 | `Keel.Capability` | preorder `⊒` (below) |
 
 Node ids share one namespace. Edges carry a validity interval:
@@ -18,6 +18,7 @@ Node ids share one namespace. Edges carry a validity interval:
 Seat      ⊆ 𝒫 × ℛ × I                      p holds r
 Line_rep  ⊆ ℛ × (ℛ ∪ ℬ) × I                r answers to x
 Line_del  ⊆ (ℛ ∪ ℬ) × (ℛ ∪ ℬ) × 𝒫(𝒞) × I   x confers G on x'
+Line_man  ⊆ 𝒫 × ℬ × 𝒫(𝒞) × I               owner p mandates body b for G (wakāla; revoked by ending I)
 Stake     ⊆ 𝒫 × 𝒫ₑ × Class × ℕ⁺ × I        p holds n units of class c in e
 ```
 
@@ -43,7 +44,7 @@ voices(e, m) = ⟨b₁, b₂, …⟩ bodies of e with some v ∈ voices(b) ⊒ m
 caps(p)     = ⋃{ eff(r) | (p, r) ∈ Seat_t }                        (raw, before reservation)
 ent(x)      = of(unit(x)) for x ∈ ℛ,  of(x) for x ∈ ℬ
 rsv(e, m)   ⟺ ∃b ∈ ℬ. of(b) = e ∧ reserves(b) ⊒ m
-𝒜           = {sell, merge, dissolve}                           alienation: disposing of the owners' property
+𝒜           = {sell, merge}                                     alienation: disposing of the owners' property
 alien(m)    ⟺ ∃a ∈ 𝒜. a ⊒ m ∨ m ⊒ a
 whole(e, p) ⟺ ∅ ≠ { h │ (h, e, _, _) ∈ Stake_t } = {p}
 can(p, m)   ⟺ ∃(p, r) ∈ Seat_t. eff(r) ⊒ m ∧ ¬rsv(ent(r), m) ∧ (alien(m) ⟹ whole(ent(r), p))
@@ -63,8 +64,11 @@ v̂(p)        = ⌜decide(b₁, m, v)⌝, b₁ the head of voices(p, m)   if kin
               ⌜carried⌝ = yes, ⌜failed⌝ = no, else ⊥
 W(S)        = Σ_{p ∈ S ∩ members(b)} w_b(p)
 inquorate   ⟺  W(dom v̂) < q · W(members)
-carried     ⟺  Y = W(members) > 0                            if alien(m)  (full consent; absence refuses)
-            ⟺  ¬inquorate ∧ Y + N > 0 ∧ Y ⋈ θ·(Y + N)      otherwise;  Y = W(v̂⁻¹ yes), N = W(v̂⁻¹ no)
+M_b(m)      = { p │ (p, b, G) ∈ Line_man,t ∧ G ⊒ m }               owners bound by mandate
+ord         ⟺  ¬inquorate ∧ Y + N > 0 ∧ Y ⋈ θ·(Y + N)       Y = W(v̂⁻¹ yes), N = W(v̂⁻¹ no)
+carried     ⟺  members ≠ ∅ ∧ ∀p ∈ members∖M. v̂(p) = yes ∧ (members ∩ M ≠ ∅ ⟹ ord)   if alien(m)
+            ⟺  Y > 0                                          if dissolve ⊒ m ∧ tenure(class(b)) = revocable
+            ⟺  ord                                            otherwise
 ```
 
 Arithmetic is exact (integer cross-multiplication of rationals).
@@ -82,6 +86,7 @@ Static:
 | I5 | `unit_forest` | `parent` is acyclic and `of(parent(u)) = of(u)` |
 | I11 | `classes` | `(of, name)` is unique over 𝒦 |
 | I12 | `voices` | no two bodies of one entity hold ⊒-equivalent voices |
+| I17 | `mandates` | `(p, b, _) ∈ Line_man,t ⟹ members(b) = {:stake, _} ∧ p ∈ members_t(b)` |
 | I16 | `alienation` | a body that reserves, or heads `voices(e, a)` for, some `a ∈ 𝒜` has `members = {:stake, _}` |
 | I15 | `reserves` | `reserves(b) ⊆⊒ grants(b)` (decidable), and reservations of distinct bodies of one entity are pairwise ⊒-incomparable (uncontested) |
 
@@ -144,12 +149,36 @@ specific voicing body, and a non-stake body is not competent (`comp`). Hence any
 carried alienation is consented to by all ultimate owners. A trustee (seat-based)
 can never supply that consent; I16 flags structures where only it could speak. ∎
 
+## Ownership rights (`Keel.Ownership`)
+
+Rights of an owner *qua* owner, independent of office. Each is a pure
+`Org → Org` effective from `t`: current stakes are closed at `t` and successors
+opened, so `σ_{t'}` is unchanged for `t' < t`.
+
+```
+withdraw(p, e, t)             defined ⟺ every class p holds in e is revocable
+transfer(p, q, e, c, n, t)    defined ⟺ n ∈ ℕ⁺ ∧ n ≤ holding_t(p, e, c) ∧ ¬(I13 fails for q after)
+  claimants = holders_t(e, c) ∖ {p}   if price given ∧ preemption(c) ∧ q ∉ holders_t(e, c)
+            = ∅                       otherwise
+preempt(sale, T)              defined ⟺ ∅ ≠ T ⊆ claimants ∧ ∀k ∈ T. H ∣ n·h_k
+  each k ∈ T takes n·h_k / H from the buyer,  h_k = holding_t(k, e, c),  H = Σ_T h_k
+```
+
+**Lemma (conservation).** `transfer` and `preempt` preserve `Σ_p holding_t(p, e, c)`
+for every `t`; `withdraw` reduces it by exactly the withdrawer's holding. ∎
+
+**Lemma (majority only by consent).** For `alien(m)`, an owner `p` who votes
+other than yes can be outvoted only if `p ∈ M_b(m)`, i.e. only by `p`'s own
+current, revocable mandate; and since `M_b(m)` is evaluated at `t`, a mandate
+revoked before `t` restores `p`'s veto. With `M = ∅` the rule reduces to full
+consent (A3). ∎
+
 ## Generalization: forms are configurations
 
 | Form | Control | Economics | Executive answers to |
 | --- | --- | --- | --- |
 | Sole proprietorship | owners body, `{:units, :equity}`, one holder | same stake | owners |
-| Partnership / LLC | owners body, `{:units, :equity}` | same stake | owners |
+| Partnership / LLC (*ʿinān*) | owners body, `{:units, :equity}`; equity revocable: any partner may withdraw or dissolve | same stake; own share transferable, optional pre-emption | owners |
 | Corporation | shareholders `{:units, :common}` → board `{:seats, director}` per capita | `:common` | board |
 | Consumer co-op | assembly `{:stake, :membership}` per capita | `:capital`, separate class | assembly |
 | Worker co-op | as consumer co-op, with `:membership` employees-only (I13) | `:capital` | assembly |
@@ -173,6 +202,7 @@ harmful outcome it permitted. Regression tests: `test/amendments_test.exs`.
 | A1 | Executive roles held `*`; bodies had no exclusive matters | Owner votes on a sale were decorative: the CEO could sell an employee-owned company unilaterally, and the board could approve it | `Body.reserves`; `can` and `comp` exclude matters reserved to another body. Corporations, partnerships and co-ops reserve `fundamental/0` (`sell, merge, dissolve, amend_charter`) to owners / members by default. Sole proprietorships reserve nothing (owner = executive) |
 | A2 | An explicit vote recorded for an entity overrode look-through | Pass-through was bypassable: recording `trust: :yes` silenced the beneficiaries | An entity with a voicing body for the matter always votes by look-through; direct votes count only for entities outside the model |
 | A3 | Sale, merger and dissolution followed ordinary majority-of-votes-cast rules; an interim amendment let the trustee vote when beneficiaries were inquorate | Owners who did not fully own could dispose of the whole: a 51% partner could sell, a quorum-plus-one of co-op members could dissolve, a trustee (title holder, not owner) could sell an employee-owned company | **No one sells what they do not fully own.** Alienation (`sell, merge, dissolve`) carries only with the consent of the entire ownership — an absent or abstaining owner is a refusal, so owner-employees must engage. Only stakeholder bodies are competent; a role may alienate only if its holder owns the entity outright. Look-through has no fallback. Invariant I16 |
+| A3′ | Dissolution was treated as alienation (full consent) | One partner could hold the others in a partnership indefinitely; no owner could exit or dispose of their own share without everyone | `dissolve ∉ 𝒜`. Revocable classes: any holder may withdraw or dissolve. Each owner may transfer their own units (`Ownership.transfer/8`), subject to eligibility and optional pre-emption. A majority may bind an owner on alienation only through that owner's revocable mandate (I17) |
 | A4 | `Body.grants` defaulted to `*` | Any body declared ad hoc was plenary (fail-open) | Default `[]` (fail-closed); authority must be granted |
 | A5 | — (new with A1) | A reservation its body cannot decide is a permanent deadlock; two bodies reserving overlapping matters contest authority | Invariant I15 |
 

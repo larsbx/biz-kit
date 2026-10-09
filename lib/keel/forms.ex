@@ -45,10 +45,28 @@ defmodule Keel.Forms do
         owners(e, [{owner, 1}], :equity, []) ++
         executive(e, :principal, [owner], {e, :owners}, 1)
 
-  @doc "Partnership / LLC. `partners :: [{party, units}]`; managers default to all partners."
-  def partnership(e, partners, managers \\ nil) do
-    managers = managers || Enum.map(partners, &elem(&1, 0))
-    entity(e) ++ owners(e, partners) ++ executive(e, :manager, managers, {e, :owners})
+  @doc """
+  Partnership (*sharikat al-ʿinān*) / LLC. `partners :: [{party, units}]`.
+
+  The `:equity` class is revocable (*jāʾiz*): any partner may withdraw or
+  dissolve unilaterally. Options: `managers:` (default all partners),
+  `preemption:` (default `false`).
+  """
+  def partnership(e, partners, opts \\ []) do
+    managers = Keyword.get_lazy(opts, :managers, fn -> Enum.map(partners, &elem(&1, 0)) end)
+
+    entity(e) ++
+      owners(e, partners) ++
+      [
+        %Class{
+          id: {e, :class, :equity},
+          of: e,
+          name: :equity,
+          tenure: :revocable,
+          preemption: Keyword.get(opts, :preemption, false)
+        }
+      ] ++
+      executive(e, :manager, managers, {e, :owners})
   end
 
   @doc "Shareholders elect a board (per capita), which oversees a CEO."

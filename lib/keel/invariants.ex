@@ -26,7 +26,8 @@ defmodule Keel.Invariants do
     :seat_limits,
     :agent_accountability,
     :eligibility,
-    :ownership_acyclic
+    :ownership_acyclic,
+    :mandates
   ]
 
   def names, do: @static ++ @temporal
@@ -64,6 +65,7 @@ defmodule Keel.Invariants do
   defp refs(%Body{id: i, of: e}), do: [{i, e, :entity}]
   defp refs(%Seat{party: p, role: r} = s), do: [{s, p, Party}, {s, r, Role}]
   defp refs(%Line{kind: :reports, from: f, to: t} = l), do: [{l, f, Role}, {l, t, [Role, Body]}]
+  defp refs(%Line{kind: :mandates, from: f, to: t} = l), do: [{l, f, Party}, {l, t, Body}]
   defp refs(%Line{from: f, to: t} = l), do: [{l, f, [Role, Body]}, {l, t, [Role, Body]}]
 
   defp refs(%Class{id: i, of: e} = c),
@@ -87,8 +89,9 @@ defmodule Keel.Invariants do
         not (Body.weight?(w) and match?({s, _} when s in [:seats, :stake], m)),
         do: {:body_shape, b}
       ) ++
-      for %Class{eligible: el} = c <- Org.nodes(org, Class),
-          not (el in [:any, :employees] or match?({:employees, _}, el)),
+      for %Class{eligible: el, tenure: tn, preemption: pr} = c <- Org.nodes(org, Class),
+          not (el in [:any, :employees] or match?({:employees, _}, el)) or
+            tn not in Class.tenures() or not is_boolean(pr),
           do: {:class_shape, c}
   end
 
@@ -223,6 +226,15 @@ defmodule Keel.Invariants do
     |> Enum.filter(&match?(%Party{kind: :entity}, Org.get(org, &1.holder)))
     |> Enum.map(&{&1.holder, &1.in})
     |> cycles()
+  end
+
+  @doc "A mandate is given by a current member of an owners body (`{:stake, _}`)."
+  def mandates(org, t) do
+    for %Line{kind: :mandates, from: p, to: b} <- Org.edges(org, Line, t),
+        body <- [Org.get(org, b)],
+        not (match?(%Body{members: {:stake, _}}, body) and
+               Map.has_key?(Org.members(org, body, t), p)),
+        do: {:not_owner, p, b}
   end
 
   defp answerable?(org, id, t) do

@@ -11,12 +11,17 @@ defmodule Keel.Decision do
   (outside the model) votes directly.
 
   Alienation (`Keel.Capability.alienation/0`) carries only with the consent of
-  the entire eligible weight: an absent or abstaining owner is a refusal.
+  every owner: an absent or abstaining owner is a refusal — unless that owner has
+  mandated this body for the matter (`Line` of kind `:mandates`, revocable), in
+  which case they are bound by its ordinary rule, which must then also carry.
+
+  Dissolution of an entity whose voting class is revocable (`Keel.Class`
+  `tenure: :revocable`) carries on any one holder's yes.
 
   Returns `{:ultra_vires, nil}` when the body is not competent for the matter
   (`Keel.Org.competent?/4`), else `{:carried | :failed | :inquorate, tally}`.
   """
-  alias Keel.{Body, Capability, Org, Party}
+  alias Keel.{Body, Capability, Line, Org, Ownership, Party}
 
   def decide(org, body_id, matter, votes, t),
     do: decide(org, body_id, matter, votes, t, MapSet.new([Org.get(org, body_id).of]))
@@ -26,9 +31,9 @@ defmodule Keel.Decision do
 
     if Org.competent?(org, body, matter, t) do
       cast =
-        for {p, w} <- Org.members(org, body, t), do: {vote(org, p, matter, votes, t, seen), w}
+        for {p, w} <- Org.members(org, body, t), do: {p, vote(org, p, matter, votes, t, seen), w}
 
-      sum = fn pred -> Enum.sum(for {v, w} <- cast, pred.(v), do: w) end
+      sum = fn pred -> Enum.sum(for {_, v, w} <- cast, pred.(v), do: w) end
 
       tally = %{
         eligible: sum.(fn _ -> true end),
@@ -37,11 +42,8 @@ defmodule Keel.Decision do
         no: sum.(&(&1 == :no))
       }
 
-      outcome =
+      ordinary =
         cond do
-          Capability.alienating?(matter) ->
-            if tally.eligible > 0 and tally.yes == tally.eligible, do: :carried, else: :failed
-
           tally.present * qd < qn * tally.eligible ->
             :inquorate
 
@@ -50,6 +52,18 @@ defmodule Keel.Decision do
 
           true ->
             :failed
+        end
+
+      outcome =
+        cond do
+          Capability.alienating?(matter) ->
+            consent(cast, mandators(org, body, matter, t), ordinary)
+
+          unilateral?(org, body, matter) ->
+            if tally.yes > 0, do: :carried, else: :failed
+
+          true ->
+            ordinary
         end
 
       {outcome, tally}
@@ -68,6 +82,31 @@ defmodule Keel.Decision do
         Map.get(votes, p)
     end
   end
+
+  # Alienation: every owner who has not mandated the body consents, and — if any
+  # owner is bound by mandate — the body's ordinary rule carries.
+  defp consent([], _, _), do: :failed
+
+  defp consent(cast, bound, ordinary) do
+    cond do
+      Enum.any?(cast, fn {p, v, _} -> p not in bound and v != :yes end) -> :failed
+      Enum.any?(cast, fn {p, _, _} -> p in bound end) -> ordinary
+      true -> :carried
+    end
+  end
+
+  defp mandators(org, %Body{id: b}, matter, t) do
+    for %Line{kind: :mandates, to: ^b, from: p, grants: gs} <- Org.edges(org, Line, t),
+        Capability.covered?(gs, matter),
+        into: MapSet.new(),
+        do: p
+  end
+
+  # Dissolution of a revocable contract is any one holder's right.
+  defp unilateral?(org, %Body{of: e, members: {:stake, c}}, matter),
+    do: Capability.covers?(:dissolve, matter) and Ownership.revocable?(org, e, c)
+
+  defp unilateral?(_, _, _), do: false
 
   defp verdict({:carried, _}), do: :yes
   defp verdict({:failed, _}), do: :no

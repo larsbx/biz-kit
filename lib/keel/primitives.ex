@@ -19,11 +19,18 @@ end
 
 defmodule Keel.Class do
   @moduledoc """
-  A stake class `name` of entity `of`, with an eligibility rule:
-  `:any` | `:employees` (of `of`) | `{:employees, entity}`. Stakes of a class with
-  no `Class` node are unrestricted.
+  A stake class `name` of entity `of`. Stakes of a class with no `Class` node are
+  unrestricted and binding.
+
+    * `eligible`   — `:any` | `:employees` (of `of`) | `{:employees, entity}`
+    * `tenure`     — `:binding` (*lāzim*) | `:revocable` (*jāʾiz*): any holder of a
+      revocable class may withdraw, or dissolve the entity, unilaterally
+    * `preemption` — co-holders may pre-empt a sale of units to an outsider (*shufʿa*)
   """
-  defstruct [:id, :of, :name, eligible: :any]
+  @tenures [:binding, :revocable]
+  defstruct [:id, :of, :name, eligible: :any, tenure: :binding, preemption: false]
+
+  def tenures, do: @tenures
 
   def employer(%__MODULE__{eligible: :employees, of: e}), do: e
   def employer(%__MODULE__{eligible: {:employees, e}}), do: e
@@ -72,8 +79,10 @@ defmodule Keel.Line do
 
     * `:reports`   — role `from` answers to `to` (a role or a body)
     * `:delegates` — `from` confers `grants` on `to` (each a role or a body); must attenuate
+    * `:mandates`  — owner `from` (a party) authorizes owners body `to` to decide `grants`
+      on their behalf by its ordinary rule (*wakāla*); revoked by ending `during`
   """
-  @kinds [:reports, :delegates]
+  @kinds [:reports, :delegates, :mandates]
   defstruct [:from, :to, kind: :reports, grants: [], during: %Keel.Interval{}]
   def kinds, do: @kinds
 end
