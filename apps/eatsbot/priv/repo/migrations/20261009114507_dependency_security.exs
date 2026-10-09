@@ -10,6 +10,8 @@ defmodule Eatsbot.Repo.Migrations.DependencySecurity do
   use Ecto.Migration
 
   def up do
+    # Fail rather than queue indefinitely behind a live authentication writer.
+    execute("SET LOCAL lock_timeout = '5s'")
     execute("LOCK TABLE tokens IN ACCESS EXCLUSIVE MODE")
     execute(token_consolidation_sql())
 
@@ -51,6 +53,8 @@ defmodule Eatsbot.Repo.Migrations.DependencySecurity do
   end
 
   def down do
+    execute("SET LOCAL lock_timeout = '5s'")
+
     alter table(:tokens) do
       add :id, :uuid, null: false, default: fragment("gen_random_uuid()")
     end

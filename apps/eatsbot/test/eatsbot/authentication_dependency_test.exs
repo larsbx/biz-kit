@@ -41,6 +41,39 @@ defmodule Eatsbot.AuthenticationDependencyTest do
     refute bearer("invalid.jwt.token").assigns[:current_user]
   end
 
+  test "legacy subject-only sessions require a fresh sign-in", %{user: user} do
+    subject = AshAuthentication.user_to_subject(user)
+
+    assert :error =
+             Helpers.authenticate_resource_from_session(User, %{"user" => subject}, :eatsbot, [])
+
+    refute live_session(%{"user" => subject})
+  end
+
+  test "forged revocation cannot invalidate a signed credential", %{user: user} do
+    {:ok, token, _claims} = Jwt.token_for_user(user)
+    [header, payload, _signature] = String.split(token, ".")
+    forged = Enum.join([header, payload, Base.url_encode64("forged", padding: false)], ".")
+
+    assert {:error, _} = Actions.revoke(Token, forged)
+    assert bearer(token).assigns.current_user.id == user.id
+  end
+
+  test "clearing a session revokes both browser and bearer credentials", %{user: user} do
+    {:ok, browser_token, _claims} = Jwt.token_for_user(user)
+    {:ok, bearer_token, _claims} = Jwt.token_for_user(user)
+
+    conn =
+      Plug.Test.conn(:delete, "/sign-out")
+      |> Plug.Test.init_test_session(%{"user_token" => browser_token})
+      |> Plug.Conn.put_req_header("authorization", "Bearer " <> bearer_token)
+      |> AshAuthentication.Phoenix.Controller.clear_session(:eatsbot)
+
+    refute Plug.Conn.get_session(conn, "user_token")
+    refute bearer(browser_token).assigns[:current_user]
+    refute bearer(bearer_token).assigns[:current_user]
+  end
+
   defp bearer(token) do
     Plug.Test.conn(:get, "/")
     |> Plug.Conn.put_req_header("authorization", "Bearer " <> token)
@@ -57,6 +90,20 @@ defmodule Eatsbot.AuthenticationDependencyTest do
     assert id == user.id
     assert :ok = Actions.revoke(Token, token)
     assert :error = Helpers.authenticate_resource_from_session(User, session, :eatsbot, [])
+
+    refute live_session(session)
+  end
+
+  defp live_session(session) do
+    {:cont, socket} =
+      AshAuthentication.Phoenix.LiveSession.on_mount(
+        :default,
+        %{},
+        session,
+        %Phoenix.LiveView.Socket{endpoint: EatsbotWeb.Endpoint}
+      )
+
+    socket.assigns[:current_user]
   end
 
   test "sign-in renews the session while retaining the return path", %{user: user} do

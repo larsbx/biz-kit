@@ -197,5 +197,61 @@ defmodule EatsbotWeb.DependencySecurityTest do
                Eatsbot.Accounts.Token,
                %{"jti" => claims["jti"], "purpose" => "magic_link"}
              )
+
+    document = LazyHTML.from_document(conn.resp_body)
+    [action] = document |> LazyHTML.query("form[method='post']") |> LazyHTML.attribute("action")
+
+    [csrf_token] =
+      document |> LazyHTML.query("input[name='_csrf_token']") |> LazyHTML.attribute("value")
+
+    signed_in =
+      conn
+      |> recycle()
+      |> put_private(:plug_skip_csrf_protection, false)
+      |> post(action, %{"_csrf_token" => csrf_token, "user" => %{"token" => token}})
+
+    assert redirected_to(signed_in) == "/"
+    user_token = get_session(signed_in, "user_token")
+    assert is_binary(user_token)
+    refute user_token == token
+
+    assert {:ok, %{id: id}} =
+             AshAuthentication.Plug.Helpers.authenticate_resource_from_session(
+               Eatsbot.Accounts.User,
+               %{"user_token" => user_token},
+               :eatsbot,
+               []
+             )
+
+    assert id == user.id
+
+    assert {:ok, []} =
+             AshAuthentication.TokenResource.Actions.get_token(
+               Eatsbot.Accounts.Token,
+               %{"jti" => claims["jti"], "purpose" => "magic_link"}
+             )
+
+    replay =
+      conn
+      |> recycle()
+      |> put_private(:plug_skip_csrf_protection, false)
+      |> post(action, %{"_csrf_token" => csrf_token, "user" => %{"token" => token}})
+
+    assert redirected_to(replay) == "/sign-in"
+    refute get_session(replay, "user_token")
+  end
+
+  test "magic-link sign-in and logout reject requests without CSRF", %{conn: conn} do
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      conn
+      |> put_private(:plug_skip_csrf_protection, false)
+      |> post("/auth/user/magic_link", %{"user" => %{"token" => "invalid"}})
+    end
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      conn
+      |> put_private(:plug_skip_csrf_protection, false)
+      |> delete(~p"/sign-out")
+    end
   end
 end
