@@ -3,7 +3,7 @@ defmodule SpruceGoose.RuntimeRecoveryConfigTest do
 
   defp read_runtime(extra_env, opts \\ []) do
     code = """
-    config = Config.Reader.read!(\"config/runtime.exs\", env: :prod)
+    config = Config.Reader.read!(#{inspect(SpruceGoose.UmbrellaRuntime.path())}, env: :prod)
     app = Keyword.fetch!(config, :spruce_goose)
     IO.puts(\"derivation_executor_actor=\#{inspect(Keyword.get(app, :derivation_executor_actor))}\")
     oban = Keyword.fetch!(app, Oban)
@@ -27,7 +27,7 @@ defmodule SpruceGoose.RuntimeRecoveryConfigTest do
           {"TOKEN_SIGNING_SECRET", String.duplicate("x", 64)},
           {"SPRUCE_GOOSE_MCP_ENABLED", "false"},
           {"OUTBOX_DISPATCHER_ENABLED", "false"}
-        ] ++ genesis_env ++ extra_env,
+        ] ++ SpruceGoose.UmbrellaRuntime.peer_env() ++ genesis_env ++ extra_env,
       stderr_to_stdout: true
     )
   end

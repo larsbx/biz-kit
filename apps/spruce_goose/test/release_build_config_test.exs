@@ -97,7 +97,8 @@ defmodule SpruceGoose.ReleaseBuildConfigTest do
 
     refute Keyword.has_key?(config, :default_release)
     assert Keyword.get(opts, :include_erts) == true
-    assert Keyword.get(opts, :runtime_config_path) == "config/runtime.exs"
+    # Inside the biz-kit umbrella the single runtime file lives at the root.
+    assert Keyword.get(opts, :runtime_config_path) == "../../config/runtime.exs"
   end
 
   test "the release names this application explicitly and permanently", %{config: config} do

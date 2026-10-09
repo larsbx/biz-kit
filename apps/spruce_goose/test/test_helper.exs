@@ -1,5 +1,28 @@
 ExUnit.start(exclude: [:separate_sessions])
 
+defmodule SpruceGoose.UmbrellaRuntime do
+  @moduledoc """
+  The biz-kit umbrella has one runtime configuration for the whole release,
+  holding every app's section. Reading it for `:prod` therefore evaluates the
+  other apps' fail-closed checks too; `peer_env/0` satisfies them with inert
+  values so these tests exercise only spruce_goose's own section.
+  """
+
+  def path, do: Path.expand("../../../config/runtime.exs", __DIR__)
+
+  def peer_env do
+    [
+      {"PUBLIC_BASE_URL", "https://dispatch.invalid"},
+      {"SECRET_KEY_BASE", String.duplicate("s", 64)},
+      {"OIDC_ISSUER", "https://issuer.invalid"},
+      {"OIDC_CLIENT_ID_API", "dispatch-api"},
+      {"OIDC_AUDIENCE", "dispatch-api"},
+      {"APPLICATION_ENCRYPTION_KEY_ID", "test-key"},
+      {"DIAGNOSTICS_TOKEN", "test-token"}
+    ]
+  end
+end
+
 defmodule SpruceGoose.SandboxMode do
   @moduledoc """
   Set the sandbox mode, but only where there is a sandbox.

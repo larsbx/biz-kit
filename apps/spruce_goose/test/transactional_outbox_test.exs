@@ -129,13 +129,15 @@ defmodule SpruceGoose.TransactionalOutboxTest do
   end
 
   test "enabled runtime configuration installs exactly one dispatcher cron entry" do
-    env = %{
-      "OUTBOX_DISPATCHER_ENABLED" => "true",
-      "OUTBOX_HANDLER" => inspect(HandlerStub),
-      "DATABASE_URL" => "ecto://postgres:postgres@localhost/spruce_goose_test",
-      "TOKEN_SIGNING_SECRET" => "runtime-config-test-only",
-      "SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR" => "runtime-config-genesis"
-    }
+    env =
+      %{
+        "OUTBOX_DISPATCHER_ENABLED" => "true",
+        "OUTBOX_HANDLER" => inspect(HandlerStub),
+        "DATABASE_URL" => "ecto://postgres:postgres@localhost/spruce_goose_test",
+        "TOKEN_SIGNING_SECRET" => "runtime-config-test-only",
+        "SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR" => "runtime-config-genesis"
+      }
+      |> Map.merge(Map.new(SpruceGoose.UmbrellaRuntime.peer_env()))
 
     previous = Map.new(env, fn {key, _value} -> {key, System.get_env(key)} end)
     Enum.each(env, fn {key, value} -> System.put_env(key, value) end)
@@ -148,7 +150,7 @@ defmodule SpruceGoose.TransactionalOutboxTest do
     end)
 
     config =
-      Config.Reader.read!(Path.expand("../config/runtime.exs", __DIR__),
+      Config.Reader.read!(SpruceGoose.UmbrellaRuntime.path(),
         env: :prod,
         target: :host
       )
