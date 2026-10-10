@@ -71,10 +71,19 @@ Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
 
 ## Still to reconcile
 
-1. **Event stores.** `coop_substrate` uses Commanded `eventstore` (chosen
-   after an AshEvents spike); `spruce_goose` uses `ash_events`.
-   `SpruceGoose.Identity` is already designed to adopt `coop_substrate`'s log
-   as an adapter.
+The [architecture decision matrix](docs/architecture/2026-10-09-integration-decisions.md)
+reviews the implementations behind these choices and proposes an integration
+path. It recommends retaining domain authorities with adapters, sharing selected
+infrastructure, and addressing production isolation first. The recommendations
+remain subject to review; no migration or production behavior changes with the
+documentation.
+
+1. **Event storage and authority.** `coop_substrate` uses Commanded's
+   `eventstore` library (chosen after an AshEvents spike), without full
+   Commanded aggregates. `spruce_goose` uses `ash_events` for notes and a
+   separate PostgreSQL certified-event ledger for orchestration shadow history;
+   Ash/PostgreSQL remains its live task authority. `SpruceGoose.Identity` has
+   an adapter seam for the cooperative log; only `Identity.Local` exists today.
 2. **Identity.** `dispatch` (OIDC) and `spruce_goose` (ash_authentication
    tokens and OAuth2) have separate models.
 3. **Shared environment variables in production.** `DATABASE_URL`,
