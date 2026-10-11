@@ -89,6 +89,73 @@ defmodule CoopSubstrate.TaskCommandsTest do
     assert :ok = Log.verify_chains()
   end
 
+  defp resign(command, actors) do
+    unsigned = %{command | signers: Enum.map(actors, & &1.signer), sigs: %{}}
+
+    Enum.reduce(actors, unsigned, fn actor, env ->
+      {:ok, signed} = Envelope.sign(env, actor.signer.key_id, actor.seed)
+      signed
+    end)
+  end
+
+  test "all task event types reject distinct same-role keys without restarting the appender", ctx do
+    other_gov = new_member("governance")
+    other_operator = new_member("operator")
+
+    {:ok, _} =
+      Log.append(
+        signed_event(ctx.gov, "RoleKeyDeclared", %{
+          "role" => "governance",
+          "key_id" => other_gov.signer.key_id,
+          "pubkey" => {:bytes, other_gov.signer.pubkey}
+        })
+      )
+
+    appender = Process.whereis(Log)
+
+    commands = [
+      resign(grant(ctx.gov, ctx.operator), [ctx.gov, other_gov]),
+      resign(revoke(ctx), [other_gov, ctx.gov]),
+      resign(baseline(ctx.gov, Map.put(@subject, "task_id", "task-2")), [ctx.gov, other_gov]),
+      resign(proposal(ctx), [ctx.operator, other_operator]),
+      resign(proposal(ctx), [other_operator, ctx.operator])
+    ]
+
+    for command <- commands do
+      assert length(Enum.uniq(Enum.map(command.signers, & &1.key_id))) == 2
+      assert length(Enum.uniq(Enum.map(command.signers, & &1.pubkey))) == 2
+      assert :ok = Envelope.verify(command)
+
+      for _attempt <- 1..3 do
+        assert_rejected(command, :task_signer_cardinality)
+        assert Process.whereis(Log) == appender
+        assert Process.alive?(appender)
+      end
+    end
+
+    assert {:ok, _} = Tasks.propose(proposal(ctx))
+    assert Process.whereis(Log) == appender
+  end
+
+  test "invalid governance signatures and malformed signer collections are safe to retry", ctx do
+    appender = Process.whereis(Log)
+    command = baseline(ctx.gov, Map.put(@subject, "task_id", "task-2"))
+    invalid = %{command | sigs: %{ctx.gov.signer.key_id => <<0::512>>}}
+
+    for _attempt <- 1..3 do
+      assert_rejected(invalid, {:invalid_signature, ctx.gov.signer.key_id})
+      assert_rejected(%{command | signers: []}, :signers_required)
+      assert_rejected(%{command | signers: nil}, :signers_required)
+      assert_rejected(%{command | signers: [%{}]}, :bad_signer)
+      assert Process.whereis(Log) == appender
+      assert Process.alive?(appender)
+    end
+
+    assert {:ok, _} = Log.append(command)
+    assert {:ok, _} = Tasks.propose(proposal(ctx))
+    assert Process.whereis(Log) == appender
+  end
+
   test "proposal is durable, typed, signed, and rebuilt from the ledger alone", ctx do
     command = proposal(ctx, %{}, timestamp_ms: 1)
     {:ok, result} = Tasks.propose(command)

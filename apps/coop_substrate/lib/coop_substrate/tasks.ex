@@ -87,7 +87,8 @@ defmodule CoopSubstrate.Tasks do
 
   @doc false
   def check(%Envelope{} = env, gate) do
-    with :ok <- scope_valid(env) do
+    with :ok <- signer_cardinality(env),
+         :ok <- scope_valid(env) do
       check_type(env, gate.orchestration, gate.role_keys)
     end
   end
@@ -144,6 +145,11 @@ defmodule CoopSubstrate.Tasks do
     end
   end
 
+  # Task events admit one accountable governance or operator key. Other event
+  # types retain their existing multi-signature rules and canonical bytes.
+  defp signer_cardinality(%Envelope{signers: [_signer]}), do: :ok
+  defp signer_cardinality(_env), do: {:error, :task_signer_cardinality}
+
   defp scope_valid(env) do
     fields =
       if Map.has_key?(env.payload, "task_id"),
@@ -165,8 +171,7 @@ defmodule CoopSubstrate.Tasks do
       else: {:error, :empty_task_field}
   end
 
-  defp governance_declared(env, keys) do
-    [signer] = env.signers
+  defp governance_declared(%Envelope{signers: [signer]} = env, keys) do
 
     if Map.get(keys[{env.chapter_id, "governance"}] || %{}, signer.key_id) == signer.pubkey,
       do: :ok,
@@ -187,8 +192,7 @@ defmodule CoopSubstrate.Tasks do
        else: {:error, :task_grant_scope_mismatch}
   end
 
-  defp operator_authorized(env, grant) do
-    [signer] = env.signers
+  defp operator_authorized(%Envelope{signers: [signer]} = env, grant) do
 
     cond do
       not grant.active ->
