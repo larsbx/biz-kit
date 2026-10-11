@@ -87,7 +87,12 @@ defmodule CoopSubstrate.Projections.Membership do
              "TaskOperatorGrantedV1",
              "TaskOperatorRevokedV1",
              "TaskBaselineRecordedV1",
-             "TaskProposedV1"
+             "TaskProposedV1",
+             "TaskReviewerGrantedV1",
+             "TaskReviewerRevokedV1",
+             "TaskDoDDefinedV1",
+             "TaskEvidenceSubmittedV1",
+             "TaskDoDReviewedV1"
            ] do
     update_in(state, [:orchestration], &CoopSubstrate.Projections.Tasks.handle_event(env, &1))
   end

@@ -131,6 +131,33 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     assert Log.replay(Projection) == state
   end
 
+  test "authoritative gate and standalone task replay fold all DoD events identically", ctx do
+    d = definition(ctx)
+    s = submission(ctx, d)
+    r = review(ctx, d, s)
+    {:ok, _} = Log.append([d, s, r])
+    {:ok, tasks} = Log.replay(Projection)
+    {:ok, gate} = Log.replay(CoopSubstrate.Projections.Membership)
+    assert gate.orchestration == tasks
+    assert gate.orchestration.dod_grants[ctx.reviewer_grant.event_id].active
+    assert gate.orchestration.tasks[@key].version == 5
+    assert gate.orchestration.tasks[@key].dod.review.decision == "accept"
+
+    revoke =
+      signed_event(
+        ctx.gov,
+        "TaskReviewerRevokedV1",
+        Map.put(@scope, "authorization_event_id", ctx.reviewer_grant.event_id)
+      )
+
+    {:ok, _} = Log.append(revoke)
+    restart_log()
+    {:ok, tasks} = Log.replay(Projection)
+    {:ok, gate} = Log.replay(CoopSubstrate.Projections.Membership)
+    assert gate.orchestration == tasks
+    refute gate.orchestration.dod_grants[ctx.reviewer_grant.event_id].active
+  end
+
   test "definition, evidence and independent review are durable and replayable", ctx do
     d = definition(ctx)
     s = submission(ctx, d)
