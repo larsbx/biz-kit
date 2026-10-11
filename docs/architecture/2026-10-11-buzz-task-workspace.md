@@ -91,5 +91,5 @@ The PostgreSQL acceptance tests and umbrella compilation were not run locally:
 this environment lacks the project's Elixir 1.19/OTP 27 runtime and database
 setup. The Consolidation workflow now explicitly checks the new files' format
 and already runs the full common-ledger suite. Its CI result must be checked
-before merge. Branch publication was blocked by automatic approval review;
-there is no PR or CI result for this branch yet.
+before merge. Publication and merge are authorized; the current full-suite
+validation result is recorded in [PR #5](https://github.com/larsbx/biz-kit/pull/5).
