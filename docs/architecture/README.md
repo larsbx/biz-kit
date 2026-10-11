@@ -1,12 +1,13 @@
 # biz-kit architecture
 
-The umbrella preserves each application's history and domain contracts. These
-documents evaluate integration across those contracts; a recommendation is not
-an authority transfer or permission to rewrite existing records.
+The consolidation target is one signed business-event ledger and rebuildable
+domain views. The imported histories and existing identifiers remain intact.
 
-- [Integration decision matrix and staged path — 2026-10-09](2026-10-09-integration-decisions.md):
-  persistence, authentication, production isolation, Keel ownership, and optional
-  applications, with implementation evidence and migration gates.
+- [One source of truth — 2026-10-11](2026-10-11-single-source-of-truth.md): current
+  direction, common command/write path, removal targets, and cutover proof.
+- [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
+  baseline implementation evidence and tradeoffs. Its recommendation to retain
+  independent authorities is superseded by the consolidation target.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

@@ -1,6 +1,12 @@
-# Integration decision matrix and staged path
+# Integration comparison at the October 9 baseline
 
-Date: 2026-10-09 (America/New_York). Status: **recommendations for review**.
+Date: 2026-10-09 (America/New_York). Status: **historical comparison; earlier
+recommendations superseded on October 11**.
+
+The current direction is [one source of truth](2026-10-11-single-source-of-truth.md).
+The recommendation tables, component recommendations, and staged path below
+record the earlier assessment. They are retained as comparative evidence and
+are not the chosen consolidation plan.
 
 This review is anchored to merged biz-kit commit
 `8aa79ec1ca419718d70592f15d8cf39bb271e32f` ([integration PR #1][integration-pr]).
@@ -10,7 +16,7 @@ Source inspection establishes repository behavior and documented contracts;
 it does not establish the state of a running deployment. In particular,
 SpruceGoose's `current-state.md` carries its own dated production evidence.
 
-## Recommendation
+## Earlier recommendation — superseded
 
 Retain independent domain authorities with explicit adapters. Share the build,
 dependency review, deployment inventory, observability, and selected backing
@@ -54,9 +60,9 @@ rewriting an entire unanchored history. Independently retained signed
 checkpoints constrain that threat for the cooperative ledger; deployment
 roles, key custody, and external evidence remain part of the trust boundary.
 
-## Authority boundaries
+## Authority boundaries in the imported implementation
 
-| Fact or decision | Authority retained | Permitted integration role |
+| Fact or decision | Authority at the baseline | Earlier integration role |
 | --- | --- | --- |
 | Cooperative membership, registered signing keys, capital and economic records | CoopSubstrate signed canonical ledger and its append gate | Other apps consume verified events/projections; they do not overwrite ledger-derived balances. |
 | Trips, loads, participants, operational role assignments | Dispatch's authorized domain actions and database | Orchestration submits scoped requests and observes results through adapters; it does not write Dispatch tables. |
@@ -99,7 +105,7 @@ The ordering/replay and isolation assessments derive from [substrate],
 Authentication consequences derive from [oidc], [principal], [sg-oauth],
 [actor-plug], and [authorization].
 
-### Component recommendations
+### Earlier component recommendations — superseded
 
 | Choice | Recommendation and reason | Cost, operational consequence, and reconsideration gate |
 | --- | --- | --- |
@@ -300,7 +306,7 @@ restart/completion reconciliation, and provenance; importing it must not
 introduce a second task/deployment authority ([spruce-readme], [spruce-agent],
 [spruce-runtime], [spruce-persistence], [current-state]).
 
-## Staged path and acceptance gates
+## Earlier staged path and acceptance gates — superseded
 
 Each stage is a proposed follow-up, not evidence it has been completed.
 Later authority changes require an explicit reviewed decision and deployment
