@@ -172,7 +172,6 @@ defmodule CoopSubstrate.Tasks do
   end
 
   defp governance_declared(%Envelope{signers: [signer]} = env, keys) do
-
     if Map.get(keys[{env.chapter_id, "governance"}] || %{}, signer.key_id) == signer.pubkey,
       do: :ok,
       else: {:error, :task_governance_not_declared}
@@ -193,7 +192,6 @@ defmodule CoopSubstrate.Tasks do
   end
 
   defp operator_authorized(%Envelope{signers: [signer]} = env, grant) do
-
     cond do
       not grant.active ->
         {:error, :task_grant_revoked}
