@@ -2,7 +2,9 @@
 
 Date: 2026-10-11 (America/Chicago).
 Direction: consolidate business-state authority. Status: **target architecture;
-runtime consolidation remains to implement**.
+full runtime consolidation remains to implement**.
+The [first implementation stage](2026-10-11-first-ledger-task-command.md) retires
+the notes spike and adds an isolated common-ledger task proposal.
 
 This replaces the October 9 recommendation to retain independent authorities
 behind adapters. The selected direction is one source of truth. The proposed
@@ -156,9 +158,9 @@ ledger.
    evidence. Optional truck-shop/spruce imports stay out of this work unless
    they supply a specific missing capability through the common admission path.
 
-The first runtime PR should therefore remove the notes spike and implement a
-bounded ledger-backed task command in an isolated instance. This document does
-not claim that PR exists or those runtime steps have run.
+The [first implementation stage](2026-10-11-first-ledger-task-command.md) removes
+the notes code/dependency and delivers a bounded task proposal against a signed
+baseline in an isolated instance. Production writer cutover remains later work.
 
 ## Cutover proof and completion
 
@@ -190,16 +192,16 @@ Consolidation is complete when:
 - task, dispatch, ownership, identity/grant, and economic recovery uses one
   event/version contract, with preserved signatures and scoped access.
 
-The runtime currently remains at the imported architecture. Main was checked
-again at `8aa79ec1ca419718d70592f15d8cf39bb271e32f`; the only open follow-up was
-the documentation PR. The [October 9 comparison](2026-10-09-integration-decisions.md)
+The production write paths remain at the imported architecture. The first
+implementation stage is based on architecture merge
+`303a6e3ab75027cb70a73e4e2c8deff09434f691`. The [October 9 comparison](2026-10-09-integration-decisions.md)
 retains the source evidence and costs. Its multi-authority recommendation and
 staged receipt-bridge path are superseded by this consolidation target.
 
 [substrate]: ../../apps/coop_substrate/SUBSTRATE.md
 [log]: ../../apps/coop_substrate/lib/coop_substrate/log.ex
 [event-store]: ../../apps/coop_substrate/lib/coop_substrate/event_store.ex
-[notes]: ../../apps/spruce_goose/lib/spruce_goose/notes/note.ex
+[notes]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/notes/note.ex
 [shadow]: ../../apps/spruce_goose/lib/spruce_goose/kernel/shadow_events.ex
 [pg-ledger]: ../../apps/spruce_goose/lib/spruce_goose/kernel/postgres/event_ledger.ex
 [task-projector]: ../../apps/spruce_goose/lib/spruce_goose/kernel/task_projector.ex

@@ -370,9 +370,9 @@ ledger and identity tests were read as contract evidence ([coop-tests],
 [authority-planes]: ../../apps/spruce_goose/docs/authority-planes.md
 [current-state]: ../../apps/spruce_goose/docs/current-state.md
 [sg-decisions]: ../../apps/spruce_goose/docs/decisions/2026-09-08-kernel-and-ledger-shape.md
-[notes]: ../../apps/spruce_goose/lib/spruce_goose/notes/note.ex
-[ash-event]: ../../apps/spruce_goose/lib/spruce_goose/events/event.ex
-[clear-notes]: ../../apps/spruce_goose/lib/spruce_goose/events/clear_records.ex
+[notes]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/notes/note.ex
+[ash-event]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/events/event.ex
+[clear-notes]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/events/clear_records.ex
 [certified]: ../../apps/spruce_goose/lib/spruce_goose/kernel/certified_event.ex
 [canonical]: ../../apps/spruce_goose/lib/spruce_goose/kernel/canonical.ex
 [pg-ledger]: ../../apps/spruce_goose/lib/spruce_goose/kernel/postgres/event_ledger.ex

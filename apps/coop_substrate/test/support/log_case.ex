@@ -147,6 +147,7 @@ defmodule CoopSubstrate.LogCase do
 
     {:ok, envelope} =
       Envelope.new(%{
+        event_id: Map.get_lazy(attrs, :event_id, &CoopSubstrate.ULID.generate/0),
         chapter_id: Map.get(attrs, :chapter_id, "chapter-genesis"),
         type: type,
         payload: payload,

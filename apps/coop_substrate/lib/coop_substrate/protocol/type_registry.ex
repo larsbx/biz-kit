@@ -1084,6 +1084,8 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
   defp field_valid?(:any, _v), do: true
 
   defp all_types do
-    Map.merge(@builtin_types, Application.get_env(:coop_substrate, :extra_event_types, %{}))
+    @builtin_types
+    |> Map.merge(CoopSubstrate.Tasks.event_types())
+    |> Map.merge(Application.get_env(:coop_substrate, :extra_event_types, %{}))
   end
 end

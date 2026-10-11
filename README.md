@@ -82,7 +82,9 @@ SpruceGoose business-event writer, competing row-write authority, and redundant
 identity/configuration machinery as their replacements pass cutover checks.
 Permanent cross-ledger bridges are outside the target.
 
-Runtime consolidation remains to implement. Today Dispatch and SpruceGoose
+The [first implementation stage](docs/architecture/2026-10-11-first-ledger-task-command.md)
+retires the notes/AshEvents spike and adds an isolated signed task proposal on
+the common ledger. Full runtime consolidation remains to implement. Dispatch and SpruceGoose
 still own live domain rows; their schemas/configuration cannot safely be
 combined by pointing both at the same `DATABASE_URL`. The architecture document
 defines the removal order, preserved signatures/IDs, and replay/recovery proof.
