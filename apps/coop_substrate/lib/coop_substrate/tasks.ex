@@ -48,6 +48,7 @@ defmodule CoopSubstrate.Tasks do
           "lifecycle_version" => :int
         })
     }
+    |> Map.merge(CoopSubstrate.Tasks.DoD.event_types())
   end
 
   defp spec(role, prefix, scope, fields) do
@@ -89,7 +90,9 @@ defmodule CoopSubstrate.Tasks do
   def check(%Envelope{} = env, gate) do
     with :ok <- signer_cardinality(env),
          :ok <- scope_valid(env) do
-      check_type(env, gate.orchestration, gate.role_keys)
+      if Map.has_key?(CoopSubstrate.Tasks.DoD.event_types(), env.type),
+        do: CoopSubstrate.Tasks.DoD.check(env, gate.orchestration, gate.role_keys),
+        else: check_type(env, gate.orchestration, gate.role_keys)
     end
   end
 
@@ -216,7 +219,9 @@ defmodule CoopSubstrate.Tasks do
 
   @doc false
   def duplicate([%Envelope{} = env], state) do
-    case Map.fetch(state.proposals, env.event_id) do
+    commands = Map.merge(state.proposals, state.dod_commands)
+
+    case Map.fetch(commands, env.event_id) do
       :error ->
         :new
 
