@@ -69,20 +69,25 @@ Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
 - `dispatch`: `ash_authentication ~> 4.0` became `~> 5.0-rc` to match
   `spruce_goose`. dispatch declared the dependency but used none of it.
 
-## Still to reconcile
+## Consolidation direction
 
-1. **Event stores.** `coop_substrate` uses Commanded `eventstore` (chosen
-   after an AshEvents spike); `spruce_goose` uses `ash_events`.
-   `SpruceGoose.Identity` is already designed to adopt `coop_substrate`'s log
-   as an adapter.
-2. **Identity.** `dispatch` (OIDC) and `spruce_goose` (ash_authentication
-   tokens and OAuth2) have separate models.
-3. **Shared environment variables in production.** `DATABASE_URL`,
-   `POOL_SIZE` and `SECRET_KEY_BASE` are read by both `dispatch` and
-   `spruce_goose`. Both default their HTTP port to 4000 (`PORT` / `MCP_PORT`).
-   Two Ecto repos pointed at one database would share `schema_migrations`.
-4. **Keel and the ledger.** Ownership changes in `keel` (transfer, withdrawal,
-   dissolution) should be appended as signed `coop_substrate` events.
-5. **Optional apps.** `truck-shop` (Phoenix 1.7, Elixir 1.16; overlaps
-   dispatch's fleet domain) and `spruce` (agent supervision; overlaps
-   spruce_goose).
+The target is [one source of truth](docs/architecture/2026-10-11-single-source-of-truth.md):
+one signed business-event ledger, one command admission path, one principal
+registry, and one PostgreSQL database. Task, dispatch, ownership, and economic
+views become rebuildable projections. Domain rules remain organized in modules.
+
+The existing `CoopSubstrate.Log` / `eventstore` implementation is the proposed
+common ledger. The plan retires the AshEvents notes spike, the separate
+SpruceGoose business-event writer, competing row-write authority, and redundant
+identity/configuration machinery as their replacements pass cutover checks.
+Permanent cross-ledger bridges are outside the target.
+
+Runtime consolidation remains to implement. Today Dispatch and SpruceGoose
+still own live domain rows; their schemas/configuration cannot safely be
+combined by pointing both at the same `DATABASE_URL`. The architecture document
+defines the removal order, preserved signatures/IDs, and replay/recovery proof.
+Optional `truck-shop` and `spruce` imports remain outside this consolidation work.
+
+The [October 9 comparison](docs/architecture/2026-10-09-integration-decisions.md)
+retains the implementation evidence and tradeoffs; its recommendation to retain
+independent authorities is superseded.
