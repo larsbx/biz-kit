@@ -98,7 +98,8 @@ defmodule CoopSubstrate.TaskCommandsTest do
     end)
   end
 
-  test "all task event types reject distinct same-role keys without restarting the appender", ctx do
+  test "all task event types reject distinct same-role keys without restarting the appender",
+       ctx do
     other_gov = new_member("governance")
     other_operator = new_member("operator")
 
