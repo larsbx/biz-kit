@@ -1,0 +1,260 @@
+defmodule CoopSubstrate.TaskCommandsTest do
+  use CoopSubstrate.LogCase, async: false
+
+  alias CoopSubstrate.Log
+  alias CoopSubstrate.Projections.Tasks, as: Projection
+  alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.Tasks
+  alias CoopSubstrate.ULID
+
+  @scope %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
+  @subject Map.put(@scope, "task_id", "task-1")
+  @key {"chapter-genesis", "tenant-1", "project-1", "task-1"}
+
+  setup do
+    gov = new_member("governance")
+    operator = new_member("operator")
+
+    {:ok, _} =
+      Log.append(
+        signed_event(gov, "RoleKeyDeclared", %{
+          "role" => "governance",
+          "key_id" => gov.signer.key_id,
+          "pubkey" => {:bytes, gov.signer.pubkey}
+        })
+      )
+
+    grant = grant(gov, operator)
+    {:ok, _} = Log.append([grant, baseline(gov)])
+    %{gov: gov, operator: operator, grant: grant}
+  end
+
+  defp grant(gov, operator, scope \\ @scope) do
+    signed_event(
+      gov,
+      "TaskOperatorGrantedV1",
+      Map.merge(scope, %{
+        "principal_id" => "principal-1",
+        "key_id" => operator.signer.key_id,
+        "pubkey" => {:bytes, operator.signer.pubkey}
+      })
+    )
+  end
+
+  defp baseline(gov, subject \\ @subject) do
+    signed_event(
+      gov,
+      "TaskBaselineRecordedV1",
+      Map.merge(subject, %{
+        "legacy_row_id" => "legacy-task-1",
+        "title" => "Propose the integration task",
+        "definition_of_done" => "Reviewed implementation",
+        "source_digest" => {:bytes, :crypto.hash(:sha256, "preserved source snapshot")},
+        "definition_ref" => {:bytes, :crypto.hash(:sha256, "preserved task definition")}
+      })
+    )
+  end
+
+  defp proposal(ctx, changes \\ %{}, attrs \\ []) do
+    signed_event(
+      ctx.operator,
+      "TaskProposedV1",
+      Map.merge(
+        Map.merge(@subject, %{
+          "principal_id" => "principal-1",
+          "authorization_event_id" => ctx.grant.event_id,
+          "expected_version" => 1,
+          "lifecycle_version" => 1
+        }),
+        changes
+      ),
+      attrs
+    )
+  end
+
+  defp revoke(ctx) do
+    signed_event(
+      ctx.gov,
+      "TaskOperatorRevokedV1",
+      Map.put(@scope, "authorization_event_id", ctx.grant.event_id)
+    )
+  end
+
+  defp assert_rejected(command, reason) do
+    before_head = Log.head()
+    before_state = Log.replay(Projection)
+    assert {:error, {:reject, 0, ^reason}} = Log.append(command)
+    assert Log.head() == before_head
+    assert Log.replay(Projection) == before_state
+    assert :ok = Log.verify_chains()
+  end
+
+  test "proposal is durable, typed, signed, and rebuilt from the ledger alone", ctx do
+    command = proposal(ctx, %{}, timestamp_ms: 1)
+    {:ok, result} = Tasks.propose(command)
+    assert result.task_version == 2
+    assert result.global_seq == 4
+    assert result.event_id == command.event_id
+
+    {:ok, state} = Log.replay(Projection)
+    assert %{state: "proposed", version: 2, last_event_id: id} = state.tasks[@key]
+    assert id == command.event_id
+
+    assert {:ok, %{tasks: %{@key => %{state: "inbox", version: 1}}}} =
+             Log.replay(Projection, as_of: 3)
+
+    {:ok, records} = Log.export_stream("chapter-genesis/tasks/tenant-1/project-1/task-1")
+    {:ok, verified} = Log.verify_export(records)
+    rebuilt = Enum.reduce(verified, Projection.init(), &Projection.handle_event/2)
+    assert rebuilt.tasks == state.tasks
+    assert :ok = Log.verify_chains()
+    assert Log.replay(Projection) == {:ok, state}
+  end
+
+  test "append gate serializes competing commands and rejects the stale one", ctx do
+    results =
+      [proposal(ctx), proposal(ctx)]
+      |> Enum.map(fn command -> Task.async(fn -> Tasks.propose(command) end) end)
+      |> Enum.map(&Task.await/1)
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+    assert {:error, {:reject, 0, {:stale_task_version, 1, 2}}} in results
+    assert Log.head().global_seq == 4
+  end
+
+  test "duplicate retry returns its original acknowledgement after restart and revocation", ctx do
+    command = proposal(ctx)
+    assert {:ok, result} = Tasks.propose(command)
+    {:ok, _} = Log.append(revoke(ctx))
+    restart_log()
+    before_head = Log.head()
+    assert Tasks.propose(command) == {:ok, result}
+    assert Log.head() == before_head
+    assert_rejected(proposal(ctx), :task_grant_revoked)
+  end
+
+  test "reuse of a command ID with different signed content is refused", ctx do
+    command = proposal(ctx)
+    {:ok, _} = Tasks.propose(command)
+    changed = proposal(ctx, %{"principal_id" => "another-principal"}, event_id: command.event_id)
+    assert_rejected(changed, :task_command_id_conflict)
+
+    assert {:error, {:reject, 0, {:missing_signature, _}}} =
+             Tasks.propose(%{command | sigs: %{}})
+  end
+
+  test "scope, principal, signer, and revocation are checked on direct append", ctx do
+    assert_rejected(proposal(ctx, %{"tenant_id" => "tenant-2"}), :task_grant_scope_mismatch)
+    assert_rejected(proposal(ctx, %{"project_id" => "project-2"}), :task_grant_scope_mismatch)
+    assert_rejected(proposal(ctx, %{}, chapter_id: "chapter-two"), :task_grant_scope_mismatch)
+    assert_rejected(proposal(ctx, %{"principal_id" => "principal-2"}), :task_principal_mismatch)
+    rogue = %{ctx | operator: new_member("operator")}
+    assert_rejected(proposal(rogue), :task_operator_key_mismatch)
+    {:ok, _} = Log.append(revoke(ctx))
+    assert_rejected(proposal(ctx), :task_grant_revoked)
+  end
+
+  test "new governance paths fail closed before declaration and after revocation", ctx do
+    other = new_member("governance")
+
+    assert_rejected(
+      grant(other, ctx.operator),
+      {:role_key_not_declared, "governance", other.signer.key_id}
+    )
+
+    {:ok, _} =
+      Log.append(
+        signed_event(ctx.gov, "RoleKeyDeclared", %{
+          "role" => "governance",
+          "key_id" => other.signer.key_id,
+          "pubkey" => {:bytes, other.signer.pubkey}
+        })
+      )
+
+    {:ok, _} =
+      Log.append(
+        signed_event(other, "RoleKeyRevoked", %{
+          "role" => "governance",
+          "key_id" => ctx.gov.signer.key_id
+        })
+      )
+
+    assert_rejected(
+      baseline(ctx.gov, Map.put(@subject, "task_id", "task-2")),
+      {:role_key_not_declared, "governance", ctx.gov.signer.key_id}
+    )
+  end
+
+  test "new namespaces need declared governance, not a fabricated membership", ctx do
+    fresh =
+      signed_event(ctx.gov, "TaskBaselineRecordedV1", baseline(ctx.gov).payload,
+        chapter_id: "new-namespace"
+      )
+
+    assert_rejected(fresh, :task_governance_not_declared)
+
+    rogue_grant =
+      signed_event(ctx.gov, "TaskOperatorGrantedV1", ctx.grant.payload,
+        chapter_id: "new-namespace"
+      )
+
+    assert_rejected(rogue_grant, :task_governance_not_declared)
+  end
+
+  test "batch rejection does not commit an earlier revocation", ctx do
+    before_head = Log.head()
+
+    assert {:error, {:reject, 1, :task_grant_revoked}} =
+             Log.append([revoke(ctx), proposal(ctx)])
+
+    assert Log.head() == before_head
+    assert {:ok, _} = Tasks.propose(proposal(ctx))
+  end
+
+  test "store append failure changes neither the authoritative task nor retry state", ctx do
+    id = ULID.generate()
+
+    {:ok, _} =
+      Log.append(
+        signed_event(
+          new_member(),
+          "TestProjectionEvent",
+          %{"note" => "reserve the ID", "amount_minor" => 0},
+          event_id: id
+        )
+      )
+
+    before_head = Log.head()
+    before_state = Log.replay(Projection)
+    assert {:error, {:store_append_failed, _}} = Tasks.propose(proposal(ctx, %{}, event_id: id))
+    assert Log.head() == before_head
+    assert Log.replay(Projection) == before_state
+    restart_log()
+    assert {:ok, _} = Tasks.propose(proposal(ctx))
+  end
+
+  test "projection tampering and unsupported states cannot license an append", ctx do
+    {:ok, _} = Tasks.propose(proposal(ctx))
+    {:ok, stale_view} = Log.replay(Projection, as_of: 3)
+    forged = put_in(stale_view, [:tasks, @key, :state], "inbox")
+
+    assert_rejected(
+      proposal(ctx, %{"expected_version" => forged.tasks[@key].version}),
+      {:stale_task_version, 1, 2}
+    )
+
+    assert_rejected(
+      proposal(ctx, %{"expected_version" => 2}),
+      {:invalid_task_transition, "proposed", "proposed"}
+    )
+
+    assert_rejected(proposal(ctx, %{"lifecycle_version" => 2}), :unsupported_task_lifecycle)
+  end
+
+  test "baseline cannot overwrite a task and stream segments cannot alias", ctx do
+    assert_rejected(baseline(ctx.gov), :task_already_recorded)
+    assert_rejected(proposal(ctx, %{"tenant_id" => "tenant-1/project-1"}), :invalid_task_scope)
+    assert_rejected(proposal(ctx, %{"project_id" => ""}), :invalid_task_scope)
+    assert_rejected(proposal(ctx, %{"task_id" => "unknown"}), :unknown_task)
+  end
+end

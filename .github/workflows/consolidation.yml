@@ -1,0 +1,64 @@
+name: Consolidation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ledger-and-orchestration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile the umbrella
+        run: mix compile --warnings-as-errors
+      - name: Verify changed Elixir formatting
+        run: >-
+          mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/tasks.ex
+          apps/coop_substrate/lib/coop_substrate/projections/tasks.ex
+          apps/coop_substrate/lib/coop_substrate/log.ex
+          apps/coop_substrate/lib/coop_substrate/projections/membership.ex
+          apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
+          apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
+          apps/coop_substrate/test/task_commands_test.exs
+          apps/coop_substrate/test/support/log_case.ex
+          apps/spruce_goose/mix.exs
+          apps/spruce_goose/config/config.exs
+      - name: Test the common ledger
+        working-directory: apps/coop_substrate
+        run: mix test
+      - name: Create and migrate orchestration database
+        working-directory: apps/spruce_goose
+        run: mix ecto.create && mix ecto.migrate
+      - name: Test orchestration after notes retirement
+        working-directory: apps/spruce_goose
+        run: mix test

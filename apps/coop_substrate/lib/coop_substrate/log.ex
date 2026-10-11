@@ -391,8 +391,19 @@ defmodule CoopSubstrate.Log do
 
   @impl true
   def handle_call({:append, envelopes}, _from, %{head: head, gate: gate} = state) do
-    with :ok <- verify_batch(envelopes),
-         :ok <- verify_validity(envelopes, gate),
+    with :ok <- verify_batch(envelopes) do
+      case CoopSubstrate.Tasks.duplicate(envelopes, gate.orchestration) do
+        {:ok, accepted} -> {:reply, {:ok, accepted}, state}
+        {:error, reason} -> {:reply, {:error, reason}, state}
+        :new -> append_verified(envelopes, head, gate, state)
+      end
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp append_verified(envelopes, head, gate, state) do
+    with :ok <- verify_validity(envelopes, gate),
          {:ok, assigned, new_head} <- assign_chains(envelopes, head),
          {:ok, event_data} <- encode_batch(assigned),
          :ok <- persist(event_data, head.global_seq) do

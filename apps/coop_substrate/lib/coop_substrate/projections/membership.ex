@@ -28,6 +28,7 @@ defmodule CoopSubstrate.Projections.Membership do
   @impl true
   def init do
     %{
+      orchestration: CoopSubstrate.Projections.Tasks.init(),
       entities: %{},
       members: %{},
       memberships: %{},
@@ -81,6 +82,16 @@ defmodule CoopSubstrate.Projections.Membership do
   end
 
   @impl true
+  def handle_event(%Envelope{type: type} = env, state)
+      when type in [
+             "TaskOperatorGrantedV1",
+             "TaskOperatorRevokedV1",
+             "TaskBaselineRecordedV1",
+             "TaskProposedV1"
+           ] do
+    update_in(state, [:orchestration], &CoopSubstrate.Projections.Tasks.handle_event(env, &1))
+  end
+
   def handle_event(%Envelope{type: "EntityRegistered", chapter_id: ch, payload: p}, state) do
     put_in(state, [:entities, Access.key({ch, p["entity_id"]})], %{
       class: p["class"],

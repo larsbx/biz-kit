@@ -108,6 +108,16 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   # -- Phase 1D: the role-key registry itself ----------------------------------
 
+  defp type_check(%Envelope{type: type} = env, gate)
+       when type in [
+              "TaskOperatorGrantedV1",
+              "TaskOperatorRevokedV1",
+              "TaskBaselineRecordedV1",
+              "TaskProposedV1"
+            ] do
+    CoopSubstrate.Tasks.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do
     governance = gate.role_keys[{ch, "governance"}]
     declared = gate.role_keys[{ch, p["role"]}] || %{}

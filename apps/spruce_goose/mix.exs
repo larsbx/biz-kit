@@ -49,7 +49,6 @@ defmodule SpruceGoose.MixProject do
       {:yaml_elixir, "~> 2.12"},
       {:picosat_elixir, "~> 0.2"},
       {:ash, "~> 3.0"},
-      {:ash_events, "~> 0.7.0"},
       {:ash_postgres, "~> 2.10"},
       {:ash_ai, "~> 1.0 and >= 1.0.3"},
       {:ash_authentication, "~> 5.0-rc"},
