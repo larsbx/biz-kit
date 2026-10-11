@@ -93,3 +93,12 @@ Optional `truck-shop` and `spruce` imports remain outside this consolidation wor
 The [October 9 comparison](docs/architecture/2026-10-09-integration-decisions.md)
 retains the implementation evidence and tradeoffs; its recommendation to retain
 independent authorities is superseded.
+
+## Buzz workspace integration
+
+The [first Buzz task stage](docs/architecture/2026-10-11-buzz-task-workspace.md)
+adds an internal signed-proposal boundary and scoped, replayable task cards
+with Definition of Done provenance. It performs no network delivery and does
+not yet implement structured evidence review, completion, or a Buzz client UI.
+Employees, members and agents use explicit scoped grants; chat/channel access
+does not confer business authority.

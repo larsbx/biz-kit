@@ -44,6 +44,8 @@ jobs:
         run: >-
           mix format --check-formatted
           apps/coop_substrate/lib/coop_substrate/tasks.ex
+          apps/coop_substrate/lib/coop_substrate/buzz/tasks.ex
+          apps/coop_substrate/test/buzz_task_cards_test.exs
           apps/coop_substrate/lib/coop_substrate/projections/tasks.ex
           apps/coop_substrate/lib/coop_substrate/log.ex
           apps/coop_substrate/lib/coop_substrate/projections/membership.ex

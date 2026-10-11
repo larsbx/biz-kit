@@ -207,8 +207,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
     changed = proposal(ctx, %{"principal_id" => "another-principal"}, event_id: command.event_id)
     assert_rejected(changed, :task_command_id_conflict)
 
-    assert {:error, {:reject, 0, {:missing_signature, _}}} =
-             Tasks.propose(%{command | sigs: %{}})
+    assert {:error, {:reject, 0, {:missing_signature, _}}} = Tasks.propose(%{command | sigs: %{}})
   end
 
   test "scope, principal, signer, and revocation are checked on direct append", ctx do
@@ -272,8 +271,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
   test "batch rejection does not commit an earlier revocation", ctx do
     before_head = Log.head()
 
-    assert {:error, {:reject, 1, :task_grant_revoked}} =
-             Log.append([revoke(ctx), proposal(ctx)])
+    assert {:error, {:reject, 1, :task_grant_revoked}} = Log.append([revoke(ctx), proposal(ctx)])
 
     assert Log.head() == before_head
     assert {:ok, _} = Tasks.propose(proposal(ctx))
@@ -295,6 +293,10 @@ defmodule CoopSubstrate.TaskCommandsTest do
     before_head = Log.head()
     before_state = Log.replay(Projection)
     assert {:error, {:store_append_failed, _}} = Tasks.propose(proposal(ctx, %{}, event_id: id))
+
+    assert {:error, {:store_append_failed, _}} =
+             CoopSubstrate.Buzz.Tasks.propose(proposal(ctx, %{}, event_id: id))
+
     assert Log.head() == before_head
     assert Log.replay(Projection) == before_state
     restart_log()
@@ -335,8 +337,10 @@ defmodule CoopSubstrate.TaskCommandsTest do
     assert result.notification["task_version"] == 2
     assert result.notification["state"] == "proposed"
     assert result.notification["delivery_id"] == "biz-kit:task:" <> command.event_id
+
     assert result.notification["event_hash"] ==
              Base.encode16(result.receipt.event_hash, case: :lower)
+
     assert Log.head().global_seq == result.receipt.global_seq
     restart_log()
     head = Log.head()
@@ -346,22 +350,29 @@ defmodule CoopSubstrate.TaskCommandsTest do
 
   test "Buzz cannot use membership flags, reactions, or changed signed bytes as commands", ctx do
     head = Log.head()
+
     for input <- [nil, %{"member" => true, "approved" => true}, %{"reaction" => "thumbs_up"}] do
       assert {:error, :not_a_task_proposal} = CoopSubstrate.Buzz.Tasks.propose(input)
     end
+
     command = proposal(ctx)
     changed = %{command | payload: Map.put(command.payload, "task_id", "task-2")}
+
     assert {:error, {:reject, 0, {:invalid_signature, _}}} =
              CoopSubstrate.Buzz.Tasks.propose(changed)
+
     assert Log.head() == head
   end
 
   test "Buzz gets no accepted notification for a revoked or stale request", ctx do
     command = proposal(ctx)
     assert {:ok, _} = Tasks.propose(command)
+
     assert {:error, {:reject, 0, {:stale_task_version, 1, 2}}} =
              CoopSubstrate.Buzz.Tasks.propose(proposal(ctx))
+
     {:ok, _} = Log.append(revoke(ctx))
+
     assert {:error, {:reject, 0, :task_grant_revoked}} =
              CoopSubstrate.Buzz.Tasks.propose(proposal(ctx))
   end
@@ -374,17 +385,26 @@ defmodule CoopSubstrate.TaskCommandsTest do
     assert Enum.map(cards, & &1["task_id"]) == ["task-1", "task-2"]
     card = hd(cards)
     assert card["definition_of_done"] == "Reviewed implementation"
+
     assert card["definition_ref"] ==
              Base.encode16(elem(state.tasks[@key].definition_ref, 1), case: :lower)
+
     assert card["task_version"] == 1
     assert card["ledger_event_id"] == state.tasks[@key].last_event_id
-    for other <- [{"other", "tenant-1", "project-1"},
-                  {"chapter-genesis", "other", "project-1"},
-                  {"chapter-genesis", "tenant-1", "other"}] do
+
+    for other <- [
+          {"other", "tenant-1", "project-1"},
+          {"chapter-genesis", "other", "project-1"},
+          {"chapter-genesis", "tenant-1", "other"}
+        ] do
       assert {:ok, []} = CoopSubstrate.Buzz.Tasks.cards(state, other)
     end
+
     assert {:error, :invalid_scope} = CoopSubstrate.Buzz.Tasks.cards(state, nil)
-    assert {:error, :invalid_scope} = CoopSubstrate.Buzz.Tasks.cards(state, {"", "tenant-1", "project-1"})
+
+    assert {:error, :invalid_scope} =
+             CoopSubstrate.Buzz.Tasks.cards(state, {"", "tenant-1", "project-1"})
+
     assert {:ok, _} = Tasks.propose(proposal(ctx))
     restart_log()
     {:ok, rebuilt} = Log.replay(Projection)
@@ -393,5 +413,4 @@ defmodule CoopSubstrate.TaskCommandsTest do
     assert updated["task_version"] == 2
     assert card["state"] == "inbox"
   end
-
 end
