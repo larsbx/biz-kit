@@ -113,7 +113,12 @@ defmodule CoopSubstrate.Protocol.Validity do
               "TaskOperatorGrantedV1",
               "TaskOperatorRevokedV1",
               "TaskBaselineRecordedV1",
-              "TaskProposedV1"
+              "TaskProposedV1",
+              "TaskReviewerGrantedV1",
+              "TaskReviewerRevokedV1",
+              "TaskDoDDefinedV1",
+              "TaskEvidenceSubmittedV1",
+              "TaskDoDReviewedV1"
             ] do
     CoopSubstrate.Tasks.check(env, gate)
   end
@@ -943,8 +948,7 @@ defmodule CoopSubstrate.Protocol.Validity do
     member = gate.members[{ch, p["member_id"]}]
     record = Membership.membership(gate, ch, p["member_id"], p["entity_id"])
 
-    current =
-      Membership.dispatch_envelope(gate, ch, p["member_id"], p["entity_id"], p["scope"])
+    current = Membership.dispatch_envelope(gate, ch, p["member_id"], p["entity_id"], p["scope"])
 
     cond do
       member == nil ->

@@ -102,3 +102,8 @@ with Definition of Done provenance. It performs no network delivery and does
 not yet implement structured evidence review, completion, or a Buzz client UI.
 Employees, members and agents use explicit scoped grants; chat/channel access
 does not confer business authority.
+
+The [DoD evidence/review stage](docs/architecture/2026-10-11-dod-evidence-review.md)
+adds immutable criteria revisions, digest-linked evidence submissions and
+independently scoped reviewer grants/decisions on the same ledger. Reviews bind
+to exact revisions and submissions; acceptance does not complete the task.

@@ -9,7 +9,7 @@ defmodule CoopSubstrate.Projections.Tasks do
   alias CoopSubstrate.Protocol.Envelope
 
   @impl true
-  def init, do: %{grants: %{}, tasks: %{}, proposals: %{}}
+  def init, do: %{grants: %{}, tasks: %{}, proposals: %{}, dod_grants: %{}, dod_commands: %{}}
 
   @impl true
   def handle_event(%Envelope{type: "TaskOperatorGrantedV1", payload: p} = env, state) do
@@ -33,6 +33,7 @@ defmodule CoopSubstrate.Projections.Tasks do
   def handle_event(%Envelope{type: "TaskBaselineRecordedV1", payload: p} = env, state) do
     task = %{
       state: "inbox",
+      dod: nil,
       version: 1,
       title: p["title"],
       definition_of_done: p["definition_of_done"],
@@ -54,7 +55,7 @@ defmodule CoopSubstrate.Projections.Tasks do
     |> put_in([:proposals, Access.key(env.event_id)], env)
   end
 
-  def handle_event(_env, state), do: state
+  def handle_event(env, state), do: CoopSubstrate.Tasks.DoD.handle_event(env, state)
 
   def task_key(%Envelope{chapter_id: ch, payload: p}),
     do: {ch, p["tenant_id"], p["project_id"], p["task_id"]}

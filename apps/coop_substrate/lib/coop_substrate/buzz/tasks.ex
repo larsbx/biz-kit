@@ -62,6 +62,7 @@ defmodule CoopSubstrate.Buzz.Tasks do
             "task_version" => task.version,
             "definition_of_done" => task.definition_of_done,
             "definition_ref" => digest(task.definition_ref),
+            "dod" => dod_card(Map.get(task, :dod)),
             "ledger_event_id" => task.last_event_id
           }
         end)
@@ -73,6 +74,35 @@ defmodule CoopSubstrate.Buzz.Tasks do
   end
 
   def cards(_state, _scope), do: {:error, :invalid_scope}
+
+  defp dod_card(nil), do: nil
+
+  defp dod_card(dod) do
+    %{
+      "definition_event_id" => dod.event_id,
+      "definition_ref" => digest(dod.definition_ref),
+      "criteria" => dod.criteria,
+      "submission" =>
+        if(dod.submission,
+          do: %{
+            "event_id" => dod.submission.event_id,
+            "principal_id" => dod.submission.principal_id,
+            "evidence" =>
+              Map.new(dod.submission.evidence, fn {id, hash} -> {id, digest(hash)} end)
+          }
+        ),
+      "review" =>
+        if(dod.review,
+          do: %{
+            "event_id" => dod.review.event_id,
+            "principal_id" => dod.review.principal_id,
+            "submission_event_id" => dod.review.submission_event_id,
+            "decision" => dod.review.decision,
+            "reason" => dod.review.reason
+          }
+        )
+    }
+  end
 
   defp digest({:bytes, <<_::256>> = value}), do: Base.encode16(value, case: :lower)
 
