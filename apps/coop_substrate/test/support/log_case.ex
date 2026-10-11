@@ -78,18 +78,21 @@ defmodule CoopSubstrate.LogCase do
     :ok
   rescue
     error ->
-      reraise("""
-              this test left a ledger the application cannot boot against:
+      reraise(
+        """
+        this test left a ledger the application cannot boot against:
 
-                  #{Exception.message(error)}
+            #{Exception.message(error)}
 
-              `CoopSubstrate.Log.recover/0` folds the entire ledger during
-              application start and raises on the first undecodable record, so
-              this residue makes the next run unstartable — and the reset that
-              would clear it never gets to run.
+        `CoopSubstrate.Log.recover/0` folds the entire ledger during
+        application start and raises on the first undecodable record, so
+        this residue makes the next run unstartable — and the reset that
+        would clear it never gets to run.
 
-              If the forged state is deliberate, declare it: `@tag :tampers_ledger`.
-              """, __STACKTRACE__)
+        If the forged state is deliberate, declare it: `@tag :tampers_ledger`.
+        """,
+        __STACKTRACE__
+      )
   end
 
   def restart_log do
@@ -226,8 +229,7 @@ defmodule CoopSubstrate.LogCase do
         signed_event(steward, "MembershipInvited", Map.put(mp, "class", class),
           chapter_id: chapter
         ),
-      probationary:
-        signed_event(member, "MembershipProbationStarted", mp, chapter_id: chapter),
+      probationary: signed_event(member, "MembershipProbationStarted", mp, chapter_id: chapter),
       member:
         multi_signed_event([member, steward], "MembershipConfirmed", mp, chapter_id: chapter)
     ]

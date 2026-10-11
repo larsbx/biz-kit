@@ -50,8 +50,9 @@ claim that task or dispatch writes already use it.
 | Duplicate projection Repos, migration owners, and production configuration | Consolidate projection ownership in one Repo and retain the existing EventStore backend in the same database. | Resolve conflicting `users`, `outbox_events`, and migration tables by explicit mappings, not by pointing today's Repos at the same schema. |
 | Unused constitutional-kernel scaffold | Remove code with no delivered admission caller; retain the actual implemented domain checks. | Preserve immutable artifact/provenance bytes referenced by existing records. `Kernel.Constitution` currently has callers only in its own test. |
 
-These are removal targets, not deletions performed by this documentation
-change. The call sites and contracts are in [notes], [shadow], [pg-ledger],
+The notes code/dependency is retired by the first implementation stage.
+The other rows remain removal targets. Original call sites and contracts
+are in [notes], [shadow], [pg-ledger],
 [task-projector], [deployment-ledger], [derivation-executor], [dispatch-outbox],
 [authorization], [constitution], and [runtime].
 
