@@ -26,7 +26,7 @@ defmodule CoopSubstrate.ArtifactCustody do
     case Map.fetch(receipts, id) do
       {:ok,
        %{chapter_id: ^chapter, tenant_id: ^tenant, project_id: ^project, digest: {:bytes, hash}}} ->
-        Artifacts.get(hash)
+        Artifacts.get_bounded(hash)
 
       {:ok, _} ->
         {:error, :custody_scope_mismatch}

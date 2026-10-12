@@ -164,7 +164,7 @@ defmodule CoopSubstrate.Tasks.DoD do
          true <-
            not Map.has_key?(state.custody_receipts, env.event_id) or
              {:error, :custody_id_conflict},
-         {:ok, _bytes} <- CoopSubstrate.Harness.Artifacts.get(elem(p["artifact_digest"], 1)),
+         {:ok, _bytes} <- CoopSubstrate.Harness.Artifacts.verify(elem(p["artifact_digest"], 1)),
          do: :ok
   end
 
@@ -241,20 +241,28 @@ defmodule CoopSubstrate.Tasks.DoD do
     receipts = p["custody_receipts"]
 
     if is_map(receipts) and Enum.sort(Map.keys(receipts)) == Enum.sort(Map.keys(p["evidence"])) do
-      Enum.reduce_while(receipts, :ok, fn {criterion, id}, :ok ->
+      Enum.reduce_while(receipts, {:ok, 16 * 1024 * 1024}, fn {criterion, id}, {:ok, budget} ->
         result =
           with {:ok, receipt} <- fetch_grant(state.custody_receipts, id, :unknown_custody_receipt),
                :ok <- grant_scope(env, receipt),
                true <-
                  receipt.digest == p["evidence"][criterion] or {:error, :custody_digest_mismatch},
-               {:ok, _bytes} <- CoopSubstrate.Harness.Artifacts.get(elem(receipt.digest, 1)),
-               do: :ok
+               {:ok, size} <-
+                 CoopSubstrate.Harness.Artifacts.verify(
+                   elem(receipt.digest, 1),
+                   min(budget, 8 * 1024 * 1024)
+                 ),
+               do: {:ok, budget - size}
 
         case result do
-          :ok -> {:cont, :ok}
+          {:ok, remaining} -> {:cont, {:ok, remaining}}
           error -> {:halt, error}
         end
       end)
+      |> case do
+        {:ok, _remaining} -> :ok
+        error -> error
+      end
     else
       {:error, :invalid_custody_receipts}
     end

@@ -538,6 +538,19 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     end
   end
 
+  test "oversized artifacts cannot monopolize custody admission", ctx do
+    {:ok, hash} = CoopSubstrate.Harness.Artifacts.put(:binary.copy("z", 8 * 1024 * 1024 + 1))
+
+    path =
+      Path.join(
+        Application.fetch_env!(:coop_substrate, :artifact_dir),
+        Base.encode16(hash, case: :lower)
+      )
+
+    on_exit(fn -> File.rm(path) end)
+    reject(custody(ctx, hash), :artifact_too_large)
+  end
+
   test "revoked authority cannot admit new custody receipts", ctx do
     {:ok, hash} = CoopSubstrate.Harness.Artifacts.put("revoked custody")
 

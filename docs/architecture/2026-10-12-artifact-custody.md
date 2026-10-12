@@ -17,13 +17,14 @@ is committed, with event ID/hash and global watermark. Receipts do not advance
 any task version and can be reused within their exact project scope.
 
 Artifacts remain outside the ledger, as required by the substrate's redaction
-contract. The writer syncs a temporary file and atomically publishes it with
-an exclusive hard link; retries verify existing content and never overwrite
-corrupt historical bytes. A crash before receipt persistence leaves at most
-an unreferenced artifact; retrying after persistence returns the original
-receipt. Ledger replay reconstructs receipts without accessing external files.
-Storage must use a persistent volume. File-data sync and atomic publication
-cover process crashes; filesystem/directory persistence, backups, retention,
+contract. The writer exclusively creates the final digest path, syncs its file data, and
+never overwrites existing bytes. It creates no temporary alias that could survive
+erasure. A concurrent reader may observe an incomplete write and refuses it;
+a crash-partial final file fails digest verification and requires explicit erasure
+before repair. A crash before receipt persistence leaves at most an unreferenced
+artifact at its documented digest path; retrying after persistence returns the
+original receipt. Ledger replay reconstructs receipts without accessing files.
+Storage must use a persistent volume. File-data sync and verification cover completed writes; filesystem/directory persistence, backups, retention,
 and protection against external deletion remain deployment responsibilities.
 A receipt attests verification at admission, not indefinite retention.
 
@@ -37,7 +38,9 @@ without changing the immutable receipt or breaking historical ledger replay.
 `TaskEvidenceSubmittedV2` retains V1's evidence digest map and adds a
 `custody_receipts` map with exactly the same criterion IDs. Every reference
 must identify an admitted receipt in the same chapter/tenant/project, with the
-same digest and currently retrievable verified bytes. Receipt admission and
+same digest and currently retrievable verified bytes. Gate verification streams
+64 KiB chunks, caps each artifact at 8 MiB and each evidence operation at 16 MiB.
+Oversized artifacts fail closed; large-blob custody is a later adapter obligation. Receipt admission and
 submission can share an atomic ledger batch. The existing operator authority,
 exact current definition event and optimistic task version are still required.
 The submission event itself supplies immutable submission identity.
@@ -64,6 +67,6 @@ Tests precede implementation in commit history. New acceptance regressions cover
 missing/tampered artifacts, digest mismatch, receipt scope, immutable IDs,
 revoked authority, replacement evidence, stale submissions, exact retries,
 restart/replay, and unavailable acceptance versus refusal. Storage tests verify
-atomic publication, idempotent writes and refusal to overwrite corruption.
+exclusive publication, bounded streaming reads, idempotent writes and refusal to overwrite corruption.
 The Consolidation workflow compiles the umbrella, checks changed formatting,
 and runs the full Elixir ledger and orchestration suites against PostgreSQL.
