@@ -2,15 +2,15 @@ defmodule CoopSubstrate.Tasks.DoD do
   @moduledoc """
   Ledger-backed Definition of Done revisions, evidence references and reviews.
 
-  Evidence is a signed claim linking each criterion to an artifact digest, not
-  proof of artifact custody or correctness. A review attests the reviewer's
+  V1 evidence is a digest claim. V2 additionally binds verified custody receipts;
+  availability is rechecked on submission and acceptance, not promised forever. A review attests the reviewer's
   decision on that exact revision/submission. It never completes a task.
   """
   alias CoopSubstrate.{Canonical, Log}
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.Projections.Tasks, as: Projection
 
-  @commands ~w(TaskDoDDefinedV1 TaskEvidenceSubmittedV1 TaskDoDReviewedV1)
+  @commands ~w(TaskDoDDefinedV1 TaskEvidenceSubmittedV1 TaskEvidenceSubmittedV2 TaskDoDReviewedV1)
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @subject Map.merge(@scope, %{"task_id" => :string, "expected_version" => :int})
   @actor %{"principal_id" => :string, "authorization_event_id" => :string}
@@ -37,6 +37,24 @@ defmodule CoopSubstrate.Tasks.DoD do
           Map.merge(Map.merge(@subject, @actor), %{
             "definition_event_id" => :string,
             "evidence" => :any
+          }),
+          true
+        ),
+      "ArtifactCustodyRecordedV1" =>
+        spec(
+          "operator",
+          "artifact_custody",
+          Map.merge(Map.merge(@scope, @actor), %{"artifact_digest" => :hash}),
+          false
+        ),
+      "TaskEvidenceSubmittedV2" =>
+        spec(
+          "operator",
+          "tasks",
+          Map.merge(Map.merge(@subject, @actor), %{
+            "definition_event_id" => :string,
+            "evidence" => :any,
+            "custody_receipts" => :any
           }),
           true
         ),
@@ -139,6 +157,23 @@ defmodule CoopSubstrate.Tasks.DoD do
          do: :ok
   end
 
+  def check(%Envelope{type: "ArtifactCustodyRecordedV1", payload: p} = env, state, _keys) do
+    with {:ok, grant} <-
+           fetch_grant(state.grants, p["authorization_event_id"], :unknown_task_grant),
+         :ok <- authorized(env, grant),
+         true <-
+           not Map.has_key?(state.custody_receipts, env.event_id) or
+             {:error, :custody_id_conflict},
+         {:ok, _bytes} <- CoopSubstrate.Harness.Artifacts.get(elem(p["artifact_digest"], 1)),
+         do: :ok
+  end
+
+  def check(%Envelope{type: "TaskEvidenceSubmittedV2"} = env, state, keys) do
+    with :ok <- check(%{env | type: "TaskEvidenceSubmittedV1"}, state, keys),
+         :ok <- verified_receipts(env, state),
+         do: :ok
+  end
+
   def check(%Envelope{type: "TaskEvidenceSubmittedV1", payload: p} = env, state, _keys) do
     with {:ok, grant} <-
            fetch_grant(state.grants, p["authorization_event_id"], :unknown_task_grant),
@@ -153,7 +188,8 @@ defmodule CoopSubstrate.Tasks.DoD do
     with {:ok, grant} <- reviewer_grant(state, p["authorization_event_id"]),
          :ok <- authorized(env, grant),
          {:ok, task} <- current_task(env, state),
-         :ok <- revision(task, p) do
+         :ok <- revision(task, p),
+         :ok <- review_availability(env, task, state) do
       submission = task.dod.submission
       [signer] = env.signers
 
@@ -173,6 +209,51 @@ defmodule CoopSubstrate.Tasks.DoD do
         true ->
           :ok
       end
+    end
+  end
+
+  defp review_availability(%Envelope{payload: p} = env, task, state) do
+    submission = task.dod.submission
+
+    if p["decision"] == "accept" and submission != nil and
+         submission.event_id == p["submission_event_id"] and
+         Map.has_key?(submission, :custody_receipts) do
+      verified_receipts(
+        %{
+          env
+          | payload:
+              Map.merge(p, %{
+                "evidence" => submission.evidence,
+                "custody_receipts" => submission.custody_receipts
+              })
+        },
+        state
+      )
+    else
+      :ok
+    end
+  end
+
+  defp verified_receipts(%Envelope{payload: p} = env, state) do
+    receipts = p["custody_receipts"]
+
+    if is_map(receipts) and Enum.sort(Map.keys(receipts)) == Enum.sort(Map.keys(p["evidence"])) do
+      Enum.reduce_while(receipts, :ok, fn {criterion, id}, :ok ->
+        result =
+          with {:ok, receipt} <- fetch_grant(state.custody_receipts, id, :unknown_custody_receipt),
+               :ok <- grant_scope(env, receipt),
+               true <-
+                 receipt.digest == p["evidence"][criterion] or {:error, :custody_digest_mismatch},
+               {:ok, _bytes} <- CoopSubstrate.Harness.Artifacts.get(elem(receipt.digest, 1)),
+               do: :ok
+
+        case result do
+          :ok -> {:cont, :ok}
+          error -> {:halt, error}
+        end
+      end)
+    else
+      {:error, :invalid_custody_receipts}
     end
   end
 
@@ -271,6 +352,21 @@ defmodule CoopSubstrate.Tasks.DoD do
   def handle_event(%Envelope{type: "TaskReviewerRevokedV1", payload: p}, state),
     do: put_in(state, [:dod_grants, p["authorization_event_id"], :active], false)
 
+  def handle_event(%Envelope{type: "ArtifactCustodyRecordedV1", payload: p} = env, state) do
+    receipt = %{
+      chapter_id: env.chapter_id,
+      tenant_id: p["tenant_id"],
+      project_id: p["project_id"],
+      digest: p["artifact_digest"],
+      principal_id: p["principal_id"],
+      authorization_event_id: p["authorization_event_id"]
+    }
+
+    state
+    |> put_in([:custody_receipts, Access.key(env.event_id)], receipt)
+    |> put_in([:dod_commands, Access.key(env.event_id)], env)
+  end
+
   def handle_event(%Envelope{type: type} = env, state) when type in @commands do
     state
     |> update_in([:tasks, Projection.task_key(env)], fn task ->
@@ -310,6 +406,11 @@ defmodule CoopSubstrate.Tasks.DoD do
         },
         review: nil
     }
+  end
+
+  defp fold_dod(%Envelope{type: "TaskEvidenceSubmittedV2", payload: p} = env, dod) do
+    folded = fold_dod(%{env | type: "TaskEvidenceSubmittedV1"}, dod)
+    put_in(folded, [:submission, Access.key(:custody_receipts)], p["custody_receipts"])
   end
 
   defp fold_dod(%Envelope{type: "TaskDoDReviewedV1", payload: p} = env, dod) do

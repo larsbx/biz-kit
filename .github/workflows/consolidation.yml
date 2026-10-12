@@ -43,9 +43,12 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
+          apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
           apps/coop_substrate/lib/coop_substrate/tasks.ex
           apps/coop_substrate/lib/coop_substrate/buzz/tasks.ex
           apps/coop_substrate/lib/coop_substrate/tasks/dod.ex
+          apps/coop_substrate/test/artifact_custody_store_test.exs
           apps/coop_substrate/test/task_dod_rules_test.exs
           apps/coop_substrate/test/task_dod_commands_test.exs
           apps/coop_substrate/test/buzz_task_cards_test.exs

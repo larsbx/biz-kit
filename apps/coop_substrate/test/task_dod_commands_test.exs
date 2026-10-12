@@ -351,16 +351,29 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     reject(changed, :task_command_id_conflict)
     assert DoD.submit(d) == {:ok, receipt}
   end
+
   defp custody(ctx, hash) do
-    signed_event(ctx.worker, "ArtifactCustodyRecordedV1", Map.merge(@scope, %{
-      "principal_id" => "worker", "authorization_event_id" => ctx.grant.event_id,
-      "artifact_digest" => {:bytes, hash}
-    }))
+    signed_event(
+      ctx.worker,
+      "ArtifactCustodyRecordedV1",
+      Map.merge(@scope, %{
+        "principal_id" => "worker",
+        "authorization_event_id" => ctx.grant.event_id,
+        "artifact_digest" => {:bytes, hash}
+      })
+    )
   end
 
   test "custody admission fetches bytes and fails closed on missing or tampered artifacts", ctx do
     hash = :crypto.hash(:sha256, "custody-test-unique")
-    File.rm(Path.join(Application.fetch_env!(:coop_substrate, :artifact_dir), Base.encode16(hash, case: :lower)))
+
+    File.rm(
+      Path.join(
+        Application.fetch_env!(:coop_substrate, :artifact_dir),
+        Base.encode16(hash, case: :lower)
+      )
+    )
+
     reject(custody(ctx, hash), :not_found)
     {:ok, ^hash} = CoopSubstrate.Harness.Artifacts.put("custody-test-unique")
     command = custody(ctx, hash)
@@ -369,7 +382,13 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     restart_log()
     assert Log.append(command) == {:ok, accepted}
     assert Log.head() == head
-    path = Path.join(Application.fetch_env!(:coop_substrate, :artifact_dir), Base.encode16(hash, case: :lower))
+
+    path =
+      Path.join(
+        Application.fetch_env!(:coop_substrate, :artifact_dir),
+        Base.encode16(hash, case: :lower)
+      )
+
     File.write!(path, "replaced")
     reject(custody(ctx, hash), :artifact_tampered)
     File.rm!(path)
@@ -380,13 +399,21 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     c = custody(ctx, hash)
     d = definition(ctx)
     {:ok, _} = Log.append([c, d])
-    payload = Map.merge(@subject, %{
-      "principal_id" => "worker", "authorization_event_id" => ctx.grant.event_id,
-      "expected_version" => 3, "definition_event_id" => d.event_id,
-      "evidence" => %{"report" => {:bytes, hash}},
-      "custody_receipts" => %{"report" => c.event_id}
-    })
-    build = fn changes -> signed_event(ctx.worker, "TaskEvidenceSubmittedV2", Map.merge(payload, changes)) end
+
+    payload =
+      Map.merge(@subject, %{
+        "principal_id" => "worker",
+        "authorization_event_id" => ctx.grant.event_id,
+        "expected_version" => 3,
+        "definition_event_id" => d.event_id,
+        "evidence" => %{"report" => {:bytes, hash}},
+        "custody_receipts" => %{"report" => c.event_id}
+      })
+
+    build = fn changes ->
+      signed_event(ctx.worker, "TaskEvidenceSubmittedV2", Map.merge(payload, changes))
+    end
+
     reject(build.(%{"custody_receipts" => %{"report" => "missing"}}), :unknown_custody_receipt)
     reject(build.(%{"evidence" => %{"report" => {:bytes, <<0::256>>}}}), :custody_digest_mismatch)
     s = build.(%{})
@@ -402,17 +429,63 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     restart_log()
     {:ok, gate} = Log.replay(CoopSubstrate.Projections.Membership)
     assert Log.replay(Projection) == {:ok, gate.orchestration}
-    path = Path.join(Application.fetch_env!(:coop_substrate, :artifact_dir), Base.encode16(hash, case: :lower))
+
+    path =
+      Path.join(
+        Application.fetch_env!(:coop_substrate, :artifact_dir),
+        Base.encode16(hash, case: :lower)
+      )
+
     File.rm!(path)
     reject(build.(%{"expected_version" => 6}), :not_found)
+    reject(review(ctx, d, replacement, 6), :not_found)
+    assert {:ok, _} = Log.append(review(ctx, d, replacement, 6, %{"decision" => "refuse"}))
     assert :ok = Log.verify_chains()
+  end
+
+  test "custody receipts cannot cross project scopes or be rewritten under an accepted ID", ctx do
+    {:ok, hash} = CoopSubstrate.Harness.Artifacts.put("scoped custody")
+    c = custody(ctx, hash)
+    {:ok, receipt} = CoopSubstrate.ArtifactCustody.submit(c)
+    {:ok, state} = Log.replay(Projection)
+
+    assert {:ok, "scoped custody"} =
+             CoopSubstrate.ArtifactCustody.get(
+               state,
+               c.event_id,
+               {"chapter-genesis", "tenant-1", "project-1"}
+             )
+
+    assert {:error, :custody_scope_mismatch} =
+             CoopSubstrate.ArtifactCustody.get(
+               state,
+               c.event_id,
+               {"chapter-genesis", "tenant-1", "other"}
+             )
+
+    {:ok, changed} =
+      CoopSubstrate.Protocol.Envelope.sign(
+        %{c | payload: Map.put(c.payload, "artifact_digest", {:bytes, <<0::256>>})},
+        ctx.worker.signer.key_id,
+        ctx.worker.seed
+      )
+
+    reject(changed, :task_command_id_conflict)
+    restart_log()
+    assert CoopSubstrate.ArtifactCustody.submit(c) == {:ok, receipt}
   end
 
   test "revoked authority cannot admit new custody receipts", ctx do
     {:ok, hash} = CoopSubstrate.Harness.Artifacts.put("revoked custody")
-    revoke = signed_event(ctx.gov, "TaskOperatorRevokedV1", Map.put(@scope, "authorization_event_id", ctx.grant.event_id))
+
+    revoke =
+      signed_event(
+        ctx.gov,
+        "TaskOperatorRevokedV1",
+        Map.put(@scope, "authorization_event_id", ctx.grant.event_id)
+      )
+
     {:ok, _} = Log.append(revoke)
     reject(custody(ctx, hash), :task_grant_revoked)
   end
-
 end

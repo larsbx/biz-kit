@@ -16,9 +16,35 @@ defmodule CoopSubstrate.Harness.Artifacts do
   def put(binary) when is_binary(binary) do
     hash = :crypto.hash(:sha256, binary)
 
-    with :ok <- File.mkdir_p(dir()),
-         :ok <- File.write(path(hash), binary) do
-      {:ok, hash}
+    with :ok <- File.mkdir_p(dir()) do
+      temporary = path(hash) <> "." <> Integer.to_string(System.unique_integer([:positive]))
+
+      try do
+        with {:ok, file} <-
+               :file.open(String.to_charlist(temporary), [:write, :binary, :raw, :exclusive]) do
+          result =
+            try do
+              with :ok <- :file.write(file, binary), :ok <- :file.sync(file), do: :ok
+            after
+              :file.close(file)
+            end
+
+          with :ok <- result do
+            case File.ln(temporary, path(hash)) do
+              :ok ->
+                {:ok, hash}
+
+              {:error, :eexist} ->
+                with {:ok, ^binary} <- get(hash), do: {:ok, hash}
+
+              error ->
+                error
+            end
+          end
+        end
+      after
+        File.rm(temporary)
+      end
     end
   end
 

@@ -85,6 +85,7 @@ defmodule CoopSubstrate.Buzz.Tasks do
       "submission" =>
         if(dod.submission,
           do: %{
+            "custody_receipts" => Map.get(dod.submission, :custody_receipts),
             "event_id" => dod.submission.event_id,
             "principal_id" => dod.submission.principal_id,
             "evidence" =>

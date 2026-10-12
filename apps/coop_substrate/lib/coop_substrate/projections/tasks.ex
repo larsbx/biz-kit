@@ -9,7 +9,15 @@ defmodule CoopSubstrate.Projections.Tasks do
   alias CoopSubstrate.Protocol.Envelope
 
   @impl true
-  def init, do: %{grants: %{}, tasks: %{}, proposals: %{}, dod_grants: %{}, dod_commands: %{}}
+  def init,
+    do: %{
+      grants: %{},
+      tasks: %{},
+      proposals: %{},
+      dod_grants: %{},
+      dod_commands: %{},
+      custody_receipts: %{}
+    }
 
   @impl true
   def handle_event(%Envelope{type: "TaskOperatorGrantedV1", payload: p} = env, state) do
