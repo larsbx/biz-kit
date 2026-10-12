@@ -72,7 +72,17 @@ defmodule CoopSubstrate.NoSurveillanceTest do
     CoopSubstrate.Harness.Artifacts => %{
       # Raw interview material — bilateral; access middleware is 1D-shaped.
       {:put, 1} => :bilateral,
-      {:get, 1} => :bilateral
+      {:get, 1} => :bilateral,
+      # Verification still discloses artifact existence and size; it is not public system data.
+      {:verify, 1} => :bilateral,
+      {:verify, 2} => :bilateral,
+      {:get_bounded, 1} => :bilateral
+    },
+    CoopSubstrate.ArtifactCustody => %{
+      # Internal scoped custody material; caller authorization remains required.
+      {:submit, 1} => :bilateral,
+      {:submit, 2} => :bilateral,
+      {:get, 3} => :bilateral
     },
     CoopSubstrate.Cockpit => %{
       # The operator's own queue + boards: process-level, no member detail.
@@ -217,13 +227,16 @@ defmodule CoopSubstrate.NoSurveillanceTest do
 
     # Bilateral: the report's shape is closed — pair positions only.
     bob = new_member("member")
-    {:ok, _} = Log.append(signed_event(bob, "MemberRegistered", registration_payload("M-bob", bob)))
+
+    {:ok, _} =
+      Log.append(signed_event(bob, "MemberRegistered", registration_payload("M-bob", bob)))
 
     as_role = fn actor, role -> %{actor | signer: %{actor.signer | role: role}} end
 
     {:ok, _} =
       Log.append(
-        multi_signed_event([as_role.(member, "debtor"), as_role.(bob, "creditor")],
+        multi_signed_event(
+          [as_role.(member, "debtor"), as_role.(bob, "creditor")],
           "ObligationRecorded",
           %{
             "obligation_id" => "OB-1",

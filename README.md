@@ -107,3 +107,8 @@ The [DoD evidence/review stage](docs/architecture/2026-10-11-dod-evidence-review
 adds immutable criteria revisions, digest-linked evidence submissions and
 independently scoped reviewer grants/decisions on the same ledger. Reviews bind
 to exact revisions and submissions; acceptance does not complete the task.
+
+The [artifact custody stage](docs/architecture/2026-10-12-artifact-custody.md)
+adds scoped verified receipts using the existing out-of-log store and common
+ledger. V2 evidence binds those receipts; availability and review acceptance
+remain distinct from authorized completion.
