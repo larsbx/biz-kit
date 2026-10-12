@@ -475,6 +475,34 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     assert CoopSubstrate.ArtifactCustody.submit(c) == {:ok, receipt}
   end
 
+  test "abrupt appender crash recovers committed custody and exact retry watermark", ctx do
+    {:ok, hash} = CoopSubstrate.Harness.Artifacts.put("crash custody")
+    c = custody(ctx, hash)
+    {:ok, receipt} = CoopSubstrate.ArtifactCustody.submit(c)
+    before = Log.replay(Projection)
+    pid = Process.whereis(Log)
+    monitor = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}
+    await_appender(pid, 500)
+    assert Log.replay(Projection) == before
+    assert CoopSubstrate.ArtifactCustody.submit(c) == {:ok, receipt}
+    assert :ok = Log.verify_chains()
+  end
+
+  defp await_appender(_previous, 0), do: flunk("appender did not recover")
+
+  defp await_appender(previous, retries) do
+    case Process.whereis(Log) do
+      pid when is_pid(pid) and pid != previous ->
+        Log.head()
+
+      _ ->
+        Process.sleep(10)
+        await_appender(previous, retries - 1)
+    end
+  end
+
   test "revoked authority cannot admit new custody receipts", ctx do
     {:ok, hash} = CoopSubstrate.Harness.Artifacts.put("revoked custody")
 
