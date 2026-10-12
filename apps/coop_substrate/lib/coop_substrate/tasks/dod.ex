@@ -168,21 +168,14 @@ defmodule CoopSubstrate.Tasks.DoD do
          do: :ok
   end
 
-  def check(%Envelope{type: "TaskEvidenceSubmittedV2"} = env, state, keys) do
-    with :ok <- check(%{env | type: "TaskEvidenceSubmittedV1"}, state, keys),
+  def check(%Envelope{type: "TaskEvidenceSubmittedV2"} = env, state, _keys) do
+    with :ok <- check_submission(env, state),
          :ok <- verified_receipts(env, state),
          do: :ok
   end
 
-  def check(%Envelope{type: "TaskEvidenceSubmittedV1", payload: p} = env, state, _keys) do
-    with {:ok, grant} <-
-           fetch_grant(state.grants, p["authorization_event_id"], :unknown_task_grant),
-         :ok <- authorized(env, grant),
-         {:ok, task} <- current_task(env, state),
-         :ok <- revision(task, p),
-         :ok <- validate_evidence(task.dod.criteria, p["evidence"]),
-         do: :ok
-  end
+  def check(%Envelope{type: "TaskEvidenceSubmittedV1"}, _state, _keys),
+    do: {:error, :custody_receipts_required}
 
   def check(%Envelope{type: "TaskDoDReviewedV1", payload: p} = env, state, _keys) do
     with {:ok, grant} <- reviewer_grant(state, p["authorization_event_id"]),
@@ -210,6 +203,16 @@ defmodule CoopSubstrate.Tasks.DoD do
           :ok
       end
     end
+  end
+
+  defp check_submission(%Envelope{payload: p} = env, state) do
+    with {:ok, grant} <-
+           fetch_grant(state.grants, p["authorization_event_id"], :unknown_task_grant),
+         :ok <- authorized(env, grant),
+         {:ok, task} <- current_task(env, state),
+         :ok <- revision(task, p),
+         :ok <- validate_evidence(task.dod.criteria, p["evidence"]),
+         do: :ok
   end
 
   defp review_availability(%Envelope{payload: p} = env, task, state) do

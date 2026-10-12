@@ -42,8 +42,9 @@ submission can share an atomic ledger batch. The existing operator authority,
 exact current definition event and optimistic task version are still required.
 The submission event itself supplies immutable submission identity.
 
-V1 canonical bytes, replay and digest-only claim semantics remain supported;
-V1 evidence is never promoted to verified custody. Cards expose the V2 receipt
+V1 canonical bytes and historical replay remain supported; new V1 submissions
+are rejected with `custody_receipts_required`. Historical V1 evidence is never
+promoted to verified custody. Cards expose the V2 receipt
 map, or null for V1. Consumers requiring custody must require V2 receipt bindings
 and check availability, rather than treating an accepted V1 review as custody.
 

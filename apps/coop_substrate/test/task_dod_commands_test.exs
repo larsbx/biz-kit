@@ -73,7 +73,30 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
       )
 
     {:ok, _} = Tasks.propose(proposal)
-    %{gov: gov, worker: worker, reviewer: reviewer, grant: grant, reviewer_grant: reviewer_grant}
+    {:ok, artifact_hash} = CoopSubstrate.Harness.Artifacts.put("artifact bytes")
+
+    custody =
+      signed_event(
+        worker,
+        "ArtifactCustodyRecordedV1",
+        Map.merge(@scope, %{
+          "principal_id" => "worker",
+          "authorization_event_id" => grant.event_id,
+          "artifact_digest" => {:bytes, artifact_hash}
+        })
+      )
+
+    {:ok, _} = Log.append(custody)
+
+    %{
+      gov: gov,
+      worker: worker,
+      reviewer: reviewer,
+      grant: grant,
+      reviewer_grant: reviewer_grant,
+      custody: custody,
+      artifact_hash: artifact_hash
+    }
   end
 
   defp definition(ctx, version \\ 2, criteria \\ @criteria) do
@@ -90,14 +113,15 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
   defp submission(ctx, definition, version \\ 3, changes \\ %{}) do
     signed_event(
       ctx.worker,
-      "TaskEvidenceSubmittedV1",
+      "TaskEvidenceSubmittedV2",
       Map.merge(
         Map.merge(@subject, %{
           "principal_id" => "worker",
           "authorization_event_id" => ctx.grant.event_id,
           "expected_version" => version,
           "definition_event_id" => definition.event_id,
-          "evidence" => %{"report" => {:bytes, Canonical.hash!("artifact bytes")}}
+          "evidence" => %{"report" => {:bytes, ctx.artifact_hash}},
+          "custody_receipts" => %{"report" => ctx.custody.event_id}
         }),
         changes
       )
@@ -361,6 +385,17 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
         "authorization_event_id" => ctx.grant.event_id,
         "artifact_digest" => {:bytes, hash}
       })
+    )
+  end
+
+  test "new digest-only submissions cannot bypass custody admission", ctx do
+    d = definition(ctx)
+    {:ok, _} = Log.append(d)
+    payload = submission(ctx, d).payload |> Map.delete("custody_receipts")
+
+    reject(
+      signed_event(ctx.worker, "TaskEvidenceSubmittedV1", payload),
+      :custody_receipts_required
     )
   end
 
