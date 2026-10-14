@@ -360,4 +360,53 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
       :custody_digest_mismatch
     )
   end
+
+  test "cross-project custody and batch revocation cannot license readiness", ctx do
+    prepare(ctx)
+    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 4))
+    other_scope = Map.put(@scope, "project_id", "project-2")
+
+    grant =
+      signed_event(
+        ctx.gov,
+        "TaskOperatorGrantedV1",
+        Map.merge(other_scope, %{
+          "principal_id" => "worker",
+          "key_id" => ctx.worker.signer.key_id,
+          "pubkey" => {:bytes, ctx.worker.signer.pubkey}
+        })
+      )
+
+    {:ok, _} = Log.append(grant)
+
+    receipt =
+      signed_event(
+        ctx.worker,
+        "ArtifactCustodyRecordedV1",
+        Map.merge(other_scope, %{
+          "principal_id" => "worker",
+          "authorization_event_id" => grant.event_id,
+          "artifact_digest" => {:bytes, ctx.hash}
+        })
+      )
+
+    {:ok, _} = Log.append(receipt)
+
+    reject(
+      command(ctx, "TaskReadyV1", 5, %{"custody_receipts" => %{"input" => receipt.event_id}}),
+      :task_grant_scope_mismatch
+    )
+
+    revoke =
+      signed_event(
+        ctx.gov,
+        "TaskOperatorRevokedV1",
+        Map.put(@scope, "authorization_event_id", ctx.grant.event_id)
+      )
+
+    head = Log.head()
+    assert {:error, {:reject, 1, :task_grant_revoked}} = Log.append([revoke, ready(ctx)])
+    assert Log.head() == head
+    assert {:ok, _} = Log.append(ready(ctx))
+  end
 end
