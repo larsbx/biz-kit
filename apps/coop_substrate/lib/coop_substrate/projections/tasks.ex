@@ -63,7 +63,10 @@ defmodule CoopSubstrate.Projections.Tasks do
     |> put_in([:proposals, Access.key(env.event_id)], env)
   end
 
-  def handle_event(env, state), do: CoopSubstrate.Tasks.DoD.handle_event(env, state)
+  def handle_event(env, state) do
+    state = CoopSubstrate.Tasks.Readiness.handle_event(env, state)
+    CoopSubstrate.Tasks.DoD.handle_event(env, state)
+  end
 
   def task_key(%Envelope{chapter_id: ch, payload: p}),
     do: {ch, p["tenant_id"], p["project_id"], p["task_id"]}

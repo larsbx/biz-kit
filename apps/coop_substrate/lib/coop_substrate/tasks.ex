@@ -9,7 +9,7 @@ defmodule CoopSubstrate.Tasks do
 
   Baselines attest source state, not historical user approval. This path is for
   isolated cutover rehearsal until the complete production write surface is
-  migrated and its old writer fenced. Readiness and execution are not exposed.
+  migrated and its old writer fenced. Queued/ready commands are isolated in Tasks.Readiness; execution is not exposed.
   """
 
   alias CoopSubstrate.Log
@@ -49,6 +49,7 @@ defmodule CoopSubstrate.Tasks do
         })
     }
     |> Map.merge(CoopSubstrate.Tasks.DoD.event_types())
+    |> Map.merge(CoopSubstrate.Tasks.Readiness.event_types())
   end
 
   defp spec(role, prefix, scope, fields) do
@@ -90,9 +91,16 @@ defmodule CoopSubstrate.Tasks do
   def check(%Envelope{} = env, gate) do
     with :ok <- signer_cardinality(env),
          :ok <- scope_valid(env) do
-      if Map.has_key?(CoopSubstrate.Tasks.DoD.event_types(), env.type),
-        do: CoopSubstrate.Tasks.DoD.check(env, gate.orchestration, gate.role_keys),
-        else: check_type(env, gate.orchestration, gate.role_keys)
+      cond do
+        Map.has_key?(CoopSubstrate.Tasks.Readiness.event_types(), env.type) ->
+          CoopSubstrate.Tasks.Readiness.check(env, gate.orchestration, gate.role_keys)
+
+        Map.has_key?(CoopSubstrate.Tasks.DoD.event_types(), env.type) ->
+          CoopSubstrate.Tasks.DoD.check(env, gate.orchestration, gate.role_keys)
+
+        true ->
+          check_type(env, gate.orchestration, gate.role_keys)
+      end
     end
   end
 
@@ -192,6 +200,11 @@ defmodule CoopSubstrate.Tasks do
          {grant.chapter_id, grant.tenant_id, grant.project_id},
        do: :ok,
        else: {:error, :task_grant_scope_mismatch}
+  end
+
+  @doc false
+  def authorized(env, grant) do
+    with :ok <- grant_scope(env, grant), do: operator_authorized(env, grant)
   end
 
   defp operator_authorized(%Envelope{signers: [signer]} = env, grant) do

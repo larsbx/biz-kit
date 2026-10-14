@@ -108,3 +108,7 @@ and ready transitions, with ledger-derived artifact/predecessor/SOP facts.
 It must replace an entire covered write path and provide a projection
 rebuild before enabling that path on live tasks. The old writer then needs an
 explicit fence; configuration rollback alone cannot recover new ledger facts.
+
+The [October 14 queued/ready stage](2026-10-14-ledger-task-readiness.md)
+extends this isolated path. The proposal-only scope above describes October 11;
+production migration, execution and completion remain pending.

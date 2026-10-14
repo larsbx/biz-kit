@@ -329,6 +329,20 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     assert state.tasks[@key].dod.review.decision == "accept"
     assert state.tasks[@key].version == 7
     assert state.tasks[@key].state == "proposed"
+
+    queue =
+      signed_event(
+        ctx.worker,
+        "TaskQueuedV1",
+        Map.merge(@subject, %{
+          "principal_id" => "worker",
+          "authorization_event_id" => ctx.grant.event_id,
+          "expected_version" => 7,
+          "lifecycle_version" => 1
+        })
+      )
+
+    reject(queue, :readiness_not_defined)
   end
 
   test "evidence needs a definition and current operator authority", ctx do
