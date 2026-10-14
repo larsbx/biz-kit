@@ -136,6 +136,19 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     assert Log.replay(Projection) == state
   end
 
+  defp await_restart(_pid, 0), do: {:error, :restart_timeout}
+
+  defp await_restart(pid, attempts) do
+    case Process.whereis(Log) do
+      current when is_pid(current) and current != pid ->
+        :ok
+
+      _ ->
+        Process.sleep(10)
+        await_restart(pid, attempts - 1)
+    end
+  end
+
   test "queued and ready are signed, optimistic and recoverable without effects", ctx do
     prepare(ctx)
     queue = command(ctx, "TaskQueuedV1", 4)
@@ -150,7 +163,11 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     assert {:ok, state} = Log.replay(Projection)
     assert state.tasks[@key].state == "ready"
     assert state.tasks[@key].version == 6
-    restart_log()
+    pid = Process.whereis(Log)
+    monitor = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}
+    assert :ok = await_restart(pid, 100)
     assert Log.replay(Projection) == {:ok, state}
     assert :ok = Log.verify_chains()
   end
@@ -273,7 +290,17 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
   test "store failure leaves a queue command retryable after recovery", ctx do
     prepare(ctx)
     id = CoopSubstrate.ULID.generate()
-    {:ok, _} = Log.append(signed_test_event(new_member(), event_id: id))
+
+    {:ok, _} =
+      Log.append(
+        signed_event(
+          new_member(),
+          "TestProjectionEvent",
+          %{"note" => "reserve ID", "amount_minor" => 0},
+          event_id: id
+        )
+      )
+
     before_state = Log.replay(Projection)
     head = Log.head()
 
