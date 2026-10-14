@@ -409,4 +409,22 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     assert Log.head() == head
     assert {:ok, _} = Log.append(ready(ctx))
   end
+
+  test "atomic readiness admission and the membership gate match task replay", ctx do
+    commands = [
+      configure(ctx),
+      command(ctx, "TaskSOPAcknowledgedV1", 3, %{"custody_receipt_id" => ctx.receipt.event_id}),
+      command(ctx, "TaskQueuedV1", 4),
+      ready(ctx)
+    ]
+
+    assert {:ok, _} = Log.append(commands)
+    assert {:ok, task_state} = Log.replay(Projection)
+    assert {:ok, gate} = Log.replay(CoopSubstrate.Projections.Membership)
+    assert gate.orchestration == task_state
+    assert task_state.tasks[@key].state == "ready"
+    restart_log()
+    assert {:ok, recovered} = Log.replay(CoopSubstrate.Projections.Membership)
+    assert recovered.orchestration == task_state
+  end
 end
