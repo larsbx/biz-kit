@@ -45,6 +45,8 @@ jobs:
           mix format --check-formatted
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
           apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
+          apps/coop_substrate/lib/coop_substrate/tasks/readiness.ex
+          apps/coop_substrate/test/task_readiness_commands_test.exs
           apps/coop_substrate/lib/coop_substrate/tasks.ex
           apps/coop_substrate/lib/coop_substrate/buzz/tasks.ex
           apps/coop_substrate/lib/coop_substrate/tasks/dod.ex

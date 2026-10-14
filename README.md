@@ -112,3 +112,8 @@ The [artifact custody stage](docs/architecture/2026-10-12-artifact-custody.md)
 adds scoped verified receipts using the existing out-of-log store and common
 ledger. V2 evidence binds those receipts; availability and review acceptance
 remain distinct from authorized completion.
+
+The [queued/ready rehearsal stage](docs/architecture/2026-10-14-ledger-task-readiness.md)
+adds governance-defined prerequisites, personal SOP acknowledgments, and scoped
+operator transitions from committed ledger state. Production writer fencing and
+execution/completion coverage remain prerequisites for cutover.

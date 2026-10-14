@@ -120,7 +120,11 @@ defmodule CoopSubstrate.Protocol.Validity do
               "TaskEvidenceSubmittedV1",
               "TaskEvidenceSubmittedV2",
               "ArtifactCustodyRecordedV1",
-              "TaskDoDReviewedV1"
+              "TaskDoDReviewedV1",
+              "TaskReadinessDefinedV1",
+              "TaskSOPAcknowledgedV1",
+              "TaskQueuedV1",
+              "TaskReadyV1"
             ] do
     CoopSubstrate.Tasks.check(env, gate)
   end
