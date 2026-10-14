@@ -317,8 +317,13 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     prepare(ctx)
     reviewer = %{ctx.worker | signer: %{ctx.worker.signer | role: "reviewer"}}
 
-    assert {:error, {:reject, 0, _}} =
-             Log.append(command(%{ctx | worker: reviewer}, "TaskQueuedV1", 4))
+    valid = command(ctx, "TaskQueuedV1", 4)
+    unsigned = %{valid | signers: [reviewer.signer], sigs: %{}}
+
+    {:ok, invalid_role} =
+      CoopSubstrate.Protocol.Envelope.sign(unsigned, reviewer.signer.key_id, reviewer.seed)
+
+    assert {:error, {:reject, 0, _}} = Log.append(invalid_role)
 
     other = new_member("operator")
 
