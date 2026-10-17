@@ -1,4 +1,4 @@
-# Fleet
+# biz-kit
 
 A local Tauri desktop app for working with the fleet — `adder-ws` (this
 workstation) and `papa` — in one place. (`mama` was decommissioned 2026-10-16.)
@@ -62,7 +62,7 @@ it runs.
 ## Hosts
 
 Defaults are compiled in. To add a box without a rebuild, write
-`~/.config/fleet-multitool/hosts.json`:
+`~/.config/biz-kit/hosts.json`:
 
 ```json
 [

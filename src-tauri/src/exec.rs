@@ -24,7 +24,7 @@ impl Host {
     }
 }
 
-/// Default fleet. Overridable via ~/.config/fleet-multitool/hosts.json so a new
+/// Default fleet. Overridable via ~/.config/biz-kit/hosts.json so a new
 /// box can be added without a rebuild.
 pub fn default_hosts() -> Vec<Host> {
     vec![
@@ -46,7 +46,7 @@ pub fn dirs_config() -> std::path::PathBuf {
     let base = std::env::var("XDG_CONFIG_HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| home().join(".config"));
-    base.join("fleet-multitool")
+    base.join("biz-kit")
 }
 
 pub fn home() -> std::path::PathBuf {

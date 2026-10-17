@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    fleet_multitool_lib::run()
+    biz_kit_lib::run()
 }

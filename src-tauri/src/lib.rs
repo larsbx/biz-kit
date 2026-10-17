@@ -1,4 +1,4 @@
-//! Fleet multi-tool.
+//! biz-kit.
 //!
 //! One local desktop app for the services, scripts, configs and health of
 //! adder-ws / papa. Remote work goes over the user's existing ssh config,
