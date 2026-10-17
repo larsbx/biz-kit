@@ -23,7 +23,7 @@ re-verify anything load-bearing before depending on it.
 | Tailnet name | `ubuntu-8gb-evergreen.tail2188e6.ts.net` |
 | SSH | port 22, open on all interfaces |
 | 443 | **Taken** — Tailscale Funnel (see OpenClaw below). Nothing else may bind it. |
-| 80 | Free (earmarked for the planned tailnet-only GitLab CE install) |
+| 80 | Free |
 | 5432 | User-local Postgres, loopback only |
 | 18789 | OpenClaw gateway, loopback only (fronted by the Funnel) |
 
@@ -65,20 +65,15 @@ port `5432`, user `postgres`, no password.
 | Elixir | 1.19.5-otp-28 | asdf |
 | Rust | 1.96.1 (rustc + cargo) | rustup (`~/.cargo/bin`) |
 | git | 2.43.0 | apt |
-| glab | 1.106.0 | manual binary in `~/.local/bin` (gitlab.com releases) |
 | Tailscale | — | apt, funnel enabled |
 
 asdf shims live at `~/.asdf/shims/`; there is no project-level
 `.tool-versions`, so the home-directory one governs.
 
-## Git identity & GitLab
+## Git identity
 
 - Global git config (set 2026-07-07): `user.name` = Lars Bendixen,
   `user.email` = larsbendixen@gmail.com, `init.defaultBranch` = main.
-- `glab` is installed but **not yet authenticated** — run
-  `glab auth login --hostname gitlab.com --stdin <<< "glpat-…"` with a
-  personal access token (`api` + `write_repository` scopes), or
-  `glab auth login` in an interactive terminal.
 - This repo has no remote yet.
 
 ## This project
@@ -89,8 +84,6 @@ asdf shims live at `~/.asdf/shims/`; there is no project-level
 
 ## Known constraints / planned changes
 
-- RAM is tight (7.6 GiB, no swap) — a GitLab CE install is planned
-  (tailnet-only, `external_url` on port 80, memory-tuned, plus a swap file).
-  Once done, update this doc: swap, port 80, and new services will change.
+- RAM is tight (7.6 GiB, no swap).
 - Port 443 cannot be used by anything but the OpenClaw funnel without
   moving that funnel first.
