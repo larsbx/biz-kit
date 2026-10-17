@@ -1,57 +1,14 @@
 //! Host execution primitive.
 //!
-//! Every panel ultimately runs a shell command on one of the fleet hosts. Local
-//! commands run through `bash -lc`; remote ones go over the user's existing ssh
-//! config, so `papa` resolves exactly as it does in a terminal and no
-//! new credential path is introduced.
+//! Every panel ultimately runs a shell command on one configured host. Local
+//! commands run through a login `bash`; remote ones go over the user's own ssh
+//! configuration, so a host alias resolves exactly as it does in a terminal and
+//! no new credential path is introduced.
 
-use serde::{Deserialize, Serialize};
+use crate::settings::{self, Host};
+use serde::Serialize;
 use std::process::Stdio;
 use tokio::process::Command;
-
-/// A fleet member. `local` is the workstation the app runs on.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Host {
-    pub name: String,
-    /// ssh destination, or None for the machine we are running on.
-    pub ssh: Option<String>,
-    pub label: String,
-}
-
-impl Host {
-    pub fn is_local(&self) -> bool {
-        self.ssh.is_none()
-    }
-}
-
-/// Default fleet. Overridable via ~/.config/biz-kit/hosts.json so a new
-/// box can be added without a rebuild.
-pub fn default_hosts() -> Vec<Host> {
-    vec![
-        Host { name: "adder-ws".into(), ssh: None, label: "workstation (local)".into() },
-        Host { name: "papa".into(), ssh: Some("papa".into()), label: "papa - EU, openclaw".into() },
-    ]
-}
-
-pub fn load_hosts() -> Vec<Host> {
-    let path = dirs_config().join("hosts.json");
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<Vec<Host>>(&s).ok())
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(default_hosts)
-}
-
-pub fn dirs_config() -> std::path::PathBuf {
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| home().join(".config"));
-    base.join("biz-kit")
-}
-
-pub fn home() -> std::path::PathBuf {
-    std::env::var("HOME").map(std::path::PathBuf::from).unwrap_or_default()
-}
 
 /// Wrap a string so a POSIX shell sees it as one literal argument.
 /// Paths and unit names reach the shell, so this is not optional.
@@ -59,7 +16,21 @@ pub fn shq(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
+/// A child process that never opens a console window on Windows.
+pub fn command(program: &str) -> Command {
+    #[allow(unused_mut)]
+    let mut c = Command::new(program);
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        c.creation_flags(CREATE_NO_WINDOW);
+    }
+    c.stdin(Stdio::null());
+    c
+}
+
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Output {
     pub stdout: String,
     pub stderr: String,
@@ -68,47 +39,38 @@ pub struct Output {
     pub command: String,
 }
 
-fn host_by_name(name: &str) -> Result<Host, String> {
-    load_hosts()
-        .into_iter()
-        .find(|h| h.name == name)
-        .ok_or_else(|| format!("unknown host: {name}"))
+/// Build the argv actually spawned, plus a human-readable rendering.
+pub fn plan(h: &Host, script: &str) -> Result<(Vec<String>, String), String> {
+    match &h.ssh {
+        None if cfg!(windows) => Err(format!(
+            "{}: local hosts need a POSIX shell; on Windows, reach hosts over ssh",
+            h.name
+        )),
+        None => Ok((
+            vec!["bash".into(), "-lc".into(), script.into()],
+            script.into(),
+        )),
+        Some(dest) => Ok((
+            ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "--", dest, script]
+                .map(String::from)
+                .to_vec(),
+            format!("ssh {dest} {}", shq(script)),
+        )),
+    }
 }
 
-/// Build the argv actually spawned, plus a human-readable rendering.
-pub fn plan(host: &str, script: &str) -> Result<(Vec<String>, String), String> {
-    let h = host_by_name(host)?;
-    if h.is_local() {
-        Ok((
-            vec!["bash".into(), "-lc".into(), script.to_string()],
-            script.to_string(),
-        ))
-    } else {
-        let dest = h.ssh.clone().unwrap();
-        Ok((
-            vec![
-                "ssh".into(),
-                "-o".into(),
-                "BatchMode=yes".into(),
-                "-o".into(),
-                "ConnectTimeout=10".into(),
-                dest.clone(),
-                script.to_string(),
-            ],
-            format!("ssh {dest} {}", shq(script)),
-        ))
-    }
+fn plan_for(host: &str, script: &str) -> Result<(Vec<String>, String), String> {
+    plan(settings::load()?.host(host)?, script)
 }
 
 /// Run a shell snippet on a host and collect its output.
 pub async fn run(host: &str, script: &str) -> Result<Output, String> {
-    let (argv, rendered) = plan(host, script)?;
-    let out = Command::new(&argv[0])
+    let (argv, rendered) = plan_for(host, script)?;
+    let out = command(&argv[0])
         .args(&argv[1..])
-        .stdin(Stdio::null())
         .output()
         .await
-        .map_err(|e| format!("spawn failed: {e}"))?;
+        .map_err(|e| format!("could not start {}: {e}", argv[0]))?;
     Ok(Output {
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -121,15 +83,39 @@ pub async fn run(host: &str, script: &str) -> Result<Output, String> {
 /// the user approves is textually the same string that will execute.
 #[tauri::command]
 pub fn preview_command(host: String, script: String) -> Result<String, String> {
-    plan(&host, &script).map(|(_, rendered)| rendered)
-}
-
-#[tauri::command]
-pub fn list_hosts() -> Vec<Host> {
-    load_hosts()
+    plan_for(&host, &script).map(|(_, rendered)| rendered)
 }
 
 #[tauri::command]
 pub async fn run_on(host: String, script: String) -> Result<Output, String> {
     run(&host, &script).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn host(ssh: Option<&str>) -> Host {
+        Host { name: "h".into(), ssh: ssh.map(String::from), label: String::new() }
+    }
+
+    #[test]
+    fn quotes_single_quotes() {
+        assert_eq!(shq("it's"), r"'it'\''s'");
+    }
+
+    #[test]
+    fn remote_plans_are_non_interactive_and_end_option_parsing() {
+        let (argv, shown) = plan(&host(Some("web-1")), "uptime").unwrap();
+        assert_eq!(argv[0], "ssh");
+        assert!(argv.contains(&"BatchMode=yes".to_string()));
+        assert_eq!(argv[argv.len() - 3..], ["--", "web-1", "uptime"]);
+        assert_eq!(shown, "ssh web-1 'uptime'");
+    }
+
+    #[test]
+    fn local_plans_need_a_posix_shell() {
+        let p = plan(&host(None), "uptime");
+        assert_eq!(p.is_ok(), cfg!(unix));
+    }
 }

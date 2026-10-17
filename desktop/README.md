@@ -1,52 +1,88 @@
-# biz-kit
+# biz-kit desktop
 
-A local Tauri desktop app for working with the fleet — `adder-ws` (this
-workstation) and `papa` — in one place. (`mama` was decommissioned 2026-10-16.)
+A desktop console for the systemd services, scripts, config files and health of
+a small set of Linux hosts. Built with Tauri 2, React and TypeScript; runs on
+Linux, macOS and Windows.
 
-Remote work goes over your existing ssh config, so `papa` resolves
-exactly as it does in a terminal. No new credentials, no agent to install on the
-far side, nothing listening on a port.
+Remote hosts are reached through your own `ssh` configuration, so an alias from
+`~/.ssh/config` resolves exactly as it does in a terminal. No new credentials,
+no agent on the far side, nothing listening on a port.
 
 ## Panels
 
 | Panel | What it does |
 |---|---|
-| **Health** | disk, memory, swap, load, failed units, tailnet IP, managed Syncthing status — probed in parallel so one unreachable host doesn't stall the rest |
-| **Services** | every systemd unit, user *and* system scope, across all hosts; start/stop/restart/enable/disable |
-| **Scripts** | auto-discovers `~/*.sh` and `~/*.py`, runs them with live streamed output and a dry-run/apply split |
-| **Configs** | browse and edit settings.json, unit files, drop-ins and hooks — with a diff before every save |
+| **Health** | disk, memory, swap, load, failed units and your own checks — hosts are probed in parallel so one unreachable host doesn't stall the rest |
+| **Services** | every systemd unit, user *and* system scope, on each host; start/stop/restart/enable/disable |
+| **Scripts** | discovers `*.sh` and `*.py` in the scripts directory and runs them locally with live output and a dry-run/apply split |
+| **Configs** | browse and edit the files matched by your config patterns, with a diff before every save |
 
-### The restart-limit audit is built in
+### Restart-loop audit
 
-Services flags any unit whose start limiter can never trip. systemd only stops a
-unit after `StartLimitBurst` restarts within `StartLimitIntervalSec`, so when
-`RestartSec × Burst >= Interval` the window always resets first and a
-permanently-failing unit restarts forever. `pinchtab.service` did this **620,351
-times over three days** and its output evicted papa's entire journal.
+Services flags any unit whose start limiter can never trip. systemd only stops
+a unit after `StartLimitBurst` restarts within `StartLimitIntervalSec`; when
+`RestartSec × StartLimitBurst ≥ StartLimitIntervalSec` the window always resets
+first, so a permanently failing unit restarts forever and can flood the
+journal. The **restart loop risk** filter shows exactly those units.
 
-The `restart-limit bug` chip filters to exactly those units.
+## Platform support
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| Runs the app | ✓ | ✓ | ✓ |
+| Remote Linux hosts over ssh | ✓ | ✓ | ✓ (built-in OpenSSH client) |
+| `local` host (this machine) | ✓ | Services/Health need systemd/Linux | — |
+| Scripts panel | `bash`, `python3` | `bash`, `python3` | `python`; `.sh` needs `bash` on `PATH` |
+
+Managed hosts must be Linux with systemd; other kernels are reported as
+unsupported rather than shown as empty numbers.
+
+## Configuration
+
+All installation-specific details live in one file, read on every action so
+edits apply without a restart:
+
+| OS | Path |
+|---|---|
+| Linux | `$XDG_CONFIG_HOME/biz-kit/config.json` (default `~/.config/biz-kit/config.json`) |
+| macOS | `~/Library/Application Support/biz-kit/config.json` |
+| Windows | `%APPDATA%\biz-kit\config.json` |
+
+The exact path is shown at the bottom of the sidebar. Every key is optional; a
+missing file means defaults, a malformed one is reported as an error. See
+[`config.example.json`](config.example.json).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `hosts` | `[{ "name": "local", "ssh": null }]` (none on Windows) | `ssh` is an ssh destination or alias; `null` is the machine the app runs on |
+| `scriptsDir` | home directory | where the Scripts panel looks |
+| `configs` | systemd user units and drop-ins | `{ "path", "label"? }`; paths and globs expand on the target host |
+| `protectedPaths` | `[]` | case-insensitive substrings; matching config files are read-only |
+| `checks` | `[]` | `{ "label", "command" }` run on each host by Health; exit 0 is healthy and the first output line is shown |
+
+Upgrading from `hosts.json`: move its array under `"hosts"` in `config.json`.
 
 ## Write posture
 
 Nothing that stops, disables, deletes or overwrites happens without a
-confirmation showing the **exact command** — the same string that then runs,
-not a paraphrase of it. Scripts default to dry run; `--apply` is a second,
-separately-confirmed click.
+confirmation showing the **exact command** — the same string that then runs.
+Scripts default to dry run; `--apply` is a second, separately confirmed click.
 
-The backend enforces the half that matters, rather than trusting the UI:
+The backend enforces the part that matters rather than trusting the UI:
 
-- unit actions are allowlisted (`start|stop|restart|enable|disable`); anything
-  else is refused in Rust
-- `run_script` refuses any path outside `$HOME` and any argument other than
-  `--apply` / `--dry-run`
-- `write_config` parses `.json` before replacing it — a malformed
-  `settings.json` silently disables every setting in the file
+- unit actions are allowlisted (`start|stop|restart|enable|disable`)
+- system-scope actions use `sudo -n`, so they fail immediately instead of
+  waiting for a password prompt a GUI cannot show; use passwordless sudo rules
+  for the units you manage, or a terminal
+- `run_script` runs only supported files directly inside the scripts directory,
+  with no argument other than `--apply` / `--dry-run`
+- `write_config` refuses protected paths and validates `.json` before writing
 - every config write leaves a timestamped `.bak` beside the original
 
-## Adding a panel
+## Extending
 
-`src/App.tsx` has a registry. Write a component taking `{ hosts }` and add one
-row:
+`src/App.tsx` holds the panel registry. Write a component taking
+`{ info }: { info: AppInfo }` and add one row:
 
 ```ts
 const PANELS: Panel[] = [
@@ -54,41 +90,30 @@ const PANELS: Panel[] = [
 ];
 ```
 
-Backend commands live in `src-tauri/src/`, one module per concern, registered in
-`lib.rs`. `exec::run(host, script)` is the primitive everything is built on — it
-picks `bash -lc` locally and `ssh` remotely, so a new panel does not care where
-it runs.
-
-## Hosts
-
-Defaults are compiled in. To add a box without a rebuild, write
-`~/.config/biz-kit/hosts.json`:
-
-```json
-[
-  { "name": "adder-ws", "ssh": null,   "label": "workstation (local)" },
-  { "name": "papa",     "ssh": "papa", "label": "papa - EU, openclaw" },
-  { "name": "newbox",   "ssh": "newbox", "label": "..." }
-]
-```
-
-`ssh: null` means "the machine the app is running on".
+Backend commands live in `src-tauri/src/`, one module per concern, registered
+in `lib.rs`. `exec::run(host, script)` is the primitive everything builds on:
+it picks a local login `bash` or `ssh`, so a panel doesn't care where it runs.
 
 ## Develop / build
 
+Prerequisites: Node 20+, stable Rust, and the
+[Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
+
 ```sh
-npm run tauri dev      # hot-reload dev window
-npm run tauri build    # release .deb + AppImage in src-tauri/target/release/bundle/
-cd src-tauri && cargo test
+npm ci
+npm run tauri dev                  # hot-reload dev window
+npm run tauri build                # installers for the current OS
+(cd src-tauri && cargo test)
 ```
 
-## Known limits
+`tauri build` produces `.deb`, `.rpm` and AppImage on Linux, `.app` and `.dmg`
+on macOS, and `.msi` and NSIS `.exe` on Windows, under
+`src-tauri/target/release/bundle/`. Installers are not cross-compiled: build
+each on its own OS, or push a `desktop-v*` tag and let
+[`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml) build all
+three into a draft GitHub release.
 
-- **System-scope actions need sudo.** papa and adder-ws prompt for a password,
-  which a GUI has no TTY for, so those actions fail rather than hang. Run privileged changes from a terminal, or via the
-  Scripts panel using a script that handles its own `ssh -t`.
-- Health reads Syncthing only through `syncthing-policy status`. A host without
-  the policy command shows "not managed"; one whose transport is down shows
-  "down" with the policy's errors on hover.
-- Syncthing config is policy-managed and is not editable here: `write_config`
-  refuses any path containing `syncthing`. Use `syncthing-policy reconcile`.
+Release builds are unsigned unless signing is configured. Unsigned macOS apps
+must be opened via right-click → Open; Windows SmartScreen will warn. See the
+Tauri guides on [macOS](https://tauri.app/distribute/sign/macos/) and
+[Windows](https://tauri.app/distribute/sign/windows/) signing.

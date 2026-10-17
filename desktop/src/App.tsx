@@ -1,5 +1,5 @@
 import { useEffect, useState, ComponentType } from "react";
-import { Host, listHosts } from "./api";
+import { AppInfo, appInfo } from "./api";
 import { ConfirmProvider } from "./Confirm";
 import HealthPanel from "./panels/Health";
 import ServicesPanel from "./panels/Services";
@@ -13,7 +13,7 @@ import ConfigsPanel from "./panels/Configs";
 type Panel = {
   id: string;
   label: string;
-  component: ComponentType<{ hosts: Host[] }>;
+  component: ComponentType<{ info: AppInfo }>;
 };
 
 const PANELS: Panel[] = [
@@ -24,12 +24,12 @@ const PANELS: Panel[] = [
 ];
 
 export default function App() {
-  const [hosts, setHosts] = useState<Host[]>([]);
+  const [info, setInfo] = useState<AppInfo | null>(null);
   const [active, setActive] = useState(() => localStorage.getItem("panel") || "health");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    listHosts().then(setHosts).catch((e) => setErr(String(e)));
+    appInfo().then(setInfo).catch((e) => setErr(String(e)));
   }, []);
 
   useEffect(() => { localStorage.setItem("panel", active); }, [active]);
@@ -41,8 +41,8 @@ export default function App() {
       <div className="app">
         <aside className="side">
           <div className="brand">
-            Fleet
-            <small>adder-ws · papa</small>
+            biz-kit
+            <small className="trunc">{info?.hosts.map((h) => h.name).join(" · ")}</small>
           </div>
           <nav className="nav">
             {PANELS.map((p) => (
@@ -55,14 +55,21 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className="side-foot">
-            {hosts.length} hosts · ssh config
+          <div className="side-foot trunc" title={info?.configPath}>
+            {info ? `${info.hosts.length} hosts · ${info.configPath}` : ""}
           </div>
         </aside>
         <main className="main">
           {err && <div className="body"><p className="err">{err}</p></div>}
-          {!err && hosts.length === 0 && <div className="body"><div className="empty">loading hosts…</div></div>}
-          {!err && hosts.length > 0 && <Current hosts={hosts} />}
+          {!err && !info && <div className="body"><div className="empty">Loading…</div></div>}
+          {info && info.hosts.length === 0 && (
+            <div className="body">
+              <div className="empty">
+                No hosts configured. Add them to <code className="mono">{info.configPath}</code>
+              </div>
+            </div>
+          )}
+          {info && info.hosts.length > 0 && <Current info={info} />}
         </main>
       </div>
     </ConfirmProvider>

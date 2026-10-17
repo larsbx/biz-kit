@@ -1,0 +1,19 @@
+{
+  "hosts": [
+    { "name": "local", "ssh": null, "label": "this machine" },
+    { "name": "web", "ssh": "web-1", "label": "web server" },
+    { "name": "db", "ssh": "deploy@db.example.com", "label": "database" }
+  ],
+  "scriptsDir": null,
+  "configs": [
+    { "path": "$HOME/.config/systemd/user/*.service" },
+    { "path": "$HOME/.config/systemd/user/*.d/*.conf" },
+    { "path": "$HOME/.claude/settings.json", "label": "Claude Code settings" },
+    { "path": "/etc/nginx/sites-enabled/*", "label": "nginx site" }
+  ],
+  "protectedPaths": ["syncthing", "secrets"],
+  "checks": [
+    { "label": "tailscale", "command": "tailscale ip -4" },
+    { "label": "docker", "command": "docker info --format '{{.ServerVersion}}'" }
+  ]
+}

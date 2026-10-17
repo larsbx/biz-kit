@@ -1,73 +1,91 @@
-//! Config browsing and editing across the fleet.
+//! Config browsing and editing on any configured host.
 //!
 //! Saving always goes through a diff the user sees first, and always writes a
-//! timestamped backup next to the original -- the same discipline used by hand
-//! when editing papa's settings.json, which carries seven hook events that a
-//! careless overwrite would silently disable.
+//! timestamped backup next to the original: a careless overwrite of a settings
+//! file can silently disable everything in it.
 
 use crate::exec;
+use crate::settings::{self, ConfigPattern};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfigEntry {
     pub host: String,
     pub path: String,
     pub label: String,
-    pub exists: bool,
     pub size: u64,
+    /// Matches a `protectedPaths` entry; shown, never written.
+    pub protected: bool,
 }
 
-/// Files worth having one click away. Globs are expanded on the host.
-fn catalog() -> Vec<(&'static str, &'static str)> {
-    vec![
-        ("$HOME/.claude/settings.json", "Claude Code settings"),
-        ("$HOME/.claude/settings.local.json", "Claude Code settings (local)"),
-        ("$HOME/.openclaw/openclaw.json", "openclaw config"),
-    ]
+/// `$HOME`/`~` prefixes are quoted so a home with spaces survives word
+/// splitting; the remainder stays unquoted so globs expand on the host.
+fn shell_pattern(p: &str) -> String {
+    match p.strip_prefix("$HOME").or_else(|| p.strip_prefix('~')) {
+        Some(rest) => format!("\"$HOME\"{rest}"),
+        None => p.to_string(),
+    }
 }
 
-const LIST: &str = r#"
-emit() { [ -e "$1" ] && printf '%s|%s\n' "$1" "$(stat -c %s "$1" 2>/dev/null || echo 0)"; }
-for f in "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" \
-         "$HOME/.openclaw/openclaw.json"; do
-  emit "$f"
-done
-for f in "$HOME"/.config/systemd/user/*.service "$HOME"/.config/systemd/user/*.d/*.conf \
-         "$HOME"/.claude/hooks/*; do
-  emit "$f"
-done
-"#;
+/// One `index|bytes|path` line per existing match, `index` naming the pattern.
+fn list_script(patterns: &[ConfigPattern]) -> String {
+    let loops: String = patterns
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("for f in {}; do emit {i} \"$f\"; done\n", shell_pattern(&c.path)))
+        .collect();
+    format!(
+        "emit() {{ [ -f \"$2\" ] && printf '%s|%s|%s\\n' \"$1\" \"$(wc -c < \"$2\" | tr -d ' ')\" \"$2\"; }}\n{loops}true\n"
+    )
+}
+
+fn derive_label(path: &str) -> String {
+    let parent = std::path::Path::new(path)
+        .parent()
+        .and_then(|d| d.file_name())
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if parent.ends_with(".d") {
+        format!("drop-in: {parent}")
+    } else if path.contains("/systemd/") {
+        "systemd unit".into()
+    } else if parent.is_empty() {
+        "file".into()
+    } else {
+        parent
+    }
+}
+
+/// A file matched by several patterns is listed once, under the first.
+fn parse_listing(host: &str, raw: &str, s: &settings::Settings) -> Vec<ConfigEntry> {
+    let mut seen = std::collections::HashSet::new();
+    let mut v: Vec<ConfigEntry> = raw
+        .lines()
+        .filter_map(|line| {
+            let mut f = line.splitn(3, '|');
+            let pattern = s.configs.get(f.next()?.parse::<usize>().ok()?)?;
+            let size = f.next()?.parse().unwrap_or(0);
+            let path = f.next()?.to_string();
+            Some(ConfigEntry {
+                host: host.to_string(),
+                label: pattern.label.clone().unwrap_or_else(|| derive_label(&path)),
+                protected: s.is_protected(&path),
+                path,
+                size,
+            })
+        })
+        .filter(|e| seen.insert(e.path.clone()))
+        .collect();
+    v.sort_by(|a, b| a.label.cmp(&b.label).then(a.path.cmp(&b.path)));
+    v
+}
 
 #[tauri::command]
 pub async fn list_configs(host: String) -> Result<Vec<ConfigEntry>, String> {
-    let out = exec::run(&host, LIST).await?;
-    let labels = catalog();
-    let mut v = vec![];
-    for line in out.stdout.lines() {
-        let Some((path, size)) = line.rsplit_once('|') else { continue };
-        let label = labels
-            .iter()
-            .find(|(p, _)| path.ends_with(p.trim_start_matches("$HOME/")))
-            .map(|(_, l)| l.to_string())
-            .unwrap_or_else(|| {
-                let p = std::path::Path::new(path);
-                let parent = p.parent().and_then(|d| d.file_name()).map(|s| s.to_string_lossy().into_owned());
-                match parent {
-                    Some(d) if d.ends_with(".d") => format!("drop-in: {d}"),
-                    Some(d) if d == "hooks" => "Claude hook".into(),
-                    _ => "systemd unit".into(),
-                }
-            });
-        v.push(ConfigEntry {
-            host: host.clone(),
-            path: path.to_string(),
-            label,
-            exists: true,
-            size: size.parse().unwrap_or(0),
-        });
-    }
-    v.sort_by(|a, b| a.label.cmp(&b.label).then(a.path.cmp(&b.path)));
-    Ok(v)
+    let s = settings::load()?;
+    let out = exec::run(&host, &list_script(&s.configs)).await?;
+    Ok(parse_listing(&host, &out.stdout, &s))
 }
 
 #[tauri::command]
@@ -98,20 +116,12 @@ pub async fn diff_config(host: String, path: String, content: String) -> Result<
     })
 }
 
-/// Syncthing is policy-managed: the reconciler regenerates its config and
-/// fails closed on anything it did not write, so a hand edit is never correct.
-fn is_policy_managed(path: &str) -> bool {
-    path.to_ascii_lowercase().contains("syncthing")
-}
-
 /// Write, keeping a timestamped backup. Validates JSON before replacing a
 /// .json file: a malformed settings.json silently disables every setting in it.
 #[tauri::command]
 pub async fn write_config(host: String, path: String, content: String) -> Result<String, String> {
-    if is_policy_managed(&path) {
-        return Err(format!(
-            "refusing to write {path}: Syncthing is policy-managed; use syncthing-policy reconcile"
-        ));
+    if settings::load()?.is_protected(&path) {
+        return Err(format!("refusing to write {path}: it matches protectedPaths in settings"));
     }
     if path.ends_with(".json") {
         serde_json::from_str::<serde_json::Value>(&content)
@@ -169,10 +179,47 @@ mod tests {
         assert!(e.chars().all(|c| c.is_ascii_alphanumeric() || "+/=".contains(c)));
     }
 
+    fn pat(path: &str, label: Option<&str>) -> ConfigPattern {
+        ConfigPattern { path: path.into(), label: label.map(String::from) }
+    }
+
     #[test]
-    fn syncthing_paths_are_policy_managed() {
-        assert!(is_policy_managed("$HOME/.local/state/syncthing/config.xml"));
-        assert!(is_policy_managed("$HOME/.config/systemd/user/syncthing-fleet.service"));
-        assert!(!is_policy_managed("$HOME/.claude/settings.json"));
+    fn patterns_quote_home_and_keep_globs() {
+        assert_eq!(shell_pattern("$HOME/a b/*.json"), "\"$HOME\"/a b/*.json");
+        assert_eq!(shell_pattern("~/x/*.conf"), "\"$HOME\"/x/*.conf");
+        assert_eq!(shell_pattern("/etc/app.conf"), "/etc/app.conf");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn listing_script_runs_and_tags_each_pattern() {
+        let dir = std::env::temp_dir().join(format!("biz-kit-test-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("u.d")).unwrap();
+        std::fs::write(dir.join("a.json"), "{}").unwrap();
+        std::fs::write(dir.join("u.d/x.conf"), "abc").unwrap();
+        let d = dir.display();
+        let script = list_script(&[pat(&format!("{d}/*.json"), Some("App")), pat(&format!("{d}/*.d/*.conf"), None), pat(&format!("{d}/none-*"), None)]);
+        let out = std::process::Command::new("sh").arg("-c").arg(&script).output().unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let raw = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(raw, format!("0|2|{d}/a.json\n1|3|{d}/u.d/x.conf\n"));
+    }
+
+    #[test]
+    fn listing_is_labelled_from_settings_then_derived() {
+        let s = settings::Settings {
+            configs: vec![pat("$HOME/.app/settings.json", Some("App settings")), pat("$HOME/.config/systemd/user/*", None)],
+            protected_paths: vec!["secret".into()],
+            ..Default::default()
+        };
+        let raw = "0|10|/h/.app/settings.json\n1|5|/h/.config/systemd/user/a.service\n1|5|/h/.config/systemd/user/a.service.d/x.conf\n\
+                   1|1|/h/.config/systemd/user/secret.service\n1|10|/h/.app/settings.json\n9|1|/nope\ngarbage\n";
+        let got: Vec<_> = parse_listing("h", raw, &s).into_iter().map(|e| (e.label, e.protected)).collect();
+        assert_eq!(got, [
+            ("App settings".into(), false),
+            ("drop-in: a.service.d".into(), false),
+            ("systemd unit".into(), false),
+            ("systemd unit".into(), true),
+        ]);
     }
 }

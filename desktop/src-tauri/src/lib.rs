@@ -1,8 +1,9 @@
 //! biz-kit.
 //!
-//! One local desktop app for the services, scripts, configs and health of
-//! adder-ws / papa. Remote work goes over the user's existing ssh config,
-//! so there is no new credential path and `papa` means what it means in a shell.
+//! A desktop app for the services, scripts, configs and health of a small set
+//! of Linux hosts. Remote work goes over the user's existing ssh config, so
+//! there is no new credential path and a host alias means what it means in a
+//! shell. Everything installation-specific lives in `settings`.
 //!
 //! Write posture: nothing that stops, disables, deletes or overwrites happens
 //! without the UI first showing the exact command or diff and the user
@@ -14,13 +15,13 @@ mod exec;
 mod health;
 mod scripts;
 mod services;
+mod settings;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            exec::list_hosts,
+            settings::app_info,
             exec::run_on,
             exec::preview_command,
             services::list_units,

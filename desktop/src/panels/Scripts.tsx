@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Script, Line, listScripts, runScript } from "../api";
+import { AppInfo, Script, Line, listScripts, runScript } from "../api";
 import { useConfirm } from "../Confirm";
 
-export default function ScriptsPanel() {
+export default function ScriptsPanel({ info: { scriptsDir } }: { info: AppInfo }) {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [sel, setSel] = useState<Script | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
@@ -17,7 +17,7 @@ export default function ScriptsPanel() {
   }
   useEffect(() => { load(); }, []);
 
-  // Follow the tail while a long fleet run streams in.
+  // Follow the tail while a long run streams in.
   useEffect(() => {
     if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight;
   }, [lines.length]);
@@ -36,7 +36,7 @@ export default function ScriptsPanel() {
   function onApply(s: Script) {
     confirm({
       title: `Run ${s.name} with --apply?`,
-      why: "This makes real changes across the fleet. The dry run shows exactly what it would do.",
+      why: "This makes real changes. The dry run shows exactly what it would do.",
       command: `${s.interpreter} ${s.path} --apply`,
       danger: true,
       run: async () => start(s, true),
@@ -49,13 +49,13 @@ export default function ScriptsPanel() {
     <>
       <div className="bar">
         <h1>Scripts</h1>
-        <span style={{ color: "var(--dim)", fontSize: 12 }}>from ~/</span>
+        <span className="mono trunc" style={{ color: "var(--dim)", fontSize: 12 }}>{scriptsDir}</span>
         <div className="spacer" />
         <button className="btn" onClick={load} disabled={running}>Rescan</button>
       </div>
       <div className="body">
         {err && <p className="err">{err}</p>}
-        {scripts.length === 0 && <div className="empty">no .sh or .py scripts in home</div>}
+        {scripts.length === 0 && <div className="empty">No .sh or .py scripts in {scriptsDir}</div>}
 
         <div className="cards" style={{ marginBottom: 16 }}>
           {scripts.map((s) => (

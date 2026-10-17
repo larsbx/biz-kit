@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Host, Unit, listUnits, unitActionScript, runOn, previewCommand } from "../api";
+import { AppInfo, Unit, listUnits, unitActionScript, runOn, previewCommand } from "../api";
 import { useConfirm } from "../Confirm";
+import HostSelect from "../HostSelect";
 
 const ACTIONS = ["start", "stop", "restart", "enable", "disable"] as const;
 const DESTRUCTIVE = new Set(["stop", "disable", "restart"]);
@@ -10,7 +11,7 @@ function fmt(s: number) {
   return s >= 60 ? `${Math.round(s / 60)}min` : `${+s.toFixed(s < 1 ? 3 : 0)}s`;
 }
 
-export default function ServicesPanel({ hosts }: { hosts: Host[] }) {
+export default function ServicesPanel({ info: { hosts } }: { info: AppInfo }) {
   const [host, setHost] = useState(hosts[0]?.name ?? "");
   const [units, setUnits] = useState<Unit[]>([]);
   const [q, setQ] = useState("");
@@ -45,7 +46,7 @@ export default function ServicesPanel({ hosts }: { hosts: Host[] }) {
       title: `${action} ${u.id} on ${u.host}?`,
       why:
         u.scope === "system"
-          ? "System scope — sudo will prompt for a password, so this needs a terminal if it hangs."
+          ? "System scope runs through sudo -n: it fails instead of prompting unless the user has passwordless sudo for this command."
           : undefined,
       command,
       host: u.host,
@@ -62,18 +63,16 @@ export default function ServicesPanel({ hosts }: { hosts: Host[] }) {
     <>
       <div className="bar">
         <h1>Services</h1>
-        <select className="btn" value={host} onChange={(e) => setHost(e.target.value)}>
-          {hosts.map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}
-        </select>
+        <HostSelect hosts={hosts} value={host} onChange={setHost} />
         <div className="chips">
           {(["all", "active", "limit"] as const).map((k) => (
             <button key={k} className={"chip" + (only === k ? " on" : "")} onClick={() => setOnly(k)}>
-              {k === "limit" ? `restart-limit bug (${badCount})` : k}
+              {k === "limit" ? `restart loop risk (${badCount})` : k}
             </button>
           ))}
         </div>
         <input
-          type="text" placeholder="filter…" value={q}
+          type="text" placeholder="Filter…" value={q}
           onChange={(e) => setQ(e.target.value)} style={{ width: 160 }}
         />
         <div className="spacer" />
