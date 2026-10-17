@@ -99,9 +99,11 @@ export default function HealthPanel({ hosts }: { hosts: Host[] }) {
                     <div className="kv" style={{ marginTop: 8 }}>
                       <span>syncthing</span>
                       <span>
-                        {d.syncthing
-                          ? <>{d.syncthing.folders} folders · {d.syncthing.peers.filter((p) => p[1]).length}/{d.syncthing.peers.length} peers</>
-                          : <span className="pill">not running</span>}
+                        {!d.syncthing
+                          ? <span className="pill">not managed</span>
+                          : d.syncthing.running
+                            ? <>{d.syncthing.folders} folders · {d.syncthing.connectedPeers} peers</>
+                            : <span className="pill warn" title={d.syncthing.errors.join("\n")}>down</span>}
                       </span>
                     </div>
                   </>

@@ -20,7 +20,7 @@ pub struct Health {
     pub swap_total_mb: u64,
     pub failed_units: Vec<String>,
     pub tailscale_ip: String,
-    /// Peer name -> connected, from the local Syncthing REST API if present.
+    /// From `syncthing-policy status`; None when the host has no managed Syncthing.
     pub syncthing: Option<SyncthingState>,
 }
 
@@ -28,7 +28,8 @@ pub struct Health {
 pub struct SyncthingState {
     pub running: bool,
     pub folders: usize,
-    pub peers: Vec<(String, bool)>,
+    pub connected_peers: u64,
+    pub errors: Vec<String>,
 }
 
 const PROBE: &str = r#"
@@ -40,18 +41,11 @@ echo "@@@FAILED"; systemctl --user --failed --no-legend --plain 2>/dev/null | aw
 systemctl --system --failed --no-legend --plain 2>/dev/null | awk '{print "system:"$1}'
 echo "@@@TS"; ip -br addr show tailscale0 2>/dev/null | awk '{print $3}' | cut -d/ -f1
 echo "@@@ST"
-if command -v curl >/dev/null 2>&1; then
-  cfg="$HOME/.local/state/syncthing/config.xml"
-  if [ -f "$cfg" ]; then
-    key=$(grep -oP '(?<=<apikey>)[^<]+' "$cfg" 2>/dev/null | head -1)
-    if [ -n "$key" ]; then
-      curl -s --max-time 4 -H "X-API-Key: $key" http://127.0.0.1:8384/rest/system/connections 2>/dev/null
-      echo
-      echo "@@@STF"
-      curl -s --max-time 4 -H "X-API-Key: $key" http://127.0.0.1:8384/rest/config/folders 2>/dev/null
-    fi
-  fi
-fi
+# Managed Syncthing keeps its state inside its sandbox; the policy command is
+# the only supported read. ssh runs a non-login shell, so ~/.local/bin is not
+# necessarily on PATH.
+sp=$(command -v syncthing-policy || echo "$HOME/.local/bin/syncthing-policy")
+[ -x "$sp" ] && timeout 20 "$sp" status 2>/dev/null
 "#;
 
 fn section<'a>(raw: &'a str, name: &str) -> &'a str {
@@ -139,22 +133,49 @@ pub async fn host_health(host: String) -> Result<Health, String> {
     h.tailscale_ip = section(raw, "TS").trim().to_string();
 
     // Syncthing is optional; absent or unparseable simply means "no panel".
-    let conns = section(raw, "ST").trim();
-    if !conns.is_empty() {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(conns) {
-            let mut peers = vec![];
-            if let Some(map) = v.get("connections").and_then(|c| c.as_object()) {
-                for (id, info) in map {
-                    let connected = info.get("connected").and_then(|b| b.as_bool()).unwrap_or(false);
-                    peers.push((id.chars().take(7).collect::<String>(), connected));
-                }
-            }
-            let folders = serde_json::from_str::<serde_json::Value>(section(raw, "STF").trim())
-                .ok()
-                .and_then(|f| f.as_array().map(|a| a.len()))
-                .unwrap_or(0);
-            h.syncthing = Some(SyncthingState { running: true, folders, peers });
-        }
-    }
+    h.syncthing = parse_syncthing(section(raw, "ST"));
     Ok(h)
+}
+
+/// Parse `syncthing-policy status`. It reports `errors` with no `folders` when
+/// the managed transport is down, which is "installed but broken", not absent.
+fn parse_syncthing(raw: &str) -> Option<SyncthingState> {
+    let v = serde_json::from_str::<serde_json::Value>(raw.trim()).ok()?;
+    let errors: Vec<String> = v
+        .get("errors")
+        .and_then(|e| e.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    Some(SyncthingState {
+        running: errors.is_empty(),
+        folders: v.get("folders").and_then(|f| f.as_array()).map_or(0, |a| a.len()),
+        connected_peers: v.get("connected_peers").and_then(|n| n.as_u64()).unwrap_or(0),
+        errors,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_a_healthy_status() {
+        let raw = r#"{"host":"adder-ws","errors":[],"connected_peers":1,
+            "folders":[{"source":"papa","state":"idle"},{"source":"adder-ws","state":"idle"}]}"#;
+        let s = parse_syncthing(raw).unwrap();
+        assert!(s.running);
+        assert_eq!((s.folders, s.connected_peers), (2, 1));
+    }
+
+    #[test]
+    fn transport_down_is_reported_not_hidden() {
+        let s = parse_syncthing(r#"{"host":"papa","errors":["API unavailable: URLError"]}"#).unwrap();
+        assert!(!s.running);
+        assert_eq!(s.errors, vec!["API unavailable: URLError"]);
+    }
+
+    #[test]
+    fn no_policy_command_means_no_panel() {
+        assert!(parse_syncthing("").is_none());
+    }
 }

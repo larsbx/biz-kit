@@ -30,7 +30,7 @@ export type Health = {
   swapTotalMb: number;
   failedUnits: string[];
   tailscaleIp: string;
-  syncthing: { running: boolean; folders: number; peers: [string, boolean][] } | null;
+  syncthing: { running: boolean; folders: number; connectedPeers: number; errors: string[] } | null;
 };
 
 export type Script = {

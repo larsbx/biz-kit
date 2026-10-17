@@ -1,7 +1,7 @@
 //! Fleet multi-tool.
 //!
 //! One local desktop app for the services, scripts, configs and health of
-//! adder-ws / papa / mama. Remote work goes over the user's existing ssh config,
+//! adder-ws / papa. Remote work goes over the user's existing ssh config,
 //! so there is no new credential path and `papa` means what it means in a shell.
 //!
 //! Write posture: nothing that stops, disables, deletes or overwrites happens

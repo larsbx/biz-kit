@@ -1,20 +1,20 @@
 # Fleet
 
 A local Tauri desktop app for working with the fleet — `adder-ws` (this
-workstation), `papa`, `mama` — in one place.
+workstation) and `papa` — in one place. (`mama` was decommissioned 2026-10-16.)
 
-Remote work goes over your existing ssh config, so `papa` and `mama` resolve
-exactly as they do in a terminal. No new credentials, no agent to install on the
+Remote work goes over your existing ssh config, so `papa` resolves
+exactly as it does in a terminal. No new credentials, no agent to install on the
 far side, nothing listening on a port.
 
 ## Panels
 
 | Panel | What it does |
 |---|---|
-| **Health** | disk, memory, swap, load, failed units, tailnet IP, Syncthing peers — probed in parallel so one unreachable host doesn't stall the rest |
+| **Health** | disk, memory, swap, load, failed units, tailnet IP, managed Syncthing status — probed in parallel so one unreachable host doesn't stall the rest |
 | **Services** | every systemd unit, user *and* system scope, across all hosts; start/stop/restart/enable/disable |
 | **Scripts** | auto-discovers `~/*.sh` and `~/*.py`, runs them with live streamed output and a dry-run/apply split |
-| **Configs** | browse and edit settings.json, unit files, drop-ins, hooks, Syncthing config — with a diff before every save |
+| **Configs** | browse and edit settings.json, unit files, drop-ins and hooks — with a diff before every save |
 
 ### The restart-limit audit is built in
 
@@ -68,7 +68,6 @@ Defaults are compiled in. To add a box without a rebuild, write
 [
   { "name": "adder-ws", "ssh": null,   "label": "workstation (local)" },
   { "name": "papa",     "ssh": "papa", "label": "papa - EU, openclaw" },
-  { "name": "mama",     "ssh": "mama", "label": "mama - US, hillsboro" },
   { "name": "newbox",   "ssh": "newbox", "label": "..." }
 ]
 ```
@@ -86,8 +85,10 @@ cd src-tauri && cargo test
 ## Known limits
 
 - **System-scope actions need sudo.** papa and adder-ws prompt for a password,
-  which a GUI has no TTY for, so those actions fail rather than hang. mama has
-  passwordless sudo and works. Run privileged changes from a terminal, or via the
+  which a GUI has no TTY for, so those actions fail rather than hang. Run privileged changes from a terminal, or via the
   Scripts panel using a script that handles its own `ssh -t`.
-- Health reads Syncthing through its local REST API; if Syncthing isn't running
-  on a host the panel simply says so.
+- Health reads Syncthing only through `syncthing-policy status`. A host without
+  the policy command shows "not managed"; one whose transport is down shows
+  "down" with the policy's errors on hover.
+- Syncthing config is policy-managed and is not editable here: `write_config`
+  refuses any path containing `syncthing`. Use `syncthing-policy reconcile`.

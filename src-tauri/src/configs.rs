@@ -22,7 +22,6 @@ fn catalog() -> Vec<(&'static str, &'static str)> {
     vec![
         ("$HOME/.claude/settings.json", "Claude Code settings"),
         ("$HOME/.claude/settings.local.json", "Claude Code settings (local)"),
-        ("$HOME/.local/state/syncthing/config.xml", "Syncthing config"),
         ("$HOME/.openclaw/openclaw.json", "openclaw config"),
     ]
 }
@@ -30,7 +29,7 @@ fn catalog() -> Vec<(&'static str, &'static str)> {
 const LIST: &str = r#"
 emit() { [ -e "$1" ] && printf '%s|%s\n' "$1" "$(stat -c %s "$1" 2>/dev/null || echo 0)"; }
 for f in "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" \
-         "$HOME/.local/state/syncthing/config.xml" "$HOME/.openclaw/openclaw.json"; do
+         "$HOME/.openclaw/openclaw.json"; do
   emit "$f"
 done
 for f in "$HOME"/.config/systemd/user/*.service "$HOME"/.config/systemd/user/*.d/*.conf \
@@ -99,10 +98,21 @@ pub async fn diff_config(host: String, path: String, content: String) -> Result<
     })
 }
 
+/// Syncthing is policy-managed: the reconciler regenerates its config and
+/// fails closed on anything it did not write, so a hand edit is never correct.
+fn is_policy_managed(path: &str) -> bool {
+    path.to_ascii_lowercase().contains("syncthing")
+}
+
 /// Write, keeping a timestamped backup. Validates JSON before replacing a
 /// .json file: a malformed settings.json silently disables every setting in it.
 #[tauri::command]
 pub async fn write_config(host: String, path: String, content: String) -> Result<String, String> {
+    if is_policy_managed(&path) {
+        return Err(format!(
+            "refusing to write {path}: Syncthing is policy-managed; use syncthing-policy reconcile"
+        ));
+    }
     if path.ends_with(".json") {
         serde_json::from_str::<serde_json::Value>(&content)
             .map_err(|e| format!("refusing to write invalid JSON: {e}"))?;
@@ -157,5 +167,12 @@ mod tests {
         let s = "{\n  \"a\": \"it's \\\"quoted\\\"\"\n}\n";
         let e = base64_encode(s.as_bytes());
         assert!(e.chars().all(|c| c.is_ascii_alphanumeric() || "+/=".contains(c)));
+    }
+
+    #[test]
+    fn syncthing_paths_are_policy_managed() {
+        assert!(is_policy_managed("$HOME/.local/state/syncthing/config.xml"));
+        assert!(is_policy_managed("$HOME/.config/systemd/user/syncthing-fleet.service"));
+        assert!(!is_policy_managed("$HOME/.claude/settings.json"));
     }
 }

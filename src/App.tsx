@@ -42,7 +42,7 @@ export default function App() {
         <aside className="side">
           <div className="brand">
             Fleet
-            <small>adder-ws · papa · mama</small>
+            <small>adder-ws · papa</small>
           </div>
           <nav className="nav">
             {PANELS.map((p) => (

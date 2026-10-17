@@ -2,7 +2,7 @@
 //!
 //! Every panel ultimately runs a shell command on one of the fleet hosts. Local
 //! commands run through `bash -lc`; remote ones go over the user's existing ssh
-//! config, so `papa` and `mama` resolve exactly as they do in a terminal and no
+//! config, so `papa` resolves exactly as it does in a terminal and no
 //! new credential path is introduced.
 
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,6 @@ pub fn default_hosts() -> Vec<Host> {
     vec![
         Host { name: "adder-ws".into(), ssh: None, label: "workstation (local)".into() },
         Host { name: "papa".into(), ssh: Some("papa".into()), label: "papa - EU, openclaw".into() },
-        Host { name: "mama".into(), ssh: Some("mama".into()), label: "mama - US, hillsboro".into() },
     ]
 }
 
