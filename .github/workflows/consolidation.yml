@@ -73,3 +73,24 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
+
+  ledger-model:
+    # Model-checks the task suggestion state machine (spec/task_suggestions.qnt):
+    # safety holds sampled and exhaustively to depth 5, and every witness state
+    # is reachable. About 3 minutes.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Apalache, which `quint verify` downloads, needs Java 17+.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install Quint
+        run: npm install -g @informalsystems/quint@0.25.1
+      - name: Model-check task suggestions
+        run: apps/coop_substrate/spec/check.sh

@@ -294,9 +294,13 @@ The admission rules are a state machine in
 Its `safety` invariant combines the properties below.
 
 ```sh
-quint run    spec/task_suggestions.qnt --invariant=safety --max-samples=20000 --max-steps=25
-quint verify spec/task_suggestions.qnt --invariant=safety --max-steps=6
+apps/coop_substrate/spec/check.sh             # what CI runs (~3 min)
+SAMPLES=20000 DEPTH=6 apps/coop_substrate/spec/check.sh
 ```
+
+`check.sh` type-checks the spec, samples `safety`, requires every witness to be
+violated, and runs the exhaustive bounded check. CI runs it as the
+`ledger-model` job of the Consolidation workflow.
 
 Results (Quint 0.25.1 with Apalache): no violation in 20,000 sampled
 executions of up to 25 steps, and none in an exhaustive bounded check of every
