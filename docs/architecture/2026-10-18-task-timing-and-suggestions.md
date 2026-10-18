@@ -20,7 +20,7 @@ Authority comes from grants, not from the client. Two roles act here:
 | Role | Grant | May append | Effect on task state |
 | --- | --- | --- | --- |
 | operator (a person; key held in the client's OS keychain) | existing `TaskOperatorGrantedV1` | `TaskCreatedV1`, `TaskTimingRevisedV1`, `TaskSuggestionDeclinedV1` | yes |
-| suggester (an agent) | new `TaskSuggesterGrantedV1` | `TaskChangeSuggestedV1`, `TaskSuggestionWithdrawnV1` | **none** |
+| suggester (an agent) | new `TaskSuggesterGrantedV1` | `TaskChangeSuggestedV1`, `TaskSuggestionWithdrawnV1`, `TaskSuggestionArtifactRecordedV1` | **none** |
 
 The proposal/commit split is enforced by the gate, not by convention. A
 suggester grant can never sign an operator command (the role and key differ),
@@ -29,6 +29,29 @@ and suggestion events are absent from the task fold:
     fold_tasks(L) = fold_tasks(L ∖ S)   where S = {e ∈ L | e.type ∈ Suggestion*}
 
 An agent's whole effect is therefore an entry in the review queue.
+
+### Reasoning is preserved, including reasons not to act
+
+Each suggestion carries a short `rationale` and may cite a fuller document
+the agent stored itself. Declines and withdrawals can carry reasons in the
+same way. The reasoning behind a suggestion that was declined, or behind one
+an agent withdrew, is kept as evidence of what was considered and why it
+wasn't done. It does not disappear when the suggestion is closed.
+
+Agents record these documents with `TaskSuggestionArtifactRecordedV1`. It
+uses the same out-of-log byte store and the same admission check (the gate
+re-reads the stored bytes and recomputes their SHA-256) as
+`ArtifactCustodyRecordedV1`, but it is a **separate type, with receipts folded
+into a separate map** (`suggestion_artifacts`, not `custody_receipts`).
+
+That separation is what preserves the rule above. DoD evidence
+(`TaskEvidenceSubmittedV2`), SOP acknowledgement (`TaskSOPAcknowledgedV1`) and
+ready inputs (`TaskReadyV1`) all resolve receipts from `custody_receipts`. If
+agent receipts were folded there, an operator command could cite one, and
+removing the agent's event would then change the task fold. An operator who
+wants an agent's document as task evidence records their own
+`ArtifactCustodyRecordedV1` for the same digest. The bytes are already in the
+store, and the operator's receipt re-verifies them under operator authority.
 
 ### Task creation
 
@@ -151,7 +174,7 @@ added in the implementation.
     spec("operator", "task_suggestions", @scope, Map.merge(@actor, %{
       "suggestion_event_id" => :string,
       "reason" => :string
-    }), %{}),
+    }), %{"reason_receipt_id" => :string}),
 
   # -- suggester: review-queue entries, no task effect -----------------------
   "TaskChangeSuggestedV1" =>
@@ -159,10 +182,14 @@ added in the implementation.
       "task_id" => :string,
       "change" => :any,
       "rationale" => :string
-    }), %{"base_timing_version" => :int}),
+    }), %{"base_timing_version" => :int, "rationale_receipt_id" => :string}),
   "TaskSuggestionWithdrawnV1" =>
     spec("suggester", "task_suggestions", @scope, Map.merge(@suggester, %{
       "suggestion_event_id" => :string
+    }), %{"reason" => :string, "reason_receipt_id" => :string}),
+  "TaskSuggestionArtifactRecordedV1" =>
+    spec("suggester", "task_suggestions", @scope, Map.merge(@suggester, %{
+      "artifact_digest" => :hash
     }), %{})
 }
 ```
@@ -197,8 +224,11 @@ been recorded (the existing `duplicate/2` same-envelope retry applies).
 | `TaskCreatedV1` | task key absent; `title` nonempty after trimming; `timing` valid. The task starts as `inbox`, `version = 1`, `timing_version = 1`, `dod: nil` |
 | `TaskTimingRevisedV1` | task exists; `expected_timing_version = task.timing_version`; `timing` valid |
 | `TaskChangeSuggestedV1` | `create`: task key absent. `timing`: task exists and `base_timing_version ≤ task.timing_version`. `rationale` nonempty and at most 1,000 characters |
+| `TaskSuggestionArtifactRecordedV1` | the gate fetches the bytes for `artifact_digest` from the store and recomputes the hash, as for operator custody; at most 1 MiB; event ID not already a receipt |
 | `TaskSuggestionWithdrawnV1` | suggestion pending, and signed by the principal who made it |
 | `TaskSuggestionDeclinedV1` | suggestion pending, same scope; `reason` may be empty |
+| `rationale_receipt_id` / suggester `reason_receipt_id` | names a `suggestion_artifacts` receipt in the same chapter/tenant/project recorded by the **same principal**. An agent can cite only documents it stored itself |
+| operator `reason_receipt_id` | names an operator `custody_receipts` entry in the same scope. An operator may not cite an agent's document as their own reason |
 | any operator command carrying `suggestion_event_id` | suggestion pending, same scope and `task_id`, and its `change.kind` matches the command type |
 
 Resolving a suggestion in the projection:
@@ -224,7 +254,9 @@ suggestions from a revoked suggester, remain; the queue shows the revocation.
 
 ```elixir
 task = %{..., timing: %{"schedule" => nil, "due_ms" => nil}, timing_version: 0}
-state = %{..., suggester_grants: %{}, suggestions: %{}}
+state = %{..., suggester_grants: %{}, suggestions: %{}, suggestion_artifacts: %{}}
+# suggestion_artifacts: event_id => %{chapter_id, tenant_id, project_id,
+#                                     principal_id, digest}
 # suggestions: event_id => %{scope, task_id, change, base_timing_version,
 #                            principal_id, status, resolved_by_event_id, global_seq}
 ```
@@ -262,6 +294,14 @@ specified in a later document.
    are all rejected.
 7. **Retry:** re-submitting the same signed envelope returns the original
    receipt, including after a revocation.
+8. **Receipt isolation:** every `suggestion_artifacts` receipt ID is rejected
+   with `:unknown_custody_receipt` wherever DoD evidence, SOP acknowledgement or
+   ready inputs resolve a custody receipt. This is property 1 made concrete
+   for artifacts.
+9. **Reasons survive closure:** for each suggestion that ends `declined` or
+   `withdrawn`, its rationale receipt and any reason receipt remain resolvable
+   from replay. Whether the bytes are still available is a store-retention
+   question, not a ledger property.
 
 ## Decisions (2026-10-18)
 
@@ -270,20 +310,18 @@ specified in a later document.
   keep it short of `ready` until governance signs `TaskDoDDefinedV1`.
 - **Suggester grants are per agent principal and project,** not per deployment.
 - **Agent reasoning stays out of the ledger body.** The `rationale` field holds
-  a short summary only. Full reasoning is stored outside the ledger and
-  referenced by digest.
+  a short summary (at most 1,000 characters). Full reasoning goes in the
+  artifact store and is cited by receipt.
+- **Agents store their own reasoning, at suggestion time.** Suggester grants
+  admit `TaskSuggestionArtifactRecordedV1`, scoped to the suggester's project,
+  so reasoning is kept whether or not the suggestion is accepted. Waiting for
+  an operator to store it on acceptance would lose the reasons behind
+  everything declined or withdrawn.
 
-## Open questions
+## Retention note
 
-- **How an agent's full rationale reaches custody.** `ArtifactCustodyRecordedV1`
-  is operator-signed and checks an operator grant, so a suggester cannot
-  record a custody receipt itself. Options:
-  1. Admit custody receipts under suggester grants too, scoped to that
-     suggester's project.
-  2. Store the rationale with the suggestion as an `optional` `rationale_digest`
-     (`:hash`) whose bytes are unverified until an operator accepts and custodies
-     them.
-  3. Have the accepting operator custody the rationale as part of acceptance.
-
-  Until this is decided, `rationale` is capped at 1,000 characters and no
-  digest field is admitted.
+A custody receipt attests that the bytes were verified at admission, not that
+they are kept forever (see [artifact custody](2026-10-12-artifact-custody.md)).
+Deployment retention and backup policy must cover suggestion artifacts
+explicitly. Otherwise the reasons for declined suggestions, the case this
+design exists for, are the first thing a cleanup would remove.
