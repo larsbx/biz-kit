@@ -62,6 +62,14 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
           apps/coop_substrate/test/task_commands_test.exs
           apps/coop_substrate/test/support/log_case.ex
+          apps/coop_substrate/lib/coop_substrate/feed.ex
+          apps/coop_substrate/lib/coop_substrate/feed/view.ex
+          apps/coop_substrate/lib/coop_substrate/feed/sse.ex
+          apps/coop_substrate/lib/coop_substrate/application.ex
+          apps/coop_substrate/test/change_feed_test.exs
+          apps/coop_substrate/test/change_feed_view_test.exs
+          apps/coop_substrate/test/support/task_histories.ex
+          apps/coop_substrate/test/task_suggestions_properties_test.exs
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
       - name: Test the common ledger
@@ -75,9 +83,10 @@ jobs:
         run: mix test
 
   ledger-model:
-    # Model-checks the task suggestion and delegation state machine
-    # (spec/task_suggestions.qnt): safety holds sampled and exhaustively to
-    # depth 5, and every witness state is reachable. About 7 minutes.
+    # Model-checks every spec in apps/coop_substrate/spec (task suggestions
+    # and delegation, readiness, the change feed): safety holds sampled and
+    # exhaustively to depth 5, and every witness state is reachable. About
+    # 7 minutes.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -92,5 +101,5 @@ jobs:
           java-version: 17
       - name: Install Quint
         run: npm install -g @informalsystems/quint@0.25.1
-      - name: Model-check task suggestions
+      - name: Model-check the ledger specs
         run: apps/coop_substrate/spec/check.sh
