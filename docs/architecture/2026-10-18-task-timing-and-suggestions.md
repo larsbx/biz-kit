@@ -33,6 +33,10 @@ and suggestion events are absent from the task fold:
 
 An agent's whole effect is therefore an entry in the review queue.
 
+Operators can also delegate classes of routine changes, which agents then make
+without a review step: see [delegated task changes](2026-10-18-task-delegation.md).
+Suggestion events still never change task state.
+
 ### Reasoning is preserved, including reasons not to act
 
 Each suggestion carries a short `rationale` and may cite a fuller document
