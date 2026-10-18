@@ -26,3 +26,6 @@ coop_substrate-*.tar
 /native/canonical_v1/target/
 /priv/native/
 
+
+# Apalache model-checker output from `quint verify`.
+/_apalache-out/

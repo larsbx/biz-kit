@@ -14,7 +14,7 @@ domain views. The imported histories and existing identifiers remain intact.
   retry/replay contract, verification, and the next production cutover boundary.
 - [Task timing and agent suggestions — draft](2026-10-18-task-timing-and-suggestions.md):
   calendar timing facet, suggester grants, suggestion/accept events and their
-  admission rules. Not implemented.
+  admission rules, with a Quint model. Ledger events implemented; transport and client to follow.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),
