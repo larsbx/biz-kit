@@ -10,14 +10,43 @@ defmodule CoopSubstrate.Projections.Tasks do
 
   @impl true
   def init,
-    do: %{
-      grants: %{},
-      tasks: %{},
-      proposals: %{},
-      dod_grants: %{},
-      dod_commands: %{},
-      custody_receipts: %{}
-    }
+    do:
+      Map.merge(
+        %{
+          grants: %{},
+          tasks: %{},
+          proposals: %{},
+          dod_grants: %{},
+          dod_commands: %{},
+          custody_receipts: %{}
+        },
+        CoopSubstrate.Tasks.Timing.init()
+      )
+
+  @doc """
+  A task entering the inbox at version 1. Baselines and operator creation share
+  one shape; baselined tasks start with no timing (`timing_version` 0).
+  """
+  def new_task(%Envelope{} = env, attrs) do
+    Map.merge(
+      %{
+        state: "inbox",
+        dod: nil,
+        version: 1,
+        title: nil,
+        description: nil,
+        definition_of_done: nil,
+        definition_ref: nil,
+        legacy_row_id: nil,
+        source_digest: nil,
+        baseline_event_id: nil,
+        timing: %{"schedule" => nil, "due_ms" => nil},
+        timing_version: 0,
+        last_event_id: env.event_id
+      },
+      attrs
+    )
+  end
 
   @impl true
   def handle_event(%Envelope{type: "TaskOperatorGrantedV1", payload: p} = env, state) do
@@ -39,18 +68,15 @@ defmodule CoopSubstrate.Projections.Tasks do
   end
 
   def handle_event(%Envelope{type: "TaskBaselineRecordedV1", payload: p} = env, state) do
-    task = %{
-      state: "inbox",
-      dod: nil,
-      version: 1,
-      title: p["title"],
-      definition_of_done: p["definition_of_done"],
-      definition_ref: p["definition_ref"],
-      legacy_row_id: p["legacy_row_id"],
-      source_digest: p["source_digest"],
-      baseline_event_id: env.event_id,
-      last_event_id: env.event_id
-    }
+    task =
+      new_task(env, %{
+        title: p["title"],
+        definition_of_done: p["definition_of_done"],
+        definition_ref: p["definition_ref"],
+        legacy_row_id: p["legacy_row_id"],
+        source_digest: p["source_digest"],
+        baseline_event_id: env.event_id
+      })
 
     put_in(state, [:tasks, Access.key(task_key(env))], task)
   end
@@ -65,7 +91,8 @@ defmodule CoopSubstrate.Projections.Tasks do
 
   def handle_event(env, state) do
     state = CoopSubstrate.Tasks.Readiness.handle_event(env, state)
-    CoopSubstrate.Tasks.DoD.handle_event(env, state)
+    state = CoopSubstrate.Tasks.DoD.handle_event(env, state)
+    CoopSubstrate.Tasks.Timing.handle_event(env, state)
   end
 
   def task_key(%Envelope{chapter_id: ch, payload: p}),

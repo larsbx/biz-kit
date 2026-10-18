@@ -108,24 +108,11 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   # -- Phase 1D: the role-key registry itself ----------------------------------
 
-  defp type_check(%Envelope{type: type} = env, gate)
-       when type in [
-              "TaskOperatorGrantedV1",
-              "TaskOperatorRevokedV1",
-              "TaskBaselineRecordedV1",
-              "TaskProposedV1",
-              "TaskReviewerGrantedV1",
-              "TaskReviewerRevokedV1",
-              "TaskDoDDefinedV1",
-              "TaskEvidenceSubmittedV1",
-              "TaskEvidenceSubmittedV2",
-              "ArtifactCustodyRecordedV1",
-              "TaskDoDReviewedV1",
-              "TaskReadinessDefinedV1",
-              "TaskSOPAcknowledgedV1",
-              "TaskQueuedV1",
-              "TaskReadyV1"
-            ] do
+  # Every registered task type routes to the task gate; deriving the list from
+  # the registration keeps a new type from being registered but left unchecked.
+  @task_types Map.keys(CoopSubstrate.Tasks.event_types())
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @task_types do
     CoopSubstrate.Tasks.check(env, gate)
   end
 
