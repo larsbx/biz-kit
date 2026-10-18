@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Host, ConfigEntry, listConfigs, readConfig, diffConfig, writeConfig } from "../api";
+import { AppInfo, ConfigEntry, listConfigs, readConfig, diffConfig, writeConfig } from "../api";
 import { useConfirm } from "../Confirm";
+import HostSelect from "../HostSelect";
 
 function Diff({ text }: { text: string }) {
   return (
@@ -17,7 +18,7 @@ function Diff({ text }: { text: string }) {
   );
 }
 
-export default function ConfigsPanel({ hosts }: { hosts: Host[] }) {
+export default function ConfigsPanel({ info: { hosts, configPath } }: { info: AppInfo }) {
   const [host, setHost] = useState(hosts[0]?.name ?? "");
   const [items, setItems] = useState<ConfigEntry[]>([]);
   const [open, setOpen] = useState<ConfigEntry | null>(null);
@@ -58,7 +59,7 @@ export default function ConfigsPanel({ hosts }: { hosts: Host[] }) {
     if (!open) return;
     confirm({
       title: `Overwrite ${open.path}?`,
-      why: "A timestamped .bak copy is written first. JSON is validated before the write — a malformed settings.json silently disables every setting in it.",
+      why: "A timestamped .bak copy is written first. JSON files are validated before the write.",
       command: `# on ${open.host}\ncp -a ${open.path} ${open.path}.bak-<timestamp>\n# then replace with your edited contents`,
       host: open.host,
       danger: true,
@@ -77,15 +78,14 @@ export default function ConfigsPanel({ hosts }: { hosts: Host[] }) {
     <>
       <div className="bar">
         <h1>Configs</h1>
-        <select className="btn" value={host} onChange={(e) => setHost(e.target.value)}>
-          {hosts.map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}
-        </select>
+        <HostSelect hosts={hosts} value={host} onChange={setHost} />
         <div className="spacer" />
         {open && (
           <>
+            {open.protected && <span className="pill">read-only</span>}
             {dirty && <span className="pill warn">unsaved</span>}
             <button className="btn" onClick={review} disabled={busy || !dirty}>Review diff</button>
-            <button className="btn danger" onClick={save} disabled={busy || !dirty}>Save…</button>
+            <button className="btn danger" onClick={save} disabled={busy || !dirty || open.protected}>Save…</button>
             <button className="btn" onClick={() => { setOpen(null); setDiff(null); }} disabled={busy}>Close</button>
           </>
         )}
@@ -97,11 +97,11 @@ export default function ConfigsPanel({ hosts }: { hosts: Host[] }) {
 
         {!open && (
           <table>
-            <thead><tr><th>what</th><th>path</th><th style={{ width: 80 }}>size</th></tr></thead>
+            <thead><tr><th>Type</th><th>Path</th><th style={{ width: 80 }}>Size</th></tr></thead>
             <tbody>
               {items.map((c) => (
                 <tr key={c.path} style={{ cursor: "pointer" }} onClick={() => openFile(c)}>
-                  <td>{c.label}</td>
+                  <td>{c.label} {c.protected && <span className="pill">read-only</span>}</td>
                   <td className="mono trunc" style={{ maxWidth: 460 }}>{c.path}</td>
                   <td style={{ color: "var(--dim)" }}>{c.size}</td>
                 </tr>
@@ -109,7 +109,9 @@ export default function ConfigsPanel({ hosts }: { hosts: Host[] }) {
             </tbody>
           </table>
         )}
-        {!open && !busy && items.length === 0 && <div className="empty">nothing found on {host}</div>}
+        {!open && !busy && items.length === 0 && (
+          <div className="empty">No matching files on {host}. Patterns are set under <code className="mono">configs</code> in {configPath}</div>
+        )}
 
         {open && (
           <>
@@ -130,6 +132,7 @@ export default function ConfigsPanel({ hosts }: { hosts: Host[] }) {
                 className="editor"
                 value={text}
                 spellCheck={false}
+                readOnly={open.protected}
                 onChange={(e) => setText(e.target.value)}
               />
             )}

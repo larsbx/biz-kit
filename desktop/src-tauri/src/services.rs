@@ -1,15 +1,16 @@
-//! systemd units across the fleet, in both user and system scope.
+//! systemd units on every configured host, in both user and system scope.
 //!
 //! Carries the restart-limit audit inline: systemd only stops a unit after
 //! StartLimitBurst restarts within StartLimitIntervalSec, so when
 //! RestartSec * Burst >= Interval the window always resets first and a
-//! permanently-failing unit restarts forever. pinchtab.service did this 620,351
-//! times over three days. Every unit is checked on load.
+//! permanently-failing unit restarts forever, flooding the journal. Every unit
+//! is checked on load.
 
 use crate::exec;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Unit {
     pub host: String,
     pub scope: String, // "user" | "system"
@@ -20,7 +21,7 @@ pub struct Unit {
     pub restart_sec: f64,
     pub limit_interval: f64,
     pub limit_burst: i64,
-    /// True when the start limiter can never trip -- the pinchtab failure mode.
+    /// True when the start limiter can never trip.
     pub limit_unreachable: bool,
 }
 
@@ -147,13 +148,14 @@ fn parse(host: &str, raw: &str) -> Vec<Unit> {
 pub async fn list_units(host: String) -> Result<Vec<Unit>, String> {
     let out = exec::run(&host, PROBE).await?;
     if out.stdout.trim().is_empty() && out.code != 0 {
-        return Err(format!("probe failed on {host}: {}", out.stderr.trim()));
+        return Err(format!("could not list units on {host}: {}", out.stderr.trim()));
     }
     Ok(parse(&host, &out.stdout))
 }
 
 /// Build the exact shell line for a unit action. Returned to the UI first so the
-/// confirmation dialog shows the real command, then run unchanged.
+/// confirmation dialog shows the real command, then run unchanged. System scope
+/// uses `sudo -n`: a GUI has no terminal to prompt on, so it fails fast instead.
 #[tauri::command]
 pub fn unit_action_script(scope: String, unit: String, action: String) -> Result<String, String> {
     if !matches!(action.as_str(), "start" | "stop" | "enable" | "disable" | "restart") {
@@ -162,7 +164,7 @@ pub fn unit_action_script(scope: String, unit: String, action: String) -> Result
     if !matches!(scope.as_str(), "user" | "system") {
         return Err(format!("bad scope: {scope}"));
     }
-    let sudo = if scope == "system" { "sudo " } else { "" };
+    let sudo = if scope == "system" { "sudo -n " } else { "" };
     Ok(format!(
         "{sudo}systemctl --{scope} {action} {}",
         exec::shq(&unit)
@@ -183,22 +185,22 @@ mod tests {
     }
 
     #[test]
-    fn flags_the_pinchtab_shape() {
+    fn flags_a_limiter_that_can_never_trip() {
         // RestartSec=3s with the default 5 starts / 10s: 5*3=15 >= 10, so the
         // limiter can never trip.
-        let raw = "@@@SCOPE user\nId=pinchtab.service\nActiveState=active\n\
+        let raw = "@@@SCOPE user\nId=worker.service\nActiveState=active\n\
                    UnitFileState=enabled\nRestart=on-failure\nRestartUSec=3s\n\
                    StartLimitIntervalUSec=10s\nStartLimitBurst=5\n";
-        let u = &parse("papa", raw)[0];
+        let u = &parse("h", raw)[0];
         assert!(u.limit_unreachable);
     }
 
     #[test]
     fn accepts_a_widened_window() {
-        let raw = "@@@SCOPE user\nId=pinchtab.service\nActiveState=active\n\
+        let raw = "@@@SCOPE user\nId=worker.service\nActiveState=active\n\
                    UnitFileState=enabled\nRestart=on-failure\nRestartUSec=3s\n\
                    StartLimitIntervalUSec=5min\nStartLimitBurst=5\n";
-        assert!(!parse("papa", raw)[0].limit_unreachable);
+        assert!(!parse("h", raw)[0].limit_unreachable);
     }
 
     #[test]
@@ -206,11 +208,20 @@ mod tests {
         let raw = "@@@SCOPE system\nId=oneshot.service\nActiveState=inactive\n\
                    UnitFileState=static\nRestart=no\nRestartUSec=100ms\n\
                    StartLimitIntervalUSec=10s\nStartLimitBurst=5\n";
-        assert!(!parse("mama", raw)[0].limit_unreachable);
+        assert!(!parse("h", raw)[0].limit_unreachable);
     }
 
     #[test]
     fn rejects_unknown_actions() {
         assert!(unit_action_script("user".into(), "x.service".into(), "rm -rf".into()).is_err());
+        assert!(unit_action_script("global".into(), "x.service".into(), "stop".into()).is_err());
+    }
+
+    #[test]
+    fn system_scope_never_prompts() {
+        assert_eq!(
+            unit_action_script("system".into(), "a b.service".into(), "restart".into()).unwrap(),
+            "sudo -n systemctl --system restart 'a b.service'"
+        );
     }
 }

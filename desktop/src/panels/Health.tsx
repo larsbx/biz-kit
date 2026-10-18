@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Host, Health, hostHealth } from "../api";
+import { AppInfo, Health, hostHealth } from "../api";
 
 function Meter({ pct }: { pct: number }) {
   const cls = pct >= 90 ? "bad" : pct >= 80 ? "warn" : "";
   return <div className="meter"><i className={cls} style={{ width: `${Math.min(pct, 100)}%` }} /></div>;
 }
 
-export default function HealthPanel({ hosts }: { hosts: Host[] }) {
+export default function HealthPanel({ info: { hosts } }: { info: AppInfo }) {
   const [data, setData] = useState<Record<string, Health | null>>({});
   const [loading, setLoading] = useState(false);
 
@@ -51,7 +51,7 @@ export default function HealthPanel({ hosts }: { hosts: Host[] }) {
                 <div className="sub">{h.label}</div>
                 {!d && <div className="empty">probing…</div>}
                 {d?.error && <div className="err">{d.error}</div>}
-                {d?.reachable && (
+                {d?.reachable && !d.error && (
                   <>
                     <div className="kv"><span>uptime</span><span>{d.uptime || "—"}</span></div>
                     <div className="kv"><span>load</span><span className="mono">{d.load}</span></div>
@@ -78,11 +78,6 @@ export default function HealthPanel({ hosts }: { hosts: Host[] }) {
                       </>
                     )}
 
-                    <div className="kv" style={{ marginTop: 8 }}>
-                      <span>tailnet</span>
-                      <span className="mono">{d.tailscaleIp || <span className="pill bad">down</span>}</span>
-                    </div>
-
                     <div className="kv">
                       <span>failed units</span>
                       <span className={d.failedUnits.length ? "pill warn" : "pill ok"}>
@@ -96,16 +91,14 @@ export default function HealthPanel({ hosts }: { hosts: Host[] }) {
                       </div>
                     )}
 
-                    <div className="kv" style={{ marginTop: 8 }}>
-                      <span>syncthing</span>
-                      <span>
-                        {!d.syncthing
-                          ? <span className="pill">not managed</span>
-                          : d.syncthing.running
-                            ? <>{d.syncthing.folders} folders · {d.syncthing.connectedPeers} peers</>
-                            : <span className="pill warn" title={d.syncthing.errors.join("\n")}>down</span>}
-                      </span>
-                    </div>
+                    {d.checks.map((c, i) => (
+                      <div className="kv" key={c.label + i} style={i === 0 ? { marginTop: 8 } : undefined}>
+                        <span>{c.label}</span>
+                        <span className={"trunc pill " + (c.ok ? "ok" : "bad")} title={c.detail} style={{ maxWidth: 180, display: "inline-block" }}>
+                          {c.detail.split("\n")[0] || (c.ok ? "ok" : "failed")}
+                        </span>
+                      </div>
+                    ))}
                   </>
                 )}
               </div>
