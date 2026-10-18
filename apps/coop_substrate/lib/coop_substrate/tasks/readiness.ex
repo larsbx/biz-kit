@@ -1,7 +1,8 @@
 defmodule CoopSubstrate.Tasks.Readiness do
   @moduledoc """
   Isolated proposed -> queued -> ready path. Governance commits exact input
-  digests, predecessor IDs and a required SOP digest. Operators acknowledge the
+  digests, predecessor IDs and a required SOP digest, and queuing requires the
+  task's Definition of Done. Operators acknowledge the
   SOP and request transitions; reviews confer no lifecycle authority. Replay
   folds accepted facts without filesystem reads or execution effects.
   """
@@ -90,6 +91,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
 
   defp check_command(%Envelope{type: "TaskQueuedV1"} = env, _, task, state) do
     with :ok <- transition(task, ["proposed"], "queued"),
+         :ok <- dod_defined(task),
          {:ok, _} <- definition(task),
          :ok <- acknowledgment(env, task, state),
          do: :ok
@@ -110,6 +112,11 @@ defmodule CoopSubstrate.Tasks.Readiness do
       do: :ok,
       else: {:error, {:invalid_task_transition, task.state, to}}
   end
+
+  # A DoD can only be defined while a task is proposed (Tasks.DoD), so queuing
+  # without one would leave the task unable ever to get one.
+  defp dod_defined(%{dod: nil}), do: {:error, :dod_not_defined}
+  defp dod_defined(_task), do: :ok
 
   defp definition(task) do
     case Map.get(task, :readiness) do

@@ -60,6 +60,8 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     {:ok, _} = Log.append([grant, baseline])
     ctx = %{gov: gov, worker: worker, grant: grant}
     {:ok, _} = Tasks.propose(command(ctx, "TaskProposedV1", 1))
+    # Queuing requires a Definition of Done, which can only be defined while proposed.
+    {:ok, _} = Log.append(definition(ctx, "task-1", 2))
     {:ok, hash} = Artifacts.put("SOP and input bytes")
 
     receipt =
@@ -94,7 +96,21 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     )
   end
 
-  defp configure(ctx, version \\ 2, extra \\ %{}) do
+  @criteria [%{"id" => "report", "description" => "Report supplied"}]
+
+  defp definition(ctx, task_id, version) do
+    signed_event(
+      ctx.gov,
+      "TaskDoDDefinedV1",
+      Map.merge(@scope, %{
+        "task_id" => task_id,
+        "expected_version" => version,
+        "criteria" => @criteria
+      })
+    )
+  end
+
+  defp configure(ctx, version \\ 3, extra \\ %{}) do
     signed_event(
       ctx.gov,
       "TaskReadinessDefinedV1",
@@ -118,11 +134,11 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
 
     {:ok, _} =
       Log.append(
-        command(ctx, "TaskSOPAcknowledgedV1", 3, %{"custody_receipt_id" => ctx.receipt.event_id})
+        command(ctx, "TaskSOPAcknowledgedV1", 4, %{"custody_receipt_id" => ctx.receipt.event_id})
       )
   end
 
-  defp ready(ctx, version \\ 5),
+  defp ready(ctx, version \\ 6),
     do:
       command(ctx, "TaskReadyV1", version, %{
         "custody_receipts" => %{"input" => ctx.receipt.event_id}
@@ -151,7 +167,7 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
 
   test "queued and ready are signed, optimistic and recoverable without effects", ctx do
     prepare(ctx)
-    queue = command(ctx, "TaskQueuedV1", 4)
+    queue = command(ctx, "TaskQueuedV1", 5)
     assert {:ok, [accepted]} = Log.append(queue)
     assert {:ok, state} = Log.replay(Projection)
     assert state.tasks[@key].state == "queued"
@@ -162,7 +178,7 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     assert {:ok, _} = Log.append(ready(ctx))
     assert {:ok, state} = Log.replay(Projection)
     assert state.tasks[@key].state == "ready"
-    assert state.tasks[@key].version == 6
+    assert state.tasks[@key].version == 7
     pid = Process.whereis(Log)
     monitor = Process.monitor(pid)
     Process.exit(pid, :kill)
@@ -172,27 +188,56 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     assert :ok = Log.verify_chains()
   end
 
+  test "queuing requires a Definition of Done, checked before readiness", ctx do
+    {:ok, state} = Log.replay(Projection)
+    task = state.tasks[@key]
+
+    baseline =
+      signed_event(
+        ctx.gov,
+        "TaskBaselineRecordedV1",
+        Map.merge(@scope, %{
+          "task_id" => "task-3",
+          "legacy_row_id" => "legacy-3",
+          "title" => task.title,
+          "definition_of_done" => task.definition_of_done,
+          "source_digest" => task.source_digest,
+          "definition_ref" => task.definition_ref
+        })
+      )
+
+    no_dod = %{"task_id" => "task-3"}
+    {:ok, _} = Log.append(baseline)
+    {:ok, _} = Tasks.propose(command(ctx, "TaskProposedV1", 1, no_dod))
+
+    # Checked right after the transition, before any readiness prerequisite.
+    reject(command(ctx, "TaskQueuedV1", 2, no_dod), :dod_not_defined)
+
+    {:ok, _} = Log.append(definition(ctx, "task-3", 2))
+    reject(command(ctx, "TaskQueuedV1", 3, no_dod), :readiness_not_defined)
+  end
+
   test "missing configuration and acknowledgment cannot be replaced by caller flags", ctx do
-    reject(command(ctx, "TaskQueuedV1", 2), :readiness_not_defined)
+    reject(command(ctx, "TaskQueuedV1", 3), :readiness_not_defined)
     {:ok, _} = Log.append(configure(ctx))
-    reject(command(ctx, "TaskQueuedV1", 3), :sop_acknowledgment_required)
-    reject(ready(ctx, 3), {:invalid_task_transition, "proposed", "ready"})
+    reject(command(ctx, "TaskQueuedV1", 4), :sop_acknowledgment_required)
+    reject(ready(ctx, 4), {:invalid_task_transition, "proposed", "ready"})
   end
 
   test "stale versions, unsupported lifecycle and forged operator fail closed", ctx do
     prepare(ctx)
-    reject(command(ctx, "TaskQueuedV1", 3), {:stale_task_version, 3, 4})
+    reject(command(ctx, "TaskQueuedV1", 4), {:stale_task_version, 4, 5})
 
     reject(
-      command(ctx, "TaskQueuedV1", 4, %{"lifecycle_version" => 2}),
+      command(ctx, "TaskQueuedV1", 5, %{"lifecycle_version" => 2}),
       :unsupported_task_lifecycle
     )
 
     rogue = %{ctx | worker: new_member("operator")}
-    reject(command(rogue, "TaskQueuedV1", 4), :task_operator_key_mismatch)
+    reject(command(rogue, "TaskQueuedV1", 5), :task_operator_key_mismatch)
 
     reject(
-      command(ctx, "TaskQueuedV1", 4, %{"project_id" => "other"}),
+      command(ctx, "TaskQueuedV1", 5, %{"project_id" => "other"}),
       :task_grant_scope_mismatch
     )
 
@@ -205,26 +250,26 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
         )
       )
 
-    reject(command(ctx, "TaskQueuedV1", 4), :task_grant_revoked)
+    reject(command(ctx, "TaskQueuedV1", 5), :task_grant_revoked)
   end
 
   test "replacement requirements invalidate SOP acknowledgment", ctx do
     prepare(ctx)
-    {:ok, _} = Log.append(configure(ctx, 4))
-    reject(command(ctx, "TaskQueuedV1", 5), :sop_acknowledgment_required)
+    {:ok, _} = Log.append(configure(ctx, 5))
+    reject(command(ctx, "TaskQueuedV1", 6), :sop_acknowledgment_required)
   end
 
   test "ready requires exact scoped custody and rechecks actual bytes", ctx do
     prepare(ctx)
-    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 4))
+    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 5))
 
     reject(
-      command(ctx, "TaskReadyV1", 5, %{"custody_receipts" => %{}}),
+      command(ctx, "TaskReadyV1", 6, %{"custody_receipts" => %{}}),
       :invalid_readiness_receipts
     )
 
     reject(
-      command(ctx, "TaskReadyV1", 5, %{"custody_receipts" => %{"input" => "unknown"}}),
+      command(ctx, "TaskReadyV1", 6, %{"custody_receipts" => %{"input" => "unknown"}}),
       :unknown_custody_receipt
     )
 
@@ -241,8 +286,8 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
   end
 
   test "unknown, self and incomplete predecessors fail closed", ctx do
-    reject(configure(ctx, 2, %{"predecessor_ids" => ["unknown"]}), :unknown_predecessor)
-    reject(configure(ctx, 2, %{"predecessor_ids" => ["task-1"]}), :invalid_predecessors)
+    reject(configure(ctx, 3, %{"predecessor_ids" => ["unknown"]}), :unknown_predecessor)
+    reject(configure(ctx, 3, %{"predecessor_ids" => ["task-1"]}), :invalid_predecessors)
     # Use the already committed baseline shape; no external row is authoritative.
     {:ok, state} = Log.replay(Projection)
     task = state.tasks[@key]
@@ -258,31 +303,31 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
       })
 
     {:ok, _} = Log.append(signed_event(ctx.gov, "TaskBaselineRecordedV1", payload))
-    {:ok, _} = Log.append(configure(ctx, 2, %{"predecessor_ids" => ["task-2"]}))
+    {:ok, _} = Log.append(configure(ctx, 3, %{"predecessor_ids" => ["task-2"]}))
 
     {:ok, _} =
       Log.append(
-        command(ctx, "TaskSOPAcknowledgedV1", 3, %{"custody_receipt_id" => ctx.receipt.event_id})
+        command(ctx, "TaskSOPAcknowledgedV1", 4, %{"custody_receipt_id" => ctx.receipt.event_id})
       )
 
-    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 4))
+    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 5))
     reject(ready(ctx), :incomplete_predecessors)
   end
 
   test "atomic failure and conflicting duplicate IDs never advance projection", ctx do
     prepare(ctx)
-    queue = command(ctx, "TaskQueuedV1", 4)
+    queue = command(ctx, "TaskQueuedV1", 5)
     head = Log.head()
 
-    assert {:error, {:reject, 1, {:stale_task_version, 4, 5}}} =
-             Log.append([queue, ready(ctx, 4)])
+    assert {:error, {:reject, 1, {:stale_task_version, 5, 6}}} =
+             Log.append([queue, ready(ctx, 5)])
 
     assert Log.head() == head
     restart_log()
     assert {:ok, _} = Log.append(queue)
 
     reject(
-      command(ctx, "TaskQueuedV1", 4, %{"principal_id" => "other"}, event_id: queue.event_id),
+      command(ctx, "TaskQueuedV1", 5, %{"principal_id" => "other"}, event_id: queue.event_id),
       :task_command_id_conflict
     )
   end
@@ -305,19 +350,19 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     head = Log.head()
 
     assert {:error, {:store_append_failed, _}} =
-             Log.append(command(ctx, "TaskQueuedV1", 4, %{}, event_id: id))
+             Log.append(command(ctx, "TaskQueuedV1", 5, %{}, event_id: id))
 
     assert Log.head() == head
     assert Log.replay(Projection) == before_state
     restart_log()
-    assert {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 4))
+    assert {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 5))
   end
 
   test "reviewer role cannot queue, and new operators must acknowledge personally", ctx do
     prepare(ctx)
     reviewer = %{ctx.worker | signer: %{ctx.worker.signer | role: "reviewer"}}
 
-    valid = command(ctx, "TaskQueuedV1", 4)
+    valid = command(ctx, "TaskQueuedV1", 5)
     unsigned = %{valid | signers: [reviewer.signer], sigs: %{}}
 
     {:ok, invalid_role} =
@@ -341,14 +386,14 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     {:ok, _} = Log.append(grant)
 
     reject(
-      command(%{ctx | worker: other, grant: grant}, "TaskQueuedV1", 4),
+      command(%{ctx | worker: other, grant: grant}, "TaskQueuedV1", 5),
       :sop_acknowledgment_required
     )
   end
 
   test "custody with the wrong digest cannot satisfy readiness", ctx do
     prepare(ctx)
-    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 4))
+    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 5))
     {:ok, hash} = Artifacts.put("different input")
 
     receipt =
@@ -361,14 +406,14 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     {:ok, _} = Log.append(receipt)
 
     reject(
-      command(ctx, "TaskReadyV1", 5, %{"custody_receipts" => %{"input" => receipt.event_id}}),
+      command(ctx, "TaskReadyV1", 6, %{"custody_receipts" => %{"input" => receipt.event_id}}),
       :custody_digest_mismatch
     )
   end
 
   test "cross-project custody and batch revocation cannot license readiness", ctx do
     prepare(ctx)
-    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 4))
+    {:ok, _} = Log.append(command(ctx, "TaskQueuedV1", 5))
     other_scope = Map.put(@scope, "project_id", "project-2")
 
     grant =
@@ -398,7 +443,7 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     {:ok, _} = Log.append(receipt)
 
     reject(
-      command(ctx, "TaskReadyV1", 5, %{"custody_receipts" => %{"input" => receipt.event_id}}),
+      command(ctx, "TaskReadyV1", 6, %{"custody_receipts" => %{"input" => receipt.event_id}}),
       :task_grant_scope_mismatch
     )
 
@@ -418,8 +463,8 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
   test "atomic readiness admission and the membership gate match task replay", ctx do
     commands = [
       configure(ctx),
-      command(ctx, "TaskSOPAcknowledgedV1", 3, %{"custody_receipt_id" => ctx.receipt.event_id}),
-      command(ctx, "TaskQueuedV1", 4),
+      command(ctx, "TaskSOPAcknowledgedV1", 4, %{"custody_receipt_id" => ctx.receipt.event_id}),
+      command(ctx, "TaskQueuedV1", 5),
       ready(ctx)
     ]
 
