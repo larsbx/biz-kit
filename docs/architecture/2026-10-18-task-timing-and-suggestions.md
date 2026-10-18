@@ -72,12 +72,10 @@ Authority splits by key:
 
 Creating a task confers no authority over its completion. A created task
 starts with `dod: nil`, can reach `proposed` (which has no prerequisites),
-and cannot reach `queued` or `ready` until governance signs its readiness
-definition (`TaskReadinessDefinedV1`). A Definition of Done is not a readiness
-prerequisite today: `Tasks.Readiness` checks the readiness definition, SOP
-acknowledgement, predecessors and input receipts, but not `task.dod`. The DoD
-gates review of completion evidence; ledger completion itself is not
-implemented yet.
+and cannot reach `queued` until governance has signed both its Definition of
+Done (`TaskDoDDefinedV1`) and its readiness definition (`TaskReadinessDefinedV1`).
+The DoD requirement was added on 2026-10-18; see
+[the readiness design](2026-10-14-ledger-task-readiness.md#definition-of-done-before-queuing).
 The worst a misused operator key can do is add inbox tasks inside its own
 project, and governance can revoke it. Routine creation therefore never
 needs the governance key, which can stay offline.
@@ -359,9 +357,8 @@ every later check reading stale state, so both lists are now derived from
 ## Decisions (2026-10-18)
 
 - **Operators create tasks.** See [Task creation](#task-creation).
-- **No DoD at creation.** A created task has `dod: nil`. Governance controls
-  its progression through the readiness definition, which `queued` and
-  `ready` require. The DoD itself is not a readiness prerequisite (see
+- **No DoD at creation.** A created task has `dod: nil`. It needs a
+  governance-signed DoD and readiness definition before it can be queued (see
   [Task creation](#task-creation)).
 - **Suggester grants are per agent principal and project,** not per deployment.
 - **Agent reasoning stays out of the ledger body.** The `rationale` field holds
