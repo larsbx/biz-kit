@@ -444,43 +444,57 @@ defmodule CoopSubstrate.TaskSuggestionsPropertiesTest do
     end
   end
 
+  # Reachability is a coverage claim, not a sample. StreamData enumerates from a
+  # clock-derived seed, so the same test could pass locally and fail in CI. Here
+  # history i comes from seed @coverage_seed + i at full size: distinct,
+  # reproducible histories, consumed until every target outcome has appeared.
+  @coverage_seed 20_261_018
+  @coverage_budget 3_000
+
+  defp coverage_histories do
+    gen = StreamData.resize(history_gen(), 30)
+
+    Stream.map(
+      1..@coverage_budget,
+      &(gen |> StreamData.seeded(@coverage_seed + &1) |> Enum.at(0))
+    )
+  end
+
+  defp reached(targets, outcomes, w, gate0) do
+    Enum.reduce_while(coverage_histories(), MapSet.new(), fn ops, seen ->
+      seen = MapSet.union(seen, MapSet.new(outcomes.(run(ops, w, gate0))))
+      if MapSet.subset?(targets, seen), do: {:halt, seen}, else: {:cont, seen}
+    end)
+  end
+
   test "generated histories reach delegated changes and exhausted budgets", %{
     world: w,
     gate0: gate0
   } do
-    outcomes =
-      history_gen()
-      |> Enum.take(400)
-      |> Enum.flat_map(fn ops ->
-        {steps, gate} = run(ops, w, gate0)
-        delegations = gate.orchestration.delegations
+    targets = MapSet.new(["TaskCreatedV1", "TaskTimingRevisedV1", :exhausted])
 
-        Enum.flat_map(steps, fn {env, _, _} ->
-          if Map.has_key?(delegations, env.payload["authorization_event_id"]),
-            do: [env.type],
-            else: []
-        end) ++ for({_, d} <- delegations, d.used == d.budget, do: :exhausted)
-      end)
-      |> MapSet.new()
+    outcomes = fn {steps, gate} ->
+      delegations = gate.orchestration.delegations
 
-    assert MapSet.subset?(
-             MapSet.new(["TaskCreatedV1", "TaskTimingRevisedV1", :exhausted]),
-             outcomes
-           )
+      for(
+        {env, _, _} <- steps,
+        Map.has_key?(delegations, env.payload["authorization_event_id"]),
+        do: env.type
+      ) ++
+        for({_, d} <- delegations, d.used == d.budget, do: :exhausted)
+    end
+
+    assert MapSet.subset?(targets, reached(targets, outcomes, w, gate0))
   end
 
   test "generated histories reach every suggestion status", %{world: w, gate0: gate0} do
-    statuses =
-      history_gen()
-      |> Enum.take(400)
-      |> Enum.flat_map(fn ops ->
-        {_steps, gate} = run(ops, w, gate0)
-        Enum.map(gate.orchestration.suggestions, fn {_, s} -> s.status end)
-      end)
-      |> MapSet.new()
+    targets = MapSet.new([:pending, :accepted, :amended, :declined, :withdrawn, :superseded])
 
-    assert statuses ==
-             MapSet.new([:pending, :accepted, :amended, :declined, :withdrawn, :superseded])
+    statuses = fn {_steps, gate} ->
+      Enum.map(gate.orchestration.suggestions, fn {_, s} -> s.status end)
+    end
+
+    assert reached(targets, statuses, w, gate0) == targets
   end
 
   defp task_key(%{payload: %{"task_id" => t}} = env) when is_binary(t),
