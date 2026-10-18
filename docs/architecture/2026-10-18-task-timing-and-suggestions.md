@@ -28,7 +28,32 @@ and suggestion events are absent from the task fold:
 
     fold_tasks(L) = fold_tasks(L ∖ S)   where S = {e ∈ L | e.type ∈ Suggestion*}
 
-An agent's whole effect is therefore an entry in the review queue. A
+An agent's whole effect is therefore an entry in the review queue.
+
+### Task creation
+
+The ledger has no creation command today. `TaskBaselineRecordedV1` is an
+import: it requires a `legacy_row_id`, a `source_digest` and a `definition_ref`,
+and attests a preserved SpruceGoose row. `TaskCreatedV1` is the first event
+that creates new work, and it is **operator-signed** (decided 2026-10-18).
+
+Authority splits by key:
+
+| Key | Decides |
+| --- | --- |
+| operator (per person and project; revocable) | what exists in the inbox, and when it is scheduled |
+| governance (per chapter; can issue grants) | what counts as done (`TaskDoDDefinedV1`), readiness rules, grants |
+
+Creating a task confers no authority over its completion. A created task
+starts with `dod: nil`, can reach `proposed` (which has no prerequisites),
+and cannot reach `ready` until governance defines its DoD and readiness.
+The worst a misused operator key can do is add inbox tasks inside its own
+project, and governance can revoke it. Routine creation therefore never
+needs the governance key, which can stay offline.
+
+Narrower operator roles (for example timing without creation) would need a
+`TaskOperatorGrantedV2` that carries a capability list. That is deferred
+until a second person needs one. A
 suggestion takes effect only when an operator signs the corresponding command,
 which carries the suggestion ID as provenance.
 
@@ -171,7 +196,7 @@ been recorded (the existing `duplicate/2` same-envelope retry applies).
 | `TaskSuggesterGrantedV1` / `RevokedV1` | declared governance key; same rules as reviewer grants |
 | `TaskCreatedV1` | task key absent; `title` nonempty after trimming; `timing` valid. The task starts as `inbox`, `version = 1`, `timing_version = 1`, `dod: nil` |
 | `TaskTimingRevisedV1` | task exists; `expected_timing_version = task.timing_version`; `timing` valid |
-| `TaskChangeSuggestedV1` | `create`: task key absent. `timing`: task exists and `base_timing_version ≤ task.timing_version` |
+| `TaskChangeSuggestedV1` | `create`: task key absent. `timing`: task exists and `base_timing_version ≤ task.timing_version`. `rationale` nonempty and at most 1,000 characters |
 | `TaskSuggestionWithdrawnV1` | suggestion pending, and signed by the principal who made it |
 | `TaskSuggestionDeclinedV1` | suggestion pending, same scope; `reason` may be empty |
 | any operator command carrying `suggestion_event_id` | suggestion pending, same scope and `task_id`, and its `change.kind` matches the command type |
@@ -238,17 +263,27 @@ specified in a later document.
 7. **Retry:** re-submitting the same signed envelope returns the original
    receipt, including after a revocation.
 
-## Open decisions
+## Decisions (2026-10-18)
 
-- **May operators create tasks?** Today only governance records tasks, as
-  baselines. `TaskCreatedV1` gives operators creation inside their granted
-  project. The alternative is a governance-signed create, with operators
-  limited to timing.
-- **DoD for created tasks:** a created task has no DoD until
-  `TaskDoDDefinedV1`, so the readiness rules keep it from becoming ready.
-  Confirm this is intended rather than requiring a DoD at creation.
-- **Rationale disclosure:** `rationale` is free text from an agent, stored in the
-  ledger under the `:edges` class. Long reasoning should probably go to artifact
-  custody, with only a digest in the event.
-- **Who may suggest:** one suggester grant per agent principal and project, or
-  per agent deployment. This document assumes per principal and project.
+- **Operators create tasks.** See [Task creation](#task-creation).
+- **No DoD at creation.** A created task has `dod: nil`, and the readiness rules
+  keep it short of `ready` until governance signs `TaskDoDDefinedV1`.
+- **Suggester grants are per agent principal and project,** not per deployment.
+- **Agent reasoning stays out of the ledger body.** The `rationale` field holds
+  a short summary only. Full reasoning is stored outside the ledger and
+  referenced by digest.
+
+## Open questions
+
+- **How an agent's full rationale reaches custody.** `ArtifactCustodyRecordedV1`
+  is operator-signed and checks an operator grant, so a suggester cannot
+  record a custody receipt itself. Options:
+  1. Admit custody receipts under suggester grants too, scoped to that
+     suggester's project.
+  2. Store the rationale with the suggestion as an `optional` `rationale_digest`
+     (`:hash`) whose bytes are unverified until an operator accepts and custodies
+     them.
+  3. Have the accepting operator custody the rationale as part of acceptance.
+
+  Until this is decided, `rationale` is capped at 1,000 characters and no
+  digest field is admitted.
