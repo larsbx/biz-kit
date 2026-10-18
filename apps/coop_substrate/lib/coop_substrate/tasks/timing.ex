@@ -357,8 +357,10 @@ defmodule CoopSubstrate.Tasks.Timing do
          true <-
            (is_binary(c["title"]) and String.trim(c["title"]) != "") or
              {:error, {:invalid_suggestion_change, :title}},
+         # Omitted, or a string: TaskCreatedV1 cannot carry a null description,
+         # so a null one could never be accepted unchanged.
          true <-
-           is_nil(c["description"]) or is_binary(c["description"]) or
+           not Map.has_key?(c, "description") or is_binary(c["description"]) or
              {:error, {:invalid_suggestion_change, :description}},
          do: timing(c["timing"])
   end

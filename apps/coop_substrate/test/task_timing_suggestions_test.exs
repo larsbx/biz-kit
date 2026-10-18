@@ -331,6 +331,31 @@ defmodule CoopSubstrate.TaskTimingSuggestionsTest do
       assert id == created.event_id
     end
 
+    test "a description is accepted unchanged, and must be omitted rather than null", ctx do
+      change =
+        Map.put(create_change("Task task-1", unscheduled()), "description", "Book the venue")
+
+      sug = suggest(ctx.agent, ctx.agent_grant, "task-1", change)
+      {:ok, _} = Log.append([sug])
+
+      {:ok, _} =
+        Log.append([
+          create(ctx.op, ctx.op_grant, "task-1", unscheduled(),
+            description: "Book the venue",
+            suggestion: sug
+          )
+        ])
+
+      assert %{status: :accepted} = suggestion(sug)
+
+      # TaskCreatedV1 cannot carry a null description, so such a Δ could never
+      # be accepted unchanged.
+      null = Map.put(create_change("Task task-2", unscheduled()), "description", nil)
+
+      assert {:error, {:reject, 0, {:invalid_suggestion_change, :description}}} =
+               rejected(suggest(ctx.agent, ctx.agent_grant, "task-2", null))
+    end
+
     test "a create suggestion for an existing task is refused", ctx do
       {:ok, _} = Log.append([create(ctx.op, ctx.op_grant, "task-1", unscheduled())])
 
@@ -357,7 +382,9 @@ defmodule CoopSubstrate.TaskTimingSuggestionsTest do
                    as_role(op_key, "suggester"),
                    sug_side,
                    "task-1",
-                   timing_change(unscheduled()), base: 1)
+                   timing_change(unscheduled()),
+                   base: 1
+                 )
                )
 
       assert {:error, {:reject, 0, :task_operator_key_mismatch}} =
@@ -375,7 +402,9 @@ defmodule CoopSubstrate.TaskTimingSuggestionsTest do
                    as_role(ctx.op, "suggester"),
                    ctx.op_grant,
                    "task-1",
-                   timing_change(unscheduled()), base: 1)
+                   timing_change(unscheduled()),
+                   base: 1
+                 )
                )
 
       assert {:error, {:reject, 0, :unknown_task_grant}} =
