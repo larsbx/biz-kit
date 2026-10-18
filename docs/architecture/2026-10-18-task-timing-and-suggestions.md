@@ -69,7 +69,12 @@ Authority splits by key:
 
 Creating a task confers no authority over its completion. A created task
 starts with `dod: nil`, can reach `proposed` (which has no prerequisites),
-and cannot reach `ready` until governance defines its DoD and readiness.
+and cannot reach `queued` or `ready` until governance signs its readiness
+definition (`TaskReadinessDefinedV1`). A Definition of Done is not a readiness
+prerequisite today: `Tasks.Readiness` checks the readiness definition, SOP
+acknowledgement, predecessors and input receipts, but not `task.dod`. The DoD
+gates review of completion evidence; ledger completion itself is not
+implemented yet.
 The worst a misused operator key can do is add inbox tasks inside its own
 project, and governance can revoke it. Routine creation therefore never
 needs the governance key, which can stay offline.
@@ -92,7 +97,10 @@ timing edits advanced the task's `version`, every drag would invalidate
 in-flight `TaskQueuedV1`/`TaskReadyV1` commands. So timing gets its own counter:
 
 - `task.version` is advanced only by lifecycle and DoD commands, as today.
-- `task.timing_version` (starting at 0) is advanced only by `TaskTimingRevisedV1`.
+- `task.timing_version` is 0 for a baselined task, which has no timing.
+  `TaskCreatedV1` sets the initial timing and the counter to 1: creation counts
+  as the first timing revision. After that, only `TaskTimingRevisedV1`
+  advances it.
 
 Timing commands check `expected_timing_version`; lifecycle commands still
 check `expected_version`. The two facets never conflict with each other.
@@ -200,12 +208,12 @@ authoritative facts, and a create suggestion has no task stream yet.
 
 ### `change` (Δ)
 
-Each Δ is exactly the body of the command it would become, so accepting
+Each Δ carries exactly the body fields of the command it would become, so accepting
 means signing that body unchanged:
 
 | `change.kind` | Fields | Accepted by | Requires |
 | --- | --- | --- | --- |
-| `create` | `title`, `timing`, optional `description` | `TaskCreatedV1` | `task_id` not yet recorded |
+| `create` | `title`, `timing`, optional `description` (a string; omitted, never `null`) | `TaskCreatedV1` | `task_id` not yet recorded |
 | `timing` | `timing` | `TaskTimingRevisedV1` | `base_timing_version` present; task exists |
 
 `timing` uses the shape and constraints above, so an invalid Δ is
@@ -235,8 +243,10 @@ Resolving a suggestion in the projection:
 
     status(s) ∈ {pending, accepted, amended, declined, withdrawn, superseded}
 
-    accepted   ⇔ resolving command body = s.change body
-    amended    ⇔ resolving command body ≠ s.change body (the operator edited before accepting)
+    body(create) = {title, timing, description}   body(timing) = {timing}
+
+    accepted   ⇔ body fields of the resolving command = body fields of s.change
+    amended    ⇔ they differ (the operator edited before accepting)
     superseded ⇔ a `create` suggestion's task_id was created without citing it
 
 A suggestion is resolved at most once; any later command that cites it is
@@ -306,8 +316,10 @@ specified in a later document.
 ## Decisions (2026-10-18)
 
 - **Operators create tasks.** See [Task creation](#task-creation).
-- **No DoD at creation.** A created task has `dod: nil`, and the readiness rules
-  keep it short of `ready` until governance signs `TaskDoDDefinedV1`.
+- **No DoD at creation.** A created task has `dod: nil`. Governance controls
+  its progression through the readiness definition, which `queued` and
+  `ready` require. The DoD itself is not a readiness prerequisite (see
+  [Task creation](#task-creation)).
 - **Suggester grants are per agent principal and project,** not per deployment.
 - **Agent reasoning stays out of the ledger body.** The `rationale` field holds
   a short summary (at most 1,000 characters). Full reasoning goes in the
