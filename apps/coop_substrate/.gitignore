@@ -28,4 +28,4 @@ coop_substrate-*.tar
 
 
 # Apalache model-checker output from `quint verify`.
-/_apalache-out/
+_apalache-out/
