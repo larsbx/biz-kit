@@ -49,6 +49,25 @@ earlier events in the same atomic batch. Identical single-command retries return
 the original accepted envelope after restart/revocation; conflicting IDs reject.
 Store failure or batch rejection advances neither projection nor chain head.
 
+## Definition of Done before queuing
+
+Added 2026-10-18. `TaskQueuedV1` requires the task to have a Definition of Done
+(`TaskDoDDefinedV1`), checked right after the state transition and before the
+readiness prerequisites. A task without one is refused with `:dod_not_defined`.
+
+Why: every DoD command (defining criteria, submitting evidence, reviewing) is
+admitted only while a task is `proposed`. Without this check a task could move
+to `queued` with no DoD and then never get one, leaving completion nothing to
+be checked against. Requiring it at the last state where it can still be
+defined closes that gap with one local check. `TaskReadyV1` needs no separate
+check: a task can only be ready after being queued.
+
+Governance signs the DoD and the readiness definition for the same task, so the
+rule adds no new kind of step. Baselined tasks need a DoD before queuing like
+any other. Tasks queued before this rule are not re-checked; on this rehearsal
+path no production data exists. The rule is modelled in
+[`spec/task_readiness.qnt`](../../apps/coop_substrate/spec/task_readiness.qnt).
+
 ## Remaining boundaries
 
 A task with incomplete predecessors cannot become ready. No completed baseline
