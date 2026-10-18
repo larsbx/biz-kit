@@ -5,7 +5,9 @@ defmodule CoopSubstrate.Tasks.Timing do
   in spec/task_suggestions.qnt).
 
   Operators create tasks and revise their timing facet, which has its own
-  version counter so calendar edits never invalidate lifecycle commands.
+  version counter so calendar edits never invalidate lifecycle commands. Agents
+  may issue the same two commands under a live delegation, within its limits
+  (`Tasks.Delegation`).
   Suggesters (agents) hold a separate grant whose events only fill a review
   queue: an operator command citing a suggestion resolves it, and task state is
   a function of operator events alone. Agent documents fold into
@@ -17,6 +19,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   alias CoopSubstrate.Projections.Tasks, as: Projection
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.Tasks
+  alias CoopSubstrate.Tasks.Delegation
 
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @subject Map.put(@scope, "task_id", :string)
@@ -27,6 +30,8 @@ defmodule CoopSubstrate.Tasks.Timing do
   }
   @suggester %{"principal_id" => :string, "authorization_event_id" => :string}
   @grant %{"principal_id" => :string, "key_id" => :string, "pubkey" => :pubkey}
+  # Accepted on delegated commands only.
+  @reasoning %{"rationale" => :string, "rationale_receipt_id" => :string}
 
   @day_ms 86_400_000
   @max_timed_ms 31 * @day_ms
@@ -50,10 +55,10 @@ defmodule CoopSubstrate.Tasks.Timing do
           "tasks",
           @subject,
           Map.merge(@actor, %{"title" => :string, "timing" => :any}),
-          %{
+          Map.merge(@reasoning, %{
             "description" => :string,
             "suggestion_event_id" => :string
-          }
+          })
         ),
       "TaskTimingRevisedV1" =>
         spec(
@@ -61,7 +66,7 @@ defmodule CoopSubstrate.Tasks.Timing do
           "tasks",
           @subject,
           Map.merge(@actor, %{"expected_timing_version" => :int, "timing" => :any}),
-          %{"suggestion_event_id" => :string}
+          Map.put(@reasoning, "suggestion_event_id", :string)
         ),
       "TaskSuggestionDeclinedV1" =>
         spec(
@@ -95,9 +100,11 @@ defmodule CoopSubstrate.Tasks.Timing do
           Map.put(@suggester, "artifact_digest", :hash)
         )
     }
+    |> Map.merge(Delegation.event_types(@scope, @actor))
   end
 
-  defp spec(role, prefix, scope, fields, optional \\ %{}) do
+  @doc false
+  def spec(role, prefix, scope, fields, optional \\ %{}) do
     %{
       required_roles: [role],
       disclosure_class: :edges,
@@ -131,19 +138,32 @@ defmodule CoopSubstrate.Tasks.Timing do
   end
 
   def check(%Envelope{type: "TaskCreatedV1", payload: p} = env, state, _keys) do
-    with :ok <- operator(env, state),
+    with {:ok, via} <- authority(env, state),
          :ok <- Tasks.nonempty_fields(p, ~w(title)),
          :ok <- timing(p["timing"]),
+         :ok <- delegated_limits(via, p["timing"], nil),
          :ok <- absent(state, env),
          do: cited(env, state)
   end
 
   def check(%Envelope{type: "TaskTimingRevisedV1", payload: p} = env, state, _keys) do
-    with :ok <- operator(env, state),
+    with {:ok, via} <- authority(env, state),
          {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task),
          :ok <- expected(p["expected_timing_version"], task.timing_version),
          :ok <- timing(p["timing"]),
+         :ok <- delegated_limits(via, p["timing"], task),
          do: cited(env, state)
+  end
+
+  def check(%Envelope{type: "TaskDelegationGrantedV1", payload: p} = env, state, _keys) do
+    with :ok <- operator(env, state),
+         :ok <- Tasks.nonempty_fields(p, ~w(delegate_principal_id key_id)),
+         :ok <- unrecorded(state.delegations, env),
+         do: Delegation.validate(p)
+  end
+
+  def check(%Envelope{type: "TaskDelegationRevokedV1"} = env, state, _keys) do
+    with :ok <- operator(env, state), do: Delegation.check_revocation(env, state)
   end
 
   def check(%Envelope{type: "TaskSuggestionDeclinedV1", payload: p} = env, state, _keys) do
@@ -169,13 +189,43 @@ defmodule CoopSubstrate.Tasks.Timing do
   end
 
   def check(%Envelope{type: "TaskSuggestionArtifactRecordedV1", payload: p} = env, state, _keys) do
-    with :ok <- suggester(env, state),
+    with :ok <- agent(env, state),
          true <-
            not (Map.has_key?(state.suggestion_artifacts, env.event_id) or
                   Map.has_key?(state.custody_receipts, env.event_id)) or
              {:error, :custody_id_conflict},
          {:ok, _bytes} <- Artifacts.verify(elem(p["artifact_digest"], 1), @max_artifact_bytes),
          do: :ok
+  end
+
+  # Who may issue a create or timing command: an operator, or an agent under a
+  # live delegation. Reasoning fields belong to delegated commands only.
+  defp authority(%Envelope{payload: p} = env, state) do
+    case state.delegations[p["authorization_event_id"]] do
+      nil ->
+        with :ok <- operator(env, state) do
+          if Map.has_key?(p, "rationale") or Map.has_key?(p, "rationale_receipt_id"),
+            do: {:error, :rationale_requires_delegation},
+            else: {:ok, :operator}
+        end
+
+      delegation ->
+        with :ok <- Delegation.admit(env, delegation, state),
+             :ok <- if(p["rationale"], do: rationale(p["rationale"]), else: :ok),
+             :ok <- own_artifact(env, state, p["rationale_receipt_id"]),
+             do: {:ok, delegation}
+    end
+  end
+
+  defp delegated_limits(:operator, _timing, _task), do: :ok
+  defp delegated_limits(delegation, timing, task), do: Delegation.limits(delegation, timing, task)
+
+  # Agents record reasoning under a suggester grant or a live delegation.
+  defp agent(%Envelope{payload: p} = env, state) do
+    case state.delegations[p["authorization_event_id"]] do
+      nil -> suggester(env, state)
+      delegation -> Delegation.live(env, delegation, state)
+    end
   end
 
   defp operator(%Envelope{payload: p} = env, state) do
@@ -274,7 +324,8 @@ defmodule CoopSubstrate.Tasks.Timing do
   defp unrecorded(map, env),
     do: if(Map.has_key?(map, env.event_id), do: {:error, :command_already_recorded}, else: :ok)
 
-  defp same_scope(%Envelope{chapter_id: ch, payload: p}, record, error) do
+  @doc false
+  def same_scope(%Envelope{chapter_id: ch, payload: p}, record, error) do
     if {ch, p["tenant_id"], p["project_id"]} ==
          {record.chapter_id, record.tenant_id, record.project_id},
        do: :ok,
@@ -379,12 +430,13 @@ defmodule CoopSubstrate.Tasks.Timing do
   # -- projection -------------------------------------------------------------------
 
   def init,
-    do: %{
-      suggester_grants: %{},
-      suggestions: %{},
-      suggestion_artifacts: %{},
-      timing_commands: %{}
-    }
+    do:
+      Map.merge(Delegation.init(), %{
+        suggester_grants: %{},
+        suggestions: %{},
+        suggestion_artifacts: %{},
+        timing_commands: %{}
+      })
 
   def handle_event(%Envelope{type: "TaskSuggesterGrantedV1", payload: p} = env, state) do
     grant = %{
@@ -404,12 +456,15 @@ defmodule CoopSubstrate.Tasks.Timing do
     do: put_in(state, [:suggester_grants, p["authorization_event_id"], :active], false)
 
   def handle_event(%Envelope{type: "TaskCreatedV1", payload: p} = env, state) do
+    {state, delegation_id} = Delegation.charge(state, env)
+
     task =
       Projection.new_task(env, %{
         title: p["title"],
         description: p["description"],
         timing: p["timing"],
-        timing_version: 1
+        timing_version: 1,
+        timing_delegation_id: delegation_id
       })
 
     state
@@ -420,17 +475,25 @@ defmodule CoopSubstrate.Tasks.Timing do
   end
 
   def handle_event(%Envelope{type: "TaskTimingRevisedV1", payload: p} = env, state) do
+    {state, delegation_id} = Delegation.charge(state, env)
+
     state
     |> update_in([:tasks, Projection.task_key(env)], fn task ->
       %{
         task
         | timing: p["timing"],
           timing_version: task.timing_version + 1,
+          timing_delegation_id: delegation_id,
           last_event_id: env.event_id
       }
     end)
     |> resolve_cited(env)
     |> command(env)
+  end
+
+  def handle_event(%Envelope{type: type} = env, state)
+      when type in ~w(TaskDelegationGrantedV1 TaskDelegationRevokedV1) do
+    state |> then(&Delegation.handle_event(env, &1)) |> command(env)
   end
 
   def handle_event(%Envelope{type: "TaskSuggestionDeclinedV1", payload: p} = env, state) do

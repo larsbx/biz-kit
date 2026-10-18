@@ -75,9 +75,9 @@ jobs:
         run: mix test
 
   ledger-model:
-    # Model-checks the task suggestion state machine (spec/task_suggestions.qnt):
-    # safety holds sampled and exhaustively to depth 5, and every witness state
-    # is reachable. About 3 minutes.
+    # Model-checks the task suggestion and delegation state machine
+    # (spec/task_suggestions.qnt): safety holds sampled and exhaustively to
+    # depth 5, and every witness state is reachable. About 7 minutes.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
