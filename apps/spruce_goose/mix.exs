@@ -17,6 +17,7 @@ defmodule SpruceGoose.MixProject do
         path: System.get_env("SPRUCE_GOOSE_ESCRIPT_PATH", "sprucegoose-direct")
       ],
       test_ignore_filters: [~r|^test/fixtures/|],
+      elixirc_paths: elixirc_paths(Mix.env()),
       releases: releases(),
       deps: deps()
     ]
@@ -36,6 +37,9 @@ defmodule SpruceGoose.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   def application do
     [
       extra_applications: [:logger],
@@ -45,6 +49,10 @@ defmodule SpruceGoose.MixProject do
 
   defp deps do
     [
+      # The common ledger: the change feed and its read access are served here.
+      {:coop_substrate, in_umbrella: true},
+      # Who a person is: sign-in through a replaceable provider, sessions.
+      {:biz_kit_identity, in_umbrella: true},
       {:req, "~> 0.5"},
       {:yaml_elixir, "~> 2.12"},
       {:picosat_elixir, "~> 0.2"},

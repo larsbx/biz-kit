@@ -80,6 +80,13 @@ defmodule CoopSubstrate.Log do
     GenServer.call(server, :head)
   end
 
+  @doc """
+  The validity-gate state at the head: the Membership fold the appender admits
+  against. A copy, for read-side decisions that must agree with admission.
+  """
+  @spec gate(GenServer.server()) :: map()
+  def gate(server \\ __MODULE__), do: GenServer.call(server, :gate)
+
   # -- read API (straight from the store; no serialization needed) -------------
 
   @doc """
@@ -391,6 +398,8 @@ defmodule CoopSubstrate.Log do
   def handle_call(:head, _from, %{head: head} = state) do
     {:reply, %{global_seq: head.global_seq, global_hash: head.global_hash}, state}
   end
+
+  def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
 
   @impl true
   def handle_call({:append, envelopes}, _from, %{head: head, gate: gate} = state) do

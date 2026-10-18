@@ -78,6 +78,10 @@ end
 config :logger, level: :warning
 
 config :spruce_goose, Oban, testing: :manual
+
+# Short, so the change feed's idle path (tick and heartbeat) runs in tests.
+config :spruce_goose, :feed_heartbeat_ms, 200
+config :spruce_goose, :secure_cookies, false
 config :spruce_goose, :start_outbox_dispatcher, false
 
 # The boot-time SOP adoption check is exercised directly in

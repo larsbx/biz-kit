@@ -1,0 +1,20 @@
+defmodule BizKit.Identity.Application do
+  @moduledoc false
+  use Application
+
+  @impl true
+  def start(_type, _args) do
+    # Malformed bindings refuse boot: a guess about who someone is would hand
+    # them a principal's authority.
+    case BizKit.Identity.Resolver.check() do
+      :ok ->
+        Supervisor.start_link([BizKit.Identity.Sessions],
+          strategy: :one_for_one,
+          name: BizKit.Identity.Supervisor
+        )
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+end
