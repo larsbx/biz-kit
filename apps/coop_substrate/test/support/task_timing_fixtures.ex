@@ -78,6 +78,19 @@ defmodule CoopSubstrate.TaskTimingFixtures do
 
   # -- operator ----------------------------------------------------------------
 
+  @doc """
+  The actor fields for a command authorised by `grant`: an operator grant, or a
+  delegation, whose delegate principal then acts. A delegated command is signed
+  with `as_role(agent, "operator")`: the same command type an operator signs.
+  """
+  def actor(%{type: "TaskDelegationGrantedV1"} = delegation) do
+    %{
+      "principal_id" => delegation.payload["delegate_principal_id"],
+      "authorization_event_id" => delegation.event_id,
+      "lifecycle_version" => 1
+    }
+  end
+
   def actor(grant) do
     %{
       "principal_id" => grant.payload["principal_id"],
@@ -99,6 +112,7 @@ defmodule CoopSubstrate.TaskTimingFixtures do
       })
       |> put_opt("description", opts[:description])
       |> put_opt("suggestion_event_id", opts[:suggestion])
+      |> put_rationale(opts)
     )
   end
 
@@ -114,6 +128,7 @@ defmodule CoopSubstrate.TaskTimingFixtures do
         "timing" => timing
       })
       |> put_opt("suggestion_event_id", opts[:suggestion])
+      |> put_rationale(opts)
     )
   end
 
@@ -149,6 +164,51 @@ defmodule CoopSubstrate.TaskTimingFixtures do
       @scope
       |> Map.merge(Map.delete(actor(grant), "lifecycle_version"))
       |> Map.put("artifact_digest", {:bytes, digest})
+    )
+  end
+
+  def operator_revoke(gov, grant) do
+    signed_event(
+      gov,
+      "TaskOperatorRevokedV1",
+      Map.put(@scope, "authorization_event_id", grant.event_id)
+    )
+  end
+
+  # -- delegation --------------------------------------------------------------
+
+  @t0 1_792_396_800_000
+  @week 7 * 86_400_000
+
+  @doc "The default delegation window: one week from `t0/0`."
+  def t0, do: @t0
+  def window, do: %{"not_before_ms" => @t0, "not_after_ms" => @t0 + @week}
+
+  def delegation(op, op_grant, agent, delegate_principal, opts \\ []) do
+    signed_event(
+      op,
+      "TaskDelegationGrantedV1",
+      @scope
+      |> Map.merge(actor(op_grant))
+      |> Map.merge(%{
+        "delegate_principal_id" => delegate_principal,
+        "key_id" => agent.signer.key_id,
+        "pubkey" => {:bytes, agent.signer.pubkey},
+        "kinds" => Keyword.get(opts, :kinds, ["timing"]),
+        "window" => Keyword.get(opts, :window, window()),
+        "max_block_ms" => Keyword.get(opts, :max_block_ms, 4 * 3_600_000),
+        "budget" => Keyword.get(opts, :budget, 10)
+      })
+      |> put_opt("task_ids", opts[:task_ids])
+      |> put_opt("states", opts[:states])
+    )
+  end
+
+  def revoke_delegation(op, op_grant, delegation) do
+    signed_event(
+      op,
+      "TaskDelegationRevokedV1",
+      @scope |> Map.merge(actor(op_grant)) |> Map.put("delegation_event_id", delegation.event_id)
     )
   end
 
@@ -195,7 +255,9 @@ defmodule CoopSubstrate.TaskTimingFixtures do
     signed_event(
       agent,
       "TaskSuggestionArtifactRecordedV1",
-      @scope |> Map.merge(suggester(grant)) |> Map.put("artifact_digest", {:bytes, digest})
+      @scope
+      |> Map.merge(Map.delete(actor(grant), "lifecycle_version"))
+      |> Map.put("artifact_digest", {:bytes, digest})
     )
   end
 
@@ -207,6 +269,12 @@ defmodule CoopSubstrate.TaskTimingFixtures do
 
   defp id(%{event_id: id}), do: id
   defp id(id) when is_binary(id), do: id
+
+  defp put_rationale(map, opts) do
+    map
+    |> put_opt("rationale", opts[:rationale])
+    |> put_opt("rationale_receipt_id", opts[:rationale_receipt])
+  end
 
   defp put_opt(map, _key, nil), do: map
   defp put_opt(map, key, value), do: Map.put(map, key, id_or(value))

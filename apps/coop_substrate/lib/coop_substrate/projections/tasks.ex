@@ -42,6 +42,7 @@ defmodule CoopSubstrate.Projections.Tasks do
         baseline_event_id: nil,
         timing: %{"schedule" => nil, "due_ms" => nil},
         timing_version: 0,
+        timing_delegation_id: nil,
         last_event_id: env.event_id
       },
       attrs
