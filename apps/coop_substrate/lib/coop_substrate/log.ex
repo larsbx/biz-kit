@@ -84,13 +84,16 @@ defmodule CoopSubstrate.Log do
 
   @doc """
   All events in global order. `as_of: n` reads only events with
-  `global_seq <= n` (06 P1 as-of evaluation).
+  `global_seq <= n` (06 P1 as-of evaluation); `from: n` only those with
+  `global_seq >= n`.
   """
   @spec read_all(keyword()) :: {:ok, [Envelope.t()]} | {:error, term()}
   def read_all(opts \\ []) do
     limit = Keyword.get(opts, :as_of, :infinity)
+    from = Keyword.get(opts, :from, 1)
 
-    with {:ok, records} <- fold_ledger([], fn env, _bytes, acc -> [env | acc] end, limit) do
+    with {:ok, records} <-
+           fold_ledger([], fn env, _bytes, acc -> [env | acc] end, limit, from) do
       {:ok, Enum.reverse(records)}
     end
   end
@@ -408,6 +411,7 @@ defmodule CoopSubstrate.Log do
          {:ok, event_data} <- encode_batch(assigned),
          :ok <- persist(event_data, head.global_seq) do
       link_batch(assigned, head)
+      :ok = CoopSubstrate.Feed.publish(assigned)
       new_gate = Enum.reduce(assigned, gate, &Gate.handle_event/2)
       {:reply, {:ok, assigned}, %{state | head: new_head, gate: new_gate}}
     else
@@ -616,8 +620,8 @@ defmodule CoopSubstrate.Log do
 
   # -- shared read internals -----------------------------------------------------
 
-  defp fold_ledger(acc, fun, limit \\ :infinity) do
-    fold_ledger_raw(acc, limit, fn position, bytes, acc ->
+  defp fold_ledger(acc, fun, limit \\ :infinity, from \\ 1) do
+    page_ledger(from, acc, limit, fn position, bytes, acc ->
       case decode_record(bytes) do
         {:ok, env} ->
           fun.(env, bytes, acc)

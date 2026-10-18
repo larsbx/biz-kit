@@ -14,10 +14,14 @@ domain views. The imported histories and existing identifiers remain intact.
   retry/replay contract, verification, and the next production cutover boundary.
 - [Task timing and agent suggestions — draft](2026-10-18-task-timing-and-suggestions.md):
   calendar timing facet, suggester grants, suggestion/accept events and their
-  admission rules, with a Quint model. Ledger events implemented; transport and client to follow.
+  admission rules, with a Quint model. Ledger events implemented; the change feed below carries them to clients.
 - [Delegated task changes](2026-10-18-task-delegation.md): operators delegate
   classes of routine timing changes or task creation to agents, within limits
   and a budget. Implemented; modelled in the same Quint spec.
+- [Change feed](2026-10-18-change-feed.md): a project's tasks, suggestions and
+  delegations pushed to clients as frames, resumable from a cursor, with SSE
+  framing. Implemented and modelled; the HTTP endpoint and read authorisation
+  are open.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

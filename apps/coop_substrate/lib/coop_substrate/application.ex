@@ -13,6 +13,8 @@ defmodule CoopSubstrate.Application do
       :ok ->
         children = [
           CoopSubstrate.EventStore,
+          # Before Log, which notifies it after every append.
+          CoopSubstrate.Feed,
           CoopSubstrate.Log
         ]
 
