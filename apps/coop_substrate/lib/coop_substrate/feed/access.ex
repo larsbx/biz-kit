@@ -83,6 +83,27 @@ defmodule CoopSubstrate.Feed.Access do
     end
   end
 
+  @doc """
+  The reader for a principal authenticated outside the ledger (a person
+  signed in through biz-kit's identity layer): its active operator grant on
+  the scope, else its active suggester grant. Delegations confer nothing.
+  """
+  @spec for_principal(map(), String.t(), View.scope()) :: {:ok, t()} | {:error, :no_grant}
+  def for_principal(o, principal_id, scope) do
+    [{:operator, o.grants}, {:suggester, o.suggester_grants}]
+    |> Enum.flat_map(fn {role, grants} ->
+      for {id, g} <- grants,
+          g.active,
+          g.principal_id == principal_id,
+          scope(g) == scope,
+          do: %__MODULE__{grant_id: id, role: role, principal_id: principal_id, scope: scope}
+    end)
+    |> case do
+      [reader | _] -> {:ok, reader}
+      [] -> {:error, :no_grant}
+    end
+  end
+
   @doc "Whether the reader's grant is still active."
   @spec live?(map(), t()) :: boolean()
   def live?(orchestration, %__MODULE__{grant_id: id}),

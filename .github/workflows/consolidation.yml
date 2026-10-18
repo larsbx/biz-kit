@@ -77,10 +77,25 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/web/router.ex
           apps/spruce_goose/test/spruce_goose/web/feed_test.exs
           apps/spruce_goose/config/test.exs
+          apps/spruce_goose/lib/spruce_goose/web/auth_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/auth_test.exs
+          apps/spruce_goose/test/support/ledger_fixtures.ex
+          apps/biz_kit_identity/mix.exs
+          apps/biz_kit_identity/lib/biz_kit/identity.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/application.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/principal.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/provider.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/resolver.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex
+          apps/biz_kit_identity/test/identity_test.exs
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
       - name: Test the common ledger
         working-directory: apps/coop_substrate
+        run: mix test
+      - name: Test identity
+        working-directory: apps/biz_kit_identity
         run: mix test
       - name: Create and migrate orchestration database
         working-directory: apps/spruce_goose

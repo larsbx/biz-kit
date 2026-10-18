@@ -67,6 +67,11 @@ defmodule CoopSubstrate.Feed do
          do: {:ok, reader}
   end
 
+  @doc "The reader for a principal authenticated outside the ledger, as of now."
+  @spec authorize_principal(String.t(), View.scope()) :: {:ok, Access.t()} | {:error, :no_grant}
+  def authorize_principal(principal_id, scope),
+    do: Access.for_principal(Log.gate().orchestration, principal_id, scope)
+
   @spec open(View.scope(), integer(), Access.t() | nil) :: {:ok, t(), frame()} | {:error, term()}
   def open(scope, cursor, reader \\ nil)
 

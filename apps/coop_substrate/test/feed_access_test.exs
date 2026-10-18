@@ -136,6 +136,38 @@ defmodule CoopSubstrate.FeedAccessTest do
     end
   end
 
+  describe "Access.for_principal/3" do
+    test "a principal reads through its own active grant on the scope", w do
+      o = Log.gate().orchestration
+
+      assert {:ok, %Access{role: :operator, grant_id: id}} =
+               Access.for_principal(o, "alice", @scope)
+
+      assert id == w.op_grant.event_id
+      assert {:ok, %Access{role: :suggester}} = Access.for_principal(o, "bot", @scope)
+    end
+
+    test "nothing else confers it", w do
+      o = Log.gate().orchestration
+
+      assert Access.for_principal(o, "alice", {"chapter-genesis", "tenant-1", "project-2"}) ==
+               {:error, :no_grant}
+
+      # A delegate is named by its delegation, which confers no read access.
+      assert Access.for_principal(o, "deleg-bot", @scope) == {:error, :no_grant}
+
+      {:ok, _} = Log.append(operator_revoke(w.gov, w.op_grant))
+
+      assert Access.for_principal(Log.gate().orchestration, "alice", @scope) ==
+               {:error, :no_grant}
+    end
+
+    test "Feed.authorize_principal/2 reads the current grants" do
+      assert {:ok, %Access{principal_id: "alice"}} = Feed.authorize_principal("alice", @scope)
+      assert Feed.authorize_principal("mallory", @scope) == {:error, :no_grant}
+    end
+  end
+
   describe "Feed.authorize/2" do
     test "a request is accepted once", w do
       req = request(w.agent_grant, w.agent)

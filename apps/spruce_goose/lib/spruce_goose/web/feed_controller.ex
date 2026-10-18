@@ -8,14 +8,17 @@ defmodule SpruceGoose.Web.FeedController do
   suggester grant on the ledger for exactly this project. Nothing here
   consults SpruceGoose's own actors or grants.
 
-  Agents authenticate with a signed request: `Authorization: CoopFeed
-  grant="…", key="…", ts="…", nonce="…", sig="…"`, signing the method, path,
-  scope and cursor of this very request (`Access.signing_bytes/1`). Human
-  readers will sign in through WorkOS, mapped to a ledger principal whose grants
-  are checked the same way; that path is not built yet.
+  Two ways in:
+
+    * **Agents** sign each request: `Authorization: CoopFeed grant="…",
+      key="…", ts="…", nonce="…", sig="…"`, over the method, path, scope and
+      cursor of this very request (`Access.signing_bytes/1`).
+    * **People** present the session cookie from `AuthController`. The
+      session names a principal (`BizKit.Identity`); the principal's active
+      grant on the scope is the reader (`Feed.authorize_principal/2`).
 
   An open stream ends when the reader's grant is revoked, at the first event
-  after which it is no longer active.
+  after which it is no longer active, and when a person's session ends.
   """
 
   use Phoenix.Controller, formats: [:json]
@@ -24,8 +27,10 @@ defmodule SpruceGoose.Web.FeedController do
 
   require Logger
 
+  alias BizKit.Identity
   alias CoopSubstrate.Feed
   alias CoopSubstrate.Feed.SSE
+  alias SpruceGoose.Web.AuthController
 
   @doc "The stream: one frame up to the head, then a frame per change."
   def stream(conn, params) do
@@ -33,10 +38,10 @@ defmodule SpruceGoose.Web.FeedController do
     scope = scope(params)
 
     with {:ok, cursor} <- SSE.cursor(cursor_param(conn)),
-         {:ok, reader} <- signed_reader(conn, scope, cursor),
+         {:ok, reader, login} <- reader(conn, scope, cursor),
          {:ok, session, frame} <- Feed.open(scope, cursor, reader) do
       try do
-        conn |> start_stream() |> send_then_run(SSE.frame(frame), session)
+        conn |> start_stream() |> send_then_run(SSE.frame(frame), {session, login})
       after
         Feed.close(session)
       end
@@ -46,6 +51,23 @@ defmodule SpruceGoose.Web.FeedController do
   end
 
   # -- authentication ----------------------------------------------------------------
+
+  # A signed request when one is presented, else the person's session.
+  defp reader(conn, scope, cursor) do
+    case get_req_header(conn, "authorization") do
+      [] -> session_reader(conn, scope)
+      _ -> with {:ok, reader} <- signed_reader(conn, scope, cursor), do: {:ok, reader, nil}
+    end
+  end
+
+  defp session_reader(conn, scope) do
+    with login when is_binary(login) <-
+           fetch_cookies(conn).cookies[AuthController.session_cookie()] ||
+             {:error, :no_credentials},
+         {:ok, %{principal: principal}} <- Identity.session(login),
+         {:ok, reader} <- Feed.authorize_principal(principal, scope),
+         do: {:ok, reader, login}
+  end
 
   defp signed_reader(conn, scope, cursor) do
     with [header] <- get_req_header(conn, "authorization"),
@@ -109,24 +131,32 @@ defmodule SpruceGoose.Web.FeedController do
     |> send_chunked(200)
   end
 
-  defp run(conn, session) do
+  # `login` is the person's session, nil for a signed request; a session that
+  # has ended (logout, expiry, unbound identity) ends the stream.
+  defp run(conn, {session, login}) do
     receive do
-      {:coop_ledger, envelopes} -> step(conn, Feed.advance(session, envelopes), nil)
+      {:coop_ledger, envelopes} -> step(conn, Feed.advance(session, envelopes), login, nil)
     after
-      heartbeat_ms() -> step(conn, Feed.tick(session), SSE.heartbeat())
+      heartbeat_ms() -> step(conn, Feed.tick(session), login, SSE.heartbeat())
     end
   end
 
   # Revocation ends the response; a reconnect is then refused.
-  defp step(conn, {:revoked, _session}, _idle), do: conn
-  defp step(conn, {nil, session}, nil), do: run(conn, session)
-  defp step(conn, {nil, session}, idle), do: send_then_run(conn, idle, session)
-  defp step(conn, {frame, session}, _idle), do: send_then_run(conn, SSE.frame(frame), session)
+  defp step(conn, {:revoked, _session}, _login, _idle), do: conn
+
+  defp step(conn, {frame, session}, login, idle) do
+    cond do
+      login != nil and not match?({:ok, _}, Identity.session(login)) -> conn
+      frame != nil -> send_then_run(conn, SSE.frame(frame), {session, login})
+      idle != nil -> send_then_run(conn, idle, {session, login})
+      true -> run(conn, {session, login})
+    end
+  end
 
   # A failed write is how a closed socket reports itself; the stream ends there.
-  defp send_then_run(conn, chunk, session) do
+  defp send_then_run(conn, chunk, state) do
     case chunk(conn, chunk) do
-      {:ok, conn} -> run(conn, session)
+      {:ok, conn} -> run(conn, state)
       {:error, :closed} -> conn
     end
   end

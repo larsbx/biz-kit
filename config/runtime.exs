@@ -480,3 +480,35 @@ if config_env() == :prod do
     hostname: System.get_env("EVENTSTORE_HOST", "localhost"),
     port: String.to_integer(System.get_env("EVENTSTORE_PORT", "5432"))
 end
+
+# ── biz_kit_identity ────────────────────────────────────────────────────────
+# Human sign-in. WorkOS is the first provider; any BizKit.Identity.Provider can
+# take its place. Bindings map a verified {issuer, subject} to a biz-kit
+# principal, and are administrator-controlled: JSON
+# [{"issuer": …, "subject": …, "principal": "prn_…"}]. Malformed bindings
+# refuse boot (BizKit.Identity.Application).
+if config_env() == :prod do
+  if client_id = System.get_env("WORKOS_CLIENT_ID") do
+    config :biz_kit_identity, :providers, %{
+      "workos" =>
+        {BizKit.Identity.Providers.WorkOS,
+         client_id: client_id,
+         api_key:
+           System.get_env("WORKOS_API_KEY") ||
+             raise("WORKOS_API_KEY is required when WORKOS_CLIENT_ID is set")}
+    }
+  end
+
+  if bindings = System.get_env("BIZKIT_IDENTITY_BINDINGS") do
+    config :biz_kit_identity,
+           :bindings,
+           for(
+             b <- :json.decode(bindings),
+             do: %{issuer: b["issuer"], subject: b["subject"], principal: b["principal"]}
+           )
+  end
+
+  if public_url = System.get_env("SPRUCE_GOOSE_PUBLIC_URL") do
+    config :spruce_goose, :public_url, public_url
+  end
+end

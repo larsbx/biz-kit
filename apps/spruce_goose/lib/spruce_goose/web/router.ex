@@ -51,6 +51,13 @@ defmodule SpruceGoose.Web.Router do
     oauth2_server_protocol_routes(oauth2_server: SpruceGoose.Oauth2Server)
   end
 
+  # Human sign-in through BizKit.Identity's configured providers.
+  scope "/auth", SpruceGoose.Web do
+    get("/:provider/login", AuthController, :login)
+    get("/:provider/callback", AuthController, :callback)
+    post("/logout", AuthController, :logout)
+  end
+
   # The common ledger's change feed. Authenticated by CoopSubstrate's own
   # grants (FeedController), not the OAuth pipeline above.
   scope "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id",

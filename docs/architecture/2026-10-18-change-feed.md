@@ -2,7 +2,7 @@
 
 Date: 2026-10-18. Status: **implemented** in `CoopSubstrate.Feed`,
 `Feed.View`, `Feed.SSE` and `Feed.Access`; served by SpruceGoose to agents
-(signed reads). Human reads through WorkOS are next. Delivery is modelled
+(signed reads) and people (sessions, see [identity](2026-10-18-identity.md)). Delivery is modelled
 in [`spec/change_feed.qnt`](../../apps/coop_substrate/spec/change_feed.qnt).
 Serves the calendar client of
 [task timing and agent suggestions](2026-10-18-task-timing-and-suggestions.md).
@@ -145,12 +145,14 @@ a request that passes). Checks run in this order: nonce shape, freshness,
 grant known (`:unknown_grant`), active (`:grant_revoked`), scope
 (`:scope_mismatch`), key (`:key_mismatch`), signature (`:bad_signature`).
 
-**Humans** (next): a WorkOS AuthKit session identifies the person; an
-explicit binding maps their WorkOS user to a ledger principal; that
-principal's active grant for the scope is the reader. A WorkOS login is not an
-Ed25519 signature, so it authorises reads only. Human writes (accepting or
-declining a suggestion) still need the operator's own signing key under the
-current command contract. A server never signs in a person's name.
+**People** present the `bizkit_session` cookie from signing in
+([identity](2026-10-18-identity.md)). The session names a biz-kit principal,
+and that principal's active operator grant on the scope (else its suggester
+grant) is the reader (`Access.for_principal/3`, `Feed.authorize_principal/2`).
+A request with an `Authorization` header is always treated as signed. A
+session authorises reads only: writes still need the principal's own device
+key, and a server never signs in a person's name. A stream also ends when its
+session ends (logout, expiry, an unbound identity).
 
 **Revocation.** A session opened for a reader serves only the reader's scope
 and checks the reader's grant after every event it folds. At the first event

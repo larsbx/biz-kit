@@ -21,7 +21,10 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Change feed](2026-10-18-change-feed.md): a project's tasks, suggestions and
   delegations pushed to clients as frames, resumable from a cursor, with SSE
   framing, served by SpruceGoose to readers holding a ledger grant for the
-  project. Agents sign their reads; human reads through WorkOS are next.
+  project. Agents sign their reads; people use a session.
+- [Identity](2026-10-18-identity.md): biz-kit's own principal IDs, a
+  replaceable sign-in provider (WorkOS first), explicit identity bindings and
+  local sessions. The ledger keeps all authority.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),
