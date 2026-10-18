@@ -61,10 +61,7 @@ defmodule SpruceGoose.Web.FeedController do
   end
 
   defp session_reader(conn, scope) do
-    with login when is_binary(login) <-
-           fetch_cookies(conn).cookies[AuthController.session_cookie()] ||
-             {:error, :no_credentials},
-         {:ok, %{principal: principal}} <- Identity.session(login),
+    with {:ok, principal, login} <- AuthController.principal(conn),
          {:ok, reader} <- Feed.authorize_principal(principal, scope),
          do: {:ok, reader, login}
   end

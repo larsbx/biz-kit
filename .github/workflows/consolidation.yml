@@ -89,6 +89,14 @@ jobs:
           apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex
           apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex
           apps/biz_kit_identity/test/identity_test.exs
+          apps/coop_substrate/lib/coop_substrate/commands.ex
+          apps/coop_substrate/lib/coop_substrate/tasks/decisions.ex
+          apps/coop_substrate/test/commands_test.exs
+          apps/spruce_goose/lib/spruce_goose/web/command_controller.ex
+          apps/spruce_goose/lib/spruce_goose/web/app_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/command_test.exs
+          apps/spruce_goose/test/spruce_goose/web/browser_test.exs
+          apps/spruce_goose/test/support/identity_fixtures.ex
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
       - name: Test the common ledger
@@ -105,6 +113,19 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
+      # The web view: its modules against the ledger's canonical vectors, then
+      # the first workflow in Chromium (sign in, enrol the device key, accept
+      # an agent's suggestion, signed in the browser).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the web view's modules
+        run: node --test apps/spruce_goose/test/js/*.test.mjs
+      - name: Install Playwright and Chromium
+        run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Test the workflow in a browser
+        working-directory: apps/spruce_goose
+        run: mix test --only browser
 
   ledger-model:
     # Model-checks every spec in apps/coop_substrate/spec (task suggestions

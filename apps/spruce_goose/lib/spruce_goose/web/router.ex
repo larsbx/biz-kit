@@ -56,6 +56,14 @@ defmodule SpruceGoose.Web.Router do
     get("/:provider/login", AuthController, :login)
     get("/:provider/callback", AuthController, :callback)
     post("/logout", AuthController, :logout)
+    get("/me", AuthController, :me)
+  end
+
+  # The minimal web view and the commands it signs.
+  scope "/", SpruceGoose.Web do
+    get("/app", AppController, :index)
+    get("/app/:file", AppController, :file)
+    post("/api/v1/commands/:id", CommandController, :submit)
   end
 
   # The common ledger's change feed. Authenticated by CoopSubstrate's own
@@ -63,6 +71,7 @@ defmodule SpruceGoose.Web.Router do
   scope "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id",
         SpruceGoose.Web do
     get("/feed", FeedController, :stream)
+    post("/commands", CommandController, :prepare)
   end
 
   scope "/mcp" do

@@ -1,4 +1,5 @@
-ExUnit.start(exclude: [:separate_sessions])
+# :browser needs Node, Playwright and Chromium (test/browser).
+ExUnit.start(exclude: [:separate_sessions, :browser])
 
 defmodule SpruceGoose.UmbrellaRuntime do
   @moduledoc """

@@ -1,0 +1,115 @@
+defmodule CoopSubstrate.Commands do
+  @moduledoc """
+  Operator commands signed on the person's own device
+  (docs/architecture/2026-10-18-decide.md).
+
+      {:ok, pending} = Commands.prepare(principal, key_id, scope, decision)
+      # the device signs pending.signing_bytes with the key named key_id
+      {:ok, envelope} = Commands.submit(principal, pending.id, signature)
+
+  `prepare/4` finds the principal's active operator grant for that key and
+  project, builds the exact envelope (`Tasks.Decisions`), and checks it
+  against the ledger's current state, so a decision that would be refused is
+  refused before anyone signs. The envelope is held for five minutes,
+  single-use and bound to the principal. `submit/3` attaches the signature,
+  which must verify under the grant's key, and appends.
+
+  The server never holds a person's key and cannot sign for them: a command
+  is admitted only with the device's signature, and the ledger checks it as
+  it checks every operator command.
+  """
+
+  use GenServer
+
+  alias CoopSubstrate.Log
+  alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
+  alias CoopSubstrate.Tasks.Decisions
+
+  @table __MODULE__
+  @ttl_ms 300_000
+
+  @type pending :: %{
+          id: String.t(),
+          signing_bytes: binary(),
+          type: String.t(),
+          payload: map(),
+          expires_at: integer()
+        }
+
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+
+  @spec prepare(String.t(), String.t(), CoopSubstrate.Feed.View.scope(), Decisions.decision()) ::
+          {:ok, pending()} | {:error, term()}
+  def prepare(principal, key_id, {chapter, _, _} = scope, decision) do
+    gate = Log.gate()
+    now = System.system_time(:millisecond)
+
+    with {:ok, grant_id, grant} <- operator_grant(gate.orchestration, principal, key_id, scope),
+         {:ok, type, payload} <-
+           Decisions.command(gate.orchestration, scope, decision, %{
+             "principal_id" => principal,
+             "authorization_event_id" => grant_id,
+             "lifecycle_version" => 1
+           }),
+         {:ok, env} <-
+           Envelope.new(%{
+             chapter_id: chapter,
+             type: type,
+             payload: payload,
+             signers: [%{role: "operator", pubkey: grant.pubkey, key_id: key_id}],
+             timestamp_ms: now
+           }),
+         :ok <- invalid(TypeRegistry.validity_check(env, gate)),
+         {:ok, bytes} <- Envelope.signing_bytes(env) do
+      id = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
+      expires_at = now + @ttl_ms
+      true = :ets.insert_new(@table, {id, principal, env, expires_at})
+      {:ok, %{id: id, signing_bytes: bytes, type: type, payload: payload, expires_at: expires_at}}
+    end
+  end
+
+  @spec submit(String.t(), String.t(), binary(), integer()) ::
+          {:ok, Envelope.t()} | {:error, term()}
+  def submit(principal, id, signature, now_ms \\ System.system_time(:millisecond)) do
+    # Looked up before it is taken, so nobody else can spend it; taken before
+    # use, so it is used once.
+    with [{^id, ^principal, _env, expires_at}] when now_ms <= expires_at <-
+           :ets.lookup(@table, id),
+         [{^id, _, env, _}] <- :ets.take(@table, id),
+         {:ok, signed} <- Envelope.attach_signature(env, hd(env.signers).key_id, signature),
+         {:ok, [appended]} <- Log.append(signed) do
+      {:ok, appended}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :unknown_command}
+    end
+  end
+
+  defp operator_grant(o, principal, key_id, scope) do
+    Enum.find_value(o.grants, {:error, :no_operator_grant}, fn {id, g} ->
+      if g.active and g.principal_id == principal and g.key_id == key_id and
+           {g.chapter_id, g.tenant_id, g.project_id} == scope,
+         do: {:ok, id, g}
+    end)
+  end
+
+  defp invalid(:ok), do: :ok
+  defp invalid({:error, reason}), do: {:error, {:invalid, reason}}
+
+  @impl true
+  def init(_opts) do
+    :ets.new(@table, [:set, :public, :named_table])
+    schedule()
+    {:ok, nil}
+  end
+
+  @impl true
+  def handle_info(:sweep, state) do
+    now = System.system_time(:millisecond)
+    :ets.select_delete(@table, [{{:_, :_, :_, :"$1"}, [{:<, :"$1", now}], [true]}])
+    schedule()
+    {:noreply, state}
+  end
+
+  defp schedule, do: Process.send_after(self(), :sweep, @ttl_ms)
+end

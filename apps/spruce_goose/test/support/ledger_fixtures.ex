@@ -77,6 +77,25 @@ defmodule SpruceGoose.LedgerFixtures do
     env
   end
 
+  @doc "An agent's timing suggestion for a task, under its suggester grant."
+  def suggest!(w, grant, task_id, timing, base) do
+    [env] =
+      append!(
+        event(w, w.agent, "TaskChangeSuggestedV1", %{
+          "tenant_id" => @tenant,
+          "project_id" => grant.payload["project_id"],
+          "principal_id" => grant.payload["principal_id"],
+          "authorization_event_id" => grant.event_id,
+          "task_id" => task_id,
+          "change" => %{"kind" => "timing", "timing" => timing},
+          "rationale" => "Fits the free slot",
+          "base_timing_version" => base
+        })
+      )
+
+    env
+  end
+
   def revoke!(w, type, grant) do
     append!(
       event(w, w.gov, type, %{
@@ -110,9 +129,9 @@ defmodule SpruceGoose.LedgerFixtures do
   def feed_path(w, project \\ "project-1"),
     do: "/api/v1/chapters/#{w.chapter}/tenants/#{@tenant}/projects/#{project}/feed"
 
-  def call(method, path, headers) do
+  def call(method, path, headers, body \\ nil) do
     method
-    |> Plug.Test.conn(path)
+    |> Plug.Test.conn(path, body)
     |> then(
       &Enum.reduce(headers, &1, fn {k, v}, conn -> Plug.Conn.put_req_header(conn, k, v) end)
     )

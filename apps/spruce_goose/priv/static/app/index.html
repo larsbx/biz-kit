@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tasks and suggestions</title>
+    <style>
+      :root {
+        --bg: #fbfbfa;
+        --fg: #1d1d1b;
+        --muted: #6b6b66;
+        --line: #e3e2de;
+        --card: #ffffff;
+        --accent: #2f5d50;
+        --warn: #8a3b12;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161615;
+          --fg: #ecebe7;
+          --muted: #a3a29c;
+          --line: #2f2e2b;
+          --card: #1e1e1c;
+          --accent: #8cc4b2;
+          --warn: #f0a77a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header, main { max-width: 960px; margin: 0 auto; padding: 16px; }
+      header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+      h1 { font-size: 1.25rem; margin: 0; }
+      h2 { font-size: 1rem; margin: 24px 0 8px; }
+      .muted { color: var(--muted); }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+      .row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+      .actions { display: flex; gap: 8px; margin-top: 8px; }
+      button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      code, pre { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 50vh; overflow: auto; }
+      .status { min-height: 1.5em; }
+      .status.error { color: var(--warn); }
+      dialog { max-width: min(640px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
+      dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+      details summary { cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Tasks and suggestions</h1>
+      <span id="who" class="muted"></span>
+    </header>
+    <main>
+      <p id="status" class="status muted" role="status"></p>
+
+      <section aria-labelledby="pending-heading">
+        <h2 id="pending-heading">Suggestions waiting for you</h2>
+        <div id="pending"><p class="muted">None.</p></div>
+      </section>
+
+      <section aria-labelledby="tasks-heading">
+        <h2 id="tasks-heading">Tasks</h2>
+        <div id="tasks"><p class="muted">None yet.</p></div>
+      </section>
+
+      <section aria-labelledby="device-heading">
+        <h2 id="device-heading">This device</h2>
+        <details class="card">
+          <summary>Signing key <code id="key-id"></code></summary>
+          <p class="muted">
+            Decisions are signed here, with a key that never leaves this browser. To use it, an
+            administrator names this public key in your operator grant for the project.
+          </p>
+          <pre id="public-key"></pre>
+        </details>
+      </section>
+    </main>
+
+    <dialog id="confirm" aria-labelledby="confirm-heading">
+      <form method="dialog">
+        <h2 id="confirm-heading">Sign this command?</h2>
+        <p class="muted">Decoded on this device from the exact bytes you are about to sign.</p>
+        <pre id="confirm-body"></pre>
+        <div class="actions">
+          <button value="cancel">Cancel</button>
+          <button value="sign" class="primary">Sign and send</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app/app.js"></script>
+  </body>
+</html>

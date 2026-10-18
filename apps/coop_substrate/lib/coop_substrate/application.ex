@@ -16,6 +16,7 @@ defmodule CoopSubstrate.Application do
           # Before Log, which notifies it after every append.
           CoopSubstrate.Feed,
           CoopSubstrate.Feed.Nonces,
+          CoopSubstrate.Commands,
           CoopSubstrate.Log
         ]
 
