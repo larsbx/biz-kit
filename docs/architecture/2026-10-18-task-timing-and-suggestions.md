@@ -1,6 +1,9 @@
 # Task timing and agent suggestions on the common ledger
 
-Date: 2026-10-18. Status: **draft schema, not implemented.** Scope: the ledger
+Date: 2026-10-18. Status: **ledger events implemented** in
+`CoopSubstrate.Tasks.Timing`, specified in
+[`spec/task_suggestions.qnt`](../../apps/coop_substrate/spec/task_suggestions.qnt). The change
+stream, HTTP/MCP wrappers and calendar client are not built yet. Scope: the ledger
 events behind a calendar client in which people edit task timing directly
 and agents only suggest changes for a person to accept.
 
@@ -249,6 +252,11 @@ Resolving a suggestion in the projection:
     amended    ⇔ they differ (the operator edited before accepting)
     superseded ⇔ a `create` suggestion's task_id was created without citing it
 
+Every non-pending status has exactly one resolving event, recorded as
+`resolved_by_event_id`. For `superseded` it is the `TaskCreatedV1` that created
+the task without citing the suggestion. (The Quint model found this gap: a
+superseded suggestion otherwise had no resolving event.)
+
 A suggestion is resolved at most once; any later command that cites it is
 rejected with `:suggestion_not_pending`. A `timing` suggestion whose
 `base_timing_version < task.timing_version` is **stale**. That is a display
@@ -267,8 +275,11 @@ task = %{..., timing: %{"schedule" => nil, "due_ms" => nil}, timing_version: 0}
 state = %{..., suggester_grants: %{}, suggestions: %{}, suggestion_artifacts: %{}}
 # suggestion_artifacts: event_id => %{chapter_id, tenant_id, project_id,
 #                                     principal_id, digest}
-# suggestions: event_id => %{scope, task_id, change, base_timing_version,
-#                            principal_id, status, resolved_by_event_id, global_seq}
+# suggestions: event_id => %{chapter_id, tenant_id, project_id, task_id, kind,
+#                            change, principal_id, base_timing_version, rationale,
+#                            rationale_receipt_id, status, reason, reason_receipt_id,
+#                            resolved_by_event_id}
+# timing_commands: event_id => envelope, for same-envelope retry
 ```
 
 Baselined tasks get `timing_version: 0` and empty timing. Importing legacy
@@ -285,6 +296,38 @@ Clients deduplicate by `global_seq` and apply in ledger order, matching the
 Buzz notification contract. Human and agent changes travel through the same
 stream, which is why suggestions are ledger events. The transport is
 specified in a later document.
+
+## Verification
+
+The admission rules are a state machine in
+[`spec/task_suggestions.qnt`](../../apps/coop_substrate/spec/task_suggestions.qnt).
+Its `safety` invariant combines the properties below.
+
+```sh
+apps/coop_substrate/spec/check.sh             # what CI runs (~3 min)
+SAMPLES=20000 DEPTH=6 apps/coop_substrate/spec/check.sh
+```
+
+`check.sh` type-checks the spec, samples `safety`, requires every witness to be
+violated, and runs the exhaustive bounded check. CI runs it as the
+`ledger-model` job of the Consolidation workflow.
+
+Results (Quint 0.25.1 with Apalache): no violation in 20,000 sampled
+executions of up to 25 steps, and none in an exhaustive bounded check of every
+execution up to 6 steps. The spec also has six witness invariants
+(`noAccepted`, `noAmended`, …) that must be **violated**, proving the
+interesting states are reachable. All six are.
+
+The model found one gap in this design: a superseded suggestion had no
+resolving event. The resolution rule above now names the creating event.
+
+In Elixir, `TaskSuggestionsPropertiesTest` checks the same invariants over
+generated histories through the pure admission path, and
+`TaskTimingSuggestionsTest` covers each rule through `Log.append/2`. Writing
+those tests exposed an implementation hazard: task types were listed by hand in
+both `Validity` and the gate projection. A type admitted but not folded leaves
+every later check reading stale state, so both lists are now derived from
+`Tasks.event_types/0`.
 
 ## Properties to test
 

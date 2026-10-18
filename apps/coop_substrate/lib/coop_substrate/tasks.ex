@@ -50,6 +50,7 @@ defmodule CoopSubstrate.Tasks do
     }
     |> Map.merge(CoopSubstrate.Tasks.DoD.event_types())
     |> Map.merge(CoopSubstrate.Tasks.Readiness.event_types())
+    |> Map.merge(CoopSubstrate.Tasks.Timing.event_types())
   end
 
   defp spec(role, prefix, scope, fields) do
@@ -97,6 +98,9 @@ defmodule CoopSubstrate.Tasks do
 
         Map.has_key?(CoopSubstrate.Tasks.DoD.event_types(), env.type) ->
           CoopSubstrate.Tasks.DoD.check(env, gate.orchestration, gate.role_keys)
+
+        Map.has_key?(CoopSubstrate.Tasks.Timing.event_types(), env.type) ->
+          CoopSubstrate.Tasks.Timing.check(env, gate.orchestration, gate.role_keys)
 
         true ->
           check_type(env, gate.orchestration, gate.role_keys)
@@ -176,13 +180,15 @@ defmodule CoopSubstrate.Tasks do
       Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/, value)
   end
 
-  defp nonempty_fields(payload, fields) do
+  @doc false
+  def nonempty_fields(payload, fields) do
     if Enum.all?(fields, &(String.trim(payload[&1]) != "")),
       do: :ok,
       else: {:error, :empty_task_field}
   end
 
-  defp governance_declared(%Envelope{signers: [signer]} = env, keys) do
+  @doc false
+  def governance_declared(%Envelope{signers: [signer]} = env, keys) do
     if Map.get(keys[{env.chapter_id, "governance"}] || %{}, signer.key_id) == signer.pubkey,
       do: :ok,
       else: {:error, :task_governance_not_declared}
@@ -232,7 +238,8 @@ defmodule CoopSubstrate.Tasks do
 
   @doc false
   def duplicate([%Envelope{} = env], state) do
-    commands = Map.merge(state.proposals, state.dod_commands)
+    commands =
+      state.proposals |> Map.merge(state.dod_commands) |> Map.merge(state.timing_commands)
 
     case Map.fetch(commands, env.event_id) do
       :error ->
