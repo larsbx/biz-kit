@@ -1,7 +1,8 @@
 # Change feed
 
 Date: 2026-10-18. Status: **implemented** in `CoopSubstrate.Feed`,
-`Feed.View` and `Feed.SSE`; no HTTP endpoint serves it yet. Delivery is modelled
+`Feed.View`, `Feed.SSE` and `Feed.Access`; served by SpruceGoose to agents
+(signed reads). Human reads through WorkOS are next. Delivery is modelled
 in [`spec/change_feed.qnt`](../../apps/coop_substrate/spec/change_feed.qnt).
 Serves the calendar client of
 [task timing and agent suggestions](2026-10-18-task-timing-and-suggestions.md).
@@ -101,11 +102,61 @@ owns the socket, as Dispatch's `StreamController` does: open, write the first
 frame, then loop on `{:coop_ledger, _}` (advance) and a heartbeat timer
 (tick plus a heartbeat comment), and exit on the first failed write.
 
-**Not decided yet: where the endpoint lives and who may read a scope.** The
-feed authorises nothing; whatever serves it must check the scope first. One
-option: a client signs a short-lived read request with a key that holds an
-active operator or suggester grant for the project, so reads use the same
-grants as writes.
+The endpoint is `SpruceGoose.Web.FeedController`:
+
+```
+GET /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/feed
+```
+
+It is a transport adapter only. CoopSubstrate decides what a reader sees and
+whether it may read; SpruceGoose's own actors and grants play no part.
+Responses: `200` and the stream; `400 invalid_cursor`; `409 cursor_ahead`
+(start again from 0); `401 unauthorized` with `WWW-Authenticate: CoopFeed`
+for every authentication or authorisation failure (the reason is logged, not
+returned).
+
+## Access
+
+Decided 2026-10-18: identity and collaboration are delegated, authority is
+not. WorkOS will authenticate humans and Buzz is the collaboration surface.
+Which actions are valid, including who may read a project, stays with the
+ledger's grants. There is no second principal registry and no grants copied
+into another system.
+
+A reader must hold an active **operator or suggester grant for exactly the
+requested scope**. A delegation confers no read access. `Feed.Access` is the
+pure decision; `Feed.authorize/2` applies it to the appender's current gate
+(`Log.gate/0`) and spends the request's nonce.
+
+**Agents** sign each read with their grant's key:
+
+```
+Authorization: CoopFeed grant="<grant event id>", key="<key id>",
+               ts="<unix ms>", nonce="<16-128 chars>", sig="<base64url Ed25519>"
+```
+
+The signature covers the canonical encoding (`Access.signing_bytes/1`) of
+`{schema: "CoopFeedReadV1", method, path, chapter_id, tenant_id, project_id,
+cursor, timestamp_ms, nonce, authorization_event_id, key_id}`, rebuilt by the
+server from the request it actually received. A signature for another path,
+scope or cursor therefore fails. A request is fresh within 60 s either way of
+the server clock, and its nonce is accepted once (`Feed.Nonces`, spent only by
+a request that passes). Checks run in this order: nonce shape, freshness,
+grant known (`:unknown_grant`), active (`:grant_revoked`), scope
+(`:scope_mismatch`), key (`:key_mismatch`), signature (`:bad_signature`).
+
+**Humans** (next): a WorkOS AuthKit session identifies the person; an
+explicit binding maps their WorkOS user to a ledger principal; that
+principal's active grant for the scope is the reader. A WorkOS login is not an
+Ed25519 signature, so it authorises reads only. Human writes (accepting or
+declining a suggestion) still need the operator's own signing key under the
+current command contract. A server never signs in a person's name.
+
+**Revocation.** A session opened for a reader serves only the reader's scope
+and checks the reader's grant after every event it folds. At the first event
+after which the grant is inactive, the session returns `:revoked` and sends
+nothing from that batch, and the endpoint ends the response. A lost
+notification is caught by the heartbeat's tick. The reconnect is then refused.
 
 ## Verification
 
@@ -124,12 +175,27 @@ grants as writes.
   the model also shows.
   The register-before-read order has no deterministic test; the model's
   `noLossReadingFirst` witness is what pins it.
+- `FeedAccessTest`: operator and suggester readers; the signature binds
+  method, path, cursor, time and nonce; wrong scope, wrong key, a delegation,
+  a revoked grant, stale and malformed requests are refused; a nonce is
+  accepted once and not spent by a refused request; sessions refuse other
+  scopes and revoked grants, end at the revocation without its batch's frame,
+  end on a tick after a lost notification, and ignore other grants'
+  revocations. Removing any one of these checks fails a test.
+- `SpruceGoose.Web.FeedTest`: refusals through the router (no or malformed
+  credentials, forged signature, other project, other path or cursor, stale,
+  replayed, revoked, bad and future cursors) and live streams on a real
+  server (snapshot then live frames, the stream ending on revocation,
+  cross-project isolation, reconnect from `Last-Event-ID` without gaps or
+  repeats).
 
 ## Limits
 
 - Each session folds the whole ledger once on open and keeps its own copy of
   the gate. Fine at today's size. Shared per-scope state can replace it
   without changing the contract.
+- Spent nonces live in one node's memory. Serving the feed from several nodes
+  needs a shared store.
 - A cursor is a position, not a hash. A client resuming against a restored
   ledger of the same length or longer cannot tell. Adding the head hash would
   close that.

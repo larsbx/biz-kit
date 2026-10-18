@@ -7,9 +7,10 @@ defmodule CoopSubstrate.Feed do
   everything), gets one frame bringing its client from the cursor to the head,
   then a frame per ledger notification that changes the project:
 
-      {:ok, session, frame} = Feed.open(scope, cursor)
-      # on {:coop_ledger, envelopes}:  {frame | nil, session} = Feed.advance(session, envelopes)
-      # on a heartbeat timer:          {frame | nil, session} = Feed.tick(session)
+      {:ok, reader} = Feed.authorize(request, signature)
+      {:ok, session, frame} = Feed.open(scope, cursor, reader)
+      # on {:coop_ledger, envelopes}:  {frame | nil | :revoked, session} = Feed.advance(session, envelopes)
+      # on a heartbeat timer:          {frame | nil | :revoked, session} = Feed.tick(session)
 
   A frame is `%{seq: n, changes: [View.change()]}`: applying its changes to
   the client's view as of the previous frame gives the view as of `n`, which
@@ -21,19 +22,22 @@ defmodule CoopSubstrate.Feed do
   notifications skip ahead. A notification lost with the appender is caught up
   by the next notification or `tick/1`.
 
+  Access (`Feed.Access`): a session opened for a reader serves only the
+  reader's scope, and ends with `:revoked` at the first event after which the
+  reader's grant is no longer active. That event's batch sends no frame. A
+  session opened without a reader is for trusted in-process callers only.
+
   One session per process: notifications go to the process, not the session.
-  The feed decides nothing about who may read a project. The transport that
-  serves it must authorise the scope first.
   """
 
-  alias CoopSubstrate.Feed.View
+  alias CoopSubstrate.Feed.{Access, Nonces, View}
   alias CoopSubstrate.Log
   alias CoopSubstrate.Projections.Membership, as: Gate
 
   @registry CoopSubstrate.Feed.Registry
 
   @enforce_keys [:scope, :seq, :gate, :view]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [reader: nil]
 
   @opaque t :: %__MODULE__{}
   @type frame :: %{seq: non_neg_integer(), changes: [View.change()]}
@@ -49,25 +53,47 @@ defmodule CoopSubstrate.Feed do
     end)
   end
 
-  @spec open(View.scope(), integer()) :: {:ok, t(), frame()} | {:error, term()}
-  def open(scope, cursor) when is_integer(cursor) and cursor >= 0 do
+  @doc """
+  Check a signed read request against the ledger's grants as of now, and
+  spend its nonce. The nonce is spent only by a request that passes, so a
+  forged request cannot burn a genuine one.
+  """
+  @spec authorize(Access.request(), binary()) :: {:ok, Access.t()} | {:error, atom()}
+  def authorize(request, signature) do
+    now = System.system_time(:millisecond)
+
+    with {:ok, reader} <- Access.authorize(Log.gate().orchestration, request, signature, now),
+         :ok <- Nonces.claim(request.nonce, request.timestamp_ms),
+         do: {:ok, reader}
+  end
+
+  @spec open(View.scope(), integer(), Access.t() | nil) :: {:ok, t(), frame()} | {:error, term()}
+  def open(scope, cursor, reader \\ nil)
+
+  def open(scope, cursor, reader) when is_integer(cursor) and cursor >= 0 do
     {:ok, _} = Registry.register(@registry, :ledger, nil)
 
-    with true <- cursor <= Log.head().global_seq or {:error, :cursor_ahead},
+    with true <- reader == nil or reader.scope == scope or {:error, :scope_mismatch},
+         true <- cursor <= Log.head().global_seq or {:error, :cursor_ahead},
          {:ok, gate} <- Log.replay(Gate, as_of: cursor),
-         session = %__MODULE__{scope: scope, seq: cursor, gate: gate, view: select(gate, scope)},
-         {:ok, {frame, session}} <- catch_up(session) do
+         {:ok, {frame, session}} <-
+           catch_up(%__MODULE__{
+             scope: scope,
+             seq: cursor,
+             gate: gate,
+             view: select(gate, scope),
+             reader: reader
+           }),
+         true <- (frame != :revoked and live?(session)) or {:error, :grant_revoked} do
       {:ok, session, frame || %{seq: session.seq, changes: []}}
     else
-      error ->
-        close(nil)
-        error
+      error -> close_with(error)
     end
   end
 
-  def open(_scope, _cursor), do: {:error, :invalid_cursor}
+  def open(_scope, _cursor, _reader), do: {:error, :invalid_cursor}
 
-  @spec advance(t(), [CoopSubstrate.Protocol.Envelope.t()]) :: {frame() | nil, t()}
+  @spec advance(t(), [CoopSubstrate.Protocol.Envelope.t()]) :: {frame() | nil | :revoked, t()}
   def advance(%__MODULE__{seq: seq} = session, envelopes) do
     case Enum.drop_while(envelopes, &(&1.global_seq <= seq)) do
       [] -> {nil, session}
@@ -76,7 +102,7 @@ defmodule CoopSubstrate.Feed do
     end
   end
 
-  @spec tick(t()) :: {frame() | nil, t()}
+  @spec tick(t()) :: {frame() | nil | :revoked, t()}
   def tick(%__MODULE__{seq: seq} = session) do
     if Log.head().global_seq > seq, do: catch_up!(session), else: {nil, session}
   end
@@ -90,6 +116,16 @@ defmodule CoopSubstrate.Feed do
 
   # -- internals --------------------------------------------------------------------
 
+  defp close_with(error) do
+    close(nil)
+    error
+  end
+
+  defp live?(%__MODULE__{reader: nil}), do: true
+
+  defp live?(%__MODULE__{reader: reader, gate: gate}),
+    do: Access.live?(gate.orchestration, reader)
+
   defp catch_up(%__MODULE__{seq: seq} = session) do
     with {:ok, envelopes} <- Log.read_all(from: seq + 1), do: {:ok, fold(session, envelopes)}
   end
@@ -100,7 +136,7 @@ defmodule CoopSubstrate.Feed do
   end
 
   # The cursor moves with every event, in scope or not; a frame only when the
-  # view changed.
+  # view changed, and none once the reader's grant is gone.
   defp fold(session, []), do: {nil, session}
 
   defp fold(%__MODULE__{view: old} = session, envelopes) do
@@ -109,9 +145,10 @@ defmodule CoopSubstrate.Feed do
     seq = List.last(envelopes).global_seq
     session = %{session | gate: gate, view: view, seq: seq}
 
-    case View.diff(old, view) do
-      [] -> {nil, session}
-      changes -> {%{seq: seq, changes: changes}, session}
+    cond do
+      not live?(session) -> {:revoked, session}
+      view == old -> {nil, session}
+      true -> {%{seq: seq, changes: View.diff(old, view)}, session}
     end
   end
 

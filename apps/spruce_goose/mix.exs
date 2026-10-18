@@ -45,6 +45,8 @@ defmodule SpruceGoose.MixProject do
 
   defp deps do
     [
+      # The common ledger: the change feed and its read access are served here.
+      {:coop_substrate, in_umbrella: true},
       {:req, "~> 0.5"},
       {:yaml_elixir, "~> 2.12"},
       {:picosat_elixir, "~> 0.2"},

@@ -70,6 +70,13 @@ jobs:
           apps/coop_substrate/test/change_feed_view_test.exs
           apps/coop_substrate/test/support/task_histories.ex
           apps/coop_substrate/test/task_suggestions_properties_test.exs
+          apps/coop_substrate/lib/coop_substrate/feed/access.ex
+          apps/coop_substrate/lib/coop_substrate/feed/nonces.ex
+          apps/coop_substrate/test/feed_access_test.exs
+          apps/spruce_goose/lib/spruce_goose/web/feed_controller.ex
+          apps/spruce_goose/lib/spruce_goose/web/router.ex
+          apps/spruce_goose/test/spruce_goose/web/feed_test.exs
+          apps/spruce_goose/config/test.exs
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
       - name: Test the common ledger
@@ -78,6 +85,8 @@ jobs:
       - name: Create and migrate orchestration database
         working-directory: apps/spruce_goose
         run: mix ecto.create && mix ecto.migrate
+      # SpruceGoose starts the ledger too (it serves the change feed), against
+      # the event store the ledger step above created.
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test

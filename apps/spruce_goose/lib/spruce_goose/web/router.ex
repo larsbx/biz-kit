@@ -1,6 +1,7 @@
 defmodule SpruceGoose.Web.Router do
   @moduledoc """
-  Routes for the OAuth 2.1 authorization server and the Ash AI MCP server.
+  Routes for the OAuth 2.1 authorization server, the Ash AI MCP server, and
+  the common ledger's change feed.
 
   The MCP surface is protected by `BearerPlug`, which validates an
   `Authorization: Bearer *** header against `SpruceGoose.Oauth2Server`, and by
@@ -48,6 +49,13 @@ defmodule SpruceGoose.Web.Router do
   scope "/" do
     pipe_through(:api)
     oauth2_server_protocol_routes(oauth2_server: SpruceGoose.Oauth2Server)
+  end
+
+  # The common ledger's change feed. Authenticated by CoopSubstrate's own
+  # grants (FeedController), not the OAuth pipeline above.
+  scope "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id",
+        SpruceGoose.Web do
+    get("/feed", FeedController, :stream)
   end
 
   scope "/mcp" do
