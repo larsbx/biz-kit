@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { decode, hex } from "../../priv/static/app/cbor.js";
-import { sign, keyId } from "../../priv/static/app/device.js";
+import { sign, keyId, isOwnEnrolment } from "../../priv/static/app/device.js";
 import { applyFrame, emptyView, pendingSuggestions, base64url } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -87,4 +87,26 @@ test("base64url round-trips without padding", () => {
   const text = base64url.encode(bytes);
   assert.doesNotMatch(text, /[+/=]/);
   assert.deepEqual(base64url.decode(text), bytes);
+});
+
+test("the device signs only its own enrolment statement", () => {
+  const own = { keyId: "k-01020304", publicKeyHex: "01020304" + "00".repeat(28) };
+  const statement = {
+    schema: "CoopDeviceEnrolmentV1",
+    principal_id: "prn_x",
+    key_id: own.keyId,
+    pubkey: { __bytes__: own.publicKeyHex },
+    label: "Laptop",
+  };
+
+  assert.equal(isOwnEnrolment(statement, own), true);
+  for (const tampered of [
+    { ...statement, schema: "CoopFeedReadV1" },
+    { ...statement, type: "TaskOperatorGrantedV1" },
+    { ...statement, key_id: "k-ffffffff" },
+    { ...statement, pubkey: { __bytes__: "ff".repeat(32) } },
+    null,
+  ]) {
+    assert.equal(isOwnEnrolment(tampered, own), false);
+  }
 });

@@ -19,9 +19,7 @@ defmodule SpruceGoose.Web.CommandController do
 
   use Phoenix.Controller, formats: [:json]
 
-  import Plug.Conn
-
-  require Logger
+  import SpruceGoose.Web.Requests
 
   alias CoopSubstrate.Commands
   alias SpruceGoose.Web.AuthController
@@ -32,15 +30,7 @@ defmodule SpruceGoose.Web.CommandController do
          {:ok, decision} <- decision(body),
          {:ok, key_id} <- string(body["key_id"]),
          {:ok, pending} <- Commands.prepare(principal, key_id, {c, t, p}, decision) do
-      conn
-      |> put_status(201)
-      |> json(%{
-        id: pending.id,
-        type: pending.type,
-        payload: pending.payload,
-        signing_bytes: Base.url_encode64(pending.signing_bytes, padding: false),
-        expires_at: pending.expires_at
-      })
+      held(conn, pending)
     else
       error -> refuse(conn, error)
     end
@@ -49,19 +39,13 @@ defmodule SpruceGoose.Web.CommandController do
   def submit(conn, %{"id" => id}) do
     with {:ok, principal, _session} <- AuthController.principal(conn),
          {:ok, body} <- json_body(conn),
-         {:ok, encoded} <- string(body["signature"]),
-         {:ok, signature} <- Base.url_decode64(encoded, padding: false),
+         {:ok, signature} <- bytes(body["signature"]),
          {:ok, env} <- Commands.submit(principal, id, signature) do
-      conn |> put_status(201) |> json(%{event_id: env.event_id, global_seq: env.global_seq})
+      appended(conn, env)
     else
-      :error -> refuse(conn, {:error, :bad_signature_encoding})
       error -> refuse(conn, error)
     end
   end
-
-  # Arbitrary JSON may put anything where a string belongs.
-  defp string(value) when is_binary(value), do: {:ok, value}
-  defp string(_value), do: {:error, :bad_request}
 
   defp decision(%{"decision" => "accept", "suggestion_event_id" => id}) when is_binary(id),
     do: {:ok, {:accept, id}}
@@ -71,50 +55,4 @@ defmodule SpruceGoose.Web.CommandController do
        do: {:ok, {:decline, id, r}}
 
   defp decision(_body), do: {:error, :bad_decision}
-
-  # The endpoint's parsers have usually read the body already; the router
-  # alone (as in tests) leaves it unread.
-  defp json_body(conn) do
-    with ["application/json" <> _] <- get_req_header(conn, "content-type"),
-         {:ok, %{} = body} <- body_params(conn) do
-      {:ok, body}
-    else
-      _ -> {:error, :bad_request}
-    end
-  end
-
-  defp body_params(%{body_params: %Plug.Conn.Unfetched{}} = conn) do
-    with {:ok, raw, _conn} <- read_body(conn), do: Jason.decode(raw)
-  end
-
-  defp body_params(%{body_params: params}), do: {:ok, params}
-
-  defp refuse(conn, {:error, reason}) do
-    {status, code} =
-      case reason do
-        r when r in [:no_credentials, :unknown_session, :expired, :unbound] ->
-          {401, "unauthorized"}
-
-        :no_operator_grant ->
-          {403, "no_operator_grant"}
-
-        r when r in [:bad_request, :bad_decision, :bad_signature_encoding] ->
-          {400, Atom.to_string(r)}
-
-        :unknown_command ->
-          {404, "unknown_command"}
-
-        {:invalid_signature, _} ->
-          {422, "invalid_signature"}
-
-        r when r in [:unknown_suggestion, :suggestion_not_pending, :unknown_task] ->
-          {409, Atom.to_string(r)}
-
-        _ ->
-          {409, "refused_by_ledger"}
-      end
-
-    Logger.info("command refused: #{inspect(reason)}")
-    conn |> put_status(status) |> json(%{error: code})
-  end
 end

@@ -97,6 +97,14 @@ jobs:
           apps/spruce_goose/test/spruce_goose/web/command_test.exs
           apps/spruce_goose/test/spruce_goose/web/browser_test.exs
           apps/spruce_goose/test/support/identity_fixtures.ex
+          apps/coop_substrate/lib/coop_substrate/enrolments.ex
+          apps/coop_substrate/lib/coop_substrate/enrolments/approver.ex
+          apps/coop_substrate/lib/mix/tasks/coop.enrol.ex
+          apps/coop_substrate/test/enrolments_test.exs
+          apps/spruce_goose/lib/spruce_goose/web/requests.ex
+          apps/spruce_goose/lib/spruce_goose/web/device_controller.ex
+          apps/spruce_goose/lib/spruce_goose/web/enrolment_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/device_test.exs
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
       - name: Test the common ledger

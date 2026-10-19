@@ -17,6 +17,7 @@ defmodule CoopSubstrate.Application do
           CoopSubstrate.Feed,
           CoopSubstrate.Feed.Nonces,
           CoopSubstrate.Commands,
+          CoopSubstrate.Enrolments,
           CoopSubstrate.Log
         ]
 

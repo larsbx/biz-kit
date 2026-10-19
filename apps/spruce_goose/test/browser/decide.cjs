@@ -1,8 +1,8 @@
 // Drives the web view in Chromium for SpruceGoose.Web.BrowserTest, talking to
 // the test over stdin/stdout one JSON line at a time:
-//   → {"device": {"public_key": hex, "key_id": …}}   once the page has its key
-//   ← "go"                                            once the test has granted it and an agent has suggested
-//   → {"done": status text}                           after accepting
+//   → {"code": …, "key_id": …}   once the page has requested access for its key
+//   ← "go"                       once an administrator has approved and an agent has suggested
+//   → {"done": status text}      after accepting
 // Usage: node decide.cjs <base url> <chapter> <tenant> <project>
 const { chromium } = require("playwright");
 const readline = require("node:readline");
@@ -29,15 +29,17 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 
     const query = new URLSearchParams({ chapter, tenant, project });
     await page.goto(`${base}/app?${query}`);
-    await page.locator("#key-id").filter({ hasText: /^k-/ }).waitFor();
-    say({
-      device: {
-        public_key: await page.locator("#public-key").textContent(),
-        key_id: await page.locator("#key-id").textContent(),
-      },
-    });
+    await page.getByLabel("Name this device").fill("Test laptop");
+    await page.getByRole("button", { name: "Request access" }).click();
+    const code = page.locator("#enrolment .code");
+    await code.waitFor();
+    say({ code: await code.textContent(), key_id: await page.locator("#key-id").textContent() });
 
     if ((await next()) !== "go") throw new Error("expected go");
+
+    // Reloading keeps the device key (IndexedDB) and finds it enrolled.
+    await page.reload();
+    await page.getByText("This device can decide for you").waitFor();
 
     await page.getByRole("button", { name: "Accept" }).click();
     const dialog = page.locator("#confirm");

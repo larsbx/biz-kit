@@ -51,6 +51,8 @@
       dialog { max-width: min(640px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
       dialog::backdrop { background: rgb(0 0 0 / 0.4); }
       details summary { cursor: pointer; }
+      input { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); margin-left: 8px; }
+      .code { font: 600 1.25rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.05em; }
     </style>
   </head>
   <body>
@@ -73,14 +75,24 @@
 
       <section aria-labelledby="device-heading">
         <h2 id="device-heading">This device</h2>
-        <details class="card">
-          <summary>Signing key <code id="key-id"></code></summary>
-          <p class="muted">
-            Decisions are signed here, with a key that never leaves this browser. To use it, an
-            administrator names this public key in your operator grant for the project.
-          </p>
-          <pre id="public-key"></pre>
-        </details>
+        <div class="card">
+          <p id="enrolment">Checking this device…</p>
+          <form id="enrol-form" class="actions" hidden>
+            <label>
+              Name this device
+              <input id="enrol-label" maxlength="80" required />
+            </label>
+            <button class="primary">Request access</button>
+          </form>
+          <details>
+            <summary>Signing key <code id="key-id"></code></summary>
+            <p class="muted">
+              Decisions are signed here, with a key that never leaves this browser. An administrator
+              approves it for this project.
+            </p>
+            <pre id="public-key"></pre>
+          </details>
+        </div>
       </section>
     </main>
 

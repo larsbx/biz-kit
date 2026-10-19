@@ -15,6 +15,14 @@ export const publicKey = async (pair) =>
 // bytes of the public key.
 export const keyId = (pub) => "k-" + hex(pub.subarray(0, 4));
 
+// Whether a decoded statement is exactly this device's enrolment request: the
+// enrolment schema (never a command, which carries a "type"), naming this key.
+export const isOwnEnrolment = (statement, { keyId, publicKeyHex }) =>
+  statement?.schema === "CoopDeviceEnrolmentV1" &&
+  !("type" in statement) &&
+  statement.key_id === keyId &&
+  statement.pubkey?.__bytes__ === publicKeyHex;
+
 export const sign = async (pair, bytes) =>
   new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, bytes));
 
