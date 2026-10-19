@@ -81,6 +81,30 @@ defmodule SpruceGoose.Web.CommandTest do
     assert status(w) == :accepted
   end
 
+  test "amend: the person's edits, recorded as amended", w do
+    timing = %{"schedule" => nil, "due_ms" => 1_792_400_400_000}
+
+    assert {201, prepared} =
+             prepare(w, %{"decision" => "amend", "edits" => %{"timing" => timing}})
+
+    assert prepared["payload"]["timing"] == timing
+    assert {201, _} = submit(w, prepared, w.device)
+    assert status(w) == :amended
+  end
+
+  test "amend: refused for other fields or a timing the ledger would refuse", w do
+    assert {400, %{"error" => "bad_amendment"}} =
+             prepare(w, %{"decision" => "amend", "edits" => %{"title" => "x"}})
+
+    assert {400, %{"error" => "bad_decision"}} =
+             prepare(w, %{"decision" => "amend", "edits" => "not a map"})
+
+    assert {400, %{"error" => "invalid_timing"}} =
+             prepare(w, %{"decision" => "amend", "edits" => %{"timing" => %{"due_ms" => -1}}})
+
+    assert status(w) == :pending
+  end
+
   test "decline, with the reason", w do
     assert {201, prepared} = prepare(w, %{"decision" => "decline", "reason" => "Not this week"})
     assert {201, _} = submit(w, prepared, w.device)

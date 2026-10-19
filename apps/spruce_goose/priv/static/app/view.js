@@ -41,3 +41,62 @@ export const base64url = {
   decode: (text) =>
     Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)),
 };
+
+// -- editing a suggestion's timing (docs/architecture/2026-10-19-amend.md) ----------
+//
+// The form's fields, as <input> values in the browser's local time: a timed
+// schedule as two datetime-local values, an all-day one as first and last day
+// (the ledger's end date is the day after the last), and an optional due time.
+
+const pad = (n) => String(n).padStart(2, "0");
+const localInput = (ms) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const fromLocal = (value) => new Date(value).getTime();
+const shiftDay = (date, days) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+export function timingForm(timing) {
+  const s = timing?.schedule;
+  return {
+    kind: s?.kind ?? "none",
+    start: s?.kind === "timed" ? localInput(Number(s.start_ms)) : "",
+    end: s?.kind === "timed" ? localInput(Number(s.end_ms)) : "",
+    tz: s?.kind === "timed" ? s.tz : null,
+    first: s?.kind === "all_day" ? s.start_date : "",
+    last: s?.kind === "all_day" ? shiftDay(s.end_date, -1) : "",
+    due: timing?.due_ms != null ? localInput(Number(timing.due_ms)) : "",
+  };
+}
+
+// The timing a form describes, or `{error}`. The schedule and the due time
+// are each kept from `original` exactly while their fields are untouched, so
+// the inputs' minute precision never rounds a part nobody edited.
+export function formTiming(form, original, tz) {
+  const was = timingForm(original);
+  const untouched = (keys) => original && keys.every((k) => form[k] === was[k]);
+  const scheduled = buildSchedule(form, tz);
+  if (scheduled.error) return scheduled;
+
+  const schedule = untouched(["kind", "start", "end", "first", "last"]) ? original.schedule : scheduled.schedule;
+  const due_ms = untouched(["due"]) ? original.due_ms : form.due ? fromLocal(form.due) : null;
+  if (Number.isNaN(due_ms)) return { error: "A date or time is incomplete." };
+  return { timing: { schedule, due_ms } };
+}
+
+function buildSchedule(form, tz) {
+  let schedule = null;
+  if (form.kind === "timed") {
+    const [start_ms, end_ms] = [fromLocal(form.start), fromLocal(form.end)];
+    if (!(start_ms < end_ms)) return { error: "The end must be after the start." };
+    schedule = { kind: "timed", start_ms, end_ms, tz: form.tz ?? tz };
+  } else if (form.kind === "all_day") {
+    if (!form.first || !form.last || form.last < form.first) return { error: "The last day must not be before the first." };
+    schedule = { kind: "all_day", start_date: form.first, end_date: shiftDay(form.last, 1) };
+  }
+  return { schedule };
+}

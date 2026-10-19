@@ -23,13 +23,25 @@ export const isOwnEnrolment = (statement, { keyId, publicKeyHex }) =>
   statement.key_id === keyId &&
   statement.pubkey?.__bytes__ === publicKeyHex;
 
+// Deep equality of decoded CBOR and plain values; an integer is the same
+// whether decoded as a number or a BigInt.
+export const same = (a, b) => {
+  const int = (v) => typeof v === "bigint" || Number.isInteger(v);
+  if (int(a) && int(b)) return BigInt(a) === BigInt(b);
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return a === b;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => k in b && same(a[k], b[k]));
+};
+
 // Whether a decoded command is exactly the one asked for: signed by this key
-// alone, of this type, with these payload fields.
+// alone, of this type, with these payload fields (compared deeply: an edited
+// timing must be the one entered).
 export const isExpectedCommand = (core, { keyId, type, payload }) =>
   core?.signers?.length === 1 &&
   core.signers[0].key_id === keyId &&
   core.type === type &&
-  Object.entries(payload).every(([field, value]) => core.payload?.[field] === value);
+  Object.entries(payload).every(([field, value]) => same(core.payload?.[field], value));
 
 export const sign = async (pair, bytes) =>
   new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, bytes));

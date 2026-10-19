@@ -6,7 +6,8 @@ defmodule SpruceGoose.Web.CommandController do
   command.
 
       POST /api/v1/chapters/:c/tenants/:t/projects/:p/commands
-           {"decision": "accept" | "decline", "suggestion_event_id", "reason"?, "key_id"}
+           {"decision": "accept" | "amend" | "decline", "suggestion_event_id", "key_id",
+            "edits"? (amend: the fields the person changed), "reason"? (decline)}
            → 201 {id, type, payload, signing_bytes (base64url), expires_at}
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
@@ -49,6 +50,10 @@ defmodule SpruceGoose.Web.CommandController do
 
   defp decision(%{"decision" => "accept", "suggestion_event_id" => id}) when is_binary(id),
     do: {:ok, {:accept, id}}
+
+  defp decision(%{"decision" => "amend", "suggestion_event_id" => id, "edits" => edits})
+       when is_binary(id) and is_map(edits),
+       do: {:ok, {:amend, id, edits}}
 
   defp decision(%{"decision" => "decline", "suggestion_event_id" => id, "reason" => r})
        when is_binary(id) and is_binary(r),

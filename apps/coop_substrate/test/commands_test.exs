@@ -86,6 +86,64 @@ defmodule CoopSubstrate.CommandsTest do
     end
   end
 
+  describe "amending" do
+    test "a timing suggestion revises the task with the person's timing", w do
+      mine = timed(t0() + 3_600_000)
+      {:ok, pending} = prepare(w, {:amend, w.suggestion.event_id, %{"timing" => mine}})
+
+      assert pending.type == "TaskTimingRevisedV1"
+      assert pending.payload["timing"] == mine
+      assert pending.payload["suggestion_event_id"] == w.suggestion.event_id
+
+      assert {:ok, _} = Commands.submit("alice", pending.id, sign(pending, w.op))
+      assert suggestion(w.suggestion.event_id).status == :amended
+
+      task =
+        Log.gate().orchestration.tasks[{"chapter-genesis", "tenant-1", "project-1", "task-1"}]
+
+      assert task.timing == mine
+    end
+
+    test "a create suggestion takes the person's title and keeps the rest", w do
+      {:ok, [s]} =
+        Log.append(
+          suggest(w.agent, w.agent_grant, "task-2", create_change("Write it up", timed(t0())))
+        )
+
+      {:ok, pending} = prepare(w, {:amend, s.event_id, %{"title" => "Write up the audit"}})
+      assert %{"title" => "Write up the audit", "timing" => timing} = pending.payload
+      assert timing == timed(t0())
+
+      assert {:ok, _} = Commands.submit("alice", pending.id, sign(pending, w.op))
+      assert suggestion(s.event_id).status == :amended
+    end
+
+    test "an edit equal to the suggestion is an acceptance", w do
+      edits = %{"timing" => timed(t0())}
+      {:ok, pending} = prepare(w, {:amend, w.suggestion.event_id, edits})
+      assert {:ok, _} = Commands.submit("alice", pending.id, sign(pending, w.op))
+      assert suggestion(w.suggestion.event_id).status == :accepted
+    end
+
+    test "only the suggestion's own fields, and only valid values", w do
+      id = w.suggestion.event_id
+
+      for edits <- [%{}, %{"title" => "Not a timing field"}, %{"task_id" => "task-9"}, "timing"] do
+        assert prepare(w, {:amend, id, edits}) == {:error, :bad_amendment}
+      end
+
+      bad = %{
+        "schedule" => %{"kind" => "timed", "start_ms" => 2, "end_ms" => 1, "tz" => "UTC"},
+        "due_ms" => nil
+      }
+
+      assert {:error, {:invalid, {:invalid_task_timing, :schedule_order}}} =
+               prepare(w, {:amend, id, %{"timing" => bad}})
+
+      assert suggestion(id).status == :pending
+    end
+  end
+
   test "declining records the reason", w do
     {:ok, pending} = prepare(w, {:decline, w.suggestion.event_id, "Clashes with the audit"})
     assert pending.type == "TaskSuggestionDeclinedV1"
