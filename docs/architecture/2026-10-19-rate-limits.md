@@ -6,18 +6,21 @@ Date: 2026-10-19. Status: **implemented**. Closes the limit noted in
 
 ## Decision
 
-Every route SpruceGoose serves is limited per client
-(`SpruceGoose.Web.RateLimit`), in one of three buckets:
+Every request SpruceGoose serves is limited per client
+(`SpruceGoose.Web.RateLimit`). The limiter is plugged into the endpoint
+ahead of `Plug.Parsers`, so a throttled request is refused before its body
+is read, and requests for paths with no route count too. The path decides
+the bucket:
 
-| Bucket | Routes | Default |
+| Bucket | Paths | Default |
 | --- | --- | --- |
-| `:sign_in` | `/auth/*`, the OAuth consent and protocol routes | 30 per minute |
-| `:capability` | `/api/v1/enrolments/*`, `/api/v1/grants/*`: no session, a code or grant ID is the capability | 60 per minute |
-| `:api` | the web view, `/api/v1/commands/:id`, device challenges, everything under a project (feed, commands, devices), MCP | 600 per minute |
+| `:sign_in` | `/auth/*`, `/oauth/*`, `/.well-known/*` | 30 per minute |
+| `:capability` | `/api/v1/enrolments/*`, `/api/v1/grants/*`, `/api/v1/principals/*`: no session; a code, grant or principal ID, and a governance signature where one is needed | 60 per minute |
+| `:api` | everything else: the web view, `/api/v1/commands/:id`, device challenges, everything under a project (feed, commands, devices), MCP | 600 per minute |
 
 Beyond its limit a client gets `429 {"error": "rate_limited"}` with
-`retry-after` in seconds, and the request goes no further: no controller
-runs and nothing is held or looked up. Each bucket counts separately, so a
+`retry-after` in seconds, and the request goes no further: no body is
+parsed, no controller runs and nothing is held or looked up. Each bucket counts separately, so a
 client that exhausts sign-in can still use the API.
 
 Limits are a backstop against guessing and flooding, not access control.
@@ -42,7 +45,9 @@ config :spruce_goose, SpruceGoose.Web.RateLimit,
 ```
 
 At runtime, `SPRUCE_GOOSE_TRUSTED_PROXIES` sets the proxies, for example
-`10.0.0.0/8,fd00::/8`.
+`10.0.0.0/8,fd00::/8`. A malformed entry, such as a prefix outside 0–32
+for IPv4 or 0–128 for IPv6, stops the server: a bad entry could otherwise
+make every client a trusted proxy, free to pick its own key.
 
 ## The client
 
@@ -56,20 +61,22 @@ than looser.
 
 ## Verification
 
-`SpruceGoose.Web.RateLimitTest` (9 tests):
+`SpruceGoose.Web.RateLimitTest` (11 tests, through the endpoint as served):
 - Beyond its limit a client gets 429 with `retry-after`; another client, and
   another bucket for the same client, are unaffected.
 - A new window starts afresh, and ended windows are swept.
-- **Every route has a bucket.** With every limit at zero, each route the
-  router lists answers 429. Removing a scope's limit fails this test and
-  names the routes. Routes added later to an existing scope, such as
-  offboarding's `/api/v1/principals/*` in the capability scope, are covered
-  by the same check.
+- **Before the body.** A throttled client posting malformed JSON or a large
+  body gets 429 and no parsing. Moving the limiter after `Plug.Parsers`
+  fails this test.
+- **Every route counts.** With every limit at zero, each route the router
+  lists, and a path with no route, answers 429.
+- The path decides the bucket, offboarding's `/api/v1/principals/*`
+  included.
 - Clients behind proxies:
   - forwarded IPv4 and IPv6 clients are told apart;
   - an untrusted peer's header is ignored;
   - a malformed header falls back to the last trusted hop;
-  - CIDR parsing.
+  - CIDR parsing, refusing prefixes out of range.
 
 The rest of the suite runs with limits set out of reach (`config/test.exs`).
 

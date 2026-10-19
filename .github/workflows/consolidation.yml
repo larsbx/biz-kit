@@ -123,6 +123,7 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/web/rate_limit/counts.ex
           apps/spruce_goose/test/spruce_goose/web/rate_limit_test.exs
           apps/spruce_goose/lib/spruce_goose/application.ex
+          apps/spruce_goose/lib/spruce_goose/web/endpoint.ex
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test

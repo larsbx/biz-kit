@@ -22,6 +22,9 @@ defmodule SpruceGoose.Web.Endpoint do
   plug(Plug.RequestId)
   plug(Plug.Telemetry, event_prefix: [:spruce_goose, :endpoint])
 
+  # Before any body is read.
+  plug(SpruceGoose.Web.RateLimit)
+
   plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],

@@ -1,8 +1,15 @@
 defmodule SpruceGoose.Web.RateLimit do
   @moduledoc """
   Per-client request limits (docs/architecture/2026-10-19-rate-limits.md).
+  Plugged into the endpoint ahead of `Plug.Parsers`, so a throttled request
+  is refused before its body is read, and every request counts, routed or
+  not. Its path decides the bucket (`bucket/1`):
 
-      plug(SpruceGoose.Web.RateLimit, :capability)
+    * `:sign_in`: `/auth`, `/oauth`, `/.well-known`;
+    * `:capability`: `/api/v1/enrolments`, `/api/v1/grants`,
+      `/api/v1/principals`, asked without a session (a code, grant or
+      principal ID, and a governance signature where one is needed);
+    * `:api`: everything else.
 
   Each bucket allows `limit` requests per client in a fixed window of
   `period_ms`, configured as
@@ -28,10 +35,11 @@ defmodule SpruceGoose.Web.RateLimit do
   alias SpruceGoose.Web.RateLimit.Counts
 
   @impl Plug
-  def init(bucket) when is_atom(bucket), do: bucket
+  def init(opts), do: opts
 
   @impl Plug
-  def call(conn, bucket) do
+  def call(conn, _opts) do
+    bucket = bucket(conn.path_info)
     {limit, period} = Map.fetch!(config(:limits, %{}), bucket)
     now = System.system_time(:millisecond)
     ends = (div(now, period) + 1) * period
@@ -47,6 +55,15 @@ defmodule SpruceGoose.Web.RateLimit do
       |> halt()
     end
   end
+
+  @doc "The bucket a request path counts in."
+  @spec bucket([String.t()]) :: :sign_in | :capability | :api
+  def bucket([first | _]) when first in ~w(auth oauth .well-known), do: :sign_in
+
+  def bucket(["api", "v1", resource | _]) when resource in ~w(enrolments grants principals),
+    do: :capability
+
+  def bucket(_path), do: :api
 
   @doc """
   The client a request counts against: the peer, or behind trusted proxies
@@ -73,10 +90,21 @@ defmodule SpruceGoose.Web.RateLimit do
   @doc "`\"10.0.0.0/8\"` as `{address, prefix bits}`."
   @spec cidr(String.t()) :: {tuple(), non_neg_integer()}
   def cidr(text) do
-    [address | bits] = String.split(text, "/")
-    ip = parse(address) || raise ArgumentError, "not an address: #{inspect(text)}"
+    {address, bits} =
+      case String.split(text, "/") do
+        [address] -> {address, nil}
+        [address, bits] -> {address, Integer.parse(bits)}
+        _ -> {nil, nil}
+      end
+
+    ip = (address && parse(address)) || raise ArgumentError, "not a CIDR: #{inspect(text)}"
     size = tuple_size(ip) * width(ip)
-    {ip, if(bits == [], do: size, else: String.to_integer(hd(bits)))}
+
+    case bits do
+      nil -> {ip, size}
+      {n, ""} when n >= 0 and n <= size -> {ip, n}
+      _ -> raise ArgumentError, "not a CIDR: #{inspect(text)}"
+    end
   end
 
   defp trusted?(ip, trusted), do: Enum.any?(trusted, &within?(ip, &1))

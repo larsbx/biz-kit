@@ -1,14 +1,16 @@
 defmodule SpruceGoose.Web.RateLimitTest do
   @moduledoc """
   Request limits per client (docs/architecture/2026-10-19-rate-limits.md):
-  every route has a bucket; beyond its limit a client gets 429 and nothing
-  else, while other clients and other buckets are unaffected.
+  every request counts in a bucket, before its body is read; beyond its
+  limit a client gets 429 and nothing else, while other clients and other
+  buckets are unaffected. Requests go through the endpoint, as served.
   """
   use ExUnit.Case, async: false
 
-  alias SpruceGoose.Web.{RateLimit, Router}
+  alias SpruceGoose.Web.{Endpoint, RateLimit, Router}
 
   setup do
+    start_supervised!(Endpoint)
     config = Application.get_env(:spruce_goose, RateLimit)
     on_exit(fn -> Application.put_env(:spruce_goose, RateLimit, config) end)
     :ok
@@ -28,13 +30,15 @@ defmodule SpruceGoose.Web.RateLimitTest do
   # A client address no other test uses.
   defp ip, do: {198, 51, 100, :rand.uniform(250)} |> then(&put_elem(&1, 2, :rand.uniform(250)))
 
-  defp get(path, ip, headers \\ []) do
-    conn = Plug.Test.conn(:get, path)
+  defp request(verb, path, ip, headers \\ [], body \\ nil) do
+    conn = Plug.Test.conn(verb, path, body)
 
     %{conn | remote_ip: ip}
     |> then(&Enum.reduce(headers, &1, fn {k, v}, c -> Plug.Conn.put_req_header(c, k, v) end))
-    |> Router.call(Router.init([]))
+    |> Endpoint.call([])
   end
+
+  defp get(path, ip, headers \\ []), do: request(:get, path, ip, headers)
 
   @enrolment "/api/v1/enrolments/AAAA-AAAA-AAAA"
 
@@ -65,21 +69,57 @@ defmodule SpruceGoose.Web.RateLimitTest do
     assert get(@enrolment, client).status == 404
   end
 
-  # With every limit at zero, a route without a bucket would answer otherwise.
-  test "every route has a bucket" do
+  test "a throttled client is refused before its body is read" do
+    limits!(%{capability: {1, 60_000}})
+    client = ip()
+    json = [{"content-type", "application/json"}]
+    path = "/api/v1/grants/x/revocation"
+
+    # Counted, then refused by the parser (a 400 when served).
+    assert_raise Plug.Parsers.ParseError, fn ->
+      request(:post, path, client, json, "{not json")
+    end
+
+    for body <- ["{not json", Jason.encode!(%{"pad" => String.duplicate("x", 100_000)})] do
+      assert request(:post, path, client, json, body).status == 429
+    end
+  end
+
+  # With every limit at zero, any request not counted would answer otherwise.
+  test "every route, and every other path, counts in a bucket" do
     limits!(%{sign_in: {0, 60_000}, capability: {0, 60_000}, api: {0, 60_000}})
     client = ip()
 
-    statuses =
+    paths =
       for route <- Phoenix.Router.routes(Router), uniq: true do
-        verb = if route.verb == :*, do: :get, else: route.verb
-        path = String.replace(route.path, ~r/:\w+|\*\w+/, "x")
-        conn = %{Plug.Test.conn(verb, path) | remote_ip: client} |> Router.call(Router.init([]))
-        {route.verb, route.path, conn.status}
+        {if(route.verb == :*, do: :get, else: route.verb),
+         String.replace(route.path, ~r/:\w+|\*\w+/, "x")}
       end
 
-    assert statuses != []
+    statuses =
+      for {verb, path} <- [{:get, "/no/such/route"} | paths],
+          do: {verb, path, request(verb, path, client).status}
+
+    assert length(statuses) > 20
     assert Enum.reject(statuses, &match?({_, _, 429}, &1)) == []
+  end
+
+  test "the path decides the bucket" do
+    for {path, bucket} <- [
+          {"/auth/workos/login", :sign_in},
+          {"/oauth/token", :sign_in},
+          {"/.well-known/oauth-authorization-server", :sign_in},
+          {"/api/v1/enrolments/AAAA-AAAA-AAAA", :capability},
+          {"/api/v1/grants/x/revocation", :capability},
+          {"/api/v1/principals/x/offboarding", :capability},
+          {"/api/v1/commands/x", :api},
+          {"/api/v1/chapters/c/tenants/t/projects/p/feed", :api},
+          {"/app", :api},
+          {"/mcp", :api},
+          {"/", :api}
+        ] do
+      assert RateLimit.bucket(String.split(path, "/", trim: true)) == bucket, path
+    end
   end
 
   describe "the client behind proxies" do
@@ -137,6 +177,10 @@ defmodule SpruceGoose.Web.RateLimitTest do
     assert RateLimit.cidr("10.0.0.0/8") == {{10, 0, 0, 0}, 8}
     assert RateLimit.cidr("192.0.2.1") == {{192, 0, 2, 1}, 32}
     assert RateLimit.cidr("::1") == {{0, 0, 0, 0, 0, 0, 0, 1}, 128}
-    assert_raise ArgumentError, fn -> RateLimit.cidr("nope/8") end
+    assert RateLimit.cidr("::/0") == {{0, 0, 0, 0, 0, 0, 0, 0}, 0}
+
+    for bad <- ~w(nope/8 10.0.0.0/-1 10.0.0.0/33 ::/129 10.0.0.0/8x 10.0.0.0/8/8 /8) do
+      assert_raise ArgumentError, fn -> RateLimit.cidr(bad) end
+    end
   end
 end
