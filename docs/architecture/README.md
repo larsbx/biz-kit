@@ -25,6 +25,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Identity](2026-10-18-identity.md): biz-kit's own principal IDs, a
   replaceable sign-in provider (WorkOS first), explicit identity bindings and
   local sessions. The ledger keeps all authority.
+- [Deciding on suggestions](2026-10-18-decide.md): the first end-to-end
+  workflow. A person accepts or declines an agent's suggestion in the web
+  view; the command is signed by a key held in their browser.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

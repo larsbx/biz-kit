@@ -8,6 +8,7 @@ defmodule SpruceGoose.Web.AuthController do
       GET  /auth/:provider/login     → the provider's sign-in page
       GET  /auth/:provider/callback  → session cookie, then `:after_login_path`
       POST /auth/logout              → session revoked
+      GET  /auth/me                  → the signed-in principal
 
   The session cookie is HttpOnly, SameSite=Lax and, outside development and
   tests, Secure. It authenticates reads; it never signs a command.
@@ -24,7 +25,24 @@ defmodule SpruceGoose.Web.AuthController do
   @session_cookie "bizkit_session"
   @state_cookie "bizkit_login_state"
 
-  def session_cookie, do: @session_cookie
+  @doc """
+  The signed-in principal and its session ID, from the session cookie. Every
+  endpoint a person reaches resolves them here.
+  """
+  @spec principal(Plug.Conn.t()) :: {:ok, String.t(), String.t()} | {:error, atom()}
+  def principal(conn) do
+    with session when is_binary(session) <-
+           fetch_cookies(conn).cookies[@session_cookie] || {:error, :no_credentials},
+         {:ok, %{principal: principal}} <- Identity.session(session),
+         do: {:ok, principal, session}
+  end
+
+  def me(conn, _params) do
+    case principal(conn) do
+      {:ok, principal, _session} -> json(conn, %{principal: principal})
+      {:error, reason} -> refuse(conn, reason)
+    end
+  end
 
   def login(conn, %{"provider" => provider}) do
     state = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
