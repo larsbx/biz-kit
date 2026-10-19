@@ -209,7 +209,7 @@ async function storeArtifact(file, { expected, task } = {}) {
   try {
     if (held) {
       status("Checking stored evidence…");
-      const res = await fetch(`${projectPath}/receipts/${encodeURIComponent(held)}`);
+      const res = await fetch(`${projectPath}/receipts/${encodeURIComponent(held)}`, { cache: "no-store" });
       if (res.ok) {
         // Consume the response too: a failed transfer is not availability.
         await res.arrayBuffer();
