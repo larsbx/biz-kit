@@ -206,12 +206,18 @@ async function revokeDevice(d, self) {
 
 const devicePath = () => `${projectPath}/devices/${encodeURIComponent(keyId)}`;
 
-// Ask the server where this device stands; while a request waits for an
-// administrator, ask again every ten seconds.
+// Ask the server where this device stands, and again every ten seconds while
+// a request waits for an administrator, every thirty otherwise: a device can
+// be enrolled or revoked from elsewhere (another browser, `mix coop.revoke`).
+let enrolmentTimer = null;
+
 async function enrolment() {
-  const res = await fetch(devicePath());
-  if (!res.ok) return;
+  clearTimeout(enrolmentTimer);
+  const res = await fetch(devicePath()).catch(() => null);
+  const next = (ms) => (enrolmentTimer = setTimeout(enrolment, ms));
+  if (!res?.ok) return next(30_000);
   const { status: state, code } = await res.json();
+  next(state === "pending" ? 10_000 : 30_000);
   enrolled = state === "enrolled";
   $("enrol-form").hidden = state !== "none";
   await loadDevices();
@@ -223,7 +229,6 @@ async function enrolment() {
       "Waiting for approval. Give your administrator this code: ",
       el("span", { className: "code", textContent: code }),
     );
-    setTimeout(enrolment, 10_000);
   } else {
     $("enrolment").textContent = "This device cannot decide yet. Request access, then give the code to your administrator.";
   }

@@ -66,6 +66,11 @@ POST /api/v1/grants/:id/revocation/:held_id                                  {"s
 
 The holder's revocation is held for the principal and submitted like a
 decision. The governance revocation is held for `{:revocation, grant_id}`.
+Preparing it needs no session, because the governance signature is the
+authority, so `Commands.hold/5` keeps at most four held envelopes per owner,
+evicting the oldest. Otherwise anyone who knew a grant ID could fill memory
+with envelopes they can never sign. The bound applies to every owner:
+principals, enrolment codes and grants.
 `coop.revoke` and `coop.enrol` share `CoopSubstrate.Governance.Client`. It
 decodes what the server prepared and signs only if the result is exactly
 what was shown, signed by its own governance key alone. Neither task starts
@@ -78,7 +83,10 @@ this one, with a Revoke button on each. Revoking goes through the same
 confirmation as decisions. The page decodes the command, checks it is a
 `TaskDeviceRevokedV1` signed by this device for the chosen grant, shows it,
 and signs on confirmation. After revoking itself, the device shows the
-enrolment form again.
+enrolment form again. The page re-checks its enrolment and device list every
+30 seconds (10 while a request is pending). A revocation made elsewhere,
+from another browser or `mix coop.revoke`, therefore disables its controls
+without a reload.
 
 ## Verification
 
@@ -115,5 +123,7 @@ enter its properties.
 
 - Revocation is per grant. Revoking all of a person's devices at once, or
   across projects (offboarding), is one `coop.revoke` per grant for now.
+- The unauthenticated `/api/v1/grants` and `/api/v1/enrolments` routes are
+  bounded in memory but not rate-limited; a public deployment should add one.
 - A lost only device can only be revoked by an administrator. A person can
   enrol a new device first, then revoke the lost one themselves.

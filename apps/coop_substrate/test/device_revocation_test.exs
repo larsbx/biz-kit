@@ -147,6 +147,33 @@ defmodule CoopSubstrate.DeviceRevocationTest do
                {:error, :no_operator_grant}
     end
 
+    test "repeated preparation holds only the latest few revocations of a grant", w do
+      [first | _] =
+        for _ <- 1..6 do
+          {:ok, held} =
+            Devices.prepare_governance_revocation(w.bob_grant.event_id, w.gov.signer.key_id)
+
+          held
+        end
+
+      assert Devices.revoke(
+               w.bob_grant.event_id,
+               first.id,
+               Crypto.sign(first.signing_bytes, w.gov.seed)
+             ) ==
+               {:error, :unknown_command}
+
+      {:ok, latest} =
+        Devices.prepare_governance_revocation(w.bob_grant.event_id, w.gov.signer.key_id)
+
+      assert {:ok, _} =
+               Devices.revoke(
+                 w.bob_grant.event_id,
+                 latest.id,
+                 Crypto.sign(latest.signing_bytes, w.gov.seed)
+               )
+    end
+
     test "governance revokes any grant by its ID", w do
       {:ok, held} =
         Devices.prepare_governance_revocation(w.bob_grant.event_id, w.gov.signer.key_id)
