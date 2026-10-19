@@ -579,7 +579,10 @@ async function lookUpRequest(event) {
       { ...governanceSigned(type, payload), chapter: details.chapter_id },
       (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
     );
-    if (result) $("approve-details").replaceChildren(el("p", { className: "muted", textContent: `Approved: ${describeRequest(details)}` }));
+    if (!result) return;
+    $("approve-details").replaceChildren(el("p", { className: "muted", textContent: `Approved: ${describeRequest(details)}` }));
+    // A new administrator of this chapter belongs in the list at once.
+    if (details.role === "governance") await loadAdministrators();
   };
   $("approve-details").replaceChildren(el("p", { textContent: describeRequest(details) }), el("div", { className: "actions" }, approve));
 }
