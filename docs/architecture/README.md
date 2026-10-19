@@ -31,6 +31,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Self-service device enrolment](2026-10-19-device-enrolment.md): a device
   requests access and proves its key; an administrator approves the code with
   the governance key (`mix coop.enrol`).
+- [Device revocation](2026-10-19-device-revocation.md): people revoke their
+  own devices from any device still enrolled; administrators revoke any grant
+  with the governance key (`mix coop.revoke`).
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

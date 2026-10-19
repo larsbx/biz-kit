@@ -1,9 +1,15 @@
 defmodule SpruceGoose.Web.DeviceController do
   @moduledoc """
-  A person asks for their device to be enrolled
-  (docs/architecture/2026-10-19-device-enrolment.md). Transport only:
-  `CoopSubstrate.Enrolments` decides.
+  A person's devices: enrolment
+  (docs/architecture/2026-10-19-device-enrolment.md) and revocation
+  (docs/architecture/2026-10-19-device-revocation.md). Transport only:
+  `CoopSubstrate.Enrolments` and `CoopSubstrate.Devices` decide.
 
+      GET  /api/v1/chapters/:c/tenants/:t/projects/:p/devices
+           → [{grant_id, key_id, label}], the person's enrolled devices
+      POST /api/v1/chapters/:c/tenants/:t/projects/:p/devices/:grant_id/revocation
+           {"key_id"} → 201 the revocation to sign with that device, submitted
+           through POST /api/v1/commands/:id
       GET  /api/v1/chapters/:c/tenants/:t/projects/:p/devices/:key_id
            → {status: "enrolled" | "pending" | "none", code?, expires_at?}
       POST /api/v1/chapters/:c/tenants/:t/projects/:p/devices
@@ -19,8 +25,31 @@ defmodule SpruceGoose.Web.DeviceController do
 
   import SpruceGoose.Web.Requests
 
-  alias CoopSubstrate.Enrolments
+  alias CoopSubstrate.{Devices, Enrolments}
   alias SpruceGoose.Web.AuthController
+
+  def index(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
+    case AuthController.principal(conn) do
+      {:ok, principal, _id} -> json(conn, Devices.list(principal, {c, t, p}))
+      error -> refuse(conn, error)
+    end
+  end
+
+  def revoke(conn, %{
+        "chapter_id" => c,
+        "tenant_id" => t,
+        "project_id" => p,
+        "grant_id" => grant_id
+      }) do
+    with {:ok, principal, _id} <- AuthController.principal(conn),
+         {:ok, body} <- json_body(conn),
+         {:ok, key_id} <- string(body["key_id"]),
+         {:ok, pending} <- Devices.prepare_revocation(principal, key_id, {c, t, p}, grant_id) do
+      held(conn, pending)
+    else
+      error -> refuse(conn, error)
+    end
+  end
 
   def status(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p, "key_id" => key_id}) do
     case AuthController.principal(conn) do

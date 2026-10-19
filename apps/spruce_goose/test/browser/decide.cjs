@@ -2,7 +2,7 @@
 // the test over stdin/stdout one JSON line at a time:
 //   → {"code": …, "key_id": …}   once the page has requested access for its key
 //   ← "go"                       once an administrator has approved and an agent has suggested
-//   → {"done": status text}      after accepting
+//   → {"done": status text}      after accepting, then revoking this device
 // Usage: node decide.cjs <base url> <chapter> <tenant> <project>
 const { chromium } = require("playwright");
 const readline = require("node:readline");
@@ -50,7 +50,19 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 
     await page.locator("#status").filter({ hasText: "Recorded on the ledger" }).waitFor();
     await page.getByText("None.").first().waitFor();
-    say({ done: await page.locator("#status").textContent() });
+    const accepted = await page.locator("#status").textContent();
+
+    // Retire this device: confirm, check the signed command, and the page
+    // no longer counts it as enrolled.
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Revoke this device" }).click();
+    await dialog.waitFor({ state: "visible" });
+    const revocation = await page.locator("#confirm-body").textContent();
+    if (!revocation.includes("TaskDeviceRevokedV1")) throw new Error(`unexpected command: ${revocation}`);
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await page.getByText("This device cannot decide yet").waitFor();
+
+    say({ done: accepted });
   } finally {
     await browser.close();
     lines.close();

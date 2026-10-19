@@ -52,6 +52,8 @@
       dialog::backdrop { background: rgb(0 0 0 / 0.4); }
       details summary { cursor: pointer; }
       input { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); margin-left: 8px; }
+      h3 { font-size: 0.95rem; margin: 16px 0 4px; }
+      #devices .row { padding: 6px 0; border-top: 1px solid var(--line); }
       .code { font: 600 1.25rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.05em; }
     </style>
   </head>
@@ -84,6 +86,8 @@
             </label>
             <button class="primary">Request access</button>
           </form>
+          <h3>Your devices in this project</h3>
+          <div id="devices"></div>
           <details>
             <summary>Signing key <code id="key-id"></code></summary>
             <p class="muted">

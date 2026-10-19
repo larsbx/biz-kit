@@ -79,6 +79,8 @@ function render() {
       ? pending.map((s) => suggestionCard(s))
       : [el("p", { className: "muted", textContent: "None." })]),
   );
+
+  renderDevices();
 }
 
 function suggestionCard(s) {
@@ -116,28 +118,21 @@ const expectedType = (s, decision) =>
 const show = (value) =>
   JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2);
 
-async function decide(s, decision) {
-  if (deciding) return;
+// One command at a time, through the confirmation dialog: decode what the
+// server prepared, refuse unless it is exactly `expected`, show it, sign it,
+// submit it.
+async function signAndSubmit(prepare, expected) {
+  if (deciding) return null;
   deciding = true;
   render();
 
   try {
     status("Preparing…");
-    const prepared = await postJSON(`${projectPath}/commands`, {
-      ...decision,
-      suggestion_event_id: s.id,
-      key_id: keyId,
-    });
+    const prepared = await prepare();
     const bytes = base64url.decode(prepared.signing_bytes);
     const core = decode(bytes);
 
-    // Sign only what was asked for: this device's key, this decision, this suggestion.
-    if (
-      core.signers?.length !== 1 ||
-      core.signers[0].key_id !== keyId ||
-      core.type !== expectedType(s, decision.decision) ||
-      core.payload?.suggestion_event_id !== s.id
-    ) {
+    if (!device.isExpectedCommand(core, { keyId, ...expected })) {
       throw new Error("the server prepared a different command; nothing was signed");
     }
 
@@ -151,26 +146,81 @@ async function decide(s, decision) {
     const signature = base64url.encode(await device.sign(pair, bytes));
     const result = await postJSON(`/api/v1/commands/${encodeURIComponent(prepared.id)}`, { signature });
     status(`Recorded on the ledger at #${result.global_seq}.`);
+    return result;
   } catch (e) {
     status(`Not recorded: ${e.message.replaceAll("_", " ")}.`, true);
+    return null;
   } finally {
     deciding = false;
     render();
   }
 }
 
+const decide = (s, decision) =>
+  signAndSubmit(
+    () => postJSON(`${projectPath}/commands`, { ...decision, suggestion_event_id: s.id, key_id: keyId }),
+    { type: expectedType(s, decision.decision), payload: { suggestion_event_id: s.id } },
+  );
+
+// -- devices ---------------------------------------------------------------------
+
+let devices = [];
+
+async function loadDevices() {
+  const res = await fetch(`${projectPath}/devices`);
+  devices = res.ok ? await res.json() : [];
+  renderDevices();
+}
+
+function renderDevices() {
+  $("devices").replaceChildren(
+    ...devices.map((d) => {
+      const self = d.key_id === keyId;
+      const button = el("button", { textContent: self ? "Revoke this device" : "Revoke", disabled: !enrolled || deciding });
+      button.onclick = () => revokeDevice(d, self);
+
+      return el(
+        "div",
+        { className: "row" },
+        el("span", {}, el("strong", { textContent: d.label ?? "Unnamed device" }), self ? " (this device)" : null),
+        el("span", {}, el("code", { textContent: d.key_id }), " ", button),
+      );
+    }),
+  );
+}
+
+async function revokeDevice(d, self) {
+  const question = self
+    ? "Revoke this device? It will no longer be able to decide for you."
+    : `Revoke “${d.label ?? d.key_id}”? Do this if it is lost or you no longer use it.`;
+  if (!confirm(question)) return;
+
+  const result = await signAndSubmit(
+    () => postJSON(`${projectPath}/devices/${encodeURIComponent(d.grant_id)}/revocation`, { key_id: keyId }),
+    { type: "TaskDeviceRevokedV1", payload: { revoked_grant_event_id: d.grant_id } },
+  );
+  if (result) await enrolment();
+}
+
 // -- enrolment ---------------------------------------------------------------------
 
 const devicePath = () => `${projectPath}/devices/${encodeURIComponent(keyId)}`;
 
-// Ask the server where this device stands; while a request waits for an
-// administrator, ask again every ten seconds.
+// Ask the server where this device stands, and again every ten seconds while
+// a request waits for an administrator, every thirty otherwise: a device can
+// be enrolled or revoked from elsewhere (another browser, `mix coop.revoke`).
+let enrolmentTimer = null;
+
 async function enrolment() {
-  const res = await fetch(devicePath());
-  if (!res.ok) return;
+  clearTimeout(enrolmentTimer);
+  const res = await fetch(devicePath()).catch(() => null);
+  const next = (ms) => (enrolmentTimer = setTimeout(enrolment, ms));
+  if (!res?.ok) return next(30_000);
   const { status: state, code } = await res.json();
+  next(state === "pending" ? 10_000 : 30_000);
   enrolled = state === "enrolled";
   $("enrol-form").hidden = state !== "none";
+  await loadDevices();
 
   if (state === "enrolled") {
     $("enrolment").textContent = "This device can decide for you in this project.";
@@ -179,7 +229,6 @@ async function enrolment() {
       "Waiting for approval. Give your administrator this code: ",
       el("span", { className: "code", textContent: code }),
     );
-    setTimeout(enrolment, 10_000);
   } else {
     $("enrolment").textContent = "This device cannot decide yet. Request access, then give the code to your administrator.";
   }

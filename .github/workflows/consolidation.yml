@@ -105,6 +105,18 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/web/device_controller.ex
           apps/spruce_goose/lib/spruce_goose/web/enrolment_controller.ex
           apps/spruce_goose/test/spruce_goose/web/device_test.exs
+          apps/coop_substrate/lib/coop_substrate/devices.ex
+          apps/coop_substrate/lib/coop_substrate/devices/revoker.ex
+          apps/coop_substrate/lib/coop_substrate/governance/client.ex
+          apps/coop_substrate/lib/mix/tasks/coop.revoke.ex
+          apps/coop_substrate/test/device_revocation_test.exs
+          apps/coop_substrate/lib/coop_substrate/tasks.ex
+          apps/coop_substrate/lib/coop_substrate/projections/tasks.ex
+          apps/coop_substrate/test/support/task_histories.ex
+          apps/coop_substrate/test/support/task_timing_fixtures.ex
+          apps/spruce_goose/lib/spruce_goose/web/grant_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/revocation_test.exs
+          apps/spruce_goose/test/support/ledger_fixtures.ex
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
       - name: Test the common ledger

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { decode, hex } from "../../priv/static/app/cbor.js";
-import { sign, keyId, isOwnEnrolment } from "../../priv/static/app/device.js";
+import { sign, keyId, isOwnEnrolment, isExpectedCommand } from "../../priv/static/app/device.js";
 import { applyFrame, emptyView, pendingSuggestions, base64url } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -108,5 +108,26 @@ test("the device signs only its own enrolment statement", () => {
     null,
   ]) {
     assert.equal(isOwnEnrolment(tampered, own), false);
+  }
+});
+
+test("the device signs only the command it was asked for", () => {
+  const core = {
+    type: "TaskDeviceRevokedV1",
+    signers: [{ role: "operator", key_id: "k-01020304", pubkey: { __bytes__: "01" } }],
+    payload: { revoked_grant_event_id: "g1", principal_id: "prn_x" },
+  };
+  const expected = { keyId: "k-01020304", type: "TaskDeviceRevokedV1", payload: { revoked_grant_event_id: "g1" } };
+
+  assert.equal(isExpectedCommand(core, expected), true);
+  for (const tampered of [
+    { ...core, type: "TaskOperatorRevokedV1" },
+    { ...core, payload: { ...core.payload, revoked_grant_event_id: "g2" } },
+    { ...core, signers: [{ ...core.signers[0], key_id: "k-ffffffff" }] },
+    { ...core, signers: [...core.signers, ...core.signers] },
+    {},
+    null,
+  ]) {
+    assert.equal(isExpectedCommand(tampered, expected), false);
   }
 });

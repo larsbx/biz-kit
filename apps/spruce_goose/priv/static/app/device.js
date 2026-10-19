@@ -23,6 +23,14 @@ export const isOwnEnrolment = (statement, { keyId, publicKeyHex }) =>
   statement.key_id === keyId &&
   statement.pubkey?.__bytes__ === publicKeyHex;
 
+// Whether a decoded command is exactly the one asked for: signed by this key
+// alone, of this type, with these payload fields.
+export const isExpectedCommand = (core, { keyId, type, payload }) =>
+  core?.signers?.length === 1 &&
+  core.signers[0].key_id === keyId &&
+  core.type === type &&
+  Object.entries(payload).every(([field, value]) => core.payload?.[field] === value);
+
 export const sign = async (pair, bytes) =>
   new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, bytes));
 

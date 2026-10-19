@@ -31,6 +31,10 @@ defmodule CoopSubstrate.Commands do
 
   @table __MODULE__
   @ttl_ms 300_000
+  # Held per owner at most, oldest evicted first. Some owners need no session
+  # (a governance revocation is prepared for a grant ID), so without a bound
+  # anyone could fill memory with envelopes they can never sign.
+  @per_owner 4
 
   @type pending :: %{
           id: String.t(),
@@ -83,7 +87,11 @@ defmodule CoopSubstrate.Commands do
          {:ok, bytes} <- Envelope.signing_bytes(env) do
       id = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
       expires_at = now + @ttl_ms
-      true = :ets.insert_new(@table, {id, owner, env, expires_at})
+
+      true =
+        :ets.insert_new(@table, {id, owner, env, expires_at, System.unique_integer([:monotonic])})
+
+      evict(owner)
       {:ok, %{id: id, signing_bytes: bytes, type: type, payload: payload, expires_at: expires_at}}
     end
   end
@@ -93,15 +101,25 @@ defmodule CoopSubstrate.Commands do
   def submit(owner, id, signature, now_ms \\ System.system_time(:millisecond)) do
     # Looked up before it is taken, so nobody else can spend it; taken before
     # use, so it is used once.
-    with [{^id, ^owner, _env, expires_at}] when now_ms <= expires_at <-
+    with [{^id, ^owner, _env, expires_at, _seq}] when now_ms <= expires_at <-
            :ets.lookup(@table, id),
-         [{^id, _, env, _}] <- :ets.take(@table, id),
+         [{^id, _, env, _, _}] <- :ets.take(@table, id),
          {:ok, signed} <- Envelope.attach_signature(env, hd(env.signers).key_id, signature),
          {:ok, [appended]} <- Log.append(signed) do
       {:ok, appended}
     else
       {:error, _} = error -> error
       _ -> {:error, :unknown_command}
+    end
+  end
+
+  @doc "A governance key declared for the chapter, as the signer of a held envelope."
+  @spec governance_signer(String.t(), String.t()) ::
+          {:ok, Envelope.signer()} | {:error, :unknown_governance_key}
+  def governance_signer(chapter, key_id) do
+    case Log.gate().role_keys[{chapter, "governance"}][key_id] do
+      nil -> {:error, :unknown_governance_key}
+      pubkey -> {:ok, %{role: "governance", pubkey: pubkey, key_id: key_id}}
     end
   end
 
@@ -126,10 +144,19 @@ defmodule CoopSubstrate.Commands do
   @impl true
   def handle_info(:sweep, state) do
     now = System.system_time(:millisecond)
-    :ets.select_delete(@table, [{{:_, :_, :_, :"$1"}, [{:<, :"$1", now}], [true]}])
+    :ets.select_delete(@table, [{{:_, :_, :_, :"$1", :_}, [{:<, :"$1", now}], [true]}])
     schedule()
     {:noreply, state}
   end
 
   defp schedule, do: Process.send_after(self(), :sweep, @ttl_ms)
+
+  defp evict(owner) do
+    :ets.select(@table, [
+      {{:"$1", :"$2", :_, :_, :"$3"}, [{:"=:=", :"$2", {:const, owner}}], [{{:"$3", :"$1"}}]}
+    ])
+    |> Enum.sort(:desc)
+    |> Enum.drop(@per_owner)
+    |> Enum.each(fn {_seq, id} -> :ets.delete(@table, id) end)
+  end
 end
