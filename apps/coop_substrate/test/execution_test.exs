@@ -247,10 +247,12 @@ defmodule CoopSubstrate.ExecutionTest do
 
     # A refunded charge, as after a failed write, frees its room.
     alias CoopSubstrate.ArtifactCustody.Quota
-    assert Quota.charge(:k, "a", 10, 10) == :ok
+    assert Quota.charge(:k, "a", 10, 10) == {:ok, :reserved}
+    # The same bytes again, as a concurrent upload would: held, not reserved.
+    assert Quota.charge(:k, "a", 10, 10) == {:ok, :held}
     assert Quota.charge(:k, "b", 1, 10) == {:error, :quota_exceeded}
     assert Quota.refund(:k, "a") == :ok
-    assert Quota.charge(:k, "b", 1, 10) == :ok
+    assert Quota.charge(:k, "b", 1, 10) == {:ok, :reserved}
   end
 
   test "operators and reviewers read the submitted evidence; others do not", w do

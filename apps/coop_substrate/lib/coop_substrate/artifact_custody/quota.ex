@@ -6,8 +6,10 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   node. If it moves, counting starts afresh.
 
   Each digest is charged once per key, so retrying an upload of the same
-  bytes (storage is content-addressed) costs nothing more, and a charge is
-  refunded when the write it reserved for fails.
+  bytes (storage is content-addressed) costs nothing more. A charge that
+  reserves room says so (`:reserved`), and only that caller refunds it when
+  its write fails; a concurrent upload of the same bytes finds it `:held`
+  and leaves it alone.
   """
 
   use GenServer
@@ -16,13 +18,17 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
 
   @server BizKit.Cluster.Singleton.name(__MODULE__)
 
-  @doc "Charge `bytes` of `digest` to `key` if that keeps it within `limit`; once per digest."
+  @doc """
+  Charge `bytes` of `digest` to `key` if that keeps it within `limit`:
+  `{:ok, :reserved}` if this call reserved the room, `{:ok, :held}` if the
+  digest was already charged.
+  """
   @spec charge(term(), binary(), non_neg_integer(), non_neg_integer()) ::
-          :ok | {:error, :quota_exceeded}
+          {:ok, :reserved | :held} | {:error, :quota_exceeded}
   def charge(key, digest, bytes, limit),
     do: GenServer.call(@server, {:charge, key, digest, bytes, limit})
 
-  @doc "Give back a charge whose write failed."
+  @doc "Give back a reservation (`:reserved`) whose write failed."
   @spec refund(term(), binary()) :: :ok
   def refund(key, digest), do: GenServer.call(@server, {:refund, key, digest})
 
@@ -32,18 +38,18 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
     {:ok, nil}
   end
 
+  # Per key: the running total and the bytes charged per digest.
   @impl true
   def handle_call({:charge, key, digest, bytes, limit}, _from, state) do
-    charged = :ets.lookup_element(@table, key, 2, %{})
-    used = charged |> Map.values() |> Enum.sum()
+    {used, charged} = :ets.lookup_element(@table, key, 2, {0, %{}})
 
     cond do
       Map.has_key?(charged, digest) ->
-        {:reply, :ok, state}
+        {:reply, {:ok, :held}, state}
 
       used + bytes <= limit ->
-        :ets.insert(@table, {key, Map.put(charged, digest, bytes)})
-        {:reply, :ok, state}
+        :ets.insert(@table, {key, {used + bytes, Map.put(charged, digest, bytes)}})
+        {:reply, {:ok, :reserved}, state}
 
       true ->
         {:reply, {:error, :quota_exceeded}, state}
@@ -51,7 +57,9 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   end
 
   def handle_call({:refund, key, digest}, _from, state) do
-    :ets.insert(@table, {key, Map.delete(:ets.lookup_element(@table, key, 2, %{}), digest)})
+    {used, charged} = :ets.lookup_element(@table, key, 2, {0, %{}})
+    {bytes, rest} = Map.pop(charged, digest, 0)
+    :ets.insert(@table, {key, {used - bytes, rest}})
     {:reply, :ok, state}
   end
 end

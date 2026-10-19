@@ -78,20 +78,20 @@ defmodule CoopSubstrate.ArtifactCustody do
     with {:ok, purpose} <- purpose(principal, scope, claimed, task_id),
          :ok <- check(byte_size(bytes) <= @limit, :too_large),
          :ok <- check(:crypto.hash(:sha256, bytes) == claimed, :digest_mismatch),
-         :ok <- charge(purpose, principal, scope, claimed, byte_size(bytes)) do
+         {:ok, charged} <- charge(purpose, principal, scope, claimed, byte_size(bytes)) do
       with {:error, _} = failed <- Artifacts.put(bytes) do
-        refund(purpose, principal, scope, claimed)
+        # Only a reservation this upload made: one held by a concurrent
+        # upload of the same bytes is that upload's to keep or give back.
+        if charged == :reserved, do: refund(purpose, principal, scope, claimed)
         failed
       end
     end
   end
 
-  defp charge(:named, _principal, _scope, _digest, _size), do: :ok
+  defp charge(:named, _principal, _scope, _digest, _size), do: {:ok, :held}
 
   defp charge({:evidence, task_id}, principal, scope, digest, size),
     do: Quota.charge({principal, scope, task_id}, digest, size, @evidence_quota)
-
-  defp refund(:named, _principal, _scope, _digest), do: :ok
 
   defp refund({:evidence, task_id}, principal, scope, digest),
     do: Quota.refund({principal, scope, task_id}, digest)
