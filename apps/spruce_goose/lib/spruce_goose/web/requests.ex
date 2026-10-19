@@ -83,7 +83,7 @@ defmodule SpruceGoose.Web.Requests do
     :unknown_device,
     :unknown_grant
   ]
-  @unprocessable [:bad_proof, :unknown_governance_key]
+  @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named]
   @conflict [
     :unknown_suggestion,
     :suggestion_not_pending,
@@ -103,6 +103,7 @@ defmodule SpruceGoose.Web.Requests do
       case reason do
         r when r in @unauthorized -> {401, "unauthorized"}
         :no_operator_grant -> {403, "no_operator_grant"}
+        :too_large -> {413, "too_large"}
         r when r in @bad_request -> {400, Atom.to_string(r)}
         r when r in @not_found -> {404, Atom.to_string(r)}
         {:invalid_signature, _} -> {422, "invalid_signature"}

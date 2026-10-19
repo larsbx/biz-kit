@@ -9,7 +9,10 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
     * queue → `TaskQueuedV1` (proposed → queued);
     * ready → `TaskReadyV1` (queued → ready), citing a custody receipt for
       each required input;
-    * revoke a delegation they made → `TaskDelegationRevokedV1`.
+    * revoke a delegation they made → `TaskDelegationRevokedV1`;
+    * record custody of an artifact they stored → `ArtifactCustodyRecordedV1`
+      (docs/architecture/2026-10-19-uploads.md), which the ledger admits
+      only once the bytes are in the store.
 
   Each task step expects the task's current version, so one prepared before
   someone else changed the task is refused as stale. Whether the step is
@@ -24,6 +27,7 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
           | {:queue, String.t()}
           | {:ready, String.t(), %{String.t() => String.t()}}
           | {:revoke_delegation, String.t()}
+          | {:record_custody, <<_::256>>}
 
   @types %{
     propose: "TaskProposedV1",
@@ -34,6 +38,18 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
 
   @spec command(map(), CoopSubstrate.Feed.View.scope(), action(), map()) ::
           {:ok, String.t(), map()} | {:error, atom()}
+  # Custody predates lifecycle versions: its actor is principal and grant only.
+  def command(_o, {_chapter, tenant, project}, {:record_custody, digest}, actor) do
+    {:ok, "ArtifactCustodyRecordedV1",
+     actor
+     |> Map.delete("lifecycle_version")
+     |> Map.merge(%{
+       "tenant_id" => tenant,
+       "project_id" => project,
+       "artifact_digest" => {:bytes, digest}
+     })}
+  end
+
   def command(o, {chapter, tenant, project}, {:revoke_delegation, id}, actor) do
     case o.delegations[id] do
       %{chapter_id: ^chapter, tenant_id: ^tenant, project_id: ^project} ->

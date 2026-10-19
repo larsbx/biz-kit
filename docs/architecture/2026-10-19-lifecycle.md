@@ -124,5 +124,6 @@ suggestions, ordered by the event that resolved them.
 
 ## Not yet
 
-- Uploading an SOP or input from the browser into custody.
+- Uploading an SOP or input from the browser is now
+  [offered](2026-10-19-uploads.md).
 - Steps after ready (execution, evidence, review) in the view.

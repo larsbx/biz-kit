@@ -208,7 +208,10 @@ test("a task's next step, or what it is waiting for", async () => {
   assert.deepEqual(nextStep("t1", view({ state: "inbox" }), "me", "k-me"), { action: "propose", label: "Propose" });
   assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: null }), "me", "k-me"), { waiting: "a Definition of Done" });
   assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {} }), "me", "k-me"), { waiting: "a readiness definition" });
-  assert.match(nextStep("t1", view({ state: "proposed", dod: {}, readiness }), "me", "k-me").waiting, /SOP \(aaaaaaaaaaaa…\)/);
+  const noSop = nextStep("t1", view({ state: "proposed", dod: {}, readiness }), "me", "k-me");
+  assert.match(noSop.waiting, /SOP \(aaaaaaaaaaaa…\)/);
+  // A file this device can store: the SOP's own digest.
+  assert.equal(noSop.upload, sop);
 
   const stored = { receipts: { r2: { digest: sop }, r1: { digest: input } } };
   assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {}, readiness }, stored), "me", "k-me"), {
@@ -235,7 +238,11 @@ test("a task's next step, or what it is waiting for", async () => {
     label: "Mark ready",
     custody_receipts: { input: "r1" },
   });
-  assert.match(nextStep("t1", { ...view({}), ...done }, "me", "k-me").waiting, /input “input”/);
+  const noInput = nextStep("t1", { ...view({}), ...done }, "me", "k-me");
+  assert.match(noInput.waiting, /input “input”/);
+  assert.equal(noInput.upload, input);
+  // Waiting on people, not files: nothing to upload.
+  assert.equal(nextStep("t1", view({ state: "proposed", dod: null }), "me", "k-me").upload, undefined);
   assert.equal(nextStep("t1", view({ state: "ready" }), "me", "k-me"), null);
 
   // Latest decided first: s1 was suggested first but decided last.

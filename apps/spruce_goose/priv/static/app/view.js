@@ -111,7 +111,8 @@ const short = (digest) => `${digest.slice(0, 12)}…`;
 
 // What a task's next step is for `me` on the device holding `keyId`:
 // `{action, label, ...cites}` to sign, `{waiting}` saying what it still needs
-// from someone else, or null. Queuing and readiness need this device's own
+// (with `upload: digest` when it is a file this device could store;
+// docs/architecture/2026-10-19-uploads.md), or null. Queuing and readiness need this device's own
 // acknowledgement of the SOP: the ledger checks the key, not only the person.
 export function nextStep(taskId, view, me, keyId) {
   const t = view.tasks[taskId];
@@ -128,7 +129,7 @@ export function nextStep(taskId, view, me, keyId) {
     const receipt = receiptFor(view, r.sop_digest);
     return receipt
       ? { action: "acknowledge_sop", label: "Acknowledge the SOP", custody_receipt_id: receipt }
-      : { waiting: `a stored copy of the SOP (${short(r.sop_digest)})` };
+      : { waiting: `a stored copy of the SOP (${short(r.sop_digest)})`, upload: r.sop_digest };
   }
   if (t.state === "proposed") return { action: "queue", label: "Queue" };
 
@@ -138,7 +139,7 @@ export function nextStep(taskId, view, me, keyId) {
   const receipts = {};
   for (const [name, digest] of Object.entries(r.artifact_requirements).sort()) {
     const receipt = receiptFor(view, digest);
-    if (!receipt) return { waiting: `a stored copy of input “${name}” (${short(digest)})` };
+    if (!receipt) return { waiting: `a stored copy of input “${name}” (${short(digest)})`, upload: digest };
     receipts[name] = receipt;
   }
   return { action: "ready", label: "Mark ready", custody_receipts: receipts };

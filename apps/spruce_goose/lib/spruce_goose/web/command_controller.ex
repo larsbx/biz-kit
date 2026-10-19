@@ -13,6 +13,7 @@ defmodule SpruceGoose.Web.CommandController do
            {"action": "acknowledge_sop", "task_id", "custody_receipt_id", "key_id"}
            {"action": "ready", "task_id", "custody_receipts": {name: receipt id}, "key_id"}
            {"action": "revoke_delegation", "delegation_event_id", "key_id"}
+           {"action": "record_custody", "artifact_digest": hex SHA-256, "key_id"}
            → 201 {id, type, payload, signing_bytes (base64url), expires_at}
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
@@ -72,6 +73,13 @@ defmodule SpruceGoose.Web.CommandController do
 
   defp action(%{"action" => "revoke_delegation", "delegation_event_id" => d}) when is_binary(d),
     do: {:ok, {:revoke_delegation, d}}
+
+  defp action(%{"action" => "record_custody", "artifact_digest" => hex}) when is_binary(hex) do
+    case Base.decode16(hex, case: :lower) do
+      {:ok, <<_::256>> = digest} -> {:ok, {:record_custody, digest}}
+      _ -> {:error, :bad_action}
+    end
+  end
 
   defp action(_body), do: {:error, :bad_action}
 

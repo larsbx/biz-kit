@@ -8,7 +8,7 @@
 // Opened as /app?chapter=…&tenant=…&project=… (&provider=… to choose the
 // sign-in provider, default workos).
 
-import { decode } from "./cbor.js";
+import { decode, hex } from "./cbor.js";
 import * as device from "./device.js";
 import {
   applyFrame,
@@ -104,7 +104,13 @@ function render() {
 function stepControl(id, t) {
   const step = nextStep(id, view, me, keyId);
   if (!step) return null;
-  if (step.waiting) return el("div", { className: "muted", textContent: `Waiting for ${step.waiting}.` });
+  if (step.waiting) {
+    const waiting = el("span", { className: "muted", textContent: `Waiting for ${step.waiting}.` });
+    if (!step.upload) return el("div", {}, waiting);
+    const upload = el("button", { textContent: "Upload…", disabled: !pair || !enrolled || deciding });
+    upload.onclick = () => chooseArtifact(step.upload);
+    return el("div", { className: "actions" }, waiting, upload);
+  }
 
   const { action, label, ...cites } = step;
   const button = el("button", { textContent: label, disabled: !pair || !enrolled || deciding });
@@ -114,6 +120,42 @@ function stepControl(id, t) {
       { type: stepTypes[action], payload: { task_id: id, expected_version: t.version, ...cites } },
     );
   return el("div", { className: "actions" }, button);
+}
+
+// -- uploads (docs/architecture/2026-10-19-uploads.md) ------------------------------
+
+const UPLOAD_LIMIT = 8 * 1024 * 1024;
+
+// Choose a file; store it only if it is exactly the one named (its SHA-256,
+// computed here); then record custody of it, signed like any command.
+function chooseArtifact(expected) {
+  const input = el("input", { type: "file" });
+  input.onchange = () => input.files[0] && storeArtifact(input.files[0], expected);
+  input.click();
+}
+
+async function storeArtifact(file, expected) {
+  if (file.size > UPLOAD_LIMIT) return status("That file is larger than 8 MiB, more than custody covers.", true);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+  if (digest !== expected) return status("That is not the file this task names; nothing was stored.", true);
+
+  try {
+    status("Storing…");
+    const res = await fetch(`${projectPath}/artifacts`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream", "x-content-sha256": digest },
+      body: bytes,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+  } catch (e) {
+    return status(`Not stored: ${e.message.replaceAll("_", " ")}.`, true);
+  }
+
+  await signAndSubmit(
+    () => postJSON(`${projectPath}/commands`, { action: "record_custody", artifact_digest: digest, key_id: keyId }),
+    { type: "ArtifactCustodyRecordedV1", payload: { artifact_digest: { __bytes__: digest } } },
+  );
 }
 
 function renderDelegations() {
