@@ -2,8 +2,8 @@ defmodule CoopSubstrate.Enrolments.Approver do
   @moduledoc """
   The administrator's side of device enrolment
   (docs/architecture/2026-10-19-device-enrolment.md), behind
-  `mix coop.enrol`: show the request, then sign the operator grant with the
-  governance key only if it grants exactly that request
+  `mix coop.enrol`: show the request, then sign the operator or reviewer
+  grant with the governance key only if it grants exactly that request
   (`CoopSubstrate.Governance.Client`).
   """
 
@@ -21,7 +21,8 @@ defmodule CoopSubstrate.Enrolments.Approver do
   @doc "Whether the decoded core is exactly the grant the request asks for."
   @spec grants?(map(), map()) :: boolean()
   def grants?(core, details) do
-    core["type"] == "TaskOperatorGrantedV1" and core["chapter_id"] == details["chapter_id"] and
+    core["type"] == CoopSubstrate.Enrolments.grant_type(details["role"]) and
+      core["chapter_id"] == details["chapter_id"] and
       core["payload"] == %{
         "tenant_id" => details["tenant_id"],
         "project_id" => details["project_id"],

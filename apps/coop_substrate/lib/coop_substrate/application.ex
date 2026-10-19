@@ -23,6 +23,7 @@ defmodule CoopSubstrate.Application do
           {Singleton, CoopSubstrate.Feed.Nonces},
           {Singleton, CoopSubstrate.Commands},
           {Singleton, CoopSubstrate.Enrolments},
+          {Singleton, CoopSubstrate.ArtifactCustody.Quota},
           {Singleton, CoopSubstrate.Log}
         ]
 

@@ -2,16 +2,18 @@ defmodule CoopSubstrate.Enrolments do
   @moduledoc """
   Self-service device enrolment (docs/architecture/2026-10-19-device-enrolment.md).
 
-      # the person's device, signed in as `principal`
-      {:ok, challenge} = Enrolments.begin(principal, identity, scope, key_id, pubkey, label)
+      # the person's device, signed in as `principal`; role "operator" or "reviewer"
+      {:ok, challenge} = Enrolments.begin(principal, identity, scope, key_id, pubkey, label, role)
       {:ok, request}   = Enrolments.prove(principal, challenge.id, signature_over(challenge.statement))
       # request.code goes to an administrator, who holds the governance key
       {:ok, details}   = Enrolments.fetch(code)
       {:ok, pending}   = Enrolments.prepare_approval(code, governance_key_id)
       {:ok, grant}     = Enrolments.approve(code, pending.id, governance_signature)
 
-  A request is only a request: it gives no access. Access is the
-  `TaskOperatorGrantedV1` that approval appends, signed by a governance key
+  A request is only a request: it gives no access. Access is the grant that
+  approval appends, `TaskOperatorGrantedV1` for an operator device or
+  `TaskReviewerGrantedV1` for a reviewer device
+  (docs/architecture/2026-10-19-execution.md), signed by a governance key
   declared for the chapter and admitted by the ledger as any grant is. The
   server signs nothing.
 
@@ -38,21 +40,33 @@ defmodule CoopSubstrate.Enrolments do
   # One for the cluster (`BizKit.Cluster.Singleton`): a code works on any node.
   @server BizKit.Cluster.Singleton.name(__MODULE__)
 
-  @doc "The statement the device must sign: who asks, for which project and key."
+  @roles ~w(operator reviewer)
+
+  @doc "The statement the device must sign: who asks, for which project, key and role."
   @spec begin(
           String.t(),
           map(),
           CoopSubstrate.Feed.View.scope(),
           String.t(),
           binary(),
+          String.t(),
           String.t()
         ) ::
           {:ok, %{id: String.t(), statement: binary()}} | {:error, atom()}
-  def begin(principal, identity, {chapter, tenant, project} = scope, key_id, pubkey, label) do
-    with :ok <- check(is_binary(pubkey) and byte_size(pubkey) == 32, :invalid_pubkey),
+  def begin(
+        principal,
+        identity,
+        {chapter, tenant, project} = scope,
+        key_id,
+        pubkey,
+        label,
+        role \\ "operator"
+      ) do
+    with :ok <- check(role in @roles, :invalid_role),
+         :ok <- check(is_binary(pubkey) and byte_size(pubkey) == 32, :invalid_pubkey),
          :ok <- check(key_id == key_id(pubkey), :key_id_mismatch),
          :ok <- check(is_binary(label) and String.length(label) in 1..80, :invalid_label),
-         :ok <- check(not enrolled?(principal, scope, key_id), :already_enrolled) do
+         :ok <- check(not enrolled?(principal, scope, key_id, role), :already_enrolled) do
       statement =
         Canonical.encode!(%{
           "schema" => "CoopDeviceEnrolmentV1",
@@ -63,6 +77,7 @@ defmodule CoopSubstrate.Enrolments do
           "key_id" => key_id,
           "pubkey" => {:bytes, pubkey},
           "label" => label,
+          "role" => role,
           "nonce" => token(16)
         })
 
@@ -74,7 +89,8 @@ defmodule CoopSubstrate.Enrolments do
         scope: scope,
         key_id: key_id,
         pubkey: pubkey,
-        label: label
+        label: label,
+        role: role
       }
 
       :ok =
@@ -93,14 +109,14 @@ defmodule CoopSubstrate.Enrolments do
   def prove(principal, id, signature),
     do: GenServer.call(@server, {:prove, principal, id, signature})
 
-  @doc "What a person's device sees of its enrolment."
-  @spec status(String.t(), CoopSubstrate.Feed.View.scope(), String.t(), integer()) ::
+  @doc "What a person's device sees of its enrolment in a role."
+  @spec status(String.t(), CoopSubstrate.Feed.View.scope(), String.t(), String.t(), integer()) ::
           :enrolled | {:pending, String.t(), integer()} | :none
-  def status(principal, scope, key_id, now_ms \\ now()) do
-    request = %{principal_id: principal, scope: scope, key_id: key_id}
+  def status(principal, scope, key_id, role \\ "operator", now_ms \\ now()) do
+    request = %{principal_id: principal, scope: scope, key_id: key_id, role: role}
 
     cond do
-      enrolled?(principal, scope, key_id) -> :enrolled
+      enrolled?(principal, scope, key_id, role) -> :enrolled
       r = GenServer.call(@server, {:pending, request, now_ms}) -> {:pending, r.code, r.expires_at}
       true -> :none
     end
@@ -111,8 +127,8 @@ defmodule CoopSubstrate.Enrolments do
   def fetch(code, now_ms \\ now()), do: GenServer.call(@server, {:fetch, code, now_ms})
 
   @doc """
-  Prepare the operator grant the request asks for, to be signed by the named
-  governance key, and hold it for this code (`Commands.hold/5`).
+  Prepare the grant the request asks for (operator or reviewer), to be signed
+  by the named governance key, and hold it for this code (`Commands.hold/5`).
   """
   @spec prepare_approval(String.t(), String.t(), integer()) ::
           {:ok, Commands.pending()} | {:error, term()}
@@ -123,7 +139,7 @@ defmodule CoopSubstrate.Enrolments do
       Commands.hold(
         {:enrolment, code},
         chapter,
-        "TaskOperatorGrantedV1",
+        grant_type(r.role),
         %{
           "tenant_id" => tenant,
           "project_id" => project,
@@ -157,8 +173,15 @@ defmodule CoopSubstrate.Enrolments do
 
   # -- internals --------------------------------------------------------------------
 
-  defp enrolled?(principal, scope, key_id) do
-    Enum.any?(Log.gate().orchestration.grants, fn {_, g} ->
+  @doc "The ledger type of the grant a role's enrolment appends."
+  def grant_type("operator"), do: "TaskOperatorGrantedV1"
+  def grant_type("reviewer"), do: "TaskReviewerGrantedV1"
+  def grant_type(_role), do: nil
+
+  defp enrolled?(principal, scope, key_id, role) do
+    o = Log.gate().orchestration
+
+    Enum.any?(if(role == "reviewer", do: o.dod_grants, else: o.grants), fn {_, g} ->
       g.active and g.principal_id == principal and g.key_id == key_id and
         {g.chapter_id, g.tenant_id, g.project_id} == scope
     end)
@@ -176,10 +199,10 @@ defmodule CoopSubstrate.Enrolments do
     end
   end
 
-  defp pending(%{principal_id: p, scope: scope, key_id: key_id}, now_ms) do
+  defp pending(%{principal_id: p, scope: scope, key_id: key_id, role: role}, now_ms) do
     :ets.match_object(@table, {{:request, :_}, p, :_, :_})
     |> Enum.find_value(fn {{:request, code}, _, r, expires_at} ->
-      if expires_at >= now_ms and r.scope == scope and r.key_id == key_id,
+      if expires_at >= now_ms and r.scope == scope and r.key_id == key_id and r.role == role,
         do: %{code: code, expires_at: expires_at}
     end)
   end

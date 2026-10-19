@@ -3,9 +3,10 @@ defmodule CoopSubstrate.Feed.View do
   What a change-feed client sees of one project: its tasks, suggestions,
   delegations and custody receipts, each reduced to a whitelisted, JSON-safe
   value (docs/architecture/2026-10-18-change-feed.md). A task carries its
-  readiness definition and SOP acknowledgement, and a receipt its digest, so
-  a person's device can take each lifecycle step
-  (docs/architecture/2026-10-19-lifecycle.md).
+  readiness definition and SOP acknowledgement, who started it, and its
+  evidence submission and review (not the evidence), and a receipt its
+  digest, so a person's device can take each lifecycle step
+  (docs/architecture/2026-10-19-lifecycle.md, 2026-10-19-execution.md).
 
   Pure. `select/2` reads a view out of the task projection; `diff/2` gives the
   changes between two views as whole-entity upserts; `apply/2` replays them.
@@ -85,7 +86,7 @@ defmodule CoopSubstrate.Feed.View do
   defp task(t) do
     t
     |> Map.take(~w(state version title description definition_of_done timing timing_version
-                   timing_delegation_id last_event_id)a)
+                   timing_delegation_id last_event_id started_by)a)
     |> Map.put(:dod, dod(t.dod))
     |> Map.put(:readiness, readiness(t[:readiness]))
     |> json()
@@ -117,7 +118,9 @@ defmodule CoopSubstrate.Feed.View do
       criteria: d.criteria,
       definition_ref: d.definition_ref,
       submission: d.submission && Map.take(d.submission, [:event_id, :principal_id]),
-      review: d.review && Map.take(d.review, [:event_id, :principal_id, :decision, :reason])
+      review:
+        d.review &&
+          Map.take(d.review, [:event_id, :principal_id, :submission_event_id, :decision, :reason])
     }
   end
 

@@ -1,10 +1,11 @@
 defmodule Mix.Tasks.Coop.Revoke do
-  @shortdoc "Revoke a device's operator grant: coop.revoke <GRANT_ID> [--server URL] [--yes]"
+  @shortdoc "Revoke a device's grant: coop.revoke <GRANT_ID> [--server URL] [--yes]"
   @moduledoc """
-  Revoke an operator grant with the governance key
+  Revoke an operator or reviewer grant with the governance key
   (docs/architecture/2026-10-19-device-revocation.md): for a person's only
-  device when it is lost or compromised, or when they leave. People revoke
-  their other devices themselves, from the web view.
+  device when it is lost or compromised, or when they leave, and for any
+  reviewer device. People revoke their other operator devices themselves,
+  from the web view.
 
       mix coop.revoke 01J… --server https://bizkit.example
 
@@ -35,7 +36,7 @@ defmodule Mix.Tasks.Coop.Revoke do
     with {:ok, signer} <- Ops.load_signer("governance"),
          {:ok, details} <- Revoker.fetch(base, id) do
       Mix.shell().info("""
-      Operator grant #{details["grant_id"]}#{if details["active"], do: "", else: " (already revoked)"}
+      #{String.capitalize(details["role"])} grant #{details["grant_id"]}#{if details["active"], do: "", else: " (already revoked)"}
         principal  #{details["principal_id"]}
         project    #{details["chapter_id"]} / #{details["tenant_id"]} / #{details["project_id"]}
         device     #{details["label"] || "(unlabelled)"} (key #{details["key_id"]})

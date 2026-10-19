@@ -7,8 +7,9 @@ defmodule Mix.Tasks.Coop.Enrol do
       mix coop.enrol ABCD-EFGH-JKLM --server https://bizkit.example
 
   Shows the request (who signed in, for which project, which key and label)
-  and, once confirmed, signs the operator grant with the governance key in
-  `HARNESS_KEYS_DIR` and submits it to the server, whose ledger admits it.
+  and, once confirmed, signs the grant it asks for (operator or reviewer)
+  with the governance key in `HARNESS_KEYS_DIR` and submits it to the
+  server, whose ledger admits it.
 
   Does not start the application: the running server is the only appender.
   `--server` defaults to `$BIZKIT_URL`, then `http://127.0.0.1:4000`.
@@ -38,7 +39,7 @@ defmodule Mix.Tasks.Coop.Enrol do
         signed in  #{details["identity"]["subject"]} at #{details["identity"]["issuer"]}
         project    #{details["chapter_id"]} / #{details["tenant_id"]} / #{details["project_id"]}
         device     #{details["label"]} (key #{details["key_id"]})
-      Grant it operator access, signed by governance key #{signer.key_id}?
+      Grant it #{details["role"]} access, signed by governance key #{signer.key_id}?
       """)
 
       if opts[:yes] || Mix.shell().yes?("Approve?") do
