@@ -75,14 +75,18 @@ defmodule CoopSubstrate.Offboarding do
     end
   end
 
-  @doc "Submit the governance signature; on admission, pending enrolments there are dropped too."
+  @doc """
+  Submit the governance signature. The principal's pending enrolment
+  requests in the project are cancelled first, so no approval of one, even
+  prepared and signed already, can be admitted after the offboarding; one
+  admitted before it ends with it.
+  """
   @spec offboard(String.t(), String.t(), binary()) ::
           {:ok, CoopSubstrate.Protocol.Envelope.t()} | {:error, term()}
   def offboard(principal, held_id, signature) do
-    with {:ok, env} <- Commands.submit({:offboarding, principal}, held_id, signature) do
-      Enrolments.cancel(principal, State.scope(env))
-      {:ok, env}
-    end
+    with {:ok, held} <- Commands.peek({:offboarding, principal}, held_id),
+         :ok <- Enrolments.cancel(principal, State.scope(held)),
+         do: Commands.submit({:offboarding, principal}, held_id, signature)
   end
 
   defp describe(o, principal, {kind, id}) do

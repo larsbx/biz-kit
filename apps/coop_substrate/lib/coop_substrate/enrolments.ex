@@ -145,25 +145,23 @@ defmodule CoopSubstrate.Enrolments do
     end
   end
 
-  @doc "Submit the governance signature; on admission the request is done."
+  @doc """
+  Submit the governance signature; on admission the request is done. Runs in
+  this process, in turn with `cancel/2`, and only while the request is still
+  pending: once offboarding has cancelled it, an approval already prepared
+  and signed is refused.
+  """
   @spec approve(String.t(), String.t(), binary()) ::
           {:ok, CoopSubstrate.Protocol.Envelope.t()} | {:error, term()}
-  def approve(code, id, signature) do
-    with {:ok, grant} <- Commands.submit({:enrolment, code}, id, signature) do
-      :ets.delete(@table, {:request, code})
-      {:ok, grant}
-    end
-  end
+  def approve(code, id, signature),
+    do: GenServer.call(__MODULE__, {:approve, code, id, signature})
 
-  @doc "Drop the principal's pending requests for the project (offboarding)."
+  @doc """
+  Drop the principal's pending requests for the project (offboarding). Once
+  it returns, no approval of them can be admitted.
+  """
   @spec cancel(String.t(), CoopSubstrate.Feed.View.scope()) :: :ok
-  def cancel(principal, scope) do
-    for {key, _, %{scope: ^scope}, _} <-
-          :ets.match_object(@table, {{:request, :_}, principal, :_, :_}),
-        do: :ets.delete(@table, key)
-
-    :ok
-  end
+  def cancel(principal, scope), do: GenServer.call(__MODULE__, {:cancel, principal, scope})
 
   # -- internals --------------------------------------------------------------------
 
@@ -225,6 +223,26 @@ defmodule CoopSubstrate.Enrolments do
     :ets.new(@table, [:set, :public, :named_table])
     schedule()
     {:ok, nil}
+  end
+
+  @impl true
+  def handle_call({:approve, code, id, signature}, _from, state) do
+    reply =
+      with {:ok, _request} <- fetch(code),
+           {:ok, grant} <- Commands.submit({:enrolment, code}, id, signature) do
+        :ets.delete(@table, {:request, code})
+        {:ok, grant}
+      end
+
+    {:reply, reply, state}
+  end
+
+  def handle_call({:cancel, principal, scope}, _from, state) do
+    for {key, _, %{scope: ^scope}, _} <-
+          :ets.match_object(@table, {{:request, :_}, principal, :_, :_}),
+        do: :ets.delete(@table, key)
+
+    {:reply, :ok, state}
   end
 
   @impl true

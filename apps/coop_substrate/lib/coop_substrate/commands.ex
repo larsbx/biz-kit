@@ -113,6 +113,15 @@ defmodule CoopSubstrate.Commands do
     end
   end
 
+  @doc "The envelope held for `owner` under `id`, without spending it."
+  @spec peek(term(), String.t()) :: {:ok, Envelope.t()} | {:error, :unknown_command}
+  def peek(owner, id) do
+    case :ets.lookup(@table, id) do
+      [{^id, ^owner, env, _expires_at, _seq}] -> {:ok, env}
+      _ -> {:error, :unknown_command}
+    end
+  end
+
   @doc "A governance key declared for the chapter, as the signer of a held envelope."
   @spec governance_signer(String.t(), String.t()) ::
           {:ok, Envelope.signer()} | {:error, :unknown_governance_key}

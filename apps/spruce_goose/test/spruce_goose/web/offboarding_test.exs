@@ -62,6 +62,26 @@ defmodule SpruceGoose.Web.OffboardingTest do
     assert {:ok, _} = Feed.authorize_principal("alice", {w.chapter, tenant(), "project-1"})
   end
 
+  test "a principal ID with reserved URL characters is one path segment", w do
+    governance_keys!(w)
+    odd = "agent/team?x#y%2F"
+    grant!(w, "TaskSuggesterGrantedV1", member("suggester"), odd, "project-1")
+    grant!(w, "TaskSuggesterGrantedV1", member("suggester"), "agent", "project-1")
+
+    assert {:ok, %{"principal_id" => ^odd, "projects" => [_]}} =
+             Offboarder.fetch(w.base, odd, governance(w))
+
+    output =
+      capture_io(fn -> Mix.Task.rerun("coop.offboard", [odd, "--server", w.base, "--yes"]) end)
+
+    assert output =~ "offboarded: #{w.chapter} / #{tenant()} / project-1"
+
+    assert Feed.authorize_principal(odd, {w.chapter, tenant(), "project-1"}) ==
+             {:error, :no_grant}
+
+    assert {:ok, _} = Feed.authorize_principal("agent", {w.chapter, tenant(), "project-1"})
+  end
+
   test "what a principal holds is shown only to a governance key", w do
     path = "/api/v1/principals/#{w.person}"
     assert call(:get, path, []).status == 401

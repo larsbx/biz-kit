@@ -169,7 +169,7 @@ defmodule CoopSubstrate.OffboardingTest do
       assert length(held("alice")) == 6
     end
 
-    test "drops the principal's pending enrolment requests in the project", w do
+    test "drops pending enrolment requests, even an approval already signed", w do
       key = new_member("operator")
       identity = %{issuer: "https://idp.test", subject: "sub-alice"}
 
@@ -185,10 +185,19 @@ defmodule CoopSubstrate.OffboardingTest do
 
       {:ok, request} = Enrolments.prove("alice", c.id, Crypto.sign(c.statement, key.seed))
 
+      # An administrator has already prepared and signed the approval.
+      {:ok, approval} = Enrolments.prepare_approval(request.code, w.gov.signer.key_id)
+      approval_sig = sign(approval, w.gov)
+
       {:ok, pending} = Offboarding.prepare("alice", @scope, w.gov.signer.key_id)
       {:ok, _} = Offboarding.offboard("alice", pending.id, sign(pending, w.gov))
 
       assert Enrolments.fetch(request.code) == {:error, :unknown_code}
+
+      assert Enrolments.approve(request.code, approval.id, approval_sig) ==
+               {:error, :unknown_code}
+
+      assert held("alice") == []
     end
   end
 

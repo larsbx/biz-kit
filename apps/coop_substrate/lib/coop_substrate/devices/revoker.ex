@@ -26,5 +26,5 @@ defmodule CoopSubstrate.Devices.Revoker do
       }
   end
 
-  defp url(base, grant_id), do: base <> "/api/v1/grants/" <> URI.encode(grant_id)
+  defp url(base, grant_id), do: base <> "/api/v1/grants/" <> Client.segment(grant_id)
 end

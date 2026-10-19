@@ -80,9 +80,17 @@ A key that governs no chapter gets 401. The submission needs no header: it
 names a held ID, which only the preparer was given.
 
 The event is held for `{:offboarding, principal}` under the per-owner bound
-of `Commands.hold/5`. Once it is admitted, the principal's pending enrolment
-requests in that project are dropped, so an old code cannot be approved by
-mistake. A new request can still be made, and approved, like any other.
+of `Commands.hold/5`. Before it is submitted, the principal's pending
+enrolment requests in that project are cancelled, so an old code cannot be
+approved by mistake. That includes an approval already prepared and signed:
+approval and cancellation run in turn in the `Enrolments` process, and
+approval goes ahead only while the request is still pending. An approval
+admitted before the cancellation is ended by the offboarding, since
+admission decides what ends. A new request can still be made, and approved,
+like any other.
+
+Principal IDs are any non-empty string, so the client escapes every
+reserved character when it puts one in a URL path (`Client.segment/1`).
 
 `mix coop.offboard` uses `CoopSubstrate.Governance.Client`, as `coop.enrol`
 and `coop.revoke` do. It signs a project's event only if the decoded
@@ -103,7 +111,8 @@ rest; when nothing is left, it says so.
   - a fresh grant afterwards works, and the old delegation stays ended;
   - through the server: the per-project listing, a grant added between
     preparing and signing ends too, the wrong key or owner is refused, and
-    pending enrolments are dropped;
+    pending enrolments are dropped, including an approval already prepared
+    and signed;
   - governance reads: a declared key sees its chapters; another key, a
     stale or replayed request, or another path is refused.
 - The generated task histories now offboard the operator, the agent and the

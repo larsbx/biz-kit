@@ -42,5 +42,5 @@ defmodule CoopSubstrate.Offboarding.Offboarder do
       }
   end
 
-  defp url(base, principal), do: base <> "/api/v1/principals/" <> URI.encode(principal)
+  defp url(base, principal), do: base <> "/api/v1/principals/" <> Client.segment(principal)
 end

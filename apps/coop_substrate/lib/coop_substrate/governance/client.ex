@@ -40,9 +40,13 @@ defmodule CoopSubstrate.Governance.Client do
          {:ok, core} <- Canonical.decode(bytes),
          true <- (expected.(core) and signed_by?(core, signer)) or {:error, :not_what_was_shown} do
       signature = Base.url_encode64(Crypto.sign(bytes, signer.seed), padding: false)
-      request(:post, url <> "/" <> URI.encode(held["id"]), %{"signature" => signature})
+      request(:post, url <> "/" <> segment(held["id"]), %{"signature" => signature})
     end
   end
+
+  @doc "`value` as one URL path segment: every reserved character escaped."
+  @spec segment(String.t()) :: String.t()
+  def segment(value), do: URI.encode(value, &URI.char_unreserved?/1)
 
   @doc "The core names this governance key, and only it, as signer."
   def signed_by?(core, signer),
