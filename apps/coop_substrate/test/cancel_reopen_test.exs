@@ -11,7 +11,6 @@ defmodule CoopSubstrate.CancelReopenTest do
   import CoopSubstrate.{ExecutionFixtures, TaskTimingFixtures}
 
   alias CoopSubstrate.{Cancellation, Crypto, Log}
-  alias CoopSubstrate.Cancellation.Canceller
 
   setup do: world!()
 
@@ -22,7 +21,7 @@ defmodule CoopSubstrate.CancelReopenTest do
     {:ok, _} = step(w, w.alice, {:start, id})
   end
 
-  # As `mix coop.cancel` does, without the HTTP between.
+  # As an administrator's signed request does, without the HTTP between.
   defp governance_cancel(w, id, reason \\ "Client withdrew") do
     key = {"chapter-genesis", "tenant-1", "project-1", id}
 
@@ -83,27 +82,6 @@ defmodule CoopSubstrate.CancelReopenTest do
              {:error, {:invalid, {:invalid_task_transition, "completed", "cancelled"}}}
 
     assert governance_cancel(w, "nope") == {:error, :unknown_task}
-  end
-
-  test "the administrator's tool signs exactly that task's cancellation, with that reason" do
-    key = {"chapter-genesis", "tenant-1", "project-1", "task-1"}
-
-    core = %{
-      "type" => "TaskCancelledByGovernanceV1",
-      "chapter_id" => "chapter-genesis",
-      "payload" => %{
-        "tenant_id" => "tenant-1",
-        "project_id" => "project-1",
-        "task_id" => "task-1",
-        "expected_version" => 3,
-        "reason" => "Client withdrew"
-      }
-    }
-
-    assert Canceller.cancels?(core, key, "Client withdrew")
-    refute Canceller.cancels?(core, key, "Other reason")
-    refute Canceller.cancels?(core, put_elem(key, 3, "task-2"), "Client withdrew")
-    refute Canceller.cancels?(%{core | "type" => "TaskCancelledV1"}, key, "Client withdrew")
   end
 
   test "a cancelled successor's predecessor: the successor waits until governance redefines it",

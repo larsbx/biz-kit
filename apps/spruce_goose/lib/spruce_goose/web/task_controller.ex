@@ -1,7 +1,8 @@
 defmodule SpruceGoose.Web.TaskController do
   @moduledoc """
   Governance cancels a task (docs/architecture/2026-10-19-cancel-reopen.md),
-  normally through `mix coop.cancel`, which holds the governance key.
+  signed with a governance key by whoever holds it, an administrator's
+  browser or a script.
 
       GET  /api/v1/chapters/:c/tenants/:t/projects/:p/tasks/:task_id
            → {task_id, title, state, version}

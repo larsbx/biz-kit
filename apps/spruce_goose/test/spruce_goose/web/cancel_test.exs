@@ -2,17 +2,15 @@ defmodule SpruceGoose.Web.CancelTest do
   @moduledoc """
   Calling a task off over HTTP (docs/architecture/2026-10-19-cancel-reopen.md):
   a person cancels from their device before the work starts; an
-  administrator cancels any task short of completed with `mix coop.cancel`,
+  administrator cancels any task short of completed with a governance key,
   through governance-signed requests to a running server.
   """
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureIO
   import SpruceGoose.{IdentityFixtures, LedgerFixtures}
 
   alias BizKit.Identity.Principal
   alias CoopSubstrate.{Crypto, Log}
-  alias CoopSubstrate.Cancellation.Canceller
   alias CoopSubstrate.Governance.Client
 
   setup do
@@ -81,34 +79,28 @@ defmodule SpruceGoose.Web.CancelTest do
              step(w, %{"action" => "cancel", "task_id" => "task-2"})
   end
 
-  test "mix coop.cancel cancels with the governance key on this machine", w do
-    governance_keys!(w)
+  test "a governance key cancels over signed requests, the same any holder of it uses", w do
+    url = w.base <> path(w) <> "/tasks/task-2"
+    reason = "Client withdrew"
 
-    output =
-      capture_io(fn ->
-        Mix.Task.rerun("coop.cancel", [
-          w.chapter,
-          tenant(),
-          "project-1",
-          "task-2",
-          "--reason",
-          "Client withdrew",
-          "--server",
-          w.base,
-          "--yes"
-        ])
-      end)
+    assert {:ok, %{"title" => "Task task-2", "state" => "inbox"}} =
+             Client.get_signed(url, governance(w))
 
-    assert output =~ "title   Task task-2"
-    assert output =~ "state   inbox"
-    assert output =~ "cancelled: event"
+    cancels? = fn core ->
+      core["type"] == "TaskCancelledByGovernanceV1" and core["payload"]["task_id"] == "task-2" and
+        core["payload"]["reason"] == reason
+    end
 
-    assert %{state: "cancelled", cancellation: %{principal_id: nil, reason: "Client withdrew"}} =
+    assert {:ok, %{"event_id" => _}} =
+             Client.sign_held(url <> "/cancellation", governance(w), cancels?, %{
+               "reason" => reason
+             })
+
+    assert %{state: "cancelled", cancellation: %{principal_id: nil, reason: ^reason}} =
              task(w, "task-2")
   end
 
   test "the task and its cancellation are for governance only", w do
-    key = {w.chapter, tenant(), "project-1", "task-1"}
     url = w.base <> path(w) <> "/tasks/task-1"
 
     # Unsigned, or signed by a key that governs nothing: refused.
@@ -116,16 +108,28 @@ defmodule SpruceGoose.Web.CancelTest do
     stranger = member("governance")
 
     assert {:error, {401, _}} =
-             Canceller.fetch(w.base, key, %{
+             Client.get_signed(url, %{
                key_id: stranger.signer.key_id,
                pubkey: stranger.signer.pubkey,
                seed: stranger.seed
              })
 
+    assert {:error, {401, _}} =
+             Client.sign_held(
+               url <> "/cancellation",
+               %{
+                 key_id: stranger.signer.key_id,
+                 pubkey: stranger.signer.pubkey,
+                 seed: stranger.seed
+               },
+               fn _ -> true end,
+               %{"reason" => "Mine now"}
+             )
+
     assert {:ok, %{"task_id" => "task-1", "state" => "inbox"}} =
-             Canceller.fetch(w.base, key, governance(w))
+             Client.get_signed(url, governance(w))
 
     assert {:error, {409, ~s({"error":"unknown_task"})}} =
-             Canceller.fetch(w.base, put_elem(key, 3, "nope"), governance(w))
+             Client.get_signed(w.base <> path(w) <> "/tasks/nope", governance(w))
   end
 end

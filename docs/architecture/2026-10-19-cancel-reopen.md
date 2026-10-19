@@ -41,25 +41,24 @@ done with no way out: once started, it could only be completed.
   cancelling principal (none for governance) and the reason. The change
   feed shows it.
 
-## Governance: `mix coop.cancel`
+## Governance cancelling
 
-```
-mix coop.cancel <CHAPTER> <TENANT> <PROJECT> <TASK> --reason "Client withdrew" \
-  --server https://bizkit.example
-```
-
-It shows the task's title and state and, once confirmed, signs exactly that
-task's `TaskCancelledByGovernanceV1` with that reason
-(`Cancellation.Canceller.cancels?/3`), using the governance key in
-`HARNESS_KEYS_DIR`. Over HTTP, as for offboarding, the read and the request
-to prepare are signed by the governance key (`Governance.Read`) and answer
-only for the chapters it governs:
+Whoever holds a governance key cancels over HTTP. As for offboarding, the
+read and the request to prepare are signed by the governance key
+(`Governance.Read`) and answer only for the chapters it governs; the server
+signs nothing:
 
 ```
 GET  /api/v1/chapters/:c/tenants/:t/projects/:p/tasks/:task_id   → {task_id, title, state, version}
 POST …/tasks/:task_id/cancellation            {"governance_key_id", "reason"} → 201 the cancellation to sign
 POST …/tasks/:task_id/cancellation/:held_id   {"signature"} → 201 {event_id, global_seq}
 ```
+
+The signer decodes what it is given and signs only that task's
+`TaskCancelledByGovernanceV1` with its reason. There is no `mix` task for
+it: an administrator acts from the web view, with a governance key held by
+their browser (the follow-up to this change), and a script or agent uses
+these endpoints with `CoopSubstrate.Governance.Client`.
 
 The signed-request check now lives in `SpruceGoose.Web.Requests`, shared by
 offboarding and cancellation.
@@ -104,7 +103,6 @@ operator cancel work under way, or reopen a cancelled task, violate safety.
   - each state before the work starts can be cancelled by a person, and a
     started task cannot;
   - governance cancels work under way, never a completed task;
-  - the administrator's tool signs only that task and that reason;
   - a successor waits on a cancelled predecessor until governance redefines
     its readiness;
   - cancelling supersedes pending timing suggestions, and the task is not
@@ -112,8 +110,9 @@ operator cancel work under way, or reopen a cancelled task, violate safety.
   - a task sent back is queued with its work cleared, and is readied and
     started again.
 - **`SpruceGoose.Web.CancelTest`:** cancel and reopen over HTTP with named
-  refusals; `mix coop.cancel` against a running server; the task read
-  refused unsigned or by a key that governs nothing.
+  refusals; a governance cancellation over signed requests to a running
+  server; the read and the request refused unsigned or by a key that
+  governs nothing.
 - **Node:** which of cancel or send back a task offers, and how a
   cancellation is described.
 - **Browser (Chromium):** the person cancels the rescheduled task from its
