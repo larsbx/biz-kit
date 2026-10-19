@@ -140,6 +140,23 @@ defmodule CoopSubstrate.LiveViewTest do
     assert Feed.authorize_principal("alice", @chapter) == {:error, :no_grant}
   end
 
+  test "an administrator's feed ends when its key comes to name someone else", w do
+    browser = new_member("governance")
+    {:ok, _} = Log.append(administrator(w.gov, browser, "alice"))
+    {:ok, reader} = Feed.authorize_principal("alice", @chapter)
+    {:ok, session, _frame} = Feed.open(@chapter, 0, reader)
+
+    # Revoked and declared again for Bob, in one batch: still declared, not Alice's.
+    revoke =
+      signed_event(w.gov, "RoleKeyRevoked", %{
+        "role" => "governance",
+        "key_id" => browser.signer.key_id
+      })
+
+    {:ok, _} = Log.append([revoke, administrator(w.gov, browser, "bob")])
+    assert {:revoked, _} = Feed.advance(session, notified())
+  end
+
   test "a chapter's feed is not for a project's readers, nor its view for another chapter" do
     assert {:ok, project_reader} = Feed.authorize_principal("alice", @project)
     assert Feed.open(@chapter, 0, project_reader) == {:error, :scope_mismatch}

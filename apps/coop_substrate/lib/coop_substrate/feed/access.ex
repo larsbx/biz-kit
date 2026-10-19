@@ -142,10 +142,19 @@ defmodule CoopSubstrate.Feed.Access do
     end
   end
 
-  @doc "Whether the reader is still authorised, against the membership projection `gate`."
+  @doc """
+  Whether the reader is still authorised, against the membership projection
+  `gate`. An administrator's key must still be declared, and still for the
+  reader: a key revoked and declared again for someone else in one batch
+  ends the session.
+  """
   @spec live_in?(map(), t()) :: boolean()
-  def live_in?(gate, %__MODULE__{grant_id: {:governance, key_id}, scope: scope}),
-    do: declared?(gate, elem(scope, 0), key_id)
+  def live_in?(gate, %__MODULE__{grant_id: {:governance, key_id}, scope: scope} = reader) do
+    chapter = elem(scope, 0)
+
+    declared?(gate, chapter, key_id) and
+      gate.role_key_members[{chapter, "governance", key_id}] == reader.principal_id
+  end
 
   def live_in?(gate, reader), do: live?(gate.orchestration, reader)
 
