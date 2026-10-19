@@ -61,10 +61,7 @@ defmodule CoopSubstrate.Projections.Throughput do
     end)
   end
 
-  def handle_event(
-        %Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env,
-        state
-      ) do
+  def handle_event(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env, state) do
     ob = Map.fetch!(state.obligations, {ch, p["obligation_id"]})
 
     # Settlement is participation by both parties; units = the settled
