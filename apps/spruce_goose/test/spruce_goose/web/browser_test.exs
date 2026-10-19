@@ -78,6 +78,32 @@ defmodule SpruceGoose.Web.BrowserTest do
     # browser approves it in the view.
     Port.command(port, "go\n")
 
+    assert %{"erase_evidence" => true} = read!(port)
+    report = "Report for #{w.chapter}"
+    digest = :crypto.hash(:sha256, report)
+    scope = {w.chapter, tenant(), "project-1"}
+    limit = CoopSubstrate.ArtifactCustody.limit()
+
+    # The report already consumed its size. Fill exactly the remaining
+    # 32 MiB, so restoring it must reuse its successful quota charge.
+    for {n, size} <- [{111, limit}, {112, limit}, {113, limit}, {114, limit - byte_size(report)}] do
+      bytes = :binary.copy(<<n>>, size)
+
+      assert {:ok, _} =
+               CoopSubstrate.ArtifactCustody.store(
+                 person,
+                 scope,
+                 bytes,
+                 :crypto.hash(:sha256, bytes),
+                 "task-2"
+               )
+    end
+
+    root = Application.fetch_env!(:coop_substrate, :artifact_dir)
+    File.rm!(Path.join(root, Base.encode16(digest, case: :lower)))
+    assert CoopSubstrate.Harness.Artifacts.get(digest) == {:error, :not_found}
+    Port.command(port, "go\n")
+
     assert %{"reviewer_key_id" => reviewer_key, "reviewer" => ^reviewer} = read!(port)
     assert %{"done" => "Recorded on the ledger" <> _} = read!(port)
 

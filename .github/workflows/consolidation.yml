@@ -148,6 +148,7 @@ jobs:
           apps/spruce_goose/test/spruce_goose/web/lifecycle_test.exs
           apps/spruce_goose/lib/spruce_goose/web/artifact_controller.ex
           apps/spruce_goose/test/spruce_goose/web/upload_test.exs
+          apps/coop_substrate/test/artifact_quota_test.exs
           apps/coop_substrate/lib/coop_substrate/artifact_custody/quota.ex
           apps/coop_substrate/test/execution_test.exs
           apps/spruce_goose/test/spruce_goose/web/execution_test.exs

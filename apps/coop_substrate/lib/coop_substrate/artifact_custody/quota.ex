@@ -2,64 +2,111 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   @moduledoc """
   Bytes a person has stored as evidence for one task
   (`CoopSubstrate.ArtifactCustody.store/5`): one process for the whole
-  cluster (`BizKit.Cluster.Singleton`), so the quota is the same on every
-  node. If it moves, counting starts afresh.
+  cluster (`BizKit.Cluster.Singleton`). If it moves, counting starts afresh.
 
-  Each digest is charged once per key, so retrying an upload of the same
-  bytes (storage is content-addressed) costs nothing more. A charge that
-  reserves room says so (`:reserved`), and only that caller refunds it when
-  its write fails; a concurrent upload of the same bytes finds it `:held`
-  and leaves it alone.
+  Each digest occupies room once per key. Pending writes each hold a
+  monitored reservation; any successful write commits the digest. A failed
+  or abandoned write releases only its own reservation, never a concurrent
+  success. Room is refunded only when no write succeeded or remains pending.
   """
 
   use GenServer
 
   @table __MODULE__
-
   @server BizKit.Cluster.Singleton.name(__MODULE__)
 
-  @doc """
-  Charge `bytes` of `digest` to `key` if that keeps it within `limit`:
-  `{:ok, :reserved}` if this call reserved the room, `{:ok, :held}` if the
-  digest was already charged.
-  """
+  @doc "Run a local write with a reservation, committing only on success."
+  def store(key, digest, bytes, limit, write) do
+    with {:ok, reservation} <- charge(key, digest, bytes, limit) do
+      try do
+        case write.() do
+          {:ok, _} = result ->
+            :ok = commit(reservation)
+            result
+
+          error ->
+            error
+        end
+      after
+        # Also covers exceptions and exits. A committed token is already
+        # settled, so this cannot refund a successful write.
+        refund(reservation)
+      end
+    end
+  end
+
+  @doc "Reserve room for a write, or return :held for a committed digest."
   @spec charge(term(), binary(), non_neg_integer(), non_neg_integer()) ::
-          {:ok, :reserved | :held} | {:error, :quota_exceeded}
+          {:ok, reference() | :held} | {:error, :quota_exceeded}
   def charge(key, digest, bytes, limit),
     do: GenServer.call(@server, {:charge, key, digest, bytes, limit})
 
-  @doc "Give back a reservation (`:reserved`) whose write failed."
-  @spec refund(term(), binary()) :: :ok
-  def refund(key, digest), do: GenServer.call(@server, {:refund, key, digest})
+  @doc "Commit a successful write's reservation. Repeated settlement is harmless."
+  def commit(reservation), do: GenServer.call(@server, {:finish, reservation, true})
+
+  @doc "Release only this failed write's reservation."
+  def refund(reservation), do: GenServer.call(@server, {:finish, reservation, false})
 
   @impl true
   def init(_opts) do
     :ets.new(@table, [:set, :protected, :named_table])
-    {:ok, nil}
+    {:ok, %{}}
   end
 
-  # Per key: the running total and the bytes charged per digest.
   @impl true
-  def handle_call({:charge, key, digest, bytes, limit}, _from, state) do
+  def handle_call({:charge, key, digest, bytes, limit}, {pid, _}, state) do
     {used, charged} = :ets.lookup_element(@table, key, 2, {0, %{}})
+    entry = Map.get(charged, digest)
 
     cond do
-      Map.has_key?(charged, digest) ->
+      entry != nil and entry.committed ->
         {:reply, {:ok, :held}, state}
 
-      used + bytes <= limit ->
-        :ets.insert(@table, {key, {used + bytes, Map.put(charged, digest, bytes)}})
-        {:reply, {:ok, :reserved}, state}
+      entry == nil and used + bytes > limit ->
+        {:reply, {:error, :quota_exceeded}, state}
 
       true ->
-        {:reply, {:error, :quota_exceeded}, state}
+        token = Process.monitor(pid)
+        used = if entry == nil, do: used + bytes, else: used
+        entry = entry || %{bytes: bytes, committed: false, pending: MapSet.new()}
+        entry = %{entry | pending: MapSet.put(entry.pending, token)}
+        :ets.insert(@table, {key, {used, Map.put(charged, digest, entry)}})
+        {:reply, {:ok, token}, Map.put(state, token, {key, digest})}
     end
   end
 
-  def handle_call({:refund, key, digest}, _from, state) do
-    {used, charged} = :ets.lookup_element(@table, key, 2, {0, %{}})
-    {bytes, rest} = Map.pop(charged, digest, 0)
-    :ets.insert(@table, {key, {used - bytes, rest}})
-    {:reply, :ok, state}
+  def handle_call({:finish, token, success}, _from, state),
+    do: {:reply, :ok, finish(state, token, success)}
+
+  @impl true
+  def handle_info({:DOWN, token, :process, _pid, _reason}, state),
+    do: {:noreply, finish(state, token, false)}
+
+  defp finish(state, token, success) do
+    case Map.pop(state, token) do
+      {nil, state} ->
+        state
+
+      {{key, digest}, state} ->
+        Process.demonitor(token, [:flush])
+        {used, charged} = :ets.lookup_element(@table, key, 2)
+        entry = Map.fetch!(charged, digest)
+
+        entry = %{
+          entry
+          | committed: entry.committed or success,
+            pending: MapSet.delete(entry.pending, token)
+        }
+
+        {used, charged} =
+          if not entry.committed and MapSet.size(entry.pending) == 0 do
+            {used - entry.bytes, Map.delete(charged, digest)}
+          else
+            {used, Map.put(charged, digest, entry)}
+          end
+
+        :ets.insert(@table, {key, {used, charged}})
+        state
+    end
   end
 end

@@ -172,15 +172,52 @@ async function signIn(browser, subject) {
       await dialog.waitFor({ state: "hidden" });
     };
     await sign("TaskStartedV1", "Start");
-    await task.getByRole("button", { name: "Submit evidence…" }).click();
-    await page.locator("#evidence-fields input[type=file]").setInputFiles({
-      name: "report.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from(`Report for ${chapter}`),
-    });
-    await page.getByRole("button", { name: "Store and sign" }).click();
+    const chooseEvidence = async (bytes = Buffer.from(`Report for ${chapter}`)) => {
+      await task.getByRole("button", { name: "Submit evidence…" }).click();
+      await page.locator("#evidence-fields input[type=file]").setInputFiles({
+        name: "report.txt", mimeType: "text/plain", buffer: bytes,
+      });
+      await page.getByRole("button", { name: "Store and sign" }).click();
+    };
+    const cancelSubmission = async () => {
+      await dialog.waitFor({ state: "visible" });
+      if (!(await page.locator("#confirm-body").textContent()).includes("TaskEvidenceSubmittedV2")) {
+        throw new Error("receipt reuse tried to sign new custody");
+      }
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await dialog.waitFor({ state: "hidden" });
+    };
+    let uploads = 0;
+    page.on("request", (r) => { if (r.method() === "POST" && r.url().includes("/artifacts")) uploads++; });
+    await chooseEvidence();
     await confirm("ArtifactCustodyRecordedV1");
+    await cancelSubmission();
+    // A healthy signed receipt is checked and reused without uploading again.
+    await chooseEvidence();
+    await cancelSubmission();
+    if (uploads !== 1) throw new Error("healthy receipt did not skip the duplicate upload");
+
+    // The Elixir fixture fills this person's quota and erases the report,
+    // keeping the signed receipt. No timing sleeps or production test route.
+    const erased = next();
+    say({ erase_evidence: true });
+    await erased;
+
+    // Full quota still rejects new content in the browser, without signing.
+    await chooseEvidence(Buffer.from("new over-quota evidence"));
+    await page.locator("#status").filter({ hasText: "Not stored: quota exceeded" }).waitFor();
+    if (await dialog.isVisible()) throw new Error("over-quota evidence prompted for a signature");
+
+    // The first repair request fails; retry must attempt restoration again.
+    await page.route("**/artifacts?evidence_for=*", (route) => route.fulfill({
+      status: 409, contentType: "application/json", body: JSON.stringify({ error: "refused_by_ledger" }),
+    }), { times: 1 });
+    await chooseEvidence();
+    await page.locator("#status").filter({ hasText: "Not stored: refused by ledger" }).waitFor();
+    if (await dialog.isVisible()) throw new Error("failed restoration prompted for a signature");
+    await chooseEvidence();
     await confirm("TaskEvidenceSubmittedV2");
+    if (uploads !== 4) throw new Error(`expected original, refused and two repair uploads; got ${uploads}`);
     await task.getByText("Waiting for a review of the evidence").waitFor();
 
     // A reviewer, in a browser of their own, asks for reviewer access.
