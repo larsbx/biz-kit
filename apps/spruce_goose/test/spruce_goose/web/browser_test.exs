@@ -54,8 +54,8 @@ defmodule SpruceGoose.Web.BrowserTest do
     Port.command(port, "go\n")
     assert %{"proposed" => true} = read!(port)
 
-    # Governance defines the Definition of Done and readiness; the SOP and
-    # the input are stored and recorded in custody.
+    # Governance defines the Definition of Done and readiness; the browser
+    # then uploads the SOP and the input and records custody of them.
     readiness!(w, "task-2")
 
     Port.command(port, "go\n")
@@ -69,10 +69,21 @@ defmodule SpruceGoose.Web.BrowserTest do
     task = Log.gate().orchestration.tasks[{w.chapter, tenant(), "project-1", "task-2"}]
     assert task.title == "Write up the audit"
 
-    # Then proposed, its SOP acknowledged, queued and marked ready, each signed
-    # by the browser's key.
+    # Then proposed, its SOP and input stored from the browser, the SOP
+    # acknowledged, queued and marked ready, each signed by the browser's key.
     assert task.state == "ready"
     assert task.readiness.acknowledgment.principal_id == person
+
+    receipts = Log.gate().orchestration.custody_receipts
+
+    stored =
+      for {_, r} <- receipts, r.chapter_id == w.chapter, r.principal_id == person, do: r.digest
+
+    assert Enum.sort(stored) ==
+             Enum.sort([
+               {:bytes, :crypto.hash(:sha256, "SOP for #{w.chapter}")},
+               {:bytes, :crypto.hash(:sha256, "Input for #{w.chapter}")}
+             ])
 
     {:ok, events} = Log.read_all(from: suggestion.global_seq + 1)
 
@@ -102,22 +113,10 @@ defmodule SpruceGoose.Web.BrowserTest do
     assert hd(created.signers).pubkey == hd(decision.signers).pubkey
   end
 
+  # What the task needs, by digest: the browser stores the files itself.
   defp readiness!(w, task_id) do
-    alias CoopSubstrate.Harness.Artifacts
-    {:ok, sop} = Artifacts.put("The SOP for #{w.chapter}")
-    {:ok, input} = Artifacts.put("The input for #{w.chapter}")
-
-    for digest <- [sop, input] do
-      append!(
-        event(w, w.op, "ArtifactCustodyRecordedV1", %{
-          "tenant_id" => tenant(),
-          "project_id" => "project-1",
-          "principal_id" => w.op_grant.payload["principal_id"],
-          "authorization_event_id" => w.op_grant.event_id,
-          "artifact_digest" => {:bytes, digest}
-        })
-      )
-    end
+    sop = :crypto.hash(:sha256, "SOP for #{w.chapter}")
+    input = :crypto.hash(:sha256, "Input for #{w.chapter}")
 
     key = {w.chapter, tenant(), "project-1", task_id}
     version = fn -> Log.gate().orchestration.tasks[key].version end

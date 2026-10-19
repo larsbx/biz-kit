@@ -131,6 +131,45 @@ defmodule CoopSubstrate.LifecycleTest do
              Commands.submit("alice", pending.id, Crypto.sign(pending.signing_bytes, w.op.seed))
   end
 
+  test "a person stores an artifact from their device and records custody of it", w do
+    # Unique per run: the artifact store outlives a test run.
+    bytes = "A new SOP, uploaded #{System.unique_integer()} #{System.system_time()}"
+    digest = :crypto.hash(:sha256, bytes)
+
+    # Recorded only once stored.
+    assert {:error, {:invalid, _}} = step(w, {:record_custody, digest})
+
+    assert {:ok, ^digest} = CoopSubstrate.ArtifactCustody.store("alice", @scope, bytes, digest)
+    assert {:ok, receipt} = step(w, {:record_custody, digest})
+
+    assert %{digest: {:bytes, ^digest}, principal_id: "alice"} =
+             Log.gate().orchestration.custody_receipts[receipt.event_id]
+  end
+
+  test "storing needs a device grant here, the right hash and a bounded size" do
+    bytes = "Some bytes"
+    digest = :crypto.hash(:sha256, bytes)
+    alias CoopSubstrate.ArtifactCustody
+
+    assert ArtifactCustody.store("mallory", @scope, bytes, digest) == {:error, :no_operator_grant}
+
+    assert ArtifactCustody.store(
+             "alice",
+             {"chapter-genesis", "tenant-1", "project-2"},
+             bytes,
+             digest
+           ) ==
+             {:error, :no_operator_grant}
+
+    assert ArtifactCustody.store("alice", @scope, bytes <> "!", digest) ==
+             {:error, :digest_mismatch}
+
+    big = :binary.copy("x", ArtifactCustody.limit() + 1)
+
+    assert ArtifactCustody.store("alice", @scope, big, :crypto.hash(:sha256, big)) ==
+             {:error, :too_large}
+  end
+
   test "a person revokes a delegation they made, and only one in this project", w do
     {:ok, [d]} = Log.append(delegation(w.op, w.grant, new_member("operator"), "bot"))
 
