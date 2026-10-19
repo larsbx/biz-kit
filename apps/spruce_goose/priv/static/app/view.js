@@ -73,12 +73,22 @@ export function timingForm(timing) {
   };
 }
 
-// The timing a form describes, or `{error}`. An unchanged form gives back
-// `original` exactly, so editing only the title leaves the timing as suggested.
+// The timing a form describes, or `{error}`. The schedule and the due time
+// are each kept from `original` exactly while their fields are untouched, so
+// the inputs' minute precision never rounds a part nobody edited.
 export function formTiming(form, original, tz) {
-  const same = ["kind", "start", "end", "first", "last", "due"].every((k) => form[k] === timingForm(original)[k]);
-  if (same && original) return { timing: original };
+  const was = timingForm(original);
+  const untouched = (keys) => original && keys.every((k) => form[k] === was[k]);
+  const scheduled = buildSchedule(form, tz);
+  if (scheduled.error) return scheduled;
 
+  const schedule = untouched(["kind", "start", "end", "first", "last"]) ? original.schedule : scheduled.schedule;
+  const due_ms = untouched(["due"]) ? original.due_ms : form.due ? fromLocal(form.due) : null;
+  if (Number.isNaN(due_ms)) return { error: "A date or time is incomplete." };
+  return { timing: { schedule, due_ms } };
+}
+
+function buildSchedule(form, tz) {
   let schedule = null;
   if (form.kind === "timed") {
     const [start_ms, end_ms] = [fromLocal(form.start), fromLocal(form.end)];
@@ -88,9 +98,5 @@ export function formTiming(form, original, tz) {
     if (!form.first || !form.last || form.last < form.first) return { error: "The last day must not be before the first." };
     schedule = { kind: "all_day", start_date: form.first, end_date: shiftDay(form.last, 1) };
   }
-
-  const due_ms = form.due ? fromLocal(form.due) : null;
-  if (Number.isNaN(due_ms) || [schedule?.start_ms, schedule?.end_ms].some(Number.isNaN))
-    return { error: "A date or time is incomplete." };
-  return { timing: { schedule, due_ms } };
+  return { schedule };
 }

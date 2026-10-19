@@ -158,6 +158,8 @@ test("an amended command is signed only with exactly the timing entered", () => 
   assert.equal(same({ a: 1 }, { a: 1, b: undefined }), false);
 });
 
+const pad2 = (n) => String(n).padStart(2, "0");
+
 test("the edit form round-trips a timing, and an untouched form keeps it exactly", () => {
   const timed = { schedule: { kind: "timed", start_ms: 1792396800000, end_ms: 1792400400000, tz: "Europe/Copenhagen" }, due_ms: 1792404000000 };
   const allDay = { schedule: { kind: "all_day", start_date: "2026-10-19", end_date: "2026-10-21" }, due_ms: null };
@@ -174,6 +176,15 @@ test("the edit form round-trips a timing, and an untouched form keeps it exactly
   // A second-precise original survives an untouched form.
   const seconds = { schedule: { ...timed.schedule, start_ms: timed.schedule.start_ms + 7000 }, due_ms: null };
   assert.deepEqual(formTiming(timingForm(seconds), seconds, "UTC"), { timing: seconds });
+
+  // Editing one part keeps the other exactly, seconds included.
+  const precise = { schedule: { ...timed.schedule, start_ms: timed.schedule.start_ms + 7000 }, due_ms: timed.due_ms + 4000 };
+  const newDue = formTiming({ ...timingForm(precise), due: timingForm(none).due }, precise, "UTC").timing;
+  assert.deepEqual(newDue, { schedule: precise.schedule, due_ms: null });
+  const later = timingForm(timed).end.replace(/T(\d\d)/, (_, h) => `T${pad2(Number(h) + 1)}`);
+  const newEnd = formTiming({ ...timingForm(precise), end: later }, precise, "UTC").timing;
+  assert.equal(newEnd.due_ms, precise.due_ms);
+  assert.equal(newEnd.schedule.end_ms, timed.schedule.end_ms + 3_600_000);
 
   const changed = { ...timingForm(timed), end: timingForm(timed).start };
   assert.match(formTiming(changed, timed, "UTC").error, /after the start/);
