@@ -29,6 +29,8 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 
     const query = new URLSearchParams({ chapter, tenant, project });
     await page.goto(`${base}/app?${query}`);
+    // Once the page holds its key; the name is typed after it has loaded.
+    await page.locator("#key-id").filter({ hasText: /^k-/ }).waitFor({ state: "attached" });
     await page.getByLabel("Name this device").fill("Test laptop");
     await page.getByRole("button", { name: "Request access" }).click();
     const code = page.locator("#enrolment .code");
