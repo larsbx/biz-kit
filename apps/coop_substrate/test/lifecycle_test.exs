@@ -86,6 +86,8 @@ defmodule CoopSubstrate.LifecycleTest do
 
     assert {:ok, _} = step(w, {:acknowledge_sop, "task-1", w.sop_receipt})
     assert task().readiness.acknowledgment.principal_id == "alice"
+    # The device that acknowledged, for the view to tell its own acknowledgement.
+    assert task().readiness.acknowledgment.key_id == w.op.signer.key_id
 
     assert {:ok, _} = step(w, {:queue, "task-1"})
     assert task().state == "queued"

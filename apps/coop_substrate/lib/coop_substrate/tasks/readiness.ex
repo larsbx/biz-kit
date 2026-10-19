@@ -242,6 +242,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
       event_id: env.event_id,
       custody_receipt_id: p["custody_receipt_id"],
       principal_id: p["principal_id"],
+      key_id: signer.key_id,
       pubkey: signer.pubkey
     })
   end

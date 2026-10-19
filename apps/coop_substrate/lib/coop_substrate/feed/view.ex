@@ -91,8 +91,8 @@ defmodule CoopSubstrate.Feed.View do
     |> json()
   end
 
-  # The acknowledging key stays out: the view says who acknowledged, with
-  # which receipt.
+  # The acknowledging public key stays out; its key ID tells a device whether
+  # the acknowledgement is its own, which queuing and readiness require.
   defp readiness(nil), do: nil
 
   defp readiness(r) do
@@ -102,7 +102,7 @@ defmodule CoopSubstrate.Feed.View do
       predecessor_ids: r.predecessor_ids,
       sop_digest: r.sop_digest,
       acknowledgment:
-        r.acknowledgment && Map.take(r.acknowledgment, [:principal_id, :custody_receipt_id])
+        r.acknowledgment && Map.take(r.acknowledgment, [:principal_id, :key_id, :custody_receipt_id])
     }
   end
 

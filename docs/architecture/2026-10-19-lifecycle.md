@@ -62,7 +62,7 @@ POST /api/v1/chapters/:c/tenants/:t/projects/:p/commands
 **Feed.** For the view to know what each step needs, the change feed now
 carries:
 - a task's `readiness`: requirements, predecessors and SOP digest, plus the
-  acknowledging principal and receipt (not the key);
+  acknowledging principal, its key ID and the receipt (not the public key);
 - the project's custody receipts, as a new `:receipts` kind with `digest`
   and `principal_id`.
 
@@ -74,8 +74,10 @@ it is waiting for. `view.js` `nextStep/3` works this out, and it is pure:
 - `inbox`: **Propose**.
 - `proposed`:
   - without a Definition of Done or readiness: waiting for that;
-  - not yet acknowledged by this person: **Acknowledge the SOP**, citing a
-    receipt with the SOP's digest, or waiting for a stored copy;
+  - not yet acknowledged by this person on this device (the ledger checks
+    the key, so an acknowledgement from another of their devices does not
+    count): **Acknowledge the SOP**, citing a receipt with the SOP's
+    digest, or waiting for a stored copy;
   - otherwise: **Queue**.
 - `queued`:
   - waiting for unfinished predecessors, or for a stored copy of a required
@@ -87,8 +89,8 @@ The page signs only if the command names this task at the version shown,
 with exactly the receipts it chose.
 
 *Delegations you made* lists the person's active delegations, each with
-**Revoke**. *Decided suggestions* shows the latest twenty resolved
-suggestions.
+**Revoke**. *Decided suggestions* shows the twenty most recently decided
+suggestions, ordered by the event that resolved them.
 
 ## Verification
 

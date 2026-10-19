@@ -109,9 +109,11 @@ const receiptFor = (view, digest) =>
 
 const short = (digest) => `${digest.slice(0, 12)}…`;
 
-// What a task's next step is for `me`: `{action, label, ...cites}` to sign,
-// `{waiting}` saying what it still needs from someone else, or null.
-export function nextStep(taskId, view, me) {
+// What a task's next step is for `me` on the device holding `keyId`:
+// `{action, label, ...cites}` to sign, `{waiting}` saying what it still needs
+// from someone else, or null. Queuing and readiness need this device's own
+// acknowledgement of the SOP: the ledger checks the key, not only the person.
+export function nextStep(taskId, view, me, keyId) {
   const t = view.tasks[taskId];
   if (!t) return null;
   if (t.state === "inbox") return { action: "propose", label: "Propose" };
@@ -121,7 +123,8 @@ export function nextStep(taskId, view, me) {
   if (t.state === "proposed" && !t.dod) return { waiting: "a Definition of Done" };
   if (!r) return { waiting: "a readiness definition" };
 
-  if (r.acknowledgment?.principal_id !== me) {
+  const own = r.acknowledgment?.principal_id === me && r.acknowledgment?.key_id === keyId;
+  if (!own) {
     const receipt = receiptFor(view, r.sop_digest);
     return receipt
       ? { action: "acknowledge_sop", label: "Acknowledge the SOP", custody_receipt_id: receipt }
@@ -142,9 +145,12 @@ export function nextStep(taskId, view, me) {
 }
 
 // Suggestions no longer pending (accepted, amended, declined, withdrawn,
-// superseded), with who resolved them and why.
+// superseded), with who resolved them and why: latest decided first, by the
+// resolving event's ID (a ULID, so in time order).
+const decidedAt = ([id, s]) => s.resolved_by_event_id ?? id;
+
 export const decidedSuggestions = (view) =>
   Object.entries(view.suggestions)
     .filter(([, s]) => s.status !== "pending")
-    .sort(([a], [b]) => b.localeCompare(a))
+    .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
     .map(([id, s]) => ({ id, ...s }));

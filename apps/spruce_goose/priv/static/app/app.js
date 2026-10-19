@@ -102,7 +102,7 @@ function render() {
 
 // The task's next lifecycle step as a button, or what it is waiting for.
 function stepControl(id, t) {
-  const step = nextStep(id, view, me);
+  const step = nextStep(id, view, me, keyId);
   if (!step) return null;
   if (step.waiting) return el("div", { className: "muted", textContent: `Waiting for ${step.waiting}.` });
 

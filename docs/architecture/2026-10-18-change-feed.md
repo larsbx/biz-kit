@@ -51,13 +51,13 @@ lowercase hex):
 | Kind | Fields |
 | --- | --- |
 | task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `dod`, `readiness` |
-| `readiness` | `event_id`, `artifact_requirements` (name → digest), `predecessor_ids`, `sop_digest`; `acknowledgment` as principal and custody receipt ID |
+| `readiness` | `event_id`, `artifact_requirements` (name → digest), `predecessor_ids`, `sop_digest`; `acknowledgment` as principal, key ID and custody receipt ID |
 | `dod` | `event_id`, `criteria`, `definition_ref`; `submission` and `review` as event and principal IDs, `review.decision` and `review.reason` |
 | suggestion | `task_id`, `kind`, `change`, `principal_id`, `base_timing_version`, `rationale`, `rationale_receipt_id`, `status`, `reason`, `reason_receipt_id`, `resolved_by_event_id` |
 | delegation | `delegator_principal_id`, `operator_grant_id`, `principal_id`, `key_id`, `kinds`, `task_ids`, `states`, `window`, `max_block_ms`, `budget`, `used`, `active`, `delegator_grant_active` |
 | receipt | `digest`, `principal_id` (a custody receipt in the project; [lifecycle](2026-10-19-lifecycle.md)) |
 
-Public keys, the acknowledging key and DoD evidence stay out. `delegator_grant_active` is derived:
+Public keys and DoD evidence stay out. `delegator_grant_active` is derived:
 revoking an operator's grant ends their delegations without touching the
 delegation records, and the derived field is what carries that to clients.
 

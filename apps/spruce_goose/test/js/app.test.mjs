@@ -205,13 +205,13 @@ test("a task's next step, or what it is waiting for", async () => {
     ...extra,
   });
 
-  assert.deepEqual(nextStep("t1", view({ state: "inbox" }), "me"), { action: "propose", label: "Propose" });
-  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: null }), "me"), { waiting: "a Definition of Done" });
-  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {} }), "me"), { waiting: "a readiness definition" });
-  assert.match(nextStep("t1", view({ state: "proposed", dod: {}, readiness }), "me").waiting, /SOP \(aaaaaaaaaaaa…\)/);
+  assert.deepEqual(nextStep("t1", view({ state: "inbox" }), "me", "k-me"), { action: "propose", label: "Propose" });
+  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: null }), "me", "k-me"), { waiting: "a Definition of Done" });
+  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {} }), "me", "k-me"), { waiting: "a readiness definition" });
+  assert.match(nextStep("t1", view({ state: "proposed", dod: {}, readiness }), "me", "k-me").waiting, /SOP \(aaaaaaaaaaaa…\)/);
 
   const stored = { receipts: { r2: { digest: sop }, r1: { digest: input } } };
-  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {}, readiness }, stored), "me"), {
+  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {}, readiness }, stored), "me", "k-me"), {
     action: "acknowledge_sop",
     label: "Acknowledge the SOP",
     custody_receipt_id: "r2",
@@ -219,23 +219,33 @@ test("a task's next step, or what it is waiting for", async () => {
 
   // Someone else's acknowledgement does not count for me.
   const theirs = { ...readiness, acknowledgment: { principal_id: "them" } };
-  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: theirs }, stored), "me").action, "acknowledge_sop");
+  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: theirs }, stored), "me", "k-me").action, "acknowledge_sop");
 
-  const mine = { ...readiness, acknowledgment: { principal_id: "me" } };
-  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: mine }, stored), "me").action, "queue");
-  assert.deepEqual(nextStep("t1", view({ state: "queued", dod: {}, readiness: mine }, stored), "me").waiting, "t0 to complete");
+  // Nor does mine from another device: the ledger checks the key.
+  const otherDevice = { ...readiness, acknowledgment: { principal_id: "me", key_id: "k-other" } };
+  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: otherDevice }, stored), "me", "k-me").action, "acknowledge_sop");
+
+  const mine = { ...readiness, acknowledgment: { principal_id: "me", key_id: "k-me" } };
+  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: mine }, stored), "me", "k-me").action, "queue");
+  assert.deepEqual(nextStep("t1", view({ state: "queued", dod: {}, readiness: mine }, stored), "me", "k-me").waiting, "t0 to complete");
 
   const done = { tasks: { t1: { state: "queued", dod: {}, readiness: mine }, t0: { state: "completed" } } };
-  assert.deepEqual(nextStep("t1", { ...view({}), ...stored, ...done }, "me"), {
+  assert.deepEqual(nextStep("t1", { ...view({}), ...stored, ...done }, "me", "k-me"), {
     action: "ready",
     label: "Mark ready",
     custody_receipts: { input: "r1" },
   });
-  assert.match(nextStep("t1", { ...view({}), ...done }, "me").waiting, /input “input”/);
-  assert.equal(nextStep("t1", view({ state: "ready" }), "me"), null);
+  assert.match(nextStep("t1", { ...view({}), ...done }, "me", "k-me").waiting, /input “input”/);
+  assert.equal(nextStep("t1", view({ state: "ready" }), "me", "k-me"), null);
 
+  // Latest decided first: s1 was suggested first but decided last.
   const history = decidedSuggestions({
-    suggestions: { s1: { status: "pending" }, s2: { status: "withdrawn", reason: "changed plan" }, s3: { status: "accepted" } },
+    suggestions: {
+      s1: { status: "declined", resolved_by_event_id: "e9" },
+      s2: { status: "withdrawn", reason: "changed plan", resolved_by_event_id: "e5" },
+      s3: { status: "accepted", resolved_by_event_id: "e7" },
+      s4: { status: "pending" },
+    },
   });
-  assert.deepEqual(history.map((s) => [s.id, s.status]), [["s3", "accepted"], ["s2", "withdrawn"]]);
+  assert.deepEqual(history.map((s) => [s.id, s.status]), [["s1", "declined"], ["s3", "accepted"], ["s2", "withdrawn"]]);
 });
