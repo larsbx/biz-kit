@@ -110,6 +110,15 @@ defmodule SpruceGoose.Web.CommandTest do
                })
     end
 
+    test "for values of the wrong JSON type", w do
+      assert {400, _} = prepare(w, %{"decision" => "accept", "key_id" => 123})
+
+      {201, prepared} = prepare(w, %{"decision" => "accept"})
+
+      assert {400, _} =
+               post_json("/api/v1/commands/#{prepared["id"]}", w.session, %{"signature" => 123})
+    end
+
     test "for a malformed decision or an unknown suggestion", w do
       assert {400, _} = prepare(w, %{"decision" => "maybe"})
 

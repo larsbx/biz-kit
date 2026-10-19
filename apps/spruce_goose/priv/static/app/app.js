@@ -18,6 +18,9 @@ const $ = (id) => document.getElementById(id);
 let view = emptyView();
 let keyId = null;
 let pair = null;
+// One decision at a time: the confirmation dialog shows one command, and the
+// bytes signed must be the ones it shows.
+let deciding = false;
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -83,8 +86,8 @@ function suggestionCard(s) {
       : `Reschedule “${task?.title ?? s.task_id}”: ${describeTiming(s.change.timing)}`;
   const stale = s.kind === "timing" && task && s.base_timing_version != null && s.base_timing_version !== task.timing_version;
 
-  const accept = el("button", { className: "primary", textContent: "Accept", disabled: !pair });
-  const decline = el("button", { textContent: "Decline", disabled: !pair });
+  const accept = el("button", { className: "primary", textContent: "Accept", disabled: !pair || deciding });
+  const decline = el("button", { textContent: "Decline", disabled: !pair || deciding });
   accept.onclick = () => decide(s, { decision: "accept" });
   decline.onclick = () => {
     const reason = prompt("Why decline? The reason is recorded on the ledger.");
@@ -110,6 +113,10 @@ const show = (value) =>
   JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2);
 
 async function decide(s, decision) {
+  if (deciding) return;
+  deciding = true;
+  render();
+
   try {
     status("Preparing…");
     const prepared = await postJSON(`${projectPath}/commands`, {
@@ -142,6 +149,9 @@ async function decide(s, decision) {
     status(`Recorded on the ledger at #${result.global_seq}.`);
   } catch (e) {
     status(`Not recorded: ${e.message.replaceAll("_", " ")}.`, true);
+  } finally {
+    deciding = false;
+    render();
   }
 }
 

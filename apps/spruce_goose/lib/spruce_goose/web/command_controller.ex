@@ -30,7 +30,8 @@ defmodule SpruceGoose.Web.CommandController do
     with {:ok, principal, _session} <- AuthController.principal(conn),
          {:ok, body} <- json_body(conn),
          {:ok, decision} <- decision(body),
-         {:ok, pending} <- Commands.prepare(principal, body["key_id"] || "", {c, t, p}, decision) do
+         {:ok, key_id} <- string(body["key_id"]),
+         {:ok, pending} <- Commands.prepare(principal, key_id, {c, t, p}, decision) do
       conn
       |> put_status(201)
       |> json(%{
@@ -48,7 +49,8 @@ defmodule SpruceGoose.Web.CommandController do
   def submit(conn, %{"id" => id}) do
     with {:ok, principal, _session} <- AuthController.principal(conn),
          {:ok, body} <- json_body(conn),
-         {:ok, signature} <- Base.url_decode64(body["signature"] || "", padding: false),
+         {:ok, encoded} <- string(body["signature"]),
+         {:ok, signature} <- Base.url_decode64(encoded, padding: false),
          {:ok, env} <- Commands.submit(principal, id, signature) do
       conn |> put_status(201) |> json(%{event_id: env.event_id, global_seq: env.global_seq})
     else
@@ -56,6 +58,10 @@ defmodule SpruceGoose.Web.CommandController do
       error -> refuse(conn, error)
     end
   end
+
+  # Arbitrary JSON may put anything where a string belongs.
+  defp string(value) when is_binary(value), do: {:ok, value}
+  defp string(_value), do: {:error, :bad_request}
 
   defp decision(%{"decision" => "accept", "suggestion_event_id" => id}) when is_binary(id),
     do: {:ok, {:accept, id}}
