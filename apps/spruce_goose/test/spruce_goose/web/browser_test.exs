@@ -28,15 +28,17 @@ defmodule SpruceGoose.Web.BrowserTest do
     w = world()
     person = Principal.new_id()
     reviewer = Principal.new_id()
+    administrator = Principal.new_id()
 
     bind([
       {"https://idp.test", "sub-person", person},
-      {"https://idp.test", "sub-reviewer", reviewer}
+      {"https://idp.test", "sub-reviewer", reviewer},
+      {"https://idp.test", "sub-admin", administrator}
     ])
 
     base = serve!()
     port = browser!(base, w)
-    assert %{"code" => code, "key_id" => key_id} = read!(port)
+    assert %{"code" => code, "key_id" => key_id, "admin_code" => admin_code} = read!(port)
 
     # The administrator approves by code; an agent suggests.
     {:ok, details} = Approver.fetch(base, code)
@@ -46,6 +48,12 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     governance = %{key_id: w.gov.signer.key_id, pubkey: w.gov.signer.pubkey, seed: w.gov.seed}
     {:ok, %{"event_id" => grant_id}} = Approver.approve(base, details, governance)
+
+    # The bootstrap: the seed holder approves the first administrator's browser.
+    {:ok, admin_request} = Approver.fetch(base, admin_code)
+    assert {admin_request["principal_id"], admin_request["role"]} == {administrator, "governance"}
+    {:ok, _} = Approver.approve(base, admin_request, governance)
+    create!(w, w.op_grant, "task-3")
 
     create!(w, w.op_grant, "task-1")
 
@@ -66,17 +74,11 @@ defmodule SpruceGoose.Web.BrowserTest do
     readiness!(w, "task-2")
 
     # The person takes it to ready, starts it and submits evidence; a
-    # reviewer's browser asks for reviewer access, which is approved.
+    # reviewer's browser asks for reviewer access, and the administrator's
+    # browser approves it in the view.
     Port.command(port, "go\n")
-    assert %{"reviewer_code" => reviewer_code, "reviewer_key_id" => reviewer_key} = read!(port)
-    {:ok, request} = Approver.fetch(base, reviewer_code)
 
-    assert {request["principal_id"], request["role"], request["key_id"]} ==
-             {reviewer, "reviewer", reviewer_key}
-
-    {:ok, _} = Approver.approve(base, request, governance)
-
-    Port.command(port, "go\n")
+    assert %{"reviewer_key_id" => reviewer_key, "reviewer" => ^reviewer} = read!(port)
     assert %{"done" => "Recorded on the ledger" <> _} = read!(port)
 
     suggestions = Log.gate().orchestration.suggestions
@@ -139,8 +141,31 @@ defmodule SpruceGoose.Web.BrowserTest do
     assert hd(revocation.signers).pubkey == hd(decision.signers).pubkey
 
     of_type = fn type -> for e <- events, e.type == type, e.chapter_id == w.chapter, do: e end
+    # The administrator's browser key, declared for it by the seed holder,
+    # approved the reviewer, cancelled task-3 and offboarded the reviewer.
+    {:ok, from_start} = Log.read_all(from: 1)
+
+    [declared] =
+      for e <- from_start,
+          e.type == "RoleKeyDeclared",
+          e.chapter_id == w.chapter,
+          e.payload["member_id"] == administrator,
+          do: e
+
+    admin_key = elem(declared.payload["pubkey"], 1)
+    [reviewer_grant] = of_type.("TaskReviewerGrantedV1")
+    assert reviewer_grant.payload["key_id"] == reviewer_key
+    assert hd(reviewer_grant.signers).pubkey == admin_key
+    [governance_cancel] = of_type.("TaskCancelledByGovernanceV1")
+    assert governance_cancel.payload["task_id"] == "task-3"
+    assert hd(governance_cancel.signers).pubkey == admin_key
+    [offboarded] = of_type.("TaskPrincipalOffboardedV1")
+    assert offboarded.payload["principal_id"] == reviewer
+    assert hd(offboarded.signers).pubkey == admin_key
+    refute Log.gate().orchestration.dod_grants[reviewer_grant.event_id].active
+
     [review] = of_type.("TaskDoDReviewedV1")
-    assert hd(review.signers).pubkey == Base.url_decode64!(request["public_key"], padding: false)
+    assert hd(review.signers).pubkey == elem(reviewer_grant.payload["pubkey"], 1)
     assert hd(review.signers).role == "reviewer"
 
     for type <- ["TaskStartedV1", "TaskEvidenceSubmittedV2", "TaskCompletedV1"] do

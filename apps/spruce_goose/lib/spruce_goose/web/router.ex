@@ -74,6 +74,19 @@ defmodule SpruceGoose.Web.Router do
     get("/api/v1/principals/:id", PrincipalController, :show)
     post("/api/v1/principals/:id/offboarding", PrincipalController, :prepare)
     post("/api/v1/principals/:id/offboarding/:held_id", PrincipalController, :offboard)
+    get("/api/v1/chapters/:chapter_id/administrators", AdministratorController, :index)
+
+    post(
+      "/api/v1/chapters/:chapter_id/administrators/:key_id/revocation",
+      AdministratorController,
+      :prepare
+    )
+
+    post(
+      "/api/v1/chapters/:chapter_id/administrators/:key_id/revocation/:held_id",
+      AdministratorController,
+      :revoke
+    )
   end
 
   # The common ledger's change feed. Authenticated by CoopSubstrate's own

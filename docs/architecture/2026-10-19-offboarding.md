@@ -6,7 +6,9 @@ Date: 2026-10-19. Status: **implemented**. Follows
 ## Decision
 
 When someone leaves, or an agent is retired, an administrator ends
-everything that principal holds with one command:
+everything that principal holds in a project from the web view
+([administration](2026-10-19-administration.md)), or in every project with
+one command:
 
     mix coop.offboard <PRINCIPAL_ID> [--server URL] [--yes]
 

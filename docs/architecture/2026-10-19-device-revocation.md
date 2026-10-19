@@ -11,7 +11,7 @@ key. Two ways end it:
 | Who | Signs | Event | For |
 | --- | --- | --- | --- |
 | the person | one of their devices still enrolled in the project, or the device itself | `TaskDeviceRevokedV1` | a lost device, when they have another; retiring a device |
-| an administrator | the governance key, with `mix coop.revoke <GRANT_ID>` | `TaskOperatorRevokedV1` (unchanged) | a person's only device; a compromised device |
+| an administrator | a governance key, from the view ([administration](2026-10-19-administration.md)) or with `mix coop.revoke <GRANT_ID>` | `TaskOperatorRevokedV1` (unchanged) | a person's only device; a compromised device |
 
 A reviewer device ([execution](2026-10-19-execution.md)) is a reviewer
 grant. Only an administrator revokes it, with the same `mix coop.revoke`,

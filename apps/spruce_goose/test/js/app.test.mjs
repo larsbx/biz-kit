@@ -4,8 +4,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { decode, hex } from "../../priv/static/app/cbor.js";
-import { sign, keyId, isOwnEnrolment, isExpectedCommand, same } from "../../priv/static/app/device.js";
+import { decode, encode, hex } from "../../priv/static/app/cbor.js";
+import {
+  sign,
+  keyId,
+  isOwnEnrolment,
+  isExpectedCommand,
+  same,
+  governanceReadBytes,
+} from "../../priv/static/app/device.js";
 import {
   applyFrame,
   emptyView,
@@ -35,6 +42,15 @@ test("decodes every committed vector to its logical term", () => {
   for (const v of vectors.vectors) {
     assert.deepEqual(comparable(decode(fromHex(v.canonical_hex))), v.term, v.name);
   }
+});
+
+test("encodes every committed vector to its exact canonical bytes", () => {
+  for (const v of vectors.vectors) {
+    assert.equal(hex(encode(decode(fromHex(v.canonical_hex)))), v.canonical_hex, v.name);
+  }
+  // Keys sorted over their encodings: shorter first, then bytewise.
+  assert.equal(hex(encode({ bb: 1, a: 2, c: 3 })), "a3616102616303626262" + "01");
+  assert.throws(() => encode(1.5));
 });
 
 test("keeps integers past 2^53 exact", () => {
@@ -328,4 +344,61 @@ test("calling a task off: cancel before the work starts, send back once under wa
     "Cancelled by governance: “Client withdrew”",
   );
   assert.equal(cancelledBecause({ state: "queued" }), null);
+});
+
+test("administration: the governance read is the server's bytes; approvals and revocations are exact", async () => {
+  const { grantFor, revocable, revocationType } = await import("../../priv/static/app/view.js");
+
+  // CoopSubstrate.Governance.Read.signing_bytes/1 for the same request.
+  const read = {
+    method: "POST",
+    path: "/api/v1/principals/prn_a/offboarding",
+    timestamp_ms: 1792396800000,
+    nonce: "AAAAAAAAAAAAAAAAAAAAAAAA",
+    key_id: "k-01020304",
+  };
+  assert.equal(
+    hex(governanceReadBytes(read)),
+    "a6647061746878242f6170692f76312f7072696e636970616c732f70726e5f612f6f6666626f617264696e67656e6f6e63657818414141414141414141414141414141414141414141414141666b65795f69646a6b2d3031303230333034666d6574686f6464504f535466736368656d6174436f6f70476f7665726e616e63655265616456316c74696d657374616d705f6d731b000001a1532cb000",
+  );
+
+  const details = {
+    principal_id: "prn_x",
+    chapter_id: "c",
+    tenant_id: "t",
+    project_id: "p",
+    key_id: "k-01020304",
+    public_key: "AQIDBA",
+    label: "Laptop",
+    role: "reviewer",
+  };
+  assert.deepEqual(grantFor(details), {
+    type: "TaskReviewerGrantedV1",
+    payload: { tenant_id: "t", project_id: "p", principal_id: "prn_x", key_id: "k-01020304", pubkey: { __bytes__: "01020304" }, device_label: "Laptop" },
+  });
+  assert.equal(grantFor({ ...details, role: "operator" }).type, "TaskOperatorGrantedV1");
+  assert.deepEqual(grantFor({ ...details, role: "governance" }), {
+    type: "RoleKeyDeclared",
+    payload: { role: "governance", key_id: "k-01020304", pubkey: { __bytes__: "01020304" }, member_id: "prn_x" },
+  });
+
+  // Exact: nothing may ride along, and only for this chapter.
+  const { type, payload } = grantFor(details);
+  const core = { chapter_id: "c", type, payload, signers: [{ key_id: "k-admin", role: "governance" }] };
+  const expected = { keyId: "k-admin", type, payload, chapter: "c", exact: true };
+  assert.equal(isExpectedCommand(core, expected), true);
+  assert.equal(isExpectedCommand({ ...core, payload: { ...payload, extra: 1 } }, expected), false);
+  assert.equal(isExpectedCommand({ ...core, chapter_id: "other" }, expected), false);
+  // Without `exact`, an extra field would pass: governance always uses it.
+  assert.equal(isExpectedCommand({ ...core, payload: { ...payload, extra: 1 } }, { ...expected, exact: false }), true);
+
+  const held = [
+    { kind: "operator", event_id: "g1" },
+    { kind: "suggester", event_id: "g2" },
+    { kind: "reviewer", event_id: "g3" },
+    { kind: "delegation", event_id: "d1" },
+  ];
+  assert.deepEqual(revocable(held).map((h) => h.event_id), ["g1", "g3"]);
+  assert.equal(revocationType("reviewer"), "TaskReviewerRevokedV1");
+  assert.equal(revocationType("operator"), "TaskOperatorRevokedV1");
 });

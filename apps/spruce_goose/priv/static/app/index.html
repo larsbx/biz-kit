@@ -84,6 +84,30 @@
         <div id="reviews"><p class="muted">None.</p></div>
       </section>
 
+      <section aria-labelledby="admin-heading" id="admin-section" hidden>
+        <h2 id="admin-heading">Administration</h2>
+        <div class="card">
+          <h3>Approve a request</h3>
+          <form id="approve-form" class="actions">
+            <label>Code <input id="approve-code" maxlength="14" required /></label>
+            <button>Look up</button>
+          </form>
+          <div id="approve-details"></div>
+        </div>
+        <div class="card">
+          <h3>A person in this project</h3>
+          <form id="person-form" class="actions">
+            <label>Principal <input id="person-id" maxlength="128" required /></label>
+            <button>Look up</button>
+          </form>
+          <div id="person-details"></div>
+        </div>
+        <div class="card">
+          <h3>Administrators of this chapter</h3>
+          <div id="administrators"></div>
+        </div>
+      </section>
+
       <section aria-labelledby="delegations-heading">
         <h2 id="delegations-heading">Delegations you made</h2>
         <div id="delegations"><p class="muted">None.</p></div>
@@ -99,6 +123,7 @@
         <div class="card">
           <p id="enrolment">Checking this device…</p>
           <p id="review-enrolment"></p>
+          <p id="admin-enrolment"></p>
           <form id="enrol-form" class="actions" hidden>
             <label>
               Name this device
@@ -109,6 +134,7 @@
               <select id="enrol-role">
                 <option value="operator">Operator: do tasks and decide</option>
                 <option value="reviewer">Reviewer: review evidence</option>
+                <option value="governance">Administrator: govern this chapter</option>
               </select>
             </label>
             <button class="primary">Request access</button>
