@@ -237,6 +237,20 @@ defmodule CoopSubstrate.ExecutionTest do
       end
 
     assert [{:ok, _}, {:ok, _}, {:ok, _}, {:ok, _}, {:error, :quota_exceeded}] = results
+
+    # Each file is charged once: storing one again, as a retry does, still
+    # succeeds with the quota spent.
+    again = :binary.copy(<<1>>, ArtifactCustody.limit())
+
+    assert {:ok, _} =
+             ArtifactCustody.store("bob", @scope, again, :crypto.hash(:sha256, again), "task-1")
+
+    # A refunded charge, as after a failed write, frees its room.
+    alias CoopSubstrate.ArtifactCustody.Quota
+    assert Quota.charge(:k, "a", 10, 10) == :ok
+    assert Quota.charge(:k, "b", 1, 10) == {:error, :quota_exceeded}
+    assert Quota.refund(:k, "a") == :ok
+    assert Quota.charge(:k, "b", 1, 10) == :ok
   end
 
   test "operators and reviewers read the submitted evidence; others do not", w do
