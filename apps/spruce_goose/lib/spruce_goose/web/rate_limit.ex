@@ -128,7 +128,9 @@ defmodule SpruceGoose.Web.RateLimit do
     end
   end
 
-  defp trusted, do: Enum.map(config(:trusted_proxies, []), &cidr/1)
+  @doc "The configured trusted proxies, parsed; raises on a malformed one."
+  @spec trusted() :: [{tuple(), non_neg_integer()}]
+  def trusted, do: Enum.map(config(:trusted_proxies, []), &cidr/1)
 
   defp config(key, default),
     do: :spruce_goose |> Application.get_env(__MODULE__, []) |> Keyword.get(key, default)

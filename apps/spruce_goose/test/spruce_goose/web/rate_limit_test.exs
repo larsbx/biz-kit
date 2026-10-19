@@ -182,5 +182,9 @@ defmodule SpruceGoose.Web.RateLimitTest do
     for bad <- ~w(nope/8 10.0.0.0/-1 10.0.0.0/33 ::/129 10.0.0.0/8x 10.0.0.0/8/8 /8) do
       assert_raise ArgumentError, fn -> RateLimit.cidr(bad) end
     end
+
+    # And the server does not start with one configured.
+    limits!(%{}, ["10.0.0.0/8", "10.0.0.0/-1"])
+    assert_raise ArgumentError, fn -> RateLimit.Counts.init([]) end
   end
 end

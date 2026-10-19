@@ -12,8 +12,11 @@ defmodule SpruceGoose.Web.RateLimit.Counts do
   @spec hit(term(), integer()) :: pos_integer()
   def hit(key, ends), do: :ets.update_counter(@table, {key, ends}, {2, 1}, {{key, ends}, 0})
 
+  # A malformed trusted proxy stops the server here rather than failing
+  # every request later.
   @impl true
   def init(_opts) do
+    SpruceGoose.Web.RateLimit.trusted()
     :ets.new(@table, [:set, :public, :named_table, write_concurrency: true])
     schedule()
     {:ok, nil}
