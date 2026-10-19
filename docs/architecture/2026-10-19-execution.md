@@ -72,8 +72,9 @@ file as evidence for a task in progress
 (`POST …/artifacts?evidence_for=<task_id>`), checked before any byte is
 read. Each person may store at most **32 MiB** of evidence per task, two
 full submissions (a submission verifies at most 16 MiB). Beyond that: 413
-`quota_exceeded`. The count is held by one process for the cluster
-(`ArtifactCustody.Quota`).
+`quota_exceeded`. Each distinct file is charged once, so a retried upload
+costs nothing more, and a charge is refunded if its write fails. The count
+is held by one process for the cluster (`ArtifactCustody.Quota`).
 
 Evidence stays out of the change feed, which carries only that a
 submission and a review exist. The project's operators and reviewers read
@@ -110,7 +111,8 @@ chose.
 - **Operator:** a ready task offers **Start**. In progress, **Submit
   evidence…** opens one file field per criterion; each file is hashed,
   stored, its custody signed (a receipt the project already holds for the
-  same bytes is reused), then the submission is signed. The task then waits
+  same bytes is reused, but the bytes are stored anyway, which restores a
+  file such a receipt has lost), then the submission is signed. The task then waits
   for a review. After a refusal it shows the reason and offers to submit
   again; after acceptance, **Complete**.
 - **Reviewer:** "Evidence to review" lists others' unreviewed submissions,

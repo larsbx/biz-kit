@@ -68,7 +68,8 @@ defmodule CoopSubstrate.ArtifactCustody do
   (docs/architecture/2026-10-19-uploads.md). Only what `may_store/4` allows,
   at most `limit/0` bytes, and only if the bytes hash to `claimed` (the
   SHA-256 their device computed), so what is stored is what they chose.
-  Evidence counts against the person's quota for the task, 32 MiB.
+  Evidence counts against the person's quota for the task, 32 MiB, each
+  distinct file once; a failed write is refunded.
   Content-addressed: storing the same bytes twice is one artifact.
   """
   @spec store(String.t(), CoopSubstrate.Feed.View.scope(), binary(), <<_::256>>, String.t() | nil) ::
@@ -77,14 +78,23 @@ defmodule CoopSubstrate.ArtifactCustody do
     with {:ok, purpose} <- purpose(principal, scope, claimed, task_id),
          :ok <- check(byte_size(bytes) <= @limit, :too_large),
          :ok <- check(:crypto.hash(:sha256, bytes) == claimed, :digest_mismatch),
-         :ok <- charge(purpose, principal, scope, byte_size(bytes)),
-         do: Artifacts.put(bytes)
+         {:ok, charged} <- charge(purpose, principal, scope, claimed, byte_size(bytes)) do
+      with {:error, _} = failed <- Artifacts.put(bytes) do
+        # Only a reservation this upload made: one held by a concurrent
+        # upload of the same bytes is that upload's to keep or give back.
+        if charged == :reserved, do: refund(purpose, principal, scope, claimed)
+        failed
+      end
+    end
   end
 
-  defp charge(:named, _principal, _scope, _size), do: :ok
+  defp charge(:named, _principal, _scope, _digest, _size), do: {:ok, :held}
 
-  defp charge({:evidence, task_id}, principal, scope, size),
-    do: Quota.charge({principal, scope, task_id}, size, @evidence_quota)
+  defp charge({:evidence, task_id}, principal, scope, digest, size),
+    do: Quota.charge({principal, scope, task_id}, digest, size, @evidence_quota)
+
+  defp refund({:evidence, task_id}, principal, scope, digest),
+    do: Quota.refund({principal, scope, task_id}, digest)
 
   @doc """
   The current evidence submission on a task, for the project's operators
