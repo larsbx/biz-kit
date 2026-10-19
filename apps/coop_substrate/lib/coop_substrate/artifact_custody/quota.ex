@@ -7,7 +7,10 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   Each digest occupies room once per key. Pending writes each hold a
   monitored reservation; any successful write commits the digest. A failed
   or abandoned write releases only its own reservation, never a concurrent
-  success. Room is refunded only when no write succeeded or remains pending.
+  success. On worker death, verify the artifact on that worker's node before
+  releasing room: a completed write stays charged even if its caller died
+  before committing. An unreachable store conservatively keeps the charge.
+  Room is refunded only when no write succeeded or remains pending.
   """
 
   use GenServer
@@ -71,7 +74,7 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
         entry = entry || %{bytes: bytes, committed: false, pending: MapSet.new()}
         entry = %{entry | pending: MapSet.put(entry.pending, token)}
         :ets.insert(@table, {key, {used, Map.put(charged, digest, entry)}})
-        {:reply, {:ok, token}, Map.put(state, token, {key, digest})}
+        {:reply, {:ok, token}, Map.put(state, token, {key, digest, node(pid), bytes})}
     end
   end
 
@@ -79,15 +82,36 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
     do: {:reply, :ok, finish(state, token, success)}
 
   @impl true
-  def handle_info({:DOWN, token, :process, _pid, _reason}, state),
-    do: {:noreply, finish(state, token, false)}
+  def handle_info({:DOWN, token, :process, _pid, _reason}, state) do
+    success =
+      case Map.get(state, token) do
+        nil ->
+          false
+
+        {_key, digest, storage_node, bytes} ->
+          # The caller may have died after persistence but before commit.
+          # Read on its node: the singleton need not share its filesystem.
+          # Only proven absence releases room; uncertainty must not permit
+          # usable evidence to escape the quota.
+          :rpc.call(
+            storage_node,
+            CoopSubstrate.Harness.Artifacts,
+            :verify,
+            [digest, bytes],
+            2_000
+          ) !=
+            {:error, :not_found}
+      end
+
+    {:noreply, finish(state, token, success)}
+  end
 
   defp finish(state, token, success) do
     case Map.pop(state, token) do
       {nil, state} ->
         state
 
-      {{key, digest}, state} ->
+      {{key, digest, _storage_node, _bytes}, state} ->
         Process.demonitor(token, [:flush])
         {used, charged} = :ets.lookup_element(@table, key, 2)
         entry = Map.fetch!(charged, digest)

@@ -75,7 +75,10 @@ full submissions (a submission verifies at most 16 MiB). Beyond that: 413
 `quota_exceeded`. Each distinct file is charged once, so a retried upload
 costs nothing more. Concurrent writes hold separate monitored reservations:
 any successful write commits the digest; failures release only their own
-reservation. Room is refunded only if no write succeeded and none remains pending. The count
+reservation. On worker death the store on that worker's node is checked:
+completed bytes remain charged, proven absence releases the reservation,
+and an unavailable store conservatively retains the charge. Room is refunded
+only if no write succeeded and none remains pending. The count
 is held by one process for the cluster (`ArtifactCustody.Quota`).
 
 Evidence stays out of the change feed, which carries only that a
