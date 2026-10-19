@@ -28,6 +28,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Deciding on suggestions](2026-10-18-decide.md): the first end-to-end
   workflow. A person accepts or declines an agent's suggestion in the web
   view; the command is signed by a key held in their browser.
+- [Self-service device enrolment](2026-10-19-device-enrolment.md): a device
+  requests access and proves its key; an administrator approves the code with
+  the governance key (`mix coop.enrol`).
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

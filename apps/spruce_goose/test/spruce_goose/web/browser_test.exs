@@ -1,9 +1,10 @@
 defmodule SpruceGoose.Web.BrowserTest do
   @moduledoc """
-  The first workflow in a real browser (docs/architecture/2026-10-18-decide.md):
-  a person signs in, their browser makes its device key, an administrator
-  grants it, an agent suggests, and the person accepts in the web view. The
-  ledger then holds the decision, signed by the key the browser made.
+  The first workflow in a real browser (docs/architecture/2026-10-18-decide.md,
+  2026-10-19-device-enrolment.md): a person signs in, their browser makes its
+  device key and requests access, an administrator approves the code, an
+  agent suggests, and the person accepts in the web view. The ledger then
+  holds the decision, signed by the key the browser made.
 
   Needs Node and Playwright with Chromium, so it is excluded by default:
   `mix test --include browser`.
@@ -13,27 +14,32 @@ defmodule SpruceGoose.Web.BrowserTest do
   import SpruceGoose.{IdentityFixtures, LedgerFixtures}
 
   alias BizKit.Identity.Principal
+  alias CoopSubstrate.Enrolments.Approver
   alias CoopSubstrate.Log
 
   @moduletag :browser
 
   @script Path.expand("../../browser/decide.cjs", __DIR__)
 
-  test "accepting a suggestion in the web view signs it on the device" do
+  test "a device enrols itself, then accepts a suggestion signed by its own key" do
     providers!()
     w = world()
     person = Principal.new_id()
     bind([{"https://idp.test", "sub-person", person}])
 
-    port = browser!(serve!(), w)
-    assert %{"device" => %{"public_key" => pub_hex, "key_id" => key_id}} = read!(port)
+    base = serve!()
+    port = browser!(base, w)
+    assert %{"code" => code, "key_id" => key_id} = read!(port)
 
-    # The administrator enrols the browser's key; an agent suggests.
-    device = %{
-      signer: %{role: "operator", key_id: key_id, pubkey: Base.decode16!(pub_hex, case: :lower)}
-    }
+    # The administrator approves by code; an agent suggests.
+    {:ok, details} = Approver.fetch(base, code)
 
-    grant = grant!(w, "TaskOperatorGrantedV1", device, person, "project-1")
+    assert {details["principal_id"], details["key_id"], details["label"]} ==
+             {person, key_id, "Test laptop"}
+
+    governance = %{key_id: w.gov.signer.key_id, pubkey: w.gov.signer.pubkey, seed: w.gov.seed}
+    {:ok, %{"event_id" => grant_id}} = Approver.approve(base, details, governance)
+
     create!(w, w.op_grant, "task-1")
 
     suggestion =
@@ -50,8 +56,10 @@ defmodule SpruceGoose.Web.BrowserTest do
       for e <- events, e.type == "TaskTimingRevisedV1", e.chapter_id == w.chapter, do: e
 
     assert decision.payload["principal_id"] == person
-    assert decision.payload["authorization_event_id"] == grant.event_id
-    assert hd(decision.signers).pubkey == device.signer.pubkey
+    assert decision.payload["authorization_event_id"] == grant_id
+
+    assert hd(decision.signers).pubkey ==
+             Base.url_decode64!(details["public_key"], padding: false)
   end
 
   defp browser!(base, w) do

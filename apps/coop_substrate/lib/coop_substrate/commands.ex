@@ -17,6 +17,10 @@ defmodule CoopSubstrate.Commands do
   The server never holds a person's key and cannot sign for them: a command
   is admitted only with the device's signature, and the ledger checks it as
   it checks every operator command.
+
+  `hold/5` is the same mechanism for any signer: it holds an envelope for an
+  owner (a principal, or `{:enrolment, code}` for a governance approval,
+  `CoopSubstrate.Enrolments`) until that owner submits its signature.
   """
 
   use GenServer
@@ -41,39 +45,55 @@ defmodule CoopSubstrate.Commands do
   @spec prepare(String.t(), String.t(), CoopSubstrate.Feed.View.scope(), Decisions.decision()) ::
           {:ok, pending()} | {:error, term()}
   def prepare(principal, key_id, {chapter, _, _} = scope, decision) do
-    gate = Log.gate()
-    now = System.system_time(:millisecond)
+    o = Log.gate().orchestration
 
-    with {:ok, grant_id, grant} <- operator_grant(gate.orchestration, principal, key_id, scope),
+    with {:ok, grant_id, grant} <- operator_grant(o, principal, key_id, scope),
          {:ok, type, payload} <-
-           Decisions.command(gate.orchestration, scope, decision, %{
+           Decisions.command(o, scope, decision, %{
              "principal_id" => principal,
              "authorization_event_id" => grant_id,
              "lifecycle_version" => 1
            }),
-         {:ok, env} <-
+         do:
+           hold(principal, chapter, type, payload, %{
+             role: "operator",
+             pubkey: grant.pubkey,
+             key_id: key_id
+           })
+  end
+
+  @doc """
+  Build an envelope for `signer`, check it against the ledger's current state,
+  and hold it for `owner` to sign and submit.
+  """
+  @spec hold(term(), String.t(), String.t(), map(), Envelope.signer()) ::
+          {:ok, pending()} | {:error, term()}
+  def hold(owner, chapter, type, payload, signer) do
+    now = System.system_time(:millisecond)
+
+    with {:ok, env} <-
            Envelope.new(%{
              chapter_id: chapter,
              type: type,
              payload: payload,
-             signers: [%{role: "operator", pubkey: grant.pubkey, key_id: key_id}],
+             signers: [signer],
              timestamp_ms: now
            }),
-         :ok <- invalid(TypeRegistry.validity_check(env, gate)),
+         :ok <- invalid(TypeRegistry.validity_check(env, Log.gate())),
          {:ok, bytes} <- Envelope.signing_bytes(env) do
       id = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
       expires_at = now + @ttl_ms
-      true = :ets.insert_new(@table, {id, principal, env, expires_at})
+      true = :ets.insert_new(@table, {id, owner, env, expires_at})
       {:ok, %{id: id, signing_bytes: bytes, type: type, payload: payload, expires_at: expires_at}}
     end
   end
 
-  @spec submit(String.t(), String.t(), binary(), integer()) ::
+  @spec submit(term(), String.t(), binary(), integer()) ::
           {:ok, Envelope.t()} | {:error, term()}
-  def submit(principal, id, signature, now_ms \\ System.system_time(:millisecond)) do
+  def submit(owner, id, signature, now_ms \\ System.system_time(:millisecond)) do
     # Looked up before it is taken, so nobody else can spend it; taken before
     # use, so it is used once.
-    with [{^id, ^principal, _env, expires_at}] when now_ms <= expires_at <-
+    with [{^id, ^owner, _env, expires_at}] when now_ms <= expires_at <-
            :ets.lookup(@table, id),
          [{^id, _, env, _}] <- :ets.take(@table, id),
          {:ok, signed} <- Envelope.attach_signature(env, hd(env.signers).key_id, signature),

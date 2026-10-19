@@ -31,10 +31,16 @@ defmodule SpruceGoose.Web.AuthController do
   """
   @spec principal(Plug.Conn.t()) :: {:ok, String.t(), String.t()} | {:error, atom()}
   def principal(conn) do
-    with session when is_binary(session) <-
+    with {:ok, session, id} <- session(conn), do: {:ok, session.principal, id}
+  end
+
+  @doc "The live session itself (principal and the identity it signed in with) and its ID."
+  @spec session(Plug.Conn.t()) :: {:ok, map(), String.t()} | {:error, atom()}
+  def session(conn) do
+    with id when is_binary(id) <-
            fetch_cookies(conn).cookies[@session_cookie] || {:error, :no_credentials},
-         {:ok, %{principal: principal}} <- Identity.session(session),
-         do: {:ok, principal, session}
+         {:ok, session} <- Identity.session(id),
+         do: {:ok, session, id}
   end
 
   def me(conn, _params) do

@@ -18,6 +18,9 @@ const $ = (id) => document.getElementById(id);
 let view = emptyView();
 let keyId = null;
 let pair = null;
+let publicKey = null;
+let publicKeyHex = null;
+let enrolled = false;
 // One decision at a time: the confirmation dialog shows one command, and the
 // bytes signed must be the ones it shows.
 let deciding = false;
@@ -86,8 +89,9 @@ function suggestionCard(s) {
       : `Reschedule “${task?.title ?? s.task_id}”: ${describeTiming(s.change.timing)}`;
   const stale = s.kind === "timing" && task && s.base_timing_version != null && s.base_timing_version !== task.timing_version;
 
-  const accept = el("button", { className: "primary", textContent: "Accept", disabled: !pair || deciding });
-  const decline = el("button", { textContent: "Decline", disabled: !pair || deciding });
+  const disabled = !pair || !enrolled || deciding;
+  const accept = el("button", { className: "primary", textContent: "Accept", disabled });
+  const decline = el("button", { textContent: "Decline", disabled });
   accept.onclick = () => decide(s, { decision: "accept" });
   decline.onclick = () => {
     const reason = prompt("Why decline? The reason is recorded on the ledger.");
@@ -155,6 +159,57 @@ async function decide(s, decision) {
   }
 }
 
+// -- enrolment ---------------------------------------------------------------------
+
+const devicePath = () => `${projectPath}/devices/${encodeURIComponent(keyId)}`;
+
+// Ask the server where this device stands; while a request waits for an
+// administrator, ask again every ten seconds.
+async function enrolment() {
+  const res = await fetch(devicePath());
+  if (!res.ok) return;
+  const { status: state, code } = await res.json();
+  enrolled = state === "enrolled";
+  $("enrol-form").hidden = state !== "none";
+
+  if (state === "enrolled") {
+    $("enrolment").textContent = "This device can decide for you in this project.";
+  } else if (state === "pending") {
+    $("enrolment").replaceChildren(
+      "Waiting for approval. Give your administrator this code: ",
+      el("span", { className: "code", textContent: code }),
+    );
+    setTimeout(enrolment, 10_000);
+  } else {
+    $("enrolment").textContent = "This device cannot decide yet. Request access, then give the code to your administrator.";
+  }
+  render();
+}
+
+async function requestAccess(event) {
+  event.preventDefault();
+  try {
+    const challenge = await postJSON(`${projectPath}/devices`, {
+      key_id: keyId,
+      public_key: base64url.encode(publicKey),
+      label: $("enrol-label").value.trim(),
+    });
+    const bytes = base64url.decode(challenge.statement);
+
+    // Prove possession by signing the enrolment statement, and nothing else.
+    if (!device.isOwnEnrolment(decode(bytes), { keyId, publicKeyHex })) {
+      throw new Error("the server asked this device to sign something else; nothing was signed");
+    }
+
+    await postJSON(`/api/v1/devices/challenges/${encodeURIComponent(challenge.id)}`, {
+      signature: base64url.encode(await device.sign(pair, bytes)),
+    });
+    await enrolment();
+  } catch (e) {
+    status(`Access not requested: ${e.message.replaceAll("_", " ")}.`, true);
+  }
+}
+
 // -- start -------------------------------------------------------------------------
 
 async function start() {
@@ -171,10 +226,14 @@ async function start() {
 
   try {
     pair = await device.load();
-    const pub = await device.publicKey(pair);
-    keyId = device.keyId(pub);
+    publicKey = await device.publicKey(pair);
+    keyId = device.keyId(publicKey);
+    publicKeyHex = Array.from(publicKey, (b) => b.toString(16).padStart(2, "0")).join("");
     $("key-id").textContent = keyId;
-    $("public-key").textContent = Array.from(pub, (b) => b.toString(16).padStart(2, "0")).join("");
+    $("public-key").textContent = publicKeyHex;
+    $("enrol-label").value = `${navigator.platform || "This"} browser`;
+    $("enrol-form").addEventListener("submit", requestAccess);
+    await enrolment();
   } catch (e) {
     status(`This browser cannot hold a signing key (${e.message}); you can read but not decide.`, true);
   }
