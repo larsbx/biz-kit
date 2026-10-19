@@ -512,6 +512,16 @@ if config_env() == :prod do
     config :spruce_goose, :public_url, public_url
   end
 
+  # The other nodes of this service's cluster, e.g.
+  # "biz_kit@10.0.0.11,biz_kit@10.0.0.12" (docs/architecture/2026-10-19-cluster.md).
+  # Each node also needs RELEASE_DISTRIBUTION=name, its own RELEASE_NODE and
+  # the cluster's shared RELEASE_COOKIE.
+  if nodes = System.get_env("BIZKIT_CLUSTER_NODES") do
+    config :biz_kit_cluster,
+           :nodes,
+           nodes |> String.split(",", trim: true) |> Enum.map(&String.to_atom(String.trim(&1)))
+  end
+
   # Reverse proxies whose x-forwarded-for is believed, e.g. "10.0.0.0/8,::1".
   if proxies = System.get_env("SPRUCE_GOOSE_TRUSTED_PROXIES") do
     config :spruce_goose,

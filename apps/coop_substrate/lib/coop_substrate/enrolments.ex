@@ -22,7 +22,9 @@ defmodule CoopSubstrate.Enrolments do
 
   The code is the capability for reading and approving one request: 60
   random bits, valid for three days, used once. Challenges and requests live
-  in this node's memory; a lost request is simply asked for again.
+  in memory, in one process for the whole cluster
+  (`BizKit.Cluster.Singleton`); if it moves to another node they are lost,
+  and a lost request is simply asked for again.
   """
 
   use GenServer
@@ -33,7 +35,8 @@ defmodule CoopSubstrate.Enrolments do
   @challenge_ttl_ms 600_000
   @request_ttl_ms 3 * 86_400_000
 
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  # One for the cluster (`BizKit.Cluster.Singleton`): a code works on any node.
+  @server BizKit.Cluster.Singleton.name(__MODULE__)
 
   @doc "The statement the device must sign: who asks, for which project and key."
   @spec begin(
@@ -74,10 +77,11 @@ defmodule CoopSubstrate.Enrolments do
         label: label
       }
 
-      :ets.insert(
-        @table,
-        {{:challenge, id}, principal, {request, statement}, now() + @challenge_ttl_ms}
-      )
+      :ok =
+        GenServer.call(
+          @server,
+          {:put, {{:challenge, id}, principal, {request, statement}, now() + @challenge_ttl_ms}}
+        )
 
       {:ok, %{id: id, statement: statement}}
     end
@@ -86,12 +90,8 @@ defmodule CoopSubstrate.Enrolments do
   @doc "Proof of possession: the statement signed by the key it names. Yields the request's code."
   @spec prove(String.t(), String.t(), binary()) ::
           {:ok, %{code: String.t(), expires_at: integer()}} | {:error, atom()}
-  def prove(principal, id, signature) do
-    with {:ok, {request, statement}} <- take({:challenge, id}, principal, :unknown_challenge),
-         :ok <- check(Crypto.verify(statement, signature, request.pubkey), :bad_proof) do
-      {:ok, pending(request) || store(request)}
-    end
-  end
+  def prove(principal, id, signature),
+    do: GenServer.call(@server, {:prove, principal, id, signature})
 
   @doc "What a person's device sees of its enrolment."
   @spec status(String.t(), CoopSubstrate.Feed.View.scope(), String.t(), integer()) ::
@@ -101,22 +101,14 @@ defmodule CoopSubstrate.Enrolments do
 
     cond do
       enrolled?(principal, scope, key_id) -> :enrolled
-      r = pending(request, now_ms) -> {:pending, r.code, r.expires_at}
+      r = GenServer.call(@server, {:pending, request, now_ms}) -> {:pending, r.code, r.expires_at}
       true -> :none
     end
   end
 
   @doc "The request a code names, for the administrator to judge."
   @spec fetch(String.t(), integer()) :: {:ok, map()} | {:error, :unknown_code}
-  def fetch(code, now_ms \\ now()) do
-    case :ets.lookup(@table, {:request, code}) do
-      [{_, _, request, expires_at}] when now_ms <= expires_at ->
-        {:ok, Map.merge(request, %{code: code, expires_at: expires_at})}
-
-      _ ->
-        {:error, :unknown_code}
-    end
-  end
+  def fetch(code, now_ms \\ now()), do: GenServer.call(@server, {:fetch, code, now_ms})
 
   @doc """
   Prepare the operator grant the request asks for, to be signed by the named
@@ -154,14 +146,14 @@ defmodule CoopSubstrate.Enrolments do
   @spec approve(String.t(), String.t(), binary()) ::
           {:ok, CoopSubstrate.Protocol.Envelope.t()} | {:error, term()}
   def approve(code, id, signature),
-    do: GenServer.call(__MODULE__, {:approve, code, id, signature})
+    do: GenServer.call(@server, {:approve, code, id, signature})
 
   @doc """
   Drop the principal's pending requests for the project (offboarding). Once
   it returns, no approval of them can be admitted.
   """
   @spec cancel(String.t(), CoopSubstrate.Feed.View.scope()) :: :ok
-  def cancel(principal, scope), do: GenServer.call(__MODULE__, {:cancel, principal, scope})
+  def cancel(principal, scope), do: GenServer.call(@server, {:cancel, principal, scope})
 
   # -- internals --------------------------------------------------------------------
 
@@ -172,7 +164,19 @@ defmodule CoopSubstrate.Enrolments do
     end)
   end
 
-  defp pending(%{principal_id: p, scope: scope, key_id: key_id}, now_ms \\ now()) do
+  # -- in the server ------------------------------------------------------------------
+
+  defp lookup(code, now_ms) do
+    case :ets.lookup(@table, {:request, code}) do
+      [{_, _, request, expires_at}] when now_ms <= expires_at ->
+        {:ok, Map.merge(request, %{code: code, expires_at: expires_at})}
+
+      _ ->
+        {:error, :unknown_code}
+    end
+  end
+
+  defp pending(%{principal_id: p, scope: scope, key_id: key_id}, now_ms) do
     :ets.match_object(@table, {{:request, :_}, p, :_, :_})
     |> Enum.find_value(fn {{:request, code}, _, r, expires_at} ->
       if expires_at >= now_ms and r.scope == scope and r.key_id == key_id,
@@ -220,15 +224,34 @@ defmodule CoopSubstrate.Enrolments do
 
   @impl true
   def init(_opts) do
-    :ets.new(@table, [:set, :public, :named_table])
+    :ets.new(@table, [:set, :protected, :named_table])
     schedule()
     {:ok, nil}
   end
 
   @impl true
+  def handle_call({:put, row}, _from, state) do
+    true = :ets.insert(@table, row)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:prove, principal, id, signature}, _from, state) do
+    reply =
+      with {:ok, {request, statement}} <- take({:challenge, id}, principal, :unknown_challenge),
+           :ok <- check(Crypto.verify(statement, signature, request.pubkey), :bad_proof),
+           do: {:ok, pending(request, now()) || store(request)}
+
+    {:reply, reply, state}
+  end
+
+  def handle_call({:pending, request, now_ms}, _from, state),
+    do: {:reply, pending(request, now_ms), state}
+
+  def handle_call({:fetch, code, now_ms}, _from, state), do: {:reply, lookup(code, now_ms), state}
+
   def handle_call({:approve, code, id, signature}, _from, state) do
     reply =
-      with {:ok, _request} <- fetch(code),
+      with {:ok, _request} <- lookup(code, now()),
            {:ok, grant} <- Commands.submit({:enrolment, code}, id, signature) do
         :ets.delete(@table, {:request, code})
         {:ok, grant}

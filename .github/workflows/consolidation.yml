@@ -135,8 +135,19 @@ jobs:
           apps/spruce_goose/test/spruce_goose/web/rate_limit_test.exs
           apps/spruce_goose/lib/spruce_goose/application.ex
           apps/spruce_goose/lib/spruce_goose/web/endpoint.ex
+          apps/biz_kit_cluster/mix.exs
+          apps/biz_kit_cluster/lib/biz_kit/cluster.ex
+          apps/biz_kit_cluster/lib/biz_kit/cluster/application.ex
+          apps/biz_kit_cluster/lib/biz_kit/cluster/singleton.ex
+          apps/biz_kit_cluster/test/support/peers.ex
+          apps/biz_kit_cluster/test/singleton_test.exs
+          apps/coop_substrate/test/cluster_test.exs
+          apps/biz_kit_identity/test/cluster_sessions_test.exs
       - name: Test the common ledger
         working-directory: apps/coop_substrate
+        run: mix test
+      - name: Test the cluster primitives
+        working-directory: apps/biz_kit_cluster
         run: mix test
       - name: Test identity
         working-directory: apps/biz_kit_identity

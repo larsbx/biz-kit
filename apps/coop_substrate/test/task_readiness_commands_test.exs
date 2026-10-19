@@ -155,7 +155,7 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
   defp await_restart(_pid, 0), do: {:error, :restart_timeout}
 
   defp await_restart(pid, attempts) do
-    case Process.whereis(Log) do
+    case GenServer.whereis(BizKit.Cluster.Singleton.name(Log)) do
       current when is_pid(current) and current != pid ->
         :ok
 
@@ -179,7 +179,7 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
     assert {:ok, state} = Log.replay(Projection)
     assert state.tasks[@key].state == "ready"
     assert state.tasks[@key].version == 7
-    pid = Process.whereis(Log)
+    pid = GenServer.whereis(BizKit.Cluster.Singleton.name(Log))
     monitor = Process.monitor(pid)
     Process.exit(pid, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}

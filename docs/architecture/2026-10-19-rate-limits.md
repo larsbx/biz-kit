@@ -82,8 +82,8 @@ The rest of the suite runs with limits set out of reach (`config/test.exs`).
 
 ## Limits
 
-- Counts live in this node's memory, like sessions and held commands.
-  Several nodes would each count their own share, so a deployment with more
-  than one needs a shared store (one of the open items).
+- Counts live in memory, in one process for the whole [cluster](2026-10-19-cluster.md), so a
+  client's limit holds however its requests are spread over the nodes. If
+  that process moves, counting starts afresh.
 - Limits are per address. Many people behind one NAT share a bucket; the
   defaults leave room for that, and they are configuration.

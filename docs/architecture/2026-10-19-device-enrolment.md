@@ -113,8 +113,9 @@ endpoints are shared (`SpruceGoose.Web.Requests`).
 
 ## Limits
 
-- Requests, codes and held approvals live in one node's memory, like
-  sessions. A restart loses pending requests; the device simply asks again.
+- Requests, codes and held approvals live in memory, in one process for the
+  whole [cluster](2026-10-19-cluster.md). If it restarts or moves, pending requests are lost; the
+  device simply asks again.
 - Code guessing: 60 bits makes it impractical, and `/api/v1/enrolments` is
   [rate-limited](2026-10-19-rate-limits.md) per client as well.
 - Revocation: see [device revocation](2026-10-19-device-revocation.md).

@@ -5,12 +5,15 @@ defmodule SpruceGoose.Application do
   @impl true
   def start(_type, _args) do
     verify_sop_adoption!()
+    # A malformed trusted proxy stops this node here rather than failing
+    # every request later.
+    SpruceGoose.Web.RateLimit.trusted()
 
     children =
       [
         {AshAuthentication.Oauth2Server.Supervisor, [otp_app: :spruce_goose]},
         SpruceGoose.Repo,
-        SpruceGoose.Web.RateLimit.Counts,
+        {BizKit.Cluster.Singleton, SpruceGoose.Web.RateLimit.Counts},
         {Oban, Application.fetch_env!(:spruce_goose, Oban)},
         {AshAuthentication.Supervisor, [otp_app: :spruce_goose]}
       ] ++

@@ -529,7 +529,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     c = custody(ctx, hash)
     {:ok, receipt} = CoopSubstrate.ArtifactCustody.submit(c)
     before = Log.replay(Projection)
-    pid = Process.whereis(Log)
+    pid = GenServer.whereis(BizKit.Cluster.Singleton.name(Log))
     monitor = Process.monitor(pid)
     Process.exit(pid, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}
@@ -542,7 +542,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
   defp await_appender(_previous, 0), do: flunk("appender did not recover")
 
   defp await_appender(previous, retries) do
-    case Process.whereis(Log) do
+    case GenServer.whereis(BizKit.Cluster.Singleton.name(Log)) do
       pid when is_pid(pid) and pid != previous ->
         Log.head()
 
