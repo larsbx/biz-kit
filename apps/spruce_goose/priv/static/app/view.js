@@ -202,11 +202,42 @@ export function grantFor(details) {
   };
 }
 
-// What an administrator may end of what a person holds in this project
+// What an administrator may end of what a person holds in a project
 // (`GET /api/v1/principals/:id`): device and reviewer grants, one by one.
 export const revocable = (held) => held.filter((h) => h.kind === "operator" || h.kind === "reviewer");
 
 export const revocationType = (kind) => (kind === "reviewer" ? "TaskReviewerRevokedV1" : "TaskOperatorRevokedV1");
+
+// -- a chapter's projects (docs/architecture/2026-10-19-chapter-projects.md) -----------
+
+const finished = ["completed", "cancelled"];
+
+// A project's tasks by state ({state: count}), in words.
+export function taskSummary(tasks) {
+  const count = (states) => states.reduce((n, s) => n + (tasks[s] ?? 0), 0);
+  const open = count(Object.keys(tasks).filter((s) => !finished.includes(s)));
+  const parts = [
+    [open, "open"],
+    ...finished.map((s) => [count([s]), s]),
+  ].filter(([n]) => n > 0);
+  return parts.length ? parts.map(([n, s]) => `${n} ${s}`).join(", ") : "no tasks";
+}
+
+// This page's query (`location.search`), for another project of the chapter.
+export function projectSearch(search, tenant, project) {
+  const params = new URLSearchParams(search);
+  params.set("tenant", tenant);
+  params.set("project", project);
+  return `?${params}`;
+}
+
+// What a person holds per project (`GET /api/v1/principals/:id`), in this
+// page's chapter only: the project open here first, marked `here`.
+export const projectsHeld = (found, [chapter, tenant, project]) =>
+  found.projects
+    .filter((p) => p.chapter_id === chapter)
+    .map((p) => ({ ...p, here: p.tenant_id === tenant && p.project_id === project }))
+    .sort((a, b) => b.here - a.here);
 
 // -- own devices (docs/architecture/2026-10-19-own-devices.md) ------------------------
 

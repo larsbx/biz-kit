@@ -75,6 +75,7 @@ defmodule SpruceGoose.Web.Router do
     post("/api/v1/principals/:id/offboarding", PrincipalController, :prepare)
     post("/api/v1/principals/:id/offboarding/:held_id", PrincipalController, :offboard)
     get("/api/v1/chapters/:chapter_id/administrators", AdministratorController, :index)
+    get("/api/v1/chapters/:chapter_id/projects", AdministratorController, :projects)
 
     post(
       "/api/v1/chapters/:chapter_id/administrators/:key_id/revocation",

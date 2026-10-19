@@ -117,13 +117,19 @@ defmodule CoopSubstrate.Projections.Tasks do
   or by them. Offboarding ends exactly these.
   """
   def held_by(state, principal, scope) do
-    for kind <- @authority,
-        {id, a} <- Map.fetch!(state, kind),
+    for {kind, id, a} <- authorities(state),
         a.active,
         {a.chapter_id, a.tenant_id, a.project_id} == scope,
-        principal in [a.principal_id, a[:delegator_principal_id]],
+        principal in holders(a),
         do: {kind, id}
   end
+
+  @doc "Every grant and delegation, active or not, as `{kind, event_id, authority}`."
+  def authorities(state),
+    do: for(kind <- @authority, {id, a} <- Map.fetch!(state, kind), do: {kind, id, a})
+
+  @doc "The principals an authority is held by: its holder and, for a delegation, its delegator."
+  def holders(a), do: Enum.reject([a.principal_id, a[:delegator_principal_id]], &is_nil/1)
 
   def scope(%Envelope{chapter_id: ch, payload: p}), do: {ch, p["tenant_id"], p["project_id"]}
 

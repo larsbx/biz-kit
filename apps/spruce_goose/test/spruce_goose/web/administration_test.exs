@@ -3,8 +3,8 @@ defmodule SpruceGoose.Web.AdministrationTest do
   Administration from a browser key (docs/architecture/2026-10-19-administration.md):
   the first administrator's browser is approved by the holder of the
   governance seed (`mix coop.enrol`, the bootstrap); from then on its key
-  signs as governance through the same endpoints, and lists and revokes the
-  chapter's administrators.
+  signs as governance through the same endpoints, lists and revokes the
+  chapter's administrators, and lists its projects.
   """
   use ExUnit.Case, async: false
 
@@ -144,5 +144,17 @@ defmodule SpruceGoose.Web.AdministrationTest do
              Client.get_signed(url, governance(w))
 
     assert key == w.gov.signer.key_id
+  end
+
+  test "an administrator lists the chapter's projects, signed by a governance key of it", w do
+    url = w.base <> "/api/v1/chapters/#{w.chapter}/projects"
+    assert {:error, {401, _}} = Client.get(url)
+    assert {:error, {401, _}} = Client.get_signed(url, signer(w.browser))
+
+    assert {:ok,
+            [
+              %{"project_id" => "project-1", "tasks" => %{}, "people" => ["alice", "bot"]},
+              %{"project_id" => "project-2", "tasks" => %{}, "people" => ["alice"]}
+            ]} = Client.get_signed(url, governance(w))
   end
 end
