@@ -17,13 +17,27 @@ defmodule CoopSubstrate.Tasks.Readiness do
       lifecycle authority by itself: an operator completes the task.
 
   A completed task is what a successor's readiness waits for.
+
+  Cancel and reopen (docs/architecture/2026-10-19-cancel-reopen.md):
+
+    * `TaskCancelledV1`, by an operator before the work starts (inbox,
+      proposed, queued or ready), and `TaskCancelledByGovernanceV1`, by a
+      governance key from any state short of completed, both with a reason.
+      Cancelled is final; a successor that names the task can no longer
+      become ready unless governance redefines its predecessors.
+    * `TaskReopenedV1` (in_progress -> queued), by an operator with a
+      reason: who started it, the evidence and its review are cleared, and
+      the task must be readied again.
   """
   alias CoopSubstrate.Projections.Tasks, as: Projection
   alias CoopSubstrate.Harness.Artifacts
   alias CoopSubstrate.Protocol.Envelope
 
   @commands ~w(TaskReadinessDefinedV1 TaskSOPAcknowledgedV1 TaskQueuedV1 TaskReadyV1
-                TaskStartedV1 TaskCompletedV1)
+                TaskStartedV1 TaskCompletedV1 TaskCancelledV1 TaskCancelledByGovernanceV1
+                TaskReopenedV1)
+  @governance ~w(TaskReadinessDefinedV1 TaskCancelledByGovernanceV1)
+  @cancels ~w(TaskCancelledV1 TaskCancelledByGovernanceV1)
   @subject %{
     "tenant_id" => :string,
     "project_id" => :string,
@@ -48,7 +62,10 @@ defmodule CoopSubstrate.Tasks.Readiness do
       "TaskQueuedV1" => spec("operator", @actor),
       "TaskReadyV1" => spec("operator", Map.put(@actor, "custody_receipts", :any)),
       "TaskStartedV1" => spec("operator", @actor),
-      "TaskCompletedV1" => spec("operator", Map.put(@actor, "review_event_id", :string))
+      "TaskCompletedV1" => spec("operator", Map.put(@actor, "review_event_id", :string)),
+      "TaskCancelledV1" => spec("operator", Map.put(@actor, "reason", :string)),
+      "TaskCancelledByGovernanceV1" => spec("governance", %{"reason" => :string}),
+      "TaskReopenedV1" => spec("operator", Map.put(@actor, "reason", :string))
     }
   end
 
@@ -68,7 +85,11 @@ defmodule CoopSubstrate.Tasks.Readiness do
     end
   end
 
-  defp authority(%Envelope{type: "TaskReadinessDefinedV1", signers: [signer]} = env, _, keys) do
+  @doc "The cancelling commands (an operator's or governance's)."
+  def cancels, do: @cancels
+
+  defp authority(%Envelope{type: type, signers: [signer]} = env, _, keys)
+       when type in @governance do
     if get_in(keys, [{env.chapter_id, "governance"}, signer.key_id]) == signer.pubkey,
       do: :ok,
       else: {:error, :task_governance_not_declared}
@@ -142,6 +163,28 @@ defmodule CoopSubstrate.Tasks.Readiness do
         _ -> {:error, :dod_review_mismatch}
       end
     end
+  end
+
+  # Before the work starts, a person may call it off; once under way, only
+  # governance may, or the task goes back to be readied again.
+  defp check_command(%Envelope{type: "TaskCancelledV1"}, p, task, _state) do
+    with :ok <- transition(task, ~w(inbox proposed queued ready), "cancelled"),
+         do: reason(p["reason"])
+  end
+
+  defp check_command(%Envelope{type: "TaskCancelledByGovernanceV1"}, p, task, _state) do
+    with :ok <- transition(task, ~w(inbox proposed queued ready in_progress), "cancelled"),
+         do: reason(p["reason"])
+  end
+
+  defp check_command(%Envelope{type: "TaskReopenedV1"}, p, task, _state) do
+    with :ok <- transition(task, ["in_progress"], "queued"), do: reason(p["reason"])
+  end
+
+  defp reason(text) do
+    if is_binary(text) and String.trim(text) != "" and String.length(text) <= 2048,
+      do: :ok,
+      else: {:error, :invalid_reason}
   end
 
   defp transition(task, allowed, to) do
@@ -302,4 +345,23 @@ defmodule CoopSubstrate.Tasks.Readiness do
       |> Map.put(:started_by, p["principal_id"])
 
   defp fold(task, %Envelope{type: "TaskCompletedV1"}), do: %{task | state: "completed"}
+
+  defp fold(task, %Envelope{type: type, payload: p} = env) when type in @cancels,
+    do:
+      task
+      |> Map.put(:state, "cancelled")
+      |> Map.put(:cancellation, %{
+        event_id: env.event_id,
+        principal_id: p["principal_id"],
+        reason: p["reason"]
+      })
+
+  defp fold(task, %Envelope{type: "TaskReopenedV1"}),
+    do:
+      %{
+        task
+        | state: "queued",
+          dod: %{task.dod | submission: nil, review: nil}
+      }
+      |> Map.put(:started_by, nil)
 end

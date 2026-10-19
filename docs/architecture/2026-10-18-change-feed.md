@@ -50,7 +50,7 @@ lowercase hex):
 
 | Kind | Fields |
 | --- | --- |
-| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `started_by` (once started), `dod`, `readiness` |
+| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `started_by` (once started), `cancellation` (once cancelled: event ID, principal or none for governance, reason), `dod`, `readiness` |
 | `readiness` | `event_id`, `artifact_requirements` (name → digest), `predecessor_ids`, `sop_digest`; `acknowledgment` as principal, key ID and custody receipt ID |
 | `dod` | `event_id`, `criteria`, `definition_ref`; `submission` and `review` as event and principal IDs, `review.submission_event_id`, `review.decision` and `review.reason` |
 | suggestion | `task_id`, `kind`, `change`, `principal_id`, `base_timing_version`, `rationale`, `rationale_receipt_id`, `status`, `reason`, `reason_receipt_id`, `resolved_by_event_id` |
@@ -127,7 +127,10 @@ into another system.
 
 A reader must hold an active **operator, suggester or reviewer grant for
 exactly the requested scope** (reviewers since
-[execution](2026-10-19-execution.md)). A delegation confers no read access. `Feed.Access` is the
+[execution](2026-10-19-execution.md)). A person signed in who holds a
+governance key of the chapter, declared for them, reads every project in it
+as an administrator, until the key is revoked
+([administration](2026-10-19-administration.md)). A delegation confers no read access. `Feed.Access` is the
 pure decision; `Feed.authorize/2` applies it to the appender's current gate
 (`Log.gate/0`) and spends the request's nonce.
 

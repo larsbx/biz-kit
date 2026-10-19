@@ -1,14 +1,18 @@
 // Drives the web view in Chromium for SpruceGoose.Web.BrowserTest, talking to
 // the test over stdin/stdout one JSON line at a time:
-//   → {"code": …, "key_id": …}   once the page has requested access for its key
-//   ← "go"                       once an administrator has approved and an agent has suggested
+//   → {"code", "key_id", "admin_code", "admin_key_id"}
+//                                once the person's page has requested access for its key, and
+//                                an administrator's browser has asked to administer the chapter
+//   ← "go"                       once the seed holder has approved both and an agent has suggested
 //   → {"proposed": true}         after accepting both suggestions and proposing the task
 //   ← "go"                       once governance has defined what the task needs
-//   → {"reviewer_code": …, "reviewer_key_id": …}
+//   → {"reviewer_code", "reviewer_key_id", "reviewer"}
 //                                after taking the task to ready, starting it and submitting
-//                                evidence; a second browser has asked for reviewer access
-//   ← "go"                       once an administrator has approved the reviewer
-//   → {"done": status text}      after the review, completing the task and revoking this device
+//                                evidence; a reviewer's browser has asked for access, and the
+//                                administrator's browser has approved it
+//   → {"done": status text}      after the review, completing the task, the administrator
+//                                cancelling task-3 and offboarding the reviewer, and revoking
+//                                this device
 // Usage: node decide.cjs <base url> <chapter> <tenant> <project>
 const { chromium } = require("playwright");
 const readline = require("node:readline");
@@ -46,9 +50,38 @@ async function signIn(browser, subject) {
     await page.getByRole("button", { name: "Request access" }).click();
     const code = page.locator("#enrolment .code");
     await code.waitFor();
-    say({ code: await code.textContent(), key_id: await page.locator("#key-id").textContent() });
+
+    // An administrator's browser asks to administer the chapter
+    // (docs/architecture/2026-10-19-administration.md).
+    const admin = await signIn(browser, "sub-admin");
+    await admin.goto(`${base}/app?${query}`);
+    await admin.locator("#key-id").filter({ hasText: /^k-/ }).waitFor({ state: "attached" });
+    await admin.getByLabel("Name this device").fill("Office browser");
+    await admin.locator("#enrol-role").selectOption("governance");
+    await admin.getByRole("button", { name: "Request access" }).click();
+    const adminCode = admin.locator("#admin-enrolment .code");
+    await adminCode.waitFor();
+
+    say({
+      code: await code.textContent(),
+      key_id: await page.locator("#key-id").textContent(),
+      admin_code: await adminCode.textContent(),
+      admin_key_id: await admin.locator("#key-id").textContent(),
+    });
 
     if ((await next()) !== "go") throw new Error("expected go");
+    await admin.reload();
+    await admin.getByText("This browser administers this chapter").waitFor();
+
+    // Sign what a page shows in its confirmation, if it is `type` (and `includes`).
+    const signOn = async (p, type, includes = "") => {
+      const shown = p.locator("#confirm");
+      await shown.waitFor({ state: "visible" });
+      const body = await p.locator("#confirm-body").textContent();
+      if (!body.includes(type) || !body.includes(includes)) throw new Error(`unexpected command: ${body}`);
+      await p.getByRole("button", { name: "Sign and send" }).click();
+      await shown.waitFor({ state: "hidden" });
+    };
 
     // Reloading keeps the device key (IndexedDB) and finds it enrolled.
     await page.reload();
@@ -77,6 +110,17 @@ async function signIn(browser, subject) {
     await page.locator("#status").filter({ hasText: "Recorded on the ledger" }).waitFor();
     await page.getByText("None.").first().waitFor();
     const accepted = await page.locator("#status").textContent();
+
+    // Call off the rescheduled task, with a reason (docs/architecture/2026-10-19-cancel-reopen.md).
+    const other = page.locator("#tasks .card").filter({ hasText: "Task task-1" });
+    page.once("dialog", (prompt) => prompt.accept("No longer needed"));
+    await other.getByRole("button", { name: "Cancel…" }).click();
+    await dialog.waitFor({ state: "visible" });
+    const cancelling = await page.locator("#confirm-body").textContent();
+    if (!cancelling.includes("TaskCancelledV1") || !cancelling.includes("No longer needed"))
+      throw new Error(`unexpected command: ${cancelling}`);
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await other.getByText("Cancelled by").waitFor();
 
     // Lifecycle: each step is a button on the task, signed like a decision.
     const task = page.locator("#tasks .card").filter({ hasText: "Write up the audit" });
@@ -148,12 +192,20 @@ async function signIn(browser, subject) {
     await reviewer.getByRole("button", { name: "Request access" }).click();
     const reviewerCode = reviewer.locator("#review-enrolment .code");
     await reviewerCode.waitFor();
+    const reviewerPrincipal = (await reviewer.locator("#who").textContent()).replace("Signed in as ", "");
+
+    // The administrator approves it in the view, signed by its browser's key.
+    await admin.locator("#approve-code").fill(await reviewerCode.textContent());
+    await admin.locator("#approve-form").getByRole("button", { name: "Look up" }).click();
+    await admin.locator("#approve-details").getByText("asks for reviewer access").waitFor();
+    await admin.getByRole("button", { name: "Approve…" }).click();
+    await signOn(admin, "TaskReviewerGrantedV1", "Review tablet");
+    await admin.locator("#approve-details").getByText("Approved:").waitFor();
     say({
       reviewer_code: await reviewerCode.textContent(),
       reviewer_key_id: await reviewer.locator("#key-id").textContent(),
+      reviewer: reviewerPrincipal,
     });
-
-    if ((await next()) !== "go") throw new Error("expected go");
 
     // The reviewer reads the evidence, then accepts it, signed by their device.
     await reviewer.reload();
@@ -176,6 +228,22 @@ async function signIn(browser, subject) {
     // The person completes the task, citing that review.
     await sign("TaskCompletedV1", "Complete");
     await task.getByText("completed", { exact: true }).waitFor();
+
+    // The administrator cancels a task it does not work on, and offboards the
+    // reviewer from the project.
+    const third = admin.locator("#tasks .card").filter({ hasText: "Task task-3" });
+    admin.once("dialog", (prompt) => prompt.accept("Client withdrew"));
+    await third.getByRole("button", { name: "Cancel as administrator…" }).click();
+    await signOn(admin, "TaskCancelledByGovernanceV1", "Client withdrew");
+    await third.getByText("Cancelled by governance").waitFor();
+
+    await admin.locator("#person-id").fill(reviewerPrincipal);
+    await admin.locator("#person-form").getByRole("button", { name: "Look up" }).click();
+    await admin.locator("#person-details").getByText("holds reviewer").waitFor();
+    admin.once("dialog", (question) => question.accept());
+    await admin.getByRole("button", { name: "Offboard from this project" }).click();
+    await signOn(admin, "TaskPrincipalOffboardedV1", reviewerPrincipal);
+    await admin.locator("#person-details").getByText("holds nothing in this project").waitFor();
 
     // Retire this device: confirm, check the signed command, and the page
     // no longer counts it as enrolled.

@@ -66,7 +66,9 @@ Governance signs the DoD and the readiness definition for the same task, so the
 rule adds no new kind of step. Baselined tasks need a DoD before queuing like
 any other. Tasks queued before this rule are not re-checked; on this rehearsal
 path no production data exists. The rule is modelled in
-[`spec/task_readiness.qnt`](../../apps/coop_substrate/spec/task_readiness.qnt).
+[`spec/task_readiness.qnt`](../../apps/coop_substrate/spec/task_readiness.qnt),
+on the lifecycle in
+[`spec/task_lifecycle.qnt`](../../apps/coop_substrate/spec/task_lifecycle.qnt).
 
 ## Remaining boundaries
 

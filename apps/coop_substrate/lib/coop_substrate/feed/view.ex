@@ -6,7 +6,9 @@ defmodule CoopSubstrate.Feed.View do
   readiness definition and SOP acknowledgement, who started it, and its
   evidence submission and review (not the evidence), and a receipt its
   digest, so a person's device can take each lifecycle step
-  (docs/architecture/2026-10-19-lifecycle.md, 2026-10-19-execution.md).
+  (docs/architecture/2026-10-19-lifecycle.md, 2026-10-19-execution.md). A
+  cancelled task carries who cancelled it (governance: none) and why
+  (2026-10-19-cancel-reopen.md).
 
   Pure. `select/2` reads a view out of the task projection; `diff/2` gives the
   changes between two views as whole-entity upserts; `apply/2` replays them.
@@ -86,7 +88,7 @@ defmodule CoopSubstrate.Feed.View do
   defp task(t) do
     t
     |> Map.take(~w(state version title description definition_of_done timing timing_version
-                   timing_delegation_id last_event_id started_by)a)
+                   timing_delegation_id last_event_id started_by cancellation)a)
     |> Map.put(:dod, dod(t.dod))
     |> Map.put(:readiness, readiness(t[:readiness]))
     |> json()

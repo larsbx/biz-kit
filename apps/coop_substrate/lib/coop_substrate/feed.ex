@@ -68,10 +68,17 @@ defmodule CoopSubstrate.Feed do
          do: {:ok, reader}
   end
 
-  @doc "The reader for a principal authenticated outside the ledger, as of now."
+  @doc """
+  The reader for a principal authenticated outside the ledger, as of now: by
+  its grant in the project, else as an administrator of the chapter.
+  """
   @spec authorize_principal(String.t(), View.scope()) :: {:ok, Access.t()} | {:error, :no_grant}
-  def authorize_principal(principal_id, scope),
-    do: Access.for_principal(Log.gate().orchestration, principal_id, scope)
+  def authorize_principal(principal_id, scope) do
+    gate = Log.gate()
+
+    with {:error, :no_grant} <- Access.for_principal(gate.orchestration, principal_id, scope),
+         do: Access.for_administrator(gate, principal_id, scope)
+  end
 
   @spec open(View.scope(), integer(), Access.t() | nil) :: {:ok, t(), frame()} | {:error, term()}
   def open(scope, cursor, reader \\ nil)
@@ -132,8 +139,7 @@ defmodule CoopSubstrate.Feed do
 
   defp live?(%__MODULE__{reader: nil}), do: true
 
-  defp live?(%__MODULE__{reader: reader, gate: gate}),
-    do: Access.live?(gate.orchestration, reader)
+  defp live?(%__MODULE__{reader: reader, gate: gate}), do: Access.live_in?(gate, reader)
 
   defp catch_up(%__MODULE__{seq: seq} = session) do
     with {:ok, envelopes} <- Log.read_all(from: seq + 1), do: {:ok, fold(session, envelopes)}

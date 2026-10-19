@@ -12,6 +12,8 @@ defmodule SpruceGoose.Web.Requests do
 
   require Logger
 
+  alias CoopSubstrate.Governance.Read
+
   # The endpoint's parsers have usually read the body already; the router
   # alone (as in tests) leaves it unread.
   def json_body(conn) do
@@ -97,8 +99,52 @@ defmodule SpruceGoose.Web.Requests do
     :already_enrolled,
     :grant_already_revoked,
     :nothing_to_offboard,
+    :unknown_role_key,
     :no_submission
   ]
+
+  @fields ~w(key ts nonce sig)
+
+  @doc """
+  The chapters a request signed by a governance key (`Governance.Read`, an
+  `Authorization: CoopGovernance …` header) may act on, or
+  `{:unauthorized, reason}`.
+  """
+  def governance_read(conn) do
+    with [header] <- get_req_header(conn, "authorization"),
+         "CoopGovernance " <> params <- header,
+         fields = Map.new(Regex.scan(~r/(\w+)="([^"]*)"/, params), fn [_, k, v] -> {k, v} end),
+         true <- Enum.all?(@fields, &Map.has_key?(fields, &1)),
+         {ts, ""} <- Integer.parse(fields["ts"]),
+         {:ok, signature} <- Base.url_decode64(fields["sig"], padding: false) do
+      Read.authorize(
+        %{
+          method: conn.method,
+          path: conn.request_path,
+          timestamp_ms: ts,
+          nonce: fields["nonce"],
+          key_id: fields["key"]
+        },
+        signature
+      )
+      |> case do
+        {:ok, chapters} -> {:ok, chapters}
+        {:error, reason} -> {:unauthorized, reason}
+      end
+    else
+      _ -> {:unauthorized, :malformed_authorization}
+    end
+  end
+
+  @doc "401 for a governance request, its reason logged."
+  def unauthorized(conn, reason) do
+    Logger.info("governance read refused: #{inspect(reason)}")
+
+    conn
+    |> put_resp_header("www-authenticate", "CoopGovernance")
+    |> put_status(401)
+    |> json(%{error: "unauthorized"})
+  end
 
   defp ledger_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp ledger_reason(reason) when is_tuple(reason), do: ledger_reason(elem(reason, 0))

@@ -102,7 +102,7 @@ defmodule CoopSubstrate.EnrolmentsTest do
       assert begin(w, pubkey: <<1, 2, 3>>) == {:error, :invalid_pubkey}
       assert begin(w, label: "") == {:error, :invalid_label}
       assert begin(w, label: String.duplicate("x", 81)) == {:error, :invalid_label}
-      assert begin(w, role: "governance") == {:error, :invalid_role}
+      assert begin(w, role: "steward") == {:error, :invalid_role}
     end
 
     test "refused without proof by that key, or by another principal", w do
@@ -313,6 +313,143 @@ defmodule CoopSubstrate.EnrolmentsTest do
       refute Log.gate().orchestration.dod_grants[grant.event_id].active
 
       assert status(w, role: "reviewer") == :none
+    end
+  end
+
+  describe "administrators (docs/architecture/2026-10-19-administration.md)" do
+    alias CoopSubstrate.Administrators
+    alias CoopSubstrate.Enrolments.Approver
+
+    test "approval declares the browser's key a governance key of the chapter, for the person",
+         w do
+      request = request!(w, role: "governance")
+      assert status(w, role: "governance") == {:pending, request.code, request.expires_at}
+
+      {:ok, declared} = approve!(w, request.code)
+      assert declared.type == "RoleKeyDeclared"
+
+      assert declared.payload == %{
+               "role" => "governance",
+               "key_id" => w.device.signer.key_id,
+               "pubkey" => {:bytes, w.device.signer.pubkey},
+               "member_id" => "alice"
+             }
+
+      assert status(w, role: "governance") == :enrolled
+      assert status(w) == :none
+      assert begin(w, role: "governance") == {:error, :already_enrolled}
+
+      assert %{key_id: _, principal_id: "alice"} =
+               Enum.find(
+                 Administrators.list("chapter-genesis"),
+                 &(&1.key_id == w.device.signer.key_id)
+               )
+
+      # The browser's key now signs as governance: it approves another request.
+      other = new_member("operator")
+
+      {:ok, challenge} =
+        begin(w, key_id: other.signer.key_id, pubkey: other.signer.pubkey, principal: "bob")
+
+      {:ok, bob} = Enrolments.prove("bob", challenge.id, sign(challenge, other))
+      {:ok, pending} = Enrolments.prepare_approval(bob.code, w.device.signer.key_id)
+
+      assert {:ok, %{type: "TaskOperatorGrantedV1"}} =
+               Enrolments.approve(
+                 bob.code,
+                 pending.id,
+                 Crypto.sign(pending.signing_bytes, w.device.seed)
+               )
+    end
+
+    test "the administrator's tool signs exactly the declaration asked for", _w do
+      details = %{
+        "role" => "governance",
+        "chapter_id" => "chapter-genesis",
+        "principal_id" => "alice",
+        "key_id" => "k-1",
+        "public_key" => Base.url_encode64(<<1::256>>, padding: false)
+      }
+
+      core = %{
+        "type" => "RoleKeyDeclared",
+        "chapter_id" => "chapter-genesis",
+        "payload" => %{
+          "role" => "governance",
+          "key_id" => "k-1",
+          "pubkey" => {:bytes, <<1::256>>},
+          "member_id" => "alice"
+        }
+      }
+
+      assert Approver.grants?(core, details)
+      refute Approver.grants?(put_in(core, ["payload", "member_id"], "mallory"), details)
+      refute Approver.grants?(put_in(core, ["payload", "role"], "steward"), details)
+      refute Approver.grants?(%{core | "chapter_id" => "other"}, details)
+    end
+
+    test "an administrator's key is revoked by another, never the chapter's last", w do
+      {:ok, _} = approve!(w, request!(w, role: "governance").code)
+      key = w.device.signer.key_id
+
+      revoke = fn target, signer ->
+        with {:ok, pending} <-
+               Administrators.prepare_revocation(
+                 "chapter-genesis",
+                 target,
+                 "Left",
+                 signer.signer.key_id
+               ) do
+          Administrators.revoke(
+            "chapter-genesis",
+            target,
+            pending.id,
+            Crypto.sign(pending.signing_bytes, signer.seed)
+          )
+        end
+      end
+
+      assert {:ok, %{type: "RoleKeyRevoked"}} = revoke.(key, w.gov)
+      assert status(w, role: "governance") == :none
+      refute Enum.any?(Administrators.list("chapter-genesis"), &(&1.key_id == key))
+
+      assert revoke.(key, w.gov) == {:error, :unknown_role_key}
+
+      assert {:error, {:invalid, :cannot_orphan_governance}} =
+               revoke.(w.gov.signer.key_id, w.gov)
+    end
+
+    test "an administrator reads every project of the chapter until its key is revoked", w do
+      alias CoopSubstrate.Feed
+      alias CoopSubstrate.Feed.Access
+
+      assert Feed.authorize_principal("alice", @scope) == {:error, :no_grant}
+      {:ok, _} = approve!(w, request!(w, role: "governance").code)
+
+      other = {"chapter-genesis", "tenant-2", "project-9"}
+      assert {:ok, %Access{role: :governance} = reader} = Feed.authorize_principal("alice", other)
+      assert {:ok, _session, _frame} = Feed.open(other, 0, reader)
+      assert Feed.authorize_principal("alice", {"chapter-other", "t", "p"}) == {:error, :no_grant}
+
+      {:ok, pending} =
+        Administrators.prepare_revocation(
+          "chapter-genesis",
+          w.device.signer.key_id,
+          "Left",
+          w.gov.signer.key_id
+        )
+
+      {:ok, _} =
+        Administrators.revoke(
+          "chapter-genesis",
+          w.device.signer.key_id,
+          pending.id,
+          Crypto.sign(pending.signing_bytes, w.gov.seed)
+        )
+
+      refute Access.live_in?(Log.gate(), reader)
+      assert Feed.open(other, 0, reader) == {:error, :grant_revoked}
+      assert Feed.authorize_principal("alice", other) == {:error, :no_grant}
     end
   end
 end

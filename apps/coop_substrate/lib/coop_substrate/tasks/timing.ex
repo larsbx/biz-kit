@@ -149,6 +149,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   def check(%Envelope{type: "TaskTimingRevisedV1", payload: p} = env, state, _keys) do
     with {:ok, via} <- authority(env, state),
          {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task),
+         :ok <- open(task),
          :ok <- expected(p["expected_timing_version"], task.timing_version),
          :ok <- timing(p["timing"]),
          :ok <- delegated_limits(via, p["timing"], task),
@@ -288,12 +289,17 @@ defmodule CoopSubstrate.Tasks.Timing do
 
   defp target("timing", %Envelope{payload: p} = env, state) do
     with true <- is_integer(p["base_timing_version"]) or {:error, :suggestion_base_required},
-         {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task) do
+         {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task),
+         :ok <- open(task) do
       if p["base_timing_version"] <= task.timing_version,
         do: :ok,
         else: {:error, :suggestion_base_ahead}
     end
   end
+
+  # A cancelled task is not rescheduled (docs/architecture/2026-10-19-cancel-reopen.md).
+  defp open(%{state: "cancelled"}), do: {:error, :task_cancelled}
+  defp open(_task), do: :ok
 
   defp rationale(text) do
     if String.trim(text) != "" and String.length(text) <= @max_rationale,
@@ -545,7 +551,13 @@ defmodule CoopSubstrate.Tasks.Timing do
     |> command(env)
   end
 
-  def handle_event(_env, state), do: state
+  # Cancelling a task resolves its pending timing suggestions: nothing can
+  # accept them now.
+  def handle_event(%Envelope{type: type} = env, state) do
+    if type in CoopSubstrate.Tasks.Readiness.cancels(),
+      do: supersede(state, env, &(&1 == "timing")),
+      else: state
+  end
 
   defp command(state, env), do: put_in(state, [:timing_commands, Access.key(env.event_id)], env)
 
@@ -572,12 +584,14 @@ defmodule CoopSubstrate.Tasks.Timing do
   defp resolve_cited(state, _env), do: state
 
   # Creating a task resolves every other pending create suggestion for it.
-  defp supersede_creates(state, env) do
+  defp supersede_creates(state, env), do: supersede(state, env, &(&1 == "create"))
+
+  defp supersede(state, env, kind?) do
     key = Projection.task_key(env)
 
     state.suggestions
     |> Enum.filter(fn {_id, s} ->
-      s.status == :pending and s.kind == "create" and
+      s.status == :pending and kind?.(s.kind) and
         {s.chapter_id, s.tenant_id, s.project_id, s.task_id} == key
     end)
     |> Enum.reduce(state, fn {id, _}, acc -> resolve(acc, id, env, :superseded, nil, nil) end)

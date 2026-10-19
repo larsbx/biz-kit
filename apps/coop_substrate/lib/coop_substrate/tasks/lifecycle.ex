@@ -25,6 +25,11 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
     * complete → `TaskCompletedV1` (in_progress → completed), citing the
       review that accepted it.
 
+  Calling it off (docs/architecture/2026-10-19-cancel-reopen.md):
+
+    * cancel → `TaskCancelledV1` before the work starts, with a reason;
+    * reopen → `TaskReopenedV1` (in_progress → queued), with a reason.
+
   Each task step expects the task's current version, so one prepared before
   someone else changed the task is refused as stale. Whether the step is
   allowed (the state, a Definition of Done, a matching receipt, finished
@@ -41,6 +46,8 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
           | {:submit_evidence, String.t(), %{String.t() => String.t()}}
           | {:review, String.t(), String.t(), String.t()}
           | {:complete, String.t(), String.t()}
+          | {:cancel, String.t(), String.t()}
+          | {:reopen, String.t(), String.t()}
           | {:revoke_delegation, String.t()}
           | {:record_custody, <<_::256>>}
 
@@ -108,6 +115,9 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
 
   defp step(_o, _task, {:ready, _, receipts}),
     do: {:ok, "TaskReadyV1", %{"custody_receipts" => receipts}}
+
+  defp step(_o, _task, {:cancel, _, reason}), do: {:ok, "TaskCancelledV1", %{"reason" => reason}}
+  defp step(_o, _task, {:reopen, _, reason}), do: {:ok, "TaskReopenedV1", %{"reason" => reason}}
 
   defp step(_o, _task, {:complete, _, review}),
     do: {:ok, "TaskCompletedV1", %{"review_event_id" => review}}

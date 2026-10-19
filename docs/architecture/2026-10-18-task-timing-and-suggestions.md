@@ -252,7 +252,9 @@ Resolving a suggestion in the projection:
 
     accepted   ⇔ body fields of the resolving command = body fields of s.change
     amended    ⇔ they differ (the operator edited before accepting)
-    superseded ⇔ a `create` suggestion's task_id was created without citing it
+    superseded ⇔ a `create` suggestion's task_id was created without citing it,
+                 or a `timing` suggestion's task was cancelled
+                 (2026-10-19-cancel-reopen.md)
 
 Every non-pending status has exactly one resolving event, recorded as
 `resolved_by_event_id`. For `superseded` it is the `TaskCreatedV1` that created

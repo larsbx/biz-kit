@@ -165,6 +165,55 @@ function executionStep(t) {
   };
 }
 
+// What else a person may do with a task (docs/architecture/2026-10-19-cancel-reopen.md):
+// call it off before the work starts, or send work under way back to queued.
+// Each asks for a reason, recorded on the ledger.
+export function otherSteps(taskId, view) {
+  const state = view.tasks[taskId]?.state;
+  if (["inbox", "proposed", "queued", "ready"].includes(state))
+    return [{ action: "cancel", label: "Cancel…", question: "Why cancel this task? The reason is recorded on the ledger, and cancelling is final." }];
+  if (state === "in_progress")
+    return [{ action: "reopen", label: "Send back…", question: "Why send this task back to queued? Its evidence and review are cleared." }];
+  return [];
+}
+
+// -- administration (docs/architecture/2026-10-19-administration.md) ----------------
+
+// The exact command approving an enrolment request (`GET /api/v1/enrolments/:code`
+// as `details`): an operator or reviewer grant for the device, or a governance
+// key declared for the person. An administrator signs only that.
+export function grantFor(details) {
+  const pubkey = { __bytes__: Array.from(base64url.decode(details.public_key), (b) => b.toString(16).padStart(2, "0")).join("") };
+  if (details.role === "governance")
+    return {
+      type: "RoleKeyDeclared",
+      payload: { role: "governance", key_id: details.key_id, pubkey, member_id: details.principal_id },
+    };
+  return {
+    type: details.role === "reviewer" ? "TaskReviewerGrantedV1" : "TaskOperatorGrantedV1",
+    payload: {
+      tenant_id: details.tenant_id,
+      project_id: details.project_id,
+      principal_id: details.principal_id,
+      key_id: details.key_id,
+      pubkey,
+      device_label: details.label,
+    },
+  };
+}
+
+// What an administrator may end of what a person holds in this project
+// (`GET /api/v1/principals/:id`): device and reviewer grants, one by one.
+export const revocable = (held) => held.filter((h) => h.kind === "operator" || h.kind === "reviewer");
+
+export const revocationType = (kind) => (kind === "reviewer" ? "TaskReviewerRevokedV1" : "TaskOperatorRevokedV1");
+
+// Who called a task off and why, or null.
+export const cancelledBecause = (t) =>
+  t?.state === "cancelled" && t.cancellation
+    ? `Cancelled by ${t.cancellation.principal_id ?? "governance"}: “${t.cancellation.reason}”`
+    : null;
+
 // Submissions this person may review: someone else's, not yet reviewed.
 export const toReview = (view, me) =>
   Object.entries(view.tasks)

@@ -3,7 +3,8 @@ defmodule CoopSubstrate.Enrolments.Approver do
   The administrator's side of device enrolment
   (docs/architecture/2026-10-19-device-enrolment.md), behind
   `mix coop.enrol`: show the request, then sign the operator or reviewer
-  grant with the governance key only if it grants exactly that request
+  grant, or the administrator's governance key declaration, with the
+  governance key only if it grants exactly that request
   (`CoopSubstrate.Governance.Client`).
   """
 
@@ -20,6 +21,16 @@ defmodule CoopSubstrate.Enrolments.Approver do
 
   @doc "Whether the decoded core is exactly the grant the request asks for."
   @spec grants?(map(), map()) :: boolean()
+  def grants?(core, %{"role" => "governance"} = details) do
+    core["type"] == "RoleKeyDeclared" and core["chapter_id"] == details["chapter_id"] and
+      core["payload"] == %{
+        "role" => "governance",
+        "key_id" => details["key_id"],
+        "pubkey" => {:bytes, Base.url_decode64!(details["public_key"], padding: false)},
+        "member_id" => details["principal_id"]
+      }
+  end
+
   def grants?(core, details) do
     core["type"] == CoopSubstrate.Enrolments.grant_type(details["role"]) and
       core["chapter_id"] == details["chapter_id"] and

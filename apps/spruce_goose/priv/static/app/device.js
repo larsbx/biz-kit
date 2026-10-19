@@ -4,7 +4,8 @@
 // the person's operator or reviewer grant; until then the ledger refuses
 // what it signs.
 
-import { hex } from "./cbor.js";
+import { encode, hex } from "./cbor.js";
+import { base64url } from "./view.js";
 
 export const generate = () =>
   crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"]);
@@ -39,12 +40,31 @@ export const same = (a, b) => {
 
 // Whether a decoded command is exactly the one asked for: signed by this key
 // alone, of this type, with these payload fields (compared deeply: an edited
-// timing must be the one entered).
-export const isExpectedCommand = (core, { keyId, type, payload }) =>
+// timing must be the one entered). With `exact`, the payload must be exactly
+// `payload`, and with `chapter`, for that chapter: what an administrator
+// signs grants or ends access, so nothing else may ride along.
+export const isExpectedCommand = (core, { keyId, type, payload, chapter, exact = false }) =>
   core?.signers?.length === 1 &&
   core.signers[0].key_id === keyId &&
   core.type === type &&
-  Object.entries(payload).every(([field, value]) => same(core.payload?.[field], value));
+  (chapter === undefined || core.chapter_id === chapter) &&
+  (exact
+    ? same(core.payload, payload)
+    : Object.entries(payload).every(([field, value]) => same(core.payload?.[field], value)));
+
+// What a governance-signed read signs (`Governance.Read`): the request, never
+// a command, canonically encoded.
+export const governanceReadBytes = ({ method, path, timestamp_ms, nonce, key_id }) =>
+  encode({ schema: "CoopGovernanceReadV1", method, path, timestamp_ms, nonce, key_id });
+
+// The Authorization header for a request signed by this browser's governance
+// key (docs/architecture/2026-10-19-administration.md).
+export async function governanceAuthorization(pair, keyId, method, path, now = Date.now()) {
+  const nonce = base64url.encode(crypto.getRandomValues(new Uint8Array(18)));
+  const bytes = governanceReadBytes({ method, path, timestamp_ms: now, nonce, key_id: keyId });
+  const sig = base64url.encode(await sign(pair, bytes));
+  return `CoopGovernance key="${keyId}", ts="${now}", nonce="${nonce}", sig="${sig}"`;
+}
 
 export const sign = async (pair, bytes) =>
   new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, bytes));
