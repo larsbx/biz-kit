@@ -67,7 +67,14 @@ defmodule SpruceGoose.Web.Requests do
   defp json_safe(value), do: value
 
   @unauthorized [:no_credentials, :unknown_session, :expired, :unbound]
-  @bad_request [:bad_request, :bad_decision, :invalid_pubkey, :key_id_mismatch, :invalid_label]
+  @bad_request [
+    :bad_request,
+    :bad_decision,
+    :bad_amendment,
+    :invalid_pubkey,
+    :key_id_mismatch,
+    :invalid_label
+  ]
   @not_found [
     :unknown_command,
     :unknown_challenge,
@@ -93,6 +100,9 @@ defmodule SpruceGoose.Web.Requests do
         r when r in @bad_request -> {400, Atom.to_string(r)}
         r when r in @not_found -> {404, Atom.to_string(r)}
         {:invalid_signature, _} -> {422, "invalid_signature"}
+        # An edited value the ledger would refuse, said before anyone signs.
+        {:invalid, {:invalid_task_timing, _}} -> {400, "invalid_timing"}
+        {:invalid, :empty_task_field} -> {400, "empty_field"}
         r when r in @unprocessable -> {422, Atom.to_string(r)}
         r when r in @conflict -> {409, Atom.to_string(r)}
         _ -> {409, "refused_by_ledger"}

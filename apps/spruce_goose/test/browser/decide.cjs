@@ -43,11 +43,24 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
     await page.reload();
     await page.getByText("This device can decide for you").waitFor();
 
-    await page.getByRole("button", { name: "Accept" }).click();
+    const card = (text) => page.locator("#pending .card").filter({ hasText: text });
+    await card("Reschedule").getByRole("button", { name: "Accept" }).click();
     const dialog = page.locator("#confirm");
     await dialog.waitFor({ state: "visible" });
     const body = await page.locator("#confirm-body").textContent();
     if (!body.includes("TaskTimingRevisedV1")) throw new Error(`unexpected command: ${body}`);
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await card("Reschedule").waitFor({ state: "detached" });
+
+    // Edit the create suggestion's title, then accept it as edited.
+    await card("Create").getByRole("button", { name: "Edit…" }).click();
+    await page.locator("#amend").waitFor({ state: "visible" });
+    await page.getByLabel("Title").fill("Write up the audit");
+    await page.getByRole("button", { name: "Review and sign" }).click();
+    await dialog.waitFor({ state: "visible" });
+    const amended = await page.locator("#confirm-body").textContent();
+    if (!amended.includes("TaskCreatedV1") || !amended.includes("Write up the audit"))
+      throw new Error(`unexpected command: ${amended}`);
     await page.getByRole("button", { name: "Sign and send" }).click();
 
     await page.locator("#status").filter({ hasText: "Recorded on the ledger" }).waitFor();

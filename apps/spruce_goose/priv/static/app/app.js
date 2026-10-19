@@ -1,13 +1,22 @@
 // The minimal web view (docs/architecture/2026-10-18-decide.md): a project's
-// tasks and pending suggestions from the change feed; accept or decline,
-// signed by this device's key after decoding exactly what will be signed.
+// tasks and pending suggestions from the change feed; accept, edit then accept
+// (docs/architecture/2026-10-19-amend.md), or decline, signed by this device's
+// key after decoding exactly what will be signed.
 //
 // Opened as /app?chapter=…&tenant=…&project=… (&provider=… to choose the
 // sign-in provider, default workos).
 
 import { decode } from "./cbor.js";
 import * as device from "./device.js";
-import { applyFrame, base64url, describeTiming, emptyView, pendingSuggestions } from "./view.js";
+import {
+  applyFrame,
+  base64url,
+  describeTiming,
+  emptyView,
+  formTiming,
+  pendingSuggestions,
+  timingForm,
+} from "./view.js";
 
 const params = new URLSearchParams(location.search);
 const scope = ["chapter", "tenant", "project"].map((k) => params.get(k));
@@ -93,8 +102,10 @@ function suggestionCard(s) {
 
   const disabled = !pair || !enrolled || deciding;
   const accept = el("button", { className: "primary", textContent: "Accept", disabled });
+  const edit = el("button", { textContent: "Edit…", disabled });
   const decline = el("button", { textContent: "Decline", disabled });
   accept.onclick = () => decide(s, { decision: "accept" });
+  edit.onclick = () => amend(s);
   decline.onclick = () => {
     const reason = prompt("Why decline? The reason is recorded on the ledger.");
     if (reason != null) decide(s, { decision: "decline", reason });
@@ -106,7 +117,7 @@ function suggestionCard(s) {
     el("div", {}, el("strong", { textContent: what })),
     el("div", { className: "muted", textContent: `Suggested by ${s.principal_id}${stale ? " · the task has changed since" : ""}` }),
     s.rationale ? el("div", { textContent: s.rationale }) : null,
-    el("div", { className: "actions" }, accept, decline),
+    el("div", { className: "actions" }, accept, edit, decline),
   );
 }
 
@@ -156,11 +167,64 @@ async function signAndSubmit(prepare, expected) {
   }
 }
 
+// An amended command must carry exactly the edits entered, as well as cite
+// the suggestion.
 const decide = (s, decision) =>
   signAndSubmit(
     () => postJSON(`${projectPath}/commands`, { ...decision, suggestion_event_id: s.id, key_id: keyId }),
-    { type: expectedType(s, decision.decision), payload: { suggestion_event_id: s.id } },
+    { type: expectedType(s, decision.decision), payload: { suggestion_event_id: s.id, ...decision.edits } },
   );
+
+// -- editing before accepting ----------------------------------------------------------
+
+const browserTz = () => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+){0,2}$/.test(tz ?? "") ? tz : "UTC";
+};
+
+const amendFields = ["kind", "start", "end", "first", "last", "due"];
+
+function showKind() {
+  const kind = $("amend-kind").value;
+  $("amend-timed").hidden = kind !== "timed";
+  $("amend-all-day").hidden = kind !== "all_day";
+}
+
+// Fill the form from the suggestion; on "Review and sign", the edits go
+// through the same decode, check and confirm as any decision.
+function amend(s) {
+  const create = s.kind === "create";
+  const form = timingForm(s.change.timing);
+  $("amend-what").textContent = create
+    ? `Suggested by ${s.principal_id}: create “${s.change.title}”.`
+    : `Suggested by ${s.principal_id}: reschedule “${view.tasks[s.task_id]?.title ?? s.task_id}”.`;
+  $("amend-create").hidden = !create;
+  $("amend-title").value = s.change.title ?? "";
+  $("amend-description").value = s.change.description ?? "";
+  for (const k of amendFields) $(`amend-${k}`).value = form[k];
+  $("amend-error").textContent = "";
+  showKind();
+
+  $("amend-form").onsubmit = (event) => {
+    if (event.submitter?.value !== "review") return;
+    const entered = Object.fromEntries(amendFields.map((k) => [k, $(`amend-${k}`).value]));
+    const { timing, error } = formTiming({ ...entered, tz: form.tz }, s.change.timing, browserTz());
+    const title = $("amend-title").value.trim();
+    if (error || (create && !title)) {
+      event.preventDefault();
+      $("amend-error").textContent = error ?? "A task needs a title.";
+      return;
+    }
+    const description = $("amend-description").value;
+    const edits = create
+      ? { title, timing, ...(description || s.change.description != null ? { description } : {}) }
+      : { timing };
+    // Once this dialog has closed; the confirmation opens next.
+    setTimeout(() => decide(s, { decision: "amend", edits }));
+  };
+
+  $("amend").showModal();
+}
 
 // -- devices ---------------------------------------------------------------------
 
@@ -283,6 +347,7 @@ async function start() {
     // A suggestion, never over a name already typed while the page loaded.
     $("enrol-label").value ||= `${navigator.platform || "This"} browser`;
     $("enrol-form").addEventListener("submit", requestAccess);
+    $("amend-kind").addEventListener("change", showKind);
     await enrolment();
   } catch (e) {
     status(`This browser cannot hold a signing key (${e.message}); you can read but not decide.`, true);

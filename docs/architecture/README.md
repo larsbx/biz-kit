@@ -37,6 +37,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Offboarding](2026-10-19-offboarding.md): one governance-signed event per
   project ends everything a principal holds there; `mix coop.offboard` does
   every project at once.
+- [Editing before accepting](2026-10-19-amend.md): a person edits a
+  suggestion's timing, or a create suggestion's title and description, and
+  accepts it as edited; the ledger records it as `amended`.
 - [Cluster](2026-10-19-cluster.md): several nodes as one service over
   distributed Erlang; the ledger's appender and the in-memory stores run
   once per cluster, and feed notifications reach every node.

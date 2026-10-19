@@ -45,10 +45,22 @@ defmodule SpruceGoose.Web.BrowserTest do
     suggestion =
       suggest!(w, w.agent_grant, "task-1", %{"schedule" => nil, "due_ms" => 1_792_396_800_000}, 1)
 
+    to_create =
+      suggest_create!(w, w.agent_grant, "task-2", "Write it up", %{
+        "schedule" => nil,
+        "due_ms" => nil
+      })
+
     Port.command(port, "go\n")
     assert %{"done" => "Recorded on the ledger" <> _} = read!(port)
 
-    assert Log.gate().orchestration.suggestions[suggestion.event_id].status == :accepted
+    suggestions = Log.gate().orchestration.suggestions
+    assert suggestions[suggestion.event_id].status == :accepted
+
+    # The create suggestion was edited before accepting.
+    assert suggestions[to_create.event_id].status == :amended
+    task = Log.gate().orchestration.tasks[{w.chapter, tenant(), "project-1", "task-2"}]
+    assert task.title == "Write up the audit"
 
     {:ok, events} = Log.read_all(from: suggestion.global_seq + 1)
 
@@ -72,6 +84,10 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     assert revocation.payload["revoked_grant_event_id"] == grant_id
     assert hd(revocation.signers).pubkey == hd(decision.signers).pubkey
+
+    [created] = for e <- events, e.type == "TaskCreatedV1", e.chapter_id == w.chapter, do: e
+    assert created.payload["suggestion_event_id"] == to_create.event_id
+    assert hd(created.signers).pubkey == hd(decision.signers).pubkey
   end
 
   defp browser!(base, w) do

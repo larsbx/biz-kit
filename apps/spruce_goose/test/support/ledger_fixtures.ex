@@ -110,19 +110,41 @@ defmodule SpruceGoose.LedgerFixtures do
   end
 
   @doc "An agent's timing suggestion for a task, under its suggester grant."
-  def suggest!(w, grant, task_id, timing, base) do
+  def suggest!(w, grant, task_id, timing, base),
+    do:
+      suggest_change!(w, grant, task_id, %{"kind" => "timing", "timing" => timing}, %{
+        "base_timing_version" => base
+      })
+
+  @doc "An agent's suggestion to create a task."
+  def suggest_create!(w, grant, task_id, title, timing),
+    do:
+      suggest_change!(w, grant, task_id, %{
+        "kind" => "create",
+        "title" => title,
+        "timing" => timing
+      })
+
+  defp suggest_change!(w, grant, task_id, change, extra \\ %{}) do
     [env] =
       append!(
-        event(w, w.agent, "TaskChangeSuggestedV1", %{
-          "tenant_id" => @tenant,
-          "project_id" => grant.payload["project_id"],
-          "principal_id" => grant.payload["principal_id"],
-          "authorization_event_id" => grant.event_id,
-          "task_id" => task_id,
-          "change" => %{"kind" => "timing", "timing" => timing},
-          "rationale" => "Fits the free slot",
-          "base_timing_version" => base
-        })
+        event(
+          w,
+          w.agent,
+          "TaskChangeSuggestedV1",
+          Map.merge(
+            %{
+              "tenant_id" => @tenant,
+              "project_id" => grant.payload["project_id"],
+              "principal_id" => grant.payload["principal_id"],
+              "authorization_event_id" => grant.event_id,
+              "task_id" => task_id,
+              "change" => change,
+              "rationale" => "Fits the free slot"
+            },
+            extra
+          )
+        )
       )
 
     env
