@@ -30,7 +30,7 @@ defmodule CoopSubstrate.Commands do
 
   alias CoopSubstrate.Log
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
-  alias CoopSubstrate.Tasks.Decisions
+  alias CoopSubstrate.Tasks.{Decisions, Lifecycle}
 
   @table __MODULE__
   @ttl_ms 300_000
@@ -51,14 +51,24 @@ defmodule CoopSubstrate.Commands do
   # node prepared.
   @server BizKit.Cluster.Singleton.name(__MODULE__)
 
-  @spec prepare(String.t(), String.t(), CoopSubstrate.Feed.View.scope(), Decisions.decision()) ::
+  @doc """
+  Prepare a person's command on this device: a decision on a suggestion
+  (`Tasks.Decisions`) or a lifecycle step (`Tasks.Lifecycle`).
+  """
+  @spec prepare(
+          String.t(),
+          String.t(),
+          CoopSubstrate.Feed.View.scope(),
+          Decisions.decision() | Lifecycle.action()
+        ) ::
           {:ok, pending()} | {:error, term()}
-  def prepare(principal, key_id, {chapter, _, _} = scope, decision) do
+  def prepare(principal, key_id, {chapter, _, _} = scope, command) do
     o = Log.gate().orchestration
+    builder = if elem(command, 0) in [:accept, :amend, :decline], do: Decisions, else: Lifecycle
 
     with {:ok, grant_id, grant} <- operator_grant(o, principal, key_id, scope),
          {:ok, type, payload} <-
-           Decisions.command(o, scope, decision, %{
+           builder.command(o, scope, command, %{
              "principal_id" => principal,
              "authorization_event_id" => grant_id,
              "lifecycle_version" => 1

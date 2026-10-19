@@ -143,6 +143,11 @@ jobs:
           apps/biz_kit_cluster/test/singleton_test.exs
           apps/coop_substrate/test/cluster_test.exs
           apps/biz_kit_identity/test/cluster_sessions_test.exs
+          apps/coop_substrate/lib/coop_substrate/tasks/lifecycle.ex
+          apps/coop_substrate/test/lifecycle_test.exs
+          apps/spruce_goose/test/spruce_goose/web/lifecycle_test.exs
+          apps/spruce_goose/lib/spruce_goose/web/artifact_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/upload_test.exs
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test

@@ -67,6 +67,46 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
     await page.getByText("None.").first().waitFor();
     const accepted = await page.locator("#status").textContent();
 
+    // Lifecycle: each step is a button on the task, signed like a decision.
+    const task = page.locator("#tasks .card").filter({ hasText: "Write up the audit" });
+    const sign = async (type, button) => {
+      await task.getByRole("button", { name: button }).click();
+      await dialog.waitFor({ state: "visible" });
+      const command = await page.locator("#confirm-body").textContent();
+      if (!command.includes(type)) throw new Error(`unexpected command: ${command}`);
+      await page.getByRole("button", { name: "Sign and send" }).click();
+      await dialog.waitFor({ state: "hidden" });
+    };
+    await sign("TaskProposedV1", "Propose");
+    await task.getByText("Waiting for a Definition of Done").waitFor();
+    say({ proposed: true });
+
+    // Governance defines what the task needs. This device stores the SOP and
+    // the input from files, refusing a file that is not the one named.
+    if ((await next()) !== "go") throw new Error("expected go");
+    const upload = async (text, signs = true) => {
+      const [chooser] = await Promise.all([
+        page.waitForEvent("filechooser"),
+        task.getByRole("button", { name: "Upload…" }).click(),
+      ]);
+      await chooser.setFiles({ name: "file.txt", mimeType: "text/plain", buffer: Buffer.from(text) });
+      if (!signs) return;
+      await dialog.waitFor({ state: "visible" });
+      const command = await page.locator("#confirm-body").textContent();
+      if (!command.includes("ArtifactCustodyRecordedV1")) throw new Error(`unexpected command: ${command}`);
+      await page.getByRole("button", { name: "Sign and send" }).click();
+      await dialog.waitFor({ state: "hidden" });
+    };
+    await upload("Not the SOP", false);
+    await page.locator("#status").filter({ hasText: "not the file this task names" }).waitFor();
+    await upload(`SOP for ${chapter}`);
+    await sign("TaskSOPAcknowledgedV1", "Acknowledge the SOP");
+    await sign("TaskQueuedV1", "Queue");
+    await task.getByText("Waiting for a stored copy of input").waitFor();
+    await upload(`Input for ${chapter}`);
+    await sign("TaskReadyV1", "Mark ready");
+    await task.getByText("ready", { exact: true }).waitFor();
+
     // Retire this device: confirm, check the signed command, and the page
     // no longer counts it as enrolled.
     page.once("dialog", (dialog) => dialog.accept());

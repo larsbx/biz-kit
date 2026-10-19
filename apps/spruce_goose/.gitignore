@@ -8,3 +8,6 @@ deps/
 graphify-out/
 backups/
 .infisical.json
+
+# Artifacts the browser test stores (coop_substrate artifact_dir in test).
+/tmp/

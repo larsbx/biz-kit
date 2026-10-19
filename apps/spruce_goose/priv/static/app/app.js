@@ -1,19 +1,23 @@
 // The minimal web view (docs/architecture/2026-10-18-decide.md): a project's
 // tasks and pending suggestions from the change feed; accept, edit then accept
-// (docs/architecture/2026-10-19-amend.md), or decline, signed by this device's
-// key after decoding exactly what will be signed.
+// (docs/architecture/2026-10-19-amend.md), or decline; each task's next
+// lifecycle step, revoking delegations, and the decided suggestions
+// (docs/architecture/2026-10-19-lifecycle.md). Everything is signed by this
+// device's key after decoding exactly what will be signed.
 //
 // Opened as /app?chapter=…&tenant=…&project=… (&provider=… to choose the
 // sign-in provider, default workos).
 
-import { decode } from "./cbor.js";
+import { decode, hex } from "./cbor.js";
 import * as device from "./device.js";
 import {
   applyFrame,
   base64url,
+  decidedSuggestions,
   describeTiming,
   emptyView,
   formTiming,
+  nextStep,
   pendingSuggestions,
   timingForm,
 } from "./view.js";
@@ -25,6 +29,7 @@ const projectPath = `/api/v1/chapters/${chapter}/tenants/${tenant}/projects/${pr
 
 const $ = (id) => document.getElementById(id);
 let view = emptyView();
+let me = null;
 let keyId = null;
 let pair = null;
 let publicKey = null;
@@ -77,6 +82,7 @@ function render() {
             t.timing_delegation_id
               ? el("div", { className: "muted", textContent: "Last scheduled by a delegated agent" })
               : null,
+            stepControl(id, t),
           ),
         )
       : [el("p", { className: "muted", textContent: "None yet." })]),
@@ -89,7 +95,106 @@ function render() {
       : [el("p", { className: "muted", textContent: "None." })]),
   );
 
+  renderDelegations();
+  renderHistory();
   renderDevices();
+}
+
+// The task's next lifecycle step as a button, or what it is waiting for.
+function stepControl(id, t) {
+  const step = nextStep(id, view, me, keyId);
+  if (!step) return null;
+  if (step.waiting) {
+    const waiting = el("span", { className: "muted", textContent: `Waiting for ${step.waiting}.` });
+    if (!step.upload) return el("div", {}, waiting);
+    const upload = el("button", { textContent: "Upload…", disabled: !pair || !enrolled || deciding });
+    upload.onclick = () => chooseArtifact(step.upload);
+    return el("div", { className: "actions" }, waiting, upload);
+  }
+
+  const { action, label, ...cites } = step;
+  const button = el("button", { textContent: label, disabled: !pair || !enrolled || deciding });
+  button.onclick = () =>
+    signAndSubmit(
+      () => postJSON(`${projectPath}/commands`, { action, task_id: id, ...cites, key_id: keyId }),
+      { type: stepTypes[action], payload: { task_id: id, expected_version: t.version, ...cites } },
+    );
+  return el("div", { className: "actions" }, button);
+}
+
+// -- uploads (docs/architecture/2026-10-19-uploads.md) ------------------------------
+
+const UPLOAD_LIMIT = 8 * 1024 * 1024;
+
+// Choose a file; store it only if it is exactly the one named (its SHA-256,
+// computed here); then record custody of it, signed like any command.
+function chooseArtifact(expected) {
+  const input = el("input", { type: "file" });
+  input.onchange = () => input.files[0] && storeArtifact(input.files[0], expected);
+  input.click();
+}
+
+async function storeArtifact(file, expected) {
+  if (file.size > UPLOAD_LIMIT) return status("That file is larger than 8 MiB, more than custody covers.", true);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+  if (digest !== expected) return status("That is not the file this task names; nothing was stored.", true);
+
+  try {
+    status("Storing…");
+    const res = await fetch(`${projectPath}/artifacts`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream", "x-content-sha256": digest },
+      body: bytes,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+  } catch (e) {
+    return status(`Not stored: ${e.message.replaceAll("_", " ")}.`, true);
+  }
+
+  await signAndSubmit(
+    () => postJSON(`${projectPath}/commands`, { action: "record_custody", artifact_digest: digest, key_id: keyId }),
+    { type: "ArtifactCustodyRecordedV1", payload: { artifact_digest: { __bytes__: digest } } },
+  );
+}
+
+function renderDelegations() {
+  const mine = Object.entries(view.delegations).filter(([, d]) => d.delegator_principal_id === me && d.active);
+  $("delegations").replaceChildren(
+    ...(mine.length
+      ? mine.map(([id, d]) => {
+          const revoke = el("button", { textContent: "Revoke", disabled: !pair || !enrolled || deciding });
+          revoke.onclick = () =>
+            confirm(`Revoke ${d.principal_id}'s delegation? It can no longer change your tasks.`) &&
+            signAndSubmit(
+              () => postJSON(`${projectPath}/commands`, { action: "revoke_delegation", delegation_event_id: id, key_id: keyId }),
+              { type: "TaskDelegationRevokedV1", payload: { delegation_event_id: id } },
+            );
+          return el(
+            "div",
+            { className: "card row" },
+            el("span", {}, el("strong", { textContent: d.principal_id }), ` may ${d.kinds.join(" and ")} · used ${d.used} of ${d.budget}`),
+            revoke,
+          );
+        })
+      : [el("p", { className: "muted", textContent: "None." })]),
+  );
+}
+
+function renderHistory() {
+  const decided = decidedSuggestions(view).slice(0, 20);
+  $("history").replaceChildren(
+    ...(decided.length
+      ? decided.map((s) =>
+          el(
+            "div",
+            { className: "card" },
+            el("div", {}, el("strong", { textContent: s.status }), ` · ${s.kind === "create" ? `create “${s.change.title}”` : `reschedule ${view.tasks[s.task_id]?.title ?? s.task_id}`}`),
+            el("div", { className: "muted", textContent: `Suggested by ${s.principal_id}${s.reason ? ` · “${s.reason}”` : ""}` }),
+          ),
+        )
+      : [el("p", { className: "muted", textContent: "None yet." })]),
+  );
 }
 
 function suggestionCard(s) {
@@ -122,6 +227,13 @@ function suggestionCard(s) {
 }
 
 // -- deciding ------------------------------------------------------------------------
+
+const stepTypes = {
+  propose: "TaskProposedV1",
+  acknowledge_sop: "TaskSOPAcknowledgedV1",
+  queue: "TaskQueuedV1",
+  ready: "TaskReadyV1",
+};
 
 const expectedType = (s, decision) =>
   decision === "decline" ? "TaskSuggestionDeclinedV1" : s.kind === "create" ? "TaskCreatedV1" : "TaskTimingRevisedV1";
@@ -329,13 +441,14 @@ async function start() {
   if (scope.some((s) => !s)) return status("Open this page with ?chapter=…&tenant=…&project=…", true);
   $("title").textContent = `Project ${scope[2]}`;
 
-  const me = await fetch("/auth/me");
-  if (!me.ok) {
+  const signedIn = await fetch("/auth/me");
+  if (!signedIn.ok) {
     const provider = encodeURIComponent(params.get("provider") ?? "workos");
     $("who").replaceChildren(el("a", { href: `/auth/${provider}/login`, textContent: "Sign in" }));
     return status("Sign in to see this project.");
   }
-  $("who").textContent = `Signed in as ${(await me.json()).principal}`;
+  me = (await signedIn.json()).principal;
+  $("who").textContent = `Signed in as ${me}`;
 
   try {
     pair = await device.load();

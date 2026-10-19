@@ -82,7 +82,11 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # Internal scoped custody material; caller authorization remains required.
       {:submit, 1} => :bilateral,
       {:submit, 2} => :bilateral,
-      {:get, 3} => :bilateral
+      {:get, 3} => :bilateral,
+      # A person storing their own upload (docs/architecture/2026-10-19-uploads.md).
+      {:store, 4} => :own_data,
+      {:may_store, 3} => :own_data,
+      {:limit, 0} => :system
     },
     CoopSubstrate.Cockpit => %{
       # The operator's own queue + boards: process-level, no member detail.
