@@ -71,6 +71,7 @@ defmodule SpruceGoose.Web.Requests do
     :bad_request,
     :bad_decision,
     :bad_amendment,
+    :bad_action,
     :invalid_pubkey,
     :key_id_mismatch,
     :invalid_label
@@ -87,10 +88,15 @@ defmodule SpruceGoose.Web.Requests do
     :unknown_suggestion,
     :suggestion_not_pending,
     :unknown_task,
+    :unknown_delegation,
     :already_enrolled,
     :grant_already_revoked,
     :nothing_to_offboard
   ]
+
+  defp ledger_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp ledger_reason(reason) when is_tuple(reason), do: ledger_reason(elem(reason, 0))
+  defp ledger_reason(_reason), do: "refused_by_ledger"
 
   def refuse(conn, {:error, reason}) do
     {status, code} =
@@ -103,6 +109,8 @@ defmodule SpruceGoose.Web.Requests do
         # An edited value the ledger would refuse, said before anyone signs.
         {:invalid, {:invalid_task_timing, _}} -> {400, "invalid_timing"}
         {:invalid, :empty_task_field} -> {400, "empty_field"}
+        # What the ledger would refuse, named, so the page can say why.
+        {:invalid, reason} -> {409, ledger_reason(reason)}
         r when r in @unprocessable -> {422, Atom.to_string(r)}
         r when r in @conflict -> {409, Atom.to_string(r)}
         _ -> {409, "refused_by_ledger"}

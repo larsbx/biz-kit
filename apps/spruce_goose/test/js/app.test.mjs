@@ -191,3 +191,51 @@ test("the edit form round-trips a timing, and an untouched form keeps it exactly
   assert.match(formTiming({ ...timingForm(allDay), last: "2026-10-18" }, allDay, "UTC").error, /before the first/);
   assert.deepEqual(formTiming({ ...timingForm(timed), kind: "none" }, timed, "UTC"), { timing: { schedule: null, due_ms: timed.due_ms } });
 });
+
+test("a task's next step, or what it is waiting for", async () => {
+  const { nextStep, decidedSuggestions } = await import("../../priv/static/app/view.js");
+  const sop = "aa".repeat(32);
+  const input = "bb".repeat(32);
+  const readiness = { sop_digest: sop, artifact_requirements: { input }, predecessor_ids: ["t0"], acknowledgment: null };
+  const view = (task, extra = {}) => ({
+    tasks: { t1: task, t0: { state: "ready" } },
+    suggestions: {},
+    delegations: {},
+    receipts: {},
+    ...extra,
+  });
+
+  assert.deepEqual(nextStep("t1", view({ state: "inbox" }), "me"), { action: "propose", label: "Propose" });
+  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: null }), "me"), { waiting: "a Definition of Done" });
+  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {} }), "me"), { waiting: "a readiness definition" });
+  assert.match(nextStep("t1", view({ state: "proposed", dod: {}, readiness }), "me").waiting, /SOP \(aaaaaaaaaaaa…\)/);
+
+  const stored = { receipts: { r2: { digest: sop }, r1: { digest: input } } };
+  assert.deepEqual(nextStep("t1", view({ state: "proposed", dod: {}, readiness }, stored), "me"), {
+    action: "acknowledge_sop",
+    label: "Acknowledge the SOP",
+    custody_receipt_id: "r2",
+  });
+
+  // Someone else's acknowledgement does not count for me.
+  const theirs = { ...readiness, acknowledgment: { principal_id: "them" } };
+  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: theirs }, stored), "me").action, "acknowledge_sop");
+
+  const mine = { ...readiness, acknowledgment: { principal_id: "me" } };
+  assert.equal(nextStep("t1", view({ state: "proposed", dod: {}, readiness: mine }, stored), "me").action, "queue");
+  assert.deepEqual(nextStep("t1", view({ state: "queued", dod: {}, readiness: mine }, stored), "me").waiting, "t0 to complete");
+
+  const done = { tasks: { t1: { state: "queued", dod: {}, readiness: mine }, t0: { state: "completed" } } };
+  assert.deepEqual(nextStep("t1", { ...view({}), ...stored, ...done }, "me"), {
+    action: "ready",
+    label: "Mark ready",
+    custody_receipts: { input: "r1" },
+  });
+  assert.match(nextStep("t1", { ...view({}), ...done }, "me").waiting, /input “input”/);
+  assert.equal(nextStep("t1", view({ state: "ready" }), "me"), null);
+
+  const history = decidedSuggestions({
+    suggestions: { s1: { status: "pending" }, s2: { status: "withdrawn", reason: "changed plan" }, s3: { status: "accepted" } },
+  });
+  assert.deepEqual(history.map((s) => [s.id, s.status]), [["s3", "accepted"], ["s2", "withdrawn"]]);
+});

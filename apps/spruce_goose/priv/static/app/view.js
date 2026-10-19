@@ -1,14 +1,12 @@
 // The client's copy of a project: what the change feed's frames build.
 // A frame's changes are whole-entity upserts (value null would mean removed).
 
-export const emptyView = () => ({ tasks: {}, suggestions: {}, delegations: {} });
+const kinds = ["tasks", "suggestions", "delegations", "receipts"];
+
+export const emptyView = () => Object.fromEntries(kinds.map((k) => [k, {}]));
 
 export function applyFrame(view, frame) {
-  const next = {
-    tasks: { ...view.tasks },
-    suggestions: { ...view.suggestions },
-    delegations: { ...view.delegations },
-  };
+  const next = Object.fromEntries(kinds.map((k) => [k, { ...view[k] }]));
 
   for (const { kind, id, value } of frame.changes) {
     if (value === null) delete next[kind][id];
@@ -100,3 +98,53 @@ function buildSchedule(form, tz) {
   }
   return { schedule };
 }
+
+// -- lifecycle (docs/architecture/2026-10-19-lifecycle.md) ---------------------------
+
+// A receipt in the project for this digest, by ID order so the choice is stable.
+const receiptFor = (view, digest) =>
+  Object.keys(view.receipts ?? {})
+    .sort()
+    .find((id) => view.receipts[id].digest === digest);
+
+const short = (digest) => `${digest.slice(0, 12)}…`;
+
+// What a task's next step is for `me`: `{action, label, ...cites}` to sign,
+// `{waiting}` saying what it still needs from someone else, or null.
+export function nextStep(taskId, view, me) {
+  const t = view.tasks[taskId];
+  if (!t) return null;
+  if (t.state === "inbox") return { action: "propose", label: "Propose" };
+  if (t.state !== "proposed" && t.state !== "queued") return null;
+
+  const r = t.readiness;
+  if (t.state === "proposed" && !t.dod) return { waiting: "a Definition of Done" };
+  if (!r) return { waiting: "a readiness definition" };
+
+  if (r.acknowledgment?.principal_id !== me) {
+    const receipt = receiptFor(view, r.sop_digest);
+    return receipt
+      ? { action: "acknowledge_sop", label: "Acknowledge the SOP", custody_receipt_id: receipt }
+      : { waiting: `a stored copy of the SOP (${short(r.sop_digest)})` };
+  }
+  if (t.state === "proposed") return { action: "queue", label: "Queue" };
+
+  const unfinished = r.predecessor_ids.filter((id) => view.tasks[id]?.state !== "completed");
+  if (unfinished.length) return { waiting: `${unfinished.join(", ")} to complete` };
+
+  const receipts = {};
+  for (const [name, digest] of Object.entries(r.artifact_requirements).sort()) {
+    const receipt = receiptFor(view, digest);
+    if (!receipt) return { waiting: `a stored copy of input “${name}” (${short(digest)})` };
+    receipts[name] = receipt;
+  }
+  return { action: "ready", label: "Mark ready", custody_receipts: receipts };
+}
+
+// Suggestions no longer pending (accepted, amended, declined, withdrawn,
+// superseded), with who resolved them and why.
+export const decidedSuggestions = (view) =>
+  Object.entries(view.suggestions)
+    .filter(([, s]) => s.status !== "pending")
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([id, s]) => ({ id, ...s }));

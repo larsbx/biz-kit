@@ -93,7 +93,7 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
     end
   end
 
-  test "generated histories put tasks, suggestions and delegations in the view", %{
+  test "generated histories put tasks, suggestions, delegations and receipts in the view", %{
     world: w,
     gate0: gate0
   } do
@@ -108,6 +108,6 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
       end)
       |> MapSet.new(&elem(&1, 0))
 
-    assert kinds == MapSet.new([:tasks, :suggestions, :delegations])
+    assert kinds == MapSet.new([:tasks, :suggestions, :delegations, :receipts])
   end
 end

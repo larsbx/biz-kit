@@ -1,8 +1,11 @@
 defmodule CoopSubstrate.Feed.View do
   @moduledoc """
-  What a change-feed client sees of one project: its tasks, suggestions and
-  delegations, each reduced to a whitelisted, JSON-safe value
-  (docs/architecture/2026-10-18-change-feed.md).
+  What a change-feed client sees of one project: its tasks, suggestions,
+  delegations and custody receipts, each reduced to a whitelisted, JSON-safe
+  value (docs/architecture/2026-10-18-change-feed.md). A task carries its
+  readiness definition and SOP acknowledgement, and a receipt its digest, so
+  a person's device can take each lifecycle step
+  (docs/architecture/2026-10-19-lifecycle.md).
 
   Pure. `select/2` reads a view out of the task projection; `diff/2` gives the
   changes between two views as whole-entity upserts; `apply/2` replays them.
@@ -14,10 +17,10 @@ defmodule CoopSubstrate.Feed.View do
   operator grant behind a delegation) still reaches the client.
   """
 
-  @kinds [:tasks, :suggestions, :delegations]
+  @kinds [:tasks, :suggestions, :delegations, :receipts]
 
   @type scope :: {chapter_id :: String.t(), tenant_id :: String.t(), project_id :: String.t()}
-  @type kind :: :tasks | :suggestions | :delegations
+  @type kind :: :tasks | :suggestions | :delegations | :receipts
   @type t :: %{kind() => %{String.t() => map()}}
   @type change :: %{kind: kind(), id: String.t(), value: map() | nil}
 
@@ -41,6 +44,13 @@ defmodule CoopSubstrate.Feed.View do
           in_scope?(d, scope),
           into: %{},
           do: {id, delegation(d, o.grants)}
+        ),
+      receipts:
+        for(
+          {id, r} <- o.custody_receipts,
+          in_scope?(r, scope),
+          into: %{},
+          do: {id, json(Map.take(r, [:digest, :principal_id]))}
         )
     }
   end
@@ -77,7 +87,23 @@ defmodule CoopSubstrate.Feed.View do
     |> Map.take(~w(state version title description definition_of_done timing timing_version
                    timing_delegation_id last_event_id)a)
     |> Map.put(:dod, dod(t.dod))
+    |> Map.put(:readiness, readiness(t[:readiness]))
     |> json()
+  end
+
+  # The acknowledging key stays out: the view says who acknowledged, with
+  # which receipt.
+  defp readiness(nil), do: nil
+
+  defp readiness(r) do
+    %{
+      event_id: r.event_id,
+      artifact_requirements: r.artifact_requirements,
+      predecessor_ids: r.predecessor_ids,
+      sop_digest: r.sop_digest,
+      acknowledgment:
+        r.acknowledgment && Map.take(r.acknowledgment, [:principal_id, :custody_receipt_id])
+    }
   end
 
   # Evidence and the submitter's key stay out: the feed says that evidence was
