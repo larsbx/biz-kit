@@ -115,6 +115,6 @@ endpoints are shared (`SpruceGoose.Web.Requests`).
 
 - Requests, codes and held approvals live in one node's memory, like
   sessions. A restart loses pending requests; the device simply asks again.
-- No rate limit on code guessing: 60 bits makes guessing impractical, but a
-  public deployment should still rate-limit `/api/v1/enrolments`.
+- Code guessing: 60 bits makes it impractical, and `/api/v1/enrolments` is
+  [rate-limited](2026-10-19-rate-limits.md) per client as well.
 - Revocation: see [device revocation](2026-10-19-device-revocation.md).
