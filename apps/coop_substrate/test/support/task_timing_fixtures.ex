@@ -56,6 +56,13 @@ defmodule CoopSubstrate.TaskTimingFixtures do
   def suggester_grant(gov, agent, principal),
     do: grant(gov, "TaskSuggesterGrantedV1", agent, principal)
 
+  def reviewer_grant(gov, reviewer, principal),
+    do: grant(gov, "TaskReviewerGrantedV1", reviewer, principal)
+
+  @doc "Governance ends everything `principal` holds in the project."
+  def offboard(gov, principal, scope \\ @scope),
+    do: signed_event(gov, "TaskPrincipalOffboardedV1", Map.put(scope, "principal_id", principal))
+
   def suggester_revoke(gov, grant) do
     signed_event(
       gov,

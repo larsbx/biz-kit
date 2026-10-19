@@ -45,10 +45,45 @@ defmodule SpruceGoose.Web.BrowserTest do
     suggestion =
       suggest!(w, w.agent_grant, "task-1", %{"schedule" => nil, "due_ms" => 1_792_396_800_000}, 1)
 
+    to_create =
+      suggest_create!(w, w.agent_grant, "task-2", "Write it up", %{
+        "schedule" => nil,
+        "due_ms" => nil
+      })
+
+    Port.command(port, "go\n")
+    assert %{"proposed" => true} = read!(port)
+
+    # Governance defines the Definition of Done and readiness; the browser
+    # then uploads the SOP and the input and records custody of them.
+    readiness!(w, "task-2")
+
     Port.command(port, "go\n")
     assert %{"done" => "Recorded on the ledger" <> _} = read!(port)
 
-    assert Log.gate().orchestration.suggestions[suggestion.event_id].status == :accepted
+    suggestions = Log.gate().orchestration.suggestions
+    assert suggestions[suggestion.event_id].status == :accepted
+
+    # The create suggestion was edited before accepting.
+    assert suggestions[to_create.event_id].status == :amended
+    task = Log.gate().orchestration.tasks[{w.chapter, tenant(), "project-1", "task-2"}]
+    assert task.title == "Write up the audit"
+
+    # Then proposed, its SOP and input stored from the browser, the SOP
+    # acknowledged, queued and marked ready, each signed by the browser's key.
+    assert task.state == "ready"
+    assert task.readiness.acknowledgment.principal_id == person
+
+    receipts = Log.gate().orchestration.custody_receipts
+
+    stored =
+      for {_, r} <- receipts, r.chapter_id == w.chapter, r.principal_id == person, do: r.digest
+
+    assert Enum.sort(stored) ==
+             Enum.sort([
+               {:bytes, :crypto.hash(:sha256, "SOP for #{w.chapter}")},
+               {:bytes, :crypto.hash(:sha256, "Input for #{w.chapter}")}
+             ])
 
     {:ok, events} = Log.read_all(from: suggestion.global_seq + 1)
 
@@ -72,6 +107,46 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     assert revocation.payload["revoked_grant_event_id"] == grant_id
     assert hd(revocation.signers).pubkey == hd(decision.signers).pubkey
+
+    [created] = for e <- events, e.type == "TaskCreatedV1", e.chapter_id == w.chapter, do: e
+    assert created.payload["suggestion_event_id"] == to_create.event_id
+    assert hd(created.signers).pubkey == hd(decision.signers).pubkey
+  end
+
+  # What the task needs, by digest: the browser stores the files itself.
+  defp readiness!(w, task_id) do
+    sop = :crypto.hash(:sha256, "SOP for #{w.chapter}")
+    input = :crypto.hash(:sha256, "Input for #{w.chapter}")
+
+    key = {w.chapter, tenant(), "project-1", task_id}
+    version = fn -> Log.gate().orchestration.tasks[key].version end
+    subject = %{"tenant_id" => tenant(), "project_id" => "project-1", "task_id" => task_id}
+
+    append!(
+      event(
+        w,
+        w.gov,
+        "TaskDoDDefinedV1",
+        Map.merge(subject, %{
+          "expected_version" => version.(),
+          "criteria" => [%{"id" => "report", "description" => "Report supplied"}]
+        })
+      )
+    )
+
+    append!(
+      event(
+        w,
+        w.gov,
+        "TaskReadinessDefinedV1",
+        Map.merge(subject, %{
+          "expected_version" => version.(),
+          "artifact_requirements" => %{"input" => {:bytes, input}},
+          "predecessor_ids" => [],
+          "sop_digest" => {:bytes, sop}
+        })
+      )
+    )
   end
 
   defp browser!(base, w) do

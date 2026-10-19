@@ -168,8 +168,9 @@ defmodule SpruceGoose.Web.RateLimitTest do
 
     assert Counts.hit(key, past) == 1
     assert Counts.hit(key, past) == 2
-    send(Counts, :sweep)
-    _ = :sys.get_state(Counts)
+    counts = GenServer.whereis(BizKit.Cluster.Singleton.name(Counts))
+    send(counts, :sweep)
+    _ = :sys.get_state(counts)
     assert Counts.hit(key, past) == 1
   end
 
@@ -183,8 +184,8 @@ defmodule SpruceGoose.Web.RateLimitTest do
       assert_raise ArgumentError, fn -> RateLimit.cidr(bad) end
     end
 
-    # And the server does not start with one configured.
+    # And a node does not start with one configured.
     limits!(%{}, ["10.0.0.0/8", "10.0.0.0/-1"])
-    assert_raise ArgumentError, fn -> RateLimit.Counts.init([]) end
+    assert_raise ArgumentError, fn -> SpruceGoose.Application.start(:normal, []) end
   end
 end

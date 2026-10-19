@@ -51,6 +51,10 @@
       dialog { max-width: min(640px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
       dialog::backdrop { background: rgb(0 0 0 / 0.4); }
       details summary { cursor: pointer; }
+      #amend label { display: block; margin: 8px 0; }
+      #amend input, #amend select, #amend textarea { width: 100%; box-sizing: border-box; margin: 4px 0 0; }
+      #amend .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
+      select, textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
       input { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); margin-left: 8px; }
       h3 { font-size: 0.95rem; margin: 16px 0 4px; }
       #devices .row { padding: 6px 0; border-top: 1px solid var(--line); }
@@ -73,6 +77,16 @@
       <section aria-labelledby="tasks-heading">
         <h2 id="tasks-heading">Tasks</h2>
         <div id="tasks"><p class="muted">None yet.</p></div>
+      </section>
+
+      <section aria-labelledby="delegations-heading">
+        <h2 id="delegations-heading">Delegations you made</h2>
+        <div id="delegations"><p class="muted">None.</p></div>
+      </section>
+
+      <section aria-labelledby="history-heading">
+        <h2 id="history-heading">Decided suggestions</h2>
+        <div id="history"><p class="muted">None yet.</p></div>
       </section>
 
       <section aria-labelledby="device-heading">
@@ -99,6 +113,38 @@
         </div>
       </section>
     </main>
+
+    <dialog id="amend" aria-labelledby="amend-heading">
+      <form method="dialog" id="amend-form">
+        <h2 id="amend-heading">Edit before accepting</h2>
+        <p class="muted" id="amend-what"></p>
+        <div id="amend-create">
+          <label>Title <input id="amend-title" maxlength="200" /></label>
+          <label>Description <textarea id="amend-description" rows="3"></textarea></label>
+        </div>
+        <label>When
+          <select id="amend-kind">
+            <option value="none">Unscheduled</option>
+            <option value="timed">At a time</option>
+            <option value="all_day">All day</option>
+          </select>
+        </label>
+        <div class="pair" id="amend-timed">
+          <label>Start <input type="datetime-local" id="amend-start" /></label>
+          <label>End <input type="datetime-local" id="amend-end" /></label>
+        </div>
+        <div class="pair" id="amend-all-day">
+          <label>First day <input type="date" id="amend-first" /></label>
+          <label>Last day <input type="date" id="amend-last" /></label>
+        </div>
+        <label>Due (optional) <input type="datetime-local" id="amend-due" /></label>
+        <p class="status error" id="amend-error"></p>
+        <div class="actions">
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button value="review" class="primary">Review and sign</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="confirm" aria-labelledby="confirm-heading">
       <form method="dialog">

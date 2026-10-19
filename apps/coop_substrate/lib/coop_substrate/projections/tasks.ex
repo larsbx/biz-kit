@@ -71,6 +71,12 @@ defmodule CoopSubstrate.Projections.Tasks do
   def handle_event(%Envelope{type: "TaskDeviceRevokedV1", payload: p}, state),
     do: put_in(state, [:grants, p["revoked_grant_event_id"], :active], false)
 
+  def handle_event(%Envelope{type: "TaskPrincipalOffboardedV1", payload: p} = env, state) do
+    state
+    |> held_by(p["principal_id"], scope(env))
+    |> Enum.reduce(state, fn {kind, id}, acc -> put_in(acc, [kind, id, :active], false) end)
+  end
+
   def handle_event(%Envelope{type: "TaskBaselineRecordedV1", payload: p} = env, state) do
     task =
       new_task(env, %{
@@ -98,6 +104,24 @@ defmodule CoopSubstrate.Projections.Tasks do
     state = CoopSubstrate.Tasks.DoD.handle_event(env, state)
     CoopSubstrate.Tasks.Timing.handle_event(env, state)
   end
+
+  @authority [:grants, :suggester_grants, :dod_grants, :delegations]
+
+  @doc """
+  Everything `principal` actively holds in the project, as `{kind, event_id}`:
+  operator (device), suggester and reviewer grants, and delegations made to
+  or by them. Offboarding ends exactly these.
+  """
+  def held_by(state, principal, scope) do
+    for kind <- @authority,
+        {id, a} <- Map.fetch!(state, kind),
+        a.active,
+        {a.chapter_id, a.tenant_id, a.project_id} == scope,
+        principal in [a.principal_id, a[:delegator_principal_id]],
+        do: {kind, id}
+  end
+
+  def scope(%Envelope{chapter_id: ch, payload: p}), do: {ch, p["tenant_id"], p["project_id"]}
 
   def task_key(%Envelope{chapter_id: ch, payload: p}),
     do: {ch, p["tenant_id"], p["project_id"], p["task_id"]}

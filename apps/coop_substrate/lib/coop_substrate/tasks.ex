@@ -42,6 +42,10 @@ defmodule CoopSubstrate.Tasks do
           "authorization_event_id" => :string,
           "revoked_grant_event_id" => :string
         }),
+      # Governance ends everything a principal holds in the project at once
+      # (docs/architecture/2026-10-19-offboarding.md).
+      "TaskPrincipalOffboardedV1" =>
+        spec("governance", "task_grants", @scope, %{"principal_id" => :string}),
       "TaskBaselineRecordedV1" =>
         spec("governance", "tasks", @subject, %{
           "legacy_row_id" => :string,
@@ -81,7 +85,7 @@ defmodule CoopSubstrate.Tasks do
   def proposal(attrs), do: Envelope.new(Map.put(Map.new(attrs), :type, "TaskProposedV1"))
 
   @doc "Append durably and return the accepted event/version watermark."
-  def propose(command, server \\ Log)
+  def propose(command, server \\ CoopSubstrate.Log.server())
 
   def propose(%Envelope{type: "TaskProposedV1"} = command, server) do
     with {:ok, [accepted]} <- Log.append(command, server),
@@ -150,6 +154,15 @@ defmodule CoopSubstrate.Tasks do
          {:ok, grant} <- fetch_grant(state, p["authorization_event_id"]),
          :ok <- grant_scope(env, grant) do
       if grant.active, do: :ok, else: {:error, :grant_already_revoked}
+    end
+  end
+
+  defp check_type(%Envelope{type: "TaskPrincipalOffboardedV1", payload: p} = env, state, keys) do
+    with :ok <- governance_declared(env, keys),
+         :ok <- nonempty_fields(p, ~w(principal_id)) do
+      if State.held_by(state, p["principal_id"], State.scope(env)) == [],
+        do: {:error, :nothing_to_offboard},
+        else: :ok
     end
   end
 

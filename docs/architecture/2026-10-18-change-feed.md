@@ -27,7 +27,7 @@ project_id}` at a **cursor**, a `global_seq` (0 for everything):
 ```
 
 A **frame** is `%{seq: n, changes: [%{kind, id, value}]}`, where `kind` is
-`:tasks`, `:suggestions` or `:delegations` and `value` is the whole entity
+`:tasks`, `:suggestions`, `:delegations` or `:receipts` and `value` is the whole entity
 (an upsert, never a patch). Applying a frame's changes to the client's view
 as of the previous frame gives the view as of `n`, and `n` is the cursor to
 resume from.
@@ -50,10 +50,12 @@ lowercase hex):
 
 | Kind | Fields |
 | --- | --- |
-| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `dod` |
+| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `dod`, `readiness` |
+| `readiness` | `event_id`, `artifact_requirements` (name → digest), `predecessor_ids`, `sop_digest`; `acknowledgment` as principal, key ID and custody receipt ID |
 | `dod` | `event_id`, `criteria`, `definition_ref`; `submission` and `review` as event and principal IDs, `review.decision` and `review.reason` |
 | suggestion | `task_id`, `kind`, `change`, `principal_id`, `base_timing_version`, `rationale`, `rationale_receipt_id`, `status`, `reason`, `reason_receipt_id`, `resolved_by_event_id` |
 | delegation | `delegator_principal_id`, `operator_grant_id`, `principal_id`, `key_id`, `kinds`, `task_ids`, `states`, `window`, `max_block_ms`, `budget`, `used`, `active`, `delegator_grant_active` |
+| receipt | `digest`, `principal_id` (a custody receipt in the project; [lifecycle](2026-10-19-lifecycle.md)) |
 
 Public keys and DoD evidence stay out. `delegator_grant_active` is derived:
 revoking an operator's grant ends their delegations without touching the
@@ -196,8 +198,8 @@ notification is caught by the heartbeat's tick. The reconnect is then refused.
 - Each session folds the whole ledger once on open and keeps its own copy of
   the gate. Fine at today's size. Shared per-scope state can replace it
   without changing the contract.
-- Spent nonces live in one node's memory. Serving the feed from several nodes
-  needs a shared store.
+- Spent nonces live in one process for the whole [cluster](2026-10-19-cluster.md), and every node's
+  feed sessions are notified of each append (`:pg`).
 - A cursor is a position, not a hash. A client resuming against a restored
   ledger of the same length or longer cannot tell. Adding the head hash would
   close that.

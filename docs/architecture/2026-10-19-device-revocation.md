@@ -11,7 +11,7 @@ key. Two ways end it:
 | Who | Signs | Event | For |
 | --- | --- | --- | --- |
 | the person | one of their devices still enrolled in the project, or the device itself | `TaskDeviceRevokedV1` | a lost device, when they have another; retiring a device |
-| an administrator | the governance key, with `mix coop.revoke <GRANT_ID>` | `TaskOperatorRevokedV1` (unchanged) | a person's only device; a compromised device; offboarding |
+| an administrator | the governance key, with `mix coop.revoke <GRANT_ID>` | `TaskOperatorRevokedV1` (unchanged) | a person's only device; a compromised device |
 
 Letting the holder revoke without governance is safe because revocation
 only removes authority. A holder can only deactivate their own device
@@ -121,8 +121,8 @@ enter its properties.
 
 ## Limits
 
-- Revocation is per grant. Revoking all of a person's devices at once, or
-  across projects (offboarding), is one `coop.revoke` per grant for now.
+- Revocation is per grant. To end everything a person holds, in every
+  project, use [offboarding](2026-10-19-offboarding.md).
 - The unauthenticated `/api/v1/grants` and `/api/v1/enrolments` routes are
   bounded in memory and [rate-limited](2026-10-19-rate-limits.md) per client.
 - A lost only device can only be revoked by an administrator. A person can

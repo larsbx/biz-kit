@@ -34,7 +34,9 @@ defmodule CoopSubstrate.Feed do
   alias CoopSubstrate.Log
   alias CoopSubstrate.Projections.Membership, as: Gate
 
-  @registry CoopSubstrate.Feed.Registry
+  # Feed sessions on every node join this :pg group; the appender, wherever
+  # it runs, notifies them all.
+  @scope CoopSubstrate.Feed
 
   @enforce_keys [:scope, :seq, :gate, :view]
   defstruct @enforce_keys ++ [reader: nil]
@@ -42,15 +44,14 @@ defmodule CoopSubstrate.Feed do
   @opaque t :: %__MODULE__{}
   @type frame :: %{seq: non_neg_integer(), changes: [View.change()]}
 
-  @doc "The registry `Log` notifies; started before it."
-  def child_spec(_opts), do: Registry.child_spec(keys: :duplicate, name: @registry)
+  @doc "The cluster-wide group `Log` notifies; started on every node, before it."
+  def child_spec(_opts), do: %{id: __MODULE__, start: {:pg, :start_link, [@scope]}}
 
   @doc "Called by `Log` after each persisted append, in ledger order."
   @spec publish([CoopSubstrate.Protocol.Envelope.t()]) :: :ok
   def publish(envelopes) do
-    Registry.dispatch(@registry, :ledger, fn entries ->
-      for {pid, _} <- entries, do: send(pid, {:coop_ledger, envelopes})
-    end)
+    for pid <- :pg.get_members(@scope, :ledger), do: send(pid, {:coop_ledger, envelopes})
+    :ok
   end
 
   @doc """
@@ -76,7 +77,7 @@ defmodule CoopSubstrate.Feed do
   def open(scope, cursor, reader \\ nil)
 
   def open(scope, cursor, reader) when is_integer(cursor) and cursor >= 0 do
-    {:ok, _} = Registry.register(@registry, :ledger, nil)
+    :ok = :pg.join(@scope, :ledger, self())
 
     with true <- reader == nil or reader.scope == scope or {:error, :scope_mismatch},
          true <- cursor <= Log.head().global_seq or {:error, :cursor_ahead},
@@ -117,7 +118,10 @@ defmodule CoopSubstrate.Feed do
 
   @doc "Stop notifications to the calling process. Exiting does the same."
   @spec close(t() | nil) :: :ok
-  def close(_session), do: Registry.unregister(@registry, :ledger)
+  def close(_session) do
+    :pg.leave(@scope, :ledger, self())
+    :ok
+  end
 
   # -- internals --------------------------------------------------------------------
 

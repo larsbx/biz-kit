@@ -84,7 +84,7 @@ defmodule CoopSubstrate.Tasks.DoD do
     }
   end
 
-  def submit(command, server \\ Log)
+  def submit(command, server \\ CoopSubstrate.Log.server())
 
   def submit(%Envelope{type: type} = command, server) when type in @commands do
     with {:ok, [accepted]} <- Log.append(command, server),

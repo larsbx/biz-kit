@@ -21,6 +21,7 @@ defmodule BizKit.Identity.MixProject do
 
   defp deps do
     [
+      {:biz_kit_cluster, in_umbrella: true},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
       {:plug, "~> 1.16", only: :test}

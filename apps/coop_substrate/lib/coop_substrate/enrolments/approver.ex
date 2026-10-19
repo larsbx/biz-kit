@@ -32,5 +32,5 @@ defmodule CoopSubstrate.Enrolments.Approver do
       }
   end
 
-  defp url(base, code), do: base <> "/api/v1/enrolments/" <> URI.encode(code)
+  defp url(base, code), do: base <> "/api/v1/enrolments/" <> Client.segment(code)
 end

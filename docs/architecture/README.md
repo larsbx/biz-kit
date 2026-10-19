@@ -34,6 +34,22 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Device revocation](2026-10-19-device-revocation.md): people revoke their
   own devices from any device still enrolled; administrators revoke any grant
   with the governance key (`mix coop.revoke`).
+- [Offboarding](2026-10-19-offboarding.md): one governance-signed event per
+  project ends everything a principal holds there; `mix coop.offboard` does
+  every project at once.
+- [Editing before accepting](2026-10-19-amend.md): a person edits a
+  suggestion's timing, or a create suggestion's title and description, and
+  accepts it as edited; the ledger records it as `amended`.
+- [Lifecycle in the view](2026-10-19-lifecycle.md): a person proposes,
+  acknowledges the SOP, queues and marks ready from the web view, citing
+  receipts already in custody; revokes delegations they made; and sees
+  decided suggestions, withdrawals included.
+- [Uploads from the browser](2026-10-19-uploads.md): a device stores the SOP
+  or an input a task names, checked against the SHA-256 it computed, and
+  records custody of it.
+- [Cluster](2026-10-19-cluster.md): several nodes as one service over
+  distributed Erlang; the ledger's appender and the in-memory stores run
+  once per cluster, and feed notifications reach every node.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.

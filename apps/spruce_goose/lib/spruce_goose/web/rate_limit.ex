@@ -23,8 +23,8 @@ defmodule SpruceGoose.Web.RateLimit do
 
   The client is the peer address, or, when the peer is a trusted proxy, the
   rightmost `x-forwarded-for` address that is not one: the nearest hop no
-  trusted proxy vouches for. Counts live in this node's memory, like held
-  commands and sessions; several nodes would each count their own share.
+  trusted proxy vouches for. Counts are one for the cluster
+  (`RateLimit.Counts`), like held commands and sessions.
   """
 
   @behaviour Plug

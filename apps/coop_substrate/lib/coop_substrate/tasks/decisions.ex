@@ -7,13 +7,24 @@ defmodule CoopSubstrate.Tasks.Decisions do
       timing, expecting the task's current timing version;
     * accept a create suggestion → `TaskCreatedV1` with the suggested title,
       timing and description;
+    * amend → the same command as accepting, with the person's edits in
+      place of the suggestion's own values: `timing` for a timing
+      suggestion; `title`, `description` and `timing` for a create;
     * decline → `TaskSuggestionDeclinedV1` with the reason.
 
   Accepting copies the suggestion's body unchanged, so the ledger records it
-  as `accepted`, not `amended`.
+  as `accepted`; an edit that changes it is recorded as `amended`. Whether
+  edited values are valid (a title, a timing) is the ledger's to say, as for
+  any command.
   """
 
-  @type decision :: {:accept, String.t()} | {:decline, String.t(), String.t()}
+  @type decision ::
+          {:accept, String.t()}
+          | {:amend, String.t(), map()}
+          | {:decline, String.t(), String.t()}
+
+  # What an edit may change, per kind: the fields the ledger compares.
+  @editable %{"timing" => ~w(timing), "create" => ~w(title description timing)}
 
   @spec command(map(), CoopSubstrate.Feed.View.scope(), decision(), map()) ::
           {:ok, String.t(), map()} | {:error, atom()}
@@ -22,6 +33,12 @@ defmodule CoopSubstrate.Tasks.Decisions do
       base = Map.merge(actor, %{"tenant_id" => s.tenant_id, "project_id" => s.project_id})
       build(o, scope, s, decision, base)
     end
+  end
+
+  defp build(o, scope, s, {:amend, id, edits}, base) do
+    if is_map(edits) and edits != %{} and Enum.all?(Map.keys(edits), &(&1 in @editable[s.kind])),
+      do: build(o, scope, %{s | change: Map.merge(s.change, edits)}, {:accept, id}, base),
+      else: {:error, :bad_amendment}
   end
 
   defp build(o, {chapter, _, _}, %{kind: "timing"} = s, {:accept, id}, base) do

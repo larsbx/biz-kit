@@ -31,6 +31,7 @@ defmodule CoopSubstrate.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:biz_kit_cluster, in_umbrella: true},
       {:rustler, "~> 0.36"},
       {:cbor, "~> 1.0"},
       # Canonical log per the AshEvents spike decision (SUBSTRATE.md §3):
