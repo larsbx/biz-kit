@@ -4,7 +4,8 @@
 // lifecycle step, revoking delegations, and the decided suggestions
 // (docs/architecture/2026-10-19-lifecycle.md); after ready, starting,
 // evidence, completion and, on a reviewer device, reviewing
-// (docs/architecture/2026-10-19-execution.md). Everything is signed by this
+// (docs/architecture/2026-10-19-execution.md); cancelling and sending back
+// (docs/architecture/2026-10-19-cancel-reopen.md). Everything is signed by this
 // device's key after decoding exactly what will be signed.
 //
 // Opened as /app?chapter=…&tenant=…&project=… (&provider=… to choose the
@@ -15,11 +16,13 @@ import * as device from "./device.js";
 import {
   applyFrame,
   base64url,
+  cancelledBecause,
   decidedSuggestions,
   describeTiming,
   emptyView,
   formTiming,
   nextStep,
+  otherSteps,
   pendingSuggestions,
   receiptFor,
   timingForm,
@@ -88,7 +91,9 @@ function render() {
             t.timing_delegation_id
               ? el("div", { className: "muted", textContent: "Last scheduled by a delegated agent" })
               : null,
+            cancelledBecause(t) ? el("div", { className: "muted", textContent: cancelledBecause(t) }) : null,
             stepControl(id, t),
+            otherControls(id, t),
           ),
         )
       : [el("p", { className: "muted", textContent: "None yet." })]),
@@ -139,6 +144,28 @@ function stepControl(id, t) {
       { type: stepTypes[action], payload: { task_id: id, expected_version: t.version, ...cites } },
     );
   return el("div", { className: "actions" }, button);
+}
+
+// Cancel or send back, each with a reason, signed like any step.
+function otherControls(id, t) {
+  const steps = otherSteps(id, view);
+  if (!steps.length) return null;
+  return el(
+    "div",
+    { className: "actions" },
+    ...steps.map(({ action, label, question }) => {
+      const button = el("button", { textContent: label, disabled: !pair || !enrolled || deciding });
+      button.onclick = () => {
+        const reason = prompt(question);
+        if (!reason?.trim()) return;
+        signAndSubmit(
+          () => postJSON(`${projectPath}/commands`, { action, task_id: id, reason, key_id: keyId }),
+          { type: stepTypes[action], payload: { task_id: id, expected_version: t.version, reason } },
+        );
+      };
+      return button;
+    }),
+  );
 }
 
 // -- uploads (docs/architecture/2026-10-19-uploads.md) ------------------------------
@@ -366,6 +393,8 @@ const stepTypes = {
   ready: "TaskReadyV1",
   start: "TaskStartedV1",
   complete: "TaskCompletedV1",
+  cancel: "TaskCancelledV1",
+  reopen: "TaskReopenedV1",
 };
 
 const expectedType = (s, decision) =>

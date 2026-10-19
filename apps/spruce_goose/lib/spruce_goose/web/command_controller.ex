@@ -19,6 +19,7 @@ defmodule SpruceGoose.Web.CommandController do
            {"action": "review", "task_id", "decision": "accept" | "refuse", "reason", "key_id"}
              (signed with a reviewer device's key)
            {"action": "complete", "task_id", "review_event_id", "key_id"}
+           {"action": "cancel" | "reopen", "task_id", "reason", "key_id"}
            → 201 {id, type, payload, signing_bytes (base64url), expires_at}
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
@@ -80,6 +81,10 @@ defmodule SpruceGoose.Web.CommandController do
   defp action(%{"action" => "review", "task_id" => t, "decision" => d, "reason" => r})
        when is_binary(t) and is_binary(d) and is_binary(r),
        do: {:ok, {:review, t, d, r}}
+
+  defp action(%{"action" => a, "task_id" => t, "reason" => r})
+       when a in ~w(cancel reopen) and is_binary(t) and is_binary(r),
+       do: {:ok, {String.to_existing_atom(a), t, r}}
 
   defp action(%{"action" => "complete", "task_id" => t, "review_event_id" => r})
        when is_binary(t) and is_binary(r),

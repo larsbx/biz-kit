@@ -50,7 +50,7 @@ lowercase hex):
 
 | Kind | Fields |
 | --- | --- |
-| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `started_by` (once started), `dod`, `readiness` |
+| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `started_by` (once started), `cancellation` (once cancelled: event ID, principal or none for governance, reason), `dod`, `readiness` |
 | `readiness` | `event_id`, `artifact_requirements` (name → digest), `predecessor_ids`, `sop_digest`; `acknowledgment` as principal, key ID and custody receipt ID |
 | `dod` | `event_id`, `criteria`, `definition_ref`; `submission` and `review` as event and principal IDs, `review.submission_event_id`, `review.decision` and `review.reason` |
 | suggestion | `task_id`, `kind`, `change`, `principal_id`, `base_timing_version`, `rationale`, `rationale_receipt_id`, `status`, `reason`, `reason_receipt_id`, `resolved_by_event_id` |

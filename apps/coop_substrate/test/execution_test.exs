@@ -10,107 +10,13 @@ defmodule CoopSubstrate.ExecutionTest do
   use ExUnit.Case, async: false
   use CoopSubstrate.LogCase
 
-  import CoopSubstrate.TaskTimingFixtures
+  import CoopSubstrate.{ExecutionFixtures, TaskTimingFixtures}
 
-  alias CoopSubstrate.{ArtifactCustody, Commands, Crypto, Log}
+  alias CoopSubstrate.{ArtifactCustody, Log}
 
   @scope {"chapter-genesis", "tenant-1", "project-1"}
 
-  setup do
-    gov = new_member("governance")
-    alice = new_member("operator")
-    bob = new_member("operator")
-    carol = new_member("reviewer")
-    grants = [operator_grant(gov, alice, "alice"), operator_grant(gov, bob, "bob")]
-    {:ok, _} = Log.append([declare_governance(gov) | grants])
-    {:ok, _} = Log.append(reviewer_grant(gov, carol, "carol"))
-
-    for id <- ["task-1", "task-2"],
-        do: {:ok, _} = Log.append(create(alice, hd(grants), id, unscheduled()))
-
-    # Unique per run: the artifact store outlives a test run.
-    run = "#{System.unique_integer()} #{System.system_time()}"
-    sop = store!("SOP #{run}")
-    input = store!("Input #{run}")
-
-    w = %{
-      gov: gov,
-      alice: {"alice", alice},
-      bob: {"bob", bob},
-      carol: {"carol", carol},
-      sop: sop,
-      input: input,
-      run: run
-    }
-
-    {:ok, sop_receipt} = step(w, w.alice, {:record_custody, sop})
-    {:ok, input_receipt} = step(w, w.alice, {:record_custody, input})
-    Map.merge(w, %{sop_receipt: sop_receipt.event_id, input_receipt: input_receipt.event_id})
-  end
-
-  defp task(id),
-    do: Log.gate().orchestration.tasks[{"chapter-genesis", "tenant-1", "project-1", id}]
-
-  # What the device does: prepare, sign the bytes, submit.
-  defp step(_w, {principal, member}, action) do
-    with {:ok, pending} <- Commands.prepare(principal, member.signer.key_id, @scope, action) do
-      Commands.submit(principal, pending.id, Crypto.sign(pending.signing_bytes, member.seed))
-    end
-  end
-
-  defp governance(w, id, type, payload) do
-    {:ok, _} =
-      Log.append(
-        signed_event(
-          w.gov,
-          type,
-          Map.merge(
-            %{"tenant_id" => "tenant-1", "project_id" => "project-1", "task_id" => id},
-            Map.put(payload, "expected_version", task(id).version)
-          )
-        )
-      )
-  end
-
-  # Proposed, with a Definition of Done and readiness, the SOP acknowledged
-  # by alice.
-  defp proposed!(w, id, predecessors) do
-    {:ok, _} = step(w, w.alice, {:propose, id})
-
-    governance(w, id, "TaskDoDDefinedV1", %{
-      "criteria" => [%{"id" => "report", "description" => "Report"}]
-    })
-
-    governance(w, id, "TaskReadinessDefinedV1", %{
-      "artifact_requirements" => %{"input" => {:bytes, w.input}},
-      "predecessor_ids" => predecessors,
-      "sop_digest" => {:bytes, w.sop}
-    })
-
-    {:ok, _} = step(w, w.alice, {:acknowledge_sop, id, w.sop_receipt})
-  end
-
-  defp queued!(w, id, predecessors \\ []) do
-    proposed!(w, id, predecessors)
-    {:ok, _} = step(w, w.alice, {:queue, id})
-  end
-
-  defp ready!(w, id) do
-    queued!(w, id)
-    {:ok, _} = step(w, w.alice, {:ready, id, %{"input" => w.input_receipt}})
-  end
-
-  # Evidence stored from alice's device and custody recorded, then submitted.
-  defp evidence(w, id, text) do
-    bytes = "#{text} #{w.run}"
-    digest = :crypto.hash(:sha256, bytes)
-    {:ok, ^digest} = ArtifactCustody.store("alice", @scope, bytes, digest, id)
-    {:ok, receipt} = step(w, w.alice, {:record_custody, digest})
-    step(w, w.alice, {:submit_evidence, id, %{"report" => receipt.event_id}})
-  end
-
-  defp review(w, id, decision, who \\ nil),
-    do: step(w, who || w.carol, {:review, id, decision, "#{decision}: as read"})
+  setup do: world!()
 
   test "start, evidence, review and complete; a successor can then be ready", w do
     ready!(w, "task-1")

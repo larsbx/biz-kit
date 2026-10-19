@@ -151,6 +151,14 @@ defmodule SpruceGoose.Web.BrowserTest do
     [completed] = of_type.("TaskCompletedV1")
     assert completed.payload["review_event_id"] == review.event_id
 
+    # The rescheduled task was then cancelled from the page, with a reason.
+    [cancelled] = of_type.("TaskCancelledV1")
+    assert cancelled.payload["reason"] == "No longer needed"
+    assert hd(cancelled.signers).pubkey == hd(decision.signers).pubkey
+
+    assert Log.gate().orchestration.tasks[{w.chapter, tenant(), "project-1", "task-1"}].state ==
+             "cancelled"
+
     [created] = for e <- events, e.type == "TaskCreatedV1", e.chapter_id == w.chapter, do: e
     assert created.payload["suggestion_event_id"] == to_create.event_id
     assert hd(created.signers).pubkey == hd(decision.signers).pubkey

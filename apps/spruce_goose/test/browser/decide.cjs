@@ -78,6 +78,17 @@ async function signIn(browser, subject) {
     await page.getByText("None.").first().waitFor();
     const accepted = await page.locator("#status").textContent();
 
+    // Call off the rescheduled task, with a reason (docs/architecture/2026-10-19-cancel-reopen.md).
+    const other = page.locator("#tasks .card").filter({ hasText: "Task task-1" });
+    page.once("dialog", (prompt) => prompt.accept("No longer needed"));
+    await other.getByRole("button", { name: "Cancel…" }).click();
+    await dialog.waitFor({ state: "visible" });
+    const cancelling = await page.locator("#confirm-body").textContent();
+    if (!cancelling.includes("TaskCancelledV1") || !cancelling.includes("No longer needed"))
+      throw new Error(`unexpected command: ${cancelling}`);
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await other.getByText("Cancelled by").waitFor();
+
     // Lifecycle: each step is a button on the task, signed like a decision.
     const task = page.locator("#tasks .card").filter({ hasText: "Write up the audit" });
     const sign = async (type, button) => {

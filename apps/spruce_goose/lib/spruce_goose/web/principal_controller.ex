@@ -19,12 +19,8 @@ defmodule SpruceGoose.Web.PrincipalController do
 
   use Phoenix.Controller, formats: [:json]
 
-  import Plug.Conn
   import SpruceGoose.Web.Requests
 
-  require Logger
-
-  alias CoopSubstrate.Governance.Read
   alias CoopSubstrate.Offboarding
 
   def show(conn, %{"id" => id}) do
@@ -58,42 +54,5 @@ defmodule SpruceGoose.Web.PrincipalController do
     else
       error -> refuse(conn, error)
     end
-  end
-
-  @fields ~w(key ts nonce sig)
-
-  defp governance_read(conn) do
-    with [header] <- get_req_header(conn, "authorization"),
-         "CoopGovernance " <> params <- header,
-         fields = Map.new(Regex.scan(~r/(\w+)="([^"]*)"/, params), fn [_, k, v] -> {k, v} end),
-         true <- Enum.all?(@fields, &Map.has_key?(fields, &1)),
-         {ts, ""} <- Integer.parse(fields["ts"]),
-         {:ok, signature} <- Base.url_decode64(fields["sig"], padding: false) do
-      Read.authorize(
-        %{
-          method: conn.method,
-          path: conn.request_path,
-          timestamp_ms: ts,
-          nonce: fields["nonce"],
-          key_id: fields["key"]
-        },
-        signature
-      )
-      |> case do
-        {:ok, chapters} -> {:ok, chapters}
-        {:error, reason} -> {:unauthorized, reason}
-      end
-    else
-      _ -> {:unauthorized, :malformed_authorization}
-    end
-  end
-
-  defp unauthorized(conn, reason) do
-    Logger.info("governance read refused: #{inspect(reason)}")
-
-    conn
-    |> put_resp_header("www-authenticate", "CoopGovernance")
-    |> put_status(401)
-    |> json(%{error: "unauthorized"})
   end
 end

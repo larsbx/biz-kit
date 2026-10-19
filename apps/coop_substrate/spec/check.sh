@@ -5,6 +5,8 @@
 #   2. every witness (`val no…`) is violated, i.e. each state it names is
 #      reachable, so `safety` cannot pass vacuously;
 #   3. `safety` holds exhaustively up to a bounded depth (Apalache).
+# A spec without a step relation is a library, typechecked here and checked
+# through the specs that import it.
 # Tunables: SAMPLES (default 3000), DEPTH (default 5).
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -13,6 +15,8 @@ check() {
   local spec=$1
   echo "== $spec"
   quint typecheck "$spec"
+  # A library (no step relation) is checked through the specs importing it.
+  if ! grep -qE '^\s*action step\b' "$spec"; then echo "library: checked by its importers"; return; fi
 
   quint run "$spec" --invariant=safety --max-samples="${SAMPLES:-3000}" --max-steps=25
 

@@ -122,7 +122,8 @@ chose.
 
 ## Model
 
-`spec/task_readiness.qnt` now runs to `completed`, with two tasks (the
+`spec/task_readiness.qnt` (now built on `spec/task_lifecycle.qnt`; see
+[cancel and reopen](2026-10-19-cancel-reopen.md#model)) runs to `completed`, with two tasks (the
 second waits for the first), two operators and two reviewers, one of whom
 is also an operator. `safety` adds:
 
@@ -176,4 +177,5 @@ across start, or skip the predecessor check each violate it.
   to another node, like the rate limits.
 - A task whose starter leaves stays in progress; any operator in the
   project can still submit evidence and complete it.
-- There is no step back from in progress, and no cancelling a task.
+- Stepping back from in progress and cancelling a task are now
+  [offered](2026-10-19-cancel-reopen.md).

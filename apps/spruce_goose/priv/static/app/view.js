@@ -165,6 +165,24 @@ function executionStep(t) {
   };
 }
 
+// What else a person may do with a task (docs/architecture/2026-10-19-cancel-reopen.md):
+// call it off before the work starts, or send work under way back to queued.
+// Each asks for a reason, recorded on the ledger.
+export function otherSteps(taskId, view) {
+  const state = view.tasks[taskId]?.state;
+  if (["inbox", "proposed", "queued", "ready"].includes(state))
+    return [{ action: "cancel", label: "Cancel…", question: "Why cancel this task? The reason is recorded on the ledger, and cancelling is final." }];
+  if (state === "in_progress")
+    return [{ action: "reopen", label: "Send back…", question: "Why send this task back to queued? Its evidence and review are cleared." }];
+  return [];
+}
+
+// Who called a task off and why, or null.
+export const cancelledBecause = (t) =>
+  t?.state === "cancelled" && t.cancellation
+    ? `Cancelled by ${t.cancellation.principal_id ?? "governance"}: “${t.cancellation.reason}”`
+    : null;
+
 // Submissions this person may review: someone else's, not yet reviewed.
 export const toReview = (view, me) =>
   Object.entries(view.tasks)

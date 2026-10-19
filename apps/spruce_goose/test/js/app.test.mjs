@@ -308,3 +308,24 @@ test("under way: evidence, then a review, then completion; what is left to revie
   assert.deepEqual(toReview(task({ submission, review: accepted }), "reviewer"), []);
   assert.deepEqual(toReview(task({ submission: null, review: null }), "reviewer"), []);
 });
+
+test("calling a task off: cancel before the work starts, send back once under way", async () => {
+  const { otherSteps, cancelledBecause } = await import("../../priv/static/app/view.js");
+  const view = (state, extra = {}) => ({ tasks: { t1: { state, ...extra } } });
+
+  for (const state of ["inbox", "proposed", "queued", "ready"])
+    assert.deepEqual(otherSteps("t1", view(state)).map((s) => s.action), ["cancel"]);
+  assert.deepEqual(otherSteps("t1", view("in_progress")).map((s) => s.action), ["reopen"]);
+  for (const state of ["completed", "cancelled"]) assert.deepEqual(otherSteps("t1", view(state)), []);
+  assert.deepEqual(otherSteps("nope", view("inbox")), []);
+
+  assert.equal(
+    cancelledBecause({ state: "cancelled", cancellation: { principal_id: "prn_a", reason: "Duplicate" } }),
+    "Cancelled by prn_a: “Duplicate”",
+  );
+  assert.equal(
+    cancelledBecause({ state: "cancelled", cancellation: { principal_id: null, reason: "Client withdrew" } }),
+    "Cancelled by governance: “Client withdrew”",
+  );
+  assert.equal(cancelledBecause({ state: "queued" }), null);
+});
