@@ -34,6 +34,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Device revocation](2026-10-19-device-revocation.md): people revoke their
   own devices from any device still enrolled; administrators revoke any grant
   with the governance key (`mix coop.revoke`).
+- [Offboarding](2026-10-19-offboarding.md): one governance-signed event per
+  project ends everything a principal holds there; `mix coop.offboard` does
+  every project at once.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

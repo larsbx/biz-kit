@@ -269,6 +269,20 @@ defmodule CoopSubstrate.TaskSuggestionsPropertiesTest do
     assert reached(targets, statuses, w, gate0) == targets
   end
 
+  test "generated histories offboard the operator, the agent and the delegate", %{
+    world: w,
+    gate0: gate0
+  } do
+    targets = MapSet.new(~w(alice bot deleg-bot))
+
+    offboarded = fn {steps, _gate} ->
+      for {%{type: "TaskPrincipalOffboardedV1"} = env, _, _} <- steps,
+          do: env.payload["principal_id"]
+    end
+
+    assert reached(targets, offboarded, w, gate0) == targets
+  end
+
   defp task_key(%{payload: %{"task_id" => t}} = env) when is_binary(t),
     do: Projection.task_key(env)
 

@@ -155,6 +155,16 @@ defmodule CoopSubstrate.Enrolments do
     end
   end
 
+  @doc "Drop the principal's pending requests for the project (offboarding)."
+  @spec cancel(String.t(), CoopSubstrate.Feed.View.scope()) :: :ok
+  def cancel(principal, scope) do
+    for {key, _, %{scope: ^scope}, _} <-
+          :ets.match_object(@table, {{:request, :_}, principal, :_, :_}),
+        do: :ets.delete(@table, key)
+
+    :ok
+  end
+
   # -- internals --------------------------------------------------------------------
 
   defp enrolled?(principal, scope, key_id) do

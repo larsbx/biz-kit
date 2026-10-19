@@ -81,7 +81,8 @@ defmodule SpruceGoose.Web.Requests do
     :suggestion_not_pending,
     :unknown_task,
     :already_enrolled,
-    :grant_already_revoked
+    :grant_already_revoked,
+    :nothing_to_offboard
   ]
 
   def refuse(conn, {:error, reason}) do

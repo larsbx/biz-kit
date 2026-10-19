@@ -119,6 +119,17 @@ jobs:
           apps/spruce_goose/test/support/ledger_fixtures.ex
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
+          apps/coop_substrate/lib/coop_substrate/offboarding.ex
+          apps/coop_substrate/lib/coop_substrate/offboarding/offboarder.ex
+          apps/coop_substrate/lib/coop_substrate/governance/read.ex
+          apps/coop_substrate/lib/coop_substrate/enrolments.ex
+          apps/coop_substrate/lib/mix/tasks/coop.offboard.ex
+          apps/coop_substrate/test/offboarding_test.exs
+          apps/coop_substrate/test/task_suggestions_properties_test.exs
+          apps/spruce_goose/lib/spruce_goose/web/principal_controller.ex
+          apps/spruce_goose/lib/spruce_goose/web/requests.ex
+          apps/spruce_goose/lib/spruce_goose/web/router.ex
+          apps/spruce_goose/test/spruce_goose/web/offboarding_test.exs
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test

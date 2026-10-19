@@ -1,10 +1,11 @@
 defmodule CoopSubstrate.TaskHistories do
   @moduledoc """
   Generated task histories for property tests: suggestions, delegations,
-  revocations and lifecycle commands, run through the pure admission path the
-  appender uses per event (`Envelope.verify/1`, `TypeRegistry.validity_check/2`,
-  gate fold), so hundreds of them need no database. Most generated commands are
-  deliberately invalid; `run/3` keeps the admitted ones.
+  revocations, offboarding and lifecycle commands, run through the pure
+  admission path the appender uses per event (`Envelope.verify/1`,
+  `TypeRegistry.validity_check/2`, gate fold), so hundreds of them need no
+  database. Most generated commands are deliberately invalid; `run/3` keeps
+  the admitted ones.
   """
 
   use ExUnitProperties
@@ -85,7 +86,8 @@ defmodule CoopSubstrate.TaskHistories do
       {2, tuple({constant(:del_create), idx, idx, idx})},
       {1, tuple({constant(:revoke_delegation), idx})},
       {1, constant(:revoke_operator)},
-      {1, constant(:revoke_device)}
+      {1, constant(:revoke_device)},
+      {1, tuple({constant(:offboard), member_of(~w(alice bot deleg-bot))})}
     ])
   end
 
@@ -202,6 +204,12 @@ defmodule CoopSubstrate.TaskHistories do
       # The operator retires their own device: same effect, signed by its holder.
       :revoke_device ->
         device_revoke(w.op, w.op_grant, w.op_grant)
+
+      # Everything the principal holds, at once: the operator's grant and the
+      # delegations it made, the agent's suggester grant, or the delegations
+      # made to the delegate.
+      {:offboard, principal} ->
+        offboard(w.gov, principal)
     end
   end
 
