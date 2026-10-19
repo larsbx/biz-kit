@@ -102,7 +102,8 @@ defmodule CoopSubstrate.Feed.View do
       predecessor_ids: r.predecessor_ids,
       sop_digest: r.sop_digest,
       acknowledgment:
-        r.acknowledgment && Map.take(r.acknowledgment, [:principal_id, :key_id, :custody_receipt_id])
+        r.acknowledgment &&
+          Map.take(r.acknowledgment, [:principal_id, :key_id, :custody_receipt_id])
     }
   end
 
