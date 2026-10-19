@@ -11,9 +11,11 @@ defmodule CoopSubstrate.Enrolments do
       {:ok, grant}     = Enrolments.approve(code, pending.id, governance_signature)
 
   A request is only a request: it gives no access. Access is the grant that
-  approval appends, `TaskOperatorGrantedV1` for an operator device or
+  approval appends, `TaskOperatorGrantedV1` for an operator device,
   `TaskReviewerGrantedV1` for a reviewer device
-  (docs/architecture/2026-10-19-execution.md), signed by a governance key
+  (docs/architecture/2026-10-19-execution.md), or a `RoleKeyDeclared`
+  governance key naming the principal for an administrator's browser, for the
+  whole chapter (docs/architecture/2026-10-19-administration.md), signed by a governance key
   declared for the chapter and admitted by the ledger as any grant is. The
   server signs nothing.
 
@@ -40,7 +42,7 @@ defmodule CoopSubstrate.Enrolments do
   # One for the cluster (`BizKit.Cluster.Singleton`): a code works on any node.
   @server BizKit.Cluster.Singleton.name(__MODULE__)
 
-  @roles ~w(operator reviewer)
+  @roles ~w(operator reviewer governance)
 
   @doc "The statement the device must sign: who asks, for which project, key and role."
   @spec begin(
@@ -140,14 +142,7 @@ defmodule CoopSubstrate.Enrolments do
         {:enrolment, code},
         chapter,
         grant_type(r.role),
-        %{
-          "tenant_id" => tenant,
-          "project_id" => project,
-          "principal_id" => r.principal_id,
-          "key_id" => r.key_id,
-          "pubkey" => {:bytes, r.pubkey},
-          "device_label" => r.label
-        },
+        grant(r, tenant, project),
         signer
       )
     end
@@ -176,7 +171,34 @@ defmodule CoopSubstrate.Enrolments do
   @doc "The ledger type of the grant a role's enrolment appends."
   def grant_type("operator"), do: "TaskOperatorGrantedV1"
   def grant_type("reviewer"), do: "TaskReviewerGrantedV1"
+  def grant_type("governance"), do: "RoleKeyDeclared"
   def grant_type(_role), do: nil
+
+  # A governance key is the chapter's, declared for the principal holding it.
+  defp grant(%{role: "governance"} = r, _tenant, _project),
+    do: %{
+      "role" => "governance",
+      "key_id" => r.key_id,
+      "pubkey" => {:bytes, r.pubkey},
+      "member_id" => r.principal_id
+    }
+
+  defp grant(r, tenant, project),
+    do: %{
+      "tenant_id" => tenant,
+      "project_id" => project,
+      "principal_id" => r.principal_id,
+      "key_id" => r.key_id,
+      "pubkey" => {:bytes, r.pubkey},
+      "device_label" => r.label
+    }
+
+  defp enrolled?(principal, {chapter, _, _}, key_id, "governance") do
+    gate = Log.gate()
+
+    Map.has_key?(gate.role_keys[{chapter, "governance"}] || %{}, key_id) and
+      gate.role_key_members[{chapter, "governance", key_id}] == principal
+  end
 
   defp enrolled?(principal, scope, key_id, role) do
     o = Log.gate().orchestration

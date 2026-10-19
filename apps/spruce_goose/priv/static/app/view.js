@@ -177,6 +177,37 @@ export function otherSteps(taskId, view) {
   return [];
 }
 
+// -- administration (docs/architecture/2026-10-19-administration.md) ----------------
+
+// The exact command approving an enrolment request (`GET /api/v1/enrolments/:code`
+// as `details`): an operator or reviewer grant for the device, or a governance
+// key declared for the person. An administrator signs only that.
+export function grantFor(details) {
+  const pubkey = { __bytes__: Array.from(base64url.decode(details.public_key), (b) => b.toString(16).padStart(2, "0")).join("") };
+  if (details.role === "governance")
+    return {
+      type: "RoleKeyDeclared",
+      payload: { role: "governance", key_id: details.key_id, pubkey, member_id: details.principal_id },
+    };
+  return {
+    type: details.role === "reviewer" ? "TaskReviewerGrantedV1" : "TaskOperatorGrantedV1",
+    payload: {
+      tenant_id: details.tenant_id,
+      project_id: details.project_id,
+      principal_id: details.principal_id,
+      key_id: details.key_id,
+      pubkey,
+      device_label: details.label,
+    },
+  };
+}
+
+// What an administrator may end of what a person holds in this project
+// (`GET /api/v1/principals/:id`): device and reviewer grants, one by one.
+export const revocable = (held) => held.filter((h) => h.kind === "operator" || h.kind === "reviewer");
+
+export const revocationType = (kind) => (kind === "reviewer" ? "TaskReviewerRevokedV1" : "TaskOperatorRevokedV1");
+
 // Who called a task off and why, or null.
 export const cancelledBecause = (t) =>
   t?.state === "cancelled" && t.cancellation

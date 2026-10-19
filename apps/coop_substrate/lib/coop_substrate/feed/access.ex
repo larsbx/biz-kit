@@ -13,6 +13,11 @@ defmodule CoopSubstrate.Feed.Access do
 
   The resulting reader stays authorised while `live?/2` holds: a feed session
   ends when its grant is revoked.
+
+  A person signed in who holds a governance key of the chapter, declared for
+  them, reads every project in it as an administrator (`for_administrator/3`,
+  docs/architecture/2026-10-19-administration.md), while the key stays
+  declared (`live_in?/2`).
   """
 
   alias CoopSubstrate.Canonical
@@ -23,8 +28,8 @@ defmodule CoopSubstrate.Feed.Access do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          grant_id: String.t(),
-          role: :operator | :suggester | :reviewer,
+          grant_id: String.t() | {:governance, String.t()},
+          role: :operator | :suggester | :reviewer | :governance,
           principal_id: String.t(),
           scope: View.scope()
         }
@@ -105,6 +110,43 @@ defmodule CoopSubstrate.Feed.Access do
       [] -> {:error, :no_grant}
     end
   end
+
+  @doc """
+  The reader for an administrator: `principal_id` holds a governance key of
+  the scope's chapter, declared for it (`RoleKeyDeclared` naming it as
+  `member_id`). `gate` is the membership projection.
+  """
+  @spec for_administrator(map(), String.t(), View.scope()) :: {:ok, t()} | {:error, :no_grant}
+  def for_administrator(gate, principal_id, {chapter, _, _} = scope) do
+    gate.role_key_members
+    |> Enum.filter(fn {{ch, role, key_id}, member} ->
+      {ch, role, member} == {chapter, "governance", principal_id} and declared?(gate, ch, key_id)
+    end)
+    |> Enum.sort()
+    |> case do
+      [{{_, _, key_id}, _} | _] ->
+        {:ok,
+         %__MODULE__{
+           grant_id: {:governance, key_id},
+           role: :governance,
+           principal_id: principal_id,
+           scope: scope
+         }}
+
+      [] ->
+        {:error, :no_grant}
+    end
+  end
+
+  @doc "Whether the reader is still authorised, against the membership projection `gate`."
+  @spec live_in?(map(), t()) :: boolean()
+  def live_in?(gate, %__MODULE__{grant_id: {:governance, key_id}, scope: {chapter, _, _}}),
+    do: declared?(gate, chapter, key_id)
+
+  def live_in?(gate, reader), do: live?(gate.orchestration, reader)
+
+  defp declared?(gate, chapter, key_id),
+    do: Map.has_key?(gate.role_keys[{chapter, "governance"}] || %{}, key_id)
 
   @doc "Whether the reader's grant is still active."
   @spec live?(map(), t()) :: boolean()

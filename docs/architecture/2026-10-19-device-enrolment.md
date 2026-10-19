@@ -31,9 +31,13 @@ the device's public key into a grant by hand" in
    declared for the chapter, checked at append. The page polls its status,
    sees it enrolled, and its decisions are accepted from then on.
 
-A request names a **role**: `operator` (the default, as above) or
+A request names a **role**: `operator` (the default, as above),
 `reviewer`, which yields a `TaskReviewerGrantedV1` for reviewing evidence
-([execution](2026-10-19-execution.md)). The statement the device signs
+([execution](2026-10-19-execution.md)), or `governance`, which declares the
+browser's key a governance key of the chapter for the person
+([administration](2026-10-19-administration.md)). Once the first
+administrator is approved with `mix coop.enrol`, administrators approve
+codes in the view. The statement the device signs
 names the role, the page checks it, status is kept per role, and the same
 key may hold both.
 

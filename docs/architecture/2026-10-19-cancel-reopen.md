@@ -57,8 +57,8 @@ POST …/tasks/:task_id/cancellation/:held_id   {"signature"} → 201 {event_id,
 The signer decodes what it is given and signs only that task's
 `TaskCancelledByGovernanceV1` with its reason. There is no `mix` task for
 it: an administrator acts from the web view, with a governance key held by
-their browser (the follow-up to this change), and a script or agent uses
-these endpoints with `CoopSubstrate.Governance.Client`.
+their browser ([administration](2026-10-19-administration.md)), and a script
+or agent uses these endpoints with `CoopSubstrate.Governance.Client`.
 
 The signed-request check now lives in `SpruceGoose.Web.Requests`, shared by
 offboarding and cancellation.

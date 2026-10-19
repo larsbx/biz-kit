@@ -5,7 +5,9 @@
 // (docs/architecture/2026-10-19-lifecycle.md); after ready, starting,
 // evidence, completion and, on a reviewer device, reviewing
 // (docs/architecture/2026-10-19-execution.md); cancelling and sending back
-// (docs/architecture/2026-10-19-cancel-reopen.md). Everything is signed by this
+// (docs/architecture/2026-10-19-cancel-reopen.md); and, in a browser holding
+// a governance key, administration (docs/architecture/2026-10-19-administration.md).
+// Everything is signed by this
 // device's key after decoding exactly what will be signed.
 //
 // Opened as /app?chapter=…&tenant=…&project=… (&provider=… to choose the
@@ -21,10 +23,13 @@ import {
   describeTiming,
   emptyView,
   formTiming,
+  grantFor,
   nextStep,
   otherSteps,
   pendingSuggestions,
   receiptFor,
+  revocable,
+  revocationType,
   timingForm,
   toReview,
 } from "./view.js";
@@ -44,6 +49,8 @@ let publicKeyHex = null;
 let enrolled = false;
 // Enrolled as a reviewer too: the same key, under a reviewer grant.
 let reviewing = false;
+// A governance key of this chapter: the same key, declared for this person.
+let governing = false;
 // One decision at a time: the confirmation dialog shows one command, and the
 // bytes signed must be the ones it shows.
 let deciding = false;
@@ -107,6 +114,7 @@ function render() {
   );
 
   renderReviews();
+  renderAdmin();
   renderDelegations();
   renderHistory();
   renderDevices();
@@ -149,10 +157,12 @@ function stepControl(id, t) {
 // Cancel or send back, each with a reason, signed like any step.
 function otherControls(id, t) {
   const steps = otherSteps(id, view);
-  if (!steps.length) return null;
+  const governed = governing && !["completed", "cancelled"].includes(t.state) ? governanceCancel(id, t) : null;
+  if (!steps.length && !governed) return null;
   return el(
     "div",
     { className: "actions" },
+    governed,
     ...steps.map(({ action, label, question }) => {
       const button = el("button", { textContent: label, disabled: !pair || !enrolled || deciding });
       button.onclick = () => {
@@ -405,8 +415,10 @@ const show = (value) =>
 
 // One command at a time, through the confirmation dialog: decode what the
 // server prepared, refuse unless it is exactly `expected`, show it, sign it,
-// submit it.
-async function signAndSubmit(prepare, expected) {
+// submit it (to `submitPath(prepared)`, by default the held command's path).
+const commandPath = (prepared) => `/api/v1/commands/${encodeURIComponent(prepared.id)}`;
+
+async function signAndSubmit(prepare, expected, submitPath = commandPath) {
   if (deciding) return null;
   deciding = true;
   render();
@@ -429,7 +441,7 @@ async function signAndSubmit(prepare, expected) {
     if (choice !== "sign") return status("Cancelled; nothing was signed.");
 
     const signature = base64url.encode(await device.sign(pair, bytes));
-    const result = await postJSON(`/api/v1/commands/${encodeURIComponent(prepared.id)}`, { signature });
+    const result = await postJSON(submitPath(prepared), { signature });
     status(`Recorded on the ledger at #${result.global_seq}.`);
     return result;
   } catch (e) {
@@ -500,6 +512,159 @@ function amend(s) {
   $("amend").showModal();
 }
 
+// -- administration (docs/architecture/2026-10-19-administration.md) ---------------
+//
+// Only in a browser whose key is a governance key of this chapter, declared
+// for the signed-in person. Each act goes through the endpoints any holder of
+// a governance key uses, and each command is signed only if it is exactly the
+// one shown: these grant and end access.
+
+const [chapterId, tenantId, projectIdRaw] = scope;
+
+// A request signed by this browser's governance key (`Governance.Read`).
+async function governed(method, path, body) {
+  const authorization = await device.governanceAuthorization(pair, keyId, method, path);
+  const headers = body ? { authorization, "content-type": "application/json" } : { authorization };
+  const res = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json;
+}
+
+const governanceSigned = (type, payload) => ({ type, payload, chapter: chapterId, exact: true });
+
+// Cancel any task short of completed, work under way included.
+function governanceCancel(id, t) {
+  const button = el("button", { textContent: "Cancel as administrator…", disabled: !pair || deciding });
+  button.onclick = () => {
+    const reason = prompt("Why cancel this task as an administrator? The reason is recorded on the ledger, and cancelling is final.");
+    if (!reason?.trim()) return;
+    const path = `${projectPath}/tasks/${encodeURIComponent(id)}/cancellation`;
+    signAndSubmit(
+      () => governed("POST", path, { governance_key_id: keyId, reason }),
+      governanceSigned("TaskCancelledByGovernanceV1", {
+        tenant_id: tenantId,
+        project_id: projectIdRaw,
+        task_id: id,
+        expected_version: t.version,
+        reason,
+      }),
+      (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
+    );
+  };
+  return button;
+}
+
+function renderAdmin() {
+  $("admin-section").hidden = !governing;
+}
+
+const describeRequest = (d) =>
+  `${d.principal_id} (signed in as ${d.identity?.subject ?? "?"} at ${d.identity?.issuer ?? "?"}) asks for ` +
+  `${d.role === "governance" ? "administrator" : d.role} access` +
+  `${d.role === "governance" ? ` to chapter ${d.chapter_id}` : ` to ${d.project_id}`} for “${d.label}”, key ${d.key_id}.`;
+
+async function lookUpRequest(event) {
+  event.preventDefault();
+  const code = $("approve-code").value.trim().toUpperCase();
+  const res = await fetch(`/api/v1/enrolments/${encodeURIComponent(code)}`);
+  if (!res.ok) return $("approve-details").replaceChildren(el("p", { className: "status error", textContent: "No such request, or it has expired." }));
+  const details = await res.json();
+  const approve = el("button", { className: "primary", textContent: "Approve…", disabled: deciding });
+  approve.onclick = async () => {
+    const { type, payload } = grantFor(details);
+    const path = `/api/v1/enrolments/${encodeURIComponent(code)}/approval`;
+    const result = await signAndSubmit(
+      () => postJSON(path, { governance_key_id: keyId }),
+      { ...governanceSigned(type, payload), chapter: details.chapter_id },
+      (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
+    );
+    if (!result) return;
+    $("approve-details").replaceChildren(el("p", { className: "muted", textContent: `Approved: ${describeRequest(details)}` }));
+    // A new administrator of this chapter belongs in the list at once.
+    if (details.role === "governance") await loadAdministrators();
+  };
+  $("approve-details").replaceChildren(el("p", { textContent: describeRequest(details) }), el("div", { className: "actions" }, approve));
+}
+
+async function lookUpPerson(event) {
+  event?.preventDefault();
+  const id = $("person-id").value.trim();
+  let found;
+  try {
+    found = await governed("GET", `/api/v1/principals/${encodeURIComponent(id)}`);
+  } catch (e) {
+    return $("person-details").replaceChildren(el("p", { className: "status error", textContent: e.message.replaceAll("_", " ") }));
+  }
+  const here = found.projects.find((p) => p.chapter_id === chapterId && p.tenant_id === tenantId && p.project_id === projectIdRaw);
+  if (!here) return $("person-details").replaceChildren(el("p", { className: "muted", textContent: `${id} holds nothing in this project.` }));
+
+  const rows = revocable(here.held).map((h) => {
+    const revoke = el("button", { textContent: "Revoke", disabled: deciding });
+    revoke.onclick = async () => {
+      if (!confirm(`Revoke ${id}'s ${h.kind} device “${h.label ?? h.key_id}”?`)) return;
+      const path = `/api/v1/grants/${encodeURIComponent(h.event_id)}/revocation`;
+      const done = await signAndSubmit(
+        () => postJSON(path, { governance_key_id: keyId }),
+        governanceSigned(revocationType(h.kind), { tenant_id: tenantId, project_id: projectIdRaw, authorization_event_id: h.event_id }),
+        (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
+      );
+      if (done) await lookUpPerson();
+    };
+    return el("div", { className: "row" }, el("span", { textContent: `${h.kind}: ${h.label ?? "unlabelled"} (key ${h.key_id})` }), revoke);
+  });
+
+  const offboard = el("button", { textContent: "Offboard from this project", disabled: deciding });
+  offboard.onclick = async () => {
+    if (!confirm(`End everything ${id} holds in this project: devices, suggester and reviewer grants, delegations?`)) return;
+    const path = `/api/v1/principals/${encodeURIComponent(id)}/offboarding`;
+    const done = await signAndSubmit(
+      () => governed("POST", path, { governance_key_id: keyId, chapter_id: chapterId, tenant_id: tenantId, project_id: projectIdRaw }),
+      governanceSigned("TaskPrincipalOffboardedV1", { tenant_id: tenantId, project_id: projectIdRaw, principal_id: id }),
+      (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
+    );
+    if (done) await lookUpPerson();
+  };
+
+  $("person-details").replaceChildren(
+    el("p", { textContent: `${id} holds ${here.held.map((h) => h.kind).join(", ")}.` }),
+    ...rows,
+    el("div", { className: "actions" }, offboard),
+  );
+}
+
+async function loadAdministrators() {
+  let keys;
+  try {
+    keys = await governed("GET", `/api/v1/chapters/${chapter}/administrators`);
+  } catch {
+    return;
+  }
+  $("administrators").replaceChildren(
+    ...keys.map((k) => {
+      const self = k.key_id === keyId;
+      const revoke = el("button", { textContent: "Revoke", disabled: deciding });
+      revoke.onclick = async () => {
+        const reason = prompt(`Why revoke ${self ? "this browser's" : `${k.principal_id ?? "unnamed"}'s`} administrator key? Recorded on the ledger.`);
+        if (!reason?.trim()) return;
+        const path = `/api/v1/chapters/${chapter}/administrators/${encodeURIComponent(k.key_id)}/revocation`;
+        const done = await signAndSubmit(
+          () => governed("POST", path, { governance_key_id: keyId, reason }),
+          governanceSigned("RoleKeyRevoked", { role: "governance", key_id: k.key_id, reason }),
+          (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
+        );
+        if (done) await (self ? enrolment() : loadAdministrators());
+      };
+      return el(
+        "div",
+        { className: "row" },
+        el("span", {}, el("strong", { textContent: k.principal_id ?? "Unnamed key" }), self ? " (this browser)" : null),
+        el("span", {}, el("code", { textContent: k.key_id }), " ", revoke),
+      );
+    }),
+  );
+}
+
 // -- devices ---------------------------------------------------------------------
 
 let devices = [];
@@ -551,34 +716,38 @@ const devicePath = () => `${projectPath}/devices/${encodeURIComponent(keyId)}`;
 let enrolmentTimer = null;
 
 const roleStatus = (role) =>
-  fetch(devicePath() + (role === "reviewer" ? "?role=reviewer" : ""))
+  fetch(devicePath() + (role === "operator" ? "" : `?role=${role}`))
     .then((res) => (res.ok ? res.json() : null))
     .catch(() => null);
 
 async function enrolment() {
   clearTimeout(enrolmentTimer);
-  const [operator, reviewer] = await Promise.all([roleStatus("operator"), roleStatus("reviewer")]);
+  const [operator, reviewer, governance] = await Promise.all(["operator", "reviewer", "governance"].map(roleStatus));
   const next = (ms) => (enrolmentTimer = setTimeout(enrolment, ms));
-  if (!operator || !reviewer) return next(30_000);
+  if (!operator || !reviewer || !governance) return next(30_000);
   const { status: state, code } = operator;
-  next(state === "pending" || reviewer.status === "pending" ? 10_000 : 30_000);
+  next([state, reviewer.status, governance.status].includes("pending") ? 10_000 : 30_000);
   enrolled = state === "enrolled";
   reviewing = reviewer.status === "enrolled";
+  const wasGoverning = governing;
+  governing = governance.status === "enrolled";
 
   // Offer only the roles this device has not asked for.
-  const open = { operator: state === "none", reviewer: reviewer.status === "none" };
+  const open = { operator: state === "none", reviewer: reviewer.status === "none", governance: governance.status === "none" };
   for (const option of $("enrol-role").options) option.disabled = !open[option.value];
-  if (!open[$("enrol-role").value]) $("enrol-role").value = open.operator ? "operator" : "reviewer";
-  $("enrol-form").hidden = !open.operator && !open.reviewer;
+  if (!open[$("enrol-role").value]) $("enrol-role").value = Object.keys(open).find((r) => open[r]) ?? "operator";
+  $("enrol-form").hidden = !Object.values(open).some(Boolean);
   await loadDevices();
+  if (governing && !wasGoverning) await loadAdministrators();
 
-  $("review-enrolment").replaceChildren(
-    ...(reviewer.status === "enrolled"
-      ? ["This device can review evidence in this project."]
-      : reviewer.status === "pending"
-        ? ["Waiting for approval as a reviewer. Give your administrator this code: ", el("span", { className: "code", textContent: reviewer.code })]
-        : []),
-  );
+  const roleLine = (s, enrolledText, as) =>
+    s.status === "enrolled"
+      ? [enrolledText]
+      : s.status === "pending"
+        ? [`Waiting for approval as ${as}. Give your administrator this code: `, el("span", { className: "code", textContent: s.code })]
+        : [];
+  $("review-enrolment").replaceChildren(...roleLine(reviewer, "This device can review evidence in this project.", "a reviewer"));
+  $("admin-enrolment").replaceChildren(...roleLine(governance, "This browser administers this chapter.", "an administrator"));
 
   if (state === "enrolled") {
     $("enrolment").textContent = "This device can decide for you in this project.";
@@ -606,6 +775,7 @@ async function requestAccess(event) {
     const bytes = base64url.decode(challenge.statement);
 
     // Prove possession by signing the enrolment statement, and nothing else.
+    // (The statement names the role asked for.)
     if (!device.isOwnEnrolment(decode(bytes), { keyId, publicKeyHex, role })) {
       throw new Error("the server asked this device to sign something else; nothing was signed");
     }
@@ -645,6 +815,8 @@ async function start() {
     $("enrol-label").value ||= `${navigator.platform || "This"} browser`;
     $("enrol-form").addEventListener("submit", requestAccess);
     $("amend-kind").addEventListener("change", showKind);
+    $("approve-form").addEventListener("submit", lookUpRequest);
+    $("person-form").addEventListener("submit", lookUpPerson);
     await enrolment();
   } catch (e) {
     status(`This browser cannot hold a signing key (${e.message}); you can read but not decide.`, true);

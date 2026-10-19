@@ -42,6 +42,10 @@ defmodule CoopSubstrate.Projections.Membership do
       floor_rules: %{},
       obligations: %{},
       role_keys: %{},
+      # Who each role key was declared for (its optional `member_id`), by
+      # {chapter, role, key_id}: an administrator's browser key names the
+      # biz-kit principal holding it (docs/architecture/2026-10-19-administration.md).
+      role_key_members: %{},
       # Phase 8A: the dispatch envelope + tender rail. Envelopes keep their
       # version across revocation (10 P6: versioned, atomically revocable —
       # monotonicity survives; `active: false` is the revoked state, never
@@ -150,18 +154,22 @@ defmodule CoopSubstrate.Projections.Membership do
   def handle_event(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p}, state) do
     {:bytes, pubkey} = p["pubkey"]
 
-    update_in(state, [:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
+    state
+    |> update_in([:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
       Map.put(keys, p["key_id"], pubkey)
     end)
+    |> put_in([:role_key_members, Access.key({ch, p["role"], p["key_id"]})], p["member_id"])
   end
 
   def handle_event(%Envelope{type: "RoleKeyRevoked", chapter_id: ch, payload: p}, state) do
     # The (possibly empty) map stays: once a role's door closes, it never
     # reopens (docs/phase1d_plan.md P4) — an empty declared set means no
     # signature in that role is acceptable until governance declares a key.
-    update_in(state, [:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
+    state
+    |> update_in([:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
       Map.delete(keys, p["key_id"])
     end)
+    |> update_in([:role_key_members], &Map.delete(&1, {ch, p["role"], p["key_id"]}))
   end
 
   def handle_event(%Envelope{type: "ThroughputRuleActivated", chapter_id: ch, payload: p}, state) do
