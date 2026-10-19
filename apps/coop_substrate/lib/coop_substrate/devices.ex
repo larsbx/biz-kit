@@ -1,13 +1,19 @@
 defmodule CoopSubstrate.Devices do
   @moduledoc """
   A person's devices in a project, and their revocation
-  (docs/architecture/2026-10-19-device-revocation.md). A device is an active
-  operator grant naming the person's principal and the device's key.
+  (docs/architecture/2026-10-19-device-revocation.md,
+  2026-10-19-own-devices.md). A device is what names the person's principal
+  and a key they hold: an active operator or reviewer grant in the project,
+  or an administrator key declared for them in its chapter.
 
-    * **By its holder** (`prepare_revocation/4`): a `TaskDeviceRevokedV1`
-      signed by one of the person's devices still enrolled in the project,
-      the lost one's sibling or the device itself. Held for the principal
-      like a decision (`Commands.hold/5`); the device signs and submits it.
+    * **By its holder** (`prepare_revocation/4`): signed by one of the
+      person's devices, the lost one's sibling or the device itself, with the
+      command its role signs: `TaskDeviceRevokedV1` from an operator device,
+      `TaskReviewerDeviceRevokedV1` from a reviewer device, a governance
+      revocation from an administrator browser. An administrator key is
+      revoked only from an administrator browser (`RoleKeyRevoked`), since the
+      chapter's keys are derived from its governance history alone. Held for the principal like a
+      decision (`Commands.hold/5`); the device signs and submits it.
     * **By governance** (`prepare_governance_revocation/2`, `revoke/3`): a
       `TaskOperatorRevokedV1` for any operator grant, or a
       `TaskReviewerRevokedV1` for a reviewer grant
@@ -19,41 +25,117 @@ defmodule CoopSubstrate.Devices do
 
   alias CoopSubstrate.{Commands, Log}
 
-  @type device :: %{grant_id: String.t(), key_id: String.t(), label: String.t() | nil}
+  @type kind :: String.t()
+  @type device :: %{
+          id: String.t(),
+          kind: kind(),
+          grant_id: String.t() | nil,
+          key_id: String.t(),
+          label: String.t() | nil
+        }
 
-  @doc "The principal's enrolled devices in the project."
+  # The order a key signs in when it holds several roles.
+  @kinds ~w(operator reviewer administrator)
+
+  @doc """
+  The principal's devices in the project: operator and reviewer grants
+  (`id` is the grant's event ID), then administrator keys of the chapter
+  (`id` is the key ID).
+  """
   @spec list(String.t(), CoopSubstrate.Feed.View.scope()) :: [device()]
-  def list(principal, scope) do
-    for {id, g} <- Log.gate().orchestration.grants,
-        g.active,
-        g.principal_id == principal,
-        scope(g) == scope,
-        do: %{grant_id: id, key_id: g.key_id, label: g.device_label}
+  def list(principal, {chapter, _, _} = scope) do
+    gate = Log.gate()
+    o = gate.orchestration
+    declared = gate.role_keys[{chapter, "governance"}] || %{}
+
+    grants =
+      for {kind, grants} <- [{"operator", o.grants}, {"reviewer", o.dod_grants}],
+          {id, g} <- Enum.sort(grants),
+          g.active and g.principal_id == principal and scope(g) == scope,
+          do: %{id: id, kind: kind, grant_id: id, key_id: g.key_id, label: g.device_label}
+
+    keys =
+      for {{^chapter, "governance", key_id}, ^principal} <- Enum.sort(gate.role_key_members),
+          Map.has_key?(declared, key_id),
+          do: %{id: key_id, kind: "administrator", grant_id: nil, key_id: key_id, label: nil}
+
+    grants ++ keys
   end
 
-  @doc "Prepare the holder's revocation of `grant_id`, to be signed by their device `key_id`."
+  @doc """
+  Prepare the holder's revocation of their device `id`, to be signed by their
+  device `key_id` with the command its role signs.
+  """
   @spec prepare_revocation(String.t(), String.t(), CoopSubstrate.Feed.View.scope(), String.t()) ::
           {:ok, Commands.pending()} | {:error, term()}
-  def prepare_revocation(principal, key_id, {chapter, tenant, project} = scope, grant_id) do
+  def prepare_revocation(principal, key_id, {chapter, _, _} = scope, id) do
     devices = list(principal, scope)
 
-    with {:ok, signing} <- find(devices, &(&1.key_id == key_id), :no_operator_grant),
-         {:ok, _target} <- find(devices, &(&1.grant_id == grant_id), :unknown_device),
-         %{pubkey: pubkey} = Log.gate().orchestration.grants[signing.grant_id] do
-      Commands.hold(
-        principal,
-        chapter,
-        "TaskDeviceRevokedV1",
-        %{
-          "tenant_id" => tenant,
-          "project_id" => project,
-          "principal_id" => principal,
-          "authorization_event_id" => signing.grant_id,
-          "revoked_grant_event_id" => grant_id
-        },
-        %{role: "operator", pubkey: pubkey, key_id: key_id}
-      )
+    with {:ok, target} <- find(devices, &(&1.id == id), :unknown_device),
+         {:ok, signer} <- signing(devices, key_id, target) do
+      {type, payload} = revocation(signer, target, principal, scope)
+      Commands.hold(principal, chapter, type, payload, signer_of(signer, chapter))
     end
+  end
+
+  # The signing device: this key's operator grant, else its reviewer grant,
+  # else its administrator key; for an administrator key, only another (or
+  # the same) administrator key.
+  defp signing(devices, key_id, %{kind: "administrator"}) do
+    cond do
+      Enum.any?(devices, &(&1.key_id == key_id and &1.kind == "administrator")) ->
+        signing(devices, key_id, nil, ["administrator"])
+
+      Enum.any?(devices, &(&1.key_id == key_id)) ->
+        {:error, :needs_administrator}
+
+      true ->
+        {:error, :no_device}
+    end
+  end
+
+  defp signing(devices, key_id, _target), do: signing(devices, key_id, nil, @kinds)
+
+  defp signing(devices, key_id, _target, kinds) do
+    Enum.find_value(kinds, {:error, :no_device}, fn kind ->
+      case Enum.find(devices, &(&1.key_id == key_id and &1.kind == kind)) do
+        nil -> nil
+        device -> {:ok, device}
+      end
+    end)
+  end
+
+  defp revocation(%{kind: kind} = signer, target, principal, {_, tenant, project})
+       when kind in ["operator", "reviewer"] do
+    {if(kind == "reviewer", do: "TaskReviewerDeviceRevokedV1", else: "TaskDeviceRevokedV1"),
+     %{
+       "tenant_id" => tenant,
+       "project_id" => project,
+       "principal_id" => principal,
+       "authorization_event_id" => signer.id,
+       "revoked_grant_event_id" => target.id
+     }}
+  end
+
+  defp revocation(%{kind: "administrator"}, %{kind: "administrator"} = target, _, _),
+    do:
+      {"RoleKeyRevoked",
+       %{"role" => "governance", "key_id" => target.id, "reason" => "Revoked by its holder"}}
+
+  defp revocation(%{kind: "administrator"}, target, _, {_, tenant, project}),
+    do:
+      {revocation_type(if(target.kind == "reviewer", do: "reviewer", else: "operator")),
+       %{"tenant_id" => tenant, "project_id" => project, "authorization_event_id" => target.id}}
+
+  defp signer_of(%{kind: "administrator", key_id: key_id}, chapter) do
+    {:ok, signer} = Commands.governance_signer(chapter, key_id)
+    signer
+  end
+
+  defp signer_of(%{kind: kind, id: id, key_id: key_id}, _chapter) do
+    o = Log.gate().orchestration
+    grant = if kind == "reviewer", do: o.dod_grants[id], else: o.grants[id]
+    %{role: kind, pubkey: grant.pubkey, key_id: key_id}
   end
 
   @doc "Any operator or reviewer grant, for an administrator to judge."

@@ -34,14 +34,14 @@ defmodule CoopSubstrate.Tasks do
         spec("governance", "task_grants", @scope, %{
           "authorization_event_id" => :string
         }),
-      # The holder of an operator grant revokes one of their own device grants
-      # (docs/architecture/2026-10-19-device-revocation.md).
-      "TaskDeviceRevokedV1" =>
-        spec("operator", "task_grants", @scope, %{
-          "principal_id" => :string,
-          "authorization_event_id" => :string,
-          "revoked_grant_event_id" => :string
-        }),
+      # The holder of a device revokes one of their own devices, an operator or
+      # reviewer grant in the project (docs/architecture/2026-10-19-device-revocation.md,
+      # 2026-10-19-own-devices.md), signed by one of their operator devices or
+      # by one of their reviewer devices. An administrator key is revoked only
+      # by governance (`RoleKeyRevoked`), so the governance history alone
+      # derives the chapter's keys, offline too (`Export`).
+      "TaskDeviceRevokedV1" => holder_revocation("operator"),
+      "TaskReviewerDeviceRevokedV1" => holder_revocation("reviewer"),
       # Governance ends everything a principal holds in the project at once
       # (docs/architecture/2026-10-19-offboarding.md).
       "TaskPrincipalOffboardedV1" =>
@@ -66,6 +66,19 @@ defmodule CoopSubstrate.Tasks do
     |> Map.merge(CoopSubstrate.Tasks.Readiness.event_types())
     |> Map.merge(CoopSubstrate.Tasks.Timing.event_types())
   end
+
+  defp holder_revocation(role),
+    do:
+      spec(role, "task_grants", @scope, %{
+        "principal_id" => :string,
+        "authorization_event_id" => :string,
+        "revoked_grant_event_id" => :string
+      })
+
+  @holder_revocations ~w(TaskDeviceRevokedV1 TaskReviewerDeviceRevokedV1)
+
+  @doc "The holder revocations, by an operator or a reviewer device."
+  def holder_revocations, do: @holder_revocations
 
   defp spec(role, prefix, scope, fields, optional \\ %{}) do
     scope_fields =
@@ -116,6 +129,9 @@ defmodule CoopSubstrate.Tasks do
         Map.has_key?(CoopSubstrate.Tasks.Timing.event_types(), env.type) ->
           CoopSubstrate.Tasks.Timing.check(env, gate.orchestration, gate.role_keys)
 
+        env.type in @holder_revocations ->
+          holder_revocation(env, gate)
+
         true ->
           check_type(env, gate.orchestration, gate.role_keys)
       end
@@ -131,21 +147,6 @@ defmodule CoopSubstrate.Tasks do
       if Map.has_key?(state.grants, env.event_id),
         do: {:error, :grant_already_recorded},
         else: :ok
-    end
-  end
-
-  # Revocation by the holder: from any of their active device grants in the
-  # project, of any of their device grants there, itself included.
-  defp check_type(%Envelope{type: "TaskDeviceRevokedV1", payload: p} = env, state, _keys) do
-    with {:ok, signer_grant} <- fetch_grant(state, p["authorization_event_id"]),
-         :ok <- authorized(env, signer_grant),
-         {:ok, target} <- fetch_grant(state, p["revoked_grant_event_id"]),
-         :ok <- grant_scope(env, target) do
-      cond do
-        target.principal_id != signer_grant.principal_id -> {:error, :not_own_device}
-        not target.active -> {:error, :grant_already_revoked}
-        true -> :ok
-      end
     end
   end
 
@@ -298,4 +299,34 @@ defmodule CoopSubstrate.Tasks do
   end
 
   def duplicate(_batch, _state), do: :new
+
+  # Revocation by the holder: from any of their active operator or reviewer
+  # devices in the project, of any of their devices there (operator or
+  # reviewer grants), itself included.
+  defp holder_revocation(%Envelope{type: type, payload: p} = env, gate) do
+    o = gate.orchestration
+    signers = if type == "TaskReviewerDeviceRevokedV1", do: o.dod_grants, else: o.grants
+
+    with {:ok, signer} <- fetch(signers, p["authorization_event_id"], :unknown_task_grant),
+         :ok <- authorized(env, signer),
+         do: holder_target(env, signer.principal_id, o)
+  end
+
+  defp holder_target(%Envelope{payload: %{"revoked_grant_event_id" => id}} = env, holder, o) do
+    with {:ok, target} <- fetch(Map.merge(o.dod_grants, o.grants), id, :unknown_task_grant),
+         :ok <- grant_scope(env, target) do
+      cond do
+        target.principal_id != holder -> {:error, :not_own_device}
+        not target.active -> {:error, :grant_already_revoked}
+        true -> :ok
+      end
+    end
+  end
+
+  defp fetch(map, id, error) do
+    case Map.fetch(map, id) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, error}
+    end
+  end
 end

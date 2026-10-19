@@ -402,3 +402,36 @@ test("administration: the governance read is the server's bytes; approvals and r
   assert.equal(revocationType("reviewer"), "TaskReviewerRevokedV1");
   assert.equal(revocationType("operator"), "TaskOperatorRevokedV1");
 });
+
+test("own devices: the command each role signs to revoke each kind", async () => {
+  const { ownRevocation } = await import("../../priv/static/app/view.js");
+  const laptop = { id: "g1", kind: "operator" };
+  const tablet = { id: "g2", kind: "reviewer" };
+  const browser = { id: "k-0a0b0c0d", kind: "administrator" };
+  const as = (enrolled, reviewing, governing) => ({ enrolled, reviewing, governing });
+
+  assert.deepEqual(ownRevocation(as(true, true, true), tablet), {
+    type: "TaskDeviceRevokedV1",
+    payload: { revoked_grant_event_id: "g2" },
+  });
+  // An administrator key only as an administrator, whatever else this key is.
+  assert.equal(ownRevocation(as(true, true, false), browser), null);
+  assert.deepEqual(ownRevocation(as(true, false, true), browser), {
+    type: "RoleKeyRevoked",
+    payload: { role: "governance", key_id: "k-0a0b0c0d" },
+  });
+  assert.deepEqual(ownRevocation(as(false, true, true), laptop), {
+    type: "TaskReviewerDeviceRevokedV1",
+    payload: { revoked_grant_event_id: "g1" },
+  });
+  assert.deepEqual(ownRevocation(as(false, false, true), tablet), {
+    type: "TaskReviewerRevokedV1",
+    payload: { authorization_event_id: "g2" },
+  });
+  assert.deepEqual(ownRevocation(as(false, false, true), laptop).type, "TaskOperatorRevokedV1");
+  assert.deepEqual(ownRevocation(as(false, false, true), browser), {
+    type: "RoleKeyRevoked",
+    payload: { role: "governance", key_id: "k-0a0b0c0d" },
+  });
+  assert.equal(ownRevocation(as(false, false, false), laptop), null);
+});

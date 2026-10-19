@@ -144,7 +144,7 @@ defmodule CoopSubstrate.DeviceRevocationTest do
                @scope,
                w.laptop_grant.event_id
              ) ==
-               {:error, :no_operator_grant}
+               {:error, :no_device}
     end
 
     test "repeated preparation holds only the latest few revocations of a grant", w do

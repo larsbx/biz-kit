@@ -124,5 +124,7 @@ equivalents of the view, on the same endpoints.
   projects are reached by opening them.
 - Offboarding a person does not revoke their administrator keys; revoke
   those under *Administrators of this chapter*.
+- A person can also give up their own administrator key from any of their
+  devices ([own devices](2026-10-19-own-devices.md)).
 - The genesis seed remains the root of trust; publishing its checkpoint
   out of band, as before, is what anchors it.

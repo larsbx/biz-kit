@@ -178,8 +178,8 @@ across start, or skip the predecessor check each violate it.
 
 ## Limits
 
-- A reviewer device is revoked by governance (`mix coop.revoke`), not by
-  its holder from the view.
+- A reviewer device can now also be revoked by its holder
+  ([own devices](2026-10-19-own-devices.md)).
 - The evidence quota is in memory: it starts afresh if its process moves
   to another node, like the rate limits.
 - A task whose starter leaves stays in progress; any operator in the

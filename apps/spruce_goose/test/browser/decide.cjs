@@ -282,6 +282,13 @@ async function signIn(browser, subject) {
     await signOn(admin, "TaskPrincipalOffboardedV1", reviewerPrincipal);
     await admin.locator("#person-details").getByText("holds nothing in this project").waitFor();
 
+    // The administrator gives up this browser's key from its own device list
+    // (docs/architecture/2026-10-19-own-devices.md).
+    admin.once("dialog", (question) => question.accept());
+    await admin.locator("#devices").getByRole("button", { name: "Revoke this device" }).click();
+    await signOn(admin, "RoleKeyRevoked");
+    await admin.locator("#admin-section").waitFor({ state: "hidden" });
+
     // Retire this device: confirm, check the signed command, and the page
     // no longer counts it as enrolled.
     page.once("dialog", (dialog) => dialog.accept());
