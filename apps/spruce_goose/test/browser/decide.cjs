@@ -278,7 +278,7 @@ async function signIn(browser, subject) {
     // The chapter's other project is listed, with a link to open it
     // (docs/architecture/2026-10-19-chapter-projects.md).
     const listed = admin.locator("#projects .row").filter({ hasText: "project-2" });
-    await listed.getByText("1 open").waitFor();
+    await listed.getByText("1 open; 2 people").waitFor();
     const href = await listed.getByRole("link", { name: "Open" }).getAttribute("href");
     if (new URLSearchParams(href.split("?")[1]).get("project") !== "project-2") throw new Error(`unexpected link: ${href}`);
 
@@ -294,6 +294,8 @@ async function signIn(browser, subject) {
       await admin.getByRole("button", { name: `Offboard from ${tenant} / ${p}` }).waitFor({ state: "detached" });
     }
     await admin.locator("#person-details").getByText("holds nothing in this chapter").waitFor();
+    // The projects card follows: only the project's own operator is left.
+    await listed.getByText("1 open; 1 person").waitFor();
 
     // The administrator gives up this browser's key from its own device list
     // (docs/architecture/2026-10-19-own-devices.md).

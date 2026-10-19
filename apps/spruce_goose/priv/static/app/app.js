@@ -621,6 +621,9 @@ async function lookUpPerson(event) {
   $("person-details").replaceChildren(...projects.map((p) => personInProject(id, p)));
 }
 
+// After ending something a person holds: what they hold, and the projects' people.
+const refreshPerson = () => Promise.all([lookUpPerson(), loadProjects()]);
+
 // What `id` holds in project `p` of this chapter: revoke a device, or offboard.
 function personInProject(id, p) {
   const where = { tenant_id: p.tenant_id, project_id: p.project_id };
@@ -636,7 +639,7 @@ function personInProject(id, p) {
         governanceSigned(revocationType(h.kind), { ...where, authorization_event_id: h.event_id }),
         (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
       );
-      if (done) await lookUpPerson();
+      if (done) await refreshPerson();
     };
     return el("div", { className: "row" }, el("span", { textContent: `${h.kind}: ${h.label ?? "unlabelled"} (key ${h.key_id})` }), revoke);
   });
@@ -650,7 +653,7 @@ function personInProject(id, p) {
       governanceSigned("TaskPrincipalOffboardedV1", { ...where, principal_id: id }),
       (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
     );
-    if (done) await Promise.all([lookUpPerson(), loadProjects()]);
+    if (done) await refreshPerson();
   };
 
   return el(
