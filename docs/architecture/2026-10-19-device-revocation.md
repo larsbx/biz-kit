@@ -14,8 +14,9 @@ key. Two ways end it:
 | an administrator | a governance key, from the view ([administration](2026-10-19-administration.md)) or with `mix coop.revoke <GRANT_ID>` | `TaskOperatorRevokedV1` (unchanged) | a person's only device; a compromised device |
 
 A reviewer device ([execution](2026-10-19-execution.md)) is a reviewer
-grant. Only an administrator revokes it, with the same `mix coop.revoke`,
-which then signs a `TaskReviewerRevokedV1`.
+grant; an administrator revokes it with the same `mix coop.revoke`, which
+then signs a `TaskReviewerRevokedV1`. Its holder can too, as can the holder
+of an administrator browser: see [own devices](2026-10-19-own-devices.md).
 
 Letting the holder revoke without governance is safe because revocation
 only removes authority. A holder can only deactivate their own device

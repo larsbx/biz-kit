@@ -164,6 +164,16 @@ defmodule SpruceGoose.Web.BrowserTest do
     assert hd(offboarded.signers).pubkey == admin_key
     refute Log.gate().orchestration.dod_grants[reviewer_grant.event_id].active
 
+    # Then the administrator's browser gave up its own key.
+    [given_up] = of_type.("RoleKeyRevoked")
+    assert given_up.payload["key_id"] == declared.payload["key_id"]
+    assert hd(given_up.signers).pubkey == admin_key
+
+    refute Map.has_key?(
+             Log.gate().role_keys[{w.chapter, "governance"}],
+             given_up.payload["key_id"]
+           )
+
     [review] = of_type.("TaskDoDReviewedV1")
     assert hd(review.signers).pubkey == elem(reviewer_grant.payload["pubkey"], 1)
     assert hd(review.signers).role == "reviewer"

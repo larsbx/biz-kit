@@ -159,6 +159,7 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/administrators.ex
           apps/spruce_goose/lib/spruce_goose/web/administrator_controller.ex
           apps/spruce_goose/test/spruce_goose/web/administration_test.exs
+          apps/coop_substrate/test/own_devices_test.exs
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test

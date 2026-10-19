@@ -208,6 +208,25 @@ export const revocable = (held) => held.filter((h) => h.kind === "operator" || h
 
 export const revocationType = (kind) => (kind === "reviewer" ? "TaskReviewerRevokedV1" : "TaskOperatorRevokedV1");
 
+// -- own devices (docs/architecture/2026-10-19-own-devices.md) ------------------------
+
+// The command this browser signs to revoke one of its person's devices `d`
+// ({id, kind}), by the role it signs in: as an operator device if it is one,
+// else as a reviewer device, else as an administrator; null if none. The
+// server chooses the same way.
+export function ownRevocation({ enrolled, reviewing, governing }, d) {
+  if (enrolled || reviewing)
+    return {
+      type: enrolled ? "TaskDeviceRevokedV1" : "TaskReviewerDeviceRevokedV1",
+      payload: d.kind === "administrator" ? { revoked_key_id: d.id } : { revoked_grant_event_id: d.id },
+    };
+  if (!governing) return null;
+  if (d.kind === "administrator") return { type: "RoleKeyRevoked", payload: { role: "governance", key_id: d.id } };
+  return { type: d.kind === "reviewer" ? "TaskReviewerRevokedV1" : "TaskOperatorRevokedV1", payload: { authorization_event_id: d.id } };
+}
+
+export const deviceKind = { operator: "decides", reviewer: "reviews", administrator: "administers the chapter" };
+
 // Who called a task off and why, or null.
 export const cancelledBecause = (t) =>
   t?.state === "cancelled" && t.cancellation

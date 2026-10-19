@@ -19,6 +19,7 @@ import {
   applyFrame,
   base64url,
   cancelledBecause,
+  deviceKind,
   decidedSuggestions,
   describeTiming,
   emptyView,
@@ -26,6 +27,7 @@ import {
   grantFor,
   nextStep,
   otherSteps,
+  ownRevocation,
   pendingSuggestions,
   receiptFor,
   revocable,
@@ -679,28 +681,35 @@ function renderDevices() {
   $("devices").replaceChildren(
     ...devices.map((d) => {
       const self = d.key_id === keyId;
-      const button = el("button", { textContent: self ? "Revoke this device" : "Revoke", disabled: !enrolled || deciding });
-      button.onclick = () => revokeDevice(d, self);
+      const command = ownRevocation({ enrolled, reviewing, governing }, d);
+      const button = el("button", { textContent: self ? "Revoke this device" : "Revoke", disabled: !command || deciding });
+      button.onclick = () => revokeDevice(d, self, command);
 
       return el(
         "div",
         { className: "row" },
-        el("span", {}, el("strong", { textContent: d.label ?? "Unnamed device" }), self ? " (this device)" : null),
+        el(
+          "span",
+          {},
+          el("strong", { textContent: d.label ?? (d.kind === "administrator" ? "Administrator browser" : "Unnamed device") }),
+          ` · ${deviceKind[d.kind]}`,
+          self ? " (this device)" : null,
+        ),
         el("span", {}, el("code", { textContent: d.key_id }), " ", button),
       );
     }),
   );
 }
 
-async function revokeDevice(d, self) {
+async function revokeDevice(d, self, command) {
   const question = self
     ? "Revoke this device? It will no longer be able to decide for you."
     : `Revoke “${d.label ?? d.key_id}”? Do this if it is lost or you no longer use it.`;
   if (!confirm(question)) return;
 
   const result = await signAndSubmit(
-    () => postJSON(`${projectPath}/devices/${encodeURIComponent(d.grant_id)}/revocation`, { key_id: keyId }),
-    { type: "TaskDeviceRevokedV1", payload: { revoked_grant_event_id: d.grant_id } },
+    () => postJSON(`${projectPath}/devices/${encodeURIComponent(d.id)}/revocation`, { key_id: keyId }),
+    command,
   );
   if (result) await enrolment();
 }

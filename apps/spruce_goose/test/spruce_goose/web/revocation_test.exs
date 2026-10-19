@@ -89,7 +89,7 @@ defmodule SpruceGoose.Web.RevocationTest do
     other = device!(w, member("operator"), Principal.new_id(), "Not mine")
 
     assert {404, %{"error" => "unknown_device"}} = revoke(w, other, w.phone)
-    assert {403, %{"error" => "no_operator_grant"}} = revoke(w, w.laptop_grant, w.agent)
+    assert {403, %{"error" => "no_device"}} = revoke(w, w.laptop_grant, w.agent)
     assert devices(w) == ["Laptop", "Phone"]
   end
 
@@ -167,5 +167,43 @@ defmodule SpruceGoose.Web.RevocationTest do
     assert output =~ "device     Review tablet"
     assert output =~ "revoked: event"
     refute CoopSubstrate.Log.gate().orchestration.dod_grants[grant.event_id].active
+  end
+
+  describe "own devices of every kind (docs/architecture/2026-10-19-own-devices.md)" do
+    test "a reviewer device revokes itself; an operator device the person's administrator key",
+         w do
+      tablet = member("reviewer")
+
+      reviewer_grant =
+        grant!(w, "TaskReviewerGrantedV1", tablet, w.person, "project-1", %{
+          "device_label" => "Tablet"
+        })
+
+      browser = member("governance")
+
+      [_] =
+        append!(
+          event(w, w.gov, "RoleKeyDeclared", %{
+            "role" => "governance",
+            "key_id" => browser.signer.key_id,
+            "pubkey" => {:bytes, browser.signer.pubkey},
+            "member_id" => w.person
+          })
+        )
+
+      assert devices(w) == [nil, "Laptop", "Phone", "Tablet"]
+
+      assert {201, _} = revoke(w, %{event_id: reviewer_grant.event_id}, tablet)
+      refute CoopSubstrate.Log.gate().orchestration.dod_grants[reviewer_grant.event_id].active
+
+      assert {201, _} = revoke(w, %{event_id: browser.signer.key_id}, w.laptop)
+
+      refute Map.has_key?(
+               CoopSubstrate.Log.gate().role_keys[{w.chapter, "governance"}],
+               browser.signer.key_id
+             )
+
+      assert devices(w) == ["Laptop", "Phone"]
+    end
   end
 end

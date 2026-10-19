@@ -156,7 +156,7 @@ defmodule SpruceGoose.Web.Requests do
         r when r in @unauthorized ->
           {401, "unauthorized"}
 
-        r when r in [:no_operator_grant, :no_reviewer_grant, :no_grant] ->
+        r when r in [:no_operator_grant, :no_reviewer_grant, :no_grant, :no_device] ->
           {403, Atom.to_string(r)}
 
         r when r in [:too_large, :quota_exceeded] ->

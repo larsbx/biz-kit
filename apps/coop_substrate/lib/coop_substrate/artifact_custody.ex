@@ -34,7 +34,7 @@ defmodule CoopSubstrate.ArtifactCustody do
 
   defp purpose(principal, {chapter, tenant, project} = scope, digest, task_id) do
     cond do
-      Devices.list(principal, scope) == [] ->
+      not Enum.any?(Devices.list(principal, scope), &(&1.kind == "operator")) ->
         {:error, :no_operator_grant}
 
       digest in named(scope) ->

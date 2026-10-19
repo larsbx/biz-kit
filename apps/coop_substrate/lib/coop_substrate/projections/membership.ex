@@ -91,7 +91,9 @@ defmodule CoopSubstrate.Projections.Membership do
 
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @task_types do
-    update_in(state, [:orchestration], &CoopSubstrate.Projections.Tasks.handle_event(env, &1))
+    state
+    |> update_in([:orchestration], &CoopSubstrate.Projections.Tasks.handle_event(env, &1))
+    |> relinquish(env)
   end
 
   def handle_event(%Envelope{type: "EntityRegistered", chapter_id: ch, payload: p}, state) do
@@ -161,16 +163,8 @@ defmodule CoopSubstrate.Projections.Membership do
     |> put_in([:role_key_members, Access.key({ch, p["role"], p["key_id"]})], p["member_id"])
   end
 
-  def handle_event(%Envelope{type: "RoleKeyRevoked", chapter_id: ch, payload: p}, state) do
-    # The (possibly empty) map stays: once a role's door closes, it never
-    # reopens (docs/phase1d_plan.md P4) — an empty declared set means no
-    # signature in that role is acceptable until governance declares a key.
-    state
-    |> update_in([:role_keys, Access.key({ch, p["role"]}, %{})], fn keys ->
-      Map.delete(keys, p["key_id"])
-    end)
-    |> update_in([:role_key_members], &Map.delete(&1, {ch, p["role"], p["key_id"]}))
-  end
+  def handle_event(%Envelope{type: "RoleKeyRevoked", chapter_id: ch, payload: p}, state),
+    do: remove_role_key(state, ch, p["role"], p["key_id"])
 
   def handle_event(%Envelope{type: "ThroughputRuleActivated", chapter_id: ch, payload: p}, state) do
     put_in(state, [:throughput_rules, Access.key(ch)], %{
@@ -716,5 +710,21 @@ defmodule CoopSubstrate.Projections.Membership do
     |> Enum.map(& &1.interviewee_ref)
     |> Enum.uniq()
     |> length()
+  end
+
+  # A holder revoking their own administrator key from another of their
+  # devices (docs/architecture/2026-10-19-own-devices.md).
+  defp relinquish(state, %Envelope{chapter_id: ch, payload: %{"revoked_key_id" => key}}),
+    do: remove_role_key(state, ch, "governance", key)
+
+  defp relinquish(state, _env), do: state
+
+  defp remove_role_key(state, ch, role, key_id) do
+    # The (possibly empty) map stays: once a role's door closes, it never
+    # reopens (docs/phase1d_plan.md P4) — an empty declared set means no
+    # signature in that role is acceptable until governance declares a key.
+    state
+    |> update_in([:role_keys, Access.key({ch, role}, %{})], &Map.delete(&1, key_id))
+    |> update_in([:role_key_members], &Map.delete(&1, {ch, role, key_id}))
   end
 end

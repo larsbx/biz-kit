@@ -64,7 +64,10 @@ defmodule CoopSubstrate.Projections.CapitalAccounts do
     end)
   end
 
-  def handle_event(%Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p} = env, state) do
+  def handle_event(
+        %Envelope{type: "RedemptionScheduleOpened", chapter_id: ch, payload: p} = env,
+        state
+      ) do
     update_account(state, {ch, p["member_id"], p["entity_id"]}, fn account ->
       %{
         account
@@ -99,7 +102,11 @@ defmodule CoopSubstrate.Projections.CapitalAccounts do
   end
 
   def handle_event(%Envelope{type: "SinkingFundContributed", chapter_id: ch, payload: p}, state) do
-    update_in(state, [:sinking_funds, Access.key({ch, p["entity_id"]}, 0)], &(&1 + p["amount_minor"]))
+    update_in(
+      state,
+      [:sinking_funds, Access.key({ch, p["entity_id"]}, 0)],
+      &(&1 + p["amount_minor"])
+    )
   end
 
   def handle_event(%Envelope{type: type, chapter_id: ch, payload: p} = _env, state) do
@@ -161,7 +168,10 @@ defmodule CoopSubstrate.Projections.CapitalAccounts do
   defp consume_fifo([entry | rest], amount) do
     consumed = min(entry.remaining_minor, amount)
 
-    [%{entry | remaining_minor: entry.remaining_minor - consumed} | consume_fifo(rest, amount - consumed)]
+    [
+      %{entry | remaining_minor: entry.remaining_minor - consumed}
+      | consume_fifo(rest, amount - consumed)
+    ]
   end
 
   defp draw_sinking_fund(state, chapter_id, entity_id, amount) do
