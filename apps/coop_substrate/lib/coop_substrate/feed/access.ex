@@ -16,8 +16,10 @@ defmodule CoopSubstrate.Feed.Access do
 
   A person signed in who holds a governance key of the chapter, declared for
   them, reads every project in it as an administrator (`for_administrator/3`,
-  docs/architecture/2026-10-19-administration.md), while the key stays
-  declared (`live_in?/2`).
+  docs/architecture/2026-10-19-administration.md), and the chapter's own
+  feed, `{chapter}` (docs/architecture/2026-10-19-live-view.md), while the
+  key stays declared (`live_in?/2`). Grants never reach a chapter's feed: a
+  grant's scope is a project.
   """
 
   alias CoopSubstrate.Canonical
@@ -117,7 +119,9 @@ defmodule CoopSubstrate.Feed.Access do
   `member_id`). `gate` is the membership projection.
   """
   @spec for_administrator(map(), String.t(), View.scope()) :: {:ok, t()} | {:error, :no_grant}
-  def for_administrator(gate, principal_id, {chapter, _, _} = scope) do
+  def for_administrator(gate, principal_id, scope) do
+    chapter = elem(scope, 0)
+
     gate.role_key_members
     |> Enum.filter(fn {{ch, role, key_id}, member} ->
       {ch, role, member} == {chapter, "governance", principal_id} and declared?(gate, ch, key_id)
@@ -138,10 +142,19 @@ defmodule CoopSubstrate.Feed.Access do
     end
   end
 
-  @doc "Whether the reader is still authorised, against the membership projection `gate`."
+  @doc """
+  Whether the reader is still authorised, against the membership projection
+  `gate`. An administrator's key must still be declared, and still for the
+  reader: a key revoked and declared again for someone else in one batch
+  ends the session.
+  """
   @spec live_in?(map(), t()) :: boolean()
-  def live_in?(gate, %__MODULE__{grant_id: {:governance, key_id}, scope: {chapter, _, _}}),
-    do: declared?(gate, chapter, key_id)
+  def live_in?(gate, %__MODULE__{grant_id: {:governance, key_id}, scope: scope} = reader) do
+    chapter = elem(scope, 0)
+
+    declared?(gate, chapter, key_id) and
+      gate.role_key_members[{chapter, "governance", key_id}] == reader.principal_id
+  end
 
   def live_in?(gate, reader), do: live?(gate.orchestration, reader)
 

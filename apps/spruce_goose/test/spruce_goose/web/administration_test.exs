@@ -146,6 +146,37 @@ defmodule SpruceGoose.Web.AdministrationTest do
     assert key == w.gov.signer.key_id
   end
 
+  test "an administrator's browser follows the chapter's feed; nobody else does", w do
+    path = "/api/v1/chapters/#{w.chapter}/feed"
+    assert call(:get, path, [{"cookie", w.session}]).status == 401
+
+    append!(
+      event(w, w.gov, "RoleKeyDeclared", %{
+        "role" => "governance",
+        "key_id" => w.browser.signer.key_id,
+        "pubkey" => {:bytes, w.browser.signer.pubkey},
+        "member_id" => w.admin
+      })
+    )
+
+    resp = open(w, {path, [{"cookie", w.session}]})
+    assert {_seq, %{"changes" => changes}} = next(resp)
+
+    assert for(%{"kind" => "projects", "id" => id} <- changes, do: id) ==
+             ["#{tenant()}/project-1", "#{tenant()}/project-2"]
+
+    # A task in another project reaches it at once.
+    create!(w, w.op_grant_2, "task-9", "project-2")
+
+    assert {_seq,
+            %{"changes" => [%{"kind" => "projects", "value" => %{"tasks" => %{"inbox" => 1}}}]}} =
+             next(resp)
+
+    # Agents sign their reads of a project; a chapter's feed is for people.
+    signed = [{"authorization", ~s(CoopFeed grant="g", key="k", ts="1", nonce="n", sig="s")}]
+    assert call(:get, path, signed).status == 401
+  end
+
   test "an administrator lists the chapter's projects, signed by a governance key of it", w do
     url = w.base <> "/api/v1/chapters/#{w.chapter}/projects"
     assert {:error, {401, _}} = Client.get(url)

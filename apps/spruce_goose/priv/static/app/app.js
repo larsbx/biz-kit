@@ -7,7 +7,8 @@
 // (docs/architecture/2026-10-19-execution.md); cancelling and sending back
 // (docs/architecture/2026-10-19-cancel-reopen.md); and, in a browser holding
 // a governance key, administration (docs/architecture/2026-10-19-administration.md)
-// across the chapter's projects (docs/architecture/2026-10-19-chapter-projects.md).
+// across the chapter's projects (docs/architecture/2026-10-19-chapter-projects.md),
+// all following the ledger's feeds (docs/architecture/2026-10-19-live-view.md).
 // Everything is signed by this
 // device's key after decoding exactly what will be signed.
 //
@@ -20,6 +21,10 @@ import {
   applyFrame,
   base64url,
   cancelledBecause,
+  chapterAdministrators,
+  chapterKinds,
+  chapterProjects,
+  changedKinds,
   deviceKind,
   decidedSuggestions,
   describeTiming,
@@ -28,6 +33,7 @@ import {
   grantFor,
   nextStep,
   otherSteps,
+  ownDevices,
   ownRevocation,
   pendingSuggestions,
   projectSearch,
@@ -558,7 +564,7 @@ function governanceCancel(id, t) {
     const reason = prompt("Why cancel this task as an administrator? The reason is recorded on the ledger, and cancelling is final.");
     if (!reason?.trim()) return;
     const path = `${projectPath}/tasks/${encodeURIComponent(id)}/cancellation`;
-    const done = signAndSubmit(
+    signAndSubmit(
       () => governed("POST", path, { governance_key_id: keyId, reason }),
       governanceSigned("TaskCancelledByGovernanceV1", {
         tenant_id: tenantId,
@@ -569,13 +575,14 @@ function governanceCancel(id, t) {
       }),
       (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
     );
-    done.then((ok) => ok && loadProjects());
   };
   return button;
 }
 
 function renderAdmin() {
   $("admin-section").hidden = !governing;
+  renderProjects();
+  renderAdministrators();
 }
 
 const describeRequest = (d) =>
@@ -600,15 +607,20 @@ async function lookUpRequest(event) {
     );
     if (!result) return;
     $("approve-details").replaceChildren(el("p", { className: "muted", textContent: `Approved: ${describeRequest(details)}` }));
-    // A new administrator, or a new person in a project, belongs in the lists at once.
-    await (details.role === "governance" ? loadAdministrators() : loadProjects());
   };
   $("approve-details").replaceChildren(el("p", { textContent: describeRequest(details) }), el("div", { className: "actions" }, approve));
 }
 
-async function lookUpPerson(event) {
-  event?.preventDefault();
-  const id = $("person-id").value.trim();
+// The person shown, if any: the chapter's frames show them afresh.
+let shownPerson = null;
+
+function lookUpPerson(event) {
+  event.preventDefault();
+  return showPerson($("person-id").value.trim());
+}
+
+async function showPerson(id) {
+  shownPerson = id;
   let found;
   try {
     found = await governed("GET", `/api/v1/principals/${encodeURIComponent(id)}`);
@@ -620,9 +632,6 @@ async function lookUpPerson(event) {
     return $("person-details").replaceChildren(el("p", { className: "muted", textContent: `${id} holds nothing in this chapter.` }));
   $("person-details").replaceChildren(...projects.map((p) => personInProject(id, p)));
 }
-
-// After ending something a person holds: what they hold, and the projects' people.
-const refreshPerson = () => Promise.all([lookUpPerson(), loadProjects()]);
 
 // What `id` holds in project `p` of this chapter: revoke a device, or offboard.
 function personInProject(id, p) {
@@ -639,7 +648,7 @@ function personInProject(id, p) {
         governanceSigned(revocationType(h.kind), { ...where, authorization_event_id: h.event_id }),
         (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
       );
-      if (done) await refreshPerson();
+      if (done) await showPerson(id);
     };
     return el("div", { className: "row" }, el("span", { textContent: `${h.kind}: ${h.label ?? "unlabelled"} (key ${h.key_id})` }), revoke);
   });
@@ -653,7 +662,7 @@ function personInProject(id, p) {
       governanceSigned("TaskPrincipalOffboardedV1", { ...where, principal_id: id }),
       (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
     );
-    if (done) await refreshPerson();
+    if (done) await showPerson(id);
   };
 
   return el(
@@ -667,15 +676,9 @@ function personInProject(id, p) {
 }
 
 // The chapter's projects, each with its tasks and people, and a link to open it.
-async function loadProjects() {
-  let projects;
-  try {
-    projects = await governed("GET", `/api/v1/chapters/${chapter}/projects`);
-  } catch {
-    return;
-  }
+function renderProjects() {
   $("projects").replaceChildren(
-    ...projects.map((p) => {
+    ...chapterProjects(chapterView).map((p) => {
       const here = p.tenant_id === tenantId && p.project_id === projectIdRaw;
       const people = p.people.length === 1 ? "1 person" : `${p.people.length} people`;
       return el(
@@ -690,29 +693,20 @@ async function loadProjects() {
   );
 }
 
-const loadChapter = () => Promise.all([loadAdministrators(), loadProjects()]);
-
-async function loadAdministrators() {
-  let keys;
-  try {
-    keys = await governed("GET", `/api/v1/chapters/${chapter}/administrators`);
-  } catch {
-    return;
-  }
+function renderAdministrators() {
   $("administrators").replaceChildren(
-    ...keys.map((k) => {
+    ...chapterAdministrators(chapterView).map((k) => {
       const self = k.key_id === keyId;
       const revoke = el("button", { textContent: "Revoke", disabled: deciding });
-      revoke.onclick = async () => {
+      revoke.onclick = () => {
         const reason = prompt(`Why revoke ${self ? "this browser's" : `${k.principal_id ?? "unnamed"}'s`} administrator key? Recorded on the ledger.`);
         if (!reason?.trim()) return;
         const path = `/api/v1/chapters/${chapter}/administrators/${encodeURIComponent(k.key_id)}/revocation`;
-        const done = await signAndSubmit(
+        signAndSubmit(
           () => governed("POST", path, { governance_key_id: keyId, reason }),
           governanceSigned("RoleKeyRevoked", { role: "governance", key_id: k.key_id, reason }),
           (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
         );
-        if (done) await (self ? enrolment() : loadAdministrators());
       };
       return el(
         "div",
@@ -724,19 +718,39 @@ async function loadAdministrators() {
   );
 }
 
-// -- devices ---------------------------------------------------------------------
+// The chapter's feed, while this browser administers it: its projects and
+// administrators as they change, and the person shown, read afresh.
+let chapterView = emptyView(chapterKinds);
+let chapterFeed = null;
 
-let devices = [];
+function followChapter(on) {
+  if (on === Boolean(chapterFeed)) return;
+  chapterFeed?.close();
+  chapterFeed = null;
+  chapterView = emptyView(chapterKinds);
+  renderAdmin();
+  if (!on) return;
 
-async function loadDevices() {
-  const res = await fetch(`${projectPath}/devices`);
-  devices = res.ok ? await res.json() : [];
-  renderDevices();
+  const feed = (chapterFeed = new EventSource(`/api/v1/chapters/${chapter}/feed`));
+  feed.addEventListener("changes", (event) => {
+    chapterView = applyFrame(chapterView, JSON.parse(event.data));
+    renderAdmin();
+    if (shownPerson) showPerson(shownPerson);
+  });
+  // Refused (the key was revoked, or a restart): ask again where this browser stands.
+  feed.onerror = () => {
+    if (feed.readyState !== EventSource.CLOSED || chapterFeed !== feed) return;
+    chapterFeed = null;
+    setTimeout(enrolment, 2000);
+  };
 }
 
+// -- devices ---------------------------------------------------------------------
+
+// This person's devices, as the project's feed carries them.
 function renderDevices() {
   $("devices").replaceChildren(
-    ...devices.map((d) => {
+    ...ownDevices(view).map((d) => {
       const self = d.key_id === keyId;
       const command = ownRevocation({ enrolled, reviewing, governing }, d);
       const button = el("button", { textContent: self ? "Revoke this device" : "Revoke", disabled: !command || deciding });
@@ -764,22 +778,24 @@ async function revokeDevice(d, self, command) {
     : `Revoke “${d.label ?? d.key_id}”? Do this if it is lost or you no longer use it.`;
   if (!confirm(question)) return;
 
-  const result = await signAndSubmit(
+  await signAndSubmit(
     () => postJSON(`${projectPath}/devices/${encodeURIComponent(d.id)}/revocation`, { key_id: keyId }),
     command,
   );
-  if (result) await enrolment();
 }
 
 // -- enrolment ---------------------------------------------------------------------
 
 const devicePath = () => `${projectPath}/devices/${encodeURIComponent(keyId)}`;
 
-// Ask the server where this device stands, as an operator and as a
-// reviewer, and again every ten seconds while a request waits for an
-// administrator, every thirty otherwise: a device can be enrolled or revoked
-// from elsewhere (another browser, `mix coop.revoke`).
+// Ask the server where this device stands in each role: on load, after a
+// request, and whenever the feed says this person's devices changed (granted
+// or revoked here, in another browser, or by `mix coop.revoke`). Only while
+// there is no feed to say so (nothing granted yet) is it asked again, every
+// ten seconds while a request waits for an administrator, every thirty
+// otherwise.
 let enrolmentTimer = null;
+let live = false;
 
 const roleStatus = (role) =>
   fetch(devicePath() + (role === "operator" ? "" : `?role=${role}`))
@@ -789,13 +805,12 @@ const roleStatus = (role) =>
 async function enrolment() {
   clearTimeout(enrolmentTimer);
   const [operator, reviewer, governance] = await Promise.all(["operator", "reviewer", "governance"].map(roleStatus));
-  const next = (ms) => (enrolmentTimer = setTimeout(enrolment, ms));
+  const next = (ms) => live || (enrolmentTimer = setTimeout(enrolment, ms));
   if (!operator || !reviewer || !governance) return next(30_000);
   const { status: state, code } = operator;
   next([state, reviewer.status, governance.status].includes("pending") ? 10_000 : 30_000);
   enrolled = state === "enrolled";
   reviewing = reviewer.status === "enrolled";
-  const wasGoverning = governing;
   governing = governance.status === "enrolled";
 
   // Offer only the roles this device has not asked for.
@@ -803,8 +818,7 @@ async function enrolment() {
   for (const option of $("enrol-role").options) option.disabled = !open[option.value];
   if (!open[$("enrol-role").value]) $("enrol-role").value = Object.keys(open).find((r) => open[r]) ?? "operator";
   $("enrol-form").hidden = !Object.values(open).some(Boolean);
-  await loadDevices();
-  if (governing && !wasGoverning) await loadChapter();
+  followChapter(governing);
 
   const roleLine = (s, enrolledText, as) =>
     s.status === "enrolled"
@@ -901,14 +915,27 @@ function follow() {
   const feed = new EventSource(`${projectPath}/feed?cursor=${cursor}`);
 
   feed.addEventListener("changes", (event) => {
-    view = applyFrame(view, JSON.parse(event.data));
+    const frame = JSON.parse(event.data);
+    view = applyFrame(view, frame);
     cursor = Number(event.lastEventId);
     backoff = 1000;
     render();
+    if (keyId && changedKinds(frame).has("devices")) enrolment();
   });
-  feed.onopen = () => status("Live.");
+  feed.onopen = () => {
+    live = true;
+    clearTimeout(enrolmentTimer);
+    status("Live.");
+  };
   feed.onerror = () => {
     if (feed.readyState !== EventSource.CLOSED) return status("Connection lost; reconnecting…", true);
+    // Refused: no access (yet, or any longer). Start over when it returns,
+    // and ask where this device stands until then.
+    live = false;
+    view = emptyView();
+    cursor = 0;
+    render();
+    if (keyId) enrolment();
     status("No access to this project's feed yet; retrying…", true);
     setTimeout(follow, backoff);
     backoff = Math.min(backoff * 2, 30_000);

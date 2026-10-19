@@ -44,9 +44,10 @@ defmodule CoopSubstrate.ChapterProjectsTest do
                tenant_id: "tenant-1",
                project_id: "project-1",
                tasks: %{"inbox" => 2},
+               grants: 1,
                people: ["alice"]
              },
-             %{tenant_id: "tenant-1", project_id: "project-2", tasks: %{}, people: []}
+             %{tenant_id: "tenant-1", project_id: "project-2", tasks: %{}, grants: 0, people: []}
            ]
 
     assert Administrators.projects("chapter-other") == []

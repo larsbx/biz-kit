@@ -153,7 +153,8 @@ defmodule SpruceGoose.Web.FeedTest do
     test "another project's changes never reach it", w do
       resp = open(w, signed_get(w, 0, w.op_grant_2, w.op))
 
-      assert {_seq, %{"changes" => []}} = next(resp)
+      # Only the reader's own device: nothing yet in project-2.
+      assert kinds(next(resp)) == ["devices"]
 
       create!(w, w.op_grant, "task-1", "project-1")
       env = create!(w, w.op_grant_2, "task-9", "project-2")

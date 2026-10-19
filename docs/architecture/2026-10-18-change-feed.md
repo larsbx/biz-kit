@@ -56,6 +56,10 @@ lowercase hex):
 | suggestion | `task_id`, `kind`, `change`, `principal_id`, `base_timing_version`, `rationale`, `rationale_receipt_id`, `status`, `reason`, `reason_receipt_id`, `resolved_by_event_id` |
 | delegation | `delegator_principal_id`, `operator_grant_id`, `principal_id`, `key_id`, `kinds`, `task_ids`, `states`, `window`, `max_block_ms`, `budget`, `used`, `active`, `delegator_grant_active` |
 | receipt | `digest`, `principal_id` (a custody receipt in the project; [lifecycle](2026-10-19-lifecycle.md)) |
+| device | `kind`, `grant_id`, `key_id`, `label`: the reader's own devices only ([live view](2026-10-19-live-view.md)) |
+
+A chapter has a feed of its own, for its administrators: its projects and
+administrators ([live view](2026-10-19-live-view.md)).
 
 Public keys and DoD evidence stay out. `delegator_grant_active` is derived:
 revoking an operator's grant ends their delegations without touching the
@@ -130,7 +134,8 @@ exactly the requested scope** (reviewers since
 [execution](2026-10-19-execution.md)). A person signed in who holds a
 governance key of the chapter, declared for them, reads every project in it
 as an administrator, until the key is revoked
-([administration](2026-10-19-administration.md)). A delegation confers no read access. `Feed.Access` is the
+([administration](2026-10-19-administration.md)), and the chapter's own
+feed ([live view](2026-10-19-live-view.md)). A delegation confers no read access. `Feed.Access` is the
 pure decision; `Feed.authorize/2` applies it to the appender's current gate
 (`Log.gate/0`) and spends the request's nonce.
 

@@ -88,10 +88,10 @@ this one, with a Revoke button on each. Revoking goes through the same
 confirmation as decisions. The page decodes the command, checks it is a
 `TaskDeviceRevokedV1` signed by this device for the chosen grant, shows it,
 and signs on confirmation. After revoking itself, the device shows the
-enrolment form again. The page re-checks its enrolment and device list every
-30 seconds (10 while a request is pending). A revocation made elsewhere,
-from another browser or `mix coop.revoke`, therefore disables its controls
-without a reload.
+enrolment form again. The project's feed carries the person's devices, and the page re-checks its
+enrolment whenever they change ([live view](2026-10-19-live-view.md)). A
+revocation made elsewhere, from another browser or `mix coop.revoke`,
+therefore disables its controls at once, without a reload.
 
 ## Verification
 
