@@ -84,7 +84,8 @@ defmodule CoopSubstrate.TaskHistories do
       {3, tuple({constant(:del_revise), idx, idx, idx})},
       {2, tuple({constant(:del_create), idx, idx, idx})},
       {1, tuple({constant(:revoke_delegation), idx})},
-      {1, constant(:revoke_operator)}
+      {1, constant(:revoke_operator)},
+      {1, constant(:revoke_device)}
     ])
   end
 
@@ -197,6 +198,10 @@ defmodule CoopSubstrate.TaskHistories do
 
       :revoke_operator ->
         operator_revoke(w.gov, w.op_grant)
+
+      # The operator retires their own device: same effect, signed by its holder.
+      :revoke_device ->
+        device_revoke(w.op, w.op_grant, w.op_grant)
     end
   end
 

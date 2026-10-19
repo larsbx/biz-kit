@@ -68,9 +68,21 @@ defmodule SpruceGoose.Web.Requests do
 
   @unauthorized [:no_credentials, :unknown_session, :expired, :unbound]
   @bad_request [:bad_request, :bad_decision, :invalid_pubkey, :key_id_mismatch, :invalid_label]
-  @not_found [:unknown_command, :unknown_challenge, :unknown_code]
+  @not_found [
+    :unknown_command,
+    :unknown_challenge,
+    :unknown_code,
+    :unknown_device,
+    :unknown_grant
+  ]
   @unprocessable [:bad_proof, :unknown_governance_key]
-  @conflict [:unknown_suggestion, :suggestion_not_pending, :unknown_task, :already_enrolled]
+  @conflict [
+    :unknown_suggestion,
+    :suggestion_not_pending,
+    :unknown_task,
+    :already_enrolled,
+    :grant_already_revoked
+  ]
 
   def refuse(conn, {:error, reason}) do
     {status, code} =

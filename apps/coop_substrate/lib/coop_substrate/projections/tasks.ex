@@ -58,15 +58,18 @@ defmodule CoopSubstrate.Projections.Tasks do
       principal_id: p["principal_id"],
       key_id: p["key_id"],
       pubkey: elem(p["pubkey"], 1),
+      device_label: p["device_label"],
       active: true
     }
 
     put_in(state, [:grants, Access.key(env.event_id)], grant)
   end
 
-  def handle_event(%Envelope{type: "TaskOperatorRevokedV1", payload: p}, state) do
-    put_in(state, [:grants, p["authorization_event_id"], :active], false)
-  end
+  def handle_event(%Envelope{type: "TaskOperatorRevokedV1", payload: p}, state),
+    do: put_in(state, [:grants, p["authorization_event_id"], :active], false)
+
+  def handle_event(%Envelope{type: "TaskDeviceRevokedV1", payload: p}, state),
+    do: put_in(state, [:grants, p["revoked_grant_event_id"], :active], false)
 
   def handle_event(%Envelope{type: "TaskBaselineRecordedV1", payload: p} = env, state) do
     task =

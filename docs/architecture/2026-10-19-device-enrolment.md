@@ -117,4 +117,4 @@ endpoints are shared (`SpruceGoose.Web.Requests`).
   sessions. A restart loses pending requests; the device simply asks again.
 - No rate limit on code guessing: 60 bits makes guessing impractical, but a
   public deployment should still rate-limit `/api/v1/enrolments`.
-- Revoking a device is still a governance `TaskOperatorRevokedV1` by hand.
+- Revocation: see [device revocation](2026-10-19-device-revocation.md).

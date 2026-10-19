@@ -13,6 +13,7 @@ defmodule SpruceGoose.Web.DeviceTest do
   alias BizKit.Identity.Principal
   alias CoopSubstrate.{Canonical, Crypto, Feed}
   alias CoopSubstrate.Enrolments.Approver
+  alias CoopSubstrate.Governance.Client
 
   setup do
     providers!()
@@ -72,9 +73,6 @@ defmodule SpruceGoose.Web.DeviceTest do
     request
   end
 
-  defp governance(w),
-    do: %{key_id: w.gov.signer.key_id, pubkey: w.gov.signer.pubkey, seed: w.gov.seed}
-
   test "a device asks, an administrator approves by code, the person can read", w do
     assert status(w) == %{"status" => "none"}
 
@@ -104,15 +102,7 @@ defmodule SpruceGoose.Web.DeviceTest do
 
   test "mix coop.enrol approves with the governance key on this machine", w do
     %{"code" => code} = request!(w)
-    dir = Path.join(System.tmp_dir!(), "coop-enrol-" <> code)
-    File.mkdir_p!(dir)
-    File.write!(Path.join(dir, "governance.seed"), Base.encode16(w.gov.seed, case: :lower))
-    System.put_env("HARNESS_KEYS_DIR", dir)
-
-    on_exit(fn ->
-      System.delete_env("HARNESS_KEYS_DIR")
-      File.rm_rf!(dir)
-    end)
+    governance_keys!(w)
 
     output =
       capture_io(fn ->
@@ -190,21 +180,23 @@ defmodule SpruceGoose.Web.DeviceTest do
         "project_id" => details["project_id"],
         "principal_id" => details["principal_id"],
         "key_id" => details["key_id"],
-        "pubkey" => {:bytes, Base.url_decode64!(details["public_key"], padding: false)}
+        "pubkey" => {:bytes, Base.url_decode64!(details["public_key"], padding: false)},
+        "device_label" => details["label"]
       }
     }
 
-    assert Approver.matches(grant, details, signer) == :ok
+    shown? = &(Approver.grants?(&1, details) and Client.signed_by?(&1, signer))
+    assert shown?.(grant)
 
     for tampered <- [
           put_in(grant, ["payload", "principal_id"], "prn_someoneelse"),
           put_in(grant, ["payload", "project_id"], "project-2"),
           put_in(grant, ["payload", "pubkey"], {:bytes, w.agent.signer.pubkey}),
+          put_in(grant, ["payload", "device_label"], "Someone else's laptop"),
           Map.put(grant, "type", "TaskSuggesterGrantedV1"),
           Map.update!(grant, "signers", &(&1 ++ &1))
         ] do
-      assert Approver.matches(tampered, details, signer) ==
-               {:error, :grant_does_not_match_request}
+      refute shown?.(tampered)
     end
   end
 end

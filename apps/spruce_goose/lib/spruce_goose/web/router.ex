@@ -68,6 +68,9 @@ defmodule SpruceGoose.Web.Router do
     get("/api/v1/enrolments/:code", EnrolmentController, :show)
     post("/api/v1/enrolments/:code/approval", EnrolmentController, :prepare)
     post("/api/v1/enrolments/:code/approval/:id", EnrolmentController, :approve)
+    get("/api/v1/grants/:id", GrantController, :show)
+    post("/api/v1/grants/:id/revocation", GrantController, :prepare)
+    post("/api/v1/grants/:id/revocation/:held_id", GrantController, :revoke)
   end
 
   # The common ledger's change feed. Authenticated by CoopSubstrate's own
@@ -76,7 +79,9 @@ defmodule SpruceGoose.Web.Router do
         SpruceGoose.Web do
     get("/feed", FeedController, :stream)
     post("/commands", CommandController, :prepare)
+    get("/devices", DeviceController, :index)
     post("/devices", DeviceController, :request)
+    post("/devices/:grant_id/revocation", DeviceController, :revoke)
     get("/devices/:key_id", DeviceController, :status)
   end
 

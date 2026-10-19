@@ -60,6 +60,18 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     assert hd(decision.signers).pubkey ==
              Base.url_decode64!(details["public_key"], padding: false)
+
+    # Then the device retired itself, signed by its own key.
+    refute Log.gate().orchestration.grants[grant_id].active
+
+    [revocation] =
+      for e <- events,
+          e.type == "TaskDeviceRevokedV1",
+          e.chapter_id == w.chapter,
+          do: e
+
+    assert revocation.payload["revoked_grant_event_id"] == grant_id
+    assert hd(revocation.signers).pubkey == hd(decision.signers).pubkey
   end
 
   defp browser!(base, w) do

@@ -167,6 +167,31 @@ defmodule CoopSubstrate.TaskTimingFixtures do
     )
   end
 
+  @doc "An operator grant for a named device, as enrolment issues it."
+  def device_grant(gov, key, principal, label) do
+    signed_event(
+      gov,
+      "TaskOperatorGrantedV1",
+      Map.merge(@scope, %{
+        "principal_id" => principal,
+        "key_id" => key.signer.key_id,
+        "pubkey" => {:bytes, key.signer.pubkey},
+        "device_label" => label
+      })
+    )
+  end
+
+  @doc "The holder of `grant` revokes `target`, one of their own device grants."
+  def device_revoke(op, grant, target) do
+    signed_event(
+      op,
+      "TaskDeviceRevokedV1",
+      @scope
+      |> Map.merge(Map.delete(actor(grant), "lifecycle_version"))
+      |> Map.put("revoked_grant_event_id", target.event_id)
+    )
+  end
+
   def operator_revoke(gov, grant) do
     signed_event(
       gov,

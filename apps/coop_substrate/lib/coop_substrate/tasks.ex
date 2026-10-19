@@ -23,14 +23,24 @@ defmodule CoopSubstrate.Tasks do
   def event_types do
     %{
       "TaskOperatorGrantedV1" =>
-        spec("governance", "task_grants", @scope, %{
-          "principal_id" => :string,
-          "key_id" => :string,
-          "pubkey" => :pubkey
-        }),
+        spec(
+          "governance",
+          "task_grants",
+          @scope,
+          %{"principal_id" => :string, "key_id" => :string, "pubkey" => :pubkey},
+          %{"device_label" => :string}
+        ),
       "TaskOperatorRevokedV1" =>
         spec("governance", "task_grants", @scope, %{
           "authorization_event_id" => :string
+        }),
+      # The holder of an operator grant revokes one of their own device grants
+      # (docs/architecture/2026-10-19-device-revocation.md).
+      "TaskDeviceRevokedV1" =>
+        spec("operator", "task_grants", @scope, %{
+          "principal_id" => :string,
+          "authorization_event_id" => :string,
+          "revoked_grant_event_id" => :string
         }),
       "TaskBaselineRecordedV1" =>
         spec("governance", "tasks", @subject, %{
@@ -53,7 +63,7 @@ defmodule CoopSubstrate.Tasks do
     |> Map.merge(CoopSubstrate.Tasks.Timing.event_types())
   end
 
-  defp spec(role, prefix, scope, fields) do
+  defp spec(role, prefix, scope, fields, optional \\ %{}) do
     scope_fields =
       if Map.has_key?(scope, "task_id"),
         do: ["tenant_id", "project_id", "task_id"],
@@ -63,7 +73,7 @@ defmodule CoopSubstrate.Tasks do
       required_roles: [role],
       disclosure_class: :edges,
       stream: {:payload_fields, prefix, scope_fields},
-      payload: %{required: Map.merge(scope, fields), optional: %{}}
+      payload: %{required: Map.merge(scope, fields), optional: optional}
     }
   end
 
@@ -112,10 +122,26 @@ defmodule CoopSubstrate.Tasks do
   # older economic event types retain their original bootstrap semantics.
   defp check_type(%Envelope{type: "TaskOperatorGrantedV1", payload: p} = env, state, keys) do
     with :ok <- governance_declared(env, keys),
-         :ok <- nonempty_fields(p, ~w(principal_id key_id)) do
+         :ok <- nonempty_fields(p, ~w(principal_id key_id)),
+         :ok <- device_label(p["device_label"]) do
       if Map.has_key?(state.grants, env.event_id),
         do: {:error, :grant_already_recorded},
         else: :ok
+    end
+  end
+
+  # Revocation by the holder: from any of their active device grants in the
+  # project, of any of their device grants there, itself included.
+  defp check_type(%Envelope{type: "TaskDeviceRevokedV1", payload: p} = env, state, _keys) do
+    with {:ok, signer_grant} <- fetch_grant(state, p["authorization_event_id"]),
+         :ok <- authorized(env, signer_grant),
+         {:ok, target} <- fetch_grant(state, p["revoked_grant_event_id"]),
+         :ok <- grant_scope(env, target) do
+      cond do
+        target.principal_id != signer_grant.principal_id -> {:error, :not_own_device}
+        not target.active -> {:error, :grant_already_revoked}
+        true -> :ok
+      end
     end
   end
 
@@ -162,6 +188,11 @@ defmodule CoopSubstrate.Tasks do
 
   # Task events admit one accountable governance or operator key. Other event
   # types retain their existing multi-signature rules and canonical bytes.
+  defp device_label(nil), do: :ok
+
+  defp device_label(label),
+    do: if(String.length(label) in 1..80, do: :ok, else: {:error, :invalid_device_label})
+
   defp signer_cardinality(%Envelope{signers: [_signer]}), do: :ok
   defp signer_cardinality(_env), do: {:error, :task_signer_cardinality}
 

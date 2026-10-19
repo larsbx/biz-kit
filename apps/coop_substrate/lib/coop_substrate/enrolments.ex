@@ -127,7 +127,7 @@ defmodule CoopSubstrate.Enrolments do
   def prepare_approval(code, governance_key_id, now_ms \\ now()) do
     with {:ok, r} <- fetch(code, now_ms),
          {chapter, tenant, project} = r.scope,
-         {:ok, pubkey} <- governance_key(chapter, governance_key_id) do
+         {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
       Commands.hold(
         {:enrolment, code},
         chapter,
@@ -137,9 +137,10 @@ defmodule CoopSubstrate.Enrolments do
           "project_id" => project,
           "principal_id" => r.principal_id,
           "key_id" => r.key_id,
-          "pubkey" => {:bytes, r.pubkey}
+          "pubkey" => {:bytes, r.pubkey},
+          "device_label" => r.label
         },
-        %{role: "governance", pubkey: pubkey, key_id: governance_key_id}
+        signer
       )
     end
   end
@@ -176,13 +177,6 @@ defmodule CoopSubstrate.Enrolments do
     expires_at = now() + @request_ttl_ms
     true = :ets.insert_new(@table, {{:request, code}, request.principal_id, request, expires_at})
     %{code: code, expires_at: expires_at}
-  end
-
-  defp governance_key(chapter, key_id) do
-    case Log.gate().role_keys[{chapter, "governance"}][key_id] do
-      nil -> {:error, :unknown_governance_key}
-      pubkey -> {:ok, pubkey}
-    end
   end
 
   # Single use, and only by the principal it was issued to; anyone else's

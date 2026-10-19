@@ -105,6 +105,16 @@ defmodule CoopSubstrate.Commands do
     end
   end
 
+  @doc "A governance key declared for the chapter, as the signer of a held envelope."
+  @spec governance_signer(String.t(), String.t()) ::
+          {:ok, Envelope.signer()} | {:error, :unknown_governance_key}
+  def governance_signer(chapter, key_id) do
+    case Log.gate().role_keys[{chapter, "governance"}][key_id] do
+      nil -> {:error, :unknown_governance_key}
+      pubkey -> {:ok, %{role: "governance", pubkey: pubkey, key_id: key_id}}
+    end
+  end
+
   defp operator_grant(o, principal, key_id, scope) do
     Enum.find_value(o.grants, {:error, :no_operator_grant}, fn {id, g} ->
       if g.active and g.principal_id == principal and g.key_id == key_id and

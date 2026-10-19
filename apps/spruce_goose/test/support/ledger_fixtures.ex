@@ -44,20 +44,52 @@ defmodule SpruceGoose.LedgerFixtures do
     appended
   end
 
-  def grant!(w, type, member, principal, project) do
+  def grant!(w, type, member, principal, project, extra \\ %{}) do
     [grant] =
       append!(
-        event(w, w.gov, type, %{
-          "tenant_id" => @tenant,
-          "project_id" => project,
-          "principal_id" => principal,
-          "key_id" => member.signer.key_id,
-          "pubkey" => {:bytes, member.signer.pubkey}
-        })
+        event(
+          w,
+          w.gov,
+          type,
+          Map.merge(
+            %{
+              "tenant_id" => @tenant,
+              "project_id" => project,
+              "principal_id" => principal,
+              "key_id" => member.signer.key_id,
+              "pubkey" => {:bytes, member.signer.pubkey}
+            },
+            extra
+          )
+        )
       )
 
     grant
   end
+
+  @doc "A person's device, enrolled in project-1 under `label`."
+  def device!(w, member, principal, label),
+    do:
+      grant!(w, "TaskOperatorGrantedV1", member, principal, "project-1", %{
+        "device_label" => label
+      })
+
+  @doc "The world's governance seed in a keys directory, as `mix coop.*` tasks expect, for this test."
+  def governance_keys!(w) do
+    dir = Path.join(System.tmp_dir!(), "coop-keys-" <> w.chapter)
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "governance.seed"), Base.encode16(w.gov.seed, case: :lower))
+    System.put_env("HARNESS_KEYS_DIR", dir)
+
+    ExUnit.Callbacks.on_exit(fn ->
+      System.delete_env("HARNESS_KEYS_DIR")
+      File.rm_rf!(dir)
+    end)
+  end
+
+  @doc "The world's governance key as a `CoopSubstrate.Governance.Client` signer."
+  def governance(w),
+    do: %{key_id: w.gov.signer.key_id, pubkey: w.gov.signer.pubkey, seed: w.gov.seed}
 
   def create!(w, grant, task_id, project \\ "project-1", signer \\ nil) do
     [env] =
