@@ -10,6 +10,7 @@ defmodule SpruceGoose.Application do
       [
         {AshAuthentication.Oauth2Server.Supervisor, [otp_app: :spruce_goose]},
         SpruceGoose.Repo,
+        SpruceGoose.Web.RateLimit.Counts,
         {Oban, Application.fetch_env!(:spruce_goose, Oban)},
         {AshAuthentication.Supervisor, [otp_app: :spruce_goose]}
       ] ++

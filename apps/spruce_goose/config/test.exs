@@ -82,6 +82,15 @@ config :spruce_goose, Oban, testing: :manual
 # Short, so the change feed's idle path (tick and heartbeat) runs in tests.
 config :spruce_goose, :feed_heartbeat_ms, 200
 config :spruce_goose, :secure_cookies, false
+
+# Every request in the suite comes from loopback; RateLimitTest sets its own.
+config :spruce_goose, SpruceGoose.Web.RateLimit,
+  limits: %{
+    sign_in: {1_000_000, 60_000},
+    capability: {1_000_000, 60_000},
+    api: {1_000_000, 60_000}
+  }
+
 config :spruce_goose, :start_outbox_dispatcher, false
 
 # The boot-time SOP adoption check is exercised directly in

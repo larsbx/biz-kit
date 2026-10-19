@@ -37,6 +37,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Offboarding](2026-10-19-offboarding.md): one governance-signed event per
   project ends everything a principal holds there; `mix coop.offboard` does
   every project at once.
+- [Rate limits](2026-10-19-rate-limits.md): every request is limited per
+  client before its body is read, in one of three buckets chosen by path;
+  clients behind trusted proxies are told apart by `x-forwarded-for`.
 
 Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),

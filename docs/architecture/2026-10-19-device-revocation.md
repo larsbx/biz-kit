@@ -124,6 +124,6 @@ enter its properties.
 - Revocation is per grant. To end everything a person holds, in every
   project, use [offboarding](2026-10-19-offboarding.md).
 - The unauthenticated `/api/v1/grants` and `/api/v1/enrolments` routes are
-  bounded in memory but not rate-limited; a public deployment should add one.
+  bounded in memory and [rate-limited](2026-10-19-rate-limits.md) per client.
 - A lost only device can only be revoked by an administrator. A person can
   enrol a new device first, then revoke the lost one themselves.

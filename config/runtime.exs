@@ -511,4 +511,11 @@ if config_env() == :prod do
   if public_url = System.get_env("SPRUCE_GOOSE_PUBLIC_URL") do
     config :spruce_goose, :public_url, public_url
   end
+
+  # Reverse proxies whose x-forwarded-for is believed, e.g. "10.0.0.0/8,::1".
+  if proxies = System.get_env("SPRUCE_GOOSE_TRUSTED_PROXIES") do
+    config :spruce_goose,
+           SpruceGoose.Web.RateLimit,
+           trusted_proxies: proxies |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  end
 end
