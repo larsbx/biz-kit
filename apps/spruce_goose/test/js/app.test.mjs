@@ -20,6 +20,9 @@ import {
   base64url,
   timingForm,
   formTiming,
+  taskSummary,
+  projectSearch,
+  projectsHeld,
 } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -434,4 +437,36 @@ test("own devices: the command each role signs to revoke each kind", async () =>
     payload: { role: "governance", key_id: "k-0a0b0c0d" },
   });
   assert.equal(ownRevocation(as(false, false, false), laptop), null);
+});
+
+test("a chapter's projects: their tasks, a link to each, and what a person holds in each", () => {
+  assert.equal(taskSummary({}), "no tasks");
+  assert.equal(taskSummary({ inbox: 2, ready: 1, completed: 3, cancelled: 1 }), "3 open, 3 completed, 1 cancelled");
+  assert.equal(taskSummary({ completed: 1 }), "1 completed");
+
+  // The same page, for another project of the chapter, keeping the provider.
+  const search = projectSearch("?chapter=c%201&tenant=t&project=p&provider=dev", "t-2", "p/2");
+  assert.deepEqual(Object.fromEntries(new URLSearchParams(search)), {
+    chapter: "c 1",
+    tenant: "t-2",
+    project: "p/2",
+    provider: "dev",
+  });
+
+  // Only this chapter's projects; the one open first, then in order.
+  const found = {
+    principal_id: "bob",
+    projects: [
+      { chapter_id: "c", tenant_id: "t", project_id: "a", held: [] },
+      { chapter_id: "other", tenant_id: "t", project_id: "x", held: [] },
+      { chapter_id: "c", tenant_id: "t", project_id: "b", held: [] },
+    ],
+  };
+  assert.deepEqual(
+    projectsHeld(found, ["c", "t", "b"]).map((p) => [p.project_id, p.here]),
+    [
+      ["b", true],
+      ["a", false],
+    ],
+  );
 });

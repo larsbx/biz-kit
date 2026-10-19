@@ -8,9 +8,14 @@ defmodule CoopSubstrate.Administrators do
   Any governance key revokes another (`RoleKeyRevoked`), with a reason; the
   ledger refuses to revoke a chapter's last one. Held for
   `{:role_key_revocation, chapter, key_id}`; the server signs nothing.
+
+  An administrator acts on every project of the chapter
+  (docs/architecture/2026-10-19-chapter-projects.md), which `projects/1`
+  lists.
   """
 
   alias CoopSubstrate.{Commands, Log}
+  alias CoopSubstrate.Projections.Tasks, as: State
 
   @doc "The chapter's governance keys, each with the principal it names, if any."
   @spec list(String.t()) :: [%{key_id: String.t(), principal_id: String.t() | nil}]
@@ -21,6 +26,44 @@ defmodule CoopSubstrate.Administrators do
       %{key_id: key_id, principal_id: gate.role_key_members[{chapter, "governance", key_id}]}
     end
     |> Enum.sort_by(& &1.key_id)
+  end
+
+  @doc """
+  The chapter's projects: each with a task or a grant (active or not), its
+  tasks by state, and the principals holding something there now, as
+  offboarding counts them (`Projections.Tasks.held_by/3`).
+  """
+  @spec projects(String.t()) :: [
+          %{
+            tenant_id: String.t(),
+            project_id: String.t(),
+            tasks: %{String.t() => pos_integer()},
+            people: [String.t()]
+          }
+        ]
+  def projects(chapter) do
+    o = Log.gate().orchestration
+    authorities = for {_, _, a} <- State.authorities(o), a.chapter_id == chapter, do: a
+    states = for {{^chapter, t, p, _}, task} <- o.tasks, do: {{t, p}, task.state}
+
+    people =
+      for a <- authorities,
+          a.active,
+          principal <- State.holders(a),
+          uniq: true,
+          do: {{a.tenant_id, a.project_id}, principal}
+
+    (Enum.map(authorities, &{&1.tenant_id, &1.project_id}) ++ Enum.map(states, &elem(&1, 0)))
+    |> Enum.uniq()
+    |> Enum.sort()
+    |> Enum.map(fn {tenant, project} = scope ->
+      %{
+        tenant_id: tenant,
+        project_id: project,
+        tasks: Enum.frequencies(for {^scope, state} <- states, do: state),
+        people: Enum.sort(for {^scope, principal} <- people, do: principal)
+      }
+    end)
   end
 
   @doc "Prepare the revocation of governance key `key_id`, to be signed by `governance_key_id`."

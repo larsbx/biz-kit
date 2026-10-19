@@ -45,9 +45,10 @@ governance key of the project's chapter, declared for the signed-in person:
 | Act | Endpoint (as for any key holder) | Command signed |
 | --- | --- | --- |
 | Approve a request by its code | `GET`/`POST /api/v1/enrolments/:code[/approval[/:id]]` | the operator or reviewer grant, or the governance key declaration |
-| Look up a person in this project | `GET /api/v1/principals/:id` (signed read) | — |
+| List the chapter's projects | `GET /api/v1/chapters/:c/projects` (signed read) | — |
+| Look up a person in the chapter | `GET /api/v1/principals/:id` (signed read) | — |
 | Revoke one of their devices | `POST /api/v1/grants/:id/revocation[/:held]` | `TaskOperatorRevokedV1` or `TaskReviewerRevokedV1` |
-| Offboard them from this project | `POST /api/v1/principals/:id/offboarding[/:held]` (signed) | `TaskPrincipalOffboardedV1` |
+| Offboard them from a project | `POST /api/v1/principals/:id/offboarding[/:held]` (signed) | `TaskPrincipalOffboardedV1` |
 | Cancel any task short of completed | `POST …/tasks/:id/cancellation[/:held]` (signed) | `TaskCancelledByGovernanceV1` |
 | List and revoke administrators | `GET`/`POST /api/v1/chapters/:c/administrators[/:key_id/revocation[/:held]]` (signed) | `RoleKeyRevoked` |
 
@@ -120,11 +121,11 @@ equivalents of the view, on the same endpoints.
 
 - An administrator's key is per browser and per chapter; a person with
   several browsers enrols each.
-- The page acts on the project it is opened for; the chapter's other
-  projects are reached by opening them.
+- The page now lists and acts on every project of the chapter
+  ([chapter projects](2026-10-19-chapter-projects.md)).
 - Offboarding a person does not revoke their administrator keys; revoke
   those under *Administrators of this chapter*.
-- A person can also give up their own administrator key from any of their
-  devices ([own devices](2026-10-19-own-devices.md)).
+- A person can also give up their own administrator key from their
+  administrator browser ([own devices](2026-10-19-own-devices.md)).
 - The genesis seed remains the root of trust; publishing its checkpoint
   out of band, as before, is what anchors it.

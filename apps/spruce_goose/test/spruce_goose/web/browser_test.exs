@@ -55,6 +55,11 @@ defmodule SpruceGoose.Web.BrowserTest do
     {:ok, _} = Approver.approve(base, admin_request, governance)
     create!(w, w.op_grant, "task-3")
 
+    # The reviewer also works in project-2, which the administrator reaches
+    # from this project's page (2026-10-19-chapter-projects.md).
+    grant!(w, "TaskOperatorGrantedV1", member("operator"), reviewer, "project-2")
+    create!(w, w.op_grant_2, "task-4", "project-2")
+
     create!(w, w.op_grant, "task-1")
 
     suggestion =
@@ -168,7 +173,8 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     of_type = fn type -> for e <- events, e.type == type, e.chapter_id == w.chapter, do: e end
     # The administrator's browser key, declared for it by the seed holder,
-    # approved the reviewer, cancelled task-3 and offboarded the reviewer.
+    # approved the reviewer, cancelled task-3 and offboarded the reviewer
+    # from both projects.
     {:ok, from_start} = Log.read_all(from: 1)
 
     [declared] =
@@ -185,9 +191,16 @@ defmodule SpruceGoose.Web.BrowserTest do
     [governance_cancel] = of_type.("TaskCancelledByGovernanceV1")
     assert governance_cancel.payload["task_id"] == "task-3"
     assert hd(governance_cancel.signers).pubkey == admin_key
-    [offboarded] = of_type.("TaskPrincipalOffboardedV1")
-    assert offboarded.payload["principal_id"] == reviewer
-    assert hd(offboarded.signers).pubkey == admin_key
+    # From both of the chapter's projects it held something in, one lookup.
+    offboarded = of_type.("TaskPrincipalOffboardedV1")
+    assert Enum.map(offboarded, & &1.payload["project_id"]) == ["project-2", "project-1"]
+
+    for e <- offboarded do
+      assert e.payload["principal_id"] == reviewer
+      assert hd(e.signers).pubkey == admin_key
+    end
+
+    assert CoopSubstrate.Offboarding.fetch(reviewer, [w.chapter]).projects == []
     refute Log.gate().orchestration.dod_grants[reviewer_grant.event_id].active
 
     # Then the administrator's browser gave up its own key.

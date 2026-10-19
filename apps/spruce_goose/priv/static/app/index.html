@@ -58,6 +58,9 @@
       input { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); margin-left: 8px; }
       h3 { font-size: 0.95rem; margin: 16px 0 4px; }
       #devices .row { padding: 6px 0; border-top: 1px solid var(--line); }
+      #projects .row { padding: 6px 0; border-top: 1px solid var(--line); }
+      .held + .held { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+      .held h4 { margin: 0 0 4px; }
       .code { font: 600 1.25rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.05em; }
     </style>
   </head>
@@ -95,12 +98,16 @@
           <div id="approve-details"></div>
         </div>
         <div class="card">
-          <h3>A person in this project</h3>
+          <h3>A person in this chapter</h3>
           <form id="person-form" class="actions">
             <label>Principal <input id="person-id" maxlength="128" required /></label>
             <button>Look up</button>
           </form>
           <div id="person-details"></div>
+        </div>
+        <div class="card">
+          <h3>Projects of this chapter</h3>
+          <div id="projects"></div>
         </div>
         <div class="card">
           <h3>Administrators of this chapter</h3>

@@ -11,7 +11,8 @@
 //                                evidence; a reviewer's browser has asked for access, and the
 //                                administrator's browser has approved it
 //   → {"done": status text}      after the review, completing the task, the administrator
-//                                cancelling task-3 and offboarding the reviewer, and revoking
+//                                cancelling task-3 and offboarding the reviewer from both
+//                                projects of the chapter, and revoking
 //                                this device
 // Usage: node decide.cjs <base url> <chapter> <tenant> <project>
 const { chromium } = require("playwright");
@@ -274,13 +275,27 @@ async function signIn(browser, subject) {
     await signOn(admin, "TaskCancelledByGovernanceV1", "Client withdrew");
     await third.getByText("Cancelled by governance").waitFor();
 
+    // The chapter's other project is listed, with a link to open it
+    // (docs/architecture/2026-10-19-chapter-projects.md).
+    const listed = admin.locator("#projects .row").filter({ hasText: "project-2" });
+    await listed.getByText("1 open; 2 people").waitFor();
+    const href = await listed.getByRole("link", { name: "Open" }).getAttribute("href");
+    if (new URLSearchParams(href.split("?")[1]).get("project") !== "project-2") throw new Error(`unexpected link: ${href}`);
+
+    // One lookup shows what the reviewer holds in each project of the
+    // chapter; the administrator offboards them from both, from this page.
     await admin.locator("#person-id").fill(reviewerPrincipal);
     await admin.locator("#person-form").getByRole("button", { name: "Look up" }).click();
     await admin.locator("#person-details").getByText("holds reviewer").waitFor();
-    admin.once("dialog", (question) => question.accept());
-    await admin.getByRole("button", { name: "Offboard from this project" }).click();
-    await signOn(admin, "TaskPrincipalOffboardedV1", reviewerPrincipal);
-    await admin.locator("#person-details").getByText("holds nothing in this project").waitFor();
+    for (const p of ["project-2", "project-1"]) {
+      admin.once("dialog", (question) => question.accept());
+      await admin.getByRole("button", { name: `Offboard from ${tenant} / ${p}` }).click();
+      await signOn(admin, "TaskPrincipalOffboardedV1", p);
+      await admin.getByRole("button", { name: `Offboard from ${tenant} / ${p}` }).waitFor({ state: "detached" });
+    }
+    await admin.locator("#person-details").getByText("holds nothing in this chapter").waitFor();
+    // The projects card follows: only the project's own operator is left.
+    await listed.getByText("1 open; 1 person").waitFor();
 
     // The administrator gives up this browser's key from its own device list
     // (docs/architecture/2026-10-19-own-devices.md).

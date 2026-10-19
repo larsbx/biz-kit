@@ -6,7 +6,8 @@
 // evidence, completion and, on a reviewer device, reviewing
 // (docs/architecture/2026-10-19-execution.md); cancelling and sending back
 // (docs/architecture/2026-10-19-cancel-reopen.md); and, in a browser holding
-// a governance key, administration (docs/architecture/2026-10-19-administration.md).
+// a governance key, administration (docs/architecture/2026-10-19-administration.md)
+// across the chapter's projects (docs/architecture/2026-10-19-chapter-projects.md).
 // Everything is signed by this
 // device's key after decoding exactly what will be signed.
 //
@@ -29,9 +30,12 @@ import {
   otherSteps,
   ownRevocation,
   pendingSuggestions,
+  projectSearch,
+  projectsHeld,
   receiptFor,
   revocable,
   revocationType,
+  taskSummary,
   timingForm,
   toReview,
 } from "./view.js";
@@ -554,7 +558,7 @@ function governanceCancel(id, t) {
     const reason = prompt("Why cancel this task as an administrator? The reason is recorded on the ledger, and cancelling is final.");
     if (!reason?.trim()) return;
     const path = `${projectPath}/tasks/${encodeURIComponent(id)}/cancellation`;
-    signAndSubmit(
+    const done = signAndSubmit(
       () => governed("POST", path, { governance_key_id: keyId, reason }),
       governanceSigned("TaskCancelledByGovernanceV1", {
         tenant_id: tenantId,
@@ -565,6 +569,7 @@ function governanceCancel(id, t) {
       }),
       (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
     );
+    done.then((ok) => ok && loadProjects());
   };
   return button;
 }
@@ -595,8 +600,8 @@ async function lookUpRequest(event) {
     );
     if (!result) return;
     $("approve-details").replaceChildren(el("p", { className: "muted", textContent: `Approved: ${describeRequest(details)}` }));
-    // A new administrator of this chapter belongs in the list at once.
-    if (details.role === "governance") await loadAdministrators();
+    // A new administrator, or a new person in a project, belongs in the lists at once.
+    await (details.role === "governance" ? loadAdministrators() : loadProjects());
   };
   $("approve-details").replaceChildren(el("p", { textContent: describeRequest(details) }), el("div", { className: "actions" }, approve));
 }
@@ -610,42 +615,82 @@ async function lookUpPerson(event) {
   } catch (e) {
     return $("person-details").replaceChildren(el("p", { className: "status error", textContent: e.message.replaceAll("_", " ") }));
   }
-  const here = found.projects.find((p) => p.chapter_id === chapterId && p.tenant_id === tenantId && p.project_id === projectIdRaw);
-  if (!here) return $("person-details").replaceChildren(el("p", { className: "muted", textContent: `${id} holds nothing in this project.` }));
+  const projects = projectsHeld(found, scope);
+  if (!projects.length)
+    return $("person-details").replaceChildren(el("p", { className: "muted", textContent: `${id} holds nothing in this chapter.` }));
+  $("person-details").replaceChildren(...projects.map((p) => personInProject(id, p)));
+}
 
-  const rows = revocable(here.held).map((h) => {
+// After ending something a person holds: what they hold, and the projects' people.
+const refreshPerson = () => Promise.all([lookUpPerson(), loadProjects()]);
+
+// What `id` holds in project `p` of this chapter: revoke a device, or offboard.
+function personInProject(id, p) {
+  const where = { tenant_id: p.tenant_id, project_id: p.project_id };
+  const name = `${p.tenant_id} / ${p.project_id}`;
+
+  const rows = revocable(p.held).map((h) => {
     const revoke = el("button", { textContent: "Revoke", disabled: deciding });
     revoke.onclick = async () => {
-      if (!confirm(`Revoke ${id}'s ${h.kind} device “${h.label ?? h.key_id}”?`)) return;
+      if (!confirm(`Revoke ${id}'s ${h.kind} device “${h.label ?? h.key_id}” in ${name}?`)) return;
       const path = `/api/v1/grants/${encodeURIComponent(h.event_id)}/revocation`;
       const done = await signAndSubmit(
         () => postJSON(path, { governance_key_id: keyId }),
-        governanceSigned(revocationType(h.kind), { tenant_id: tenantId, project_id: projectIdRaw, authorization_event_id: h.event_id }),
+        governanceSigned(revocationType(h.kind), { ...where, authorization_event_id: h.event_id }),
         (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
       );
-      if (done) await lookUpPerson();
+      if (done) await refreshPerson();
     };
     return el("div", { className: "row" }, el("span", { textContent: `${h.kind}: ${h.label ?? "unlabelled"} (key ${h.key_id})` }), revoke);
   });
 
-  const offboard = el("button", { textContent: "Offboard from this project", disabled: deciding });
+  const offboard = el("button", { textContent: `Offboard from ${name}`, disabled: deciding });
   offboard.onclick = async () => {
-    if (!confirm(`End everything ${id} holds in this project: devices, suggester and reviewer grants, delegations?`)) return;
+    if (!confirm(`End everything ${id} holds in ${name}: devices, suggester and reviewer grants, delegations?`)) return;
     const path = `/api/v1/principals/${encodeURIComponent(id)}/offboarding`;
     const done = await signAndSubmit(
-      () => governed("POST", path, { governance_key_id: keyId, chapter_id: chapterId, tenant_id: tenantId, project_id: projectIdRaw }),
-      governanceSigned("TaskPrincipalOffboardedV1", { tenant_id: tenantId, project_id: projectIdRaw, principal_id: id }),
+      () => governed("POST", path, { governance_key_id: keyId, chapter_id: chapterId, ...where }),
+      governanceSigned("TaskPrincipalOffboardedV1", { ...where, principal_id: id }),
       (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
     );
-    if (done) await lookUpPerson();
+    if (done) await refreshPerson();
   };
 
-  $("person-details").replaceChildren(
-    el("p", { textContent: `${id} holds ${here.held.map((h) => h.kind).join(", ")}.` }),
+  return el(
+    "div",
+    { className: "held" },
+    el("h4", { textContent: `${name}${p.here ? " (this page)" : ""}` }),
+    el("p", { textContent: `${id} holds ${p.held.map((h) => h.kind).join(", ")}.` }),
     ...rows,
     el("div", { className: "actions" }, offboard),
   );
 }
+
+// The chapter's projects, each with its tasks and people, and a link to open it.
+async function loadProjects() {
+  let projects;
+  try {
+    projects = await governed("GET", `/api/v1/chapters/${chapter}/projects`);
+  } catch {
+    return;
+  }
+  $("projects").replaceChildren(
+    ...projects.map((p) => {
+      const here = p.tenant_id === tenantId && p.project_id === projectIdRaw;
+      const people = p.people.length === 1 ? "1 person" : `${p.people.length} people`;
+      return el(
+        "div",
+        { className: "row" },
+        el("span", {}, el("strong", { textContent: `${p.tenant_id} / ${p.project_id}` }), ` ${taskSummary(p.tasks)}; ${people}`),
+        here
+          ? el("span", { className: "muted", textContent: "this page" })
+          : el("a", { href: `/app${projectSearch(location.search, p.tenant_id, p.project_id)}`, textContent: "Open" }),
+      );
+    }),
+  );
+}
+
+const loadChapter = () => Promise.all([loadAdministrators(), loadProjects()]);
 
 async function loadAdministrators() {
   let keys;
@@ -759,7 +804,7 @@ async function enrolment() {
   if (!open[$("enrol-role").value]) $("enrol-role").value = Object.keys(open).find((r) => open[r]) ?? "operator";
   $("enrol-form").hidden = !Object.values(open).some(Boolean);
   await loadDevices();
-  if (governing && !wasGoverning) await loadAdministrators();
+  if (governing && !wasGoverning) await loadChapter();
 
   const roleLine = (s, enrolledText, as) =>
     s.status === "enrolled"
