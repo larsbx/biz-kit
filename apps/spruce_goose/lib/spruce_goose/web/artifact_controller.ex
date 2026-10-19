@@ -12,8 +12,10 @@ defmodule SpruceGoose.Web.ArtifactController do
 
   Storing gives no custody: the device then signs `ArtifactCustodyRecordedV1`
   for the digest through `/commands`, and the ledger admits it once the
-  bytes are there. At most `ArtifactCustody.limit/0` bytes are read; a larger
-  body is refused without being buffered whole.
+  bytes are there. Only a digest a task in the project names (its SOP or a
+  required input) is accepted, and that is checked before any byte is read.
+  At most `ArtifactCustody.limit/0` bytes are read; a larger body is refused
+  without being buffered whole.
   """
 
   use Phoenix.Controller, formats: [:json]
@@ -26,10 +28,10 @@ defmodule SpruceGoose.Web.ArtifactController do
 
   def create(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
     with {:ok, principal, _session} <- AuthController.principal(conn),
-         :ok <- ArtifactCustody.may_store(principal, {c, t, p}),
          ["application/octet-stream" <> _] <- get_req_header(conn, "content-type"),
          [hex] <- get_req_header(conn, "x-content-sha256"),
-         {:ok, claimed} <- Base.decode16(hex, case: :mixed),
+         {:ok, <<_::256>> = claimed} <- Base.decode16(hex, case: :mixed),
+         :ok <- ArtifactCustody.may_store(principal, {c, t, p}, claimed),
          {:ok, bytes, conn} <- read_all(conn, ArtifactCustody.limit()),
          {:ok, digest} <- ArtifactCustody.store(principal, {c, t, p}, bytes, claimed) do
       conn

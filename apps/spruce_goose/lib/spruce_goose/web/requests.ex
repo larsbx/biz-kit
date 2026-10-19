@@ -83,7 +83,7 @@ defmodule SpruceGoose.Web.Requests do
     :unknown_device,
     :unknown_grant
   ]
-  @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch]
+  @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named]
   @conflict [
     :unknown_suggestion,
     :suggestion_not_pending,

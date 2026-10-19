@@ -85,7 +85,7 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:get, 3} => :bilateral,
       # A person storing their own upload (docs/architecture/2026-10-19-uploads.md).
       {:store, 4} => :own_data,
-      {:may_store, 2} => :own_data,
+      {:may_store, 3} => :own_data,
       {:limit, 0} => :system
     },
     CoopSubstrate.Cockpit => %{

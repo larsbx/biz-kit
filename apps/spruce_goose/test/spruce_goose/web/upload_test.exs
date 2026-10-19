@@ -18,7 +18,7 @@ defmodule SpruceGoose.Web.UploadTest do
     person = Principal.new_id()
     stranger = Principal.new_id()
     device = member("operator")
-    grant!(w, "TaskOperatorGrantedV1", device, person, "project-1")
+    grant = grant!(w, "TaskOperatorGrantedV1", device, person, "project-1")
 
     bind([
       {"https://idp.test", "sub-person", person},
@@ -27,6 +27,7 @@ defmodule SpruceGoose.Web.UploadTest do
 
     Map.merge(w, %{
       device: device,
+      grant: grant,
       person: person,
       session: session!("second", "sub-person"),
       stranger: session!("second", "sub-stranger")
@@ -48,6 +49,56 @@ defmodule SpruceGoose.Web.UploadTest do
 
   defp hex(bytes), do: Base.encode16(:crypto.hash(:sha256, bytes), case: :lower)
 
+  # A proposed task whose readiness names these files' digests: only those
+  # may be stored.
+  defp naming!(w, sop, inputs) do
+    create!(w, w.grant, "task-1", "project-1", w.device)
+    subject = %{"tenant_id" => tenant(), "project_id" => "project-1", "task_id" => "task-1"}
+
+    append!(
+      event(
+        w,
+        w.device,
+        "TaskProposedV1",
+        Map.merge(subject, %{
+          "principal_id" => w.person,
+          "authorization_event_id" => w.grant.event_id,
+          "lifecycle_version" => 1,
+          "expected_version" => 1
+        })
+      )
+    )
+
+    append!(
+      event(
+        w,
+        w.gov,
+        "TaskDoDDefinedV1",
+        Map.merge(subject, %{
+          "expected_version" => 2,
+          "criteria" => [%{"id" => "r", "description" => "Report"}]
+        })
+      )
+    )
+
+    append!(
+      event(
+        w,
+        w.gov,
+        "TaskReadinessDefinedV1",
+        Map.merge(subject, %{
+          "expected_version" => 3,
+          "artifact_requirements" =>
+            inputs
+            |> Enum.with_index()
+            |> Map.new(fn {b, i} -> {"in#{i}", {:bytes, :crypto.hash(:sha256, b)}} end),
+          "predecessor_ids" => [],
+          "sop_digest" => {:bytes, :crypto.hash(:sha256, sop)}
+        })
+      )
+    )
+  end
+
   defp json(path, cookie, body) do
     conn =
       call(
@@ -62,6 +113,7 @@ defmodule SpruceGoose.Web.UploadTest do
 
   test "stored, then custody recorded by the device's signature", w do
     bytes = "The SOP, from the browser #{w.chapter}"
+    naming!(w, bytes, [])
     assert {201, %{"digest" => digest, "size" => size}} = upload(w, bytes)
     assert {digest, size} == {hex(bytes), byte_size(bytes)}
 
@@ -85,14 +137,17 @@ defmodule SpruceGoose.Web.UploadTest do
     assert principal == w.person
   end
 
-  test "refused: no session, no grant here, wrong hash, too large, not raw bytes", w do
+  test "refused: no session, no grant here, not named, wrong hash, too large, not raw bytes", w do
+    big = :binary.copy("x", ArtifactCustody.limit() + 1)
+    naming!(w, "x", ["y", big])
+
+    assert {422, %{"error" => "not_named"}} = upload(w, "something no task names")
     assert {401, _} = upload(w, "x", cookie: false)
     assert {403, %{"error" => "no_operator_grant"}} = upload(w, "x", cookie: w.stranger)
     assert {422, %{"error" => "digest_mismatch"}} = upload(w, "x", claim: hex("y"))
     assert {400, _} = upload(w, "x", claim: "not hex")
     assert {400, _} = upload(w, "x", type: "text/plain")
 
-    big = :binary.copy("x", ArtifactCustody.limit() + 1)
     assert {413, %{"error" => "too_large"}} = upload(w, big)
 
     assert {400, %{"error" => "bad_action"}} =

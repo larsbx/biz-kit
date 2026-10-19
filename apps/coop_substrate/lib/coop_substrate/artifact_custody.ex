@@ -13,28 +13,46 @@ defmodule CoopSubstrate.ArtifactCustody do
   # What one receipt may cover: custody admission verifies at most this.
   @limit 8 * 1024 * 1024
 
-  @doc "Whether the principal may store artifacts in the project: before any byte is read."
-  @spec may_store(String.t(), CoopSubstrate.Feed.View.scope()) ::
-          :ok | {:error, :no_operator_grant}
-  def may_store(principal, scope),
-    do: if(Devices.list(principal, scope) != [], do: :ok, else: {:error, :no_operator_grant})
+  @doc """
+  Whether the principal may store this artifact in the project, before any
+  byte is read: they hold an active device grant there, and the digest is
+  one a task there names, its SOP or a required input. Nothing else can be
+  stored, so storage is bounded by what governance has defined.
+  """
+  @spec may_store(String.t(), CoopSubstrate.Feed.View.scope(), <<_::256>>) ::
+          :ok | {:error, :no_operator_grant | :not_named}
+  def may_store(principal, scope, digest) do
+    cond do
+      Devices.list(principal, scope) == [] -> {:error, :no_operator_grant}
+      digest not in named(scope) -> {:error, :not_named}
+      true -> :ok
+    end
+  end
+
+  # The digests the project's readiness definitions name.
+  defp named({chapter, tenant, project}) do
+    for {{^chapter, ^tenant, ^project, _}, %{readiness: %{} = r}} <-
+          Log.gate().orchestration.tasks,
+        {:bytes, digest} <- [r.sop_digest | Map.values(r.artifact_requirements)],
+        uniq: true,
+        do: digest
+  end
 
   @doc "The largest artifact a person may store (`store/4`)."
   def limit, do: @limit
 
   @doc """
   Store bytes a person sent from their device, for them to record custody of
-  (docs/architecture/2026-10-19-uploads.md). Only for a principal with an
-  active device grant in the project, at most `limit/0` bytes, and only if
-  the bytes hash to `claimed` (the SHA-256 their device computed), so what
-  is stored is what they chose. Content-addressed: storing the same bytes
-  twice is one artifact.
+  (docs/architecture/2026-10-19-uploads.md). Only what `may_store/3` allows,
+  at most `limit/0` bytes, and only if the bytes hash to `claimed` (the
+  SHA-256 their device computed), so what is stored is what they chose.
+  Content-addressed: storing the same bytes twice is one artifact.
   """
   @spec store(String.t(), CoopSubstrate.Feed.View.scope(), binary(), <<_::256>>) ::
           {:ok, <<_::256>>} | {:error, atom()}
   def store(principal, scope, bytes, claimed) do
     cond do
-      may_store(principal, scope) != :ok -> {:error, :no_operator_grant}
+      (refused = may_store(principal, scope, claimed)) != :ok -> refused
       byte_size(bytes) > @limit -> {:error, :too_large}
       :crypto.hash(:sha256, bytes) != claimed -> {:error, :digest_mismatch}
       true -> Artifacts.put(bytes)
