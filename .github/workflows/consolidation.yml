@@ -119,6 +119,10 @@ jobs:
           apps/spruce_goose/test/support/ledger_fixtures.ex
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
+          apps/spruce_goose/lib/spruce_goose/web/rate_limit.ex
+          apps/spruce_goose/lib/spruce_goose/web/rate_limit/counts.ex
+          apps/spruce_goose/test/spruce_goose/web/rate_limit_test.exs
+          apps/spruce_goose/lib/spruce_goose/application.ex
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test

@@ -45,6 +45,12 @@ config :spruce_goose, SpruceGoose.Web.Endpoint,
   server: false,
   render_errors: [formats: [json: SpruceGoose.Web.ErrorJSON], layout: false]
 
+# Requests per client per window (SpruceGoose.Web.RateLimit). Behind a reverse
+# proxy, list its addresses in `trusted_proxies` so clients are told apart.
+config :spruce_goose, SpruceGoose.Web.RateLimit,
+  limits: %{sign_in: {30, 60_000}, capability: {60, 60_000}, api: {600, 60_000}},
+  trusted_proxies: []
+
 config :spruce_goose, Oban,
   repo: SpruceGoose.Repo,
   queues: [outbox: 1, derivations: 1, deployments: 1]

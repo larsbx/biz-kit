@@ -3,6 +3,11 @@ defmodule SpruceGoose.Web.Router do
   Routes for the OAuth 2.1 authorization server, the Ash AI MCP server, and
   the common ledger's change feed.
 
+  Every route is rate-limited per client (`RateLimit`), in one of three
+  buckets: `:sign_in` for sign-in and the OAuth protocol, `:capability` for
+  what anyone holding a code or grant ID may ask without a session, and
+  `:api` for the rest.
+
   The MCP surface is protected by `BearerPlug`, which validates an
   `Authorization: Bearer *** header against `SpruceGoose.Oauth2Server`, and by
   `RequireScopePlug`, which enforces the exact `mcp` delegated scope. Missing,
@@ -10,6 +15,18 @@ defmodule SpruceGoose.Web.Router do
   """
   use Phoenix.Router
   use AshAuthentication.Phoenix.Oauth2Server.Router
+
+  pipeline :sign_in_limit do
+    plug(SpruceGoose.Web.RateLimit, :sign_in)
+  end
+
+  pipeline :capability_limit do
+    plug(SpruceGoose.Web.RateLimit, :capability)
+  end
+
+  pipeline :api_limit do
+    plug(SpruceGoose.Web.RateLimit, :api)
+  end
 
   pipeline :browser do
     plug(:accepts, ["html"])
@@ -22,6 +39,7 @@ defmodule SpruceGoose.Web.Router do
   end
 
   pipeline :mcp_protected do
+    plug(SpruceGoose.Web.RateLimit, :api)
     plug(:accepts, ["json"])
 
     plug(AshAuthentication.Phoenix.Oauth2Server.BearerPlug,
@@ -42,17 +60,18 @@ defmodule SpruceGoose.Web.Router do
   end
 
   scope "/" do
-    pipe_through(:browser)
+    pipe_through([:sign_in_limit, :browser])
     oauth2_server_consent_routes(oauth2_server: SpruceGoose.Oauth2Server)
   end
 
   scope "/" do
-    pipe_through(:api)
+    pipe_through([:sign_in_limit, :api])
     oauth2_server_protocol_routes(oauth2_server: SpruceGoose.Oauth2Server)
   end
 
   # Human sign-in through BizKit.Identity's configured providers.
   scope "/auth", SpruceGoose.Web do
+    pipe_through(:sign_in_limit)
     get("/:provider/login", AuthController, :login)
     get("/:provider/callback", AuthController, :callback)
     post("/logout", AuthController, :logout)
@@ -61,10 +80,17 @@ defmodule SpruceGoose.Web.Router do
 
   # The minimal web view and the commands it signs.
   scope "/", SpruceGoose.Web do
+    pipe_through(:api_limit)
     get("/app", AppController, :index)
     get("/app/:file", AppController, :file)
     post("/api/v1/commands/:id", CommandController, :submit)
     post("/api/v1/devices/challenges/:id", DeviceController, :prove)
+  end
+
+  # Asked without a session: a code or grant ID is the capability, and a
+  # governance signature the authority.
+  scope "/", SpruceGoose.Web do
+    pipe_through(:capability_limit)
     get("/api/v1/enrolments/:code", EnrolmentController, :show)
     post("/api/v1/enrolments/:code/approval", EnrolmentController, :prepare)
     post("/api/v1/enrolments/:code/approval/:id", EnrolmentController, :approve)
@@ -77,6 +103,7 @@ defmodule SpruceGoose.Web.Router do
   # grants (FeedController), not the OAuth pipeline above.
   scope "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id",
         SpruceGoose.Web do
+    pipe_through(:api_limit)
     get("/feed", FeedController, :stream)
     post("/commands", CommandController, :prepare)
     get("/devices", DeviceController, :index)
