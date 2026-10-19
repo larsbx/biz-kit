@@ -91,7 +91,12 @@ defmodule SpruceGoose.Web.Router do
   end
 
   # The common ledger's change feed. Authenticated by CoopSubstrate's own
-  # grants (FeedController), not the OAuth pipeline above.
+  # grants (FeedController), not the OAuth pipeline above: a project's, and a
+  # chapter's for its administrators.
+  scope "/api/v1/chapters/:chapter_id", SpruceGoose.Web do
+    get("/feed", FeedController, :stream)
+  end
+
   scope "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id",
         SpruceGoose.Web do
     get("/feed", FeedController, :stream)

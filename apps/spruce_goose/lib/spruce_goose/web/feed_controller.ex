@@ -17,6 +17,11 @@ defmodule SpruceGoose.Web.FeedController do
       session names a principal (`BizKit.Identity`); the principal's active
       grant on the scope is the reader (`Feed.authorize_principal/2`).
 
+  A **chapter's** feed (`/api/v1/chapters/:chapter_id/feed`,
+  docs/architecture/2026-10-19-live-view.md) is for its administrators, by
+  session only: a person holding a governance key of the chapter declared
+  for them. Agents' signed reads name a project.
+
   An open stream ends when the reader's grant is revoked, at the first event
   after which it is no longer active, and when a person's session ends.
   """
@@ -56,6 +61,7 @@ defmodule SpruceGoose.Web.FeedController do
   defp reader(conn, scope, cursor) do
     case get_req_header(conn, "authorization") do
       [] -> session_reader(conn, scope)
+      _ when tuple_size(scope) == 1 -> {:error, :signed_chapter_read}
       _ -> with {:ok, reader} <- signed_reader(conn, scope, cursor), do: {:ok, reader, nil}
     end
   end
@@ -102,6 +108,7 @@ defmodule SpruceGoose.Web.FeedController do
     do: List.first(get_req_header(conn, "last-event-id")) || conn.query_params["cursor"]
 
   defp scope(%{"chapter_id" => c, "tenant_id" => t, "project_id" => p}), do: {c, t, p}
+  defp scope(%{"chapter_id" => c}), do: {c}
 
   # Why a request was refused stays in the log, not the response.
   defp refuse(conn, :invalid_cursor), do: error(conn, 400, "invalid_cursor")

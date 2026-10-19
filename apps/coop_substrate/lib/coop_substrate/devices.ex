@@ -43,8 +43,13 @@ defmodule CoopSubstrate.Devices do
   (`id` is the key ID).
   """
   @spec list(String.t(), CoopSubstrate.Feed.View.scope()) :: [device()]
-  def list(principal, {chapter, _, _} = scope) do
-    gate = Log.gate()
+  def list(principal, scope), do: of(Log.gate(), principal, scope)
+
+  @doc "`list/2` against the membership projection `gate`: pure, as the change feed reads it."
+  @spec of(map(), String.t() | nil, CoopSubstrate.Feed.View.scope()) :: [device()]
+  def of(_gate, nil, _scope), do: []
+
+  def of(gate, principal, {chapter, _, _} = scope) do
     o = gate.orchestration
     declared = gate.role_keys[{chapter, "governance"}] || %{}
 

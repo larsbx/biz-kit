@@ -7,7 +7,7 @@ defmodule SpruceGoose.Web.AdministratorController do
       GET  /api/v1/chapters/:chapter_id/administrators
            → [{key_id, principal_id}]
       GET  /api/v1/chapters/:chapter_id/projects
-           → [{tenant_id, project_id, tasks: {state: count}, people: [principal_id]}]
+           → [{tenant_id, project_id, tasks: {state: count}, grants, people: [principal_id]}]
       POST /api/v1/chapters/:chapter_id/administrators/:key_id/revocation
            {"governance_key_id", "reason"} → 201 the revocation to sign
       POST /api/v1/chapters/:chapter_id/administrators/:key_id/revocation/:held_id

@@ -24,7 +24,7 @@ holds.
 
 ```
 GET /api/v1/chapters/:chapter_id/projects
-    → [{tenant_id, project_id, tasks: {state: count}, people: [principal_id]}]
+    → [{tenant_id, project_id, tasks: {state: count}, grants: n, people: [principal_id]}]
 ```
 
 This is a signed read by a governance key of that chapter
@@ -35,6 +35,7 @@ This is a signed read by a governance key of that chapter
 | --- | --- |
 | a project | any `{tenant, project}` of the chapter with a task, or with a grant or delegation, active or not, so a project everyone left is still listed |
 | `tasks` | its tasks counted by state |
+| `grants` | its active grants and delegations, so any change in access changes the project ([live view](2026-10-19-live-view.md)) |
 | `people` | who holds something there now, counted as offboarding counts it (`Projections.Tasks.held_by/3`): holders of active grants and of delegations, and delegators |
 
 `held_by/3` and this list share one enumeration of authorities
@@ -46,9 +47,8 @@ leaves the list exactly when offboarding ends everything they hold.
 - **Projects of this chapter.** Each project shows its tasks in words
   (`taskSummary`: open, completed, cancelled) and its number of people. Other
   projects link to the same page for that project, with the query otherwise
-  kept (`projectSearch`), so the sign-in provider carries over. The list is
-  refreshed after the administrator approves a device or reviewer, cancels a
-  task or offboards someone.
+  kept (`projectSearch`), so the sign-in provider carries over. The list
+  follows the chapter's feed ([live view](2026-10-19-live-view.md)).
 - **A person in this chapter.** The lookup (`GET /api/v1/principals/:id`)
   already answered for every chapter the key governs. The page now shows
   every project of this chapter in which the person holds something, the one
@@ -89,8 +89,8 @@ leaves the list exactly when offboarding ends everything they hold.
 
 ## Limits
 
-- The counts are read when the section loads and after the administrator's
-  own acts. Changes by others show on the next load.
+- The counts now follow the chapter's feed, others' changes included
+  ([live view](2026-10-19-live-view.md)).
 - A project is known to the ledger only once it has a task or a grant.
   Creating an empty project is not a ledger act.
 - Offboarding is still one command per project. Leaving a whole chapter

@@ -267,6 +267,12 @@ async function signIn(browser, subject) {
     await sign("TaskCompletedV1", "Complete");
     await task.getByText("completed", { exact: true }).waitFor();
 
+    // The administrator's page follows from the chapter's feed: the person's
+    // completion, in another browser, shows at once, with no reload or poll
+    // (docs/architecture/2026-10-19-live-view.md).
+    const live = { timeout: 5_000 };
+    await admin.locator("#projects .row").filter({ hasText: "project-1" }).getByText(/1 completed/).waitFor(live);
+
     // The administrator cancels a task it does not work on, and offboards the
     // reviewer from the project.
     const third = admin.locator("#tasks .card").filter({ hasText: "Task task-3" });
@@ -284,6 +290,7 @@ async function signIn(browser, subject) {
 
     // One lookup shows what the reviewer holds in each project of the
     // chapter; the administrator offboards them from both, from this page.
+    await reviewer.locator("#devices .row").filter({ hasText: "Review tablet" }).waitFor(live);
     await admin.locator("#person-id").fill(reviewerPrincipal);
     await admin.locator("#person-form").getByRole("button", { name: "Look up" }).click();
     await admin.locator("#person-details").getByText("holds reviewer").waitFor();
@@ -296,6 +303,10 @@ async function signIn(browser, subject) {
     await admin.locator("#person-details").getByText("holds nothing in this chapter").waitFor();
     // The projects card follows: only the project's own operator is left.
     await listed.getByText("1 open; 1 person").waitFor();
+    // The reviewer's own page follows from its feed: its device is gone,
+    // and it no longer offers to review.
+    await reviewer.locator("#devices .row").waitFor({ state: "detached", ...live });
+    await reviewer.getByText("This device can review evidence").waitFor({ state: "detached", ...live });
 
     // The administrator gives up this browser's key from its own device list
     // (docs/architecture/2026-10-19-own-devices.md).

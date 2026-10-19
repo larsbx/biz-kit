@@ -264,6 +264,9 @@ defmodule SpruceGoose.LedgerFixtures do
     end
   end
 
+  @doc "The kinds a frame changes, each once."
+  def kinds({_seq, %{"changes" => changes}}), do: changes |> Enum.map(& &1["kind"]) |> Enum.uniq()
+
   def tasks({_seq, %{"changes" => changes}}),
     do: for(%{"kind" => "tasks", "id" => id} <- changes, do: id) |> Enum.sort()
 end

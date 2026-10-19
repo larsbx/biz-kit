@@ -1,7 +1,9 @@
 defmodule CoopSubstrate.Feed do
   @moduledoc """
-  The change feed: one project's view, kept current from the ledger
-  (docs/architecture/2026-10-18-change-feed.md; spec/change_feed.qnt).
+  The change feed: one project's view, or one chapter's for its
+  administrators, kept current from the ledger
+  (docs/architecture/2026-10-18-change-feed.md,
+  docs/architecture/2026-10-19-live-view.md; spec/change_feed.qnt).
 
   A subscriber process opens a session at a cursor (a `global_seq`; 0 for
   everything), gets one frame bringing its client from the cursor to the head,
@@ -94,7 +96,7 @@ defmodule CoopSubstrate.Feed do
              scope: scope,
              seq: cursor,
              gate: gate,
-             view: select(gate, scope),
+             view: select(gate, scope, reader),
              reader: reader
            }),
          true <- (frame != :revoked and live?(session)) or {:error, :grant_revoked} do
@@ -156,7 +158,7 @@ defmodule CoopSubstrate.Feed do
 
   defp fold(%__MODULE__{view: old} = session, envelopes) do
     gate = Enum.reduce(envelopes, session.gate, &Gate.handle_event/2)
-    view = select(gate, session.scope)
+    view = select(gate, session.scope, session.reader)
     seq = List.last(envelopes).global_seq
     session = %{session | gate: gate, view: view, seq: seq}
 
@@ -167,5 +169,5 @@ defmodule CoopSubstrate.Feed do
     end
   end
 
-  defp select(gate, scope), do: View.select(gate.orchestration, scope)
+  defp select(gate, scope, reader), do: View.select(gate, scope, reader && reader.principal_id)
 end

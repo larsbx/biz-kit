@@ -1,20 +1,44 @@
-// The client's copy of a project: what the change feed's frames build.
-// A frame's changes are whole-entity upserts (value null would mean removed).
+// The client's copy of a project, or of a chapter for its administrators:
+// what the change feed's frames build (docs/architecture/2026-10-19-live-view.md).
+// A frame's changes are whole-entity upserts (value null means removed).
 
-const kinds = ["tasks", "suggestions", "delegations", "receipts"];
+export const projectKinds = ["tasks", "suggestions", "delegations", "receipts", "devices"];
+export const chapterKinds = ["projects", "administrators"];
 
-export const emptyView = () => Object.fromEntries(kinds.map((k) => [k, {}]));
+export const emptyView = (kinds = projectKinds) => Object.fromEntries(kinds.map((k) => [k, {}]));
 
 export function applyFrame(view, frame) {
-  const next = Object.fromEntries(kinds.map((k) => [k, { ...view[k] }]));
+  const next = Object.fromEntries(Object.entries(view).map(([k, entities]) => [k, { ...entities }]));
 
   for (const { kind, id, value } of frame.changes) {
+    next[kind] ??= {};
     if (value === null) delete next[kind][id];
     else next[kind][id] = value;
   }
 
   return next;
 }
+
+// The kinds a frame changes: what a page re-renders, or re-reads, on it.
+export const changedKinds = (frame) => new Set(frame.changes.map((c) => c.kind));
+
+const byKey = (key) => (a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
+const entries = (entities) => Object.entries(entities).map(([id, value]) => ({ id, ...value }));
+const deviceOrder = ["operator", "reviewer", "administrator"];
+
+// This person's devices, as the project's feed carries them: operator
+// devices, then reviewer devices, then administrator keys.
+export const ownDevices = (view) =>
+  entries(view.devices ?? {}).sort(byKey((d) => [deviceOrder.indexOf(d.kind), d.id].join("\u0000")));
+
+// A chapter's projects and administrators, as the chapter's feed carries them.
+export const chapterProjects = (chapter) =>
+  Object.values(chapter.projects).sort(byKey((p) => [p.tenant_id, p.project_id].join("\u0000")));
+
+export const chapterAdministrators = (chapter) =>
+  entries(chapter.administrators)
+    .map(({ id, ...k }) => ({ key_id: id, ...k }))
+    .sort(byKey((k) => k.key_id));
 
 export const pendingSuggestions = (view) =>
   Object.entries(view.suggestions)

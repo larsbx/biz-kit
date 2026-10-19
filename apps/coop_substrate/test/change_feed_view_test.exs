@@ -2,7 +2,10 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
   @moduledoc """
   `CoopSubstrate.Feed.View` over the generated histories of
   `CoopSubstrate.TaskHistories`: a client that applies the feed's frames, cut
-  at any batch boundaries, holds exactly the project view a fresh read gives.
+  at any batch boundaries, holds exactly the view a fresh read gives. Each
+  property holds for every view a feed serves: a project's, without a reader
+  and as Alice reads it (with her devices), and the chapter's
+  (docs/architecture/2026-10-19-live-view.md).
   """
   use ExUnit.Case, async: true
   use ExUnitProperties
@@ -18,7 +21,10 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
     %{world: world, gate0: gate0}
   end
 
-  defp view(gate, scope \\ @scope), do: View.select(gate.orchestration, scope)
+  @views [{@scope, nil}, {@scope, "alice"}, {{"chapter-genesis"}, nil}]
+
+  defp view(gate, {scope, principal}),
+    do: View.select(gate, scope, principal)
 
   # The gates a client passes through when the steps arrive in batches: `cuts`
   # says, per step, whether a batch ends after it. The last step always ends one.
@@ -35,16 +41,20 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
   } do
     check all(ops <- history_gen(), cuts <- list_of(boolean()), max_runs: 150) do
       {steps, gate} = run(ops, w, gate0)
-      start = View.apply(View.empty(), View.diff(View.empty(), view(gate0)))
 
-      {client, _} =
-        steps
-        |> batch_ends(cuts)
-        |> Enum.reduce({start, view(gate0)}, fn next, {client, server} ->
-          {View.apply(client, View.diff(server, view(next))), view(next)}
-        end)
+      for {scope, _} = v <- @views do
+        empty = View.empty(scope)
+        start = View.apply(empty, View.diff(empty, view(gate0, v)))
 
-      assert client == view(gate)
+        {client, _} =
+          steps
+          |> batch_ends(cuts)
+          |> Enum.reduce({start, view(gate0, v)}, fn next, {client, server} ->
+            {View.apply(client, View.diff(server, view(next, v))), view(next, v)}
+          end)
+
+        assert client == view(gate, v)
+      end
     end
   end
 
@@ -55,9 +65,9 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
     check all(ops <- history_gen(), max_runs: 150) do
       {steps, _gate} = run(ops, w, gate0)
 
-      for {_env, before, next} <- steps do
-        old = view(before)
-        new = view(next)
+      for {_env, before, next} <- steps, v <- @views do
+        old = view(before, v)
+        new = view(next, v)
         changes = View.diff(old, new)
 
         assert View.diff(new, new) == []
@@ -74,11 +84,15 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
   property "frames encode as JSON and carry no signing keys", %{world: w, gate0: gate0} do
     check all(ops <- history_gen(), max_runs: 100) do
       {_steps, gate} = run(ops, w, gate0)
-      changes = View.diff(View.empty(), view(gate))
-      json = Jason.encode!(changes)
 
-      for {_, d} <- gate.orchestration.delegations,
-          do: refute(json =~ Base.encode16(d.pubkey, case: :lower))
+      for {scope, _} = v <- @views do
+        json = Jason.encode!(View.diff(View.empty(scope), view(gate, v)))
+
+        o = gate.orchestration
+
+        for a <- Map.values(o.delegations) ++ Map.values(o.grants),
+            do: refute(json =~ Base.encode16(a.pubkey, case: :lower))
+      end
     end
   end
 
@@ -88,12 +102,15 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
   } do
     check all(ops <- history_gen(), max_runs: 100) do
       {_steps, gate} = run(ops, w, gate0)
-      assert view(gate, {"chapter-genesis", "tenant-1", "project-2"}) == View.empty()
-      assert view(gate, {"chapter-other", "tenant-1", "project-1"}) == View.empty()
+
+      for scope <- [{"chapter-genesis", "tenant-1", "project-2"}, {"chapter-other", "t", "p"}],
+          do: assert(view(gate, {scope, "alice"}) == View.empty(scope))
+
+      assert view(gate, {{"chapter-other"}, nil}) == View.empty({"chapter-other"})
     end
   end
 
-  test "generated histories put tasks, suggestions, delegations and receipts in the view", %{
+  test "generated histories put every kind in the views", %{
     world: w,
     gate0: gate0
   } do
@@ -104,10 +121,17 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
       |> Enum.flat_map(fn i ->
         ops = gen |> StreamData.seeded(20_261_018 + i) |> Enum.at(0)
         {_steps, gate} = run(ops, w, gate0)
-        gate |> view() |> Enum.filter(fn {_kind, entities} -> entities != %{} end)
-      end)
-      |> MapSet.new(&elem(&1, 0))
 
-    assert kinds == MapSet.new([:tasks, :suggestions, :delegations, :receipts])
+        for v <- @views,
+            {kind, entities} <- view(gate, v),
+            entities != %{},
+            do: kind
+      end)
+      |> MapSet.new()
+
+    assert kinds ==
+             MapSet.new(
+               ~w(tasks suggestions delegations receipts devices projects administrators)a
+             )
   end
 end

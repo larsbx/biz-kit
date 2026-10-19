@@ -19,9 +19,10 @@ defmodule CoopSubstrate.Administrators do
 
   @doc "The chapter's governance keys, each with the principal it names, if any."
   @spec list(String.t()) :: [%{key_id: String.t(), principal_id: String.t() | nil}]
-  def list(chapter) do
-    gate = Log.gate()
+  def list(chapter), do: keys(Log.gate(), chapter)
 
+  @doc "`list/1` against the membership projection `gate`: pure, as the change feed reads it."
+  def keys(gate, chapter) do
     for {key_id, _pubkey} <- gate.role_keys[{chapter, "governance"}] || %{} do
       %{key_id: key_id, principal_id: gate.role_key_members[{chapter, "governance", key_id}]}
     end
@@ -30,19 +31,24 @@ defmodule CoopSubstrate.Administrators do
 
   @doc """
   The chapter's projects: each with a task or a grant (active or not), its
-  tasks by state, and the principals holding something there now, as
-  offboarding counts them (`Projections.Tasks.held_by/3`).
+  tasks by state, the principals holding something there now, as
+  offboarding counts them (`Projections.Tasks.held_by/3`), and the number of
+  active grants and delegations, so any change in access changes the
+  project (docs/architecture/2026-10-19-live-view.md).
   """
   @spec projects(String.t()) :: [
           %{
             tenant_id: String.t(),
             project_id: String.t(),
             tasks: %{String.t() => pos_integer()},
+            grants: non_neg_integer(),
             people: [String.t()]
           }
         ]
-  def projects(chapter) do
-    o = Log.gate().orchestration
+  def projects(chapter), do: projects(Log.gate().orchestration, chapter)
+
+  @doc "`projects/1` against the task projection `o`: pure, as the change feed reads it."
+  def projects(o, chapter) do
     authorities = for {_, _, a} <- State.authorities(o), a.chapter_id == chapter, do: a
     states = for {{^chapter, t, p, _}, task} <- o.tasks, do: {{t, p}, task.state}
 
@@ -61,6 +67,7 @@ defmodule CoopSubstrate.Administrators do
         tenant_id: tenant,
         project_id: project,
         tasks: Enum.frequencies(for {^scope, state} <- states, do: state),
+        grants: Enum.count(authorities, &(&1.active and {&1.tenant_id, &1.project_id} == scope)),
         people: Enum.sort(for {^scope, principal} <- people, do: principal)
       }
     end)

@@ -84,7 +84,8 @@ defmodule SpruceGoose.Web.AuthTest do
       workos_signs_in("user_A")
       session = session!("workos", "code")
       resp = open(w, {feed_path(w), [{"cookie", session}]})
-      assert {_seq, %{"changes" => []}} = next(resp)
+      # The person's own device is all there is.
+      assert kinds(next(resp)) == ["devices"]
 
       assert call(:post, "/auth/logout", [{"cookie", session}]).status == 204
       assert next(resp) == :done

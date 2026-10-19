@@ -10,28 +10,70 @@ defmodule CoopSubstrate.Feed.View do
   cancelled task carries who cancelled it (governance: none) and why
   (2026-10-19-cancel-reopen.md).
 
-  Pure. `select/2` reads a view out of the task projection; `diff/2` gives the
-  changes between two views as whole-entity upserts; `apply/2` replays them.
-  A client applying the diffs of successive views holds the latest view,
-  however the events between them were batched.
+  A project's view also carries its reader's own **devices** (`Devices.of/3`:
+  operator and reviewer grants in the project, administrator keys of the
+  chapter), so a person's page follows its access as it is granted and
+  revoked (docs/architecture/2026-10-19-live-view.md). Another person's
+  devices never appear; a view read without a reader has none.
+
+  A **chapter's** view, scope `{chapter}`, is for its administrators: its
+  **projects** (`Administrators.projects/2`, keyed `tenant/project`, each
+  part URI-encoded) and its **administrators** (`Administrators.keys/2`).
+
+  Pure. `select/3` reads a view out of the membership projection; `diff/2`
+  gives the changes between two views as whole-entity upserts; `apply/2`
+  replays them. A client applying the diffs of successive views holds the
+  latest view, however the events between them were batched.
 
   Derived fields (`delegation.delegator_grant_active`) are part of the value,
   so a change that affects an entity without touching its record (revoking the
   operator grant behind a delegation) still reaches the client.
   """
 
-  @kinds [:tasks, :suggestions, :delegations, :receipts]
+  alias CoopSubstrate.{Administrators, Devices}
 
-  @type scope :: {chapter_id :: String.t(), tenant_id :: String.t(), project_id :: String.t()}
-  @type kind :: :tasks | :suggestions | :delegations | :receipts
+  @project_kinds [:tasks, :suggestions, :delegations, :receipts, :devices]
+  @chapter_kinds [:projects, :administrators]
+
+  @type project :: {chapter_id :: String.t(), tenant_id :: String.t(), project_id :: String.t()}
+  @type scope :: project() | {chapter_id :: String.t()}
+  @type kind ::
+          :tasks
+          | :suggestions
+          | :delegations
+          | :receipts
+          | :devices
+          | :projects
+          | :administrators
   @type t :: %{kind() => %{String.t() => map()}}
   @type change :: %{kind: kind(), id: String.t(), value: map() | nil}
 
-  @spec empty() :: t()
-  def empty, do: Map.new(@kinds, &{&1, %{}})
+  @doc "The empty view of a scope's shape: a project's (the default) or a chapter's."
+  @spec empty(scope()) :: t()
+  def empty(scope \\ {nil, nil, nil}), do: Map.new(kinds(scope), &{&1, %{}})
 
-  @spec select(map(), scope()) :: t()
-  def select(o, {chapter, tenant, project} = scope) do
+  defp kinds({_chapter}), do: @chapter_kinds
+  defp kinds({_, _, _}), do: @project_kinds
+
+  @doc "The view of `scope` as `principal` reads it (nil: no reader, so no devices)."
+  @spec select(map(), scope(), String.t() | nil) :: t()
+  def select(gate, scope, principal \\ nil)
+
+  def select(gate, {chapter}, _principal) do
+    %{
+      projects:
+        Map.new(
+          Administrators.projects(gate.orchestration, chapter),
+          &{project_id(&1), json(&1)}
+        ),
+      administrators:
+        Map.new(Administrators.keys(gate, chapter), &{&1.key_id, Map.delete(&1, :key_id)})
+    }
+  end
+
+  def select(gate, {chapter, tenant, project} = scope, principal) do
+    o = gate.orchestration
+
     %{
       tasks:
         for(
@@ -54,14 +96,19 @@ defmodule CoopSubstrate.Feed.View do
           in_scope?(r, scope),
           into: %{},
           do: {id, json(Map.take(r, [:digest, :principal_id]))}
-        )
+        ),
+      devices: Map.new(Devices.of(gate, principal, scope), &{&1.id, Map.delete(&1, :id)})
     }
   end
+
+  defp project_id(p),
+    do: URI.encode_www_form(p.tenant_id) <> "/" <> URI.encode_www_form(p.project_id)
 
   @doc "Entities whose value differs, in a stable order; `value: nil` would mean removed."
   @spec diff(t(), t()) :: [change()]
   def diff(old, new) do
-    for kind <- @kinds,
+    for kind <- @project_kinds ++ @chapter_kinds,
+        Map.has_key?(new, kind),
         id <-
           old[kind]
           |> Map.keys()

@@ -28,7 +28,9 @@ the device's public key into a grant by hand" in
    grants exactly that principal, project and key, signed by its own
    governance key alone, and then signs and submits it.
 3. **The ledger admits the grant** as it admits any grant: a governance key
-   declared for the chapter, checked at append. The page polls its status,
+   declared for the chapter, checked at append. The page asks for its status
+   (by polling, until it can read the project's feed; then on every frame
+   that changes its person's devices ([live view](2026-10-19-live-view.md))),
    sees it enrolled, and its decisions are accepted from then on.
 
 A request names a **role**: `operator` (the default, as above),

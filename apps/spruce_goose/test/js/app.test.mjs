@@ -23,6 +23,11 @@ import {
   taskSummary,
   projectSearch,
   projectsHeld,
+  chapterKinds,
+  changedKinds,
+  ownDevices,
+  chapterProjects,
+  chapterAdministrators,
 } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -469,4 +474,44 @@ test("a chapter's projects: their tasks, a link to each, and what a person holds
       ["a", false],
     ],
   );
+});
+
+test("live: a frame of any kind builds the view; the person's devices and the chapter's lists come from it", () => {
+  const project = [
+    {
+      seq: 3,
+      changes: [
+        { kind: "devices", id: "k-admin", value: { kind: "administrator", grant_id: null, key_id: "k-admin", label: null } },
+        { kind: "devices", id: "g-2", value: { kind: "reviewer", grant_id: "g-2", key_id: "k-tab", label: "Tablet" } },
+        { kind: "devices", id: "g-1", value: { kind: "operator", grant_id: "g-1", key_id: "k-lap", label: "Laptop" } },
+      ],
+    },
+    { seq: 4, changes: [{ kind: "devices", id: "g-2", value: null }] },
+  ].reduce(applyFrame, emptyView());
+
+  // Operator devices first, then reviewer devices, then administrator keys.
+  assert.deepEqual(
+    ownDevices(project).map((d) => [d.id, d.kind]),
+    [
+      ["g-1", "operator"],
+      ["k-admin", "administrator"],
+    ],
+  );
+  assert.deepEqual(changedKinds({ changes: [{ kind: "tasks" }, { kind: "devices" }, { kind: "tasks" }] }), new Set(["tasks", "devices"]));
+
+  const chapter = applyFrame(emptyView(chapterKinds), {
+    seq: 5,
+    changes: [
+      { kind: "projects", id: "t/b", value: { tenant_id: "t", project_id: "b", tasks: {}, grants: 0, people: [] } },
+      { kind: "projects", id: "t/a", value: { tenant_id: "t", project_id: "a", tasks: { inbox: 1 }, grants: 1, people: ["p"] } },
+      { kind: "administrators", id: "k-2", value: { principal_id: "p" } },
+      { kind: "administrators", id: "k-1", value: { principal_id: null } },
+    ],
+  });
+  assert.deepEqual(Object.keys(chapter).sort(), ["administrators", "projects"]);
+  assert.deepEqual(chapterProjects(chapter).map((p) => p.project_id), ["a", "b"]);
+  assert.deepEqual(chapterAdministrators(chapter), [
+    { key_id: "k-1", principal_id: null },
+    { key_id: "k-2", principal_id: "p" },
+  ]);
 });
