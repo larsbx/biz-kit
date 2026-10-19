@@ -196,8 +196,8 @@ notification is caught by the heartbeat's tick. The reconnect is then refused.
 - Each session folds the whole ledger once on open and keeps its own copy of
   the gate. Fine at today's size. Shared per-scope state can replace it
   without changing the contract.
-- Spent nonces live in one node's memory. Serving the feed from several nodes
-  needs a shared store.
+- Spent nonces live in one process for the whole [cluster](2026-10-19-cluster.md), and every node's
+  feed sessions are notified of each append (`:pg`).
 - A cursor is a position, not a hash. A client resuming against a restored
   ledger of the same length or longer cannot tell. Adding the head hash would
   close that.

@@ -112,7 +112,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
         })
       )
 
-    appender = Process.whereis(Log)
+    appender = GenServer.whereis(BizKit.Cluster.Singleton.name(Log))
 
     commands = [
       resign(grant(ctx.gov, ctx.operator), [ctx.gov, other_gov]),
@@ -129,17 +129,17 @@ defmodule CoopSubstrate.TaskCommandsTest do
 
       for _attempt <- 1..3 do
         assert_rejected(command, :task_signer_cardinality)
-        assert Process.whereis(Log) == appender
+        assert GenServer.whereis(BizKit.Cluster.Singleton.name(Log)) == appender
         assert Process.alive?(appender)
       end
     end
 
     assert {:ok, _} = Tasks.propose(proposal(ctx))
-    assert Process.whereis(Log) == appender
+    assert GenServer.whereis(BizKit.Cluster.Singleton.name(Log)) == appender
   end
 
   test "invalid governance signatures and malformed signer collections are safe to retry", ctx do
-    appender = Process.whereis(Log)
+    appender = GenServer.whereis(BizKit.Cluster.Singleton.name(Log))
     command = baseline(ctx.gov, Map.put(@subject, "task_id", "task-2"))
     invalid = %{command | sigs: %{ctx.gov.signer.key_id => <<0::512>>}}
 
@@ -148,13 +148,13 @@ defmodule CoopSubstrate.TaskCommandsTest do
       assert_rejected(%{command | signers: []}, :signers_required)
       assert_rejected(%{command | signers: nil}, :signers_required)
       assert_rejected(%{command | signers: [%{}]}, :bad_signer)
-      assert Process.whereis(Log) == appender
+      assert GenServer.whereis(BizKit.Cluster.Singleton.name(Log)) == appender
       assert Process.alive?(appender)
     end
 
     assert {:ok, _} = Log.append(command)
     assert {:ok, _} = Tasks.propose(proposal(ctx))
-    assert Process.whereis(Log) == appender
+    assert GenServer.whereis(BizKit.Cluster.Singleton.name(Log)) == appender
   end
 
   test "proposal is durable, typed, signed, and rebuilt from the ledger alone", ctx do

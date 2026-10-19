@@ -85,7 +85,7 @@ defmodule CoopSubstrate.Tasks do
   def proposal(attrs), do: Envelope.new(Map.put(Map.new(attrs), :type, "TaskProposedV1"))
 
   @doc "Append durably and return the accepted event/version watermark."
-  def propose(command, server \\ Log)
+  def propose(command, server \\ CoopSubstrate.Log.server())
 
   def propose(%Envelope{type: "TaskProposedV1"} = command, server) do
     with {:ok, [accepted]} <- Log.append(command, server),

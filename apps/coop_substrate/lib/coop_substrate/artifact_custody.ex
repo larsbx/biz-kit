@@ -10,7 +10,7 @@ defmodule CoopSubstrate.ArtifactCustody do
   alias CoopSubstrate.{Log, Harness.Artifacts}
   alias CoopSubstrate.Protocol.Envelope
 
-  def submit(command, server \\ Log)
+  def submit(command, server \\ CoopSubstrate.Log.server())
 
   def submit(%Envelope{type: "ArtifactCustodyRecordedV1"} = command, server) do
     with {:ok, [accepted]} <- Log.append(command, server),

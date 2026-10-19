@@ -21,6 +21,12 @@ defmodule CoopSubstrate.Log do
   caps, and no prior log assignment. The single serialized appender
   (hand-off §1: ONE canonical log) assigns both chains.
 
+  The appender is one process for the whole cluster
+  (`BizKit.Cluster.Singleton`; docs/architecture/2026-10-19-cluster.md).
+  Should two ever run, say on either side of a partition, the store's
+  expected-version check admits only one's append; the other stops on the
+  refusal and starts again from the store, so the chain never forks.
+
   What is signed is what is stored is what is replayed: the store holds the
   `CoopEventCanonicalV1` bytes of the full record verbatim (bytea,
   pass-through serializer); reads re-decode strictly and re-verify.
@@ -37,6 +43,7 @@ defmodule CoopSubstrate.Log do
   alias CoopSubstrate.ULID
 
   @ledger "ledger"
+  @server BizKit.Cluster.Singleton.name(__MODULE__)
   @page 1_000
 
   defmodule Head do
@@ -57,6 +64,10 @@ defmodule CoopSubstrate.Log do
     {:ok, %{head: head, gate: gate}}
   end
 
+  @doc "How any node calls the appender."
+  @spec server() :: GenServer.server()
+  def server, do: @server
+
   # -- write API ---------------------------------------------------------------
 
   @doc """
@@ -66,7 +77,7 @@ defmodule CoopSubstrate.Log do
   """
   @spec append(Envelope.t() | [Envelope.t()], GenServer.server()) ::
           {:ok, [Envelope.t()]} | {:error, term()}
-  def append(envelope_or_envelopes, server \\ __MODULE__)
+  def append(envelope_or_envelopes, server \\ @server)
 
   def append(%Envelope{} = envelope, server), do: append([envelope], server)
 
@@ -76,7 +87,7 @@ defmodule CoopSubstrate.Log do
 
   @doc "Current global head: `%{global_seq: n, global_hash: <<_::256>> | nil}`."
   @spec head(GenServer.server()) :: %{global_seq: non_neg_integer(), global_hash: binary() | nil}
-  def head(server \\ __MODULE__) do
+  def head(server \\ @server) do
     GenServer.call(server, :head)
   end
 
@@ -85,7 +96,7 @@ defmodule CoopSubstrate.Log do
   against. A copy, for read-side decisions that must agree with admission.
   """
   @spec gate(GenServer.server()) :: map()
-  def gate(server \\ __MODULE__), do: GenServer.call(server, :gate)
+  def gate(server \\ @server), do: GenServer.call(server, :gate)
 
   # -- read API (straight from the store; no serialization needed) -------------
 
@@ -424,7 +435,13 @@ defmodule CoopSubstrate.Log do
       new_gate = Enum.reduce(assigned, gate, &Gate.handle_event/2)
       {:reply, {:ok, assigned}, %{state | head: new_head, gate: new_gate}}
     else
-      {:error, reason} -> {:reply, {:error, reason}, state}
+      # Another appender moved the ledger: this one's head is stale. Stop, and
+      # start again from the store.
+      {:error, {:store_append_failed, :wrong_expected_version}} = error ->
+        {:stop, :ledger_moved, error, state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
     end
   end
 

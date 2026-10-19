@@ -21,6 +21,9 @@ defmodule CoopSubstrate.Commands do
   `hold/5` is the same mechanism for any signer: it holds an envelope for an
   owner (a principal, or `{:enrolment, code}` for a governance approval,
   `CoopSubstrate.Enrolments`) until that owner submits its signature.
+
+  Held envelopes live in one process for the whole cluster
+  (`BizKit.Cluster.Singleton`), so any node submits what any node prepared.
   """
 
   use GenServer
@@ -44,7 +47,9 @@ defmodule CoopSubstrate.Commands do
           expires_at: integer()
         }
 
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  # One for the cluster (`BizKit.Cluster.Singleton`): any node submits what any
+  # node prepared.
+  @server BizKit.Cluster.Singleton.name(__MODULE__)
 
   @spec prepare(String.t(), String.t(), CoopSubstrate.Feed.View.scope(), Decisions.decision()) ::
           {:ok, pending()} | {:error, term()}
@@ -87,11 +92,7 @@ defmodule CoopSubstrate.Commands do
          {:ok, bytes} <- Envelope.signing_bytes(env) do
       id = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
       expires_at = now + @ttl_ms
-
-      true =
-        :ets.insert_new(@table, {id, owner, env, expires_at, System.unique_integer([:monotonic])})
-
-      evict(owner)
+      :ok = GenServer.call(@server, {:hold, id, owner, env, expires_at})
       {:ok, %{id: id, signing_bytes: bytes, type: type, payload: payload, expires_at: expires_at}}
     end
   end
@@ -99,28 +100,15 @@ defmodule CoopSubstrate.Commands do
   @spec submit(term(), String.t(), binary(), integer()) ::
           {:ok, Envelope.t()} | {:error, term()}
   def submit(owner, id, signature, now_ms \\ System.system_time(:millisecond)) do
-    # Looked up before it is taken, so nobody else can spend it; taken before
-    # use, so it is used once.
-    with [{^id, ^owner, _env, expires_at, _seq}] when now_ms <= expires_at <-
-           :ets.lookup(@table, id),
-         [{^id, _, env, _, _}] <- :ets.take(@table, id),
+    with {:ok, env} <- GenServer.call(@server, {:take, owner, id, now_ms}),
          {:ok, signed} <- Envelope.attach_signature(env, hd(env.signers).key_id, signature),
-         {:ok, [appended]} <- Log.append(signed) do
-      {:ok, appended}
-    else
-      {:error, _} = error -> error
-      _ -> {:error, :unknown_command}
-    end
+         {:ok, [appended]} <- Log.append(signed),
+         do: {:ok, appended}
   end
 
   @doc "The envelope held for `owner` under `id`, without spending it."
   @spec peek(term(), String.t()) :: {:ok, Envelope.t()} | {:error, :unknown_command}
-  def peek(owner, id) do
-    case :ets.lookup(@table, id) do
-      [{^id, ^owner, env, _expires_at, _seq}] -> {:ok, env}
-      _ -> {:error, :unknown_command}
-    end
-  end
+  def peek(owner, id), do: GenServer.call(@server, {:peek, owner, id})
 
   @doc "A governance key declared for the chapter, as the signer of a held envelope."
   @spec governance_signer(String.t(), String.t()) ::
@@ -145,9 +133,43 @@ defmodule CoopSubstrate.Commands do
 
   @impl true
   def init(_opts) do
-    :ets.new(@table, [:set, :public, :named_table])
+    :ets.new(@table, [:set, :protected, :named_table])
     schedule()
     {:ok, nil}
+  end
+
+  @impl true
+  def handle_call({:hold, id, owner, env, expires_at}, _from, state) do
+    true =
+      :ets.insert_new(@table, {id, owner, env, expires_at, System.unique_integer([:monotonic])})
+
+    evict(owner)
+    {:reply, :ok, state}
+  end
+
+  # Only by its owner, before it expires, and once.
+  def handle_call({:take, owner, id, now_ms}, _from, state) do
+    reply =
+      case :ets.lookup(@table, id) do
+        [{^id, ^owner, env, expires_at, _seq}] when now_ms <= expires_at ->
+          :ets.delete(@table, id)
+          {:ok, env}
+
+        _ ->
+          {:error, :unknown_command}
+      end
+
+    {:reply, reply, state}
+  end
+
+  def handle_call({:peek, owner, id}, _from, state) do
+    reply =
+      case :ets.lookup(@table, id) do
+        [{^id, ^owner, env, _expires_at, _seq}] -> {:ok, env}
+        _ -> {:error, :unknown_command}
+      end
+
+    {:reply, reply, state}
   end
 
   @impl true

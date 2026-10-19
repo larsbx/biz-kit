@@ -16,7 +16,7 @@ defmodule CoopSubstrate.Buzz.Tasks do
   alias CoopSubstrate.Tasks
 
   @doc "Submit a signed proposal and prepare a notification only after durable acceptance."
-  def propose(command, server \\ CoopSubstrate.Log)
+  def propose(command, server \\ CoopSubstrate.Log.server())
 
   def propose(%Envelope{type: "TaskProposedV1"} = command, server) do
     with {:ok, receipt} <- Tasks.propose(command, server) do

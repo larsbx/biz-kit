@@ -11,6 +11,7 @@ defmodule BizKit.MixProject do
         biz_kit: [
           applications: [
             keel: :permanent,
+            biz_kit_cluster: :permanent,
             coop_substrate: :permanent,
             biz_kit_identity: :permanent,
             dispatch: :permanent,
