@@ -104,14 +104,21 @@ test("the device signs only its own enrolment statement", () => {
     key_id: own.keyId,
     pubkey: { __bytes__: own.publicKeyHex },
     label: "Laptop",
+    role: "operator",
   };
 
   assert.equal(isOwnEnrolment(statement, own), true);
+  // A reviewer request is its own, and only as a reviewer.
+  const asReviewer = { ...statement, role: "reviewer" };
+  assert.equal(isOwnEnrolment(asReviewer, { ...own, role: "reviewer" }), true);
+  assert.equal(isOwnEnrolment(asReviewer, own), false);
+  assert.equal(isOwnEnrolment(statement, { ...own, role: "reviewer" }), false);
   for (const tampered of [
     { ...statement, schema: "CoopFeedReadV1" },
     { ...statement, type: "TaskOperatorGrantedV1" },
     { ...statement, key_id: "k-ffffffff" },
     { ...statement, pubkey: { __bytes__: "ff".repeat(32) } },
+    { ...statement, role: undefined },
     null,
   ]) {
     assert.equal(isOwnEnrolment(tampered, own), false);
@@ -243,7 +250,13 @@ test("a task's next step, or what it is waiting for", async () => {
   assert.equal(noInput.upload, input);
   // Waiting on people, not files: nothing to upload.
   assert.equal(nextStep("t1", view({ state: "proposed", dod: null }), "me", "k-me").upload, undefined);
-  assert.equal(nextStep("t1", view({ state: "ready" }), "me", "k-me"), null);
+  // Ready: whoever starts acknowledged the SOP on this device.
+  assert.deepEqual(nextStep("t1", view({ state: "ready", dod: {}, readiness: mine }, stored), "me", "k-me"), {
+    action: "start",
+    label: "Start",
+  });
+  assert.equal(nextStep("t1", view({ state: "ready", dod: {}, readiness: otherDevice }, stored), "me", "k-me").action, "acknowledge_sop");
+  assert.equal(nextStep("t1", view({ state: "completed", dod: {}, readiness: mine }), "me", "k-me"), null);
 
   // Latest decided first: s1 was suggested first but decided last.
   const history = decidedSuggestions({
@@ -255,4 +268,43 @@ test("a task's next step, or what it is waiting for", async () => {
     },
   });
   assert.deepEqual(history.map((s) => [s.id, s.status]), [["s1", "declined"], ["s3", "accepted"], ["s2", "withdrawn"]]);
+});
+
+test("under way: evidence, then a review, then completion; what is left to review", async () => {
+  const { nextStep, toReview } = await import("../../priv/static/app/view.js");
+  const criteria = [{ id: "report", description: "Report" }];
+  const task = (dod) => ({ tasks: { t1: { state: "in_progress", title: "Audit", dod: { criteria, ...dod } } } });
+  const submission = { event_id: "e1", principal_id: "me" };
+
+  assert.deepEqual(nextStep("t1", task({ submission: null, review: null }), "me", "k-me"), {
+    evidence: criteria,
+    label: "Submit evidence…",
+  });
+  assert.deepEqual(nextStep("t1", task({ submission, review: null }), "me", "k-me"), {
+    waiting: "a review of the evidence",
+  });
+
+  const refused = { event_id: "e2", decision: "refuse", reason: "Missing page 2", submission_event_id: "e1" };
+  assert.deepEqual(nextStep("t1", task({ submission, review: refused }), "me", "k-me"), {
+    evidence: criteria,
+    label: "Submit evidence again…",
+    refused,
+  });
+
+  const accepted = { ...refused, decision: "accept" };
+  assert.deepEqual(nextStep("t1", task({ submission, review: accepted }), "me", "k-me"), {
+    action: "complete",
+    label: "Complete",
+    review_event_id: "e2",
+  });
+  // An accepting review of another submission completes nothing.
+  assert.equal(nextStep("t1", task({ submission, review: { ...accepted, submission_event_id: "e0" } }), "me", "k-me").action, undefined);
+
+  // A reviewer sees others' unreviewed submissions, never their own.
+  assert.deepEqual(toReview(task({ submission, review: null }), "reviewer"), [
+    { id: "t1", title: "Audit", criteria, submission },
+  ]);
+  assert.deepEqual(toReview(task({ submission, review: null }), "me"), []);
+  assert.deepEqual(toReview(task({ submission, review: accepted }), "reviewer"), []);
+  assert.deepEqual(toReview(task({ submission: null, review: null }), "reviewer"), []);
 });

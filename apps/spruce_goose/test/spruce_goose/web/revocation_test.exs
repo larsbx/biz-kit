@@ -147,4 +147,25 @@ defmodule SpruceGoose.Web.RevocationTest do
     assert {:error, {404, _}} = Revoker.fetch(w.base, "no-such-grant")
     assert devices(w) == ["Laptop", "Phone"]
   end
+
+  test "mix coop.revoke also revokes a reviewer device", w do
+    reviewer = member("reviewer")
+
+    grant =
+      grant!(w, "TaskReviewerGrantedV1", reviewer, w.person, "project-1", %{
+        "device_label" => "Review tablet"
+      })
+
+    governance_keys!(w)
+
+    output =
+      capture_io(fn ->
+        Mix.Task.rerun("coop.revoke", [grant.event_id, "--server", w.base, "--yes"])
+      end)
+
+    assert output =~ "Reviewer grant #{grant.event_id}"
+    assert output =~ "device     Review tablet"
+    assert output =~ "revoked: event"
+    refute CoopSubstrate.Log.gate().orchestration.dod_grants[grant.event_id].active
+  end
 end

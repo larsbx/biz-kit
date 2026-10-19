@@ -1,8 +1,8 @@
 defmodule SpruceGoose.Web.CommandController do
   @moduledoc """
   A person's decision on a suggestion (docs/architecture/2026-10-18-decide.md)
-  or lifecycle step (docs/architecture/2026-10-19-lifecycle.md), signed on
-  their device. Transport only: `CoopSubstrate.Commands`
+  or lifecycle step (docs/architecture/2026-10-19-lifecycle.md,
+  2026-10-19-execution.md), signed on their device. Transport only: `CoopSubstrate.Commands`
   prepares and admits the command; the ledger checks it as any operator
   command.
 
@@ -14,6 +14,11 @@ defmodule SpruceGoose.Web.CommandController do
            {"action": "ready", "task_id", "custody_receipts": {name: receipt id}, "key_id"}
            {"action": "revoke_delegation", "delegation_event_id", "key_id"}
            {"action": "record_custody", "artifact_digest": hex SHA-256, "key_id"}
+           {"action": "start", "task_id", "key_id"}
+           {"action": "submit_evidence", "task_id", "custody_receipts": {criterion: receipt id}, "key_id"}
+           {"action": "review", "task_id", "decision": "accept" | "refuse", "reason", "key_id"}
+             (signed with a reviewer device's key)
+           {"action": "complete", "task_id", "review_event_id", "key_id"}
            → 201 {id, type, payload, signing_bytes (base64url), expires_at}
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
@@ -57,19 +62,28 @@ defmodule SpruceGoose.Web.CommandController do
   defp command(%{"action" => _} = body), do: action(body)
   defp command(body), do: decision(body)
 
-  defp action(%{"action" => a, "task_id" => t}) when a in ~w(propose queue) and is_binary(t),
-    do: {:ok, {String.to_existing_atom(a), t}}
+  defp action(%{"action" => a, "task_id" => t})
+       when a in ~w(propose queue start) and is_binary(t),
+       do: {:ok, {String.to_existing_atom(a), t}}
 
   defp action(%{"action" => "acknowledge_sop", "task_id" => t, "custody_receipt_id" => r})
        when is_binary(t) and is_binary(r),
        do: {:ok, {:acknowledge_sop, t, r}}
 
-  defp action(%{"action" => "ready", "task_id" => t, "custody_receipts" => rs})
-       when is_binary(t) and is_map(rs) do
+  defp action(%{"action" => a, "task_id" => t, "custody_receipts" => rs})
+       when a in ~w(ready submit_evidence) and is_binary(t) and is_map(rs) do
     if Enum.all?(rs, fn {_, id} -> is_binary(id) end),
-      do: {:ok, {:ready, t, rs}},
+      do: {:ok, {String.to_existing_atom(a), t, rs}},
       else: {:error, :bad_action}
   end
+
+  defp action(%{"action" => "review", "task_id" => t, "decision" => d, "reason" => r})
+       when is_binary(t) and is_binary(d) and is_binary(r),
+       do: {:ok, {:review, t, d, r}}
+
+  defp action(%{"action" => "complete", "task_id" => t, "review_event_id" => r})
+       when is_binary(t) and is_binary(r),
+       do: {:ok, {:complete, t, r}}
 
   defp action(%{"action" => "revoke_delegation", "delegation_event_id" => d}) when is_binary(d),
     do: {:ok, {:revoke_delegation, d}}

@@ -34,6 +34,7 @@ defmodule SpruceGoose.Web.EnrolmentController do
           key_id: r.key_id,
           public_key: encode(r.pubkey),
           label: r.label,
+          role: r.role,
           expires_at: r.expires_at
         })
 

@@ -20,6 +20,12 @@ The lifecycle state stays **proposed**, including after an accepted review.
 This stage does not skip queueing, readiness, SOP, predecessor or execution
 checks and does not implement completion. A review is not a deployment license.
 
+Since [execution](2026-10-19-execution.md), submissions and reviews are also
+admitted while a task is **in progress**, starting a task clears any earlier
+submission and review, and `TaskCompletedV1` completes it by citing an
+accepting review. A review still completes nothing by itself. A reviewer
+grant may carry a `device_label`.
+
 Criterion IDs use the existing bounded ASCII segment convention. Descriptions
 and review reasons are nonblank UTF-8 strings of at most 2048 bytes. Evidence
 maps must cover exactly the definition's IDs, with no omissions or extras;

@@ -71,8 +71,10 @@ path no production data exists. The rule is modelled in
 ## Remaining boundaries
 
 A task with incomplete predecessors cannot become ready. No completed baseline
-or caller-provided completion assertion is accepted: until a governed common-ledger
-completion path exists, nonempty unfinished dependencies remain queued. No task
+or caller-provided completion assertion is accepted. The common-ledger
+completion path now exists ([execution](2026-10-19-execution.md)): a task is
+started, its evidence reviewed, and an operator completes it citing the
+accepting review; only then can a successor become ready. No task
 hierarchy/definition importer or dependency-cycle scheduling engine is introduced.
 This is an isolated rehearsal slice, not production command-coverage parity.
 

@@ -1,7 +1,8 @@
 // This device's signing key: Ed25519, generated in the browser with
 // WebCrypto as non-extractable, so script can use it but never read it out.
 // Kept in IndexedDB. An administrator enrols it by naming its public key in
-// the person's operator grant; until then the ledger refuses what it signs.
+// the person's operator or reviewer grant; until then the ledger refuses
+// what it signs.
 
 import { hex } from "./cbor.js";
 
@@ -16,12 +17,14 @@ export const publicKey = async (pair) =>
 export const keyId = (pub) => "k-" + hex(pub.subarray(0, 4));
 
 // Whether a decoded statement is exactly this device's enrolment request: the
-// enrolment schema (never a command, which carries a "type"), naming this key.
-export const isOwnEnrolment = (statement, { keyId, publicKeyHex }) =>
+// enrolment schema (never a command, which carries a "type"), naming this key
+// and the role asked for (operator or reviewer).
+export const isOwnEnrolment = (statement, { keyId, publicKeyHex, role = "operator" }) =>
   statement?.schema === "CoopDeviceEnrolmentV1" &&
   !("type" in statement) &&
   statement.key_id === keyId &&
-  statement.pubkey?.__bytes__ === publicKeyHex;
+  statement.pubkey?.__bytes__ === publicKeyHex &&
+  statement.role === role;
 
 // Deep equality of decoded CBOR and plain values; an integer is the same
 // whether decoded as a number or a BigInt.

@@ -4,7 +4,9 @@ defmodule SpruceGoose.Web.BrowserTest do
   2026-10-19-device-enrolment.md): a person signs in, their browser makes its
   device key and requests access, an administrator approves the code, an
   agent suggests, and the person accepts in the web view. The ledger then
-  holds the decision, signed by the key the browser made.
+  holds the decision, signed by the key the browser made. The person then
+  takes a task from proposed to completed (2026-10-19-execution.md), with a
+  reviewer accepting its evidence from a browser of their own.
 
   Needs Node and Playwright with Chromium, so it is excluded by default:
   `mix test --include browser`.
@@ -25,7 +27,12 @@ defmodule SpruceGoose.Web.BrowserTest do
     providers!()
     w = world()
     person = Principal.new_id()
-    bind([{"https://idp.test", "sub-person", person}])
+    reviewer = Principal.new_id()
+
+    bind([
+      {"https://idp.test", "sub-person", person},
+      {"https://idp.test", "sub-reviewer", reviewer}
+    ])
 
     base = serve!()
     port = browser!(base, w)
@@ -58,6 +65,17 @@ defmodule SpruceGoose.Web.BrowserTest do
     # then uploads the SOP and the input and records custody of them.
     readiness!(w, "task-2")
 
+    # The person takes it to ready, starts it and submits evidence; a
+    # reviewer's browser asks for reviewer access, which is approved.
+    Port.command(port, "go\n")
+    assert %{"reviewer_code" => reviewer_code, "reviewer_key_id" => reviewer_key} = read!(port)
+    {:ok, request} = Approver.fetch(base, reviewer_code)
+
+    assert {request["principal_id"], request["role"], request["key_id"]} ==
+             {reviewer, "reviewer", reviewer_key}
+
+    {:ok, _} = Approver.approve(base, request, governance)
+
     Port.command(port, "go\n")
     assert %{"done" => "Recorded on the ledger" <> _} = read!(port)
 
@@ -70,9 +88,16 @@ defmodule SpruceGoose.Web.BrowserTest do
     assert task.title == "Write up the audit"
 
     # Then proposed, its SOP and input stored from the browser, the SOP
-    # acknowledged, queued and marked ready, each signed by the browser's key.
-    assert task.state == "ready"
+    # acknowledged, queued and marked ready, started, its evidence stored and
+    # submitted, accepted by the reviewer and completed, each signed by the
+    # browser's own key.
+    assert task.state == "completed"
+    assert task.started_by == person
     assert task.readiness.acknowledgment.principal_id == person
+    assert task.dod.submission.principal_id == person
+
+    assert %{principal_id: ^reviewer, decision: "accept", reason: "Complete and clear"} =
+             task.dod.review
 
     receipts = Log.gate().orchestration.custody_receipts
 
@@ -82,8 +107,13 @@ defmodule SpruceGoose.Web.BrowserTest do
     assert Enum.sort(stored) ==
              Enum.sort([
                {:bytes, :crypto.hash(:sha256, "SOP for #{w.chapter}")},
-               {:bytes, :crypto.hash(:sha256, "Input for #{w.chapter}")}
+               {:bytes, :crypto.hash(:sha256, "Input for #{w.chapter}")},
+               {:bytes, :crypto.hash(:sha256, "Report for #{w.chapter}")}
              ])
+
+    assert task.dod.submission.evidence == %{
+             "report" => {:bytes, :crypto.hash(:sha256, "Report for #{w.chapter}")}
+           }
 
     {:ok, events} = Log.read_all(from: suggestion.global_seq + 1)
 
@@ -107,6 +137,19 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     assert revocation.payload["revoked_grant_event_id"] == grant_id
     assert hd(revocation.signers).pubkey == hd(decision.signers).pubkey
+
+    of_type = fn type -> for e <- events, e.type == type, e.chapter_id == w.chapter, do: e end
+    [review] = of_type.("TaskDoDReviewedV1")
+    assert hd(review.signers).pubkey == Base.url_decode64!(request["public_key"], padding: false)
+    assert hd(review.signers).role == "reviewer"
+
+    for type <- ["TaskStartedV1", "TaskEvidenceSubmittedV2", "TaskCompletedV1"] do
+      [e] = of_type.(type)
+      assert hd(e.signers).pubkey == hd(decision.signers).pubkey
+    end
+
+    [completed] = of_type.("TaskCompletedV1")
+    assert completed.payload["review_event_id"] == review.event_id
 
     [created] = for e <- events, e.type == "TaskCreatedV1", e.chapter_id == w.chapter, do: e
     assert created.payload["suggestion_event_id"] == to_create.event_id

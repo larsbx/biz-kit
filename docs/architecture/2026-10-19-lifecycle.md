@@ -126,4 +126,5 @@ suggestions, ordered by the event that resolved them.
 
 - Uploading an SOP or input from the browser is now
   [offered](2026-10-19-uploads.md).
-- Steps after ready (execution, evidence, review) in the view.
+- Steps after ready (start, evidence, review, complete) are now
+  [offered](2026-10-19-execution.md).

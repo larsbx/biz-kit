@@ -1,6 +1,6 @@
 defmodule SpruceGoose.Web.GrantController do
   @moduledoc """
-  Governance revocation of an operator grant
+  Governance revocation of an operator or reviewer grant
   (docs/architecture/2026-10-19-device-revocation.md), normally through
   `mix coop.revoke <GRANT_ID>`, which holds the governance key.
 
@@ -25,6 +25,7 @@ defmodule SpruceGoose.Web.GrantController do
 
         json(conn, %{
           grant_id: g.grant_id,
+          role: g.role,
           principal_id: g.principal_id,
           chapter_id: chapter,
           tenant_id: tenant,
