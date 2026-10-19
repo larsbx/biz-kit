@@ -68,17 +68,12 @@ defmodule CoopSubstrate.Projections.Tasks do
   def handle_event(%Envelope{type: "TaskOperatorRevokedV1", payload: p}, state),
     do: put_in(state, [:grants, p["authorization_event_id"], :active], false)
 
-  # A device of the holder's: an operator or a reviewer grant. A revoked
-  # administrator key is the membership projection's (`revoked_key_id`).
+  # A device of the holder's: an operator or a reviewer grant.
   def handle_event(%Envelope{type: type, payload: %{"revoked_grant_event_id" => id}}, state)
       when type in ~w(TaskDeviceRevokedV1 TaskReviewerDeviceRevokedV1) do
     kind = if Map.has_key?(state.grants, id), do: :grants, else: :dod_grants
     put_in(state, [kind, id, :active], false)
   end
-
-  def handle_event(%Envelope{type: type}, state)
-      when type in ~w(TaskDeviceRevokedV1 TaskReviewerDeviceRevokedV1),
-      do: state
 
   def handle_event(%Envelope{type: "TaskPrincipalOffboardedV1", payload: p} = env, state) do
     state

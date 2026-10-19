@@ -10,7 +10,9 @@ defmodule CoopSubstrate.Devices do
       person's devices, the lost one's sibling or the device itself, with the
       command its role signs: `TaskDeviceRevokedV1` from an operator device,
       `TaskReviewerDeviceRevokedV1` from a reviewer device, a governance
-      revocation from an administrator browser. Held for the principal like a
+      revocation from an administrator browser. An administrator key is
+      revoked only from an administrator browser (`RoleKeyRevoked`), since the
+      chapter's keys are derived from its governance history alone. Held for the principal like a
       decision (`Commands.hold/5`); the device signs and submits it.
     * **By governance** (`prepare_governance_revocation/2`, `revoke/3`): a
       `TaskOperatorRevokedV1` for any operator grant, or a
@@ -69,17 +71,33 @@ defmodule CoopSubstrate.Devices do
   def prepare_revocation(principal, key_id, {chapter, _, _} = scope, id) do
     devices = list(principal, scope)
 
-    with {:ok, signer} <- signing(devices, key_id),
-         {:ok, target} <- find(devices, &(&1.id == id), :unknown_device) do
+    with {:ok, target} <- find(devices, &(&1.id == id), :unknown_device),
+         {:ok, signer} <- signing(devices, key_id, target) do
       {type, payload} = revocation(signer, target, principal, scope)
       Commands.hold(principal, chapter, type, payload, signer_of(signer, chapter))
     end
   end
 
   # The signing device: this key's operator grant, else its reviewer grant,
-  # else its administrator key.
-  defp signing(devices, key_id) do
-    Enum.find_value(@kinds, {:error, :no_device}, fn kind ->
+  # else its administrator key; for an administrator key, only another (or
+  # the same) administrator key.
+  defp signing(devices, key_id, %{kind: "administrator"}) do
+    cond do
+      Enum.any?(devices, &(&1.key_id == key_id and &1.kind == "administrator")) ->
+        signing(devices, key_id, nil, ["administrator"])
+
+      Enum.any?(devices, &(&1.key_id == key_id)) ->
+        {:error, :needs_administrator}
+
+      true ->
+        {:error, :no_device}
+    end
+  end
+
+  defp signing(devices, key_id, _target), do: signing(devices, key_id, nil, @kinds)
+
+  defp signing(devices, key_id, _target, kinds) do
+    Enum.find_value(kinds, {:error, :no_device}, fn kind ->
       case Enum.find(devices, &(&1.key_id == key_id and &1.kind == kind)) do
         nil -> nil
         device -> {:ok, device}
@@ -94,12 +112,9 @@ defmodule CoopSubstrate.Devices do
        "tenant_id" => tenant,
        "project_id" => project,
        "principal_id" => principal,
-       "authorization_event_id" => signer.id
-     }
-     |> Map.put(
-       if(target.kind == "administrator", do: "revoked_key_id", else: "revoked_grant_event_id"),
-       target.id
-     )}
+       "authorization_event_id" => signer.id,
+       "revoked_grant_event_id" => target.id
+     }}
   end
 
   defp revocation(%{kind: "administrator"}, %{kind: "administrator"} = target, _, _),

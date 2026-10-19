@@ -79,18 +79,24 @@ defmodule CoopSubstrate.OwnDevicesTest do
     assert kinds() == ["administrator"]
   end
 
-  test "an operator device revokes the person's reviewer device and administrator key", w do
+  test "an operator device revokes the person's reviewer device, not their administrator key",
+       w do
     assert {:ok, %{type: "TaskDeviceRevokedV1"} = env} = revoke(w.laptop, w.tablet_grant)
     assert env.payload["revoked_grant_event_id"] == w.tablet_grant
     refute Log.gate().orchestration.dod_grants[w.tablet_grant].active
 
-    assert {:ok, %{type: "TaskDeviceRevokedV1"} = env} = revoke(w.laptop, w.browser.signer.key_id)
-    assert env.payload["revoked_key_id"] == w.browser.signer.key_id
-    refute w.browser.signer.key_id in administrators()
+    # The chapter's keys come from its governance history alone: only an
+    # administrator key revokes one, so an export derives the same keys.
+    assert revoke(w.laptop, w.browser.signer.key_id) == {:error, :needs_administrator}
+    assert w.browser.signer.key_id in administrators()
+  end
 
-    # The key's reach ends with it: no longer an administrator's reader.
-    assert Feed.authorize_principal("alice", {"chapter-genesis", "tenant-2", "p"}) ==
-             {:error, :no_grant}
+  test "an administrator browser gives up its own key; its feed access ends", w do
+    other = {"chapter-genesis", "tenant-2", "p"}
+    assert {:ok, _} = Feed.authorize_principal("alice", other)
+    assert {:ok, %{type: "RoleKeyRevoked"}} = revoke(w.browser, w.browser.signer.key_id)
+    refute w.browser.signer.key_id in administrators()
+    assert Feed.authorize_principal("alice", other) == {:error, :no_grant}
   end
 
   test "an administrator browser revokes the person's devices with governance commands", w do
@@ -106,37 +112,19 @@ defmodule CoopSubstrate.OwnDevicesTest do
     assert revoke(w.laptop, bob_grant.event_id) == {:error, :unknown_device}
     assert revoke(new_member("operator"), w.laptop_grant) == {:error, :no_device}
 
-    # Forged directly: someone else's key, both targets, or none.
-    holder = fn extra ->
-      signed_event(
-        w.laptop,
-        "TaskDeviceRevokedV1",
-        Map.merge(
-          %{
-            "tenant_id" => "tenant-1",
-            "project_id" => "project-1",
-            "principal_id" => "alice",
-            "authorization_event_id" => w.laptop_grant
-          },
-          extra
-        )
-      )
-    end
-
+    # Forged directly: another person's grant.
     assert {:error, {:reject, 0, :not_own_device}} =
-             Log.append(holder.(%{"revoked_key_id" => w.gov.signer.key_id}))
-
-    assert {:error, {:reject, 0, :invalid_revocation_target}} =
              Log.append(
-               holder.(%{
-                 "revoked_key_id" => w.browser.signer.key_id,
-                 "revoked_grant_event_id" => w.tablet_grant
+               signed_event(w.laptop, "TaskDeviceRevokedV1", %{
+                 "tenant_id" => "tenant-1",
+                 "project_id" => "project-1",
+                 "principal_id" => "alice",
+                 "authorization_event_id" => w.laptop_grant,
+                 "revoked_grant_event_id" => bob_grant.event_id
                })
              )
 
-    assert {:error, {:reject, 0, :invalid_revocation_target}} = Log.append(holder.(%{}))
-
-    # Alice's key as the chapter's only one: hers to give up, but not the last.
+    # Alice's key as the chapter's only one: never revoked, even by itself.
     {:ok, _} =
       Log.append(
         signed_event(w.browser, "RoleKeyRevoked", %{
@@ -146,6 +134,6 @@ defmodule CoopSubstrate.OwnDevicesTest do
       )
 
     assert {:error, {:invalid, :cannot_orphan_governance}} =
-             revoke(w.laptop, w.browser.signer.key_id)
+             revoke(w.browser, w.browser.signer.key_id)
   end
 end

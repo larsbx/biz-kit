@@ -212,16 +212,19 @@ export const revocationType = (kind) => (kind === "reviewer" ? "TaskReviewerRevo
 
 // The command this browser signs to revoke one of its person's devices `d`
 // ({id, kind}), by the role it signs in: as an operator device if it is one,
-// else as a reviewer device, else as an administrator; null if none. The
+// else as a reviewer device, else as an administrator; null if none. An
+// administrator key is revoked only as an administrator (`RoleKeyRevoked`):
+// the chapter's keys are derived from its governance history alone. The
 // server chooses the same way.
 export function ownRevocation({ enrolled, reviewing, governing }, d) {
+  if (d.kind === "administrator")
+    return governing ? { type: "RoleKeyRevoked", payload: { role: "governance", key_id: d.id } } : null;
   if (enrolled || reviewing)
     return {
       type: enrolled ? "TaskDeviceRevokedV1" : "TaskReviewerDeviceRevokedV1",
-      payload: d.kind === "administrator" ? { revoked_key_id: d.id } : { revoked_grant_event_id: d.id },
+      payload: { revoked_grant_event_id: d.id },
     };
   if (!governing) return null;
-  if (d.kind === "administrator") return { type: "RoleKeyRevoked", payload: { role: "governance", key_id: d.id } };
   return { type: d.kind === "reviewer" ? "TaskReviewerRevokedV1" : "TaskOperatorRevokedV1", payload: { authorization_event_id: d.id } };
 }
 

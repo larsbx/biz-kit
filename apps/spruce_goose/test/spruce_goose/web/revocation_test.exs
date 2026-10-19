@@ -196,7 +196,11 @@ defmodule SpruceGoose.Web.RevocationTest do
       assert {201, _} = revoke(w, %{event_id: reviewer_grant.event_id}, tablet)
       refute CoopSubstrate.Log.gate().orchestration.dod_grants[reviewer_grant.event_id].active
 
-      assert {201, _} = revoke(w, %{event_id: browser.signer.key_id}, w.laptop)
+      # An administrator key only from an administrator browser.
+      assert {403, %{"error" => "needs_administrator"}} =
+               revoke(w, %{event_id: browser.signer.key_id}, w.laptop)
+
+      assert {201, _} = revoke(w, %{event_id: browser.signer.key_id}, browser)
 
       refute Map.has_key?(
                CoopSubstrate.Log.gate().role_keys[{w.chapter, "governance"}],

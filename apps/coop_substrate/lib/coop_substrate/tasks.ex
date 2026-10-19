@@ -34,11 +34,12 @@ defmodule CoopSubstrate.Tasks do
         spec("governance", "task_grants", @scope, %{
           "authorization_event_id" => :string
         }),
-      # The holder of a device revokes one of their own devices: an operator or
-      # reviewer grant in the project, or an administrator key declared for
-      # them in the chapter (docs/architecture/2026-10-19-device-revocation.md,
-      # 2026-10-19-own-devices.md). Signed by one of their operator devices, or
-      # by one of their reviewer devices.
+      # The holder of a device revokes one of their own devices, an operator or
+      # reviewer grant in the project (docs/architecture/2026-10-19-device-revocation.md,
+      # 2026-10-19-own-devices.md), signed by one of their operator devices or
+      # by one of their reviewer devices. An administrator key is revoked only
+      # by governance (`RoleKeyRevoked`), so the governance history alone
+      # derives the chapter's keys, offline too (`Export`).
       "TaskDeviceRevokedV1" => holder_revocation("operator"),
       "TaskReviewerDeviceRevokedV1" => holder_revocation("reviewer"),
       # Governance ends everything a principal holds in the project at once
@@ -66,16 +67,13 @@ defmodule CoopSubstrate.Tasks do
     |> Map.merge(CoopSubstrate.Tasks.Timing.event_types())
   end
 
-  # Exactly one of the two targets (`holder_target/2`).
   defp holder_revocation(role),
     do:
-      spec(
-        role,
-        "task_grants",
-        @scope,
-        %{"principal_id" => :string, "authorization_event_id" => :string},
-        %{"revoked_grant_event_id" => :string, "revoked_key_id" => :string}
-      )
+      spec(role, "task_grants", @scope, %{
+        "principal_id" => :string,
+        "authorization_event_id" => :string,
+        "revoked_grant_event_id" => :string
+      })
 
   @holder_revocations ~w(TaskDeviceRevokedV1 TaskReviewerDeviceRevokedV1)
 
@@ -304,25 +302,17 @@ defmodule CoopSubstrate.Tasks do
 
   # Revocation by the holder: from any of their active operator or reviewer
   # devices in the project, of any of their devices there (operator or
-  # reviewer grants), itself included, or of an administrator key declared for
-  # them in the chapter, never the chapter's last.
+  # reviewer grants), itself included.
   defp holder_revocation(%Envelope{type: type, payload: p} = env, gate) do
     o = gate.orchestration
     signers = if type == "TaskReviewerDeviceRevokedV1", do: o.dod_grants, else: o.grants
 
     with {:ok, signer} <- fetch(signers, p["authorization_event_id"], :unknown_task_grant),
          :ok <- authorized(env, signer),
-         do: holder_target(env, signer.principal_id, gate)
+         do: holder_target(env, signer.principal_id, o)
   end
 
-  defp holder_target(
-         %Envelope{payload: %{"revoked_grant_event_id" => id} = p} = env,
-         holder,
-         gate
-       )
-       when not is_map_key(p, "revoked_key_id") do
-    o = gate.orchestration
-
+  defp holder_target(%Envelope{payload: %{"revoked_grant_event_id" => id}} = env, holder, o) do
     with {:ok, target} <- fetch(Map.merge(o.dod_grants, o.grants), id, :unknown_task_grant),
          :ok <- grant_scope(env, target) do
       cond do
@@ -332,24 +322,6 @@ defmodule CoopSubstrate.Tasks do
       end
     end
   end
-
-  defp holder_target(
-         %Envelope{chapter_id: ch, payload: %{"revoked_key_id" => key} = p},
-         holder,
-         gate
-       )
-       when not is_map_key(p, "revoked_grant_event_id") do
-    keys = gate.role_keys[{ch, "governance"}] || %{}
-
-    cond do
-      not Map.has_key?(keys, key) -> {:error, :unknown_role_key}
-      gate.role_key_members[{ch, "governance", key}] != holder -> {:error, :not_own_device}
-      map_size(keys) == 1 -> {:error, :cannot_orphan_governance}
-      true -> :ok
-    end
-  end
-
-  defp holder_target(_env, _holder, _gate), do: {:error, :invalid_revocation_target}
 
   defp fetch(map, id, error) do
     case Map.fetch(map, id) do

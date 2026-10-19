@@ -414,9 +414,11 @@ test("own devices: the command each role signs to revoke each kind", async () =>
     type: "TaskDeviceRevokedV1",
     payload: { revoked_grant_event_id: "g2" },
   });
-  assert.deepEqual(ownRevocation(as(true, false, false), browser), {
-    type: "TaskDeviceRevokedV1",
-    payload: { revoked_key_id: "k-0a0b0c0d" },
+  // An administrator key only as an administrator, whatever else this key is.
+  assert.equal(ownRevocation(as(true, true, false), browser), null);
+  assert.deepEqual(ownRevocation(as(true, false, true), browser), {
+    type: "RoleKeyRevoked",
+    payload: { role: "governance", key_id: "k-0a0b0c0d" },
   });
   assert.deepEqual(ownRevocation(as(false, true, true), laptop), {
     type: "TaskReviewerDeviceRevokedV1",
