@@ -280,7 +280,8 @@ async function start() {
     publicKeyHex = Array.from(publicKey, (b) => b.toString(16).padStart(2, "0")).join("");
     $("key-id").textContent = keyId;
     $("public-key").textContent = publicKeyHex;
-    $("enrol-label").value = `${navigator.platform || "This"} browser`;
+    // A suggestion, never over a name already typed while the page loaded.
+    $("enrol-label").value ||= `${navigator.platform || "This"} browser`;
     $("enrol-form").addEventListener("submit", requestAccess);
     await enrolment();
   } catch (e) {
