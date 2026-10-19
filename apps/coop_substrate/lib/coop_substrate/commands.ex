@@ -8,7 +8,8 @@ defmodule CoopSubstrate.Commands do
       {:ok, envelope} = Commands.submit(principal, pending.id, signature)
 
   `prepare/4` finds the principal's active operator grant for that key and
-  project, builds the exact envelope (`Tasks.Decisions`), and checks it
+  project (their reviewer grant, for a review), builds the exact envelope
+  (`Tasks.Decisions`, `Tasks.Lifecycle`), and checks it
   against the ledger's current state, so a decision that would be refused is
   refused before anyone signs. The envelope is held for five minutes,
   single-use and bound to the principal. `submit/3` attaches the signature,
@@ -65,8 +66,9 @@ defmodule CoopSubstrate.Commands do
   def prepare(principal, key_id, {chapter, _, _} = scope, command) do
     o = Log.gate().orchestration
     builder = if elem(command, 0) in [:accept, :amend, :decline], do: Decisions, else: Lifecycle
+    role = if elem(command, 0) == :review, do: "reviewer", else: "operator"
 
-    with {:ok, grant_id, grant} <- operator_grant(o, principal, key_id, scope),
+    with {:ok, grant_id, grant} <- grant(o, role, principal, key_id, scope),
          {:ok, type, payload} <-
            builder.command(o, scope, command, %{
              "principal_id" => principal,
@@ -75,7 +77,7 @@ defmodule CoopSubstrate.Commands do
            }),
          do:
            hold(principal, chapter, type, payload, %{
-             role: "operator",
+             role: role,
              pubkey: grant.pubkey,
              key_id: key_id
            })
@@ -130,8 +132,13 @@ defmodule CoopSubstrate.Commands do
     end
   end
 
-  defp operator_grant(o, principal, key_id, scope) do
-    Enum.find_value(o.grants, {:error, :no_operator_grant}, fn {id, g} ->
+  defp grant(o, role, principal, key_id, scope) do
+    {grants, missing} =
+      if role == "reviewer",
+        do: {o.dod_grants, :no_reviewer_grant},
+        else: {o.grants, :no_operator_grant}
+
+    Enum.find_value(grants, {:error, missing}, fn {id, g} ->
       if g.active and g.principal_id == principal and g.key_id == key_id and
            {g.chapter_id, g.tenant_id, g.project_id} == scope,
          do: {:ok, id, g}

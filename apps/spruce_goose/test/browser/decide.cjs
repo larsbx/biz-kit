@@ -2,7 +2,13 @@
 // the test over stdin/stdout one JSON line at a time:
 //   → {"code": …, "key_id": …}   once the page has requested access for its key
 //   ← "go"                       once an administrator has approved and an agent has suggested
-//   → {"done": status text}      after accepting, then revoking this device
+//   → {"proposed": true}         after accepting both suggestions and proposing the task
+//   ← "go"                       once governance has defined what the task needs
+//   → {"reviewer_code": …, "reviewer_key_id": …}
+//                                after taking the task to ready, starting it and submitting
+//                                evidence; a second browser has asked for reviewer access
+//   ← "go"                       once an administrator has approved the reviewer
+//   → {"done": status text}      after the review, completing the task and revoking this device
 // Usage: node decide.cjs <base url> <chapter> <tenant> <project>
 const { chromium } = require("playwright");
 const readline = require("node:readline");
@@ -12,20 +18,25 @@ const lines = readline.createInterface({ input: process.stdin });
 const next = () => new Promise((resolve) => lines.once("line", resolve));
 const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 
+// A fresh browser context (its own cookies and device key) signed in as `subject`
+// through the second provider, whose page would hand straight back with the code.
+async function signIn(browser, subject) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  page.on("console", (m) => process.stderr.write(`[${subject}] ${m.text()}\n`));
+  const login = await page.request.get(`${base}/auth/second/login`, { maxRedirects: 0 });
+  const state = new URL(login.headers().location).searchParams.get("state");
+  const callback = `${base}/auth/second/callback?code=${subject}&state=${state}`;
+  const signedIn = await page.request.get(callback, { maxRedirects: 0 });
+  if (signedIn.status() !== 302) throw new Error(`sign-in failed: ${signedIn.status()}`);
+  return page;
+}
+
 (async () => {
   // Loopback only: never through an environment proxy.
   const browser = await chromium.launch({ args: ["--no-proxy-server"] });
   try {
-    const page = await browser.newPage();
-    page.on("console", (m) => process.stderr.write(`[page] ${m.text()}\n`));
-
-    // Sign in through the second provider, whose page would hand straight back
-    // with the code. The context's request API shares the browser's cookies.
-    const login = await page.request.get(`${base}/auth/second/login`, { maxRedirects: 0 });
-    const state = new URL(login.headers().location).searchParams.get("state");
-    const callback = `${base}/auth/second/callback?code=sub-person&state=${state}`;
-    const signedIn = await page.request.get(callback, { maxRedirects: 0 });
-    if (signedIn.status() !== 302) throw new Error(`sign-in failed: ${signedIn.status()}`);
+    const page = await signIn(browser, "sub-person");
 
     const query = new URLSearchParams({ chapter, tenant, project });
     await page.goto(`${base}/app?${query}`);
@@ -106,6 +117,65 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
     await upload(`Input for ${chapter}`);
     await sign("TaskReadyV1", "Mark ready");
     await task.getByText("ready", { exact: true }).waitFor();
+
+    // Start, then submit a file as evidence for the one criterion: its
+    // custody, then the submission citing it, each signed.
+    const confirm = async (type) => {
+      await dialog.waitFor({ state: "visible" });
+      const command = await page.locator("#confirm-body").textContent();
+      if (!command.includes(type)) throw new Error(`unexpected command: ${command}`);
+      await page.getByRole("button", { name: "Sign and send" }).click();
+      await dialog.waitFor({ state: "hidden" });
+    };
+    await sign("TaskStartedV1", "Start");
+    await task.getByRole("button", { name: "Submit evidence…" }).click();
+    await page.locator("#evidence-fields input[type=file]").setInputFiles({
+      name: "report.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from(`Report for ${chapter}`),
+    });
+    await page.getByRole("button", { name: "Store and sign" }).click();
+    await confirm("ArtifactCustodyRecordedV1");
+    await confirm("TaskEvidenceSubmittedV2");
+    await task.getByText("Waiting for a review of the evidence").waitFor();
+
+    // A reviewer, in a browser of their own, asks for reviewer access.
+    const reviewer = await signIn(browser, "sub-reviewer");
+    await reviewer.goto(`${base}/app?${query}`);
+    await reviewer.locator("#key-id").filter({ hasText: /^k-/ }).waitFor({ state: "attached" });
+    await reviewer.getByLabel("Name this device").fill("Review tablet");
+    await reviewer.locator("#enrol-role").selectOption("reviewer");
+    await reviewer.getByRole("button", { name: "Request access" }).click();
+    const reviewerCode = reviewer.locator("#review-enrolment .code");
+    await reviewerCode.waitFor();
+    say({
+      reviewer_code: await reviewerCode.textContent(),
+      reviewer_key_id: await reviewer.locator("#key-id").textContent(),
+    });
+
+    if ((await next()) !== "go") throw new Error("expected go");
+
+    // The reviewer reads the evidence, then accepts it, signed by their device.
+    await reviewer.reload();
+    await reviewer.getByText("This device can review evidence").waitFor();
+    const submission = reviewer.locator("#reviews .card").filter({ hasText: "Write up the audit" });
+    const download = submission.getByRole("link", { name: "Download" });
+    await download.waitFor();
+    const file = await reviewer.request.get(new URL(await download.getAttribute("href"), base).href);
+    if ((await file.text()) !== `Report for ${chapter}`) throw new Error("the evidence is not the file submitted");
+    reviewer.once("dialog", (prompt) => prompt.accept("Complete and clear"));
+    await submission.getByRole("button", { name: "Accept" }).click();
+    const reviewed = reviewer.locator("#confirm");
+    await reviewed.waitFor({ state: "visible" });
+    const verdict = await reviewer.locator("#confirm-body").textContent();
+    if (!verdict.includes("TaskDoDReviewedV1") || !verdict.includes("Complete and clear"))
+      throw new Error(`unexpected command: ${verdict}`);
+    await reviewer.getByRole("button", { name: "Sign and send" }).click();
+    await reviewer.locator("#reviews").getByText("None.").waitFor();
+
+    // The person completes the task, citing that review.
+    await sign("TaskCompletedV1", "Complete");
+    await task.getByText("completed", { exact: true }).waitFor();
 
     // Retire this device: confirm, check the signed command, and the page
     // no longer counts it as enrolled.

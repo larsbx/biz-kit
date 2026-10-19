@@ -85,8 +85,15 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       {:get, 3} => :bilateral,
       # A person storing their own upload (docs/architecture/2026-10-19-uploads.md).
       {:store, 4} => :own_data,
+      {:store, 5} => :own_data,
       {:may_store, 3} => :own_data,
-      {:limit, 0} => :system
+      {:may_store, 4} => :own_data,
+      {:limit, 0} => :system,
+      # Evidence a person submitted for review, shown to the project's
+      # operators and reviewers, never to a suggester
+      # (docs/architecture/2026-10-19-execution.md): submitter and reviewer.
+      {:evidence, 3} => :bilateral,
+      {:read, 3} => :bilateral
     },
     CoopSubstrate.Cockpit => %{
       # The operator's own queue + boards: process-level, no member detail.

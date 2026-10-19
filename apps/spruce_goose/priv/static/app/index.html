@@ -51,7 +51,7 @@
       dialog { max-width: min(640px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
       dialog::backdrop { background: rgb(0 0 0 / 0.4); }
       details summary { cursor: pointer; }
-      #amend label { display: block; margin: 8px 0; }
+      #amend label, #evidence label { display: block; margin: 8px 0; }
       #amend input, #amend select, #amend textarea { width: 100%; box-sizing: border-box; margin: 4px 0 0; }
       #amend .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
       select, textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
@@ -79,6 +79,11 @@
         <div id="tasks"><p class="muted">None yet.</p></div>
       </section>
 
+      <section aria-labelledby="reviews-heading" id="review-section" hidden>
+        <h2 id="reviews-heading">Evidence to review</h2>
+        <div id="reviews"><p class="muted">None.</p></div>
+      </section>
+
       <section aria-labelledby="delegations-heading">
         <h2 id="delegations-heading">Delegations you made</h2>
         <div id="delegations"><p class="muted">None.</p></div>
@@ -93,10 +98,18 @@
         <h2 id="device-heading">This device</h2>
         <div class="card">
           <p id="enrolment">Checking this device…</p>
+          <p id="review-enrolment"></p>
           <form id="enrol-form" class="actions" hidden>
             <label>
               Name this device
               <input id="enrol-label" maxlength="80" required />
+            </label>
+            <label>
+              As
+              <select id="enrol-role">
+                <option value="operator">Operator: do tasks and decide</option>
+                <option value="reviewer">Reviewer: review evidence</option>
+              </select>
             </label>
             <button class="primary">Request access</button>
           </form>
@@ -142,6 +155,19 @@
         <div class="actions">
           <button value="cancel" formnovalidate>Cancel</button>
           <button value="review" class="primary">Review and sign</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="evidence" aria-labelledby="evidence-heading">
+      <form method="dialog" id="evidence-form">
+        <h2 id="evidence-heading">Submit evidence</h2>
+        <p class="muted" id="evidence-what"></p>
+        <div id="evidence-fields"></div>
+        <p class="status error" id="evidence-error"></p>
+        <div class="actions">
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button value="submit" class="primary">Store and sign</button>
         </div>
       </form>
     </dialog>

@@ -4,7 +4,17 @@ defmodule CoopSubstrate.Tasks.DoD do
 
   V1 evidence is a digest claim. V2 additionally binds verified custody receipts;
   availability is rechecked on submission and acceptance, not promised forever. A review attests the reviewer's
-  decision on that exact revision/submission. It never completes a task.
+  decision on that exact revision/submission. It never completes a task: the
+  operator's `TaskCompletedV1` does, citing an accepting review
+  (docs/architecture/2026-10-19-execution.md).
+
+  A Definition of Done is defined while a task is proposed. Evidence is
+  submitted and reviewed while it is proposed or in progress; starting the
+  task clears any earlier submission (`Tasks.Readiness`), so what completes
+  it is evidence of the work.
+
+  A reviewer grant may name the device it was enrolled from (`device_label`,
+  docs/architecture/2026-10-19-device-enrolment.md).
   """
   alias CoopSubstrate.{Canonical, Log}
   alias CoopSubstrate.Protocol.Envelope
@@ -20,7 +30,8 @@ defmodule CoopSubstrate.Tasks.DoD do
       Map.merge(@scope, %{"principal_id" => :string, "key_id" => :string, "pubkey" => :pubkey})
 
     %{
-      "TaskReviewerGrantedV1" => spec("governance", "task_reviewers", grant, false),
+      "TaskReviewerGrantedV1" =>
+        spec("governance", "task_reviewers", grant, false, %{"device_label" => :string}),
       "TaskReviewerRevokedV1" =>
         spec(
           "governance",
@@ -73,14 +84,14 @@ defmodule CoopSubstrate.Tasks.DoD do
     }
   end
 
-  defp spec(role, prefix, fields, task?) do
+  defp spec(role, prefix, fields, task?, optional \\ %{}) do
     %{
       required_roles: [role],
       disclosure_class: :edges,
       stream:
         {:payload_fields, prefix,
          if(task?, do: ~w(tenant_id project_id task_id), else: ~w(tenant_id project_id))},
-      payload: %{required: fields, optional: %{}}
+      payload: %{required: fields, optional: optional}
     }
   end
 
@@ -135,7 +146,10 @@ defmodule CoopSubstrate.Tasks.DoD do
   @doc false
   def check(%Envelope{type: "TaskReviewerGrantedV1", payload: p} = env, state, keys) do
     with :ok <- governance(env, keys),
-         true <- (text?(p["principal_id"]) and text?(p["key_id"])) or {:error, :empty_task_field} do
+         true <- (text?(p["principal_id"]) and text?(p["key_id"])) or {:error, :empty_task_field},
+         true <-
+           p["device_label"] == nil or String.length(p["device_label"]) in 1..80 or
+             {:error, :invalid_device_label} do
       if Map.has_key?(state.dod_grants, env.event_id),
         do: {:error, :grant_already_recorded},
         else: :ok
@@ -278,7 +292,7 @@ defmodule CoopSubstrate.Tasks.DoD do
           env.payload["expected_version"] != task.version ->
             {:error, {:stale_task_version, env.payload["expected_version"], task.version}}
 
-          task.state != "proposed" ->
+          task.state not in open_states(env.type) ->
             {:error, :dod_task_not_proposed}
 
           true ->
@@ -286,6 +300,11 @@ defmodule CoopSubstrate.Tasks.DoD do
         end
     end
   end
+
+  # A definition is fixed once the task leaves `proposed`; evidence and its
+  # review are of the work once it is under way.
+  defp open_states("TaskDoDDefinedV1"), do: ["proposed"]
+  defp open_states(_type), do: ["proposed", "in_progress"]
 
   defp revision(%{dod: nil}, _), do: {:error, :dod_not_defined}
 
@@ -354,6 +373,7 @@ defmodule CoopSubstrate.Tasks.DoD do
       principal_id: p["principal_id"],
       key_id: p["key_id"],
       pubkey: elem(p["pubkey"], 1),
+      device_label: p["device_label"],
       active: true
     }
 

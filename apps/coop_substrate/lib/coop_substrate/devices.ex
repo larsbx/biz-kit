@@ -9,8 +9,10 @@ defmodule CoopSubstrate.Devices do
       the lost one's sibling or the device itself. Held for the principal
       like a decision (`Commands.hold/5`); the device signs and submits it.
     * **By governance** (`prepare_governance_revocation/2`, `revoke/3`): a
-      `TaskOperatorRevokedV1` for any grant, signed with a governance key by
-      `mix coop.revoke`. Held for `{:revocation, grant_id}`.
+      `TaskOperatorRevokedV1` for any operator grant, or a
+      `TaskReviewerRevokedV1` for a reviewer grant
+      (docs/architecture/2026-10-19-execution.md), signed with a governance
+      key by `mix coop.revoke`. Held for `{:revocation, grant_id}`.
 
   The server signs neither; the ledger admits both by its own rules.
   """
@@ -54,17 +56,22 @@ defmodule CoopSubstrate.Devices do
     end
   end
 
-  @doc "Any operator grant, for an administrator to judge."
+  @doc "Any operator or reviewer grant, for an administrator to judge."
   @spec fetch(String.t()) :: {:ok, map()} | {:error, :unknown_grant}
   def fetch(grant_id) do
-    case Log.gate().orchestration.grants[grant_id] do
-      nil ->
+    o = Log.gate().orchestration
+
+    case {o.grants[grant_id], o.dod_grants[grant_id]} do
+      {nil, nil} ->
         {:error, :unknown_grant}
 
-      g ->
+      {g, r} ->
+        g = g || r
+
         {:ok,
          %{
            grant_id: grant_id,
+           role: if(r, do: "reviewer", else: "operator"),
            principal_id: g.principal_id,
            scope: scope(g),
            key_id: g.key_id,
@@ -78,12 +85,12 @@ defmodule CoopSubstrate.Devices do
   @spec prepare_governance_revocation(String.t(), String.t()) ::
           {:ok, Commands.pending()} | {:error, term()}
   def prepare_governance_revocation(grant_id, governance_key_id) do
-    with {:ok, %{active: true, scope: {chapter, tenant, project}}} <- active(fetch(grant_id)),
+    with {:ok, %{active: true, scope: {chapter, tenant, project}} = g} <- active(fetch(grant_id)),
          {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
       Commands.hold(
         {:revocation, grant_id},
         chapter,
-        "TaskOperatorRevokedV1",
+        revocation_type(g.role),
         %{"tenant_id" => tenant, "project_id" => project, "authorization_event_id" => grant_id},
         signer
       )
@@ -95,6 +102,11 @@ defmodule CoopSubstrate.Devices do
           {:ok, CoopSubstrate.Protocol.Envelope.t()} | {:error, term()}
   def revoke(grant_id, held_id, signature),
     do: Commands.submit({:revocation, grant_id}, held_id, signature)
+
+  @doc "The ledger type that revokes a grant of this role."
+  def revocation_type("operator"), do: "TaskOperatorRevokedV1"
+  def revocation_type("reviewer"), do: "TaskReviewerRevokedV1"
+  def revocation_type(_role), do: nil
 
   defp active({:ok, %{active: false}}), do: {:error, :grant_already_revoked}
   defp active(other), do: other

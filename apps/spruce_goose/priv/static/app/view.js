@@ -102,7 +102,7 @@ function buildSchedule(form, tz) {
 // -- lifecycle (docs/architecture/2026-10-19-lifecycle.md) ---------------------------
 
 // A receipt in the project for this digest, by ID order so the choice is stable.
-const receiptFor = (view, digest) =>
+export const receiptFor = (view, digest) =>
   Object.keys(view.receipts ?? {})
     .sort()
     .find((id) => view.receipts[id].digest === digest);
@@ -112,13 +112,17 @@ const short = (digest) => `${digest.slice(0, 12)}…`;
 // What a task's next step is for `me` on the device holding `keyId`:
 // `{action, label, ...cites}` to sign, `{waiting}` saying what it still needs
 // (with `upload: digest` when it is a file this device could store;
-// docs/architecture/2026-10-19-uploads.md), or null. Queuing and readiness need this device's own
-// acknowledgement of the SOP: the ledger checks the key, not only the person.
+// docs/architecture/2026-10-19-uploads.md), `{evidence: criteria, label}`
+// when the work's evidence is due (with `refused: review` after a refusal;
+// docs/architecture/2026-10-19-execution.md), or null. Queuing, readiness
+// and starting need this device's own acknowledgement of the SOP: the
+// ledger checks the key, not only the person.
 export function nextStep(taskId, view, me, keyId) {
   const t = view.tasks[taskId];
   if (!t) return null;
   if (t.state === "inbox") return { action: "propose", label: "Propose" };
-  if (t.state !== "proposed" && t.state !== "queued") return null;
+  if (t.state === "in_progress") return executionStep(t);
+  if (!["proposed", "queued", "ready"].includes(t.state)) return null;
 
   const r = t.readiness;
   if (t.state === "proposed" && !t.dod) return { waiting: "a Definition of Done" };
@@ -132,6 +136,7 @@ export function nextStep(taskId, view, me, keyId) {
       : { waiting: `a stored copy of the SOP (${short(r.sop_digest)})`, upload: r.sop_digest };
   }
   if (t.state === "proposed") return { action: "queue", label: "Queue" };
+  if (t.state === "ready") return { action: "start", label: "Start" };
 
   const unfinished = r.predecessor_ids.filter((id) => view.tasks[id]?.state !== "completed");
   if (unfinished.length) return { waiting: `${unfinished.join(", ")} to complete` };
@@ -144,6 +149,28 @@ export function nextStep(taskId, view, me, keyId) {
   }
   return { action: "ready", label: "Mark ready", custody_receipts: receipts };
 }
+
+// Under way: evidence for each criterion, a reviewer's decision on it, then
+// completion citing the review that accepted it. A new submission clears
+// the review, so a review on record is of the current submission.
+function executionStep(t) {
+  const { criteria, submission, review } = t.dod;
+  if (review?.decision === "accept" && review.submission_event_id === submission?.event_id)
+    return { action: "complete", label: "Complete", review_event_id: review.event_id };
+  if (submission && !review) return { waiting: "a review of the evidence" };
+  return {
+    evidence: criteria,
+    label: submission ? "Submit evidence again…" : "Submit evidence…",
+    ...(review ? { refused: review } : {}),
+  };
+}
+
+// Submissions this person may review: someone else's, not yet reviewed.
+export const toReview = (view, me) =>
+  Object.entries(view.tasks)
+    .filter(([, t]) => t.dod?.submission && !t.dod.review && t.dod.submission.principal_id !== me)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, t]) => ({ id, title: t.title ?? id, criteria: t.dod.criteria, submission: t.dod.submission }));
 
 // Suggestions no longer pending (accepted, amended, declined, withdrawn,
 // superseded), with who resolved them and why: latest decided first, by the

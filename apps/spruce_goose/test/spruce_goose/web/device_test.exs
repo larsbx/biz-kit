@@ -41,21 +41,32 @@ defmodule SpruceGoose.Web.DeviceTest do
     {conn.status, Jason.decode!(conn.resp_body)}
   end
 
-  defp status(w) do
-    conn = call(:get, devices_path(w) <> "/" <> w.device.signer.key_id, [{"cookie", w.session}])
+  defp status(w, query \\ "") do
+    conn =
+      call(:get, devices_path(w) <> "/" <> w.device.signer.key_id <> query, [
+        {"cookie", w.session}
+      ])
+
     Jason.decode!(conn.resp_body)
   end
 
   defp b64(bytes), do: Base.url_encode64(bytes, padding: false)
 
-  defp ask(w, member \\ nil, label \\ "Work laptop") do
+  defp ask(w, member \\ nil, label \\ "Work laptop", extra \\ %{}) do
     member = member || w.device
 
-    post_json(devices_path(w), w.session, %{
-      "key_id" => member.signer.key_id,
-      "public_key" => b64(member.signer.pubkey),
-      "label" => label
-    })
+    post_json(
+      devices_path(w),
+      w.session,
+      Map.merge(
+        %{
+          "key_id" => member.signer.key_id,
+          "public_key" => b64(member.signer.pubkey),
+          "label" => label
+        },
+        extra
+      )
+    )
   end
 
   # What the device does: decode the statement, sign it.
@@ -198,5 +209,34 @@ defmodule SpruceGoose.Web.DeviceTest do
         ] do
       refute shown?.(tampered)
     end
+  end
+
+  test "a reviewer device: its own request, approved with mix coop.enrol, then readable", w do
+    assert {400, %{"error" => "invalid_role"}} = ask(w, nil, "Work laptop", %{"role" => "boss"})
+
+    {201, challenge} = ask(w, nil, "Review tablet", %{"role" => "reviewer"})
+
+    {:ok, statement} =
+      challenge["statement"] |> Base.url_decode64!(padding: false) |> Canonical.decode()
+
+    assert statement["role"] == "reviewer"
+    {201, %{"code" => code}} = prove(w, challenge, w.device)
+
+    assert %{"status" => "pending", "code" => ^code} = status(w, "?role=reviewer")
+    assert status(w) == %{"status" => "none"}
+    assert {:ok, %{"role" => "reviewer"}} = Approver.fetch(w.base, code)
+
+    governance_keys!(w)
+
+    output =
+      capture_io(fn -> Mix.Task.rerun("coop.enrol", [code, "--server", w.base, "--yes"]) end)
+
+    assert output =~ "Grant it reviewer access"
+    assert output =~ "granted: event"
+    assert status(w, "?role=reviewer") == %{"status" => "enrolled"}
+    assert status(w) == %{"status" => "none"}
+
+    assert {:ok, %{role: :reviewer}} =
+             Feed.authorize_principal(w.person, {w.chapter, tenant(), "project-1"})
   end
 end

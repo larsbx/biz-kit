@@ -10,15 +10,18 @@ defmodule SpruceGoose.Web.DeviceController do
       POST /api/v1/chapters/:c/tenants/:t/projects/:p/devices/:grant_id/revocation
            {"key_id"} → 201 the revocation to sign with that device, submitted
            through POST /api/v1/commands/:id
-      GET  /api/v1/chapters/:c/tenants/:t/projects/:p/devices/:key_id
+      GET  /api/v1/chapters/:c/tenants/:t/projects/:p/devices/:key_id[?role=reviewer]
            → {status: "enrolled" | "pending" | "none", code?, expires_at?}
       POST /api/v1/chapters/:c/tenants/:t/projects/:p/devices
-           {"key_id", "public_key" (base64url), "label"} → 201 {id, statement (base64url)}
+           {"key_id", "public_key" (base64url), "label", "role"?: "operator" | "reviewer"}
+           → 201 {id, statement (base64url)}
       POST /api/v1/devices/challenges/:id  {"signature"} → 201 {code, expires_at}
 
   All need the session cookie. The device signs the statement it was given,
   after decoding it, as proof that it holds the key; the code then goes to an
-  administrator.
+  administrator. A role is operator unless the request names reviewer
+  (docs/architecture/2026-10-19-execution.md); the same key may be enrolled
+  in both.
   """
 
   use Phoenix.Controller, formats: [:json]
@@ -52,24 +55,23 @@ defmodule SpruceGoose.Web.DeviceController do
   end
 
   def status(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p, "key_id" => key_id}) do
-    case AuthController.principal(conn) do
-      {:ok, principal, _id} ->
-        json(
-          conn,
-          case Enrolments.status(principal, {c, t, p}, key_id) do
-            :enrolled ->
-              %{status: "enrolled"}
+    with {:ok, principal, _id} <- AuthController.principal(conn),
+         {:ok, role} <- string(query(conn, "role") || "operator") do
+      json(
+        conn,
+        case Enrolments.status(principal, {c, t, p}, key_id, role) do
+          :enrolled ->
+            %{status: "enrolled"}
 
-            :none ->
-              %{status: "none"}
+          :none ->
+            %{status: "none"}
 
-            {:pending, code, expires_at} ->
-              %{status: "pending", code: code, expires_at: expires_at}
-          end
-        )
-
-      error ->
-        refuse(conn, error)
+          {:pending, code, expires_at} ->
+            %{status: "pending", code: code, expires_at: expires_at}
+        end
+      )
+    else
+      error -> refuse(conn, error)
     end
   end
 
@@ -79,8 +81,17 @@ defmodule SpruceGoose.Web.DeviceController do
          {:ok, key_id} <- string(body["key_id"]),
          {:ok, pubkey} <- bytes(body["public_key"]),
          {:ok, label} <- string(body["label"]),
+         {:ok, role} <- string(body["role"] || "operator"),
          {:ok, challenge} <-
-           Enrolments.begin(session.principal, session.identity, {c, t, p}, key_id, pubkey, label) do
+           Enrolments.begin(
+             session.principal,
+             session.identity,
+             {c, t, p},
+             key_id,
+             pubkey,
+             label,
+             role
+           ) do
       conn |> put_status(201) |> json(%{id: challenge.id, statement: encode(challenge.statement)})
     else
       error -> refuse(conn, error)

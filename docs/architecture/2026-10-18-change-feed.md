@@ -50,9 +50,9 @@ lowercase hex):
 
 | Kind | Fields |
 | --- | --- |
-| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `dod`, `readiness` |
+| task | `state`, `version`, `title`, `description`, `definition_of_done`, `timing`, `timing_version`, `timing_delegation_id`, `last_event_id`, `started_by` (once started), `dod`, `readiness` |
 | `readiness` | `event_id`, `artifact_requirements` (name → digest), `predecessor_ids`, `sop_digest`; `acknowledgment` as principal, key ID and custody receipt ID |
-| `dod` | `event_id`, `criteria`, `definition_ref`; `submission` and `review` as event and principal IDs, `review.decision` and `review.reason` |
+| `dod` | `event_id`, `criteria`, `definition_ref`; `submission` and `review` as event and principal IDs, `review.submission_event_id`, `review.decision` and `review.reason` |
 | suggestion | `task_id`, `kind`, `change`, `principal_id`, `base_timing_version`, `rationale`, `rationale_receipt_id`, `status`, `reason`, `reason_receipt_id`, `resolved_by_event_id` |
 | delegation | `delegator_principal_id`, `operator_grant_id`, `principal_id`, `key_id`, `kinds`, `task_ids`, `states`, `window`, `max_block_ms`, `budget`, `used`, `active`, `delegator_grant_active` |
 | receipt | `digest`, `principal_id` (a custody receipt in the project; [lifecycle](2026-10-19-lifecycle.md)) |
@@ -125,8 +125,9 @@ Which actions are valid, including who may read a project, stays with the
 ledger's grants. There is no second principal registry and no grants copied
 into another system.
 
-A reader must hold an active **operator or suggester grant for exactly the
-requested scope**. A delegation confers no read access. `Feed.Access` is the
+A reader must hold an active **operator, suggester or reviewer grant for
+exactly the requested scope** (reviewers since
+[execution](2026-10-19-execution.md)). A delegation confers no read access. `Feed.Access` is the
 pure decision; `Feed.authorize/2` applies it to the appender's current gate
 (`Log.gate/0`) and spends the request's nonce.
 

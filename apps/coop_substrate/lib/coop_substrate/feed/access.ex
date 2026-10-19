@@ -3,10 +3,11 @@ defmodule CoopSubstrate.Feed.Access do
   Who may read a project's change feed
   (docs/architecture/2026-10-18-change-feed.md#access). Pure.
 
-  A reader proves possession of the key of an active **operator or suggester**
-  grant for exactly the requested scope, by signing a fresh request. The grants
-  are the ledger's own (`TaskOperatorGrantedV1`, `TaskSuggesterGrantedV1`);
-  a delegation confers no read access. The signature binds the method, path,
+  A reader proves possession of the key of an active **operator, suggester or
+  reviewer** grant for exactly the requested scope, by signing a fresh
+  request. The grants are the ledger's own (`TaskOperatorGrantedV1`,
+  `TaskSuggesterGrantedV1`, `TaskReviewerGrantedV1`); a delegation confers no
+  read access. The signature binds the method, path,
   scope, cursor, time and nonce, so it cannot be replayed against another
   resource or position. Nonces are spent by `CoopSubstrate.Feed.Nonces`.
 
@@ -23,7 +24,7 @@ defmodule CoopSubstrate.Feed.Access do
 
   @type t :: %__MODULE__{
           grant_id: String.t(),
-          role: :operator | :suggester,
+          role: :operator | :suggester | :reviewer,
           principal_id: String.t(),
           scope: View.scope()
         }
@@ -86,11 +87,12 @@ defmodule CoopSubstrate.Feed.Access do
   @doc """
   The reader for a principal authenticated outside the ledger (a person
   signed in through biz-kit's identity layer): its active operator grant on
-  the scope, else its active suggester grant. Delegations confer nothing.
+  the scope, else its suggester grant, else its reviewer grant. Delegations
+  confer nothing.
   """
   @spec for_principal(map(), String.t(), View.scope()) :: {:ok, t()} | {:error, :no_grant}
   def for_principal(o, principal_id, scope) do
-    [{:operator, o.grants}, {:suggester, o.suggester_grants}]
+    [{:operator, o.grants}, {:suggester, o.suggester_grants}, {:reviewer, o.dod_grants}]
     |> Enum.flat_map(fn {role, grants} ->
       for {id, g} <- grants,
           g.active,
@@ -113,6 +115,7 @@ defmodule CoopSubstrate.Feed.Access do
     cond do
       Map.has_key?(o.grants, id) -> {:ok, :operator, o.grants[id]}
       Map.has_key?(o.suggester_grants, id) -> {:ok, :suggester, o.suggester_grants[id]}
+      Map.has_key?(o.dod_grants, id) -> {:ok, :reviewer, o.dod_grants[id]}
       true -> {:error, :unknown_grant}
     end
   end

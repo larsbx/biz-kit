@@ -86,6 +86,8 @@ defmodule SpruceGoose.Web.Router do
     post("/devices", DeviceController, :request)
     post("/devices/:grant_id/revocation", DeviceController, :revoke)
     post("/artifacts", ArtifactController, :create)
+    get("/receipts/:receipt_id", ArtifactController, :show)
+    get("/tasks/:task_id/evidence", ArtifactController, :evidence)
     get("/devices/:key_id", DeviceController, :status)
   end
 

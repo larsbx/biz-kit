@@ -13,6 +13,10 @@ key. Two ways end it:
 | the person | one of their devices still enrolled in the project, or the device itself | `TaskDeviceRevokedV1` | a lost device, when they have another; retiring a device |
 | an administrator | the governance key, with `mix coop.revoke <GRANT_ID>` | `TaskOperatorRevokedV1` (unchanged) | a person's only device; a compromised device |
 
+A reviewer device ([execution](2026-10-19-execution.md)) is a reviewer
+grant. Only an administrator revokes it, with the same `mix coop.revoke`,
+which then signs a `TaskReviewerRevokedV1`.
+
 Letting the holder revoke without governance is safe because revocation
 only removes authority. A holder can only deactivate their own device
 grants in the same project. Someone holding a stolen device could revoke

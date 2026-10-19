@@ -1,16 +1,29 @@
 defmodule CoopSubstrate.Tasks.Readiness do
   @moduledoc """
-  Isolated proposed -> queued -> ready path. Governance commits exact input
-  digests, predecessor IDs and a required SOP digest, and queuing requires the
-  task's Definition of Done. Operators acknowledge the
-  SOP and request transitions; reviews confer no lifecycle authority. Replay
-  folds accepted facts without filesystem reads or execution effects.
+  The operator's path proposed -> queued -> ready -> in_progress -> completed.
+  Governance commits exact input digests, predecessor IDs and a required SOP
+  digest, and queuing requires the task's Definition of Done. Operators
+  acknowledge the SOP and request transitions. Replay folds accepted facts
+  without filesystem reads or execution effects.
+
+  Execution (docs/architecture/2026-10-19-execution.md):
+
+    * `TaskStartedV1` (ready -> in_progress) rechecks what readiness
+      admitted: the starter's own SOP acknowledgement and the input receipts,
+      bytes included. It clears any evidence submitted earlier, so what
+      completes the task is evidence of this work (`Tasks.DoD`).
+    * `TaskCompletedV1` (in_progress -> completed) cites the review of the
+      current submission, which must accept it. A review confers no
+      lifecycle authority by itself: an operator completes the task.
+
+  A completed task is what a successor's readiness waits for.
   """
   alias CoopSubstrate.Projections.Tasks, as: Projection
   alias CoopSubstrate.Harness.Artifacts
   alias CoopSubstrate.Protocol.Envelope
 
-  @commands ~w(TaskReadinessDefinedV1 TaskSOPAcknowledgedV1 TaskQueuedV1 TaskReadyV1)
+  @commands ~w(TaskReadinessDefinedV1 TaskSOPAcknowledgedV1 TaskQueuedV1 TaskReadyV1
+                TaskStartedV1 TaskCompletedV1)
   @subject %{
     "tenant_id" => :string,
     "project_id" => :string,
@@ -33,7 +46,9 @@ defmodule CoopSubstrate.Tasks.Readiness do
         }),
       "TaskSOPAcknowledgedV1" => spec("operator", Map.put(@actor, "custody_receipt_id", :string)),
       "TaskQueuedV1" => spec("operator", @actor),
-      "TaskReadyV1" => spec("operator", Map.put(@actor, "custody_receipts", :any))
+      "TaskReadyV1" => spec("operator", Map.put(@actor, "custody_receipts", :any)),
+      "TaskStartedV1" => spec("operator", @actor),
+      "TaskCompletedV1" => spec("operator", Map.put(@actor, "review_event_id", :string))
     }
   end
 
@@ -82,7 +97,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
   end
 
   defp check_command(%Envelope{type: "TaskSOPAcknowledgedV1"} = env, p, task, state) do
-    with :ok <- transition(task, ["proposed", "queued"], "acknowledge_sop"),
+    with :ok <- transition(task, ["proposed", "queued", "ready"], "acknowledge_sop"),
          {:ok, definition} <- definition(task),
          {:ok, _} <-
            receipt(env, p["custody_receipt_id"], definition.sop_digest, state, 8 * 1024 * 1024),
@@ -105,6 +120,28 @@ defmodule CoopSubstrate.Tasks.Readiness do
          :ok <-
            input_receipts(env, definition.artifact_requirements, p["custody_receipts"], state),
          do: :ok
+  end
+
+  # Whoever starts acknowledged the SOP on this device, and the inputs are
+  # still there.
+  defp check_command(%Envelope{type: "TaskStartedV1"} = env, _, task, state) do
+    with :ok <- transition(task, ["ready"], "in_progress"),
+         {:ok, definition} <- definition(task),
+         :ok <- acknowledgment(env, task, state),
+         :ok <- input_receipts(env, definition.artifact_requirements, task.ready_receipts, state),
+         do: :ok
+  end
+
+  # A new submission clears the review (Tasks.DoD), so a review on record is
+  # of the current submission.
+  defp check_command(%Envelope{type: "TaskCompletedV1"}, %{"review_event_id" => id}, task, _) do
+    with :ok <- transition(task, ["in_progress"], "completed") do
+      case task.dod.review do
+        %{event_id: ^id, decision: "accept"} -> :ok
+        %{event_id: ^id} -> {:error, :dod_not_accepted}
+        _ -> {:error, :dod_review_mismatch}
+      end
+    end
   end
 
   defp transition(task, allowed, to) do
@@ -254,4 +291,15 @@ defmodule CoopSubstrate.Tasks.Readiness do
       task
       |> Map.put(:state, "ready")
       |> Map.put(:ready_receipts, env.payload["custody_receipts"])
+
+  defp fold(task, %Envelope{type: "TaskStartedV1", payload: p}),
+    do:
+      %{
+        task
+        | state: "in_progress",
+          dod: %{task.dod | submission: nil, review: nil}
+      }
+      |> Map.put(:started_by, p["principal_id"])
+
+  defp fold(task, %Envelope{type: "TaskCompletedV1"}), do: %{task | state: "completed"}
 end

@@ -28,15 +28,16 @@ defmodule CoopSubstrate.EnrolmentsTest do
       Keyword.get(opts, :scope, @scope),
       Keyword.get(opts, :key_id, w.device.signer.key_id),
       Keyword.get(opts, :pubkey, w.device.signer.pubkey),
-      Keyword.get(opts, :label, "Alice's laptop")
+      Keyword.get(opts, :label, "Alice's laptop"),
+      Keyword.get(opts, :role, "operator")
     )
   end
 
   # The device signs the statement it was given.
   defp sign(%{statement: bytes}, member), do: Crypto.sign(bytes, member.seed)
 
-  defp request!(w) do
-    {:ok, challenge} = begin(w)
+  defp request!(w, opts \\ []) do
+    {:ok, challenge} = begin(w, opts)
     {:ok, request} = Enrolments.prove("alice", challenge.id, sign(challenge, w.device))
     request
   end
@@ -51,7 +52,8 @@ defmodule CoopSubstrate.EnrolmentsTest do
       Enrolments.status(
         Keyword.get(opts, :principal, "alice"),
         @scope,
-        Keyword.get(opts, :key_id, w.device.signer.key_id)
+        Keyword.get(opts, :key_id, w.device.signer.key_id),
+        Keyword.get(opts, :role, "operator")
       )
 
   describe "requesting" do
@@ -67,7 +69,8 @@ defmodule CoopSubstrate.EnrolmentsTest do
                "project_id" => "project-1",
                "key_id" => key_id,
                "pubkey" => {:bytes, pubkey},
-               "label" => "Alice's laptop"
+               "label" => "Alice's laptop",
+               "role" => "operator"
              } = statement
 
       assert {key_id, pubkey} == {w.device.signer.key_id, w.device.signer.pubkey}
@@ -99,6 +102,7 @@ defmodule CoopSubstrate.EnrolmentsTest do
       assert begin(w, pubkey: <<1, 2, 3>>) == {:error, :invalid_pubkey}
       assert begin(w, label: "") == {:error, :invalid_label}
       assert begin(w, label: String.duplicate("x", 81)) == {:error, :invalid_label}
+      assert begin(w, role: "governance") == {:error, :invalid_role}
     end
 
     test "refused without proof by that key, or by another principal", w do
@@ -198,7 +202,9 @@ defmodule CoopSubstrate.EnrolmentsTest do
     test "an expired request is no longer pending and cannot be approved", w do
       request = request!(w)
       later = request.expires_at + 1
-      assert Enrolments.status("alice", @scope, w.device.signer.key_id, later) == :none
+
+      assert Enrolments.status("alice", @scope, w.device.signer.key_id, "operator", later) ==
+               :none
 
       assert Enrolments.fetch(request.code, request.expires_at + 1) == {:error, :unknown_code}
 
@@ -217,6 +223,96 @@ defmodule CoopSubstrate.EnrolmentsTest do
 
       assert status(w) == :none
       assert %{code: _} = request!(w)
+    end
+  end
+
+  describe "reviewer devices (docs/architecture/2026-10-19-execution.md)" do
+    alias CoopSubstrate.{Devices, Feed.Access}
+    alias CoopSubstrate.Devices.Revoker
+    alias CoopSubstrate.Enrolments.Approver
+
+    test "approval issues a reviewer grant; the role's status is its own", w do
+      request = request!(w, role: "reviewer")
+
+      assert status(w, role: "reviewer") == {:pending, request.code, request.expires_at}
+      assert status(w) == :none
+      assert {:ok, %{role: "reviewer"}} = Enrolments.fetch(request.code)
+
+      {:ok, grant} = approve!(w, request.code)
+      assert grant.type == "TaskReviewerGrantedV1"
+
+      assert %{principal_id: "alice", key_id: key_id, device_label: "Alice's laptop"} =
+               Log.gate().orchestration.dod_grants[grant.event_id]
+
+      assert key_id == w.device.signer.key_id
+      assert status(w, role: "reviewer") == :enrolled
+      assert status(w) == :none
+      assert begin(w, role: "reviewer") == {:error, :already_enrolled}
+      assert {:ok, _} = begin(w)
+
+      assert {:ok, %Access{role: :reviewer}} =
+               Access.for_principal(Log.gate().orchestration, "alice", @scope)
+    end
+
+    test "the administrator's tool signs exactly the role's grant" do
+      details = %{
+        "role" => "reviewer",
+        "chapter_id" => "chapter-genesis",
+        "tenant_id" => "tenant-1",
+        "project_id" => "project-1",
+        "principal_id" => "alice",
+        "key_id" => "k-1",
+        "public_key" => Base.url_encode64(<<1::256>>, padding: false),
+        "label" => "Laptop"
+      }
+
+      core = %{
+        "type" => "TaskReviewerGrantedV1",
+        "chapter_id" => "chapter-genesis",
+        "payload" => %{
+          "tenant_id" => "tenant-1",
+          "project_id" => "project-1",
+          "principal_id" => "alice",
+          "key_id" => "k-1",
+          "pubkey" => {:bytes, <<1::256>>},
+          "device_label" => "Laptop"
+        }
+      }
+
+      assert Approver.grants?(core, details)
+      refute Approver.grants?(%{core | "type" => "TaskOperatorGrantedV1"}, details)
+      refute Approver.grants?(core, %{details | "role" => "operator"})
+      refute Approver.grants?(core, Map.delete(details, "role"))
+    end
+
+    test "governance revokes a reviewer grant", w do
+      {:ok, grant} = approve!(w, request!(w, role: "reviewer").code)
+      assert {:ok, %{role: "reviewer", active: true} = details} = Devices.fetch(grant.event_id)
+
+      {:ok, pending} = Devices.prepare_governance_revocation(grant.event_id, w.gov.signer.key_id)
+      assert pending.type == "TaskReviewerRevokedV1"
+
+      assert Revoker.revokes?(
+               %{
+                 "type" => pending.type,
+                 "chapter_id" => "chapter-genesis",
+                 "payload" => pending.payload
+               },
+               %{
+                 "role" => details.role,
+                 "chapter_id" => "chapter-genesis",
+                 "tenant_id" => "tenant-1",
+                 "project_id" => "project-1",
+                 "grant_id" => grant.event_id
+               }
+             )
+
+      {:ok, _} =
+        Devices.revoke(grant.event_id, pending.id, Crypto.sign(pending.signing_bytes, w.gov.seed))
+
+      refute Log.gate().orchestration.dod_grants[grant.event_id].active
+
+      assert status(w, role: "reviewer") == :none
     end
   end
 end

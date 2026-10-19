@@ -31,6 +31,12 @@ the device's public key into a grant by hand" in
    declared for the chapter, checked at append. The page polls its status,
    sees it enrolled, and its decisions are accepted from then on.
 
+A request names a **role**: `operator` (the default, as above) or
+`reviewer`, which yields a `TaskReviewerGrantedV1` for reviewing evidence
+([execution](2026-10-19-execution.md)). The statement the device signs
+names the role, the page checks it, status is kept per role, and the same
+key may hold both.
+
 ## What holds what
 
 | | Holds | Can |
