@@ -193,8 +193,8 @@ function chooseArtifact(expected) {
 // Store a file and record custody of it: `{digest, receipt}`, or null with
 // the reason in the status line. With `expected`, only that exact file;
 // with `task`, as evidence for that task, and a receipt the project already
-// holds for the same bytes is reused. The bytes are stored either way:
-// storing is idempotent, and it restores a file a reused receipt has lost.
+// holds for the same bytes is reused only after reading its verified bytes.
+// A missing artifact is restored by an idempotent upload before receipt reuse.
 const refused = (message) => {
   status(message, true);
   return null;
@@ -205,7 +205,20 @@ async function storeArtifact(file, { expected, task } = {}) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const digest = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
   if (expected && digest !== expected) return refused("That is not the file this task names; nothing was stored.");
+  const held = task && receiptFor(view, digest);
   try {
+    if (held) {
+      status("Checking stored evidence…");
+      const res = await fetch(`${projectPath}/receipts/${encodeURIComponent(held)}`, { cache: "no-store" });
+      if (res.ok) {
+        // Consume the response too: a failed transfer is not availability.
+        await res.arrayBuffer();
+        return { digest, receipt: held };
+      }
+      // Only absence is repaired; authorization and other failures remain
+      // visible, and a corrupted historical artifact is never overwritten.
+      if (res.status !== 404) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+    }
     status("Storing…");
     const query = task ? `?evidence_for=${encodeURIComponent(task)}` : "";
     const res = await fetch(`${projectPath}/artifacts${query}`, {
@@ -218,7 +231,6 @@ async function storeArtifact(file, { expected, task } = {}) {
     return refused(`Not stored: ${e.message.replaceAll("_", " ")}.`);
   }
 
-  const held = task && receiptFor(view, digest);
   if (held) return { digest, receipt: held };
   const recorded = await signAndSubmit(
     () => postJSON(`${projectPath}/commands`, { action: "record_custody", artifact_digest: digest, key_id: keyId }),

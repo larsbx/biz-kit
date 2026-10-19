@@ -197,6 +197,59 @@ defmodule SpruceGoose.Web.ExecutionTest do
     assert task(w).state == "completed"
   end
 
+  test "failed and repeated uploads preserve quota and a signed receipt recovers missing bytes",
+       w do
+    assert {201, _} = step(w, w.person, %{"action" => "start", "task_id" => "task-1"})
+    root = Application.fetch_env!(:coop_substrate, :artifact_dir)
+    blocker = Path.join(root, "blocked-#{w.chapter}")
+    File.mkdir_p!(root)
+    File.write!(blocker, "not a directory")
+    on_exit(fn -> File.rm(blocker) end)
+    report = :binary.copy(<<101>>, CoopSubstrate.ArtifactCustody.limit())
+
+    try do
+      Application.put_env(:coop_substrate, :artifact_dir, blocker)
+      for _ <- 1..5, do: assert({409, _} = upload(w, report, "?evidence_for=task-1"))
+    after
+      Application.put_env(:coop_substrate, :artifact_dir, root)
+    end
+
+    assert {201, %{"digest" => digest}} = upload(w, report, "?evidence_for=task-1")
+    for _ <- 1..5, do: assert({201, _} = upload(w, report, "?evidence_for=task-1"))
+
+    assert {201, %{"event_id" => receipt}} =
+             step(w, w.person, %{"action" => "record_custody", "artifact_digest" => digest})
+
+    for n <- 102..104 do
+      bytes = :binary.copy(<<n>>, CoopSubstrate.ArtifactCustody.limit())
+      assert {201, _} = upload(w, bytes, "?evidence_for=task-1")
+    end
+
+    assert {413, %{"error" => "quota_exceeded"}} = upload(w, "extra", "?evidence_for=task-1")
+    assert {413, %{"error" => "too_large"}} = upload(w, report <> "x", "?evidence_for=task-1")
+    File.rm!(Path.join(root, digest))
+    assert get(path(w) <> "/receipts/#{receipt}", w.person.session).status == 404
+
+    submission = %{
+      "action" => "submit_evidence",
+      "task_id" => "task-1",
+      "custody_receipts" => %{"report" => receipt}
+    }
+
+    assert {409, _} = step(w, w.person, submission)
+    assert task(w).dod.submission == nil
+
+    # Restoring already charged content works even at the full quota; the
+    # original signed receipt is still sufficient, without a second record.
+    assert {201, %{"digest" => ^digest}} = upload(w, report, "?evidence_for=task-1")
+    conn = get(path(w) <> "/receipts/#{receipt}", w.reviewer.session)
+    assert {conn.status, conn.resp_body} == {200, report}
+    assert {201, _} = step(w, w.person, submission)
+    assert task(w).dod.submission.custody_receipts == %{"report" => receipt}
+    assert {413, %{"error" => "quota_exceeded"}} = upload(w, "extra", "?evidence_for=task-1")
+    assert get(path(w) <> "/receipts/#{receipt}", w.stranger).status == 403
+  end
+
   test "refusals, named", w do
     # Evidence only for a task in progress.
     assert {422, %{"error" => "not_named"}} = upload(w, "Too early", "?evidence_for=task-1")

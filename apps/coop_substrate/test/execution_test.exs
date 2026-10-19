@@ -150,15 +150,53 @@ defmodule CoopSubstrate.ExecutionTest do
 
     assert {:ok, _} =
              ArtifactCustody.store("bob", @scope, again, :crypto.hash(:sha256, again), "task-1")
+  end
 
-    # A refunded charge, as after a failed write, frees its room.
-    alias CoopSubstrate.ArtifactCustody.Quota
-    assert Quota.charge(:k, "a", 10, 10) == {:ok, :reserved}
-    # The same bytes again, as a concurrent upload would: held, not reserved.
-    assert Quota.charge(:k, "a", 10, 10) == {:ok, :held}
-    assert Quota.charge(:k, "b", 1, 10) == {:error, :quota_exceeded}
-    assert Quota.refund(:k, "a") == :ok
-    assert Quota.charge(:k, "b", 1, 10) == {:ok, :reserved}
+  test "failed filesystem writes do not spend quota; missing bytes can be restored at the limit",
+       w do
+    ready!(w, "task-1")
+    {:ok, _} = step(w, w.alice, {:start, "task-1"})
+    principal = "retry-#{w.run}"
+    {:ok, _} = Log.append(operator_grant(w.gov, new_member("operator"), principal))
+    alias CoopSubstrate.Harness.Artifacts
+    root = Application.fetch_env!(:coop_substrate, :artifact_dir)
+    blocker = Path.join(root, "blocked-#{w.run}")
+    File.mkdir_p!(root)
+    File.write!(blocker, "not a directory")
+    on_exit(fn -> File.rm(blocker) end)
+    bytes = :binary.copy(<<91>>, ArtifactCustody.limit())
+    digest = :crypto.hash(:sha256, bytes)
+
+    try do
+      Application.put_env(:coop_substrate, :artifact_dir, blocker)
+
+      for _ <- 1..5 do
+        assert {:error, _} = ArtifactCustody.store(principal, @scope, bytes, digest, "task-1")
+      end
+    after
+      Application.put_env(:coop_substrate, :artifact_dir, root)
+    end
+
+    for n <- 91..94 do
+      b = :binary.copy(<<n>>, ArtifactCustody.limit())
+
+      assert {:ok, _} =
+               ArtifactCustody.store(principal, @scope, b, :crypto.hash(:sha256, b), "task-1")
+    end
+
+    assert ArtifactCustody.store(
+             principal,
+             @scope,
+             "extra",
+             :crypto.hash(:sha256, "extra"),
+             "task-1"
+           ) ==
+             {:error, :quota_exceeded}
+
+    File.rm!(Path.join(root, Base.encode16(digest, case: :lower)))
+    assert Artifacts.get(digest) == {:error, :not_found}
+    assert {:ok, ^digest} = ArtifactCustody.store(principal, @scope, bytes, digest, "task-1")
+    assert {:ok, ^bytes} = Artifacts.get(digest)
   end
 
   test "operators and reviewers read the submitted evidence; others do not", w do
