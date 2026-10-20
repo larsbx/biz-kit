@@ -38,7 +38,7 @@ defmodule TaskCore.LessonWorkflowTest do
     @impl true
     def read_blueprint(digest) do
       case Enum.find(
-             [TaskCore.BlueprintTest.doc(), curriculum_v2()],
+             [curriculum(), curriculum_v2()],
              &(digest(encode(&1)) == digest)
            ) do
         nil -> {:error, :not_found}
@@ -46,7 +46,16 @@ defmodule TaskCore.LessonWorkflowTest do
       end
     end
 
-    def encode(doc), do: :erlang.term_to_binary(doc)
+    def curriculum do
+      {document, _} = Code.eval_file(Path.join(__DIR__, "fixtures/curriculum.exs"))
+      document
+    end
+
+    def encode(doc) do
+      if doc == curriculum(),
+        do: File.read!(Path.join(__DIR__, "fixtures/curriculum.exs")),
+        else: :erlang.term_to_binary(doc)
+    end
 
     # The second term's revision: fractions gains a test after adding.
     def curriculum_v2 do
@@ -58,7 +67,7 @@ defmodule TaskCore.LessonWorkflowTest do
       }
 
       update_in(
-        TaskCore.BlueprintTest.doc(),
+        curriculum(),
         ["roadmaps", Access.at(0), "workflows", Access.at(0), "tasks"],
         &(&1 ++ [test])
       )
@@ -149,7 +158,7 @@ defmodule TaskCore.LessonWorkflowTest do
 
   describe "a curriculum as a blueprint" do
     test "applying it builds the hierarchy; a run creates every lesson", %{school: s} do
-      {s, revision} = apply_blueprint!(s, TaskCore.BlueprintTest.doc(), "v1")
+      {s, revision} = apply_blueprint!(s, Host.curriculum(), "v1")
 
       assert %{name: "Year 7 maths", roadmaps: %{"autumn" => %{workflows: workflows}}} =
                s.state.hierarchy[@scope]
@@ -190,8 +199,66 @@ defmodule TaskCore.LessonWorkflowTest do
       assert s.state.tasks[key("adding-7a")].readiness.predecessor_ids == ["intro-7a"]
     end
 
+    test "Git-defined lessons progress through prerequisites, evidence and review", %{school: s} do
+      {document, source} = git_curriculum!()
+      {:ok, blueprint} = TaskCore.Blueprint.normalize(document)
+      applied = blueprint_event(document, blueprint, "v1")
+      applied = %{applied | payload: Map.merge(applied.payload, source)}
+      s = fold!(s, applied)
+      revision = applied.event_id
+      assert s.state.blueprints[revision].source.commit == source["commit"]
+
+      s =
+        step!(
+          s,
+          {:instantiate, revision, "autumn", "fractions", %{"intro" => "i", "adding" => "a"}}
+        )
+
+      s =
+        Enum.reduce(
+          [{"i", [], %{"worksheet" => {:bytes, Host.digest("Worksheet")}}}, {"a", ["i"], %{}}],
+          s,
+          fn {id, predecessors, inputs}, acc ->
+            acc
+            |> step!({:propose, id})
+            |> govern!(id, "TaskReadinessDefinedV1", %{
+              "artifact_requirements" => inputs,
+              "predecessor_ids" => predecessors,
+              "sop_digest" => {:bytes, Host.digest("Lesson SOP")}
+            })
+            |> step!({:acknowledge_sop, id, "custody Lesson SOP"})
+            |> step!({:queue, id})
+          end
+        )
+
+      assert admit(prepare(s, {:ready, "a", %{}}), s) == {:error, :incomplete_predecessors}
+      s = s |> step!({:ready, "i", %{"worksheet" => "custody Worksheet"}}) |> step!({:start, "i"})
+      s = step!(s, {:record_custody, Host.digest("Learner's answers")}, "curriculum-work")
+      s = step!(s, {:submit_evidence, "i", %{"worksheet" => "curriculum-work"}})
+      s = step!(s, {:review, "i", "accept", "Correct"}, nil, @marker, "marker-grant")
+      s = step!(s, {:complete, "i", s.state.tasks[key("i")].dod.review.event_id})
+      s = step!(s, {:ready, "a", %{}})
+      assert state_of(s, "a") == "ready"
+      assert s.state.tasks[key("i")].blueprint.revision_event_id == revision
+    end
+
+    test "blueprint runs reject another lifecycle version before creating tasks", %{school: s} do
+      {s, revision} = apply_blueprint!(s, Host.curriculum(), "v1")
+
+      run =
+        prepare(
+          s,
+          {:instantiate, revision, "autumn", "fractions", %{"intro" => "i", "adding" => "a"}}
+        )
+
+      assert admit(put_in(run.payload["lifecycle_version"], 2), s) ==
+               {:error, :unsupported_task_lifecycle}
+
+      refute Map.has_key?(s.state.tasks, key("i"))
+    end
+
     test "a run names every definition with new, distinct tasks", %{school: s} do
-      {s, revision} = apply_blueprint!(s, TaskCore.BlueprintTest.doc(), "v1")
+      {s, revision} = apply_blueprint!(s, Host.curriculum(), "v1")
       run = &prepare(s, {:instantiate, revision, "autumn", "fractions", &1})
 
       for ids <- [
@@ -209,7 +276,7 @@ defmodule TaskCore.LessonWorkflowTest do
     end
 
     test "a new revision governs the workflow; runs of the old one are refused", %{school: s} do
-      {s, v1} = apply_blueprint!(s, TaskCore.BlueprintTest.doc(), "v1")
+      {s, v1} = apply_blueprint!(s, Host.curriculum(), "v1")
       {s, v2} = apply_blueprint!(s, Host.curriculum_v2(), "v2")
 
       assert s.state.hierarchy[@scope].roadmaps["autumn"].workflows["fractions"].revision == v2
@@ -224,7 +291,7 @@ defmodule TaskCore.LessonWorkflowTest do
     end
 
     test "only the stored, matching blueprint of this project, once per source", %{school: s} do
-      doc = TaskCore.BlueprintTest.doc()
+      doc = Host.curriculum()
       {:ok, blueprint} = TaskCore.Blueprint.normalize(doc)
       applied = blueprint_event(doc, blueprint, "v1")
 
@@ -253,6 +320,49 @@ defmodule TaskCore.LessonWorkflowTest do
     end
   end
 
+  # An offline Git repository, with real commit/tree identities. Only the
+  # trusted Elixir fixture is evaluated; a production host uses a data decoder.
+  defp git_curriculum! do
+    directory = Path.join(System.tmp_dir!(), "curriculum-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(directory)
+    on_exit(fn -> File.rm_rf!(directory) end)
+    bytes = File.read!(Path.join(__DIR__, "fixtures/curriculum.exs"))
+    File.write!(Path.join(directory, "curriculum.exs"), bytes)
+
+    git = fn args ->
+      {output, 0} = System.cmd("git", args, cd: directory, stderr_to_stdout: true)
+      String.trim(output)
+    end
+
+    git.(["init", "--quiet"])
+    git.(["add", "curriculum.exs"])
+
+    git.([
+      "-c",
+      "user.name=School fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "Pin curriculum"
+    ])
+
+    commit = git.(["rev-parse", "HEAD"])
+    tree = git.(["rev-parse", "HEAD^{tree}"])
+    {pinned, 0} = System.cmd("git", ["show", "#{commit}:curriculum.exs"], cd: directory)
+    assert pinned == bytes
+    {document, _} = Code.eval_string(pinned)
+
+    {document,
+     %{
+       "repository" => "school/curriculum",
+       "commit" => commit,
+       "tree" => tree,
+       "path" => "curriculum.exs"
+     }}
+  end
+
   defp apply_blueprint!(s, doc, commit) do
     {:ok, blueprint} = TaskCore.Blueprint.normalize(doc)
     event = blueprint_event(doc, blueprint, commit)
@@ -267,7 +377,7 @@ defmodule TaskCore.LessonWorkflowTest do
         "repository" => "school/curriculum",
         "commit" => String.duplicate(if(commit == "v1", do: "a", else: "b"), 40),
         "tree" => String.duplicate("c", 40),
-        "path" => "maths/year-7.yaml",
+        "path" => "apps/task_core/test/fixtures/curriculum.exs",
         "manifest_digest" => {:bytes, Host.digest(Host.encode(doc))},
         "blueprint" => blueprint
       }),

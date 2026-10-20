@@ -14,7 +14,7 @@ workflow at once. For school operations, a curriculum is the blueprint:
 
 SpruceGoose already had this, on Ash and PostgreSQL
 (`SpruceGoose.Workflows.{Project, Roadmap, Workflow, BlueprintRevision}`,
-`Blueprints.Applier`, `Blueprints.ForgejoVerifier`). The rules now live in
+`Blueprints.Applier`, `Blueprints.ForgejoVerifier`). The portable document and planning rules now live in
 `task_core`, and the signed ledger is their first host.
 
 ## Reviewing SpruceGoose's design
@@ -32,7 +32,7 @@ decisions; the rest follow from them or from the existing ledger.
 | Definition of Done in a definition *(asked)* | One string | Criteria `[{id, description}]` | Criteria | Evidence and review are per criterion, and an assessment maps onto criteria. |
 | Where an instance's Definition of Done and dependencies come from *(asked)* | Copied from the exact revision when instantiated | Governance defines them per task | From the revision. Governance may still redefine the Definition of Done while the task is proposed. Readiness must keep the blueprint's predecessors and input names. | The blueprint is the reviewed, governance-signed source. Only digests and the SOP stay per task. |
 | How roadmaps and workflows change *(asked)* | Only by applying a blueprint revision ("constitutive lockdown") | No hierarchy | Only by `TaskBlueprintAppliedV1` | One reviewed path, and no ad-hoc edits that drift from git. |
-| Source verification *(asked)* | The server walks the Forgejo commit → tree → blob chain on every apply and instantiation | — | The governance tool walks the same chain (`ForgejoVerifier`, unchanged). The server stores the exact bytes in custody, and admission rereads them and requires the signed blueprint to be their normal form. | The append gate never calls the network, replay never reads files, and the bytes stay checkable later. |
+| Source verification *(asked)* | The server walks the Forgejo commit → tree → blob chain on every apply and instantiation | — | The governance tool walks the same chain (`ForgejoVerifier`). The server stores the exact bytes in custody, and admission rereads them and requires the signed blueprint to be their normal form. | The append gate never calls the network, replay never reads files, and the bytes stay checkable later. |
 | Instantiating | One task at a time; dependencies linked separately | — | A **workflow run** names a new task for every definition, and the run's tasks are each other's predecessors | One task at a time cannot resolve `depends_on`. A run can. |
 | Which revision a run uses | Any revision of the project | — | Only the revision now governing the workflow (`stale_blueprint_revision` otherwise) | A superseded definition should not start new work. Existing tasks keep what they were made from. |
 | Applying | Creates or renames by key, never deletes; once per `(project, repository, commit, path)` | — | The same | Removal would orphan tasks. Once per source keeps provenance unambiguous. |
@@ -175,11 +175,40 @@ other step.
 
 - **Not shown in the web view or the feed.** The tasks a run creates appear
   in the project's feed like any other task.
-- **No Quint model yet.** `task_lifecycle.qnt` still models a Definition of
-  Done defined only while a task is proposed; a run's tasks start with one.
-  Queuing requires a Definition of Done either way.
+- **Bounded model scope.** `task_blueprint.qnt` reuses the ledger lifecycle
+  with tasks initialized with a Definition of Done. It checks current revision
+  and lifecycle-version admission, preservation across a later revision,
+  predecessor readiness and evidence/review completion for two tasks and two
+  revisions. It does not model Git cryptography, parsing or arbitrary DAGs.
 - **SpruceGoose's own hierarchy is unchanged.** Its Ash resources, its
   schema-1 blueprints and its CLI remain as the consolidation plan leaves
   them. Only the Forgejo verifier is shared.
 - **Removing a roadmap or workflow is not modelled.** A revision that omits
   one leaves it in place, as in SpruceGoose.
+
+
+## Portable run planning and source contract
+
+`TaskCore.Workflow.plan/5` takes a decoded blueprint, roadmap/workflow keys,
+a complete definition-to-instance ID map and `{LifecycleModule, version}`.
+It returns ordered task data with run-local predecessors and the selected
+lifecycle's initial state. It validates the document and lifecycle before
+returning any plan. The ledger's hierarchy admission and fold use this same
+planner with `TaskCore.TaskLifecycle`; other hosts can use the planner alone.
+The plan never maps SpruceGoose states onto ledger states or changes their
+SOP/predecessor policies. See the [consumer contract](../../apps/task_core/README.md).
+
+`TaskCore.Blueprint.Source.normalize/1` centralizes pinned Git source syntax,
+including SHA-1 OIDs and safe relative paths. The host still verifies
+Git objects and manifest bytes. The current forge adapter supports SHA-1
+repositories only; SHA-256 Git objects require an explicit future extension
+of both this contract and the verifier. The governance signing predicate
+binds all three scope segments before signing.
+
+The school integration now reads the committed curriculum fixture from a
+real temporary Git commit, applies that source identity, creates the whole
+workflow, refuses early successor readiness, and allows progression only
+after verified evidence, independent review and completion. Planner tests
+also use another host lifecycle with a different initial state and the same
+numeric version, ensuring version numbers are not treated as global profiles.
+These are portable contracts for any task domain, not school-only APIs.
