@@ -49,6 +49,8 @@ defmodule SpruceGoose.MixProject do
 
   defp deps do
     [
+      # Task and workflow rules shared with the ledger and any other host.
+      {:task_core, in_umbrella: true},
       # The common ledger: the change feed and its read access are served here.
       {:coop_substrate, in_umbrella: true},
       # Who a person is: sign-in through a replaceable provider, sessions.

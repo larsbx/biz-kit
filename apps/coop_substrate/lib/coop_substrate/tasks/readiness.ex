@@ -32,6 +32,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
   alias CoopSubstrate.Projections.Tasks, as: Projection
   alias CoopSubstrate.Harness.Artifacts
   alias CoopSubstrate.Protocol.Envelope
+  alias TaskCore.TaskLifecycle
 
   @commands ~w(TaskReadinessDefinedV1 TaskSOPAcknowledgedV1 TaskQueuedV1 TaskReadyV1
                 TaskStartedV1 TaskCompletedV1 TaskCancelledV1 TaskCancelledByGovernanceV1
@@ -49,6 +50,37 @@ defmodule CoopSubstrate.Tasks.Readiness do
     "authorization_event_id" => :string,
     "lifecycle_version" => :int
   }
+
+  # Each command's move: the states it may leave, and the state it enters.
+  # Each is part of `TaskCore.TaskLifecycle`, checked as this compiles; all of
+  # them together are the whole relation (TaskLifecycleMovesTest).
+  @moves %{
+    "TaskProposedV1" => {~w(inbox), "proposed"},
+    "TaskQueuedV1" => {~w(proposed), "queued"},
+    "TaskReadyV1" => {~w(queued), "ready"},
+    "TaskStartedV1" => {~w(ready), "in_progress"},
+    "TaskCompletedV1" => {~w(in_progress), "completed"},
+    # Before the work starts, a person may call it off; once under way, only
+    # governance may, or the task goes back to be readied again.
+    "TaskCancelledV1" => {~w(inbox proposed queued ready), "cancelled"},
+    "TaskCancelledByGovernanceV1" => {~w(inbox proposed queued ready in_progress), "cancelled"},
+    "TaskReopenedV1" => {~w(in_progress), "queued"}
+  }
+
+  for {type, {from, to}} <- @moves,
+      state <- from,
+      not TaskLifecycle.allowed?(String.to_atom(state), String.to_atom(to)) do
+    raise CompileError, description: "#{type}: #{state} -> #{to} is not in TaskCore.TaskLifecycle"
+  end
+
+  @doc "Each lifecycle command's move, as `%{type => {from_states, to_state}}`."
+  def moves, do: @moves
+
+  @doc "Whether the task's state admits the command's move."
+  def move(task, type) do
+    {from, to} = Map.fetch!(@moves, type)
+    transition(task, from, to)
+  end
 
   def event_types do
     %{
@@ -126,7 +158,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
   end
 
   defp check_command(%Envelope{type: "TaskQueuedV1"} = env, _, task, state) do
-    with :ok <- transition(task, ["proposed"], "queued"),
+    with :ok <- move(task, env.type),
          :ok <- dod_defined(task),
          {:ok, _} <- definition(task),
          :ok <- acknowledgment(env, task, state),
@@ -134,7 +166,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
   end
 
   defp check_command(%Envelope{type: "TaskReadyV1"} = env, p, task, state) do
-    with :ok <- transition(task, ["queued"], "ready"),
+    with :ok <- move(task, env.type),
          {:ok, definition} <- definition(task),
          :ok <- acknowledgment(env, task, state),
          :ok <- completed_predecessors(env, definition.predecessor_ids, state),
@@ -146,7 +178,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
   # Whoever starts acknowledged the SOP on this device, and the inputs are
   # still there.
   defp check_command(%Envelope{type: "TaskStartedV1"} = env, _, task, state) do
-    with :ok <- transition(task, ["ready"], "in_progress"),
+    with :ok <- move(task, env.type),
          {:ok, definition} <- definition(task),
          :ok <- acknowledgment(env, task, state),
          :ok <- input_receipts(env, definition.artifact_requirements, task.ready_receipts, state),
@@ -155,8 +187,13 @@ defmodule CoopSubstrate.Tasks.Readiness do
 
   # A new submission clears the review (Tasks.DoD), so a review on record is
   # of the current submission.
-  defp check_command(%Envelope{type: "TaskCompletedV1"}, %{"review_event_id" => id}, task, _) do
-    with :ok <- transition(task, ["in_progress"], "completed") do
+  defp check_command(
+         %Envelope{type: "TaskCompletedV1" = type},
+         %{"review_event_id" => id},
+         task,
+         _
+       ) do
+    with :ok <- move(task, type) do
       case task.dod.review do
         %{event_id: ^id, decision: "accept"} -> :ok
         %{event_id: ^id} -> {:error, :dod_not_accepted}
@@ -165,20 +202,9 @@ defmodule CoopSubstrate.Tasks.Readiness do
     end
   end
 
-  # Before the work starts, a person may call it off; once under way, only
-  # governance may, or the task goes back to be readied again.
-  defp check_command(%Envelope{type: "TaskCancelledV1"}, p, task, _state) do
-    with :ok <- transition(task, ~w(inbox proposed queued ready), "cancelled"),
-         do: reason(p["reason"])
-  end
-
-  defp check_command(%Envelope{type: "TaskCancelledByGovernanceV1"}, p, task, _state) do
-    with :ok <- transition(task, ~w(inbox proposed queued ready in_progress), "cancelled"),
-         do: reason(p["reason"])
-  end
-
-  defp check_command(%Envelope{type: "TaskReopenedV1"}, p, task, _state) do
-    with :ok <- transition(task, ["in_progress"], "queued"), do: reason(p["reason"])
+  defp check_command(%Envelope{type: type}, p, task, _state)
+       when type in ~w(TaskCancelledV1 TaskCancelledByGovernanceV1 TaskReopenedV1) do
+    with :ok <- move(task, type), do: reason(p["reason"])
   end
 
   defp reason(text) do

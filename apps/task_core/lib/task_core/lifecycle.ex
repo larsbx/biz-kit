@@ -1,9 +1,9 @@
-defmodule SpruceGoose.Lifecycle do
+defmodule TaskCore.Lifecycle do
   @moduledoc """
   A versioned, fail-closed, finite lifecycle contract, declared once and
-  shared by every state machine in SpruceGoose.
+  shared by every state machine that vendors TaskCore.
 
-      use SpruceGoose.Lifecycle,
+      use TaskCore.Lifecycle,
         version: 1,
         initial: :queued,
         transitions: [queued: [:building, :cancelled], building: [...], ...],
@@ -18,8 +18,9 @@ defmodule SpruceGoose.Lifecycle do
   The declaration is verified when the module compiles (`verify!/4`): every
   successor, the initial state, and every terminal state must be declared
   states, no state may be declared twice, and every sink state must be
-  terminal. Reachability is exposed (`reachable/1`) so tests can decide the
-  remaining properties exhaustively rather than sample them.
+  terminal. `violations/1` decides the remaining properties exhaustively,
+  rather than sampling them: every state is reachable from the initial state,
+  and every state can reach a terminal one.
 
   The relation is only the *shape* of a lifecycle. Preconditions that depend
   on data (evidence, reasons, predecessors, gates) belong to the resource
@@ -44,7 +45,7 @@ defmodule SpruceGoose.Lifecycle do
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
-      @behaviour SpruceGoose.Lifecycle
+      @behaviour TaskCore.Lifecycle
 
       @version Keyword.fetch!(opts, :version)
       @initial Keyword.fetch!(opts, :initial)
@@ -55,7 +56,7 @@ defmodule SpruceGoose.Lifecycle do
                          for {state, []} <- @table, do: state
                        end)
 
-      :ok = SpruceGoose.Lifecycle.verify!(__MODULE__, @initial, @table, @terminal_states)
+      :ok = TaskCore.Lifecycle.verify!(__MODULE__, @initial, @table, @terminal_states)
 
       @impl true
       def version, do: @version
@@ -105,7 +106,7 @@ defmodule SpruceGoose.Lifecycle do
 
       @doc "Every state reachable from `from` (inclusive), by default from the initial state."
       @impl true
-      def reachable(from \\ @initial), do: SpruceGoose.Lifecycle.closure(@transitions, from)
+      def reachable(from \\ @initial), do: TaskCore.Lifecycle.closure(@transitions, from)
     end
   end
 
@@ -143,6 +144,24 @@ defmodule SpruceGoose.Lifecycle do
         do: fail.("sink state #{inspect(state)} is not terminal")
 
     :ok
+  end
+
+  @doc """
+  The properties a declaration's static check cannot see, decided over the
+  whole relation: `[]` when every state is reachable from the initial state
+  and can reach a terminal state, else each failure as `{property, state}`.
+  """
+  @spec violations(module()) :: [{:unreachable | :cannot_terminate, state()}]
+  def violations(machine) do
+    reachable = MapSet.new(machine.reachable())
+
+    for state <- machine.states(),
+        failure <- [
+          state not in reachable && :unreachable,
+          not Enum.any?(machine.reachable(state), &machine.terminal?/1) && :cannot_terminate
+        ],
+        failure,
+        do: {failure, state}
   end
 
   @doc "Reflexive-transitive closure of the relation from one state, in first-visit order."

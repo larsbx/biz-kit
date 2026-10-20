@@ -166,6 +166,18 @@ jobs:
           apps/coop_substrate/test/records_upgrade_test.exs
           apps/coop_substrate/test/support/quota_writer.ex
           apps/coop_substrate/test/live_view_test.exs
+          apps/task_core/mix.exs
+          apps/task_core/lib/task_core.ex
+          apps/task_core/lib/task_core/lifecycle.ex
+          apps/task_core/lib/task_core/task_lifecycle.ex
+          apps/task_core/lib/task_core/dag.ex
+          apps/task_core/test/lifecycle_test.exs
+          apps/task_core/test/dag_test.exs
+          apps/coop_substrate/test/task_lifecycle_moves_test.exs
+          apps/spruce_goose/test/lifecycle_test.exs
+      - name: Test the task core
+        working-directory: apps/task_core
+        run: mix test
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test

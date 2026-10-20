@@ -191,11 +191,8 @@ defmodule CoopSubstrate.Tasks do
         p["expected_version"] != task.version ->
           {:error, {:stale_task_version, p["expected_version"], task.version}}
 
-        task.state != "inbox" ->
-          {:error, {:invalid_task_transition, task.state, "proposed"}}
-
         true ->
-          :ok
+          CoopSubstrate.Tasks.Readiness.move(task, env.type)
       end
     end
   end

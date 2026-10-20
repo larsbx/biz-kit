@@ -1,8 +1,8 @@
 defmodule SpruceGoose.Workflows.Definition do
   use Ash.Resource, data_layer: :embedded
 
-  alias SpruceGoose.Workflows.Dag
   alias SpruceGoose.Workflows.TaskDefinition
+  alias TaskCore.Dag
 
   attributes do
     attribute(:schema_version, :integer,

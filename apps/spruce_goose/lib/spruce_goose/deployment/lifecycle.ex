@@ -7,7 +7,7 @@ defmodule SpruceGoose.Deployment.Lifecycle do
   that contract keeps its meaning here.
   """
 
-  use SpruceGoose.Lifecycle,
+  use TaskCore.Lifecycle,
     version: 1,
     initial: :queued,
     transitions: [
