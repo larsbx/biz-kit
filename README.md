@@ -9,7 +9,7 @@ under its directory.
 | --- | --- | --- | --- |
 | `keel` | `apps/keel` | `larsbx/keel` | Company-structure primitives: pure functions, no runtime |
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
-| `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications |
+| `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
 | `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task and orchestration control plane (CLI, MCP/OAuth endpoint) |
 
 Mix requires umbrella directory names to equal OTP application names, hence
@@ -68,6 +68,9 @@ Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
   they differed) so that resolution moved as little as possible.
 - `dispatch`: `ash_authentication ~> 4.0` became `~> 5.0-rc` to match
   `spruce_goose`. dispatch declared the dependency but used none of it.
+- `dispatch` signs with the ledger's scheme (`coop_substrate`, code only), and
+  its OpenAPI contract is `apps/dispatch/contracts/openapi.json` — the
+  d-patch field app's DTOs are held to a copy of it.
 
 ## Roadmap
 

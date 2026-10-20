@@ -164,6 +164,13 @@ if allowlist = System.get_env("ROLE_PROFILE_MODULE_ALLOWLIST") do
   end
 end
 
+# The capability document's Ed25519 seed (base64url, 32 bytes). Unset leaves the
+# compiled development seed outside production and nothing in it, which
+# `Dispatch.Config` then refuses.
+if seed = System.get_env("DISPATCH_CAPABILITY_SIGNING_SEED") do
+  config :dispatch, :capability_signing_seed, seed
+end
+
 if config_env() == :prod do
   config :dispatch, Dispatch.Repo,
     url: require_env.("DATABASE_URL"),

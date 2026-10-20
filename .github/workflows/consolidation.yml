@@ -211,6 +211,20 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/commands.ex
           apps/coop_substrate/test/task_lifecycle_moves_test.exs
           apps/spruce_goose/test/lifecycle_test.exs
+          apps/dispatch/lib/dispatch/access/capability_signer.ex
+          apps/dispatch/lib/dispatch/access/capability_document.ex
+          apps/dispatch/lib/dispatch_web/controllers/role_capability_controller.ex
+          apps/dispatch/lib/dispatch_web/schemas/role_capabilities.ex
+          apps/dispatch/test/dispatch/access/capability_signer_test.exs
+          apps/dispatch/test/dispatch_web/role_capability_controller_test.exs
+          apps/dispatch/lib/dispatch/accounts/validations/known_constraints.ex
+      # Dispatch's unit tier: no PostGIS here, so the integration tier stays
+      # local (`mix test --include integration`). The contract check keeps
+      # apps/dispatch/contracts/openapi.json, which the field app is held to,
+      # in step with the router.
+      - name: Test dispatch (unit tier) and its contract
+        working-directory: apps/dispatch
+        run: mix test && mix openapi.check
       - name: Test the task core
         working-directory: apps/task_core
         run: mix test

@@ -120,7 +120,7 @@ defmodule Dispatch.Support.Fixtures do
       principal_id: subject.id,
       organization_id: org.id,
       role_definition_id: definition.id,
-      scope_type: Keyword.get(opts, :scope_type, scope_for(key)),
+      scope_type: Keyword.get_lazy(opts, :scope_type, fn -> scope_for(key) end),
       # A STOP- or LOAD-scoped profile is meaningless without the subject it is
       # scoped to, so the fixture requires one rather than silently granting a
       # wider scope than the manifest declares.

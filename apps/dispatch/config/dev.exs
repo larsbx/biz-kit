@@ -51,6 +51,11 @@ config :dispatch, :role_profile_module_allowlist, [
   Dispatch.Access.Roles.Broker
 ]
 
+# The published development capability-signing seed, so a clean checkout signs
+# documents the debug Android build can verify. `Dispatch.Config` refuses it in
+# production by its public key.
+config :dispatch, :capability_signing_seed, "LOjUuBAU_0FB36dzwHvX3syRwWpowbNTdDXwcsgcnRg"
+
 config :dispatch, :diagnostics_token, String.duplicate("dev-diagnostics-token", 2)
 
 config :logger, level: :debug
