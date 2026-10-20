@@ -1,5 +1,7 @@
 # biz-kit architecture
 
+What is delivered and what comes next: [the roadmap](../roadmap.md).
+
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 

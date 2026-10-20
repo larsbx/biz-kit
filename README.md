@@ -69,6 +69,11 @@ Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
 - `dispatch`: `ash_authentication ~> 4.0` became `~> 5.0-rc` to match
   `spruce_goose`. dispatch declared the dependency but used none of it.
 
+## Roadmap
+
+[docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
+in what order, the remaining consolidation steps, and open questions.
+
 ## Consolidation direction
 
 The target is [one source of truth](docs/architecture/2026-10-11-single-source-of-truth.md):
