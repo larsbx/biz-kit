@@ -172,6 +172,17 @@ defmodule SpruceGoose.Web.Requests do
     end
   end
 
+  @doc "`:ok` for a request signed by a governance key of `chapter`; otherwise the conn, refused."
+  def governing(conn, chapter) do
+    case governance_read(conn) do
+      {:ok, chapters} ->
+        if chapter in chapters, do: :ok, else: unauthorized(conn, :not_governance)
+
+      {:unauthorized, reason} ->
+        unauthorized(conn, reason)
+    end
+  end
+
   @doc "401 for a governance request, its reason logged."
   def unauthorized(conn, reason) do
     Logger.info("governance read refused: #{inspect(reason)}")

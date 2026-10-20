@@ -9,6 +9,9 @@ defmodule TaskCore do
     * `TaskCore.TaskLifecycle`: a task's states and moves, as the signed
       ledger admits them;
     * `TaskCore.Dag`: a workflow's dependency graph, validated and ordered;
+    * `TaskCore.Blueprint` and `TaskCore.Hierarchy`: a project's roadmaps
+      and workflows as a reviewed document, applied from a pinned source,
+      and workflow runs that create their tasks;
     * `TaskCore.Admission` and `TaskCore.State`: whether an event may be
       appended, and the fold of those accepted, with the rules of
       `Readiness`, `DoD`, `Timing` and `Delegation`;

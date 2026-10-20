@@ -20,6 +20,8 @@ defmodule SpruceGoose.Web.CommandController do
              (signed with a reviewer device's key)
            {"action": "complete", "task_id", "review_event_id", "key_id"}
            {"action": "cancel" | "reopen", "task_id", "reason", "key_id"}
+           {"action": "instantiate", "revision_event_id", "roadmap_key", "workflow_id",
+            "task_ids": {definition id: new task id}, "key_id"}
            → 201 {id, type, payload, signing_bytes (base64url), expires_at}
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
@@ -98,6 +100,19 @@ defmodule SpruceGoose.Web.CommandController do
       {:ok, <<_::256>> = digest} -> {:ok, {:record_custody, digest}}
       _ -> {:error, :bad_action}
     end
+  end
+
+  defp action(%{
+         "action" => "instantiate",
+         "revision_event_id" => rev,
+         "roadmap_key" => roadmap,
+         "workflow_id" => workflow,
+         "task_ids" => ids
+       })
+       when is_binary(rev) and is_binary(roadmap) and is_binary(workflow) and is_map(ids) do
+    if Enum.all?(ids, fn {_, id} -> is_binary(id) end),
+      do: {:ok, {:instantiate, rev, roadmap, workflow, ids}},
+      else: {:error, :bad_action}
   end
 
   defp action(_body), do: {:error, :bad_action}

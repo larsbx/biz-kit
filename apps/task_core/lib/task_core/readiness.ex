@@ -144,6 +144,12 @@ defmodule TaskCore.Readiness do
     with :ok <- transition(task, ["proposed", "queued"], "define_readiness"),
          :ok <- requirements(p["artifact_requirements"]),
          :ok <- predecessors(env, p["predecessor_ids"], state),
+         :ok <-
+           TaskCore.Hierarchy.keeps_blueprint(
+             task,
+             p["predecessor_ids"],
+             p["artifact_requirements"]
+           ),
          do: :ok
   end
 

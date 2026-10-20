@@ -174,6 +174,22 @@ jobs:
           apps/task_core/test/lifecycle_test.exs
           apps/task_core/test/dag_test.exs
           apps/task_core/test/lesson_workflow_test.exs
+          apps/task_core/lib/task_core/workflow.ex
+          apps/task_core/lib/task_core/blueprint/source.ex
+          apps/spruce_goose/test/workflow_plan_test.exs
+          apps/task_core/test/workflow_test.exs
+          apps/task_core/test/fixtures/curriculum.exs
+          apps/task_core/test/blueprint_test.exs
+          apps/task_core/lib/task_core/blueprint.ex
+          apps/task_core/lib/task_core/hierarchy.ex
+          apps/coop_substrate/lib/coop_substrate/blueprints.ex
+          apps/coop_substrate/test/task_hierarchy_test.exs
+          apps/spruce_goose/lib/spruce_goose/web/blueprint_controller.ex
+          apps/spruce_goose/lib/spruce_goose/web/requests.ex
+          apps/spruce_goose/lib/spruce_goose/web/command_controller.ex
+          apps/spruce_goose/lib/spruce_goose/web/administrator_controller.ex
+          apps/spruce_goose/lib/mix/tasks/coop.blueprint.ex
+          apps/spruce_goose/test/spruce_goose/web/blueprint_test.exs
           apps/task_core/lib/task_core/admission.ex
           apps/task_core/lib/task_core/state.ex
           apps/task_core/lib/task_core/steps.ex
@@ -223,8 +239,8 @@ jobs:
 
   ledger-model:
     # Model-checks every spec in apps/task_core/spec (task suggestions and
-    # delegation, readiness, cancellation) and apps/coop_substrate/spec (the
-    # change feed): safety holds sampled and exhaustively to depth 5, and
+    # delegation, readiness, cancellation and blueprint runs) and the ledger
+    # change feed in apps/coop_substrate/spec: sampled safety, exhaustive depth 5, and
     # every witness state is reachable. About 7 minutes.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
