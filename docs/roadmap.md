@@ -1,6 +1,6 @@
 # biz-kit roadmap
 
-Updated 2026-10-20. The direction is
+Updated 2026-10-20 (dispatch field app added). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
 registry and one PostgreSQL database. Task, dispatch, ownership and economic
@@ -66,6 +66,13 @@ has not been switched.
   governance defines a run's readiness in one signed batch. With this, a run
   can go from blueprint to completion outside the tests.
 
+**Dispatch**
+- [Capability document](architecture/2026-10-20-dispatch-capability-document.md):
+  `GET /v1/role-capabilities` signs what dispatch offers a role assignment
+  with the ledger's scheme (Ed25519 over canonical bytes); the d-patch field
+  app verifies it against a pinned key and gates its status screen on it.
+  `GET /v1/me/role-assignments` lists the assignments a principal may select.
+
 ## Next
 
 Ordered by what blocks real use first.
@@ -84,6 +91,25 @@ Ordered by what blocks real use first.
 5. **Applying a blueprint from the page.** An administrator gives the forge
    source and the page verifies it. Today this is done only by
    `mix coop.blueprint`.
+
+## Dispatch field app (d-patch)
+
+Dispatch's server work happens here; d-patch keeps the Android, web and e2e
+clients (d-patch ADR-0010). The Android app's offline status flow is built and
+currently reports itself signed out. What it needs from biz-kit, in order:
+
+1. **Mobile sign-in.** `BizKit.Identity` sessions are browser cookies; the app
+   needs a flow that yields a bearer token `apps/dispatch` accepts for `/v1`,
+   resolving to the same principal.
+2. **Device keys.** Enrol each installation's Ed25519 key through
+   `CoopSubstrate.Enrolments`, so offline status events are signed by a
+   governance-granted device key rather than dispatch's own `devices` table.
+3. **End-to-end runs.** d-patch's Slice 1 exit tests (1, 13–19, online and
+   after an offline interval) against this server rather than d-patch's frozen
+   `central/`.
+4. **Grants instead of the document.** When dispatch's roles become ledger
+   grants (consolidation step 4), the app reads them from the change feed and
+   the capability document retires.
 
 ## Later: consolidation steps 3–5
 
