@@ -42,9 +42,14 @@ import {
   receiptFor,
   revocable,
   revocationType,
+  runOf,
+  runReadiness,
+  runs,
+  runTaskIds,
   taskSummary,
   timingForm,
   toReview,
+  workflows,
 } from "./view.js";
 
 const params = new URLSearchParams(location.search);
@@ -112,6 +117,7 @@ function render() {
               ? el("div", { className: "muted", textContent: "Last scheduled by a delegated agent" })
               : null,
             cancelledBecause(t) ? el("div", { className: "muted", textContent: cancelledBecause(t) }) : null,
+            runOf(t, view) ? el("div", { className: "muted", textContent: runOf(t, view) }) : null,
             stepControl(id, t),
             otherControls(id, t),
           ),
@@ -126,6 +132,7 @@ function render() {
       : [el("p", { className: "muted", textContent: "None." })]),
   );
 
+  renderWorkflows();
   renderReviews();
   renderAdmin();
   renderDelegations();
@@ -188,6 +195,132 @@ function otherControls(id, t) {
       };
       return button;
     }),
+  );
+}
+
+// -- workflows (docs/architecture/2026-10-20-workflow-view.md) ----------------------
+
+// Each workflow the project's blueprints define, its steps in order, and a
+// run: one task per step, named after the run, signed like any step.
+function renderWorkflows() {
+  const all = workflows(view);
+  $("workflow-section").hidden = all.length === 0;
+  $("workflows").replaceChildren(
+    ...all.map((w) => {
+      const run = el("button", { textContent: "Run…", disabled: !pair || !enrolled || deciding });
+      run.onclick = () => runWorkflow(w);
+      return el(
+        "div",
+        { className: "card" },
+        el(
+          "div",
+          { className: "row" },
+          el("strong", { textContent: w.name }),
+          el("span", { className: "muted", textContent: w.roadmap_name }),
+        ),
+        el(
+          "ol",
+          {},
+          ...w.definitions.map((d) =>
+            el("li", {
+              textContent: d.depends_on.length ? `${d.title} (after ${d.depends_on.join(", ")})` : d.title,
+            }),
+          ),
+        ),
+        el("div", {
+          className: "muted",
+          textContent: `From ${w.source.repository} at ${w.source.commit.slice(0, 12)}, ${w.source.path}`,
+        }),
+        el("div", { className: "actions" }, run),
+        ...runs(view)
+          .filter((r) => r.blueprint.roadmap_key === w.roadmap_key && r.blueprint.workflow_id === w.workflow_id)
+          .map(runRow),
+      );
+    }),
+  );
+}
+
+// A run's progress, and for an administrator, its readiness to define.
+function runRow(r) {
+  const define =
+    governing && r.pending.length
+      ? el("button", { textContent: `Define readiness (${r.pending.length})…`, disabled: deciding })
+      : null;
+  if (define) define.onclick = () => openReadiness(r);
+  return el(
+    "div",
+    { className: "row run" },
+    el("span", { textContent: `Run ${r.name}: ${r.done} of ${r.tasks.length} completed` }),
+    define,
+  );
+}
+
+// -- run readiness (docs/architecture/2026-10-20-run-readiness.md) -----------------
+
+// One digest field per input of each task waiting, and the run's SOP; the
+// known digests (custody receipts in this project) are offered to pick from.
+function openReadiness(r) {
+  const known = [...new Set(Object.values(view.receipts).map((x) => x.digest))];
+  $("digests").replaceChildren(...known.map((d) => el("option", { value: d })));
+  // `list` is read-only as a property: it is set as an attribute.
+  const field = (name, label) => {
+    const input = el("input", { name, pattern: "[0-9a-f]{64}", required: true });
+    input.setAttribute("list", "digests");
+    return el("label", {}, label, input);
+  };
+  $("readiness-what").textContent = `Run ${r.name}: ${r.pending.map((t) => t.id).join(", ")}`;
+  $("readiness-fields").replaceChildren(
+    field("sop", "SOP digest"),
+    ...r.pending.flatMap((t) =>
+      t.blueprint.artifact_requirements.map((name) => field(`${t.id}/${name}`, `${t.id}: input “${name}”`)),
+    ),
+  );
+  // A later batch keeps the SOP the run already follows.
+  if (r.sop) Object.assign($("readiness-form").elements.sop, { value: r.sop, readOnly: true });
+  $("readiness").showModal();
+  $("readiness").addEventListener(
+    "close",
+    () => {
+      if ($("readiness").returnValue === "prepare") defineReadiness(r, new FormData($("readiness-form")));
+    },
+    { once: true },
+  );
+}
+
+async function defineReadiness(r, form) {
+  const inputs = {};
+  for (const [key, value] of form.entries()) {
+    if (key === "sop") continue;
+    const [task, name] = key.split("/");
+    (inputs[task] ??= {})[name] = value.trim();
+  }
+  const sop = (form.get("sop") ?? "").trim();
+  const { commands, error } = runReadiness(r, { tenant: tenantId, project: projectIdRaw, sop, inputs });
+  if (error) return status(`Not defined: ${error}.`, true);
+
+  const path = `${projectPath}/runs/${encodeURIComponent(r.run_event_id)}/readiness`;
+  await signEach(
+    () => governed("POST", path, { governance_key_id: keyId, sop_digest: sop, inputs }),
+    (prepared) => prepared.commands,
+    (cores) => device.isExpectedBatch(cores, { keyId, chapter: chapterId, commands }),
+    (prepared, signatures) => postJSON(`${path}/${encodeURIComponent(prepared.id)}`, { signatures }),
+  );
+}
+
+function runWorkflow(w) {
+  const run = prompt(`Name this run of ${w.name}. Each step becomes a task named <run>-<step>.`);
+  if (run === null) return;
+  const { ids, error } = runTaskIds(w, run.trim(), view.tasks);
+  if (error) return status(`Not run: ${error}.`, true);
+  const fields = {
+    revision_event_id: w.revision_event_id,
+    roadmap_key: w.roadmap_key,
+    workflow_id: w.workflow_id,
+    task_ids: ids,
+  };
+  signAndSubmit(
+    () => postJSON(`${projectPath}/commands`, { action: "instantiate", ...fields, key_id: keyId }),
+    { type: "TaskWorkflowInstantiatedV1", payload: fields },
   );
 }
 

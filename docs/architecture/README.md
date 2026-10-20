@@ -1,5 +1,7 @@
 # biz-kit architecture
 
+What is delivered and what comes next: [the roadmap](../roadmap.md).
+
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
@@ -58,6 +60,13 @@ domain views. The imported histories and existing identifiers remain intact.
   governance from a pinned source (`mix coop.blueprint`); an operator runs a
   workflow, creating its tasks with their Definitions of Done and
   predecessors. SpruceGoose's design reviewed point by point.
+- [Workflows in the view](2026-10-20-workflow-view.md): a project's feed
+  carries its workflows; a person runs one from the page, and each task says
+  which workflow and step it came from.
+- [Readiness for a workflow run](2026-10-20-run-readiness.md): an
+  administrator defines readiness for a run's tasks in one signed batch, the
+  blueprint's predecessors and input names filled in; the page shows each
+  run's progress.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.

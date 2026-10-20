@@ -72,6 +72,11 @@ Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
   its OpenAPI contract is `apps/dispatch/contracts/openapi.json` — the
   d-patch field app's DTOs are held to a copy of it.
 
+## Roadmap
+
+[docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
+in what order, the remaining consolidation steps, and open questions.
+
 ## Consolidation direction
 
 The target is [one source of truth](docs/architecture/2026-10-11-single-source-of-truth.md):

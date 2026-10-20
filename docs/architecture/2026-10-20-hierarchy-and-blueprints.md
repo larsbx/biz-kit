@@ -174,7 +174,8 @@ other step.
 ## Limits
 
 - **Not shown in the web view or the feed.** The tasks a run creates appear
-  in the project's feed like any other task.
+  in the project's feed like any other task. [Workflows in the view](2026-10-20-workflow-view.md)
+  adds both.
 - **Bounded model scope.** `task_blueprint.qnt` reuses the ledger lifecycle
   with tasks initialized with a Definition of Done. It checks current revision
   and lifecycle-version admission, preservation across a later revision,

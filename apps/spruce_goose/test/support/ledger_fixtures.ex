@@ -160,6 +160,46 @@ defmodule SpruceGoose.LedgerFixtures do
     )
   end
 
+  @doc """
+  A two-step release blueprint (build, then ship) applied to project-1 by the
+  world's governance key; its event.
+  """
+  def apply_blueprint!(w) do
+    bytes = """
+    # #{w.chapter}
+    schema_version: 2
+    project: {key: project-1, name: Launch}
+    roadmaps:
+      - key: q4
+        name: Fourth quarter
+        workflows:
+          - id: release
+            name: Release
+            tasks:
+              - {id: build, title: Build the release, definition_of_done: [{id: built, description: Built}]}
+              - {id: ship, title: Ship it, definition_of_done: [{id: shipped, description: Shipped}], depends_on: [build]}
+    """
+
+    {:ok, blueprint} = CoopSubstrate.Blueprints.read(bytes)
+    {:ok, digest} = CoopSubstrate.Harness.Artifacts.put(bytes)
+
+    [revision] =
+      append!(
+        event(w, w.gov, "TaskBlueprintAppliedV1", %{
+          "tenant_id" => tenant(),
+          "project_id" => "project-1",
+          "repository" => "acme/plans",
+          "commit" => String.duplicate("a", 40),
+          "tree" => String.duplicate("b", 40),
+          "path" => "launch.yaml",
+          "manifest_digest" => {:bytes, digest},
+          "blueprint" => blueprint
+        })
+      )
+
+    revision
+  end
+
   @doc "A fresh chapter with its governance key, an operator and an agent."
   def world do
     w = %{chapter: "chapter-sg-" <> ULID.generate(), gov: member("governance")}

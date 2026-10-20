@@ -2,7 +2,7 @@
 // what the change feed's frames build (docs/architecture/2026-10-19-live-view.md).
 // A frame's changes are whole-entity upserts (value null means removed).
 
-export const projectKinds = ["tasks", "suggestions", "delegations", "receipts", "devices"];
+export const projectKinds = ["tasks", "suggestions", "delegations", "receipts", "devices", "workflows"];
 export const chapterKinds = ["projects", "administrators"];
 
 export const emptyView = (kinds = projectKinds) => Object.fromEntries(kinds.map((k) => [k, {}]));
@@ -323,3 +323,90 @@ export const decidedSuggestions = (view) =>
     .filter(([, s]) => s.status !== "pending")
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
     .map(([id, s]) => ({ id, ...s }));
+
+// -- workflows (docs/architecture/2026-10-20-workflow-view.md) ----------------------
+
+// The project's workflows under the blueprints now governing them, by roadmap
+// then name.
+export const workflows = (view) =>
+  entries(view.workflows ?? {}).sort(byKey((w) => `${w.roadmap_name}\u0000${w.name}`));
+
+const runName = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+// The tasks a run named `run` would create: `run-<step>` for each step of the
+// workflow, each a new, valid task ID. `{ids}` to sign, or `{error}` to say.
+export function runTaskIds(workflow, run, tasks) {
+  if (!runName.test(run ?? "")) return { error: "a run's name is lowercase letters, digits, - and _" };
+  const ids = Object.fromEntries(workflow.definitions.map((d) => [d.id, `${run}-${d.id}`]));
+  const taken = Object.values(ids).filter((id) => id in tasks || id.length > 128);
+  return taken.length ? { error: `${taken.join(", ")} already exist${taken.length === 1 ? "s" : ""}` } : { ids };
+}
+
+// Where a task made by a run came from, for its card: the workflow's name if
+// the view still has it, and the step.
+export function runOf(t, view) {
+  const b = t.blueprint;
+  if (!b) return null;
+  const key = `${encodeURIComponent(b.roadmap_key)}/${encodeURIComponent(b.workflow_id)}`;
+  const name = view.workflows?.[key]?.name ?? b.workflow_id;
+  return `From workflow ${name}, step ${b.definition_id}`;
+}
+
+// -- run readiness (docs/architecture/2026-10-20-run-readiness.md) -----------------
+
+// The project's workflow runs, newest name last: each run's tasks, and those
+// governance can define readiness for now (proposed or queued, none yet).
+export function runs(view) {
+  const byRun = new Map();
+  for (const [id, t] of Object.entries(view.tasks)) {
+    const run = t.blueprint?.run_event_id;
+    if (!run) continue;
+    if (!byRun.has(run)) byRun.set(run, { run_event_id: run, blueprint: t.blueprint, tasks: [] });
+    byRun.get(run).tasks.push({ id, ...t });
+  }
+  return [...byRun.values()]
+    .map((r) => {
+      const tasks = r.tasks.sort(byKey((t) => t.id));
+      const pending = tasks.filter((t) => ["proposed", "queued"].includes(t.state) && !t.readiness);
+      const done = tasks.filter((t) => t.state === "completed").length;
+      // Its name, as the page made its task IDs: `<run>-<step>`.
+      const t = tasks[0];
+      const suffix = `-${t.blueprint.definition_id}`;
+      const name = t.id.endsWith(suffix) ? t.id.slice(0, -suffix.length) : t.id;
+      // A run follows one SOP: the one its tasks were already readied under.
+      const sop = tasks.find((x) => x.readiness)?.readiness.sop_digest ?? null;
+      return { ...r, name, tasks, pending, done, sop };
+    })
+    .sort(byKey((r) => r.tasks[0].id));
+}
+
+const hex64 = /^[0-9a-f]{64}$/;
+
+// The exact definitions a run's readiness batch must hold: per pending task,
+// the blueprint's predecessors and input names, with the digests given
+// (`inputs[task][name]`, hex) and the run's SOP. `{commands}` or `{error}`.
+export function runReadiness(run, { tenant, project, sop, inputs }) {
+  if (!hex64.test(sop ?? "")) return { error: "the SOP needs a SHA-256 digest" };
+  const commands = [];
+  for (const t of run.pending) {
+    const requirements = {};
+    for (const name of t.blueprint.artifact_requirements) {
+      const digest = inputs[t.id]?.[name];
+      if (!hex64.test(digest ?? "")) return { error: `${t.id} needs a SHA-256 digest for “${name}”` };
+      requirements[name] = { __bytes__: digest };
+    }
+    commands.push({
+      type: "TaskReadinessDefinedV1",
+      payload: {
+        tenant_id: tenant,
+        project_id: project,
+        task_id: t.id,
+        expected_version: t.version,
+        artifact_requirements: requirements,
+        predecessor_ids: t.blueprint.predecessor_ids,
+        sop_digest: { __bytes__: sop },
+      },
+    });
+  }
+  return commands.length ? { commands } : { error: "no task of this run is waiting for readiness" };
+}
