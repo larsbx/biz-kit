@@ -130,10 +130,10 @@ These defects stand regardless of whether Keel is adopted.
 | D7 | `spruce_goose/lib/spruce_goose/actors/grant.ex:53-55` | revoking a grant destroys the row, which loses the record of who held authority when | **Open: needs a governed change.** Any fix changes the schema and `registry.ex`, and both are pinned constitutional roots (`schema`, `agent_charter` in `priv/kernel/shadow-event-roots.json`). A fix closing grants (`revoked_at`, `revoked_by`, a base filter, a partial unique index) passes the actor tests but requires re-pinning both roots. The ledger grants that replace `Actors.Grant` already keep history. |
 | D8 | `spruce_goose/lib/spruce_goose/workflows/task.ex:85` | `Task.assignees` is free strings, not principals | **Not a defect.** Documented as scheduling metadata, "not the governed statement of the work" (`spruce_goose/docs/revisions.md:86`); nothing derives authority from it. Governed assignment is the ledger grant, which names principals. |
 | D9 | `dispatch` `RoleAssignment.principal_type` | `SERVICE` principals have no accountable owner | **Open, no live path.** Nothing grants role assignments yet except seeds and tests, since the admin API is unbuilt. Resolution is planned: dispatch roles become governance-signed ledger grants (`2026-10-20-dispatch-capability-document.md`), which are accountable by construction. |
-| D10 | truck-shop `lib/` | no policy authorizer anywhere, so any tenant user can run any action | **Blocked: truck-shop has never built.** It mixes Ash 2 and Ash 3 DSL, has syntax errors and no `mix.lock`, so a policy cannot be compiled or tested. Needs an Ash 3 bring-up first. |
-| D11 | truck-shop `accounts/organization.ex:228-235` | `can_add_users?` always returns true | **Blocked**, as D10. |
-| D12 | truck-shop `fleet/assignment.ex` | overlapping truck/driver assignments are not refused; the TLA+ invariants aren't enforced in code | **Blocked**, as D10. |
-| D13 | spruce `resources/agent.ex` | its docs promise policies but there is no authorizer, and `max_turns` is never enforced | **Blocked: spruce has never built.** DSL errors, no migrations and no `mix.lock`. Needs a bring-up first. |
+| D10 | truck-shop `lib/` | no policy authorizer anywhere, so any tenant user can run any action | **Fixed, with a gap.** After an Ash 3 bring-up, policies require active membership of the tenant's organization and the role's permission; admin-only for destructive and org/user actions (truck-shop #25). Domains authorize only when an actor is passed, and the web layer passes none yet. |
+| D11 | truck-shop `accounts/organization.ex:228-235` | `can_add_users?` always returns true | **Fixed.** Compares active users with `max_users`; creating, re-activating or moving a user into a full organization is refused. |
+| D12 | truck-shop `fleet/assignment.ex` | overlapping truck/driver assignments are not refused; the TLA+ invariants aren't enforced in code | **Fixed.** Overlapping active assignments of a truck or driver are refused, by validation and a `btree_gist` exclusion constraint. |
+| D13 | spruce `resources/agent.ex` | its docs promise policies but there is no authorizer, and `max_turns` is never enforced | **Fixed.** After a bring-up, `Ash.Policy.Authorizer` refuses a new turn once the persisted `turns_taken` reaches `max_turns`, which holds across restarts (spruce #4). The policies don't check the actor yet. |
 | D14 | agent-runtime-platform `bin/pi-executive`, `bin/pi-decider` | the Executive acts on an agent's (the Decider's) approval; the chain reaches a person only through the spec file | **Fixed.** The Decider runs only on a spec with `Status: approved` and a named `Approved-By:` (anything else defers); the Executive accepts records only from the Decider's `90-decisions` directory (`tests/test_pi_optimizer_gate.sh`). |
 | D15 | bizops-kb `24.12d:61` | "Who approves adding or removing an employee?" is left blank in the sign-off form | **Not a defect.** It is a field under "Policies the owner decides", blank until the owner signs. |
 
@@ -141,8 +141,8 @@ These defects stand regardless of whether Keel is adopted.
 
 1. **Fix D2** (done: charter constants now need governance). D1 and D3
    turned out to be specified behaviour, as did D4, D5, D8 and D15. D14 is
-   fixed. D7 needs a governed re-pin of two constitutional roots; D10–D13
-   need truck-shop and spruce brought up to build first.
+   fixed, and so are D10–D13 after truck-shop and spruce were brought up.
+   D7 needs a governed re-pin of two constitutional roots.
 2. **Give the `prn_` principal a kind** (person, entity, agent, system). This
    is the precondition for agent accountability (C6 and the founding party).
 3. **Decide C1** (one seat per request) and **C2** (instant type) in Keel
