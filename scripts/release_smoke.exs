@@ -6,7 +6,7 @@
 alias CoopSubstrate.{Crypto, Log}
 alias CoopSubstrate.Protocol.Envelope
 
-chapter = "smoke-#{System.unique_integer([:positive])}"
+chapter = "smoke-" <> CoopSubstrate.ULID.generate()
 scope = {chapter, "tenant-1", "project-1"}
 where = %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
 
