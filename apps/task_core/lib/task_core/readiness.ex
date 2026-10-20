@@ -16,7 +16,18 @@ defmodule TaskCore.Readiness do
       current submission, which must accept it. A review confers no
       lifecycle authority by itself: an operator completes the task.
 
-  A completed task is what a successor's readiness waits for.
+  A completed task is what a successor's readiness waits for, and a task
+  completes only once each of its todos is completed or dropped
+  (`TaskCore.Todos`).
+
+  What SpruceGoose guaranteed and the ledger now does too
+  (docs/architecture/2026-10-20-sprucegoose-salvage.md):
+
+    * no readiness definition closes a cycle among the predecessors of a
+      project's tasks, so no task is left unable ever to become ready;
+    * a definition may name the SOP's version (`MAJOR.MINOR.PATCH`). Once a
+      task's SOP is versioned, a redefinition names a version, never a lower
+      one, and one version names one document.
 
   Cancel and reopen (docs/architecture/2026-10-19-cancel-reopen.md):
 
@@ -83,11 +94,15 @@ defmodule TaskCore.Readiness do
   def event_types do
     %{
       "TaskReadinessDefinedV1" =>
-        spec("governance", %{
-          "artifact_requirements" => :any,
-          "predecessor_ids" => :any,
-          "sop_digest" => :hash
-        }),
+        spec(
+          "governance",
+          %{
+            "artifact_requirements" => :any,
+            "predecessor_ids" => :any,
+            "sop_digest" => :hash
+          },
+          %{"sop_version" => :string}
+        ),
       "TaskSOPAcknowledgedV1" => spec("operator", Map.put(@actor, "custody_receipt_id", :string)),
       "TaskQueuedV1" => spec("operator", @actor),
       "TaskReadyV1" => spec("operator", Map.put(@actor, "custody_receipts", :any)),
@@ -99,12 +114,12 @@ defmodule TaskCore.Readiness do
     }
   end
 
-  defp spec(role, fields) do
+  defp spec(role, fields, optional \\ %{}) do
     %{
       required_roles: [role],
       disclosure_class: :edges,
       stream: {:payload_fields, "tasks", ~w(tenant_id project_id task_id)},
-      payload: %{required: Map.merge(@subject, fields), optional: %{}}
+      payload: %{required: Map.merge(@subject, fields), optional: optional}
     }
   end
 
@@ -144,6 +159,8 @@ defmodule TaskCore.Readiness do
     with :ok <- transition(task, ["proposed", "queued"], "define_readiness"),
          :ok <- requirements(p["artifact_requirements"]),
          :ok <- predecessors(env, p["predecessor_ids"], state),
+         :ok <- acyclic(env, p["predecessor_ids"], state),
+         :ok <- sop_version(Map.get(task, :readiness), p),
          :ok <-
            TaskCore.Hierarchy.keeps_blueprint(
              task,
@@ -197,7 +214,8 @@ defmodule TaskCore.Readiness do
          task,
          _
        ) do
-    with :ok <- move(task, type) do
+    with :ok <- move(task, type),
+         :ok <- TaskCore.Todos.finished(task) do
       case task.dod.review do
         %{event_id: ^id, decision: "accept"} -> :ok
         %{event_id: ^id} -> {:error, :dod_not_accepted}
@@ -259,6 +277,63 @@ defmodule TaskCore.Readiness do
   end
 
   defp predecessors(_, _, _), do: {:error, :invalid_predecessors}
+
+  # The project's predecessor graph, with this task's list replaced, must stay
+  # acyclic (I-19). Every task of the project is a node; one never defined
+  # has no predecessors.
+  defp acyclic(env, ids, state) do
+    {chapter, tenant, project, self} = State.task_key(env)
+
+    graph =
+      for {{^chapter, ^tenant, ^project, id}, task} <- state.tasks do
+        depends_on =
+          if id == self, do: ids, else: get_in(task, [:readiness, :predecessor_ids]) || []
+
+        %{"id" => id, "depends_on" => depends_on}
+      end
+
+    case TaskCore.Dag.order(graph) do
+      {:ok, _} -> :ok
+      {:error, _} -> {:error, :predecessor_cycle}
+    end
+  end
+
+  # Once versioned, an SOP's version only moves forward, and names one document (I-20).
+  defp sop_version(previous, %{"sop_version" => version} = p) do
+    with {:ok, new} <- parse_version(version) do
+      case previous do
+        %{sop_version: old} when is_binary(old) ->
+          {:ok, old_parsed} = parse_version(old)
+
+          cond do
+            new < old_parsed ->
+              {:error, :sop_version_regressed}
+
+            new == old_parsed and p["sop_digest"] != previous.sop_digest ->
+              {:error, :sop_version_conflict}
+
+            true ->
+              :ok
+          end
+
+        _ ->
+          :ok
+      end
+    end
+  end
+
+  defp sop_version(%{sop_version: old}, _p) when is_binary(old),
+    do: {:error, :sop_version_required}
+
+  defp sop_version(_previous, _p), do: :ok
+
+  defp parse_version(version) when is_binary(version) do
+    if Regex.match?(~r/\A(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\z/, version),
+      do: {:ok, version |> String.split(".") |> Enum.map(&String.to_integer/1)},
+      else: {:error, :invalid_sop_version}
+  end
+
+  defp parse_version(_), do: {:error, :invalid_sop_version}
 
   defp predecessor_key(env, id), do: put_elem(State.task_key(env), 3, id)
 
@@ -343,6 +418,7 @@ defmodule TaskCore.Readiness do
       artifact_requirements: p["artifact_requirements"],
       predecessor_ids: p["predecessor_ids"],
       sop_digest: p["sop_digest"],
+      sop_version: p["sop_version"],
       acknowledgment: nil
     })
   end

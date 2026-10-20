@@ -46,6 +46,10 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
           apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
           apps/task_core/lib/task_core/readiness.ex
+          apps/task_core/lib/task_core/todos.ex
+          apps/task_core/lib/task_core/steps.ex
+          apps/task_core/test/salvage_test.exs
+          apps/coop_substrate/test/task_salvage_test.exs
           apps/coop_substrate/test/task_readiness_commands_test.exs
           apps/coop_substrate/lib/coop_substrate/tasks.ex
           apps/coop_substrate/lib/coop_substrate/buzz/tasks.ex

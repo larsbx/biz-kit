@@ -65,6 +65,9 @@ has not been switched.
 - [Readiness for a workflow run](architecture/2026-10-20-run-readiness.md):
   governance defines a run's readiness in one signed batch. With this, a run
   can go from blueprint to completion outside the tests.
+- [What the ledger keeps from SpruceGoose](architecture/2026-10-20-sprucegoose-salvage.md):
+  todos that gate completion, no predecessor cycle across a project, and
+  SOP versions that never go back.
 
 **Dispatch**
 - [Capability document](architecture/2026-10-20-dispatch-capability-document.md):
@@ -115,9 +118,13 @@ currently reports itself signed out. What it needs from biz-kit, in order:
 
 - **Orchestration write surface.** Move SpruceGoose's remaining writes onto
   the ledger with dual-read parity, then fence the old writer:
-  - its Ash hierarchy and schema-1 blueprints;
-  - TODOs and approvals;
-  - deployment authorizations and outcome receipts.
+  - its Ash hierarchy and schema-1 blueprints.
+
+  Its todos, predecessor-cycle refusal and SOP versions are on the ledger
+  ([what the ledger keeps from SpruceGoose](architecture/2026-10-20-sprucegoose-salvage.md)).
+  Its deployment domain, derivation permits, release provenance, runtime
+  shadows, boards and inbox captures are not migrated; they go with its
+  writer.
 - **Dispatch and ownership.** Move dispatch, Keel ownership and shared
   principal facts onto the same admission path.
 - **Cutover.** Fence the old writers behind a signed baseline and prove
@@ -129,7 +136,3 @@ currently reports itself signed out. What it needs from biz-kit, in order:
 - **Single-project offboarding.** Should it, like chapter offboarding,
   cancel the person's pending requests only once the offboarding is
   admitted?
-- **Ledger predecessor cycles.** Should the ledger refuse a cycle in
-  predecessor lists that a person defines directly? Workflow definitions
-  already refuse cycles. Today an ad-hoc cycle leaves its tasks unable to
-  become ready.

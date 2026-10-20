@@ -50,6 +50,7 @@ defmodule TaskCore.State do
         timing: %{"schedule" => nil, "due_ms" => nil},
         timing_version: 0,
         timing_delegation_id: nil,
+        todos: %{},
         last_event_id: env.event_id
       },
       attrs
@@ -114,6 +115,7 @@ defmodule TaskCore.State do
     state = TaskCore.Readiness.handle_event(env, state)
     state = TaskCore.DoD.handle_event(env, state)
     state = TaskCore.Hierarchy.handle_event(env, state)
+    state = TaskCore.Todos.handle_event(env, state)
     TaskCore.Timing.handle_event(env, state)
   end
 
