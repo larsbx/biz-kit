@@ -94,6 +94,7 @@ defmodule Dispatch.Accounts.RoleDefinition do
 
   validations do
     validate {Dispatch.Accounts.Validations.KnownCapabilities, []}
+    validate {Dispatch.Accounts.Validations.KnownConstraints, []}
     validate {Dispatch.Accounts.Validations.AllowedProfileModule, []}
   end
 
