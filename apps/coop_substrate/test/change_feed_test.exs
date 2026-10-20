@@ -149,5 +149,9 @@ defmodule CoopSubstrate.ChangeFeedTest do
     test "a heartbeat is a comment, which EventSource ignores" do
       assert IO.iodata_to_binary(SSE.heartbeat()) == ": heartbeat\n\n"
     end
+
+    test "revocation is a named event with no id, so a resume never skips past it" do
+      assert IO.iodata_to_binary(SSE.revoked()) == "event: revoked\ndata: {}\n\n"
+    end
   end
 end

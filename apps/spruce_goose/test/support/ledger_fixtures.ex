@@ -223,8 +223,8 @@ defmodule SpruceGoose.LedgerFixtures do
     )
   end
 
-  # The next `changes` event, skipping heartbeats; :done when the server ends
-  # the stream.
+  # The next `changes` event, skipping heartbeats; :revoked when the server
+  # says the reader's access ended; :done when it ends the stream.
   def next(resp) do
     buffer = Process.get(resp.body.ref, "")
 
@@ -232,6 +232,10 @@ defmodule SpruceGoose.LedgerFixtures do
       [": heartbeat", rest] ->
         Process.put(resp.body.ref, rest)
         next(resp)
+
+      ["event: revoked\ndata: {}", rest] ->
+        Process.put(resp.body.ref, rest)
+        :revoked
 
       [event, rest] ->
         Process.put(resp.body.ref, rest)

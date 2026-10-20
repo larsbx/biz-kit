@@ -30,6 +30,7 @@ defmodule CoopSubstrate.Commands do
   use GenServer
 
   alias CoopSubstrate.Log
+  alias CoopSubstrate.Projections.Membership
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
   alias CoopSubstrate.Tasks.{Decisions, Lifecycle}
 
@@ -90,36 +91,118 @@ defmodule CoopSubstrate.Commands do
   @spec hold(term(), String.t(), String.t(), map(), Envelope.signer()) ::
           {:ok, pending()} | {:error, term()}
   def hold(owner, chapter, type, payload, signer) do
+    with {:ok, %{commands: [command]} = held} <-
+           hold_batch(owner, chapter, [{type, payload}], signer),
+         do: {:ok, held |> Map.delete(:commands) |> Map.merge(command)}
+  end
+
+  @doc """
+  `hold/5` for several commands by one signer, signed together and appended
+  as one atomic batch (`Log.append/1`): all of them or none. Each is checked
+  against the ledger as the ones before it leave it, in order.
+  """
+  @spec hold_batch(term(), String.t(), [{String.t(), map()}], Envelope.signer()) ::
+          {:ok, %{id: String.t(), commands: [map()], expires_at: integer()}} | {:error, term()}
+  def hold_batch(owner, chapter, commands, signer) do
     now = System.system_time(:millisecond)
 
-    with {:ok, env} <-
-           Envelope.new(%{
-             chapter_id: chapter,
-             type: type,
-             payload: payload,
-             signers: [signer],
-             timestamp_ms: now
-           }),
-         :ok <- invalid(TypeRegistry.validity_check(env, Log.gate())),
-         {:ok, bytes} <- Envelope.signing_bytes(env) do
+    with {:ok, envs} <- envelopes(chapter, commands, signer, now),
+         :ok <- admissible(envs, Log.gate()) do
       id = Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
       expires_at = now + @ttl_ms
-      :ok = GenServer.call(@server, {:hold, id, owner, env, expires_at})
-      {:ok, %{id: id, signing_bytes: bytes, type: type, payload: payload, expires_at: expires_at}}
+      :ok = GenServer.call(@server, {:hold, id, owner, envs, expires_at})
+
+      {:ok,
+       %{
+         id: id,
+         expires_at: expires_at,
+         commands:
+           for env <- envs do
+             {:ok, bytes} = Envelope.signing_bytes(env)
+             %{signing_bytes: bytes, type: env.type, payload: env.payload}
+           end
+       }}
     end
   end
 
   @spec submit(term(), String.t(), binary(), integer()) ::
           {:ok, Envelope.t()} | {:error, term()}
   def submit(owner, id, signature, now_ms \\ System.system_time(:millisecond)) do
-    with {:ok, env} <- GenServer.call(@server, {:take, owner, id, now_ms}),
-         {:ok, signed} <- Envelope.attach_signature(env, hd(env.signers).key_id, signature),
-         {:ok, [appended]} <- Log.append(signed),
+    with {:ok, [appended]} <- submit_batch(owner, id, [signature], now_ms: now_ms),
          do: {:ok, appended}
   end
 
-  @doc "The envelope held for `owner` under `id`, without spending it."
-  @spec peek(term(), String.t()) :: {:ok, Envelope.t()} | {:error, :unknown_command}
+  @doc """
+  Submit one signature per held command, in order; appended all at once, or
+  none. With `guard:` (`Log.append_if/3`), only if it holds at admission.
+  A wrong count leaves the batch held; a bad signature spends it, as it
+  spends a single command (`signed/3` checks without spending).
+  """
+  @spec submit_batch(term(), String.t(), [binary()], keyword()) ::
+          {:ok, [Envelope.t()]} | {:error, term()}
+  def submit_batch(owner, id, signatures, opts \\ []) do
+    now_ms = Keyword.get_lazy(opts, :now_ms, fn -> System.system_time(:millisecond) end)
+
+    with {:ok, held} <- peek(owner, id),
+         true <- length(held) == length(signatures) or {:error, :signature_count},
+         {:ok, envs} <- GenServer.call(@server, {:take, owner, id, now_ms}),
+         {:ok, signed} <- attach(envs, signatures) do
+      case opts[:guard] do
+        nil -> Log.append(signed)
+        guard -> Log.append_if(signed, guard)
+      end
+    end
+  end
+
+  @doc "The held batch with these signatures attached, without spending it: the count and each signature checked."
+  @spec signed(term(), String.t(), [binary()]) :: {:ok, [Envelope.t()]} | {:error, term()}
+  def signed(owner, id, signatures) do
+    with {:ok, held} <- peek(owner, id),
+         true <- length(held) == length(signatures) or {:error, :signature_count},
+         do: attach(held, signatures)
+  end
+
+  defp envelopes(chapter, commands, signer, now) do
+    Enum.reduce_while(commands, {:ok, []}, fn {type, payload}, {:ok, acc} ->
+      case Envelope.new(%{
+             chapter_id: chapter,
+             type: type,
+             payload: payload,
+             signers: [signer],
+             timestamp_ms: now
+           }) do
+        {:ok, env} -> {:cont, {:ok, acc ++ [env]}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  # Each against the gate the ones before it leave, as `Log.append/1` checks a batch.
+  defp admissible(envs, gate) do
+    Enum.reduce_while(envs, gate, fn env, gate ->
+      case invalid(TypeRegistry.validity_check(env, gate)) do
+        :ok -> {:cont, Membership.handle_event(env, gate)}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:error, _} = error -> error
+      _gate -> :ok
+    end
+  end
+
+  defp attach(envs, signatures) do
+    Enum.zip(envs, signatures)
+    |> Enum.reduce_while({:ok, []}, fn {env, signature}, {:ok, acc} ->
+      case Envelope.attach_signature(env, hd(env.signers).key_id, signature) do
+        {:ok, signed} -> {:cont, {:ok, acc ++ [signed]}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  @doc "The envelopes held for `owner` under `id`, in order, without spending them."
+  @spec peek(term(), String.t()) :: {:ok, [Envelope.t()]} | {:error, :unknown_command}
   def peek(owner, id), do: GenServer.call(@server, {:peek, owner, id})
 
   @doc "A governance key declared for the chapter, as the signer of a held envelope."
@@ -156,9 +239,9 @@ defmodule CoopSubstrate.Commands do
   end
 
   @impl true
-  def handle_call({:hold, id, owner, env, expires_at}, _from, state) do
+  def handle_call({:hold, id, owner, envs, expires_at}, _from, state) do
     true =
-      :ets.insert_new(@table, {id, owner, env, expires_at, System.unique_integer([:monotonic])})
+      :ets.insert_new(@table, {id, owner, envs, expires_at, System.unique_integer([:monotonic])})
 
     evict(owner)
     {:reply, :ok, state}

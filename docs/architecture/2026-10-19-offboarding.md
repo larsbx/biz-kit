@@ -135,6 +135,8 @@ inactive at one point, which its properties already allow.
 
 ## Limits
 
+- Offboarding from a whole chapter, administrator keys included, is one
+  act in the view ([chapter offboarding](2026-10-19-chapter-offboarding.md)).
 - Identity bindings and sessions are left as they are. A signed-in person
   with no grants reads and signs nothing. Unbinding an identity remains an
   identity-layer action.

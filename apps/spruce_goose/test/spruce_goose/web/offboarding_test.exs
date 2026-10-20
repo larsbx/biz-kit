@@ -11,7 +11,7 @@ defmodule SpruceGoose.Web.OffboardingTest do
   import SpruceGoose.{IdentityFixtures, LedgerFixtures}
 
   alias BizKit.Identity.Principal
-  alias CoopSubstrate.Feed
+  alias CoopSubstrate.{Crypto, Enrolments, Feed, Log, Offboarding}
   alias CoopSubstrate.Governance.Client
   alias CoopSubstrate.Offboarding.Offboarder
 
@@ -52,6 +52,7 @@ defmodule SpruceGoose.Web.OffboardingTest do
     assert output =~ "operator  Laptop  key #{w.laptop.payload["key_id"]}"
     assert output =~ "reviewer  -"
     assert output =~ "offboarded: #{w.chapter} / #{tenant()} / project-2"
+    assert next(resp) == :revoked
     assert next(resp) == :done
 
     refute holds?(w, "project-1")
@@ -119,6 +120,52 @@ defmodule SpruceGoose.Web.OffboardingTest do
     assert {:ok, %{"projects" => []}} = Client.get_signed(w.base <> path, governance(other))
   end
 
+  test "from the whole chapter: every project and the person's administrator key, in one signed batch",
+       w do
+    browser = member("governance")
+
+    append!(
+      event(w, w.gov, "RoleKeyDeclared", %{
+        "role" => "governance",
+        "key_id" => browser.signer.key_id,
+        "pubkey" => {:bytes, browser.signer.pubkey},
+        "member_id" => w.person
+      })
+    )
+
+    principal = w.base <> "/api/v1/principals/" <> Client.segment(w.person)
+    assert {:ok, %{"keys" => [%{"key_id" => key}]}} = Client.get_signed(principal, governance(w))
+    assert key == browser.signer.key_id
+
+    url = principal <> "/chapter_offboarding"
+    params = %{"chapter_id" => w.chapter}
+
+    expected = [
+      {"TaskPrincipalOffboardedV1", %{"tenant_id" => tenant(), "project_id" => "project-1"}},
+      {"TaskPrincipalOffboardedV1", %{"tenant_id" => tenant(), "project_id" => "project-2"}},
+      {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key}}
+    ]
+
+    shown? = fn cores ->
+      Enum.map(cores, &{&1["type"], Map.delete(&1["payload"], "principal_id")}) == expected
+    end
+
+    # Signed by another chapter's key: refused before anything is held.
+    assert {:error, {401, _}} = Client.sign_batch(url, governance(world()), shown?, params)
+
+    # The page would refuse a batch other than the one shown: nothing is signed.
+    assert Client.sign_batch(url, governance(w), &(length(&1) == 2), params) ==
+             {:error, :not_what_was_shown}
+
+    assert {:ok, %{"events" => [_, _, _]}} = Client.sign_batch(url, governance(w), shown?, params)
+
+    refute holds?(w, "project-1") or holds?(w, "project-2")
+    refute Map.has_key?(CoopSubstrate.Log.gate().role_keys[{w.chapter, "governance"}], key)
+
+    assert {:error, {409, body}} = Client.sign_batch(url, governance(w), shown?, params)
+    assert body =~ "nothing_to_offboard"
+  end
+
   test "the administrator signs only the offboarding it was shown", w do
     {:ok, details} = Offboarder.fetch(w.base, w.person, governance(w))
     [p1 | _] = details["projects"]
@@ -161,5 +208,89 @@ defmodule SpruceGoose.Web.OffboardingTest do
     assert {:error, {401, _}} = Offboarder.offboard(w.base, details, signer)
     assert {:error, {401, _}} = Offboarder.offboard(w.base, details, governance(world()))
     assert holds?(w, "project-1")
+  end
+
+  test "an admission race returns 409 with the request intact; a successful retry blocks its signed approval",
+       w do
+    key = member("governance")
+
+    {:ok, challenge} =
+      Enrolments.begin(
+        w.person,
+        %{issuer: "https://idp.test", subject: "sub-person"},
+        {w.chapter, tenant(), "pending-only"},
+        key.signer.key_id,
+        key.signer.pubkey,
+        "Pending administrator",
+        "governance"
+      )
+
+    {:ok, request} =
+      Enrolments.prove(w.person, challenge.id, Crypto.sign(challenge.statement, key.seed))
+
+    {:ok, before} = Enrolments.fetch(request.code)
+    {:ok, approval} = Enrolments.prepare_approval(request.code, w.gov.signer.key_id)
+    approval_sig = Crypto.sign(approval.signing_bytes, w.gov.seed)
+    {:ok, batch} = Offboarding.prepare_chapter(w.person, w.chapter, w.gov.signer.key_id)
+
+    body =
+      Jason.encode!(%{
+        signatures:
+          Enum.map(batch.commands, fn command ->
+            command.signing_bytes
+            |> Crypto.sign(w.gov.seed)
+            |> Base.url_encode64(padding: false)
+          end)
+      })
+
+    path = "/api/v1/principals/#{Client.segment(w.person)}/chapter_offboarding"
+    headers = [{"content-type", "application/json"}]
+    enrolments = BizKit.Cluster.Singleton.whereis_name(Enrolments)
+    :ok = :sys.suspend(enrolments)
+
+    try do
+      task =
+        Task.async(fn ->
+          receive do
+            :go -> call(:post, path <> "/" <> batch.id, headers, body)
+          end
+        end)
+
+      pid = task.pid
+      :erlang.trace(pid, true, [:send, {:tracer, self()}])
+      send(pid, :go)
+      assert_receive {:trace, ^pid, :send, {:"$gen_call", _, _}, ^enrolments}, 2_000
+
+      grant!(w, "TaskOperatorGrantedV1", member("operator"), w.person, "project-3")
+      head = Log.head()
+      :ok = :sys.resume(enrolments)
+      response = Task.await(task)
+      assert response.status == 409
+      assert response.resp_body =~ "holdings_changed"
+      assert Log.head() == head
+    after
+      :sys.resume(enrolments)
+    end
+
+    assert Enrolments.fetch(request.code) == {:ok, before}
+    assert call(:post, path <> "/" <> batch.id, headers, body).status == 404
+
+    assert {:ok, %{"events" => [_, _, _]}} =
+             Client.sign_batch(w.base <> path, governance(w), &(length(&1) == 3), %{
+               "chapter_id" => w.chapter
+             })
+
+    response =
+      call(
+        :post,
+        "/api/v1/enrolments/#{request.code}/approval/#{approval.id}",
+        headers,
+        Jason.encode!(%{signature: Base.url_encode64(approval_sig, padding: false)})
+      )
+
+    assert response.status == 404
+    assert response.resp_body =~ "unknown_code"
+    refute holds?(w, "project-1") or holds?(w, "project-2") or holds?(w, "project-3")
+    refute Map.has_key?(Log.gate().role_keys[{w.chapter, "governance"}], key.signer.key_id)
   end
 end

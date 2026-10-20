@@ -60,6 +60,19 @@ defmodule SpruceGoose.Web.BrowserTest do
     grant!(w, "TaskOperatorGrantedV1", member("operator"), reviewer, "project-2")
     create!(w, w.op_grant_2, "task-4", "project-2")
 
+    # And administers the chapter from a browser elsewhere: offboarding them
+    # from the chapter ends that key too (2026-10-19-chapter-offboarding.md).
+    reviewer_admin = member("governance")
+
+    append!(
+      event(w, w.gov, "RoleKeyDeclared", %{
+        "role" => "governance",
+        "key_id" => reviewer_admin.signer.key_id,
+        "pubkey" => {:bytes, reviewer_admin.signer.pubkey},
+        "member_id" => reviewer
+      })
+    )
+
     create!(w, w.op_grant, "task-1")
 
     suggestion =
@@ -191,7 +204,8 @@ defmodule SpruceGoose.Web.BrowserTest do
     [governance_cancel] = of_type.("TaskCancelledByGovernanceV1")
     assert governance_cancel.payload["task_id"] == "task-3"
     assert hd(governance_cancel.signers).pubkey == admin_key
-    # From both of the chapter's projects it held something in, one lookup.
+    # From project-2 alone, then from the whole chapter: project-1 and the
+    # reviewer's administrator key, in one append.
     offboarded = of_type.("TaskPrincipalOffboardedV1")
     assert Enum.map(offboarded, & &1.payload["project_id"]) == ["project-2", "project-1"]
 
@@ -200,11 +214,23 @@ defmodule SpruceGoose.Web.BrowserTest do
       assert hd(e.signers).pubkey == admin_key
     end
 
+    [ended] =
+      for e <- of_type.("RoleKeyRevoked"),
+          e.payload["key_id"] == reviewer_admin.signer.key_id,
+          do: e
+
+    assert hd(ended.signers).pubkey == admin_key
+    assert ended.global_seq == List.last(offboarded).global_seq + 1
+
     assert CoopSubstrate.Offboarding.fetch(reviewer, [w.chapter]).projects == []
     refute Log.gate().orchestration.dod_grants[reviewer_grant.event_id].active
 
     # Then the administrator's browser gave up its own key.
-    [given_up] = of_type.("RoleKeyRevoked")
+    [given_up] =
+      for e <- of_type.("RoleKeyRevoked"),
+          e.payload["key_id"] == declared.payload["key_id"],
+          do: e
+
     assert given_up.payload["key_id"] == declared.payload["key_id"]
     assert hd(given_up.signers).pubkey == admin_key
 

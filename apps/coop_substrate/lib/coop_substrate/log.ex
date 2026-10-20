@@ -85,6 +85,17 @@ defmodule CoopSubstrate.Log do
     GenServer.call(server, {:append, envelopes})
   end
 
+  @doc """
+  `append/2`, admitted only if `guard` holds of the gate at admission:
+  `{module, function, args}`, called as `apply(module, function, [gate | args])`
+  in the appender itself, so nothing can be appended between the check and
+  the batch. It returns `:ok` or `{:error, reason}`.
+  """
+  @spec append_if([Envelope.t()], {module(), atom(), list()}, GenServer.server()) ::
+          {:ok, [Envelope.t()]} | {:error, term()}
+  def append_if(envelopes, {_m, _f, _a} = guard, server \\ @server) when is_list(envelopes),
+    do: GenServer.call(server, {:append, envelopes, guard})
+
   @doc "Current global head: `%{global_seq: n, global_hash: <<_::256>> | nil}`."
   @spec head(GenServer.server()) :: %{global_seq: non_neg_integer(), global_hash: binary() | nil}
   def head(server \\ @server) do
@@ -413,8 +424,12 @@ defmodule CoopSubstrate.Log do
   def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
 
   @impl true
-  def handle_call({:append, envelopes}, _from, %{head: head, gate: gate} = state) do
-    with :ok <- verify_batch(envelopes) do
+  def handle_call({:append, envelopes}, from, state),
+    do: handle_call({:append, envelopes, nil}, from, state)
+
+  def handle_call({:append, envelopes, guard}, _from, %{head: head, gate: gate} = state) do
+    with :ok <- verify_batch(envelopes),
+         :ok <- guard(guard, gate) do
       case CoopSubstrate.Tasks.duplicate(envelopes, gate.orchestration) do
         {:ok, accepted} -> {:reply, {:ok, accepted}, state}
         {:error, reason} -> {:reply, {:error, reason}, state}
@@ -446,6 +461,9 @@ defmodule CoopSubstrate.Log do
   end
 
   # -- append internals ---------------------------------------------------------
+
+  defp guard(nil, _gate), do: :ok
+  defp guard({m, f, a}, gate), do: apply(m, f, [gate | a])
 
   defp verify_batch([]), do: {:error, :empty_batch}
 

@@ -233,14 +233,15 @@ async function signIn(browser, subject) {
     const reviewerPrincipal = (await reviewer.locator("#who").textContent()).replace("Signed in as ", "");
 
     // The administrator approves it in the view, signed by its browser's key.
-    await admin.locator("#approve-code").fill(await reviewerCode.textContent());
+    const reviewerCodeText = await reviewerCode.textContent();
+    await admin.locator("#approve-code").fill(reviewerCodeText);
     await admin.locator("#approve-form").getByRole("button", { name: "Look up" }).click();
     await admin.locator("#approve-details").getByText("asks for reviewer access").waitFor();
     await admin.getByRole("button", { name: "Approve…" }).click();
     await signOn(admin, "TaskReviewerGrantedV1", "Review tablet");
     await admin.locator("#approve-details").getByText("Approved:").waitFor();
     say({
-      reviewer_code: await reviewerCode.textContent(),
+      reviewer_code: reviewerCodeText,
       reviewer_key_id: await reviewer.locator("#key-id").textContent(),
       reviewer: reviewerPrincipal,
     });
@@ -294,13 +295,27 @@ async function signIn(browser, subject) {
     await admin.locator("#person-id").fill(reviewerPrincipal);
     await admin.locator("#person-form").getByRole("button", { name: "Look up" }).click();
     await admin.locator("#person-details").getByText("holds reviewer").waitFor();
-    for (const p of ["project-2", "project-1"]) {
-      admin.once("dialog", (question) => question.accept());
-      await admin.getByRole("button", { name: `Offboard from ${tenant} / ${p}` }).click();
-      await signOn(admin, "TaskPrincipalOffboardedV1", p);
-      await admin.getByRole("button", { name: `Offboard from ${tenant} / ${p}` }).waitFor({ state: "detached" });
-    }
+    admin.once("dialog", (question) => question.accept());
+    await admin.getByRole("button", { name: `Offboard from ${tenant} / project-2` }).click();
+    await signOn(admin, "TaskPrincipalOffboardedV1", "project-2");
+    await admin.getByRole("button", { name: `Offboard from ${tenant} / project-2` }).waitFor({ state: "detached" });
+
+    // The reviewer also administers the chapter from another browser: one act
+    // ends project-1 and that key, signed as one batch
+    // (docs/architecture/2026-10-19-chapter-offboarding.md).
+    const reviewerAdmin = admin.locator("#administrators .row").filter({ hasText: reviewerPrincipal });
+    await reviewerAdmin.waitFor(live);
+    await admin.locator("#person-details").getByText(`${reviewerPrincipal} administers it with`).waitFor();
+    admin.once("dialog", (question) => question.accept());
+    await admin.getByRole("button", { name: "Offboard from this chapter" }).click();
+    await admin.locator("#confirm").waitFor({ state: "visible" });
+    const batch = await admin.locator("#confirm-body").textContent();
+    if (!["TaskPrincipalOffboardedV1", "project-1", "RoleKeyRevoked"].every((t) => batch.includes(t)) || batch.includes("project-2"))
+      throw new Error(`unexpected batch: ${batch}`);
+    await admin.getByRole("button", { name: "Sign and send" }).click();
+    await admin.locator("#confirm").waitFor({ state: "hidden" });
     await admin.locator("#person-details").getByText("holds nothing in this chapter").waitFor();
+    await reviewerAdmin.waitFor({ state: "detached", ...live });
     // The projects card follows: only the project's own operator is left.
     await listed.getByText("1 open; 1 person").waitFor();
     // The reviewer's own page follows from its feed: its device is gone,
