@@ -16,8 +16,13 @@ defmodule CoopSubstrate.Application do
         # The appender and the in-memory stores are one per cluster
         # (docs/architecture/2026-10-19-cluster.md); every node runs the
         # event store client and the feed's notification group.
+        # An installation from before the operational records gains them here.
+        :ok = CoopSubstrate.Records.setup!()
+
         children = [
           CoopSubstrate.EventStore,
+          # Before the evidence quota, which rebuilds its charges from it.
+          CoopSubstrate.Records,
           # Before Log, which notifies it after every append.
           CoopSubstrate.Feed,
           {Singleton, CoopSubstrate.Feed.Nonces},

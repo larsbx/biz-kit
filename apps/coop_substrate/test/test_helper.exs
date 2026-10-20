@@ -18,6 +18,7 @@ Application.put_env(:coop_substrate, :extra_event_types, %{
 # wedges it at `Log.init/1`, before the reset that would clear it can run.
 ExUnit.after_suite(fn _results ->
   CoopSubstrate.LogCase.truncate_store!()
+  CoopSubstrate.LogCase.truncate_records!()
 end)
 
 ExUnit.start()

@@ -472,13 +472,16 @@ end
 # serve its change feed. apps/coop_substrate/config/config.exs reads these at
 # build time, which would bake the build host's credentials into a release, so
 # production reads them at boot.
+# Operational records share its database, in their own schema.
 if config_env() == :prod do
-  config :coop_substrate, CoopSubstrate.EventStore,
-    database: System.get_env("EVENTSTORE_DATABASE", "coop_substrate_eventstore"),
-    username: System.get_env("EVENTSTORE_USERNAME", "postgres"),
-    password: System.get_env("EVENTSTORE_PASSWORD"),
-    hostname: System.get_env("EVENTSTORE_HOST", "localhost"),
-    port: String.to_integer(System.get_env("EVENTSTORE_PORT", "5432"))
+  for store <- [CoopSubstrate.EventStore, CoopSubstrate.Records] do
+    config :coop_substrate, store,
+      database: System.get_env("EVENTSTORE_DATABASE", "coop_substrate_eventstore"),
+      username: System.get_env("EVENTSTORE_USERNAME", "postgres"),
+      password: System.get_env("EVENTSTORE_PASSWORD"),
+      hostname: System.get_env("EVENTSTORE_HOST", "localhost"),
+      port: String.to_integer(System.get_env("EVENTSTORE_PORT", "5432"))
+  end
 end
 
 # ── biz_kit_identity ────────────────────────────────────────────────────────

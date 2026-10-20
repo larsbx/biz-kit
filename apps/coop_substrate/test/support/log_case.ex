@@ -66,6 +66,31 @@ defmodule CoopSubstrate.LogCase do
     :ok
   end
 
+  @doc "Empty the operational records (`CoopSubstrate.Records`), as `truncate_store!/0` empties the ledger."
+  def truncate_records! do
+    {:ok, conn} = raw_conn()
+
+    Postgrex.transaction(conn, fn conn ->
+      Postgrex.query!(conn, "SET LOCAL eventstore.reset TO 'on'", [])
+
+      Postgrex.query!(
+        conn,
+        "TRUNCATE TABLE records.snapshots, records.subscriptions, records.stream_events, " <>
+          "records.streams, records.events RESTART IDENTITY",
+        []
+      )
+
+      Postgrex.query!(
+        conn,
+        "INSERT INTO records.streams (stream_id, stream_uuid, stream_version) VALUES (0, '$all', 0)",
+        []
+      )
+    end)
+
+    GenServer.stop(conn)
+    :ok
+  end
+
   @doc """
   Fail the test that leaves a ledger the application cannot boot against.
 
