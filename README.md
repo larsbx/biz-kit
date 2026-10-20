@@ -52,6 +52,12 @@ Verified on Elixir 1.19.0 / OTP 27.3.4 / PostgreSQL 16 + PostGIS 3:
 | dispatch (with integration tier) | 261 tests, 2 doctests, 0 failures |
 | spruce_goose | 523 tests, 0 failures (8 `:separate_sessions` excluded by default) |
 
+## Deploying
+
+[docs/deploy.md](docs/deploy.md): the `orchestration` release (the ledger and
+SpruceGoose, without dispatch), its settings, migrations, and
+`scripts/release-smoke.sh`, which builds, boots and exercises it.
+
 ## Configuration
 
 - `config/config.exs` imports each app's own `apps/<app>/config/config.exs`,

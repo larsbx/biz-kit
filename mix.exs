@@ -21,6 +21,20 @@ defmodule BizKit.MixProject do
           # unstripped beams (its provenance chunks must survive the build).
           include_erts: true,
           strip_beams: false
+        ],
+        # The ledger and SpruceGoose (the task view, its API and the CLI
+        # service) without dispatch, which cannot boot in production until its
+        # integrations are configured (docs/deploy.md). Nothing here depends
+        # on dispatch.
+        orchestration: [
+          applications: [
+            biz_kit_cluster: :permanent,
+            coop_substrate: :permanent,
+            biz_kit_identity: :permanent,
+            spruce_goose: :permanent
+          ],
+          include_erts: true,
+          strip_beams: false
         ]
       ]
     ]
