@@ -61,3 +61,7 @@ Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),
 [SpruceGoose's authority planes](../../apps/spruce_goose/docs/authority-planes.md),
 and its [documented current state](../../apps/spruce_goose/docs/current-state.md).
+- [Company-structure primitive audit — 2026-10-20](2026-10-20-primitive-audit.md):
+  every party, role, seat, delegation, ownership and decision model across
+  biz-kit and the remaining repos, compared with Keel; conflicts to decide,
+  what Keel lacks, defects found, and a recommended order.
