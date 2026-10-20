@@ -171,7 +171,11 @@ if seed = System.get_env("DISPATCH_CAPABILITY_SIGNING_SEED") do
   config :dispatch, :capability_signing_seed, seed
 end
 
-if config_env() == :prod do
+# The `orchestration` release carries no dispatch (mix.exs), so it needs none of
+# dispatch's production settings.
+dispatch_released? = System.get_env("RELEASE_NAME") != "orchestration"
+
+if config_env() == :prod and dispatch_released? do
   config :dispatch, Dispatch.Repo,
     url: require_env.("DATABASE_URL"),
     pool_size: integer_env.("POOL_SIZE", 10),
@@ -327,6 +331,14 @@ end
 
 cli_service_enabled? =
   System.get_env("SPRUCE_GOOSE_CLI_SERVICE_ENABLED", "false") in ["1", "true"]
+
+# The boot-time Systemwide SOP adoption check guards the legacy SpruceGoose
+# writer, whose CLI service gates work on that file. The ledger names each
+# task's SOP by digest in its readiness definition instead, so a node serving
+# only the ledger and the web view needs no SOP file (docs/deploy.md).
+if config_env() == :prod and not cli_service_enabled? do
+  config :spruce_goose, :verify_sop_adoption, false
+end
 
 # `UID` is a bash shell variable, not an exported environment variable, so the
 # old fallback resolved to "/run/user/" and the socket landed at

@@ -22,11 +22,15 @@ defmodule CoopSubstrate.RunReadiness do
   `{task_id, task}` for each that is proposed or queued without readiness.
   """
   def pending(o, {chapter, tenant, project}, run) do
-    for {{^chapter, ^tenant, ^project, id}, %{blueprint: %{run_event_id: ^run}} = task} <-
-          o.tasks,
-        task.state in ~w(proposed queued),
-        not Map.has_key?(task, :readiness),
-        do: {id, task}
+    for(
+      {{^chapter, ^tenant, ^project, id}, %{blueprint: %{run_event_id: ^run}} = task} <-
+        o.tasks,
+      task.state in ~w(proposed queued),
+      not Map.has_key?(task, :readiness),
+      do: {id, task}
+    )
+    # A map's order is not its keys' order past 32 entries.
+    |> Enum.sort_by(&elem(&1, 0))
   end
 
   @doc """

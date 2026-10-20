@@ -51,6 +51,9 @@ jobs:
           apps/task_core/test/salvage_test.exs
           apps/coop_substrate/test/task_salvage_test.exs
           apps/coop_substrate/test/task_hierarchy_test.exs
+          apps/spruce_goose/lib/spruce_goose/release_tasks.ex
+          scripts/release_smoke.exs
+          apps/coop_substrate/test/run_readiness_order_test.exs
           apps/spruce_goose/test/spruce_goose/web/todo_test.exs
           apps/coop_substrate/test/task_readiness_commands_test.exs
           apps/coop_substrate/lib/coop_substrate/tasks.ex
@@ -194,6 +197,8 @@ jobs:
           apps/task_core/lib/task_core/hierarchy.ex
           apps/coop_substrate/lib/coop_substrate/blueprints.ex
           apps/coop_substrate/test/task_hierarchy_test.exs
+          apps/spruce_goose/lib/spruce_goose/release_tasks.ex
+          scripts/release_smoke.exs
           apps/spruce_goose/lib/spruce_goose/web/blueprint_controller.ex
           apps/spruce_goose/lib/spruce_goose/web/requests.ex
           apps/spruce_goose/lib/spruce_goose/web/command_controller.ex
@@ -264,6 +269,39 @@ jobs:
       - name: Test the workflow in a browser
         working-directory: apps/spruce_goose
         run: mix test --only browser
+
+  release-smoke:
+    # The production orchestration release (the ledger and SpruceGoose,
+    # without dispatch): built, migrated twice, booted, its web view served,
+    # and task commands admitted and refused on its own ledger
+    # (scripts/release-smoke.sh, docs/deploy.md).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies
+        run: MIX_ENV=prod mix deps.get --check-locked --only prod
+      - name: Build, migrate, boot and exercise the release
+        run: scripts/release-smoke.sh
 
   ledger-model:
     # Model-checks every spec in apps/task_core/spec (task suggestions and
