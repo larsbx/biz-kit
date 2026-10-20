@@ -100,13 +100,10 @@ release gate.
 
 ## Deployment domain
 
-`SpruceGoose.Deployment` now owns release acceptance, deployment lifecycle,
-human-approved single-use execution authorizations, and execution tracking,
-with one authoritative record per deployment and a linked certified event
-stream behind it (see [`deployment-domain.md`](deployment-domain.md)). The
-native deployment control plane is subsumed by it. No production or staging
-deployment has yet been executed through this domain; the scripted host
-adapter has been exercised only against a stand-in script.
+Retired in biz-kit (2026-10-20), together with derivation permits, release
+provenance and runtime shadows: none is migrated to the ledger
+(`../../../docs/architecture/2026-10-20-sprucegoose-salvage.md`). Their tables
+stay until the legacy writer's database is retired; nothing writes them.
 
 ## Authority-cutover status
 

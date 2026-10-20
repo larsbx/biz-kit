@@ -4,7 +4,6 @@ defmodule SpruceGoose.ShadowEventAppendTest do
   alias SpruceGoose.CLI.Executor
   alias SpruceGoose.SopGate
   alias SpruceGoose.Kernel.Postgres.EventLedger
-  alias SpruceGoose.ReleaseProvenance
   alias SpruceGoose.Repo
 
   setup do
@@ -103,7 +102,9 @@ defmodule SpruceGoose.ShadowEventAppendTest do
       |> Enum.sort()
       |> Enum.map(&%{"path" => &1, "sha256" => String.replace_prefix(digest(&1), "sha256:", "")})
 
-    assert roots["schema"] == "sha256:" <> ReleaseProvenance.migration_set_digest(migrations)
+    # Each migration's path and digest, NUL-separated, one per line.
+    set = Enum.map_join(migrations, &(&1["path"] <> <<0>> <> &1["sha256"] <> "\n"))
+    assert roots["schema"] == "sha256:" <> Base.encode16(:crypto.hash(:sha256, set), case: :lower)
   end
 
   @tag :separate_sessions

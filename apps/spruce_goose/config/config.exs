@@ -7,9 +7,6 @@ config :spruce_goose,
   ash_domains: [
     SpruceGoose.Accounts,
     SpruceGoose.Actors,
-    SpruceGoose.Derivations.Domain,
-    SpruceGoose.Deployment.Domain,
-    SpruceGoose.Runtime.Domain,
     SpruceGoose.Workflows,
     SpruceGoose.Knowledge.Domain
   ]
@@ -53,18 +50,10 @@ config :spruce_goose, SpruceGoose.Web.RateLimit,
 
 config :spruce_goose, Oban,
   repo: SpruceGoose.Repo,
-  queues: [outbox: 1, derivations: 1, deployments: 1]
+  queues: [outbox: 1]
 
 config :spruce_goose, :start_outbox_dispatcher, false
 config :spruce_goose, :outbox_handler, nil
-config :spruce_goose, :derivation_executor_actor, nil
-config :spruce_goose, :deployment_executor_actor, nil
-config :spruce_goose, :deployment_host_adapter, nil
-config :spruce_goose, :deployment_operation_timeout_ms, 600_000
-
-config :spruce_goose, :derivation_handlers, %{
-  verify_artifact: SpruceGoose.Derivations.VerifyArtifact
-}
 
 config :spruce_goose, :outbox_delivery_timeout_ms, 30_000
 config :spruce_goose, :ledger_import_root, nil

@@ -19,7 +19,6 @@ defmodule SpruceGoose.Kernel.ShadowEvents do
     :add_task,
     :add_todo,
     :add_todo_dependency,
-    :admit_derivation,
     :apply_blueprint,
     :complete_todo,
     :instantiate_task,
