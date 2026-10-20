@@ -96,6 +96,10 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/web/app_controller.ex
           apps/spruce_goose/test/spruce_goose/web/command_test.exs
           apps/spruce_goose/test/spruce_goose/web/browser_test.exs
+          apps/coop_substrate/lib/coop_substrate/run_readiness.ex
+          apps/spruce_goose/lib/spruce_goose/web/run_readiness_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/run_readiness_test.exs
+          apps/spruce_goose/test/support/ledger_fixtures.ex
           apps/spruce_goose/test/support/identity_fixtures.ex
           apps/coop_substrate/lib/coop_substrate/enrolments.ex
           apps/coop_substrate/lib/coop_substrate/enrolments/approver.ex

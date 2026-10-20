@@ -197,6 +197,7 @@ defmodule TaskCore.Hierarchy do
           }
         })
         |> Map.put(:blueprint, %{
+          run_event_id: env.event_id,
           revision_event_id: p["revision_event_id"],
           roadmap_key: p["roadmap_key"],
           workflow_id: p["workflow_id"],

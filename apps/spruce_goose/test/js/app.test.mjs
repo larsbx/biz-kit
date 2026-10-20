@@ -33,6 +33,8 @@ import {
   workflows,
   runTaskIds,
   runOf,
+  runs,
+  runReadiness,
 } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -609,4 +611,54 @@ test("the device signs a run only with exactly the task IDs it named", () => {
   assert.ok(isExpectedCommand(core(fields), expected));
   assert.ok(!isExpectedCommand(core({ ...fields, task_ids: { build: "r2-build", ship: "other" } }), expected));
   assert.ok(!isExpectedCommand(core({ ...fields, revision_event_id: "e-old" }), expected));
+});
+
+test("runs group a run's tasks; readiness covers exactly the tasks waiting", () => {
+  const bp = (step, preds, inputs) => ({
+    run_event_id: "e-run",
+    roadmap_key: "q4",
+    workflow_id: "release",
+    definition_id: step,
+    predecessor_ids: preds,
+    artifact_requirements: inputs,
+  });
+  const view = {
+    ...emptyView(),
+    tasks: {
+      "r1-build": { state: "proposed", version: 2, blueprint: bp("build", [], ["source"]) },
+      "r1-ship": { state: "inbox", version: 1, blueprint: bp("ship", ["r1-build"], []) },
+      "r0-build": { state: "completed", version: 9, blueprint: { ...bp("build", [], []), run_event_id: "e-old" } },
+      plain: { state: "proposed", version: 2 },
+    },
+  };
+
+  const [old, run] = runs(view);
+  assert.deepEqual([old.name, old.done, old.tasks.length], ["r0", 1, 1]);
+  assert.deepEqual([run.name, run.tasks.map((t) => t.id), run.pending.map((t) => t.id)], ["r1", ["r1-build", "r1-ship"], ["r1-build"]]);
+
+  const sop = "a".repeat(64);
+  const source = "b".repeat(64);
+  const where = { tenant: "t1", project: "p1", sop };
+  assert.match(runReadiness(run, { ...where, inputs: {} }).error, /r1-build needs a SHA-256 digest for “source”/);
+  assert.match(runReadiness(run, { ...where, sop: "nope", inputs: {} }).error, /SOP/);
+  assert.deepEqual(runReadiness(run, { ...where, inputs: { "r1-build": { source } } }).commands, [
+    {
+      type: "TaskReadinessDefinedV1",
+      payload: {
+        tenant_id: "t1",
+        project_id: "p1",
+        task_id: "r1-build",
+        expected_version: 2,
+        artifact_requirements: { source: { __bytes__: source } },
+        predecessor_ids: [],
+        sop_digest: { __bytes__: sop },
+      },
+    },
+  ]);
+  assert.match(runReadiness(old, { ...where, inputs: {} }).error, /no task of this run/);
+  assert.equal(run.sop, null);
+
+  const readied = { ...view.tasks["r1-build"], state: "queued", readiness: { sop_digest: sop } };
+  const [, later] = runs({ ...view, tasks: { ...view.tasks, "r1-build": readied } });
+  assert.equal(later.sop, sop);
 });

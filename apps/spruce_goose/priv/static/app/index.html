@@ -51,7 +51,8 @@
       dialog { max-width: min(640px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); }
       dialog::backdrop { background: rgb(0 0 0 / 0.4); }
       details summary { cursor: pointer; }
-      #amend label, #evidence label { display: block; margin: 8px 0; }
+      #amend label, #evidence label, #readiness label { display: block; margin: 8px 0; }
+      #readiness input { width: 100%; box-sizing: border-box; margin: 4px 0 0; font-family: ui-monospace, monospace; }
       #amend input, #amend select, #amend textarea { width: 100%; box-sizing: border-box; margin: 4px 0 0; }
       #amend .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
       select, textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
@@ -164,6 +165,20 @@
         </div>
       </section>
     </main>
+
+    <dialog id="readiness" aria-labelledby="readiness-heading">
+      <form method="dialog" id="readiness-form">
+        <h2 id="readiness-heading">Define readiness for a run</h2>
+        <p class="muted" id="readiness-what"></p>
+        <p class="muted">Predecessors and input names come from the blueprint. Give the digest of each input and of the SOP.</p>
+        <div id="readiness-fields"></div>
+        <datalist id="digests"></datalist>
+        <div class="actions">
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button value="prepare">Prepare to sign</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="amend" aria-labelledby="amend-heading">
       <form method="dialog" id="amend-form">

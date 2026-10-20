@@ -351,3 +351,62 @@ export function runOf(t, view) {
   const name = view.workflows?.[key]?.name ?? b.workflow_id;
   return `From workflow ${name}, step ${b.definition_id}`;
 }
+
+// -- run readiness (docs/architecture/2026-10-20-run-readiness.md) -----------------
+
+// The project's workflow runs, newest name last: each run's tasks, and those
+// governance can define readiness for now (proposed or queued, none yet).
+export function runs(view) {
+  const byRun = new Map();
+  for (const [id, t] of Object.entries(view.tasks)) {
+    const run = t.blueprint?.run_event_id;
+    if (!run) continue;
+    if (!byRun.has(run)) byRun.set(run, { run_event_id: run, blueprint: t.blueprint, tasks: [] });
+    byRun.get(run).tasks.push({ id, ...t });
+  }
+  return [...byRun.values()]
+    .map((r) => {
+      const tasks = r.tasks.sort(byKey((t) => t.id));
+      const pending = tasks.filter((t) => ["proposed", "queued"].includes(t.state) && !t.readiness);
+      const done = tasks.filter((t) => t.state === "completed").length;
+      // Its name, as the page made its task IDs: `<run>-<step>`.
+      const t = tasks[0];
+      const suffix = `-${t.blueprint.definition_id}`;
+      const name = t.id.endsWith(suffix) ? t.id.slice(0, -suffix.length) : t.id;
+      // A run follows one SOP: the one its tasks were already readied under.
+      const sop = tasks.find((x) => x.readiness)?.readiness.sop_digest ?? null;
+      return { ...r, name, tasks, pending, done, sop };
+    })
+    .sort(byKey((r) => r.tasks[0].id));
+}
+
+const hex64 = /^[0-9a-f]{64}$/;
+
+// The exact definitions a run's readiness batch must hold: per pending task,
+// the blueprint's predecessors and input names, with the digests given
+// (`inputs[task][name]`, hex) and the run's SOP. `{commands}` or `{error}`.
+export function runReadiness(run, { tenant, project, sop, inputs }) {
+  if (!hex64.test(sop ?? "")) return { error: "the SOP needs a SHA-256 digest" };
+  const commands = [];
+  for (const t of run.pending) {
+    const requirements = {};
+    for (const name of t.blueprint.artifact_requirements) {
+      const digest = inputs[t.id]?.[name];
+      if (!hex64.test(digest ?? "")) return { error: `${t.id} needs a SHA-256 digest for “${name}”` };
+      requirements[name] = { __bytes__: digest };
+    }
+    commands.push({
+      type: "TaskReadinessDefinedV1",
+      payload: {
+        tenant_id: tenant,
+        project_id: project,
+        task_id: t.id,
+        expected_version: t.version,
+        artifact_requirements: requirements,
+        predecessor_ids: t.blueprint.predecessor_ids,
+        sop_digest: { __bytes__: sop },
+      },
+    });
+  }
+  return commands.length ? { commands } : { error: "no task of this run is waiting for readiness" };
+}
