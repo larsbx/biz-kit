@@ -21,15 +21,47 @@ defmodule CoopSubstrate.Records do
   def setup! do
     config = config()
 
-    # The database is the ledger's, already there: only the schema, which
-    # needs no right to create databases.
-    case EventStore.Storage.Schema.create(config) do
-      :ok -> :ok
-      {:error, :already_up} -> :ok
-      {:error, reason} -> raise "the records schema could not be created: #{reason}"
-    end
+    {:ok, conn} =
+      config
+      |> EventStore.Config.default_postgrex_opts()
+      |> Keyword.put(:pool_size, 1)
+      |> Postgrex.start_link()
 
-    EventStore.Tasks.Init.exec(config, quiet: true)
+    try do
+      # One database transaction covers the existence check and all DDL.
+      # The database lock serializes independent release/node startups too.
+      {:ok, :ok} =
+        Postgrex.transaction(
+          conn,
+          fn tx ->
+            Postgrex.query!(tx, "SELECT pg_advisory_xact_lock(1936028785, 1903521652)", [])
+            schema = Keyword.fetch!(config, :schema)
+
+            %{rows: [[exists]]} =
+              Postgrex.query!(
+                tx,
+                """
+                SELECT EXISTS (SELECT 1 FROM information_schema.tables
+                  WHERE table_schema = $1 AND table_name = 'events')
+                """,
+                [schema]
+              )
+
+            unless exists do
+              quoted = String.replace(schema, "\"", "\"\"")
+              Postgrex.query!(tx, ~s(CREATE SCHEMA IF NOT EXISTS "#{quoted}"), [])
+              {:ok, _} = EventStore.Storage.Initializer.run!(tx, config)
+            end
+
+            :ok
+          end,
+          timeout: 60_000
+        )
+
+      :ok
+    after
+      GenServer.stop(conn)
+    end
   end
 
   defmodule Serializer do

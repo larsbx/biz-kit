@@ -19,8 +19,10 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   reservations still unsettled count too, as pending, so a restart or a
   move to another node neither forgets what was stored nor makes room for
   a second upload while the first may yet land. A restored reservation is
-  settled by its writer's commit or refund, or, after a grace period, by
-  the artifact on the writer's node, as on worker death.
+  settled by its writer's commit or refund. Recovery reattaches a monitor
+  to the recorded writer; only confirmed writer death permits an absence
+  check to release capacity. An unreachable or legacy unidentified writer
+  keeps its reservation: a timeout is not evidence that a write stopped.
   """
 
   use GenServer
@@ -37,19 +39,25 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   @doc "Run a local write with a reservation, committing only on success."
   def store(key, digest, bytes, limit, write) do
     with {:ok, reservation} <- charge(key, digest, bytes, limit) do
-      try do
-        case write.() do
-          {:ok, _} = result ->
-            :ok = commit(reservation)
-            result
-
-          error ->
-            error
+      result =
+        try do
+          write.()
+        catch
+          kind, reason ->
+            refund(reservation)
+            :erlang.raise(kind, reason, __STACKTRACE__)
         end
-      after
-        # Also covers exceptions and exits. A committed reservation is
-        # already settled, so this cannot refund a successful write.
-        refund(reservation)
+
+      case result do
+        {:ok, _} ->
+          # A failed commit acknowledgement must leave the reservation in
+          # place: the file already landed. Recovery can settle it later.
+          :ok = commit(reservation)
+          result
+
+        error ->
+          :ok = refund(reservation)
+          error
       end
     end
   end
@@ -69,7 +77,7 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   # -- server -------------------------------------------------------------------------
 
   # State: the reservations in flight, by ID: %{key, digest, bytes, node, monitor}.
-  # A restored reservation has no monitor; its writer ran before this process.
+  # A restored reservation starts without a monitor; recovery reattaches it.
 
   @impl true
   def init(_opts) do
@@ -80,7 +88,7 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
     for {id, r} <- pending, do: count(r.key, r.digest, r.bytes, {:pending, id})
 
     state = Map.new(pending, fn {id, r} -> {id, Map.put(r, :monitor, nil)} end)
-    if state != %{}, do: resolve_restored_after(grace_ms())
+    if state != %{}, do: send(self(), :resolve_restored)
     {:ok, state}
   end
 
@@ -100,7 +108,7 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
         id = "r-" <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
         writer = Atom.to_string(node(pid))
         # Recorded before it is granted: no restart forgets room handed out.
-        record({:reserved, id, key, digest, bytes, writer})
+        record({:reserved, id, key, digest, bytes, writer, :erlang.term_to_binary(pid)})
         count(key, digest, bytes, {:pending, id})
 
         reservation = %{
@@ -108,6 +116,7 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
           digest: digest,
           bytes: bytes,
           node: writer,
+          writer: :erlang.term_to_binary(pid),
           monitor: Process.monitor(pid)
         }
 
@@ -122,8 +131,8 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
       if Map.has_key?(state, id) do
         finish(state, id, success)
       else
-        # Settled already (a restored reservation resolved before its writer
-        # returned): a success is still a stored digest, and counts.
+        # Duplicate commit after a completed settlement. Recovery never
+        # refunds a live writer, so this cannot resurrect expired capacity.
         if success, do: late_commit(key, digest, bytes)
         state
       end
@@ -132,17 +141,69 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   end
 
   @impl true
-  def handle_info({:DOWN, monitor, :process, _pid, _reason}, state) do
+  def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
     case Enum.find(state, fn {_id, r} -> r.monitor == monitor end) do
-      nil -> {:noreply, state}
-      {id, r} -> {:noreply, finish(state, id, landed?(r))}
+      nil ->
+        {:noreply, state}
+
+      {id, _r} when reason == :noconnection ->
+        # A distribution disconnect is not writer death. It may still write
+        # on the other side of the partition, even if its file is absent now.
+        retry_recovery()
+        {:noreply, put_in(state[id].monitor, nil)}
+
+      {id, r} ->
+        {:noreply, finish(state, id, landed?(r))}
     end
   end
 
-  # Restored reservations whose writers have not come back: the store decides.
+  # Recovery never expires a live writer's right to land its file.
   def handle_info(:resolve_restored, state) do
-    restored = for {id, %{monitor: nil} = r} <- state, do: {id, r}
-    {:noreply, Enum.reduce(restored, state, fn {id, r}, acc -> finish(acc, id, landed?(r)) end)}
+    state =
+      Enum.reduce(state, state, fn
+        {id, %{monitor: nil, writer: writer} = r}, acc when is_binary(writer) ->
+          case writer_status_on_node(r) do
+            {:alive, pid} -> put_in(acc[id].monitor, Process.monitor(pid))
+            :dead -> finish(acc, id, landed?(r))
+            :unknown -> acc
+          end
+
+        _, acc ->
+          acc
+      end)
+
+    if Enum.any?(state, fn {_, r} -> r.monitor == nil and r.writer != nil end),
+      do: retry_recovery()
+
+    {:noreply, state}
+  end
+
+  # Called on the writer's node. Encoding the PID as bytes keeps peer-node
+  # atoms out of Records.Serializer's safe decode on a newly started node.
+  # The PID includes the VM creation identity; a previous VM's PID is dead.
+  @doc false
+  def writer_status(encoded) do
+    pid = :erlang.binary_to_term(encoded, [:safe])
+
+    if is_pid(pid) and node(pid) == node() do
+      if Process.alive?(pid), do: {:alive, pid}, else: :dead
+    else
+      :unknown
+    end
+  rescue
+    ArgumentError -> :unknown
+  end
+
+  defp writer_status_on_node(r) do
+    with {:ok, node} <- known_node(r.node) do
+      case :rpc.call(node, __MODULE__, :writer_status, [r.writer], 2_000) do
+        {:alive, pid} when is_pid(pid) -> {:alive, pid}
+        :dead -> :dead
+        _ -> :unknown
+      end
+    else
+      :unknown -> :unknown
+    end
   end
 
   # The caller may have died after persistence but before commit. Read on its
@@ -220,8 +281,15 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   defp fold(records) do
     {committed, pending} =
       Enum.reduce(records, {[], %{}}, fn
+        {:reserved, id, key, digest, bytes, node, writer}, {committed, pending} ->
+          r = %{key: key, digest: digest, bytes: bytes, node: node, writer: writer}
+          {committed, Map.put(pending, id, r)}
+
         {:reserved, id, key, digest, bytes, node}, {committed, pending} ->
-          {committed, Map.put(pending, id, %{key: key, digest: digest, bytes: bytes, node: node})}
+          # Prior records lack writer identity. They cannot safely be expired
+          # by inspecting an absent file; only explicit settlement frees them.
+          r = %{key: key, digest: digest, bytes: bytes, node: node, writer: nil}
+          {committed, Map.put(pending, id, r)}
 
         {:settled, id, success}, {committed, pending} ->
           {r, pending} = Map.pop(pending, id)
@@ -250,9 +318,11 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
     end
   end
 
-  defp grace_ms, do: Application.get_env(:coop_substrate, :quota_restore_grace_ms, 60_000)
-
-  # No grace: before anything else reaches this process.
-  defp resolve_restored_after(0), do: send(self(), :resolve_restored)
-  defp resolve_restored_after(ms), do: Process.send_after(self(), :resolve_restored, ms)
+  defp retry_recovery do
+    Process.send_after(
+      self(),
+      :resolve_restored,
+      Application.get_env(:coop_substrate, :quota_recovery_retry_ms, 60_000)
+    )
+  end
 end

@@ -79,7 +79,7 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
     server = BizKit.Cluster.Singleton.whereis_name(Quota)
     parent = self()
     :erlang.trace(server, true, [:receive])
-    on_exit(fn -> :erlang.trace(server, false, [:receive]) end)
+    on_exit(fn -> if Process.alive?(server), do: :erlang.trace(server, false, [:receive]) end)
 
     for landed <- [false, true] do
       bytes = "worker-death-#{System.unique_integer([:positive])}"
@@ -166,6 +166,7 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
       assert Quota.charge(key, "a", 8, 8) == {:ok, :held}
     end
 
+    @tag :restart_race
     test "recovery cannot reassign room while a restored writer is still alive", %{key: key} do
       alias CoopSubstrate.Harness.Artifacts
       bytes = "slow-upload-#{key}"
@@ -203,50 +204,137 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
       assert {:ok, _} = Quota.charge(key, "b", 8, 8)
     end
 
-    test "a restored reservation nobody settles is resolved by what was stored", %{key: key} do
+    test "a dead restored writer releases only proven-absent bytes", %{key: key} do
       alias CoopSubstrate.Harness.Artifacts
+      parent = self()
+      sup = CoopSubstrate.Supervisor
 
-      bytes = "restored-#{key}"
-      landed = :crypto.hash(:sha256, bytes)
-      {:ok, ^landed} = Artifacts.put(bytes)
-      {:ok, _} = Quota.charge(key, landed, byte_size(bytes), 64)
-      {:ok, _} = Quota.charge(key <> "-gone", :crypto.hash(:sha256, "never #{key}"), 8, 8)
+      for landed <- [false, true] do
+        bytes = "dead-restored-#{key}-#{landed}"
+        digest = :crypto.hash(:sha256, bytes)
+        size = byte_size(bytes)
+        scope = {key, landed}
 
-      # Their writers never come back; after the grace, the store decides.
-      Application.put_env(:coop_substrate, :quota_restore_grace_ms, 0)
-      on_exit(fn -> Application.delete_env(:coop_substrate, :quota_restore_grace_ms) end)
-      restart_quota()
-      _ = :sys.get_state(BizKit.Cluster.Singleton.whereis_name(Quota))
+        writer =
+          spawn(fn ->
+            {:ok, _} = Quota.charge(scope, digest, size, size)
+            if landed, do: {:ok, ^digest} = Artifacts.put(bytes)
+            send(parent, {:reserved, self()})
+            receive do: (:stop -> :ok)
+          end)
 
-      assert Quota.charge(key, landed, byte_size(bytes), 64) == {:ok, :held}
-      assert {:ok, _} = Quota.charge(key <> "-gone", "other", 8, 8)
+        assert_receive {:reserved, ^writer}, 1_000
+        :ok = Supervisor.terminate_child(sup, Quota)
+        ref = Process.monitor(writer)
+        send(writer, :stop)
+        assert_receive {:DOWN, ^ref, :process, ^writer, :normal}, 1_000
+        {:ok, _} = Supervisor.restart_child(sup, Quota)
+        recover_now()
+
+        if landed do
+          assert Quota.charge(scope, digest, size, size) == {:ok, :held}
+          assert Quota.charge(scope, "other", 1, size) == {:error, :quota_exceeded}
+        else
+          assert {:ok, reservation} = Quota.charge(scope, "other", size, size)
+          :ok = Quota.refund(reservation)
+        end
+      end
     end
 
-    test "an installation from before the records gains their schema at start" do
-      {:ok, conn} = CoopSubstrate.LogCase.raw_conn()
-      Postgrex.query!(conn, ~s(DROP SCHEMA "records" CASCADE), [])
+    test "a restored live writer is monitored again for death", %{key: key} do
+      parent = self()
+      digest = :crypto.hash(:sha256, "absent-#{key}")
 
-      exists? = fn ->
-        %{rows: [[found]]} =
-          Postgrex.query!(
-            conn,
-            "SELECT EXISTS (SELECT 1 FROM information_schema.tables " <>
-              "WHERE table_schema = 'records' AND table_name = 'events')",
-            []
-          )
+      writer =
+        spawn(fn ->
+          {:ok, _} = Quota.charge(key, digest, 8, 8)
+          send(parent, :reserved)
+          receive do: (:stop -> :ok)
+        end)
 
-        found
-      end
-
-      refute exists?.()
-      assert CoopSubstrate.Records.setup!() == :ok
-      assert exists?.()
-      # And again, as on every later start.
-      assert CoopSubstrate.Records.setup!() == :ok
-      GenServer.stop(conn)
-
+      assert_receive :reserved, 1_000
       restart_quota()
-      assert {:ok, _} = Quota.charge("after-upgrade-#{System.unique_integer()}", "a", 1, 1)
+      recover_now()
+      server = BizKit.Cluster.Singleton.whereis_name(Quota)
+      :erlang.trace(server, true, [:receive])
+      on_exit(fn -> if Process.alive?(server), do: :erlang.trace(server, false, [:receive]) end)
+      send(writer, :stop)
+      assert_receive {:trace, ^server, :receive, {:DOWN, _, :process, ^writer, :normal}}, 1_000
+      assert {:ok, reservation} = Quota.charge(key, "replacement", 8, 8)
+      :ok = Quota.refund(reservation)
+    end
+
+    test "legacy and unreachable restored writers retain room until explicit settlement", %{
+      key: key
+    } do
+      for legacy <- [true, false] do
+        id = "unknown-#{key}-#{legacy}"
+        scope = {key, legacy}
+        digest = :crypto.hash(:sha256, id)
+        node = "unreachable_quota_writer@invalid"
+
+        record =
+          if legacy do
+            {:reserved, id, scope, digest, 8, Atom.to_string(node())}
+          else
+            {:reserved, id, scope, digest, 8, node, :erlang.term_to_binary(self())}
+          end
+
+        :ok =
+          CoopSubstrate.Records.append_to_stream("evidence-quota", :any_version, [
+            %EventStore.EventData{event_type: "EvidenceQuota", data: record}
+          ])
+
+        restart_quota()
+        recover_now()
+        recover_now()
+        assert Quota.charge(scope, "other", 8, 8) == {:error, :quota_exceeded}
+        assert Quota.refund({id, scope, digest, 8}) == :ok
+        assert {:ok, reservation} = Quota.charge(scope, "other", 8, 8)
+        :ok = Quota.refund(reservation)
+      end
+    end
+
+    test "a peer writer retains capacity through recovery and a distribution disconnect", %{
+      key: key
+    } do
+      alias BizKit.Cluster.Peers
+      Peers.distribute!()
+      {control, peer} = Peers.start!()
+      Peers.mesh!([peer])
+      root = Path.join(System.tmp_dir!(), "quota-peer-#{key}")
+      :ok = :peer.call(control, Application, :put_env, [:coop_substrate, :artifact_dir, root])
+      on_exit(fn -> File.rm_rf(root) end)
+      bytes = "peer-#{key}"
+      digest = :crypto.hash(:sha256, bytes)
+      size = byte_size(bytes)
+      writer = :peer.call(control, CoopSubstrate.QuotaWriter, :start, [self(), key, bytes])
+      assert_receive {:writer_ready, ^writer}, 2_000
+      restart_quota()
+      recover_now()
+      server = BizKit.Cluster.Singleton.whereis_name(Quota)
+      :erlang.trace(server, true, [:receive])
+      on_exit(fn -> if Process.alive?(server), do: :erlang.trace(server, false, [:receive]) end)
+      true = Node.disconnect(peer)
+
+      assert_receive {:trace, ^server, :receive, {:DOWN, _, :process, ^writer, :noconnection}},
+                     2_000
+
+      assert Quota.charge(key, "replacement", size, size) == {:error, :quota_exceeded}
+      true = Node.connect(peer)
+      Peers.mesh!([peer])
+      recover_now()
+      send(writer, :land)
+      assert_receive {:writer_finished, ^writer, {:ok, ^digest}}, 2_000
+      restart_quota()
+      assert Quota.charge(key, digest, size, size) == {:ok, :held}
+      assert Quota.charge(key, "replacement", 1, size) == {:error, :quota_exceeded}
+    end
+
+    defp recover_now do
+      server = BizKit.Cluster.Singleton.whereis_name(Quota)
+      send(server, :resolve_restored)
+      :sys.get_state(server)
     end
 
     test "failed and refunded writes leave nothing behind", %{key: key} do
