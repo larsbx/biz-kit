@@ -166,6 +166,36 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
       assert Quota.charge(key, "a", 8, 8) == {:ok, :held}
     end
 
+    test "recovery cannot reassign room while a restored writer is still alive", %{key: key} do
+      alias CoopSubstrate.Harness.Artifacts
+      bytes = "slow-upload-#{key}"
+      digest = :crypto.hash(:sha256, bytes)
+      size = byte_size(bytes)
+      parent = self()
+
+      writer =
+        Task.async(fn ->
+          Quota.store(key, digest, size, size, fn ->
+            send(parent, :write_paused)
+            receive do: (:land -> Artifacts.put(bytes))
+          end)
+        end)
+
+      assert_receive :write_paused, 1_000
+      restart_quota()
+      server = BizKit.Cluster.Singleton.whereis_name(Quota)
+      # Deterministically execute the old grace timer while the writer is
+      # paused before file creation, rather than racing a wall-clock sleep.
+      send(server, :resolve_restored)
+      _ = :sys.get_state(server)
+      assert Quota.charge(key, "replacement", size, size) == {:error, :quota_exceeded}
+      send(writer.pid, :land)
+      assert Task.await(writer) == {:ok, digest}
+      restart_quota()
+      assert Quota.charge(key, digest, size, size) == {:ok, :held}
+      assert Quota.charge(key, "replacement", 1, size) == {:error, :quota_exceeded}
+    end
+
     test "a write in flight across a restart that then fails gives its room back", %{key: key} do
       {:ok, reservation} = Quota.charge(key, "a", 8, 8)
       restart_quota()
