@@ -56,7 +56,10 @@ defmodule CoopSubstrate.Tasks do
   @doc false
   def duplicate([%Envelope{} = env], state) do
     commands =
-      state.proposals |> Map.merge(state.dod_commands) |> Map.merge(state.timing_commands)
+      state.proposals
+      |> Map.merge(state.dod_commands)
+      |> Map.merge(state.timing_commands)
+      |> Map.merge(state.hierarchy_commands)
 
     case Map.fetch(commands, env.event_id) do
       :error ->

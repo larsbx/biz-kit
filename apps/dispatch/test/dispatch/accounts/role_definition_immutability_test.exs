@@ -32,7 +32,7 @@ defmodule Dispatch.Accounts.RoleDefinitionImmutabilityTest do
         key: "TEST_IMMUTABLE",
         label: "New label",
         capabilities_json: ["audit.read"],
-        constraints_json: %{"audit.read" => %{"scope" => "all"}},
+        constraints_json: %{"audit.read" => ["audited_read"]},
         profile_module: "Dispatch.Access.Roles.Admin"
       })
       |> Ash.create!(authorize?: false, tenant: ctx.tenant)

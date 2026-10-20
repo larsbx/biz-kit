@@ -146,6 +146,40 @@ defmodule Dispatch.ConfigTest do
     end
   end
 
+  describe "capability signing seed" do
+    setup do
+      original = Application.get_env(:dispatch, :capability_signing_seed)
+      on_exit(fn -> Application.put_env(:dispatch, :capability_signing_seed, original) end)
+      :ok
+    end
+
+    @seed_env "DISPATCH_CAPABILITY_SIGNING_SEED"
+
+    test "the published development seed is refused in production and allowed elsewhere" do
+      assert codes(:test, @seed_env) == []
+      assert codes(:prod, @seed_env) == ["CAPABILITY_SIGNING_KEY_IS_DEVELOPMENT_KEY"]
+    end
+
+    test "a missing or unreadable seed fails production startup" do
+      for seed <- [nil, "", "not a seed"] do
+        Application.put_env(:dispatch, :capability_signing_seed, seed)
+        assert codes(:prod, @seed_env) == ["CAPABILITY_SIGNING_KEY_UNUSABLE"]
+      end
+    end
+
+    test "a deployment's own seed passes" do
+      {_public, seed} = CoopSubstrate.Crypto.generate_keypair()
+
+      Application.put_env(
+        :dispatch,
+        :capability_signing_seed,
+        Base.url_encode64(seed, padding: false)
+      )
+
+      assert codes(:prod, @seed_env) == []
+    end
+  end
+
   describe "face verification" do
     test "the challenge TTL range is inclusive at both ends" do
       base = Application.get_env(:dispatch, :identity)

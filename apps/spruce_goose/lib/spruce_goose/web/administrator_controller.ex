@@ -59,15 +59,4 @@ defmodule SpruceGoose.Web.AdministratorController do
       error -> refuse(conn, error)
     end
   end
-
-  # A read signed by a governance key of `chapter`; otherwise the conn, refused.
-  defp governing(conn, chapter) do
-    case governance_read(conn) do
-      {:ok, chapters} ->
-        if chapter in chapters, do: :ok, else: unauthorized(conn, :not_governance)
-
-      {:unauthorized, reason} ->
-        unauthorized(conn, reason)
-    end
-  end
 end

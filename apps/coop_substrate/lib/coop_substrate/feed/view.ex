@@ -16,6 +16,12 @@ defmodule CoopSubstrate.Feed.View do
   revoked (docs/architecture/2026-10-19-live-view.md). Another person's
   devices never appear; a view read without a reader has none.
 
+  It carries the project's **workflows** under the blueprint revisions now
+  governing them, and a task a workflow run made carries its `blueprint`:
+  the revision, roadmap, workflow and definition it came from, its
+  predecessors and its input names
+  (docs/architecture/2026-10-20-workflow-view.md).
+
   A **chapter's** view, scope `{chapter}`, is for its administrators: its
   **projects** (`Administrators.projects/2`, keyed `tenant/project`, each
   part URI-encoded) and its **administrators** (`Administrators.keys/2`).
@@ -32,7 +38,7 @@ defmodule CoopSubstrate.Feed.View do
 
   alias CoopSubstrate.{Administrators, Devices}
 
-  @project_kinds [:tasks, :suggestions, :delegations, :receipts, :devices]
+  @project_kinds [:tasks, :suggestions, :delegations, :receipts, :devices, :workflows]
   @chapter_kinds [:projects, :administrators]
 
   @type project :: {chapter_id :: String.t(), tenant_id :: String.t(), project_id :: String.t()}
@@ -43,6 +49,7 @@ defmodule CoopSubstrate.Feed.View do
           | :delegations
           | :receipts
           | :devices
+          | :workflows
           | :projects
           | :administrators
   @type t :: %{kind() => %{String.t() => map()}}
@@ -97,8 +104,33 @@ defmodule CoopSubstrate.Feed.View do
           into: %{},
           do: {id, json(Map.take(r, [:digest, :principal_id]))}
         ),
-      devices: Map.new(Devices.of(gate, principal, scope), &{&1.id, Map.delete(&1, :id)})
+      devices: Map.new(Devices.of(gate, principal, scope), &{&1.id, Map.delete(&1, :id)}),
+      workflows: workflows(o, scope)
     }
+  end
+
+  # Every workflow the project's blueprints define, under the revision now
+  # governing it, keyed `roadmap/workflow` (each part URI-encoded), with its
+  # definitions in the blueprint's order: what a person needs to run it.
+  defp workflows(o, scope) do
+    for {roadmap_key, roadmap} <- get_in(o, [:hierarchy, scope, :roadmaps]) || %{},
+        {workflow_id, %{revision: revision}} <- roadmap.workflows,
+        into: %{} do
+      %{blueprint: blueprint, source: source} = o.blueprints[revision]
+      {:ok, workflow} = TaskCore.Blueprint.workflow(blueprint, roadmap_key, workflow_id)
+
+      {URI.encode_www_form(roadmap_key) <> "/" <> URI.encode_www_form(workflow_id),
+       json(%{
+         roadmap_key: roadmap_key,
+         roadmap_name: roadmap.name,
+         workflow_id: workflow_id,
+         name: workflow["name"],
+         revision_event_id: revision,
+         source: Map.take(source, [:repository, :commit, :path]),
+         definitions:
+           Enum.map(workflow["tasks"], &Map.take(&1, ~w(id title description depends_on)))
+       })}
+    end
   end
 
   defp project_id(p),
@@ -138,6 +170,7 @@ defmodule CoopSubstrate.Feed.View do
                    timing_delegation_id last_event_id started_by cancellation)a)
     |> Map.put(:dod, dod(t.dod))
     |> Map.put(:readiness, readiness(t[:readiness]))
+    |> Map.put(:blueprint, t[:blueprint])
     |> json()
   end
 

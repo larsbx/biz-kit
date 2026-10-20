@@ -25,6 +25,12 @@ defmodule TaskCore.Steps do
     * complete → `TaskCompletedV1` (in_progress → completed), citing the
       review that accepted it.
 
+  Running a workflow (docs/architecture/2026-10-20-hierarchy-and-blueprints.md):
+
+    * instantiate → `TaskWorkflowInstantiatedV1`, a run of a roadmap's
+      workflow under the blueprint revision now governing it, naming a new
+      task for each of its definitions.
+
   Calling it off (docs/architecture/2026-10-19-cancel-reopen.md):
 
     * cancel → `TaskCancelledV1` before the work starts, with a reason;
@@ -50,6 +56,7 @@ defmodule TaskCore.Steps do
           | {:reopen, String.t(), String.t()}
           | {:revoke_delegation, String.t()}
           | {:record_custody, <<_::256>>}
+          | {:instantiate, String.t(), String.t(), String.t(), %{String.t() => String.t()}}
 
   # Definition of Done commands predate lifecycle versions: their actor is
   # principal and grant only.
@@ -65,6 +72,25 @@ defmodule TaskCore.Steps do
        "tenant_id" => tenant,
        "project_id" => project,
        "artifact_digest" => {:bytes, digest}
+     })}
+  end
+
+  # A workflow run under its current revision: `task_ids` names a new task
+  # for each of the workflow's definitions.
+  def command(
+        _o,
+        {_chapter, tenant, project},
+        {:instantiate, revision, roadmap, workflow, ids},
+        actor
+      ) do
+    {:ok, "TaskWorkflowInstantiatedV1",
+     Map.merge(actor, %{
+       "tenant_id" => tenant,
+       "project_id" => project,
+       "revision_event_id" => revision,
+       "roadmap_key" => roadmap,
+       "workflow_id" => workflow,
+       "task_ids" => ids
      })}
   end
 

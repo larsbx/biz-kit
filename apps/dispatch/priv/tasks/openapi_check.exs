@@ -4,7 +4,7 @@
 # two would silently produce a client for an API that does not exist.
 {:ok, _} = Application.ensure_all_started(:open_api_spex)
 
-path = Path.expand("../../../contracts/openapi.json", __DIR__)
+path = Path.expand("../../contracts/openapi.json", __DIR__)
 generated = DispatchWeb.OpenApiJson.encode()
 
 case File.read(path) do

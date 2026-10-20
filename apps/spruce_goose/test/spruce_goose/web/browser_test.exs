@@ -75,6 +75,10 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     create!(w, w.op_grant, "task-1")
 
+    # A blueprint governs a workflow the person runs from the page, at the end
+    # (2026-10-20-workflow-view.md).
+    apply_blueprint!(w)
+
     suggestion =
       suggest!(w, w.agent_grant, "task-1", %{"schedule" => nil, "due_ms" => 1_792_396_800_000}, 1)
 

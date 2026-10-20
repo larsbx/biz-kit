@@ -60,6 +60,16 @@ defmodule DispatchWeb.Router do
     plug DispatchWeb.Plugs.ResolveActor
   end
 
+  # Authentication without actor resolution, for the one read that must precede
+  # it: listing the assignments a principal may select. A caller holding several
+  # cannot yet name one, so `ResolveActor` would refuse the request that exists
+  # to let them choose.
+  pipeline :api_principal do
+    plug :accepts, ["json"]
+    plug :put_no_store
+    plug DispatchWeb.Plugs.Authenticate
+  end
+
   scope "/health", DispatchWeb do
     pipe_through :health
 
@@ -137,7 +147,15 @@ defmodule DispatchWeb.Router do
   end
 
   scope "/v1", DispatchWeb do
+    pipe_through :api_principal
+
+    get "/me/role-assignments", RoleCapabilityController, :assignments
+  end
+
+  scope "/v1", DispatchWeb do
     pipe_through :api
+
+    get "/role-capabilities", RoleCapabilityController, :capabilities
 
     # Section 24.1: the canonical self-service route and the DRIVER
     # compatibility projection. Both reach the same controller function.

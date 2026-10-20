@@ -1,5 +1,7 @@
 # biz-kit architecture
 
+What is delivered and what comes next: [the roadmap](../roadmap.md).
+
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
@@ -53,6 +55,18 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Task core](2026-10-20-task-core.md): the task and workflow rules as a
   dependency-free app (`apps/task_core`) any application can vendor, behind
   two host ports; one lifecycle contract and DAG shared with SpruceGoose.
+- [Hierarchy and blueprints](2026-10-20-hierarchy-and-blueprints.md): a
+  project's roadmaps and workflows as a reviewed blueprint in git, applied by
+  governance from a pinned source (`mix coop.blueprint`); an operator runs a
+  workflow, creating its tasks with their Definitions of Done and
+  predecessors. SpruceGoose's design reviewed point by point.
+- [Workflows in the view](2026-10-20-workflow-view.md): a project's feed
+  carries its workflows; a person runs one from the page, and each task says
+  which workflow and step it came from.
+- [Readiness for a workflow run](2026-10-20-run-readiness.md): an
+  administrator defines readiness for a run's tasks in one signed batch, the
+  blueprint's predecessors and input names filled in; the page shows each
+  run's progress.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.
@@ -61,6 +75,10 @@ Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),
 [SpruceGoose's authority planes](../../apps/spruce_goose/docs/authority-planes.md),
 and its [documented current state](../../apps/spruce_goose/docs/current-state.md).
+- [Dispatch capability document](2026-10-20-dispatch-capability-document.md):
+  what dispatch offers a role assignment, as Ed25519-signed canonical bytes the
+  d-patch field app verifies against a pinned key. An attestation for the
+  client, not authority; retired when dispatch's roles become ledger grants.
 - [Company-structure primitive audit — 2026-10-20](2026-10-20-primitive-audit.md):
   every party, role, seat, delegation, ownership and decision model across
   biz-kit and the remaining repos, compared with Keel; conflicts to decide,

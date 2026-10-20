@@ -115,7 +115,8 @@ defmodule SpruceGoose.Web.Requests do
     :key_id_mismatch,
     :invalid_label,
     :invalid_role,
-    :signature_count
+    :signature_count,
+    :missing_input
   ]
   @not_found [
     :unknown_command,
@@ -127,6 +128,8 @@ defmodule SpruceGoose.Web.Requests do
   ]
   @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named]
   @conflict [
+    :nothing_to_define,
+    :sop_mismatch,
     :unknown_suggestion,
     :suggestion_not_pending,
     :unknown_task,
@@ -169,6 +172,17 @@ defmodule SpruceGoose.Web.Requests do
       end
     else
       _ -> {:unauthorized, :malformed_authorization}
+    end
+  end
+
+  @doc "`:ok` for a request signed by a governance key of `chapter`; otherwise the conn, refused."
+  def governing(conn, chapter) do
+    case governance_read(conn) do
+      {:ok, chapters} ->
+        if chapter in chapters, do: :ok, else: unauthorized(conn, :not_governance)
+
+      {:unauthorized, reason} ->
+        unauthorized(conn, reason)
     end
   end
 

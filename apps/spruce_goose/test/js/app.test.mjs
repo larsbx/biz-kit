@@ -30,6 +30,11 @@ import {
   chapterProjects,
   chapterAdministrators,
   chapterOffboarding,
+  workflows,
+  runTaskIds,
+  runOf,
+  runs,
+  runReadiness,
 } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -556,4 +561,104 @@ test("offboarding from a chapter: every project and key, signed only as the exac
   assert.ok(!ok([cores[0], cores[1], core({ ...commands[2], payload: { ...commands[2].payload, reason: "x" } })]));
   assert.ok(!ok([core(commands[0], "k-other"), cores[1], cores[2]]), "another signer");
   assert.ok(!ok([core(commands[0], "k-admin", "other"), cores[1], cores[2]]), "another chapter");
+});
+
+test("workflows: sorted, a run's task IDs checked, a run task's origin named", () => {
+  const release = {
+    roadmap_key: "q4",
+    roadmap_name: "Fourth quarter",
+    workflow_id: "release",
+    name: "Release",
+    definitions: [
+      { id: "build", title: "Build", depends_on: [] },
+      { id: "ship", title: "Ship", depends_on: ["build"] },
+    ],
+  };
+  const view = [
+    {
+      seq: 1,
+      changes: [
+        { kind: "workflows", id: "q4/release", value: release },
+        { kind: "workflows", id: "q1/audit", value: { ...release, roadmap_name: "First quarter", name: "Audit" } },
+        { kind: "tasks", id: "r1-build", value: { title: "Build", blueprint: { roadmap_key: "q4", workflow_id: "release", definition_id: "build" } } },
+      ],
+    },
+  ].reduce(applyFrame, emptyView());
+
+  assert.deepEqual(workflows(view).map((w) => w.name), ["Audit", "Release"]);
+  assert.deepEqual(runTaskIds(release, "r2", view.tasks), { ids: { build: "r2-build", ship: "r2-ship" } });
+  assert.match(runTaskIds(release, "r1", view.tasks).error, /r1-build already exists/);
+  assert.match(runTaskIds(release, "Autumn 7A", view.tasks).error, /lowercase/);
+  assert.match(runTaskIds(release, "", view.tasks).error, /lowercase/);
+  assert.equal(runOf(view.tasks["r1-build"], view), "From workflow Release, step build");
+  assert.equal(runOf({ title: "Plain" }, view), null);
+});
+
+test("the device signs a run only with exactly the task IDs it named", () => {
+  const fields = {
+    revision_event_id: "e-rev",
+    roadmap_key: "q4",
+    workflow_id: "release",
+    task_ids: { build: "r2-build", ship: "r2-ship" },
+  };
+  const core = (payload) => ({
+    type: "TaskWorkflowInstantiatedV1",
+    signers: [{ key_id: "k1" }],
+    payload: { ...payload, principal_id: "alice", authorization_event_id: "g1" },
+  });
+  const expected = { keyId: "k1", type: "TaskWorkflowInstantiatedV1", payload: fields };
+
+  assert.ok(isExpectedCommand(core(fields), expected));
+  assert.ok(!isExpectedCommand(core({ ...fields, task_ids: { build: "r2-build", ship: "other" } }), expected));
+  assert.ok(!isExpectedCommand(core({ ...fields, revision_event_id: "e-old" }), expected));
+});
+
+test("runs group a run's tasks; readiness covers exactly the tasks waiting", () => {
+  const bp = (step, preds, inputs) => ({
+    run_event_id: "e-run",
+    roadmap_key: "q4",
+    workflow_id: "release",
+    definition_id: step,
+    predecessor_ids: preds,
+    artifact_requirements: inputs,
+  });
+  const view = {
+    ...emptyView(),
+    tasks: {
+      "r1-build": { state: "proposed", version: 2, blueprint: bp("build", [], ["source"]) },
+      "r1-ship": { state: "inbox", version: 1, blueprint: bp("ship", ["r1-build"], []) },
+      "r0-build": { state: "completed", version: 9, blueprint: { ...bp("build", [], []), run_event_id: "e-old" } },
+      plain: { state: "proposed", version: 2 },
+    },
+  };
+
+  const [old, run] = runs(view);
+  assert.deepEqual([old.name, old.done, old.tasks.length], ["r0", 1, 1]);
+  assert.deepEqual([run.name, run.tasks.map((t) => t.id), run.pending.map((t) => t.id)], ["r1", ["r1-build", "r1-ship"], ["r1-build"]]);
+
+  const sop = "a".repeat(64);
+  const source = "b".repeat(64);
+  const where = { tenant: "t1", project: "p1", sop };
+  assert.match(runReadiness(run, { ...where, inputs: {} }).error, /r1-build needs a SHA-256 digest for “source”/);
+  assert.match(runReadiness(run, { ...where, sop: "nope", inputs: {} }).error, /SOP/);
+  assert.deepEqual(runReadiness(run, { ...where, inputs: { "r1-build": { source } } }).commands, [
+    {
+      type: "TaskReadinessDefinedV1",
+      payload: {
+        tenant_id: "t1",
+        project_id: "p1",
+        task_id: "r1-build",
+        expected_version: 2,
+        artifact_requirements: { source: { __bytes__: source } },
+        predecessor_ids: [],
+        sop_digest: { __bytes__: sop },
+      },
+    },
+  ]);
+  assert.match(runReadiness(old, { ...where, inputs: {} }).error, /no task of this run/);
+  assert.equal(run.sop, null);
+
+  const readied = { ...view.tasks["r1-build"], state: "queued", readiness: { sop_digest: sop } };
+  const [, later] = runs({ ...view, tasks: { ...view.tasks, "r1-build": readied } });
+  assert.equal(later.sop, sop);
 });

@@ -18,6 +18,14 @@ found along the way.
 | spruce | `10b9479` | Not in biz-kit. |
 | bizops-kb | `acf7051` | Prose, not code. |
 
+Rechecked against `main` at `24d7947` (19 commits later, PRs #39–#44)
+before review. None of the files cited for D1–D9 changed. The new blueprint
+hierarchy (`2026-10-20-hierarchy-and-blueprints.md`) puts roadmap → workflow →
+task on the ledger. That is a work tree, not an organization tree, so the
+Unit row stands. Dispatch's signed capability document
+(`2026-10-20-dispatch-capability-document.md`) is issued per role assignment,
+which is consistent with C1.
+
 Method: one read-only pass per codebase against a fixed checklist, then a
 spot-check against source of every finding that this document relies on.
 **✓** marks a claim confirmed directly at the cited location. Unmarked claims

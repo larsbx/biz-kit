@@ -10,7 +10,7 @@ defmodule CoopSubstrate.TaskHistories do
 
   use ExUnitProperties
 
-  import CoopSubstrate.LogCase, only: [new_member: 1]
+  import CoopSubstrate.LogCase, only: [new_member: 1, signed_event: 3]
   import CoopSubstrate.TaskTimingFixtures
 
   alias CoopSubstrate.Projections.Membership, as: Gate
@@ -64,7 +64,8 @@ defmodule CoopSubstrate.TaskHistories do
       op_grant: operator_grant(gov, op, "alice"),
       agent_grant: suggester_grant(gov, agent, "bot"),
       other_grant: suggester_grant(gov, other, "bot-2"),
-      digests: Enum.map(1..3, &store!("property artifact #{&1}"))
+      digests: Enum.map(1..3, &store!("property artifact #{&1}")),
+      blueprints: Enum.map(1..2, &blueprint!/1)
     }
 
     gate =
@@ -72,6 +73,31 @@ defmodule CoopSubstrate.TaskHistories do
       |> Enum.reduce(Gate.init(), fn env, gate -> elem(admit(env, gate), 1) end)
 
     {world, gate}
+  end
+
+  # Two revisions of one project's blueprint: the second adds a step.
+  defp blueprint!(revision) do
+    extra =
+      if revision == 2,
+        do:
+          "\n          - {id: ship, title: Ship, definition_of_done: [{id: shipped, description: Shipped}], depends_on: [build]}",
+        else: ""
+
+    bytes = """
+    schema_version: 2
+    project: {key: project-1, name: Project #{revision}}
+    roadmaps:
+      - key: q4
+        name: Fourth quarter
+        workflows:
+          - id: release
+            name: Release
+            tasks:
+              - {id: build, title: Build, definition_of_done: [{id: built, description: Built}]}#{extra}
+    """
+
+    {:ok, blueprint} = CoopSubstrate.Blueprints.read(bytes)
+    %{digest: store!(bytes), blueprint: blueprint, commit: String.duplicate("#{revision}", 40)}
   end
 
   # -- generation --------------------------------------------------------------
@@ -87,7 +113,9 @@ defmodule CoopSubstrate.TaskHistories do
       {1, tuple({constant(:revoke_delegation), idx})},
       {1, constant(:revoke_operator)},
       {1, constant(:revoke_device)},
-      {1, tuple({constant(:offboard), member_of(~w(alice bot deleg-bot))})}
+      {1, tuple({constant(:offboard), member_of(~w(alice bot deleg-bot))})},
+      {1, tuple({constant(:blueprint), integer(0..1)})},
+      {1, tuple({constant(:run), idx, integer(1..3)})}
     ])
   end
 
@@ -210,6 +238,40 @@ defmodule CoopSubstrate.TaskHistories do
       # made to the delegate.
       {:offboard, principal} ->
         offboard(w.gov, principal)
+
+      {:blueprint, b} ->
+        %{digest: digest, blueprint: blueprint, commit: commit} = at(w.blueprints, b)
+
+        signed_event(w.gov, "TaskBlueprintAppliedV1", %{
+          "tenant_id" => "tenant-1",
+          "project_id" => "project-1",
+          "repository" => "acme/plans",
+          "commit" => commit,
+          "tree" => String.duplicate("c", 40),
+          "path" => "plan.yaml",
+          "manifest_digest" => {:bytes, digest},
+          "blueprint" => blueprint
+        })
+
+      # A run under one of the revisions applied so far: stale, unless the latest.
+      {:run, r, n} ->
+        revision = pick(seen.revisions, r)
+
+        steps =
+          if revision && revision.payload["commit"] =~ "2", do: ~w(build ship), else: ~w(build)
+
+        signed_event(
+          w.op,
+          "TaskWorkflowInstantiatedV1",
+          Map.merge(actor(w.op_grant), %{
+            "tenant_id" => "tenant-1",
+            "project_id" => "project-1",
+            "revision_event_id" => (revision && revision.event_id) || "no-revision",
+            "roadmap_key" => "q4",
+            "workflow_id" => "release",
+            "task_ids" => Map.new(steps, &{&1, "run-#{n}-#{&1}"})
+          })
+        )
     end
   end
 
@@ -229,7 +291,7 @@ defmodule CoopSubstrate.TaskHistories do
 
   # Run a history; returns accepted envelopes and the gate after each one.
   def run(ops, w, gate0) do
-    seen = %{sugs: [], agent_receipts: [], op_receipts: [], delegations: []}
+    seen = %{sugs: [], agent_receipts: [], op_receipts: [], delegations: [], revisions: []}
 
     {steps, gate, _seen} =
       Enum.reduce(ops, {[], gate0, seen}, fn op, {steps, gate, seen} ->
@@ -255,6 +317,9 @@ defmodule CoopSubstrate.TaskHistories do
 
   defp remember(seen, %{type: "TaskDelegationGrantedV1"} = env),
     do: %{seen | delegations: [env | seen.delegations]}
+
+  defp remember(seen, %{type: "TaskBlueprintAppliedV1"} = env),
+    do: %{seen | revisions: [env | seen.revisions]}
 
   defp remember(seen, _env), do: seen
 end

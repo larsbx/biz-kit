@@ -284,6 +284,34 @@ defmodule Dispatch.AccountsTest do
       assert Exception.message(error) =~ "load.delete.everything"
     end
 
+    test "constraints must be canonical names on granted capabilities" do
+      # Structured or unknown constraint values would reach no policy check,
+      # and the signed capability document's canonical encoding admits only
+      # plain lists of strings; both are refused at write time.
+      carrier = organization()
+
+      for {constraints, named} <- [
+            {%{"load.read" => ["self_only", "whenever_convenient"]}, "load.read"},
+            {%{"load.read" => %{"self_only" => true}}, "load.read"},
+            {%{"load.read" => "self_only"}, "load.read"},
+            {%{"stop.read" => ["audited_read"]}, "stop.read"}
+          ] do
+        assert {:error, error} =
+                 RoleDefinition
+                 |> Ash.Changeset.for_create(:seed, %{
+                   tenant_id: carrier.id,
+                   key: "CUSTOM",
+                   label: "Custom",
+                   capabilities_json: ["load.read"],
+                   constraints_json: constraints,
+                   profile_module: inspect(Dispatch.Access.Roles.Dispatcher)
+                 })
+                 |> Ash.create(authorize?: false, tenant: carrier.id)
+
+        assert Exception.message(error) =~ named
+      end
+    end
+
     test "a profile module outside the allowlist is rejected" do
       # Section 23.2: database content cannot name or load arbitrary code.
       carrier = organization()

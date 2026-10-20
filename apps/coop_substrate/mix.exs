@@ -40,6 +40,8 @@ defmodule CoopSubstrate.MixProject do
       # the eventstore library only — Commanded aggregates are NOT adopted.
       {:eventstore, "~> 1.4"},
       {:jason, "~> 1.4"},
+      # Blueprints are YAML (TaskHost.read_blueprint/1).
+      {:yaml_elixir, "~> 2.12"},
       {:stream_data, "~> 1.1", only: [:test, :dev]}
     ]
   end

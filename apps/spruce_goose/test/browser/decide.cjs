@@ -323,6 +323,45 @@ async function signIn(browser, subject) {
     await reviewer.locator("#devices .row").waitFor({ state: "detached", ...live });
     await reviewer.getByText("This device can review evidence").waitFor({ state: "detached", ...live });
 
+    // Run the project's workflow: each step becomes a task named after the
+    // run, signed by this device (docs/architecture/2026-10-20-workflow-view.md).
+    const workflow = page.locator("#workflows .card").filter({ hasText: "Release" });
+    await workflow.getByText("Ship it (after build)").waitFor();
+    page.once("dialog", (prompt) => prompt.accept("r1"));
+    await workflow.getByRole("button", { name: "Run…" }).click();
+    await dialog.waitFor({ state: "visible" });
+    const run = await page.locator("#confirm-body").textContent();
+    if (!["TaskWorkflowInstantiatedV1", "r1-build", "r1-ship"].every((t) => run.includes(t)))
+      throw new Error(`unexpected run: ${run}`);
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await page.locator("#tasks .card").filter({ hasText: "Ship it" }).getByText("From workflow Release, step ship").waitFor(live);
+
+    // The person proposes the run's first step; the administrator defines
+    // readiness for the run in one batch, giving the SOP's digest
+    // (docs/architecture/2026-10-20-run-readiness.md).
+    const build = page.locator("#tasks .card").filter({ hasText: "Build the release" });
+    await build.getByRole("button", { name: "Propose" }).click();
+    await dialog.waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await build.getByText("Waiting for a readiness definition").waitFor(live);
+
+    const adminRun = admin.locator("#workflows .run").filter({ hasText: "Run r1: 0 of 2 completed" });
+    await adminRun.getByRole("button", { name: "Define readiness (1)…" }).click(live);
+    await admin.locator("#readiness").waitFor({ state: "visible" });
+    const sopDigest = await admin.locator("#digests option").first().getAttribute("value");
+    await admin.locator('#readiness input[name="sop"]').fill(sopDigest);
+    await admin.getByRole("button", { name: "Prepare to sign" }).click();
+    await admin.locator("#confirm").waitFor({ state: "visible" });
+    const readiness = await admin.locator("#confirm-body").textContent();
+    if (!["TaskReadinessDefinedV1", "r1-build", sopDigest].every((t) => readiness.includes(t)) || readiness.includes("r1-ship"))
+      throw new Error(`unexpected readiness: ${readiness}`);
+    await admin.getByRole("button", { name: "Sign and send" }).click();
+    await admin.locator("#confirm").waitFor({ state: "hidden" });
+    await adminRun.getByRole("button", { name: /Define readiness/ }).waitFor({ state: "detached", ...live });
+    await build.getByText("Waiting for a readiness definition").waitFor({ state: "detached", ...live });
+
     // The administrator gives up this browser's key from its own device list
     // (docs/architecture/2026-10-19-own-devices.md).
     admin.once("dialog", (question) => question.accept());

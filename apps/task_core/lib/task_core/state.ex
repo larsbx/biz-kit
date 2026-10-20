@@ -28,6 +28,7 @@ defmodule TaskCore.State do
         },
         TaskCore.Timing.init()
       )
+      |> Map.merge(TaskCore.Hierarchy.init())
 
   @doc """
   A task entering the inbox at version 1. Baselines and operator creation share
@@ -112,6 +113,7 @@ defmodule TaskCore.State do
   def handle_event(env, state) do
     state = TaskCore.Readiness.handle_event(env, state)
     state = TaskCore.DoD.handle_event(env, state)
+    state = TaskCore.Hierarchy.handle_event(env, state)
     TaskCore.Timing.handle_event(env, state)
   end
 
