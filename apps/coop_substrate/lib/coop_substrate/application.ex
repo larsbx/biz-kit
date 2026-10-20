@@ -18,6 +18,8 @@ defmodule CoopSubstrate.Application do
         # event store client and the feed's notification group.
         children = [
           CoopSubstrate.EventStore,
+          # Before the evidence quota, which rebuilds its charges from it.
+          CoopSubstrate.Records,
           # Before Log, which notifies it after every append.
           CoopSubstrate.Feed,
           {Singleton, CoopSubstrate.Feed.Nonces},

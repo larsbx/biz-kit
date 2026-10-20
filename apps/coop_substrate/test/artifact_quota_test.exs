@@ -1,8 +1,15 @@
 defmodule CoopSubstrate.ArtifactQuotaTest do
+  @moduledoc """
+  The evidence quota (`ArtifactCustody.Quota`): reservations while a write is
+  in flight, a charge per distinct digest once it succeeds, kept across a
+  restart of the quota process (docs/architecture/2026-10-20-durable-quota.md).
+  """
   use ExUnit.Case, async: false
   alias CoopSubstrate.ArtifactCustody.Quota
 
-  setup do: %{key: make_ref()}
+  # A key as the quota is given one: plain data, recorded and read back in
+  # any VM (a ref names its node, which no later VM knows).
+  setup do: %{key: "quota-test-#{System.os_time()}-#{System.unique_integer([:positive])}"}
 
   test "only successful distinct digests consume room, including retries at the limit", %{
     key: key
@@ -86,7 +93,7 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
 
       writer =
         spawn(fn ->
-          {:ok, token} = Quota.charge(scope, digest, size, size)
+          {:ok, {token, _, _, _}} = Quota.charge(scope, digest, size, size)
           if landed, do: {:ok, ^digest} = Artifacts.put(bytes)
           send(parent, {:reserved, self(), token})
           receive do: (:stop -> :ok)
@@ -112,13 +119,56 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
 
   test "the same digest is charged separately to each person, scope and task", %{key: key} do
     for scope <- [
-          {key, :alice, :project, :task},
-          {key, :bob, :project, :task},
-          {key, :alice, :other_project, :task},
-          {key, :alice, :project, :other_task}
+          {key, "alice", "project", "task"},
+          {key, "bob", "project", "task"},
+          {key, "alice", "other project", "task"},
+          {key, "alice", "project", "other task"}
         ] do
       assert Quota.store(scope, "a", 8, 8, fn -> {:ok, "a"} end) == {:ok, "a"}
       assert Quota.charge(scope, "b", 1, 8) == {:error, :quota_exceeded}
+    end
+  end
+
+  describe "durable (docs/architecture/2026-10-20-durable-quota.md)" do
+    # As when the quota process moves to another node, or the cluster restarts.
+    defp restart_quota do
+      sup = CoopSubstrate.Supervisor
+      :ok = Supervisor.terminate_child(sup, Quota)
+      {:ok, _} = Supervisor.restart_child(sup, Quota)
+      :ok
+    end
+
+    test "committed evidence still counts after the quota process restarts", %{key: key} do
+      for digest <- ~w(a b),
+          do: {:ok, ^digest} = Quota.store(key, digest, 8, 16, fn -> {:ok, digest} end)
+
+      restart_quota()
+
+      assert Quota.charge(key, "c", 1, 16) == {:error, :quota_exceeded}
+      # A stored file is held: storing it again costs nothing.
+      assert Quota.charge(key, "a", 8, 16) == {:ok, :held}
+      # Another person's, scope's or task's room is their own.
+      assert {:ok, _} = Quota.charge(key <> "-other", "c", 16, 16)
+    end
+
+    test "a write in flight across a restart is still recorded when it succeeds", %{key: key} do
+      {:ok, reservation} = Quota.charge(key, "a", 8, 8)
+      restart_quota()
+
+      assert Quota.commit(reservation) == :ok
+      assert Quota.charge(key, "b", 1, 8) == {:error, :quota_exceeded}
+
+      restart_quota()
+      assert Quota.charge(key, "a", 8, 8) == {:ok, :held}
+    end
+
+    test "failed and refunded writes leave nothing behind", %{key: key} do
+      {:ok, reservation} = Quota.charge(key, "a", 8, 8)
+      assert Quota.refund(reservation) == :ok
+      assert Quota.store(key, "b", 8, 8, fn -> {:error, :enospc} end) == {:error, :enospc}
+
+      restart_quota()
+      assert {:ok, _} = Quota.charge(key, "c", 8, 8)
     end
   end
 end

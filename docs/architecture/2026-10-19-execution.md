@@ -79,7 +79,9 @@ reservation. On worker death the store on that worker's node is checked:
 completed bytes remain charged, proven absence releases the reservation,
 and an unavailable store conservatively retains the charge. Room is refunded
 only if no write succeeded and none remains pending. The count
-is held by one process for the cluster (`ArtifactCustody.Quota`).
+is held by one process for the cluster (`ArtifactCustody.Quota`), and what
+it charges is recorded, so it survives a restart
+([durable quota](2026-10-20-durable-quota.md)).
 
 Evidence stays out of the change feed, which carries only that a
 submission and a review exist. The project's operators and reviewers read
@@ -180,8 +182,9 @@ across start, or skip the predecessor check each violate it.
 
 - A reviewer device can now also be revoked by its holder
   ([own devices](2026-10-19-own-devices.md)).
-- The evidence quota is in memory: it starts afresh if its process moves
-  to another node, like the rate limits.
+- The evidence quota is now durable
+  ([durable quota](2026-10-20-durable-quota.md)); the rate limits are
+  still in memory.
 - A task whose starter leaves stays in progress; any operator in the
   project can still submit evidence and complete it.
 - Stepping back from in progress and cancelling a task are now

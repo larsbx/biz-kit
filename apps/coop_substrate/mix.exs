@@ -47,8 +47,11 @@ defmodule CoopSubstrate.MixProject do
       # Drop first: the ledger is folded in full at app boot (Log.init/1 ->
       # recover/0), and one undecodable record raises there, so leftover state
       # from a previous run takes down the whole suite, not just one test.
+      # Operational records (CoopSubstrate.Records) live in the same database,
+      # in a schema of their own: drop it once; create (the schema) and
+      # initialise both.
       test: [
-        "event_store.drop --quiet",
+        "event_store.drop --quiet -e CoopSubstrate.EventStore",
         "event_store.create --quiet",
         "event_store.init --quiet",
         "test"
