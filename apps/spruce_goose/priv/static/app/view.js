@@ -263,6 +263,21 @@ export const projectsHeld = (found, [chapter, tenant, project]) =>
     .map((p) => ({ ...p, here: p.tenant_id === tenant && p.project_id === project }))
     .sort((a, b) => b.here - a.here);
 
+// Offboarding `found` (`GET /api/v1/principals/:id`) from a whole chapter
+// (docs/architecture/2026-10-19-chapter-offboarding.md): each project they
+// hold something in, and each of their administrator keys there.
+export const chapterOffboarding = (found, chapter) => [
+  ...found.projects
+    .filter((p) => p.chapter_id === chapter)
+    .map((p) => ({
+      type: "TaskPrincipalOffboardedV1",
+      payload: { tenant_id: p.tenant_id, project_id: p.project_id, principal_id: found.principal_id },
+    })),
+  ...found.keys
+    .filter((k) => k.chapter_id === chapter)
+    .map((k) => ({ type: "RoleKeyRevoked", payload: { role: "governance", key_id: k.key_id } })),
+];
+
 // -- own devices (docs/architecture/2026-10-19-own-devices.md) ------------------------
 
 // The command this browser signs to revoke one of its person's devices `d`

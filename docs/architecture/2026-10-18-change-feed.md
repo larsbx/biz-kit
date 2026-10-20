@@ -103,7 +103,10 @@ arrives, without the cursor check or backfill, violates it at once.
 
 `Feed.SSE` frames each frame as one server-sent `changes` event with
 `id: <seq>`, so a browser's `EventSource` resumes on its own through
-`Last-Event-ID` (`SSE.cursor/1`). A heartbeat is a comment line. The endpoint
+`Last-Event-ID` (`SSE.cursor/1`). A heartbeat is a comment line. When the
+reader's access ends, a last `revoked` event (no data, no ID) precedes the
+end of the stream, so a client stops at once
+([chapter offboarding](2026-10-19-chapter-offboarding.md#a-feed-says-when-access-ends)). The endpoint
 owns the socket, as Dispatch's `StreamController` does: open, write the first
 frame, then loop on `{:coop_ledger, _}` (advance) and a heartbeat timer
 (tick plus a heartbeat comment), and exit on the first failed write.

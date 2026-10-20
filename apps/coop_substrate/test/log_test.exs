@@ -136,6 +136,34 @@ defmodule CoopSubstrate.LogTest do
     end
   end
 
+  describe "append_if/2" do
+    # A guard reporting the gate it was given, then allowing or refusing.
+    def report(gate, pid, verdict) do
+      send(pid, {:guarded, gate})
+      verdict
+    end
+
+    test "admits a batch only if its guard holds of the appender's gate at admission" do
+      member = new_member()
+      {:ok, [first]} = Log.append(signed_test_event(member, note: "a"))
+
+      assert Log.append_if(
+               [signed_test_event(member, note: "b")],
+               {__MODULE__, :report, [self(), {:error, :refused}]}
+             ) == {:error, :refused}
+
+      assert Log.head().global_seq == first.global_seq
+      gate = Log.gate()
+      assert_received {:guarded, ^gate}
+
+      assert {:ok, [_]} =
+               Log.append_if(
+                 [signed_test_event(member, note: "b")],
+                 {__MODULE__, :report, [self(), :ok]}
+               )
+    end
+  end
+
   describe "reads" do
     test "read_all returns global order; as_of truncates" do
       member = new_member()

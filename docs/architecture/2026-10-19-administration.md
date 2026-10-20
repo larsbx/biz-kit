@@ -123,8 +123,9 @@ equivalents of the view, on the same endpoints.
   several browsers enrols each.
 - The page now lists and acts on every project of the chapter
   ([chapter projects](2026-10-19-chapter-projects.md)).
-- Offboarding a person does not revoke their administrator keys; revoke
-  those under *Administrators of this chapter*.
+- Offboarding a person from the whole chapter now also revokes their
+  administrator keys, in one batch
+  ([chapter offboarding](2026-10-19-chapter-offboarding.md)).
 - A person can also give up their own administrator key from their
   administrator browser ([own devices](2026-10-19-own-devices.md)).
 - The genesis seed remains the root of trust; publishing its checkpoint

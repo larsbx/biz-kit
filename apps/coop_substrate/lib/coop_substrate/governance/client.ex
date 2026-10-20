@@ -44,6 +44,41 @@ defmodule CoopSubstrate.Governance.Client do
     end
   end
 
+  @doc """
+  `sign_held/4` for a batch held as one (`Commands.hold_batch/4`): every
+  command is decoded and `expected` judges them all, in order, before any is
+  signed; then one signature each, submitted together.
+  """
+  @spec sign_batch(String.t(), signer(), ([map()] -> boolean()), map()) ::
+          {:ok, map()} | {:error, term()}
+  def sign_batch(url, signer, expected, params \\ %{}) do
+    with {:ok, held} <-
+           request(:post, url, Map.put(params, "governance_key_id", signer.key_id), [
+             authorization("POST", url, signer)
+           ]),
+         {:ok, bytes} <- decode_all(held["commands"]),
+         {:ok, cores} <- bytes |> Enum.map(&Canonical.decode/1) |> all_ok(),
+         true <-
+           (expected.(cores) and Enum.all?(cores, &signed_by?(&1, signer))) or
+             {:error, :not_what_was_shown} do
+      signatures =
+        Enum.map(bytes, &Base.url_encode64(Crypto.sign(&1, signer.seed), padding: false))
+
+      request(:post, url <> "/" <> segment(held["id"]), %{"signatures" => signatures})
+    end
+  end
+
+  defp decode_all(commands) when is_list(commands),
+    do: commands |> Enum.map(&Base.url_decode64(&1["signing_bytes"], padding: false)) |> all_ok()
+
+  defp decode_all(_commands), do: {:error, :not_what_was_shown}
+
+  defp all_ok(results) do
+    if Enum.all?(results, &match?({:ok, _}, &1)),
+      do: {:ok, Enum.map(results, &elem(&1, 1))},
+      else: {:error, :not_what_was_shown}
+  end
+
   @doc "`value` as one URL path segment: every reserved character escaped."
   @spec segment(String.t()) :: String.t()
   def segment(value), do: URI.encode(value, &URI.char_unreserved?/1)

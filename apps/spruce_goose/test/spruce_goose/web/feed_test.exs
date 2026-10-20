@@ -147,6 +147,7 @@ defmodule SpruceGoose.Web.FeedTest do
       _snapshot = next(resp)
 
       revoke!(w, "TaskOperatorRevokedV1", w.op_grant)
+      assert next(resp) == :revoked
       assert next(resp) == :done
     end
 

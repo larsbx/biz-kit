@@ -145,8 +145,13 @@ defmodule SpruceGoose.Web.FeedController do
     end
   end
 
-  # Revocation ends the response; a reconnect is then refused.
-  defp step(conn, {:revoked, _session}, _login, _idle), do: conn
+  # Revocation says so, then ends the response; a reconnect is then refused.
+  defp step(conn, {:revoked, _session}, _login, _idle) do
+    case chunk(conn, SSE.revoked()) do
+      {:ok, conn} -> conn
+      {:error, :closed} -> conn
+    end
+  end
 
   defp step(conn, {frame, session}, login, idle) do
     cond do

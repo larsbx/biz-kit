@@ -22,6 +22,7 @@ import {
   base64url,
   cancelledBecause,
   chapterAdministrators,
+  chapterOffboarding,
   chapterKinds,
   chapterProjects,
   changedKinds,
@@ -442,7 +443,18 @@ const show = (value) =>
 // submit it (to `submitPath(prepared)`, by default the held command's path).
 const commandPath = (prepared) => `/api/v1/commands/${encodeURIComponent(prepared.id)}`;
 
-async function signAndSubmit(prepare, expected, submitPath = commandPath) {
+const signAndSubmit = (prepare, expected, submitPath = commandPath) =>
+  signEach(
+    prepare,
+    (prepared) => [prepared],
+    ([core]) => device.isExpectedCommand(core, { keyId, ...expected }),
+    (prepared, [signature]) => postJSON(submitPath(prepared), { signature }),
+  );
+
+// Any held commands, a batch included (docs/architecture/2026-10-19-chapter-offboarding.md):
+// decode each, refuse unless `isExpected` holds of them all, show them all in
+// one confirmation, sign each, and submit the signatures together.
+async function signEach(prepare, commandsOf, isExpected, submit) {
   if (deciding) return null;
   deciding = true;
   render();
@@ -450,23 +462,25 @@ async function signAndSubmit(prepare, expected, submitPath = commandPath) {
   try {
     status("Preparing…");
     const prepared = await prepare();
-    const bytes = base64url.decode(prepared.signing_bytes);
-    const core = decode(bytes);
+    const bytes = commandsOf(prepared).map((c) => base64url.decode(c.signing_bytes));
+    const cores = bytes.map(decode);
 
-    if (!device.isExpectedCommand(core, { keyId, ...expected })) {
+    if (!isExpected(cores)) {
       throw new Error("the server prepared a different command; nothing was signed");
     }
 
-    $("confirm-body").textContent = show({ type: core.type, payload: core.payload });
+    const shown = cores.map((core) => ({ type: core.type, payload: core.payload }));
+    $("confirm-body").textContent = show(shown.length === 1 ? shown[0] : shown);
     $("confirm").showModal();
     const choice = await new Promise((resolve) =>
       $("confirm").addEventListener("close", () => resolve($("confirm").returnValue), { once: true }),
     );
     if (choice !== "sign") return status("Cancelled; nothing was signed.");
 
-    const signature = base64url.encode(await device.sign(pair, bytes));
-    const result = await postJSON(submitPath(prepared), { signature });
-    status(`Recorded on the ledger at #${result.global_seq}.`);
+    const signatures = [];
+    for (const b of bytes) signatures.push(base64url.encode(await device.sign(pair, b)));
+    const result = await submit(prepared, signatures);
+    status(`Recorded on the ledger at #${result.global_seq ?? result.events.at(-1).global_seq}.`);
     return result;
   } catch (e) {
     status(`Not recorded: ${e.message.replaceAll("_", " ")}.`, true);
@@ -628,9 +642,40 @@ async function showPerson(id) {
     return $("person-details").replaceChildren(el("p", { className: "status error", textContent: e.message.replaceAll("_", " ") }));
   }
   const projects = projectsHeld(found, scope);
-  if (!projects.length)
+  const keys = found.keys.filter((k) => k.chapter_id === chapterId);
+  if (!projects.length && !keys.length)
     return $("person-details").replaceChildren(el("p", { className: "muted", textContent: `${id} holds nothing in this chapter.` }));
-  $("person-details").replaceChildren(...projects.map((p) => personInProject(id, p)));
+  $("person-details").replaceChildren(...projects.map((p) => personInProject(id, p)), personInChapter(found, keys));
+}
+
+// Everything `found` holds in this chapter, at once: every project, and their
+// administrator keys (docs/architecture/2026-10-19-chapter-offboarding.md).
+function personInChapter(found, keys) {
+  const id = found.principal_id;
+  const offboard = el("button", { textContent: "Offboard from this chapter", disabled: deciding });
+  offboard.onclick = async () => {
+    if (!confirm(`End everything ${id} holds in this chapter: every project, and their administrator keys?`)) return;
+    const path = `/api/v1/principals/${encodeURIComponent(id)}/chapter_offboarding`;
+    const done = await signEach(
+      () => governed("POST", path, { governance_key_id: keyId, chapter_id: chapterId }),
+      (prepared) => prepared.commands,
+      (cores) => device.isExpectedBatch(cores, { keyId, chapter: chapterId, commands: chapterOffboarding(found, chapterId) }),
+      (prepared, signatures) => postJSON(`${path}/${encodeURIComponent(prepared.id)}`, { signatures }),
+    );
+    if (done) await showPerson(id);
+  };
+
+  return el(
+    "div",
+    { className: "held" },
+    el("h4", { textContent: "This chapter" }),
+    el("p", {
+      textContent: keys.length
+        ? `${id} administers it with ${keys.map((k) => k.key_id).join(", ")}.`
+        : `${id} does not administer it.`,
+    }),
+    el("div", { className: "actions" }, offboard),
+  );
 }
 
 // What `id` holds in project `p` of this chapter: revoke a device, or offboard.
@@ -737,7 +782,14 @@ function followChapter(on) {
     renderAdmin();
     if (shownPerson) showPerson(shownPerson);
   });
-  // Refused (the key was revoked, or a restart): ask again where this browser stands.
+  // The key was revoked: the server says so before closing. Ask at once
+  // where this browser stands.
+  feed.addEventListener("revoked", () => {
+    feed.close();
+    if (chapterFeed === feed) chapterFeed = null;
+    enrolment();
+  });
+  // Refused (a restart, or a revocation missed): ask again in a moment.
   feed.onerror = () => {
     if (feed.readyState !== EventSource.CLOSED || chapterFeed !== feed) return;
     chapterFeed = null;
@@ -927,10 +979,9 @@ function follow() {
     clearTimeout(enrolmentTimer);
     status("Live.");
   };
-  feed.onerror = () => {
-    if (feed.readyState !== EventSource.CLOSED) return status("Connection lost; reconnecting…", true);
-    // Refused: no access (yet, or any longer). Start over when it returns,
-    // and ask where this device stands until then.
+  // No access (yet, or any longer): start over when it returns, and ask
+  // where this device stands until then.
+  const lost = () => {
     live = false;
     view = emptyView();
     cursor = 0;
@@ -939,6 +990,16 @@ function follow() {
     status("No access to this project's feed yet; retrying…", true);
     setTimeout(follow, backoff);
     backoff = Math.min(backoff * 2, 30_000);
+  };
+  // The reader's access ended: the server says so before closing, so the
+  // page follows at once rather than after a refused reconnect.
+  feed.addEventListener("revoked", () => {
+    feed.close();
+    lost();
+  });
+  feed.onerror = () => {
+    if (feed.readyState !== EventSource.CLOSED) return status("Connection lost; reconnecting…", true);
+    lost();
   };
 }
 
