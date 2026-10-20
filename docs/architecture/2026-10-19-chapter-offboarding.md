@@ -1,6 +1,7 @@
 # Offboarding from a chapter
 
-Date: 2026-10-19. Status: **implemented**. Follows
+Date: 2026-10-19; admission coordination revised 2026-10-20.
+Status: **implemented**. Follows
 [offboarding](2026-10-19-offboarding.md) and
 [administration](2026-10-19-administration.md). Those left one gap:
 offboarding ended a person's grants project by project, but not their
@@ -42,8 +43,11 @@ unit, and `submit_batch/3` takes one signature per command:
   batch that would be refused is refused before anyone signs.
 - A batch is single-use, bound to its owner (`{:chapter_offboarding,
   principal}`), and held for five minutes, as a single command is.
-- A wrong number of signatures, or a bad one, is refused
-  (`signature_count`, `invalid_signature`), and the batch stays held.
+- Chapter offboarding checks the signature count and every signature before
+  spending the batch. Either refusal (`signature_count`, `invalid_signature`)
+  leaves it held. Once submission takes the batch, it is spent even if the
+  final ledger guard or governance validity check refuses admission; retry
+  with a newly prepared batch. The pending enrolment requests stay intact.
 - `hold/5` and `submit/3` are now the one-command case of the same code.
 
 **Order.** The project offboardings come first, then the key revocations.
@@ -62,12 +66,55 @@ rebuilds the batch from that gate and requires it to be the same.
 Otherwise the batch is refused whole (`holdings_changed`, 409) and the
 administrator offboards again.
 
-**Requests last.** The person's pending enrolment requests anywhere in the
-chapter (`Enrolments.cancel/2` now also takes `{chapter}`) are cancelled
-before the append, so no approval of one can be admitted after it.
-Cancelling only happens once the count, every signature and the holdings
-have checked out. Only a change in the instant between that check and the
-append can cost a request, and the person can ask again.
+**Requests last, inside the approval coordinator.** After the preliminary
+checks, `Offboarding.offboard_chapter/3` calls
+`Enrolments.offboard_chapter/4`. The cluster-wide enrolment process submits
+the held batch under the unchanged atomic ledger guard, waits for admission,
+and deletes this principal's pending requests in this chapter **only on
+success**, before handling another message. An error returned by submission
+leaves the requests, their codes, expiry times and prepared approvals intact.
+Other principals and other chapters are untouched.
+
+Approval already runs in this same process, including both its pending-code
+lookup and its call to `Commands.submit/3`. There are two orders:
+
+- **Approval first:** its grant is admitted before offboarding. The final
+  offboarding guard either covers it (an already named project), or rejects
+  the stale batch (a new project or governance key). Nothing is cancelled on
+  that rejection.
+- **Offboarding first:** approvals wait through admission and cancellation.
+  On success their pending-code lookup fails with `unknown_code`, even if
+  the approval was prepared and signed before offboarding. On rejection
+  their requests are still available.
+
+This fixes the previously documented check/cancel/append window. A preliminary
+holdings check is an early error only; it never authorizes request deletion.
+
+### Transaction and state-machine boundaries
+
+The canonical transaction is `Log`'s signed event-store append. Enrolment
+requests and held commands are separate, ephemeral ETS tables owned by their
+respective cluster singletons. A SQL transaction cannot enlist these tables.
+Deleting first and restoring on error would need to reconcile concurrent
+approvals, cancellations and expiry; simply deleting after append in the
+HTTP caller would allow an already prepared approval between those calls.
+Instead, the existing enrolment state machine serializes admission and
+conditional deletion with approvals. No rollback or reservation state is
+needed.
+
+The call direction is Enrolments → Commands → Log. Log never calls back into
+Enrolments: its guard remains a pure check of its own gate. Every signature,
+governance validity rule, orphan check and expected-version store fence still
+runs in the existing path. No unsigned ledger event or server signature is
+introduced, and neither command ownership nor single-use semantics changes.
+
+This is coordination for the existing live singleton, **not** a durable
+transaction across ETS and the event store. A process/node failure still
+loses ephemeral requests as documented for enrolment. A timeout or lost
+reply is an indeterminate outcome, not a reported admission refusal; inspect
+the signed ledger before preparing a retry. If the coordinator dies after
+append, its old pending codes die with it. This change adds no stronger
+partition/failover guarantee than the existing singleton architecture.
 
 ## Over HTTP
 
@@ -120,6 +167,17 @@ same way ([live view](2026-10-19-live-view.md)).
   - a project granted or a key declared while the batch waited refuses it
     whole (`holdings_changed`);
   - a bad submission keeps the batch and the person's pending requests;
+  - a deterministic process barrier grants a new project after preliminary
+    validation but before admission: `holdings_changed`, no offboarding
+    append, and the exact pending request and its signed approval survive;
+  - removing the other governance key at that barrier triggers
+    `cannot_orphan_governance` after the guard passes and keeps the request;
+  - operator, reviewer and governance approvals queued while offboarding
+    waits for the ledger cannot restore access after success;
+  - an approval already in admission for a named project is committed first,
+    then its new grant is ended by the following offboarding;
+  - another principal's requests and this principal's other-chapter requests
+    survive successful offboarding;
   - pending requests anywhere in the chapter are dropped;
   - a batch is only for its principal, needs one signature per command, and
     is used once.
@@ -129,6 +187,8 @@ same way ([live view](2026-10-19-live-view.md)).
   - a batch other than the one expected is not signed;
   - the batch ends both projects and the key;
   - a second attempt finds nothing to offboard.
+  - the same admission race returns 409 without losing the request; a fresh
+    successful batch then makes the previously signed approval return 404.
 - **`FeedTest`, `OffboardingTest`:** a revoked reader's stream ends with
   `revoked`.
 - **`LogTest`:** `append_if/3` admits a batch only when its guard holds;
@@ -159,3 +219,8 @@ same way ([live view](2026-10-19-live-view.md)).
   from each by an administrator of that chapter.
 - `mix coop.offboard` still ends projects only. Administrators do this in
   the view.
+- This correction coordinates chapter offboarding. The separate project
+  offboarding path retains its existing cancellation behavior.
+- Requests and challenges are not a permanent ban. New requests and fresh
+  governance-signed grants remain possible; direct governance ledger writes
+  are not enrolment approvals and retain their existing authority.

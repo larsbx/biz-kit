@@ -129,21 +129,20 @@ defmodule CoopSubstrate.Offboarding do
   @doc """
   Submit the signatures, one per prepared command. Admitted only if the batch
   is still everything the principal holds in the chapter (`unchanged/5`,
-  checked by the appender at admission). Once the signatures and the
-  holdings check out, the principal's pending enrolment requests anywhere in
-  the chapter are cancelled, before the append, so no approval of one can be
-  admitted after it.
+  checked by the appender at admission). Enrolments serializes submission
+  with approvals and cancels the principal's pending requests in the chapter
+  only after successful admission, before processing another approval.
+  A refused admission leaves the requests intact.
   """
   @spec offboard_chapter(String.t(), String.t(), [binary()]) ::
           {:ok, [CoopSubstrate.Protocol.Envelope.t()]} | {:error, term()}
   def offboard_chapter(principal, held_id, signatures) do
     owner = {:chapter_offboarding, principal}
 
-    with {:ok, [first | _] = signed} <- Commands.signed(owner, held_id, signatures),
+    with {:ok, [_ | _] = signed} <- Commands.signed(owner, held_id, signatures),
          {m, f, args} = guard = guard(principal, signed),
          :ok <- apply(m, f, [Log.gate() | args]),
-         :ok <- Enrolments.cancel(principal, {first.chapter_id}),
-         do: Commands.submit_batch(owner, held_id, signatures, guard: guard)
+         do: Enrolments.offboard_chapter(principal, held_id, signatures, guard)
   end
 
   defp guard(principal, [first | _] = envs) do

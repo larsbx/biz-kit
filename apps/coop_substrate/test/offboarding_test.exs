@@ -475,6 +475,163 @@ defmodule CoopSubstrate.OffboardingTest do
       task
     end
 
+    defp request!(principal, scope, role) do
+      key = new_member(role)
+      identity = %{issuer: "https://idp.test", subject: "sub-#{principal}"}
+
+      {:ok, challenge} =
+        Enrolments.begin(
+          principal,
+          identity,
+          scope,
+          key.signer.key_id,
+          key.signer.pubkey,
+          "Pending #{role}",
+          role
+        )
+
+      {:ok, request} =
+        Enrolments.prove(principal, challenge.id, Crypto.sign(challenge.statement, key.seed))
+
+      request
+    end
+
+    test "approvals queued during successful admission cannot restore project or administrator access",
+         w do
+      requests =
+        for role <- ~w(operator reviewer governance) do
+          request = request!("alice", @scope, role)
+          {:ok, approval} = Enrolments.prepare_approval(request.code, w.gov.signer.key_id)
+          {request, approval, Crypto.sign(approval.signing_bytes, w.gov.seed)}
+        end
+
+      bob = request!("bob", @scope, "operator")
+      elsewhere = request!("alice", {"other-chapter", "tenant-1", "project-1"}, "operator")
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      signed = signatures(batch, w.gov)
+      enrolments = BizKit.Cluster.Singleton.whereis_name(Enrolments)
+      log = BizKit.Cluster.Singleton.whereis_name(Log)
+      :ok = :sys.suspend(enrolments)
+      :erlang.trace(enrolments, true, [:send, {:tracer, self()}])
+
+      try do
+        offboarding =
+          traced_task(fn -> Offboarding.offboard_chapter("alice", batch.id, signed) end)
+
+        pid = offboarding.pid
+        assert_receive {:trace, ^pid, :send, {:"$gen_call", _, _}, ^enrolments}, 2_000
+
+        # Pause actual ledger admission with the enrolment coordinator holding
+        # the operation. Queue already signed approvals behind that operation.
+        :ok = :sys.suspend(log)
+        :ok = :sys.resume(enrolments)
+
+        assert_receive {:trace, ^enrolments, :send, {:"$gen_call", _, {:append, _, _}}, ^log},
+                       2_000
+
+        approvals =
+          for {request, approval, signature} <- requests do
+            task = traced_task(fn -> Enrolments.approve(request.code, approval.id, signature) end)
+            pid = task.pid
+            assert_receive {:trace, ^pid, :send, {:"$gen_call", _, _}, ^enrolments}, 2_000
+            task
+          end
+
+        :ok = :sys.resume(log)
+        assert {:ok, _} = Task.await(offboarding)
+        for task <- approvals, do: assert(Task.await(task) == {:error, :unknown_code})
+      after
+        :sys.resume(log)
+        :sys.resume(enrolments)
+        :erlang.trace(enrolments, false, [:send])
+      end
+
+      for {request, _, _} <- requests do
+        assert Enrolments.fetch(request.code) == {:error, :unknown_code}
+      end
+
+      assert {:ok, _} = Enrolments.fetch(bob.code)
+      assert {:ok, _} = Enrolments.fetch(elsewhere.code)
+
+      assert Offboarding.fetch("alice", ["chapter-genesis"]) == %{
+               principal_id: "alice",
+               projects: [],
+               keys: []
+             }
+    end
+
+    test "governance refusal at admission preserves requests even when holdings are unchanged",
+         w do
+      alice = administrator!(w.gov, "alice")
+      request = request!("alice", @scope, "operator")
+      {:ok, before} = Enrolments.fetch(request.code)
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", alice.signer.key_id)
+      signed = signatures(batch, alice)
+      enrolments = BizKit.Cluster.Singleton.whereis_name(Enrolments)
+      :ok = :sys.suspend(enrolments)
+
+      try do
+        task = traced_task(fn -> Offboarding.offboard_chapter("alice", batch.id, signed) end)
+        pid = task.pid
+        assert_receive {:trace, ^pid, :send, {:"$gen_call", _, _}, ^enrolments}, 2_000
+
+        # The batch still describes Alice exactly, but admitting it now would
+        # remove the last governance key. This fails AFTER the atomic guard.
+        {:ok, _} =
+          Log.append(
+            signed_event(alice, "RoleKeyRevoked", %{
+              "role" => "governance",
+              "key_id" => w.gov.signer.key_id
+            })
+          )
+
+        head = Log.head()
+        :ok = :sys.resume(enrolments)
+        assert {:error, {:reject, 2, :cannot_orphan_governance}} = Task.await(task)
+        assert Log.head() == head
+      after
+        :sys.resume(enrolments)
+      end
+
+      assert Enrolments.fetch(request.code) == {:ok, before}
+      assert alice.signer.key_id in keys()
+      assert length(held("alice")) == 6
+    end
+
+    test "an approval admitted first in a named project is ended by the following offboarding",
+         w do
+      request = request!("alice", @scope, "operator")
+      {:ok, approval} = Enrolments.prepare_approval(request.code, w.gov.signer.key_id)
+      signature = Crypto.sign(approval.signing_bytes, w.gov.seed)
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      signed = signatures(batch, w.gov)
+      enrolments = BizKit.Cluster.Singleton.whereis_name(Enrolments)
+      log = BizKit.Cluster.Singleton.whereis_name(Log)
+      :erlang.trace(enrolments, true, [:send, {:tracer, self()}])
+      :ok = :sys.suspend(log)
+
+      try do
+        approving = Task.async(fn -> Enrolments.approve(request.code, approval.id, signature) end)
+        assert_receive {:trace, ^enrolments, :send, {:"$gen_call", _, {:append, _}}, ^log}, 2_000
+
+        offboarding =
+          traced_task(fn -> Offboarding.offboard_chapter("alice", batch.id, signed) end)
+
+        pid = offboarding.pid
+        assert_receive {:trace, ^pid, :send, {:"$gen_call", _, :gate}, ^log}, 2_000
+
+        :ok = :sys.resume(log)
+        assert {:ok, grant} = Task.await(approving)
+        assert {:ok, [first | _]} = Task.await(offboarding)
+        assert grant.global_seq < first.global_seq
+        refute o().grants[grant.event_id].active
+        assert held("alice") == []
+      after
+        :sys.resume(log)
+        :erlang.trace(enrolments, false, [:send])
+      end
+    end
+
     test "only for the principal it was prepared for, once", w do
       {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
 

@@ -150,9 +150,9 @@ defmodule CoopSubstrate.Enrolments do
 
   @doc """
   Submit the governance signature; on admission the request is done. Runs in
-  this process, in turn with `cancel/2`, and only while the request is still
-  pending: once offboarding has cancelled it, an approval already prepared
-  and signed is refused.
+  this process, in turn with `cancel/2` and `offboard_chapter/4`, and only
+  while the request is still pending: once offboarding has cancelled it,
+  an approval already prepared and signed is refused.
   """
   @spec approve(String.t(), String.t(), binary()) ::
           {:ok, CoopSubstrate.Protocol.Envelope.t()} | {:error, term()}
@@ -166,6 +166,18 @@ defmodule CoopSubstrate.Enrolments do
   """
   @spec cancel(String.t(), CoopSubstrate.Feed.View.scope()) :: :ok
   def cancel(principal, scope), do: GenServer.call(@server, {:cancel, principal, scope})
+
+  @doc """
+  Submit a chapter offboarding in turn with approvals. The ledger still
+  decides admission under `guard`; only a successful admission cancels the
+  principal's requests. While admission is in flight, no approval can pass
+  its request lookup. Used by `Offboarding.offboard_chapter/3` after its
+  preliminary signature and holdings checks.
+  """
+  @spec offboard_chapter(String.t(), String.t(), [binary()], {module(), atom(), list()}) ::
+          {:ok, [CoopSubstrate.Protocol.Envelope.t()]} | {:error, term()}
+  def offboard_chapter(principal, id, signatures, guard),
+    do: GenServer.call(@server, {:offboard_chapter, principal, id, signatures, guard})
 
   # -- internals --------------------------------------------------------------------
 
@@ -307,12 +319,28 @@ defmodule CoopSubstrate.Enrolments do
   end
 
   def handle_call({:cancel, principal, scope}, _from, state) do
+    cancel_pending(principal, scope)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:offboard_chapter, principal, id, signatures, guard}, _from, state) do
+    reply =
+      with {:ok, [first | _] = appended} <-
+             Commands.submit_batch({:chapter_offboarding, principal}, id, signatures,
+               guard: guard
+             ) do
+        cancel_pending(principal, {first.chapter_id})
+        {:ok, appended}
+      end
+
+    {:reply, reply, state}
+  end
+
+  defp cancel_pending(principal, scope) do
     for {key, _, %{scope: request_scope}, _} <-
           :ets.match_object(@table, {{:request, :_}, principal, :_, :_}),
         within?(request_scope, scope),
         do: :ets.delete(@table, key)
-
-    {:reply, :ok, state}
   end
 
   defp within?(scope, {chapter}), do: elem(scope, 0) == chapter

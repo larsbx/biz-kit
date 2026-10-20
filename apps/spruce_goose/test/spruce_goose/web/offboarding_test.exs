@@ -11,7 +11,7 @@ defmodule SpruceGoose.Web.OffboardingTest do
   import SpruceGoose.{IdentityFixtures, LedgerFixtures}
 
   alias BizKit.Identity.Principal
-  alias CoopSubstrate.Feed
+  alias CoopSubstrate.{Crypto, Enrolments, Feed, Log, Offboarding}
   alias CoopSubstrate.Governance.Client
   alias CoopSubstrate.Offboarding.Offboarder
 
@@ -208,5 +208,89 @@ defmodule SpruceGoose.Web.OffboardingTest do
     assert {:error, {401, _}} = Offboarder.offboard(w.base, details, signer)
     assert {:error, {401, _}} = Offboarder.offboard(w.base, details, governance(world()))
     assert holds?(w, "project-1")
+  end
+
+  test "an admission race returns 409 with the request intact; a successful retry blocks its signed approval",
+       w do
+    key = member("governance")
+
+    {:ok, challenge} =
+      Enrolments.begin(
+        w.person,
+        %{issuer: "https://idp.test", subject: "sub-person"},
+        {w.chapter, tenant(), "pending-only"},
+        key.signer.key_id,
+        key.signer.pubkey,
+        "Pending administrator",
+        "governance"
+      )
+
+    {:ok, request} =
+      Enrolments.prove(w.person, challenge.id, Crypto.sign(challenge.statement, key.seed))
+
+    {:ok, before} = Enrolments.fetch(request.code)
+    {:ok, approval} = Enrolments.prepare_approval(request.code, w.gov.signer.key_id)
+    approval_sig = Crypto.sign(approval.signing_bytes, w.gov.seed)
+    {:ok, batch} = Offboarding.prepare_chapter(w.person, w.chapter, w.gov.signer.key_id)
+
+    body =
+      Jason.encode!(%{
+        signatures:
+          Enum.map(batch.commands, fn command ->
+            command.signing_bytes
+            |> Crypto.sign(w.gov.seed)
+            |> Base.url_encode64(padding: false)
+          end)
+      })
+
+    path = "/api/v1/principals/#{Client.segment(w.person)}/chapter_offboarding"
+    headers = [{"content-type", "application/json"}]
+    enrolments = BizKit.Cluster.Singleton.whereis_name(Enrolments)
+    :ok = :sys.suspend(enrolments)
+
+    try do
+      task =
+        Task.async(fn ->
+          receive do
+            :go -> call(:post, path <> "/" <> batch.id, headers, body)
+          end
+        end)
+
+      pid = task.pid
+      :erlang.trace(pid, true, [:send, {:tracer, self()}])
+      send(pid, :go)
+      assert_receive {:trace, ^pid, :send, {:"$gen_call", _, _}, ^enrolments}, 2_000
+
+      grant!(w, "TaskOperatorGrantedV1", member("operator"), w.person, "project-3")
+      head = Log.head()
+      :ok = :sys.resume(enrolments)
+      response = Task.await(task)
+      assert response.status == 409
+      assert response.resp_body =~ "holdings_changed"
+      assert Log.head() == head
+    after
+      :sys.resume(enrolments)
+    end
+
+    assert Enrolments.fetch(request.code) == {:ok, before}
+    assert call(:post, path <> "/" <> batch.id, headers, body).status == 404
+
+    assert {:ok, %{"events" => [_, _, _]}} =
+             Client.sign_batch(w.base <> path, governance(w), &(length(&1) == 3), %{
+               "chapter_id" => w.chapter
+             })
+
+    response =
+      call(
+        :post,
+        "/api/v1/enrolments/#{request.code}/approval/#{approval.id}",
+        headers,
+        Jason.encode!(%{signature: Base.url_encode64(approval_sig, padding: false)})
+      )
+
+    assert response.status == 404
+    assert response.resp_body =~ "unknown_code"
+    refute holds?(w, "project-1") or holds?(w, "project-2") or holds?(w, "project-3")
+    refute Map.has_key?(Log.gate().role_keys[{w.chapter, "governance"}], key.signer.key_id)
   end
 end
