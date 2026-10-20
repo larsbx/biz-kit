@@ -8,6 +8,7 @@ defmodule Dispatch.Config do
   operator fix a misconfigured deployment in a single pass.
   """
 
+  alias Dispatch.Access.CapabilitySigner
   alias Dispatch.Integrations.AdapterRegistry
 
   @typedoc "A single configuration violation, identified by a stable reason code."
@@ -15,6 +16,11 @@ defmodule Dispatch.Config do
 
   @breakglass_ttl_bounds 60..3_600
   @face_challenge_ttl_bounds 30..120
+
+  # The public half of the published development capability seed (base64url).
+  # Compared whole, not by its four-byte `k-` identifier, so no other key can be
+  # mistaken for it; a test pins it to the seed in config/test.exs.
+  @development_capability_public "L9DjPZCFSf6Y1zCcg8vJmYoBnzyxvSUPVqalBPJzKdQ"
 
   @doc """
   Validates the running configuration and raises when it is unusable.
@@ -47,7 +53,8 @@ defmodule Dispatch.Config do
       validate_nonproduction_adapters(production?),
       validate_secrets(production?),
       validate_breakglass(production?),
-      validate_face(production?)
+      validate_face(production?),
+      validate_capability_signing(production?)
     ])
   end
 
@@ -198,6 +205,42 @@ defmodule Dispatch.Config do
 
     ttl_violation ++ single_user_violation ++ entitlement_violation
   end
+
+  # Outside production a missing seed fails only the capability endpoint, the
+  # right size of failure for a developer. In production it is a startup
+  # failure, and so is the development seed: every checkout holds it, so a
+  # document it signed proves nothing.
+  defp validate_capability_signing(false), do: []
+
+  defp validate_capability_signing(true) do
+    case CapabilitySigner.key() do
+      {:ok, %{public: public}} ->
+        if Base.url_encode64(public, padding: false) == @development_capability_public do
+          [
+            violation(
+              "CAPABILITY_SIGNING_KEY_IS_DEVELOPMENT_KEY",
+              "DISPATCH_CAPABILITY_SIGNING_SEED",
+              "The published development seed cannot sign production documents."
+            )
+          ]
+        else
+          []
+        end
+
+      {:error, reason} ->
+        [
+          violation(
+            "CAPABILITY_SIGNING_KEY_UNUSABLE",
+            "DISPATCH_CAPABILITY_SIGNING_SEED",
+            "A base64url 32-byte Ed25519 seed is required (#{reason})."
+          )
+        ]
+    end
+  end
+
+  @doc false
+  @spec development_capability_public() :: String.t()
+  def development_capability_public, do: @development_capability_public
 
   defp validate_face(production?) do
     identity = Application.get_env(:dispatch, :identity, [])

@@ -66,3 +66,7 @@ Application contracts remain under `apps/`. Start with
 [CoopSubstrate's normative substrate](../../apps/coop_substrate/SUBSTRATE.md),
 [SpruceGoose's authority planes](../../apps/spruce_goose/docs/authority-planes.md),
 and its [documented current state](../../apps/spruce_goose/docs/current-state.md).
+- [Dispatch capability document](2026-10-20-dispatch-capability-document.md):
+  what dispatch offers a role assignment, as Ed25519-signed canonical bytes the
+  d-patch field app verifies against a pinned key. An attestation for the
+  client, not authority; retired when dispatch's roles become ledger grants.

@@ -65,6 +65,11 @@ defmodule Dispatch.MixProject do
       {:open_api_spex, "~> 3.21"},
       {:jason, "~> 1.4"},
 
+      # The platform's one signature scheme: Ed25519 over CoopEventCanonicalV1
+      # bytes, for the signed capability document. Code only — dispatch does not
+      # start or write the ledger, so the application is not started from here.
+      {:coop_substrate, in_umbrella: true, runtime: false},
+
       # Outbound HTTP, used directly for OIDC key discovery (Section 23.1).
       # Declared here rather than relied on transitively: the TLS trust store
       # below is what makes token verification sound.
