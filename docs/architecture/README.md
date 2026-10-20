@@ -53,6 +53,11 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Task core](2026-10-20-task-core.md): the task and workflow rules as a
   dependency-free app (`apps/task_core`) any application can vendor, behind
   two host ports; one lifecycle contract and DAG shared with SpruceGoose.
+- [Hierarchy and blueprints](2026-10-20-hierarchy-and-blueprints.md): a
+  project's roadmaps and workflows as a reviewed blueprint in git, applied by
+  governance from a pinned source (`mix coop.blueprint`); an operator runs a
+  workflow, creating its tasks with their Definitions of Done and
+  predecessors. SpruceGoose's design reviewed point by point.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.

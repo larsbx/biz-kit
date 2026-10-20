@@ -5,7 +5,8 @@ Task and workflow rules for any application:
 - dependency graphs;
 - readiness and execution;
 - Definitions of Done, evidence and review;
-- timing, suggestions and delegation.
+- timing, suggestions and delegation;
+- roadmaps and workflows from reviewed blueprints, and workflow runs.
 
 TaskCore is pure Elixir with no dependencies. Your application keeps
 storage, signing and transport. See

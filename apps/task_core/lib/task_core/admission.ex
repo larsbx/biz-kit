@@ -60,6 +60,7 @@ defmodule TaskCore.Admission do
     |> Map.merge(TaskCore.DoD.event_types())
     |> Map.merge(TaskCore.Readiness.event_types())
     |> Map.merge(TaskCore.Timing.event_types())
+    |> Map.merge(TaskCore.Hierarchy.event_types())
   end
 
   defp holder_revocation(role),
@@ -106,6 +107,9 @@ defmodule TaskCore.Admission do
 
         Map.has_key?(TaskCore.Timing.event_types(), env.type) ->
           TaskCore.Timing.check(env, gate.orchestration, gate.role_keys)
+
+        Map.has_key?(TaskCore.Hierarchy.event_types(), env.type) ->
+          TaskCore.Hierarchy.check(env, gate.orchestration, gate.role_keys)
 
         env.type in @holder_revocations ->
           holder_revocation(env, gate)
@@ -192,10 +196,11 @@ defmodule TaskCore.Admission do
         else: ~w(tenant_id project_id)
 
     values = [env.chapter_id | Enum.map(fields, &env.payload[&1])]
-    if Enum.all?(values, &safe_segment?/1), do: :ok, else: {:error, :invalid_task_scope}
+    if Enum.all?(values, &segment?/1), do: :ok, else: {:error, :invalid_task_scope}
   end
 
-  defp safe_segment?(value) do
+  @doc "Whether `value` is a safe scope segment: 1 to 128 bytes, `[A-Za-z0-9][A-Za-z0-9_.-]*`."
+  def segment?(value) do
     is_binary(value) and byte_size(value) in 1..128 and
       Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/, value)
   end

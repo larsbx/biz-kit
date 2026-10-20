@@ -118,6 +118,8 @@ defmodule SpruceGoose.Web.Router do
     get("/tasks/:task_id", TaskController, :show)
     post("/tasks/:task_id/cancellation", TaskController, :prepare)
     post("/tasks/:task_id/cancellation/:held_id", TaskController, :cancel)
+    post("/blueprints", BlueprintController, :prepare)
+    post("/blueprints/:held_id", BlueprintController, :apply)
     get("/devices/:key_id", DeviceController, :status)
   end
 
