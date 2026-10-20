@@ -275,6 +275,8 @@ function openReadiness(r) {
       t.blueprint.artifact_requirements.map((name) => field(`${t.id}/${name}`, `${t.id}: input “${name}”`)),
     ),
   );
+  // A later batch keeps the SOP the run already follows.
+  if (r.sop) Object.assign($("readiness-form").elements.sop, { value: r.sop, readOnly: true });
   $("readiness").showModal();
   $("readiness").addEventListener(
     "close",

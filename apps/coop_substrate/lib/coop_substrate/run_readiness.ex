@@ -3,7 +3,8 @@ defmodule CoopSubstrate.RunReadiness do
   Governance defines readiness for a workflow run's tasks at once
   (docs/architecture/2026-10-20-run-readiness.md): one `TaskReadinessDefinedV1`
   per task of the run that is proposed or queued and has none yet, held as
-  one batch for a governance key to sign.
+  one batch for a governance key to sign. A run follows one SOP: a later
+  batch, for tasks proposed later, must name the SOP an earlier one did.
 
   What the blueprint fixed is filled in, not chosen: each task's
   predecessors (the run's own tasks) and the names of its inputs. Governance
@@ -34,14 +35,30 @@ defmodule CoopSubstrate.RunReadiness do
   @spec prepare(TaskCore.State.scope(), String.t(), binary(), map(), String.t()) ::
           {:ok, %{id: String.t(), commands: [map()], expires_at: integer()}} | {:error, term()}
   def prepare({chapter, tenant, project} = scope, run, sop, inputs, governance_key_id) do
-    pending = pending(Log.gate().orchestration, scope, run)
+    o = Log.gate().orchestration
+    pending = pending(o, scope, run)
 
     with true <- pending != [] or {:error, :nothing_to_define},
          true <- match?(<<_::256>>, sop) or {:error, :bad_request},
+         true <- sop(o, scope, run) in [nil, sop] or {:error, :sop_mismatch},
          {:ok, commands} <- commands(pending, tenant, project, sop, inputs),
          {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
       Commands.hold_batch({:run_readiness, scope, run}, chapter, commands, signer)
     end
+  end
+
+  @doc """
+  The SOP digest the run's tasks were already readied under, if any: a run
+  follows one SOP, so a later batch (tasks proposed later) must name it too.
+  """
+  def sop(o, {chapter, tenant, project}, run) do
+    Enum.find_value(o.tasks, fn
+      {{^chapter, ^tenant, ^project, _}, %{blueprint: %{run_event_id: ^run}, readiness: r}} ->
+        elem(r.sop_digest, 1)
+
+      _ ->
+        nil
+    end)
   end
 
   @doc "Submit one signature per held definition, appended together."

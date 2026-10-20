@@ -17,7 +17,9 @@ and the names of its inputs (`TaskCore.Hierarchy.keeps_blueprint/3`), so
 those are filled in, never chosen. Governance supplies only digests:
 - one per input, per task;
 - one for the SOP the run follows. A run uses one SOP; the ledger still
-  records it per task, as an exact digest.
+  records it per task, as an exact digest. A later batch, for tasks proposed
+  later, must name the SOP the run was already readied under
+  (`sop_mismatch` otherwise), and the page fills it in.
 
 `CoopSubstrate.RunReadiness` holds one `TaskReadinessDefinedV1` per task of
 the run that is proposed or queued and has no readiness yet, as one batch
@@ -28,7 +30,7 @@ task, and the blueprint's predecessors and input names kept.
 
 | Request | Answer |
 | --- | --- |
-| `POST …/projects/:project_id/runs/:run_event_id/readiness` `{"governance_key_id", "sop_digest": hex, "inputs": {task_id: {name: hex}}}`, signed by a governance key of the chapter (`Governance.Read`) | 201: the definitions to sign. 409 `nothing_to_define` if no task of the run is waiting. 400 `missing_input` if an input digest is missing. |
+| `POST …/projects/:project_id/runs/:run_event_id/readiness` `{"governance_key_id", "sop_digest": hex, "inputs": {task_id: {name: hex}}}`, signed by a governance key of the chapter (`Governance.Read`) | 201: the definitions to sign. 409 `nothing_to_define` if no task of the run is waiting, or `sop_mismatch` if the run already follows another SOP. 400 `missing_input` if an input digest is missing. |
 | `POST …/runs/:run_event_id/readiness/:held_id` `{"signatures"}` | 201: the appended events |
 
 A task made by a run now records the run (`blueprint.run_event_id`, the
@@ -56,6 +58,7 @@ view.
   - one batch defines both tasks, with the blueprint's predecessors, the
     input digest and the SOP;
   - once defined, there is nothing left to define;
+  - a later batch must name the SOP the run already follows;
   - an operator key cannot sign it;
   - a batch cannot be submitted under another run.
 - **HTTP (`RunReadinessTest`):**

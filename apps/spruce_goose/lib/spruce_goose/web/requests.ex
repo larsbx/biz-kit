@@ -129,6 +129,7 @@ defmodule SpruceGoose.Web.Requests do
   @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named]
   @conflict [
     :nothing_to_define,
+    :sop_mismatch,
     :unknown_suggestion,
     :suggestion_not_pending,
     :unknown_task,

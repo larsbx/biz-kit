@@ -373,7 +373,9 @@ export function runs(view) {
       const t = tasks[0];
       const suffix = `-${t.blueprint.definition_id}`;
       const name = t.id.endsWith(suffix) ? t.id.slice(0, -suffix.length) : t.id;
-      return { ...r, name, tasks, pending, done };
+      // A run follows one SOP: the one its tasks were already readied under.
+      const sop = tasks.find((x) => x.readiness)?.readiness.sop_digest ?? null;
+      return { ...r, name, tasks, pending, done, sop };
     })
     .sort(byKey((r) => r.tasks[0].id));
 }

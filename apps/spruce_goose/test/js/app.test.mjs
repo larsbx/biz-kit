@@ -656,4 +656,9 @@ test("runs group a run's tasks; readiness covers exactly the tasks waiting", () 
     },
   ]);
   assert.match(runReadiness(old, { ...where, inputs: {} }).error, /no task of this run/);
+  assert.equal(run.sop, null);
+
+  const readied = { ...view.tasks["r1-build"], state: "queued", readiness: { sop_digest: sop } };
+  const [, later] = runs({ ...view, tasks: { ...view.tasks, "r1-build": readied } });
+  assert.equal(later.sop, sop);
 });

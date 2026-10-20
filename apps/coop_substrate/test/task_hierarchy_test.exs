@@ -189,6 +189,22 @@ defmodule CoopSubstrate.TaskHierarchyTest do
                {:error, :nothing_to_define}
     end
 
+    test "a later batch, for tasks proposed later, must name the run's SOP", w do
+      propose!(w, "build-r")
+      inputs = %{"build-r" => %{"source" => @source}}
+      {:ok, held} = RunReadiness.prepare(@scope, w.run, @sop, inputs, w.gov.signer.key_id)
+      {:ok, [_]} = RunReadiness.define(@scope, w.run, held.id, sign_all(w, held))
+
+      propose!(w, "announce-r")
+      other = :crypto.hash(:sha256, "another SOP")
+
+      assert RunReadiness.prepare(@scope, w.run, other, %{}, w.gov.signer.key_id) ==
+               {:error, :sop_mismatch}
+
+      {:ok, held} = RunReadiness.prepare(@scope, w.run, @sop, %{}, w.gov.signer.key_id)
+      assert [%{payload: %{"task_id" => "announce-r"}}] = held.commands
+    end
+
     test "only governance keys sign, and a batch belongs to its run", w do
       propose!(w, "announce-r")
 
