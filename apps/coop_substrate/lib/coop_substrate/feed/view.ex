@@ -8,7 +8,9 @@ defmodule CoopSubstrate.Feed.View do
   digest, so a person's device can take each lifecycle step
   (docs/architecture/2026-10-19-lifecycle.md, 2026-10-19-execution.md). A
   cancelled task carries who cancelled it (governance: none) and why
-  (2026-10-19-cancel-reopen.md).
+  (2026-10-19-cancel-reopen.md). A task carries its todos in the order they
+  were added, and its readiness the SOP's version if governance named one
+  (2026-10-20-sprucegoose-salvage.md).
 
   A project's view also carries its reader's own **devices** (`Devices.of/3`:
   operator and reviewer grants in the project, administrator keys of the
@@ -171,6 +173,13 @@ defmodule CoopSubstrate.Feed.View do
     |> Map.put(:dod, dod(t.dod))
     |> Map.put(:readiness, readiness(t[:readiness]))
     |> Map.put(:blueprint, t[:blueprint])
+    |> Map.put(
+      :todos,
+      Enum.map(
+        TaskCore.Todos.ordered(t),
+        &Map.take(&1, [:id, :title, :depends_on, :state, :version, :principal_id, :reason])
+      )
+    )
     |> json()
   end
 
@@ -184,6 +193,7 @@ defmodule CoopSubstrate.Feed.View do
       artifact_requirements: r.artifact_requirements,
       predecessor_ids: r.predecessor_ids,
       sop_digest: r.sop_digest,
+      sop_version: r[:sop_version],
       acknowledgment:
         r.acknowledgment &&
           Map.take(r.acknowledgment, [:principal_id, :key_id, :custody_receipt_id])

@@ -352,15 +352,32 @@ async function signIn(browser, subject) {
     await admin.locator("#readiness").waitFor({ state: "visible" });
     const sopDigest = await admin.locator("#digests option").first().getAttribute("value");
     await admin.locator('#readiness input[name="sop"]').fill(sopDigest);
+    await admin.locator('#readiness input[name="sop_version"]').fill("1.0.0");
     await admin.getByRole("button", { name: "Prepare to sign" }).click();
     await admin.locator("#confirm").waitFor({ state: "visible" });
     const readiness = await admin.locator("#confirm-body").textContent();
-    if (!["TaskReadinessDefinedV1", "r1-build", sopDigest].every((t) => readiness.includes(t)) || readiness.includes("r1-ship"))
+    if (!["TaskReadinessDefinedV1", "r1-build", sopDigest, "1.0.0"].every((t) => readiness.includes(t)) || readiness.includes("r1-ship"))
       throw new Error(`unexpected readiness: ${readiness}`);
     await admin.getByRole("button", { name: "Sign and send" }).click();
     await admin.locator("#confirm").waitFor({ state: "hidden" });
     await adminRun.getByRole("button", { name: /Define readiness/ }).waitFor({ state: "detached", ...live });
     await build.getByText("Waiting for a readiness definition").waitFor({ state: "detached", ...live });
+
+    // A todo on the run's first step, added and then done from this device
+    // (docs/architecture/2026-10-20-sprucegoose-salvage.md).
+    const onBuild = async (type, text) => {
+      await dialog.waitFor({ state: "visible" });
+      const command = await page.locator("#confirm-body").textContent();
+      if (!command.includes(type) || !command.includes(text)) throw new Error(`unexpected command: ${command}`);
+      await page.getByRole("button", { name: "Sign and send" }).click();
+      await dialog.waitFor({ state: "hidden" });
+    };
+    page.once("dialog", (prompt) => prompt.accept("Tag the release"));
+    await build.getByRole("button", { name: "Add todo…" }).click();
+    await onBuild("TaskTodoAddedV1", "tag-the-release");
+    await build.locator("li").filter({ hasText: "Tag the release" }).getByRole("button", { name: "Done" }).click(live);
+    await onBuild("TaskTodoCompletedV1", "tag-the-release");
+    await build.getByText("Tag the release (completed)").waitFor(live);
 
     // The administrator gives up this browser's key from its own device list
     // (docs/architecture/2026-10-19-own-devices.md).

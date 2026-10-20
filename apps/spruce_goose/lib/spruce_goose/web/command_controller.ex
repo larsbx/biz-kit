@@ -22,6 +22,11 @@ defmodule SpruceGoose.Web.CommandController do
            {"action": "cancel" | "reopen", "task_id", "reason", "key_id"}
            {"action": "instantiate", "revision_event_id", "roadmap_key", "workflow_id",
             "task_ids": {definition id: new task id}, "key_id"}
+           {"action": "add_todo" | "revise_todo", "task_id", "todo_id", "title",
+            "depends_on": [todo id], "key_id"}
+           {"action": "complete_todo", "task_id", "todo_id", "key_id"}
+           {"action": "drop_todo", "task_id", "todo_id", "reason", "key_id"}
+             (docs/architecture/2026-10-20-sprucegoose-salvage.md)
            → 201 {id, type, payload, signing_bytes (base64url), expires_at}
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
@@ -114,6 +119,28 @@ defmodule SpruceGoose.Web.CommandController do
       do: {:ok, {:instantiate, rev, roadmap, workflow, ids}},
       else: {:error, :bad_action}
   end
+
+  defp action(%{
+         "action" => a,
+         "task_id" => t,
+         "todo_id" => todo,
+         "title" => title,
+         "depends_on" => deps
+       })
+       when a in ~w(add_todo revise_todo) and is_binary(t) and is_binary(todo) and
+              is_binary(title) and is_list(deps) do
+    if Enum.all?(deps, &is_binary/1),
+      do: {:ok, {String.to_existing_atom(a), t, todo, title, deps}},
+      else: {:error, :bad_action}
+  end
+
+  defp action(%{"action" => "complete_todo", "task_id" => t, "todo_id" => todo})
+       when is_binary(t) and is_binary(todo),
+       do: {:ok, {:complete_todo, t, todo}}
+
+  defp action(%{"action" => "drop_todo", "task_id" => t, "todo_id" => todo, "reason" => r})
+       when is_binary(t) and is_binary(todo) and is_binary(r),
+       do: {:ok, {:drop_todo, t, todo, r}}
 
   defp action(_body), do: {:error, :bad_action}
 

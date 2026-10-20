@@ -205,6 +205,25 @@ defmodule CoopSubstrate.TaskHierarchyTest do
       assert [%{payload: %{"task_id" => "announce-r"}}] = held.commands
     end
 
+    test "a run's SOP version is kept by every later batch", w do
+      propose!(w, "build-r")
+      inputs = %{"build-r" => %{"source" => @source}}
+      gov_key = w.gov.signer.key_id
+      {:ok, held} = RunReadiness.prepare(@scope, w.run, @sop, inputs, gov_key, "1.4.0")
+      assert [%{payload: %{"sop_version" => "1.4.0"}}] = held.commands
+      {:ok, [_]} = RunReadiness.define(@scope, w.run, held.id, sign_all(w, held))
+
+      propose!(w, "announce-r")
+      assert RunReadiness.prepare(@scope, w.run, @sop, %{}, gov_key) == {:error, :sop_mismatch}
+
+      assert RunReadiness.prepare(@scope, w.run, @sop, %{}, gov_key, "1.5.0") ==
+               {:error, :sop_mismatch}
+
+      {:ok, held} = RunReadiness.prepare(@scope, w.run, @sop, %{}, gov_key, "1.4.0")
+      {:ok, [_]} = RunReadiness.define(@scope, w.run, held.id, sign_all(w, held))
+      assert Log.gate().orchestration.tasks[key("announce-r")].readiness.sop_version == "1.4.0"
+    end
+
     test "only governance keys sign, and a batch belongs to its run", w do
       propose!(w, "announce-r")
 
