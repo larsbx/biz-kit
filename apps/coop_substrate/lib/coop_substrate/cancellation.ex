@@ -4,7 +4,7 @@ defmodule CoopSubstrate.Cancellation do
   a `TaskCancelledByGovernanceV1`, from any state short of completed, signed
   with a governance key (`SpruceGoose.Web.TaskController`). Held for
   `{:cancellation, key}`; the server signs nothing. People cancel before the work starts from their
-  own devices (`Tasks.Lifecycle`).
+  own devices (`TaskCore.Steps`).
   """
 
   alias CoopSubstrate.{Commands, Log}

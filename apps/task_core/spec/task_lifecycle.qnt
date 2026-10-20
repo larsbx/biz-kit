@@ -3,7 +3,7 @@
 // execution of docs/architecture/2026-10-19-execution.md, and cancelling and
 // reopening of docs/architecture/2026-10-19-cancel-reopen.md. Every action is
 // one admitted ledger command; its preconditions are the append gate's checks
-// in Tasks.Readiness and Tasks.DoD.
+// in TaskCore.Readiness and TaskCore.DoD.
 //
 // A library: no step relation of its own. task_readiness.qnt checks the
 // lifecycle to completion and task_cancel.qnt adds cancelling and reopening,
@@ -47,13 +47,13 @@ module task_lifecycle {
     all { tasks.get(t).state == "inbox", change(t, x => { ...x, state: "proposed" }) }
   }
 
-  // A Definition of Done is defined only while a task is proposed (Tasks.DoD).
+  // A Definition of Done is defined only while a task is proposed (TaskCore.DoD).
   action defineDoD = {
     nondet t = TASKS.oneOf()
     all { tasks.get(t).state == "proposed", change(t, x => { ...x, dod: true }) }
   }
 
-  // Governance readiness definition, while proposed or queued (Tasks.Readiness).
+  // Governance readiness definition, while proposed or queued (TaskCore.Readiness).
   // Replacing requirements invalidates an earlier SOP acknowledgment.
   action defineReadiness = {
     nondet t = TASKS.oneOf()

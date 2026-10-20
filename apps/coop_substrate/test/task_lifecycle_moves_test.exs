@@ -1,12 +1,12 @@
 defmodule CoopSubstrate.TaskLifecycleMovesTest do
   @moduledoc """
   The ledger's lifecycle commands realize `TaskCore.TaskLifecycle` exactly:
-  each move is in the relation (also checked as `Tasks.Readiness` compiles),
+  each move is in the relation (also checked as `TaskCore.Readiness` compiles),
   and every edge of the relation is some command's move.
   """
   use ExUnit.Case, async: true
 
-  alias CoopSubstrate.Tasks.Readiness
+  alias TaskCore.Readiness
   alias TaskCore.TaskLifecycle
 
   test "the commands' moves are exactly the lifecycle relation" do
@@ -26,7 +26,7 @@ defmodule CoopSubstrate.TaskLifecycleMovesTest do
   end
 
   test "every lifecycle command is a registered event type" do
-    types = Map.keys(CoopSubstrate.Tasks.event_types())
+    types = Map.keys(TaskCore.Admission.event_types())
     assert Map.keys(Readiness.moves()) -- types == []
   end
 

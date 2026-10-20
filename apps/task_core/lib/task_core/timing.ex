@@ -1,4 +1,4 @@
-defmodule CoopSubstrate.Tasks.Timing do
+defmodule TaskCore.Timing do
   @moduledoc """
   Task timing and agent suggestions
   (docs/architecture/2026-10-18-task-timing-and-suggestions.md; state machine
@@ -7,7 +7,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   Operators create tasks and revise their timing facet, which has its own
   version counter so calendar edits never invalidate lifecycle commands. Agents
   may issue the same two commands under a live delegation, within its limits
-  (`Tasks.Delegation`).
+  (`TaskCore.Delegation`).
   Suggesters (agents) hold a separate grant whose events only fill a review
   queue: an operator command citing a suggestion resolves it, and task state is
   a function of operator events alone. Agent documents fold into
@@ -15,11 +15,9 @@ defmodule CoopSubstrate.Tasks.Timing do
   cite one as evidence, SOP acknowledgement or ready input.
   """
 
-  alias CoopSubstrate.Harness.Artifacts
-  alias CoopSubstrate.Projections.Tasks, as: Projection
-  alias CoopSubstrate.Protocol.Envelope
-  alias CoopSubstrate.Tasks
-  alias CoopSubstrate.Tasks.Delegation
+  alias TaskCore.State
+  alias TaskCore.Admission
+  alias TaskCore.Delegation
 
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @subject Map.put(@scope, "task_id", :string)
@@ -119,17 +117,17 @@ defmodule CoopSubstrate.Tasks.Timing do
 
   # -- admission ----------------------------------------------------------------
 
-  def check(%Envelope{type: "TaskSuggesterGrantedV1", payload: p} = env, state, keys) do
-    with :ok <- Tasks.governance_declared(env, keys),
-         :ok <- Tasks.nonempty_fields(p, ~w(principal_id key_id)) do
+  def check(%{type: "TaskSuggesterGrantedV1", payload: p} = env, state, keys) do
+    with :ok <- Admission.governance_declared(env, keys),
+         :ok <- Admission.nonempty_fields(p, ~w(principal_id key_id)) do
       if Map.has_key?(state.suggester_grants, env.event_id),
         do: {:error, :grant_already_recorded},
         else: :ok
     end
   end
 
-  def check(%Envelope{type: "TaskSuggesterRevokedV1", payload: p} = env, state, keys) do
-    with :ok <- Tasks.governance_declared(env, keys),
+  def check(%{type: "TaskSuggesterRevokedV1", payload: p} = env, state, keys) do
+    with :ok <- Admission.governance_declared(env, keys),
          {:ok, grant} <-
            fetch(state.suggester_grants, p["authorization_event_id"], :unknown_suggester_grant),
          :ok <- same_scope(env, grant, :task_grant_scope_mismatch) do
@@ -137,18 +135,18 @@ defmodule CoopSubstrate.Tasks.Timing do
     end
   end
 
-  def check(%Envelope{type: "TaskCreatedV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskCreatedV1", payload: p} = env, state, _keys) do
     with {:ok, via} <- authority(env, state),
-         :ok <- Tasks.nonempty_fields(p, ~w(title)),
+         :ok <- Admission.nonempty_fields(p, ~w(title)),
          :ok <- timing(p["timing"]),
          :ok <- delegated_limits(via, p["timing"], nil),
          :ok <- absent(state, env),
          do: cited(env, state)
   end
 
-  def check(%Envelope{type: "TaskTimingRevisedV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskTimingRevisedV1", payload: p} = env, state, _keys) do
     with {:ok, via} <- authority(env, state),
-         {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task),
+         {:ok, task} <- fetch(state.tasks, State.task_key(env), :unknown_task),
          :ok <- open(task),
          :ok <- expected(p["expected_timing_version"], task.timing_version),
          :ok <- timing(p["timing"]),
@@ -156,24 +154,24 @@ defmodule CoopSubstrate.Tasks.Timing do
          do: cited(env, state)
   end
 
-  def check(%Envelope{type: "TaskDelegationGrantedV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskDelegationGrantedV1", payload: p} = env, state, _keys) do
     with :ok <- operator(env, state),
-         :ok <- Tasks.nonempty_fields(p, ~w(delegate_principal_id key_id)),
+         :ok <- Admission.nonempty_fields(p, ~w(delegate_principal_id key_id)),
          :ok <- unrecorded(state.delegations, env),
          do: Delegation.validate(p)
   end
 
-  def check(%Envelope{type: "TaskDelegationRevokedV1"} = env, state, _keys) do
+  def check(%{type: "TaskDelegationRevokedV1"} = env, state, _keys) do
     with :ok <- operator(env, state), do: Delegation.check_revocation(env, state)
   end
 
-  def check(%Envelope{type: "TaskSuggestionDeclinedV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskSuggestionDeclinedV1", payload: p} = env, state, _keys) do
     with :ok <- operator(env, state),
          {:ok, _suggestion} <- pending(env, state),
          do: operator_receipt(env, state, p["reason_receipt_id"])
   end
 
-  def check(%Envelope{type: "TaskChangeSuggestedV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskChangeSuggestedV1", payload: p} = env, state, _keys) do
     with :ok <- suggester(env, state),
          :ok <- unrecorded(state.suggestions, env),
          :ok <- rationale(p["rationale"]),
@@ -182,26 +180,27 @@ defmodule CoopSubstrate.Tasks.Timing do
          do: own_artifact(env, state, p["rationale_receipt_id"])
   end
 
-  def check(%Envelope{type: "TaskSuggestionWithdrawnV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskSuggestionWithdrawnV1", payload: p} = env, state, _keys) do
     with :ok <- suggester(env, state),
          {:ok, suggestion} <- pending(env, state),
          true <- suggestion.principal_id == p["principal_id"] or {:error, :suggestion_not_own},
          do: own_artifact(env, state, p["reason_receipt_id"])
   end
 
-  def check(%Envelope{type: "TaskSuggestionArtifactRecordedV1", payload: p} = env, state, _keys) do
+  def check(%{type: "TaskSuggestionArtifactRecordedV1", payload: p} = env, state, _keys) do
     with :ok <- agent(env, state),
          true <-
            not (Map.has_key?(state.suggestion_artifacts, env.event_id) or
                   Map.has_key?(state.custody_receipts, env.event_id)) or
              {:error, :custody_id_conflict},
-         {:ok, _bytes} <- Artifacts.verify(elem(p["artifact_digest"], 1), @max_artifact_bytes),
+         {:ok, _bytes} <-
+           state.host.verify_artifact(elem(p["artifact_digest"], 1), @max_artifact_bytes),
          do: :ok
   end
 
   # Who may issue a create or timing command: an operator, or an agent under a
   # live delegation. Reasoning fields belong to delegated commands only.
-  defp authority(%Envelope{payload: p} = env, state) do
+  defp authority(%{payload: p} = env, state) do
     case state.delegations[p["authorization_event_id"]] do
       nil ->
         with :ok <- operator(env, state) do
@@ -222,21 +221,21 @@ defmodule CoopSubstrate.Tasks.Timing do
   defp delegated_limits(delegation, timing, task), do: Delegation.limits(delegation, timing, task)
 
   # Agents record reasoning under a suggester grant or a live delegation.
-  defp agent(%Envelope{payload: p} = env, state) do
+  defp agent(%{payload: p} = env, state) do
     case state.delegations[p["authorization_event_id"]] do
       nil -> suggester(env, state)
       delegation -> Delegation.live(env, delegation, state)
     end
   end
 
-  defp operator(%Envelope{payload: p} = env, state) do
+  defp operator(%{payload: p} = env, state) do
     with {:ok, grant} <- fetch(state.grants, p["authorization_event_id"], :unknown_task_grant),
-         :ok <- Tasks.authorized(env, grant) do
+         :ok <- Admission.authorized(env, grant) do
       if p["lifecycle_version"] == 1, do: :ok, else: {:error, :unsupported_task_lifecycle}
     end
   end
 
-  defp suggester(%Envelope{payload: p, signers: [signer]} = env, state) do
+  defp suggester(%{payload: p, signers: [signer]} = env, state) do
     with {:ok, grant} <-
            fetch(state.suggester_grants, p["authorization_event_id"], :unknown_suggester_grant),
          :ok <- same_scope(env, grant, :task_grant_scope_mismatch) do
@@ -257,7 +256,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   end
 
   defp absent(state, env) do
-    if Map.has_key?(state.tasks, Projection.task_key(env)),
+    if Map.has_key?(state.tasks, State.task_key(env)),
       do: {:error, :task_already_recorded},
       else: :ok
   end
@@ -266,7 +265,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   defp expected(expected, current), do: {:error, {:stale_timing_version, expected, current}}
 
   # An operator command may cite one pending suggestion of its own kind and task.
-  defp cited(%Envelope{type: type, payload: %{"suggestion_event_id" => _}} = env, state) do
+  defp cited(%{type: type, payload: %{"suggestion_event_id" => _}} = env, state) do
     with {:ok, suggestion} <- pending(env, state) do
       if suggestion.kind == @resolves[type] and suggestion.task_id == env.payload["task_id"],
         do: :ok,
@@ -276,7 +275,7 @@ defmodule CoopSubstrate.Tasks.Timing do
 
   defp cited(_env, _state), do: :ok
 
-  defp pending(%Envelope{payload: %{"suggestion_event_id" => id}} = env, state) do
+  defp pending(%{payload: %{"suggestion_event_id" => id}} = env, state) do
     with {:ok, suggestion} <- fetch(state.suggestions, id, :unknown_suggestion),
          :ok <- same_scope(env, suggestion, :suggestion_mismatch) do
       if suggestion.status == :pending,
@@ -287,9 +286,9 @@ defmodule CoopSubstrate.Tasks.Timing do
 
   defp target("create", env, state), do: absent(state, env)
 
-  defp target("timing", %Envelope{payload: p} = env, state) do
+  defp target("timing", %{payload: p} = env, state) do
     with true <- is_integer(p["base_timing_version"]) or {:error, :suggestion_base_required},
-         {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task),
+         {:ok, task} <- fetch(state.tasks, State.task_key(env), :unknown_task),
          :ok <- open(task) do
       if p["base_timing_version"] <= task.timing_version,
         do: :ok,
@@ -310,7 +309,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   # An agent cites only documents it recorded itself, in the same scope.
   defp own_artifact(_env, _state, nil), do: :ok
 
-  defp own_artifact(%Envelope{payload: p} = env, state, id) do
+  defp own_artifact(%{payload: p} = env, state, id) do
     with {:ok, receipt} <- fetch(state.suggestion_artifacts, id, :unknown_suggestion_artifact),
          :ok <- same_scope(env, receipt, :suggestion_artifact_not_own) do
       if receipt.principal_id == p["principal_id"],
@@ -331,7 +330,7 @@ defmodule CoopSubstrate.Tasks.Timing do
     do: if(Map.has_key?(map, env.event_id), do: {:error, :command_already_recorded}, else: :ok)
 
   @doc false
-  def same_scope(%Envelope{chapter_id: ch, payload: p}, record, error) do
+  def same_scope(%{chapter_id: ch, payload: p}, record, error) do
     if {ch, p["tenant_id"], p["project_id"]} ==
          {record.chapter_id, record.tenant_id, record.project_id},
        do: :ok,
@@ -444,7 +443,7 @@ defmodule CoopSubstrate.Tasks.Timing do
         timing_commands: %{}
       })
 
-  def handle_event(%Envelope{type: "TaskSuggesterGrantedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskSuggesterGrantedV1", payload: p} = env, state) do
     grant = %{
       chapter_id: env.chapter_id,
       tenant_id: p["tenant_id"],
@@ -458,14 +457,14 @@ defmodule CoopSubstrate.Tasks.Timing do
     put_in(state, [:suggester_grants, Access.key(env.event_id)], grant)
   end
 
-  def handle_event(%Envelope{type: "TaskSuggesterRevokedV1", payload: p}, state),
+  def handle_event(%{type: "TaskSuggesterRevokedV1", payload: p}, state),
     do: put_in(state, [:suggester_grants, p["authorization_event_id"], :active], false)
 
-  def handle_event(%Envelope{type: "TaskCreatedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskCreatedV1", payload: p} = env, state) do
     {state, delegation_id} = Delegation.charge(state, env)
 
     task =
-      Projection.new_task(env, %{
+      State.new_task(env, %{
         title: p["title"],
         description: p["description"],
         timing: p["timing"],
@@ -474,17 +473,17 @@ defmodule CoopSubstrate.Tasks.Timing do
       })
 
     state
-    |> put_in([:tasks, Access.key(Projection.task_key(env))], task)
+    |> put_in([:tasks, Access.key(State.task_key(env))], task)
     |> resolve_cited(env)
     |> supersede_creates(env)
     |> command(env)
   end
 
-  def handle_event(%Envelope{type: "TaskTimingRevisedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskTimingRevisedV1", payload: p} = env, state) do
     {state, delegation_id} = Delegation.charge(state, env)
 
     state
-    |> update_in([:tasks, Projection.task_key(env)], fn task ->
+    |> update_in([:tasks, State.task_key(env)], fn task ->
       %{
         task
         | timing: p["timing"],
@@ -497,18 +496,18 @@ defmodule CoopSubstrate.Tasks.Timing do
     |> command(env)
   end
 
-  def handle_event(%Envelope{type: type} = env, state)
+  def handle_event(%{type: type} = env, state)
       when type in ~w(TaskDelegationGrantedV1 TaskDelegationRevokedV1) do
     state |> then(&Delegation.handle_event(env, &1)) |> command(env)
   end
 
-  def handle_event(%Envelope{type: "TaskSuggestionDeclinedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskSuggestionDeclinedV1", payload: p} = env, state) do
     state
     |> resolve(p["suggestion_event_id"], env, :declined, p["reason"], p["reason_receipt_id"])
     |> command(env)
   end
 
-  def handle_event(%Envelope{type: "TaskChangeSuggestedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskChangeSuggestedV1", payload: p} = env, state) do
     suggestion = %{
       chapter_id: env.chapter_id,
       tenant_id: p["tenant_id"],
@@ -531,13 +530,13 @@ defmodule CoopSubstrate.Tasks.Timing do
     |> command(env)
   end
 
-  def handle_event(%Envelope{type: "TaskSuggestionWithdrawnV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskSuggestionWithdrawnV1", payload: p} = env, state) do
     state
     |> resolve(p["suggestion_event_id"], env, :withdrawn, p["reason"], p["reason_receipt_id"])
     |> command(env)
   end
 
-  def handle_event(%Envelope{type: "TaskSuggestionArtifactRecordedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskSuggestionArtifactRecordedV1", payload: p} = env, state) do
     receipt = %{
       chapter_id: env.chapter_id,
       tenant_id: p["tenant_id"],
@@ -553,8 +552,8 @@ defmodule CoopSubstrate.Tasks.Timing do
 
   # Cancelling a task resolves its pending timing suggestions: nothing can
   # accept them now.
-  def handle_event(%Envelope{type: type} = env, state) do
-    if type in CoopSubstrate.Tasks.Readiness.cancels(),
+  def handle_event(%{type: type} = env, state) do
+    if type in TaskCore.Readiness.cancels(),
       do: supersede(state, env, &(&1 == "timing")),
       else: state
   end
@@ -564,7 +563,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   # Accepted iff the command's body equals the Δ's. A citation of a suggestion
   # absent from the fold (a replay without suggester events) is ignored: task
   # state never depends on suggestions.
-  defp resolve_cited(state, %Envelope{payload: %{"suggestion_event_id" => id} = p} = env) do
+  defp resolve_cited(state, %{payload: %{"suggestion_event_id" => id} = p} = env) do
     case state.suggestions[id] do
       nil ->
         state
@@ -587,7 +586,7 @@ defmodule CoopSubstrate.Tasks.Timing do
   defp supersede_creates(state, env), do: supersede(state, env, &(&1 == "create"))
 
   defp supersede(state, env, kind?) do
-    key = Projection.task_key(env)
+    key = State.task_key(env)
 
     state.suggestions
     |> Enum.filter(fn {_id, s} ->

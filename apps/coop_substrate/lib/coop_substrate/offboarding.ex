@@ -3,7 +3,7 @@ defmodule CoopSubstrate.Offboarding do
   Offboarding a principal (docs/architecture/2026-10-19-offboarding.md): one
   `TaskPrincipalOffboardedV1` per project, signed with a governance key by
   `mix coop.offboard`, ends everything the principal holds there at
-  admission (`Projections.Tasks.held_by/3`): device, suggester and reviewer
+  admission (`TaskCore.State.held_by/3`): device, suggester and reviewer
   grants, and delegations to or by them. Held for `{:offboarding, principal}`;
   the server signs nothing.
 
@@ -22,7 +22,7 @@ defmodule CoopSubstrate.Offboarding do
   """
 
   alias CoopSubstrate.{Commands, Enrolments, Log}
-  alias CoopSubstrate.Projections.Tasks, as: State
+  alias TaskCore.State
 
   @kinds %{
     grants: "operator",

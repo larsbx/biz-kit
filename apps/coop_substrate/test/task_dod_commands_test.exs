@@ -2,7 +2,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
   use CoopSubstrate.LogCase, async: false
   alias CoopSubstrate.{Canonical, Log, Tasks}
   alias CoopSubstrate.Projections.Tasks, as: Projection
-  alias CoopSubstrate.Tasks.DoD
+  alias TaskCore.DoD
 
   @scope %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
   @subject Map.put(@scope, "task_id", "task-1")
@@ -186,7 +186,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     d = definition(ctx)
     s = submission(ctx, d)
     r = review(ctx, d, s)
-    for command <- [d, s, r], do: assert({:ok, _} = DoD.submit(command))
+    for command <- [d, s, r], do: assert({:ok, _} = Tasks.submit(command))
     {:ok, state} = Log.replay(Projection)
     task = state.tasks[@key]
     assert task.version == 5
@@ -197,7 +197,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     restart_log()
     assert Log.replay(Projection) == {:ok, state}
     head = Log.head()
-    for command <- [d, s, r], do: assert({:ok, _} = DoD.submit(command))
+    for command <- [d, s, r], do: assert({:ok, _} = Tasks.submit(command))
     assert Log.head() == head
     assert :ok = Log.verify_chains()
 
@@ -211,7 +211,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
   test "criteria and evidence fail closed on direct append", ctx do
     reject(definition(ctx, 2, []), :invalid_dod_criteria)
     d = definition(ctx)
-    {:ok, _} = DoD.submit(d)
+    {:ok, _} = Tasks.submit(d)
     reject(submission(ctx, d, 3, %{"evidence" => %{}}), :invalid_dod_evidence)
     reject(submission(ctx, d, 3, %{"definition_event_id" => "other"}), :dod_revision_mismatch)
     reject(submission(ctx, d, 2), {:stale_task_version, 2, 3})
@@ -282,12 +282,12 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
     s = submission(ctx, d)
     {:ok, _} = Log.append([d, s, review(ctx, d, s)])
     s2 = submission(ctx, d, 5)
-    {:ok, _} = DoD.submit(s2)
+    {:ok, _} = Tasks.submit(s2)
     reject(review(ctx, d, s, 6), :dod_submission_mismatch)
     {:ok, state} = Log.replay(Projection)
     assert state.tasks[@key].dod.review == nil
     d2 = definition(ctx, 6, [%{"id" => "photo", "description" => "Photograph"}])
-    {:ok, _} = DoD.submit(d2)
+    {:ok, _} = Tasks.submit(d2)
     reject(review(ctx, d, s2, 7), :dod_revision_mismatch)
     {:ok, state} = Log.replay(Projection)
     assert state.tasks[@key].dod.submission == nil
@@ -348,7 +348,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
   test "evidence needs a definition and current operator authority", ctx do
     reject(submission(ctx, %{event_id: "missing-definition"}, 2), :dod_not_defined)
     d = definition(ctx)
-    {:ok, _} = DoD.submit(d)
+    {:ok, _} = Tasks.submit(d)
 
     revoked =
       signed_event(
@@ -364,7 +364,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
   test "concurrent definitions cannot both consume the same task version", ctx do
     results =
       [definition(ctx), definition(ctx)]
-      |> Enum.map(fn command -> Task.async(fn -> DoD.submit(command) end) end)
+      |> Enum.map(fn command -> Task.async(fn -> Tasks.submit(command) end) end)
       |> Enum.map(&Task.await/1)
 
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
@@ -373,7 +373,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
 
   test "retry ID conflicts are rejected rather than overwriting definitions", ctx do
     d = definition(ctx)
-    {:ok, receipt} = DoD.submit(d)
+    {:ok, receipt} = Tasks.submit(d)
 
     {:ok, changed} =
       CoopSubstrate.Protocol.Envelope.sign(
@@ -387,7 +387,7 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
       )
 
     reject(changed, :task_command_id_conflict)
-    assert DoD.submit(d) == {:ok, receipt}
+    assert Tasks.submit(d) == {:ok, receipt}
   end
 
   defp custody(ctx, hash) do

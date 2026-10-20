@@ -9,7 +9,7 @@ defmodule CoopSubstrate.Commands do
 
   `prepare/4` finds the principal's active operator grant for that key and
   project (their reviewer grant, for a review), builds the exact envelope
-  (`Tasks.Decisions`, `Tasks.Lifecycle`), and checks it
+  (`TaskCore.Decisions`, `TaskCore.Steps`), and checks it
   against the ledger's current state, so a decision that would be refused is
   refused before anyone signs. The envelope is held for five minutes,
   single-use and bound to the principal. `submit/3` attaches the signature,
@@ -32,7 +32,7 @@ defmodule CoopSubstrate.Commands do
   alias CoopSubstrate.Log
   alias CoopSubstrate.Projections.Membership
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
-  alias CoopSubstrate.Tasks.{Decisions, Lifecycle}
+  alias TaskCore.{Decisions, Steps}
 
   @table __MODULE__
   @ttl_ms 300_000
@@ -55,18 +55,18 @@ defmodule CoopSubstrate.Commands do
 
   @doc """
   Prepare a person's command on this device: a decision on a suggestion
-  (`Tasks.Decisions`) or a lifecycle step (`Tasks.Lifecycle`).
+  (`TaskCore.Decisions`) or a lifecycle step (`TaskCore.Steps`).
   """
   @spec prepare(
           String.t(),
           String.t(),
           CoopSubstrate.Feed.View.scope(),
-          Decisions.decision() | Lifecycle.action()
+          Decisions.decision() | Steps.action()
         ) ::
           {:ok, pending()} | {:error, term()}
   def prepare(principal, key_id, {chapter, _, _} = scope, command) do
     o = Log.gate().orchestration
-    builder = if elem(command, 0) in [:accept, :amend, :decline], do: Decisions, else: Lifecycle
+    builder = if elem(command, 0) in [:accept, :amend, :decline], do: Decisions, else: Steps
     role = if elem(command, 0) == :review, do: "reviewer", else: "operator"
 
     with {:ok, grant_id, grant} <- grant(o, role, principal, key_id, scope),
