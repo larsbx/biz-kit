@@ -58,6 +58,9 @@ domain views. The imported histories and existing identifiers remain intact.
   governance from a pinned source (`mix coop.blueprint`); an operator runs a
   workflow, creating its tasks with their Definitions of Done and
   predecessors. SpruceGoose's design reviewed point by point.
+- [Workflows in the view](2026-10-20-workflow-view.md): a project's feed
+  carries its workflows; a person runs one from the page, and each task says
+  which workflow and step it came from.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.

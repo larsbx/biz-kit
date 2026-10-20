@@ -2,7 +2,7 @@
 // what the change feed's frames build (docs/architecture/2026-10-19-live-view.md).
 // A frame's changes are whole-entity upserts (value null means removed).
 
-export const projectKinds = ["tasks", "suggestions", "delegations", "receipts", "devices"];
+export const projectKinds = ["tasks", "suggestions", "delegations", "receipts", "devices", "workflows"];
 export const chapterKinds = ["projects", "administrators"];
 
 export const emptyView = (kinds = projectKinds) => Object.fromEntries(kinds.map((k) => [k, {}]));
@@ -323,3 +323,31 @@ export const decidedSuggestions = (view) =>
     .filter(([, s]) => s.status !== "pending")
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
     .map(([id, s]) => ({ id, ...s }));
+
+// -- workflows (docs/architecture/2026-10-20-workflow-view.md) ----------------------
+
+// The project's workflows under the blueprints now governing them, by roadmap
+// then name.
+export const workflows = (view) =>
+  entries(view.workflows ?? {}).sort(byKey((w) => `${w.roadmap_name}\u0000${w.name}`));
+
+const runName = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+// The tasks a run named `run` would create: `run-<step>` for each step of the
+// workflow, each a new, valid task ID. `{ids}` to sign, or `{error}` to say.
+export function runTaskIds(workflow, run, tasks) {
+  if (!runName.test(run ?? "")) return { error: "a run's name is lowercase letters, digits, - and _" };
+  const ids = Object.fromEntries(workflow.definitions.map((d) => [d.id, `${run}-${d.id}`]));
+  const taken = Object.values(ids).filter((id) => id in tasks || id.length > 128);
+  return taken.length ? { error: `${taken.join(", ")} already exist${taken.length === 1 ? "s" : ""}` } : { ids };
+}
+
+// Where a task made by a run came from, for its card: the workflow's name if
+// the view still has it, and the step.
+export function runOf(t, view) {
+  const b = t.blueprint;
+  if (!b) return null;
+  const key = `${encodeURIComponent(b.roadmap_key)}/${encodeURIComponent(b.workflow_id)}`;
+  const name = view.workflows?.[key]?.name ?? b.workflow_id;
+  return `From workflow ${name}, step ${b.definition_id}`;
+}

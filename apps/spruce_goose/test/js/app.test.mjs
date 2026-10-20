@@ -30,6 +30,9 @@ import {
   chapterProjects,
   chapterAdministrators,
   chapterOffboarding,
+  workflows,
+  runTaskIds,
+  runOf,
 } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -556,4 +559,54 @@ test("offboarding from a chapter: every project and key, signed only as the exac
   assert.ok(!ok([cores[0], cores[1], core({ ...commands[2], payload: { ...commands[2].payload, reason: "x" } })]));
   assert.ok(!ok([core(commands[0], "k-other"), cores[1], cores[2]]), "another signer");
   assert.ok(!ok([core(commands[0], "k-admin", "other"), cores[1], cores[2]]), "another chapter");
+});
+
+test("workflows: sorted, a run's task IDs checked, a run task's origin named", () => {
+  const release = {
+    roadmap_key: "q4",
+    roadmap_name: "Fourth quarter",
+    workflow_id: "release",
+    name: "Release",
+    definitions: [
+      { id: "build", title: "Build", depends_on: [] },
+      { id: "ship", title: "Ship", depends_on: ["build"] },
+    ],
+  };
+  const view = [
+    {
+      seq: 1,
+      changes: [
+        { kind: "workflows", id: "q4/release", value: release },
+        { kind: "workflows", id: "q1/audit", value: { ...release, roadmap_name: "First quarter", name: "Audit" } },
+        { kind: "tasks", id: "r1-build", value: { title: "Build", blueprint: { roadmap_key: "q4", workflow_id: "release", definition_id: "build" } } },
+      ],
+    },
+  ].reduce(applyFrame, emptyView());
+
+  assert.deepEqual(workflows(view).map((w) => w.name), ["Audit", "Release"]);
+  assert.deepEqual(runTaskIds(release, "r2", view.tasks), { ids: { build: "r2-build", ship: "r2-ship" } });
+  assert.match(runTaskIds(release, "r1", view.tasks).error, /r1-build already exists/);
+  assert.match(runTaskIds(release, "Autumn 7A", view.tasks).error, /lowercase/);
+  assert.match(runTaskIds(release, "", view.tasks).error, /lowercase/);
+  assert.equal(runOf(view.tasks["r1-build"], view), "From workflow Release, step build");
+  assert.equal(runOf({ title: "Plain" }, view), null);
+});
+
+test("the device signs a run only with exactly the task IDs it named", () => {
+  const fields = {
+    revision_event_id: "e-rev",
+    roadmap_key: "q4",
+    workflow_id: "release",
+    task_ids: { build: "r2-build", ship: "r2-ship" },
+  };
+  const core = (payload) => ({
+    type: "TaskWorkflowInstantiatedV1",
+    signers: [{ key_id: "k1" }],
+    payload: { ...payload, principal_id: "alice", authorization_event_id: "g1" },
+  });
+  const expected = { keyId: "k1", type: "TaskWorkflowInstantiatedV1", payload: fields };
+
+  assert.ok(isExpectedCommand(core(fields), expected));
+  assert.ok(!isExpectedCommand(core({ ...fields, task_ids: { build: "r2-build", ship: "other" } }), expected));
+  assert.ok(!isExpectedCommand(core({ ...fields, revision_event_id: "e-old" }), expected));
 });

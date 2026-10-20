@@ -75,6 +75,10 @@ defmodule SpruceGoose.Web.BrowserTest do
 
     create!(w, w.op_grant, "task-1")
 
+    # A blueprint governs a workflow the person runs from the page, at the end
+    # (2026-10-20-workflow-view.md).
+    blueprint!(w)
+
     suggestion =
       suggest!(w, w.agent_grant, "task-1", %{"schedule" => nil, "due_ms" => 1_792_396_800_000}, 1)
 
@@ -311,6 +315,39 @@ defmodule SpruceGoose.Web.BrowserTest do
       {:env, [{~c"NODE_PATH", String.to_charlist(global)}]},
       args: [@script, base, w.chapter, tenant(), "project-1"]
     ])
+  end
+
+  defp blueprint!(w) do
+    bytes = """
+    # #{w.chapter}
+    schema_version: 2
+    project: {key: project-1, name: Launch}
+    roadmaps:
+      - key: q4
+        name: Fourth quarter
+        workflows:
+          - id: release
+            name: Release
+            tasks:
+              - {id: build, title: Build the release, definition_of_done: [{id: built, description: Built}]}
+              - {id: ship, title: Ship it, definition_of_done: [{id: shipped, description: Shipped}], depends_on: [build]}
+    """
+
+    {:ok, blueprint} = CoopSubstrate.Blueprints.read(bytes)
+    {:ok, digest} = CoopSubstrate.Harness.Artifacts.put(bytes)
+
+    append!(
+      event(w, w.gov, "TaskBlueprintAppliedV1", %{
+        "tenant_id" => tenant(),
+        "project_id" => "project-1",
+        "repository" => "acme/plans",
+        "commit" => String.duplicate("a", 40),
+        "tree" => String.duplicate("b", 40),
+        "path" => "launch.yaml",
+        "manifest_digest" => {:bytes, digest},
+        "blueprint" => blueprint
+      })
+    )
   end
 
   defp read!(port) do
