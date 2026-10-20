@@ -265,17 +265,7 @@ end
 
 config :spruce_goose,
   start_outbox_dispatcher: outbox_enabled?,
-  outbox_handler: outbox_handler,
-  derivation_executor_actor:
-    (case System.get_env("SPRUCE_GOOSE_DERIVATION_EXECUTOR_ACTOR") do
-       value when is_binary(value) and value != "" -> value
-       _ -> nil
-     end),
-  deployment_executor_actor:
-    (case System.get_env("SPRUCE_GOOSE_DEPLOYMENT_EXECUTOR_ACTOR") do
-       value when is_binary(value) and value != "" -> value
-       _ -> nil
-     end)
+  outbox_handler: outbox_handler
 
 if not oban_enabled? do
   config :spruce_goose, Oban, queues: false, plugins: false

@@ -1,5 +1,12 @@
 # CI, artifact delivery, and hooks
 
+> In biz-kit, the governed release lane described here (`ci-governed-release`
+> and the build, inspect, validate and activate scripts) is retired with
+> release provenance. biz-kit's CI is `.github/workflows/consolidation.yml` at
+> the repository root, and it deploys as the `orchestration` release
+> (`docs/deploy.md`). This page describes the standalone `sprucegoose`
+> repository.
+
 GitHub checks every pull request and main push. The workflows use disposable
 GitHub-hosted Ubuntu 24.04 runners, the versions in `.tool-versions`, and Hex
 2.5.1. PostgreSQL 16 service containers hold only test data. No deployment

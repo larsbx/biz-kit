@@ -8,10 +8,8 @@ defmodule SpruceGoose.CLI.Executor do
   alias SpruceGoose.CLI.Command
   alias SpruceGoose.Blueprints.{Applier, SourceVerifier}
   alias SpruceGoose.Outbox.Operator, as: OutboxOperator
-  alias SpruceGoose.Derivations.{Executor, OutcomeReceipt, Permit}
   alias SpruceGoose.Kernel.{ShadowEvents, TaskProjector}
   alias SpruceGoose.Kernel.GrandfatheredBaseline
-  alias SpruceGoose.Runtime.Shadow, as: RuntimeShadow
   alias SpruceGoose.{Authz, Ledger, Legibility, Repo, Revise, SopGate, TaskId}
 
   alias SpruceGoose.Workflows.{
@@ -35,17 +33,6 @@ defmodule SpruceGoose.CLI.Executor do
   # an actor is resolved so that `help` still works on a cold registry — the
   # same reason genesis exists.
   @unauthenticated [:help, :version, :generate_id]
-
-  @doc "Execute only boot-free, read-only release provenance commands."
-  def run_read_only({:inspect_release_provenance, archive}) do
-    SpruceGoose.ReleaseValidator.inspect_archive(archive)
-  end
-
-  def run_read_only({:validate_release_provenance, archive, opts}) do
-    SpruceGoose.ReleaseValidator.validate(Keyword.put(opts, :archive, archive))
-  end
-
-  def run_read_only(_), do: {:error, "not a read-only release provenance command"}
 
   @registry_verbs [
     :add_actor,
@@ -145,61 +132,6 @@ defmodule SpruceGoose.CLI.Executor do
   defp dispatch(:generate_id), do: {:ok, %{id: TaskId.generate()}}
   defp dispatch(:list_failed_outbox), do: OutboxOperator.list_failed()
   defp dispatch({:replay_outbox, event_id}), do: OutboxOperator.replay(event_id)
-
-  defp dispatch({:show_derivation, permit_id}) do
-    with {:ok, permit} <- Authz.read_one(Permit, permit_id: permit_id),
-         {:ok, task} <- Authz.read_one(Task, id: permit.task_id) do
-      {:ok, derivation_json(permit, task.task_id)}
-    end
-  end
-
-  # A derivation whose outcome could not be recorded leaves a permit with no
-  # terminal receipt. Oban retries that case now, but a job can still be
-  # exhausted or discarded, and the permit is immutable — so there has to be a
-  # supported way back that does not involve inserting Oban rows by hand.
-  #
-  # Refuses when a receipt already exists: re-running a completed derivation is
-  # what `one_terminal_receipt_per_permit` exists to prevent.
-  defp dispatch({:reschedule_derivation, permit_id}) do
-    with {:ok, permit} <- Authz.read_one(Permit, permit_id: permit_id),
-         {:ok, task} <- Authz.read_one(Task, id: permit.task_id),
-         :ok <- refuse_completed_derivation(permit_id) do
-      # AUTHORIZATION: the actor-bound reads above established derivation-executor
-      # authority over this permit's project before its job is re-queued.
-      case %{permit_id: permit.permit_id} |> Executor.new() |> Oban.insert() do
-        {:ok, _job} -> {:ok, derivation_json(permit, task.task_id)}
-        {:error, reason} -> {:error, reason}
-      end
-    end
-  end
-
-  defp dispatch({:admit_derivation, attrs}) do
-    with {:ok, task} <- Authz.read_one(Task, task_id: attrs.task_id) do
-      # AUTHORIZATION: the actor-bound Permit.admit policy is evaluated before
-      # the raw transaction may insert its matching opaque Oban job.
-      case Repo.transaction(fn ->
-             input = Map.put(attrs, :task_id, task.id)
-
-             with {:ok, permit, notifications} <-
-                    Authz.create_with_notifications(Permit, input, action: :admit),
-                  {:ok, _job} <-
-                    %{permit_id: permit.permit_id} |> Executor.new() |> Oban.insert() do
-               {permit, notifications}
-             else
-               {:error, reason} -> Repo.rollback(reason)
-             end
-           end) do
-        {:ok, {permit, notifications}} ->
-          notify(notifications)
-          {:ok, derivation_json(permit, task.task_id)}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end
-  end
-
-  defp dispatch({:deployment, verb, args}), do: SpruceGoose.Deployment.CLI.run(verb, args)
 
   defp dispatch({:validate_id, id}) do
     if TaskId.valid?(id), do: {:ok, %{id: id, valid: true}}, else: {:error, "invalid task ID"}
@@ -548,18 +480,6 @@ defmodule SpruceGoose.CLI.Executor do
   defp dispatch(:show_grandfathered_baseline), do: GrandfatheredBaseline.show()
   defp dispatch(:rebuild_task_projection), do: TaskProjector.rebuild()
   defp dispatch(:task_projection_status), do: TaskProjector.status()
-
-  defp dispatch({:shadow_runtime, task_id, envelope}) do
-    with {:ok, task} <- Authz.read_one(Task, task_id: task_id) do
-      RuntimeShadow.import(task, envelope)
-    end
-  end
-
-  defp dispatch({:parity_runtime, task_id, envelope}) do
-    with {:ok, task} <- Authz.read_one(Task, task_id: task_id) do
-      RuntimeShadow.parity(task, envelope)
-    end
-  end
 
   defp dispatch({:show_task, id}) do
     with :ok <- require_valid_id(id),
@@ -1738,7 +1658,7 @@ defmodule SpruceGoose.CLI.Executor do
   defp filter_json(filter),
     do: %{id: filter.id, board_id: filter.board_id, name: filter.name, criteria: filter.criteria}
 
-  # `apply_blueprint` and `admit_derivation` are shadowed verbs, so they run
+  # `apply_blueprint` is a shadowed verb, so it runs
   # inside ShadowEvents.transaction/2. Notifying directly from there delivered
   # notifications for a mutation the certified-event append could still roll
   # back — the collector exists so they fire after commit, and these were the
@@ -1752,40 +1672,6 @@ defmodule SpruceGoose.CLI.Executor do
       else: Ash.Notifier.notify(notifications)
 
     :ok
-  end
-
-  defp refuse_completed_derivation(permit_id) do
-    OutcomeReceipt
-    |> Ash.Query.filter_input(permit_id: permit_id)
-    |> Authz.read()
-    |> case do
-      {:ok, []} -> :ok
-      {:ok, _} -> {:error, "derivation #{permit_id} already has a terminal receipt"}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp derivation_json(permit, task_id) do
-    %{
-      permit_id: permit.permit_id,
-      task_id: task_id,
-      source_event_id: permit.source_event_id,
-      forge_instance: permit.forge_instance,
-      repository: permit.repository,
-      commit_sha: permit.commit_sha,
-      tree_sha: permit.tree_sha,
-      ref: permit.ref,
-      pipeline_digest: permit.pipeline_digest,
-      input_artifact_digest: permit.input_artifact_digest,
-      action: permit.action,
-      state: permit.state,
-      executor_id: permit.executor_id,
-      evidence_digest: permit.evidence_digest,
-      artifact_digest: permit.artifact_digest,
-      failure_reason: permit.failure_reason,
-      claimed_at: permit.claimed_at,
-      completed_at: permit.completed_at
-    }
   end
 
   defp todo_json(todo) do

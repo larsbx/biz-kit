@@ -43,10 +43,10 @@ versioned bridge, backup, restart, and rollback procedure and
 [`ops/mama-authority/MIGRATION_PROGRESS.md`](ops/mama-authority/MIGRATION_PROGRESS.md)
 for the cutover evidence.
 
-Deployments are governed by the deployment domain: accepted releases, one
-authoritative record per deployment, human-approved single-use execution
-authorizations, and a bounded host adapter. See
-[`docs/deployment-domain.md`](docs/deployment-domain.md).
+In biz-kit, the deployment domain, derivation permits, release provenance and
+runtime shadows are retired, not migrated to the ledger
+(`../../docs/architecture/2026-10-20-sprucegoose-salvage.md`). biz-kit deploys
+as the `orchestration` release (`../../docs/deploy.md`).
 
 See [`docs/current-state.md`](docs/current-state.md) for the exact production
 release, database baseline, artifact boundary, and open architecture gaps.

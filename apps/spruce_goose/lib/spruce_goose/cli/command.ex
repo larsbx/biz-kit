@@ -102,20 +102,7 @@ defmodule SpruceGoose.CLI.Command do
        "replay-rebuild",
        "replay-status"
      ]},
-    {"runtime", ["shadow TASK_ID JSON", "parity TASK_ID JSON"]},
     {"outbox", ["failed", "replay EVENT_ID"]},
-    {"derivation",
-     [
-       "admit --task ID --source-event ID --forge-instance ID --repository OWNER/REPO --commit OID --tree OID --ref REF --pipeline-digest SHA256 --ontology-root CID --schema-root CID --norm-root CID --policy-root CID --grant-epoch-root CID --agent-charter-root CID --interpreter-root CID --evidence-policy-root CID --action test|build_release|verify_artifact [--input-artifact SHA256]",
-       "show PERMIT_ID",
-       "reschedule PERMIT_ID"
-     ]},
-    {"deployment", SpruceGoose.Deployment.CLI.usage()},
-    {"release",
-     [
-       "inspect-provenance ARCHIVE",
-       "validate-provenance ARCHIVE --receipt PATH --expected-commit OID --expected-tree OID (--destination-inventory PATH|--artifact-only) [--allow-dirty]"
-     ]},
     # Nounless verbs. `whoami` sits here rather than under its own noun because
     # it takes no subcommand, and because it answers a question about the caller
     # rather than about the work.
@@ -177,30 +164,6 @@ defmodule SpruceGoose.CLI.Command do
 
   def parse([noun, help]) when noun in @help_nouns and help in ["help", "--help", "-h"],
     do: {:ok, {:help, noun}}
-
-  def parse(["release", "inspect-provenance", archive]),
-    do: {:ok, {:inspect_release_provenance, archive}}
-
-  def parse(["release", "validate-provenance", archive | args]) do
-    {opts, rest, invalid} =
-      OptionParser.parse(args,
-        strict: [
-          receipt: :string,
-          expected_commit: :string,
-          expected_tree: :string,
-          destination_inventory: :string,
-          artifact_only: :boolean,
-          allow_dirty: :boolean
-        ]
-      )
-
-    if rest == [] and invalid == [] and
-         Enum.all?([:receipt, :expected_commit, :expected_tree], &Keyword.has_key?(opts, &1)) do
-      {:ok, {:validate_release_provenance, archive, opts}}
-    else
-      {:error, "invalid release validate-provenance arguments"}
-    end
-  end
 
   def parse(["id"]), do: {:ok, :generate_id}
   def parse(["validate-id", id]), do: {:ok, {:validate_id, id}}
@@ -494,77 +457,6 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["outbox", "failed"]), do: {:ok, :list_failed_outbox}
   def parse(["outbox", "replay", event_id]), do: {:ok, {:replay_outbox, event_id}}
 
-  def parse(["derivation", "show", permit_id]), do: {:ok, {:show_derivation, permit_id}}
-  def parse(["deployment" | args]), do: SpruceGoose.Deployment.CLI.parse(args)
-
-  def parse(["derivation", "reschedule", permit_id]),
-    do: {:ok, {:reschedule_derivation, permit_id}}
-
-  def parse(["runtime", verb, task_id, json]) when verb in ["shadow", "parity"] do
-    with {:ok, envelope} <- runtime_envelope(json) do
-      command = if verb == "shadow", do: :shadow_runtime, else: :parity_runtime
-      {:ok, {command, task_id, envelope}}
-    end
-  end
-
-  def parse(["derivation", "admit" | args]) do
-    {opts, rest, invalid} =
-      OptionParser.parse(args,
-        strict: [
-          task: :string,
-          source_event: :string,
-          forge_instance: :string,
-          repository: :string,
-          commit: :string,
-          tree: :string,
-          ref: :string,
-          pipeline_digest: :string,
-          ontology_root: :string,
-          schema_root: :string,
-          norm_root: :string,
-          policy_root: :string,
-          grant_epoch_root: :string,
-          agent_charter_root: :string,
-          interpreter_root: :string,
-          evidence_policy_root: :string,
-          action: :string,
-          input_artifact: :string
-        ]
-      )
-
-    required =
-      ~w(task source_event forge_instance repository commit tree ref pipeline_digest ontology_root schema_root norm_root policy_root grant_epoch_root agent_charter_root interpreter_root evidence_policy_root action)a
-
-    with [] <- rest,
-         [] <- invalid,
-         true <- Enum.all?(required, &Keyword.has_key?(opts, &1)),
-         {:ok, action} <- derivation_action(Keyword.fetch!(opts, :action)) do
-      {:ok,
-       {:admit_derivation,
-        %{
-          task_id: Keyword.fetch!(opts, :task),
-          source_event_id: Keyword.fetch!(opts, :source_event),
-          forge_instance: Keyword.fetch!(opts, :forge_instance),
-          repository: Keyword.fetch!(opts, :repository),
-          commit_sha: Keyword.fetch!(opts, :commit),
-          tree_sha: Keyword.fetch!(opts, :tree),
-          ref: Keyword.fetch!(opts, :ref),
-          pipeline_digest: Keyword.fetch!(opts, :pipeline_digest),
-          roots:
-            Map.new(
-              ~w(ontology schema norm policy grant_epoch agent_charter interpreter evidence_policy),
-              fn name ->
-                {name, Keyword.fetch!(opts, String.to_existing_atom(name <> "_root"))}
-              end
-            ),
-          input_artifact_digest: Keyword.get(opts, :input_artifact),
-          action: action
-        }}}
-    else
-      _ -> {:error, "invalid derivation admit arguments"}
-    end
-  end
-
   def parse(["task", "add" | _args]) do
     {:error,
      "task add is retired for executable work; commit a TaskDefinition, apply its blueprint, then use task instantiate"}
@@ -615,47 +507,6 @@ defmodule SpruceGoose.CLI.Command do
   end
 
   def parse(_args), do: {:error, :usage}
-
-  defp derivation_action("test"), do: {:ok, :test}
-  defp derivation_action("build_release"), do: {:ok, :build_release}
-  defp derivation_action("verify_artifact"), do: {:ok, :verify_artifact}
-  defp derivation_action(_), do: {:error, :invalid_action}
-
-  @runtime_envelope_keys ~w(protocol_version adapter external_id revision status checkpoint owner_context_digest state_digest wait_digest child_task_count)
-  @runtime_required_keys List.delete(@runtime_envelope_keys, "checkpoint")
-  @runtime_key_sets [Enum.sort(@runtime_required_keys), Enum.sort(@runtime_envelope_keys)]
-  @runtime_statuses ~w(pending running waiting blocked succeeded failed cancelled)
-
-  defp runtime_envelope(json) do
-    with {:ok, decoded} when is_map(decoded) <- Jason.decode(json),
-         true <- decoded |> Map.keys() |> Enum.sort() |> then(&(&1 in @runtime_key_sets)),
-         1 <- decoded["protocol_version"],
-         adapter when is_binary(adapter) and adapter != "" <- decoded["adapter"],
-         external_id when is_binary(external_id) and external_id != "" <- decoded["external_id"],
-         revision when is_integer(revision) and revision >= 0 <- decoded["revision"],
-         status when status in @runtime_statuses <- decoded["status"],
-         checkpoint when is_nil(checkpoint) or is_binary(checkpoint) <- decoded["checkpoint"],
-         owner when is_binary(owner) <- decoded["owner_context_digest"],
-         state when is_binary(state) <- decoded["state_digest"],
-         wait when is_binary(wait) <- decoded["wait_digest"],
-         children when is_integer(children) and children >= 0 <- decoded["child_task_count"] do
-      {:ok,
-       %{
-         protocol_version: 1,
-         adapter: adapter,
-         external_id: external_id,
-         revision: revision,
-         status: String.to_existing_atom(status),
-         checkpoint: checkpoint,
-         owner_context_digest: owner,
-         state_digest: state,
-         wait_digest: wait,
-         child_task_count: children
-       }}
-    else
-      _ -> {:error, "invalid runtime envelope"}
-    end
-  end
 
   defp dependency_option(args) do
     case OptionParser.parse(args, strict: [after: :string]) do

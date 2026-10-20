@@ -5,7 +5,6 @@ defmodule SpruceGoose.RuntimeRecoveryConfigTest do
     code = """
     config = Config.Reader.read!(#{inspect(SpruceGoose.UmbrellaRuntime.path())}, env: :prod)
     app = Keyword.fetch!(config, :spruce_goose)
-    IO.puts(\"derivation_executor_actor=\#{inspect(Keyword.get(app, :derivation_executor_actor))}\")
     oban = Keyword.fetch!(app, Oban)
     IO.puts(\"queues=\#{inspect(Keyword.fetch!(oban, :queues))}\")
     IO.puts(\"plugins=\#{inspect(Keyword.fetch!(oban, :plugins))}\")
@@ -46,17 +45,6 @@ defmodule SpruceGoose.RuntimeRecoveryConfigTest do
 
     assert status != 0
     assert output =~ "SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR is required in production"
-  end
-
-  test "production runtime reads the bounded derivation executor actor" do
-    {output, status} =
-      read_runtime([
-        {"SPRUCE_GOOSE_OBAN_ENABLED", "false"},
-        {"SPRUCE_GOOSE_DERIVATION_EXECUTOR_ACTOR", "bounded-derivation-v1"}
-      ])
-
-    assert status == 0, output
-    assert output =~ "derivation_executor_actor=\"bounded-derivation-v1\""
   end
 
   test "MCP production runtime refuses to start without immutable OAuth actor bindings" do

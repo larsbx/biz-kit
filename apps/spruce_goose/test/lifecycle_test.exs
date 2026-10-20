@@ -1,17 +1,16 @@
 defmodule SpruceGoose.LifecycleTest do
   @moduledoc """
-  One contract (`TaskCore.Lifecycle`), two machines.
+  The task machine on the shared contract (`TaskCore.Lifecycle`).
 
   Every property here is decided, not sampled: the relations are finite, so
   the tests enumerate the whole state set and the whole relation.
   """
   use ExUnit.Case, async: true
 
-  alias SpruceGoose.Deployment
   alias SpruceGoose.Workflows
   alias SpruceGoose.Workflows.TaskState
 
-  @machines [Workflows.Lifecycle, Deployment.Lifecycle]
+  @machines [Workflows.Lifecycle]
 
   # The contract's own properties are TaskCore's tests; these are its
   # declarations here.
@@ -62,34 +61,6 @@ defmodule SpruceGoose.LifecycleTest do
       for terminal <- Workflows.Lifecycle.terminal_states(), to <- Workflows.Lifecycle.states() do
         assert {:error, :invalid_transition} = Workflows.Lifecycle.transition(terminal, to)
       end
-    end
-  end
-
-  describe "deployment lifecycle" do
-    test "carries the native control plane's relation unchanged" do
-      assert Deployment.Lifecycle.version() == 1
-      assert Deployment.Lifecycle.initial() == :queued
-
-      assert Deployment.Lifecycle.transitions() == %{
-               queued: [:building, :cancelled],
-               building: [:staged, :failed, :cancelled],
-               staged: [:deploying, :cancelled],
-               deploying: [:verifying, :failed, :rolling_back],
-               verifying: [:ready, :failed, :rolling_back],
-               ready: [:rolling_back],
-               failed: [:rolling_back],
-               rolling_back: [:rolled_back, :failed],
-               rolled_back: [],
-               cancelled: []
-             }
-
-      assert Enum.sort(Deployment.Lifecycle.terminal_states()) ==
-               [:cancelled, :failed, :ready, :rolled_back]
-    end
-
-    test "terminal is finished, not absorbing: ready and failed may still roll back" do
-      assert Deployment.Lifecycle.terminal?(:ready)
-      assert {:ok, :rolling_back} = Deployment.Lifecycle.transition(:ready, :rolling_back)
     end
   end
 
