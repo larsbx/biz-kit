@@ -32,6 +32,7 @@ import {
   emptyView,
   formTiming,
   grantFor,
+  newTodoId,
   nextStep,
   otherSteps,
   ownDevices,
@@ -48,6 +49,7 @@ import {
   runTaskIds,
   taskSummary,
   timingForm,
+  todoRows,
   toReview,
   workflows,
 } from "./view.js";
@@ -118,6 +120,7 @@ function render() {
               : null,
             cancelledBecause(t) ? el("div", { className: "muted", textContent: cancelledBecause(t) }) : null,
             runOf(t, view) ? el("div", { className: "muted", textContent: runOf(t, view) }) : null,
+            todoControls(id, t),
             stepControl(id, t),
             otherControls(id, t),
           ),
@@ -198,6 +201,62 @@ function otherControls(id, t) {
   );
 }
 
+// -- todos (docs/architecture/2026-10-20-sprucegoose-salvage.md) ---------------------
+
+// A task's todos, each with Done and Drop… where the ledger would admit them,
+// and Add todo… while the task is not finished. Signed like any step.
+function todoControls(id, t) {
+  const rows = todoRows(t);
+  const live = !["completed", "cancelled"].includes(t.state);
+  if (!rows.length && !live) return null;
+  const disabled = !pair || !enrolled || deciding;
+  // `seen` is what the person saw and must sign: for a todo already there,
+  // the version shown, so a revision since is refused rather than signed.
+  const sign = (action, fields, seen = {}) =>
+    signAndSubmit(
+      () => postJSON(`${projectPath}/commands`, { action, task_id: id, ...fields, key_id: keyId }),
+      { type: stepTypes[action], payload: { task_id: id, ...fields, ...seen } },
+    );
+
+  const items = rows.map((r) => {
+    const done = el("button", { textContent: "Done", disabled });
+    const seen = { expected_todo_version: r.version };
+    done.onclick = () => sign("complete_todo", { todo_id: r.id }, seen);
+    const drop = el("button", { textContent: "Drop…", disabled });
+    drop.onclick = () => {
+      const reason = prompt(`Why drop “${r.title}”? The reason is recorded on the ledger.`);
+      if (reason?.trim()) sign("drop_todo", { todo_id: r.id, reason }, seen);
+    };
+    const label = r.state === "open" ? r.title : `${r.title} (${r.state}${r.reason ? `: ${r.reason}` : ""})`;
+    return el(
+      "li",
+      {},
+      el("span", { className: r.state === "open" ? "" : "muted", textContent: label }),
+      r.complete ? done : null,
+      r.drop ? drop : null,
+    );
+  });
+
+  const add = live ? el("button", { textContent: "Add todo…", disabled }) : null;
+  if (add)
+    add.onclick = () => {
+      const title = prompt("The todo:")?.trim();
+      if (!title) return;
+      const nameable = rows.filter((r) => r.state !== "dropped").map((r) => r.id);
+      const after = nameable.length ? prompt(`After which todos? IDs separated by commas, from: ${nameable.join(", ")}`, "") : "";
+      if (after === null) return;
+      const depends_on = after.split(",").map((s) => s.trim()).filter(Boolean);
+      sign("add_todo", { todo_id: newTodoId(title, rows), title, depends_on });
+    };
+
+  return el(
+    "div",
+    {},
+    rows.length ? el("ul", { className: "todos" }, ...items) : null,
+    add ? el("div", { className: "actions" }, add) : null,
+  );
+}
+
 // -- workflows (docs/architecture/2026-10-20-workflow-view.md) ----------------------
 
 // Each workflow the project's blueprints define, its steps in order, and a
@@ -269,14 +328,19 @@ function openReadiness(r) {
     return el("label", {}, label, input);
   };
   $("readiness-what").textContent = `Run ${r.name}: ${r.pending.map((t) => t.id).join(", ")}`;
+  const version = el("input", { name: "sop_version", pattern: "(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)", placeholder: "MAJOR.MINOR.PATCH" });
   $("readiness-fields").replaceChildren(
     field("sop", "SOP digest"),
+    el("label", {}, "SOP version (optional; once named, never lowered)", version),
     ...r.pending.flatMap((t) =>
       t.blueprint.artifact_requirements.map((name) => field(`${t.id}/${name}`, `${t.id}: input “${name}”`)),
     ),
   );
   // A later batch keeps the SOP the run already follows.
-  if (r.sop) Object.assign($("readiness-form").elements.sop, { value: r.sop, readOnly: true });
+  if (r.sop) {
+    Object.assign($("readiness-form").elements.sop, { value: r.sop, readOnly: true });
+    Object.assign(version, { value: r.sopVersion ?? "", readOnly: true });
+  }
   $("readiness").showModal();
   $("readiness").addEventListener(
     "close",
@@ -290,17 +354,18 @@ function openReadiness(r) {
 async function defineReadiness(r, form) {
   const inputs = {};
   for (const [key, value] of form.entries()) {
-    if (key === "sop") continue;
+    if (key === "sop" || key === "sop_version") continue;
     const [task, name] = key.split("/");
     (inputs[task] ??= {})[name] = value.trim();
   }
   const sop = (form.get("sop") ?? "").trim();
-  const { commands, error } = runReadiness(r, { tenant: tenantId, project: projectIdRaw, sop, inputs });
+  const sopVersion = (form.get("sop_version") ?? "").trim() || null;
+  const { commands, error } = runReadiness(r, { tenant: tenantId, project: projectIdRaw, sop, sopVersion, inputs });
   if (error) return status(`Not defined: ${error}.`, true);
 
   const path = `${projectPath}/runs/${encodeURIComponent(r.run_event_id)}/readiness`;
   await signEach(
-    () => governed("POST", path, { governance_key_id: keyId, sop_digest: sop, inputs }),
+    () => governed("POST", path, { governance_key_id: keyId, sop_digest: sop, ...(sopVersion ? { sop_version: sopVersion } : {}), inputs }),
     (prepared) => prepared.commands,
     (cores) => device.isExpectedBatch(cores, { keyId, chapter: chapterId, commands }),
     (prepared, signatures) => postJSON(`${path}/${encodeURIComponent(prepared.id)}`, { signatures }),
@@ -563,6 +628,9 @@ const stepTypes = {
   complete: "TaskCompletedV1",
   cancel: "TaskCancelledV1",
   reopen: "TaskReopenedV1",
+  add_todo: "TaskTodoAddedV1",
+  complete_todo: "TaskTodoCompletedV1",
+  drop_todo: "TaskTodoDroppedV1",
 };
 
 const expectedType = (s, decision) =>

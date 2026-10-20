@@ -179,8 +179,11 @@ export function nextStep(taskId, view, me, keyId) {
 // the review, so a review on record is of the current submission.
 function executionStep(t) {
   const { criteria, submission, review } = t.dod;
-  if (review?.decision === "accept" && review.submission_event_id === submission?.event_id)
+  if (review?.decision === "accept" && review.submission_event_id === submission?.event_id) {
+    const open = (t.todos ?? []).filter((x) => x.state === "open").length;
+    if (open) return { waiting: `${open} open todo${open === 1 ? "" : "s"}` };
     return { action: "complete", label: "Complete", review_event_id: review.event_id };
+  }
   if (submission && !review) return { waiting: "a review of the evidence" };
   return {
     evidence: criteria,
@@ -373,20 +376,24 @@ export function runs(view) {
       const t = tasks[0];
       const suffix = `-${t.blueprint.definition_id}`;
       const name = t.id.endsWith(suffix) ? t.id.slice(0, -suffix.length) : t.id;
-      // A run follows one SOP: the one its tasks were already readied under.
-      const sop = tasks.find((x) => x.readiness)?.readiness.sop_digest ?? null;
-      return { ...r, name, tasks, pending, done, sop };
+      // A run follows one SOP: the one its tasks were already readied under,
+      // at the version (if any) it was named at.
+      const readied = tasks.find((x) => x.readiness)?.readiness;
+      return { ...r, name, tasks, pending, done, sop: readied?.sop_digest ?? null, sopVersion: readied?.sop_version ?? null };
     })
     .sort(byKey((r) => r.tasks[0].id));
 }
 
 const hex64 = /^[0-9a-f]{64}$/;
+const semver = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
 
 // The exact definitions a run's readiness batch must hold: per pending task,
 // the blueprint's predecessors and input names, with the digests given
-// (`inputs[task][name]`, hex) and the run's SOP. `{commands}` or `{error}`.
-export function runReadiness(run, { tenant, project, sop, inputs }) {
+// (`inputs[task][name]`, hex) and the run's SOP, with its version if one is
+// given (docs/architecture/2026-10-20-sprucegoose-salvage.md). `{commands}` or `{error}`.
+export function runReadiness(run, { tenant, project, sop, sopVersion, inputs }) {
   if (!hex64.test(sop ?? "")) return { error: "the SOP needs a SHA-256 digest" };
+  if (sopVersion && !semver.test(sopVersion)) return { error: "the SOP version needs the form MAJOR.MINOR.PATCH" };
   const commands = [];
   for (const t of run.pending) {
     const requirements = {};
@@ -405,8 +412,35 @@ export function runReadiness(run, { tenant, project, sop, inputs }) {
         artifact_requirements: requirements,
         predecessor_ids: t.blueprint.predecessor_ids,
         sop_digest: { __bytes__: sop },
+        ...(sopVersion ? { sop_version: sopVersion } : {}),
       },
     });
   }
   return commands.length ? { commands } : { error: "no task of this run is waiting for readiness" };
+}
+
+// -- todos (docs/architecture/2026-10-20-sprucegoose-salvage.md) ---------------------
+
+// A task's todos in order, each with whether it may be completed (open, and
+// nothing it depends on still open) or dropped (open, and no open todo
+// depends on it). Nothing changes once the task is completed or cancelled.
+export function todoRows(t) {
+  const todos = t.todos ?? [];
+  const open = (id) => todos.some((x) => x.id === id && x.state === "open");
+  const live = !["completed", "cancelled"].includes(t.state);
+  return todos.map((x) => ({
+    ...x,
+    complete: live && x.state === "open" && !x.depends_on.some(open),
+    drop: live && x.state === "open" && !todos.some((y) => y.state === "open" && y.depends_on.includes(x.id)),
+  }));
+}
+
+// A new todo's ID from its title: lower-case words joined by "-", made
+// unique among the task's todos.
+export function newTodoId(title, todos) {
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "todo";
+  const taken = new Set((todos ?? []).map((x) => x.id));
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  return id;
 }

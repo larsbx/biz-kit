@@ -4,7 +4,8 @@ defmodule SpruceGoose.Web.RunReadinessController do
   (docs/architecture/2026-10-20-run-readiness.md).
 
       POST …/projects/:project_id/runs/:run_event_id/readiness
-           {"governance_key_id", "sop_digest": hex, "inputs": {task_id: {name: hex}}}
+           {"governance_key_id", "sop_digest": hex, "sop_version"?: "MAJOR.MINOR.PATCH",
+            "inputs": {task_id: {name: hex}}}
            → 201 the definitions to sign, one per task
       POST …/runs/:run_event_id/readiness/:held_id
            {"signatures"} → 201 {events}
@@ -25,9 +26,10 @@ defmodule SpruceGoose.Web.RunReadinessController do
          {:ok, body} <- json_body(conn),
          {:ok, signer} <- string(body["governance_key_id"]),
          {:ok, sop} <- digest(body["sop_digest"]),
+         {:ok, version} <- version(body["sop_version"]),
          {:ok, inputs} <- inputs(body["inputs"]),
          {:ok, batch} <-
-           RunReadiness.prepare({ch, t, p}, params["run_event_id"], sop, inputs, signer) do
+           RunReadiness.prepare({ch, t, p}, params["run_event_id"], sop, inputs, signer, version) do
       held_batch(conn, batch)
     else
       %Plug.Conn{} = refused -> refused
@@ -54,6 +56,11 @@ defmodule SpruceGoose.Web.RunReadinessController do
   end
 
   defp digest(_), do: {:error, :bad_request}
+
+  # Optional; its form is the ledger's to check (`invalid_sop_version`).
+  defp version(nil), do: {:ok, nil}
+  defp version(version) when is_binary(version), do: {:ok, version}
+  defp version(_), do: {:error, :bad_request}
 
   # {task_id: {name: hex}}, every digest 32 bytes.
   defp inputs(inputs) when is_map(inputs) do

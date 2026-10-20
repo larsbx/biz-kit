@@ -75,6 +75,19 @@ defmodule SpruceGoose.Web.RunReadinessTest do
              {:bytes, Base.decode16!(@sop, case: :lower)}
   end
 
+  test "a run may name its SOP's version; a malformed one is refused", w do
+    sign = fn params ->
+      Client.sign_batch(w.base <> w.path, governance(w), fn _ -> true end, params)
+    end
+
+    base = %{"sop_digest" => @sop, "inputs" => %{}}
+    assert {:error, {400, _}} = sign.(Map.put(base, "sop_version", 3))
+    assert {:error, {409, body}} = sign.(Map.put(base, "sop_version", "1.0"))
+    assert body =~ "invalid_sop_version"
+    assert {:ok, _} = sign.(Map.put(base, "sop_version", "1.2.0"))
+    assert task(w, "r1-ship").readiness.sop_version == "1.2.0"
+  end
+
   test "an unsigned request, a malformed digest and a defined run are refused", w do
     unsigned = call(:post, w.path, [{"content-type", "application/json"}], "{}")
     assert unsigned.status == 401

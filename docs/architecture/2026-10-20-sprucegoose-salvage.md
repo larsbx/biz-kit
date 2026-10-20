@@ -1,6 +1,6 @@
 # What the ledger keeps from SpruceGoose
 
-Date: 2026-10-20. Status: **implemented (task rules)**. Follows
+Date: 2026-10-20. Status: **implemented**, with the web view. Follows
 [task core](2026-10-20-task-core.md) and
 [readiness for a workflow run](2026-10-20-run-readiness.md).
 
@@ -41,6 +41,24 @@ acknowledgment, so work under way keeps the SOP it started under.
 - `TaskCore.Steps` builds the four commands: `{:add_todo, task, todo, title, deps}`,
   `{:revise_todo, …}`, `{:complete_todo, task, todo}` and `{:drop_todo, task, todo, reason}`.
 
+## In the view
+
+- **Todos on a task.** The project's feed carries each task's todos in
+  order (`id`, `title`, `depends_on`, `state`, `version`, who last acted,
+  and a drop's reason). A task's card lists them, with **Done** and
+  **Drop…** where the ledger would admit them (`todoRows/1` in `view.js`),
+  and **Add todo…** while the task is not finished; a new todo's ID comes
+  from its title. Each is signed on the device like any step, through
+  `POST …/commands` with `add_todo`, `revise_todo`, `complete_todo` or
+  `drop_todo`. An accepted review offers **Complete** only once no todo is
+  open; until then the card says how many are.
+- **A run's SOP version.** The run readiness dialog takes an optional SOP
+  version beside the digest; the batch request carries it as
+  `sop_version`, and `RunReadiness.prepare/6` puts it in each definition.
+  A run follows one SOP at one version: a later batch must name both as
+  the first did (`sop_mismatch`), and the dialog fills them in. The feed
+  carries a readiness definition's `sop_version`.
+
 ## Not migrated
 
 - **Already on the ledger.** Two registry rules SpruceGoose enforced already
@@ -76,11 +94,14 @@ acknowledgment, so work under way keeps the SOP it started under.
     any sequence of redefinitions; a versioned SOP's version is the highest
     it has been named at; one version names one document.
   - Both are checked by `check.sh` (sampled, witnesses, Apalache to depth 5).
+- **The view:** `SpruceGoose.Web.TodoTest` (todos over HTTP, and the feed
+  carrying them in order), run readiness with a version over HTTP and on
+  the ledger (a later batch keeps it), the page's pure functions
+  (`app.test.mjs`), and the browser workflow: the administrator names the
+  SOP's version, and the person adds a todo and marks it done.
 - **Suites:** task_core, the ledger and SpruceGoose pass unchanged.
 
 ## Limits
 
-- `CoopSubstrate.RunReadiness` and the run readiness page do not yet pass
-  `sop_version`; a run's batch defines unversioned SOPs as before.
-- The web view does not yet show or edit todos; clients build the commands
-  with `TaskCore.Steps`.
+- The page does not revise a todo; the command exists (`revise_todo`).
+- The page asks for a new todo's dependencies by ID, in a prompt.

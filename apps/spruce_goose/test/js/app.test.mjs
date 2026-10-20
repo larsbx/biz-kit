@@ -662,3 +662,47 @@ test("runs group a run's tasks; readiness covers exactly the tasks waiting", () 
   const [, later] = runs({ ...view, tasks: { ...view.tasks, "r1-build": readied } });
   assert.equal(later.sop, sop);
 });
+
+test("a run's readiness may name the SOP's version; a later batch keeps it", () => {
+  const blueprint = { run_event_id: "e-run", definition_id: "build", predecessor_ids: [], artifact_requirements: [] };
+  const view = { ...emptyView(), tasks: { "r1-build": { state: "proposed", version: 2, blueprint } } };
+  const [run] = runs(view);
+  const where = { tenant: "t1", project: "p1", sop: "a".repeat(64), inputs: {} };
+
+  assert.equal(runReadiness(run, { ...where, sopVersion: "1.2.0" }).commands[0].payload.sop_version, "1.2.0");
+  assert.ok(!("sop_version" in runReadiness(run, { ...where, sopVersion: "" }).commands[0].payload));
+  for (const bad of ["1.2", "v1.2.0", "01.2.0"])
+    assert.match(runReadiness(run, { ...where, sopVersion: bad }).error, /MAJOR\.MINOR\.PATCH/);
+
+  const readied = { state: "queued", version: 3, blueprint, readiness: { sop_digest: "a".repeat(64), sop_version: "1.2.0" } };
+  const [later] = runs({ ...view, tasks: { "r1-build": readied, "r1-ship": { state: "proposed", version: 2, blueprint: { ...blueprint, definition_id: "ship" } } } });
+  assert.deepEqual([later.sop, later.sopVersion], ["a".repeat(64), "1.2.0"]);
+});
+
+test("todos: in order, each with what may be done to it; completion waits for them", async () => {
+  const { todoRows, newTodoId, nextStep } = await import("../../priv/static/app/view.js");
+  const todos = [
+    { id: "read", title: "Read", depends_on: [], state: "completed", version: 2 },
+    { id: "answer", title: "Answer", depends_on: ["read"], state: "open", version: 1 },
+    { id: "check", title: "Check", depends_on: ["answer"], state: "open", version: 1 },
+    { id: "old", title: "Old", depends_on: [], state: "dropped", version: 2, reason: "Moot" },
+  ];
+
+  assert.deepEqual(
+    todoRows({ state: "in_progress", todos }).map((r) => [r.id, r.complete, r.drop]),
+    [["read", false, false], ["answer", true, false], ["check", false, true], ["old", false, false]],
+  );
+  // Nothing may change once the task is finished.
+  assert.ok(todoRows({ state: "completed", todos }).every((r) => !r.complete && !r.drop));
+
+  assert.equal(newTodoId("Read the chapter", todos), "read-the-chapter");
+  assert.equal(newTodoId("Read", todos), "read-2");
+  assert.equal(newTodoId("  !!  ", todos), "todo");
+
+  const accepted = { event_id: "e2", decision: "accept", submission_event_id: "e1" };
+  const task = (todos) => ({
+    tasks: { t1: { state: "in_progress", todos, dod: { criteria: [], submission: { event_id: "e1" }, review: accepted } } },
+  });
+  assert.deepEqual(nextStep("t1", task(todos), "me", "k-me"), { waiting: "2 open todos" });
+  assert.equal(nextStep("t1", task(todos.filter((t) => t.state !== "open")), "me", "k-me").action, "complete");
+});
