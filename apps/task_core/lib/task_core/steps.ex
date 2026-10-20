@@ -31,6 +31,14 @@ defmodule TaskCore.Steps do
       workflow under the blueprint revision now governing it, naming a new
       task for each of its definitions.
 
+  Todos (`TaskCore.Todos`), each expecting the todo's own version rather
+  than the task's:
+
+    * add a todo → `TaskTodoAddedV1`, with a title and the todos it depends on;
+    * revise a todo → `TaskTodoRevisedV1`;
+    * complete a todo → `TaskTodoCompletedV1`;
+    * drop a todo → `TaskTodoDroppedV1`, with a reason.
+
   Calling it off (docs/architecture/2026-10-19-cancel-reopen.md):
 
     * cancel → `TaskCancelledV1` before the work starts, with a reason;
@@ -57,6 +65,10 @@ defmodule TaskCore.Steps do
           | {:revoke_delegation, String.t()}
           | {:record_custody, <<_::256>>}
           | {:instantiate, String.t(), String.t(), String.t(), %{String.t() => String.t()}}
+          | {:add_todo, String.t(), String.t(), String.t(), [String.t()]}
+          | {:revise_todo, String.t(), String.t(), String.t(), [String.t()]}
+          | {:complete_todo, String.t(), String.t()}
+          | {:drop_todo, String.t(), String.t(), String.t()}
 
   # Definition of Done commands predate lifecycle versions: their actor is
   # principal and grant only.
@@ -94,6 +106,25 @@ defmodule TaskCore.Steps do
      })}
   end
 
+  def command(o, {chapter, tenant, project}, action, actor)
+      when elem(action, 0) in [:add_todo, :revise_todo, :complete_todo, :drop_todo] do
+    {task_id, todo_id} = {elem(action, 1), elem(action, 2)}
+
+    with %{} = task <- o.tasks[{chapter, tenant, project, task_id}] || {:error, :unknown_task},
+         {:ok, type, fields} <- todo_step(task, action) do
+      {:ok, type,
+       actor
+       |> Map.delete("lifecycle_version")
+       |> Map.merge(%{
+         "tenant_id" => tenant,
+         "project_id" => project,
+         "task_id" => task_id,
+         "todo_id" => todo_id
+       })
+       |> Map.merge(fields)}
+    end
+  end
+
   def command(o, {chapter, tenant, project}, {:revoke_delegation, id}, actor) do
     case o.delegations[id] do
       %{chapter_id: ^chapter, tenant_id: ^tenant, project_id: ^project} ->
@@ -126,6 +157,30 @@ defmodule TaskCore.Steps do
        |> Map.merge(fields)}
     end
   end
+
+  defp todo_step(_task, {:add_todo, _, _, title, depends_on}),
+    do: {:ok, "TaskTodoAddedV1", %{"title" => title, "depends_on" => depends_on}}
+
+  defp todo_step(task, action) do
+    case task.todos[elem(action, 2)] do
+      nil ->
+        {:error, :unknown_todo}
+
+      todo ->
+        {:ok, todo_type(action),
+         Map.put(todo_fields(action), "expected_todo_version", todo.version)}
+    end
+  end
+
+  defp todo_type({:revise_todo, _, _, _, _}), do: "TaskTodoRevisedV1"
+  defp todo_type({:complete_todo, _, _}), do: "TaskTodoCompletedV1"
+  defp todo_type({:drop_todo, _, _, _}), do: "TaskTodoDroppedV1"
+
+  defp todo_fields({:revise_todo, _, _, title, depends_on}),
+    do: %{"title" => title, "depends_on" => depends_on}
+
+  defp todo_fields({:drop_todo, _, _, reason}), do: %{"reason" => reason}
+  defp todo_fields(_action), do: %{}
 
   defp versioned(actor, type) when type in @unversioned,
     do: Map.delete(actor, "lifecycle_version")

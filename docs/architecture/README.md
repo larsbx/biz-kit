@@ -67,6 +67,10 @@ domain views. The imported histories and existing identifiers remain intact.
   administrator defines readiness for a run's tasks in one signed batch, the
   blueprint's predecessors and input names filled in; the page shows each
   run's progress.
+- [What the ledger keeps from SpruceGoose](2026-10-20-sprucegoose-salvage.md):
+  todos that gate completion, no predecessor cycle across a project, and SOP
+  versions that never go back; with Quint models. The rest of SpruceGoose's
+  domain is not migrated.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.
