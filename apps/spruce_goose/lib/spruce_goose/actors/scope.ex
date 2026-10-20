@@ -5,7 +5,7 @@ defmodule SpruceGoose.Actors.Scope do
   Scope resolution is a SQL walk up to `projects` rather than a preloaded
   relationship graph: the check runs inside a policy, where the record is loaded
   but its ancestors are not, and this codebase already resolves across tables
-  inside a check — see `SpruceGoose.Workflows.Task.validate_board_scope/4`.
+  inside a check.
 
   Grants are read with `authorize?: false`. A permission check may never be
   subject to the permissions it decides.
@@ -17,15 +17,11 @@ defmodule SpruceGoose.Actors.Scope do
   alias SpruceGoose.Repo
 
   alias SpruceGoose.Workflows.{
-    Board,
-    BoardColumn,
     BlueprintRevision,
     Dependency,
-    InboxItem,
     Project,
     Revision,
     Roadmap,
-    SavedFilter,
     Task,
     Todo,
     TodoDependency,
@@ -48,29 +44,6 @@ defmodule SpruceGoose.Actors.Scope do
     JOIN roadmaps r ON r.id = w.roadmap_id
     JOIN projects p ON p.id = r.project_id
     WHERE t.id = $1
-    """,
-    Board => """
-    SELECT p.key FROM boards b
-    JOIN workflows w ON w.id = b.workflow_id
-    JOIN roadmaps r ON r.id = w.roadmap_id
-    JOIN projects p ON p.id = r.project_id
-    WHERE b.id = $1
-    """,
-    BoardColumn => """
-    SELECT p.key FROM board_columns c
-    JOIN boards b ON b.id = c.board_id
-    JOIN workflows w ON w.id = b.workflow_id
-    JOIN roadmaps r ON r.id = w.roadmap_id
-    JOIN projects p ON p.id = r.project_id
-    WHERE c.id = $1
-    """,
-    SavedFilter => """
-    SELECT p.key FROM saved_filters f
-    JOIN boards b ON b.id = f.board_id
-    JOIN workflows w ON w.id = b.workflow_id
-    JOIN roadmaps r ON r.id = w.roadmap_id
-    JOIN projects p ON p.id = r.project_id
-    WHERE f.id = $1
     """,
     Todo => """
     SELECT p.key FROM task_todos td
@@ -110,9 +83,6 @@ defmodule SpruceGoose.Actors.Scope do
     Roadmap => {:project_id, Project},
     Workflow => {:roadmap_id, Roadmap},
     Task => {:workflow_id, Workflow},
-    Board => {:workflow_id, Workflow},
-    BoardColumn => {:board_id, Board},
-    SavedFilter => {:board_id, Board},
     Todo => {:task_id, Task},
     BlueprintRevision => {:project_id, Project}
   }
@@ -124,9 +94,6 @@ defmodule SpruceGoose.Actors.Scope do
     Roadmap => [:project, :key],
     Workflow => [:roadmap, :project, :key],
     Task => [:workflow, :roadmap, :project, :key],
-    Board => [:workflow, :roadmap, :project, :key],
-    BoardColumn => [:board, :workflow, :roadmap, :project, :key],
-    SavedFilter => [:board, :workflow, :roadmap, :project, :key],
     Todo => [:task, :workflow, :roadmap, :project, :key],
     Dependency => [:successor, :workflow, :roadmap, :project, :key],
     TodoDependency => [:successor, :task, :workflow, :roadmap, :project, :key],
@@ -151,7 +118,6 @@ defmodule SpruceGoose.Actors.Scope do
   def of(%Ash.Changeset{action_type: :create} = changeset), do: create_scope(changeset)
   def of(%Ash.Changeset{data: data}), do: of(data)
   def of(%Project{key: key}), do: {:ok, {:project, key}}
-  def of(%InboxItem{}), do: {:ok, :global}
   def of(%Revision{project_key: nil}), do: {:ok, :global}
   def of(%Revision{project_key: key}), do: {:ok, {:project, key}}
 
@@ -165,7 +131,6 @@ defmodule SpruceGoose.Actors.Scope do
   def of(other), do: {:error, "cannot determine scope for #{inspect(other)}"}
 
   defp create_scope(%Ash.Changeset{resource: Project}), do: {:ok, :global}
-  defp create_scope(%Ash.Changeset{resource: InboxItem}), do: {:ok, :global}
 
   defp create_scope(%Ash.Changeset{resource: Revision} = changeset) do
     case Ash.Changeset.get_attribute(changeset, :project_key) do

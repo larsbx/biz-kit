@@ -116,9 +116,8 @@ write failure leaves both hierarchy and revision receipt unchanged.
 Instantiation re-verifies the referenced commit/path bytes and copies the
 typed runner, input, title, Definition of Done, dependencies, and artifact
 requirements from that exact revision; it does not trust a mutable workflow
-row. `task add` and `inbox promote` are retired operator paths. Use `inbox add`
-for a non-authoritative work request, then commit a TaskDefinition and use
-`task instantiate`. Pre-cutover tasks retain null source bindings as the
+row. `task add` and the inbox are retired operator paths: commit a
+TaskDefinition and use `task instantiate`. Pre-cutover tasks retain null source bindings as the
 explicit grandfathered epoch rather than receiving fabricated repository
 provenance.
 The production verifier reads a repository-read-only token from the owner-only
@@ -183,8 +182,6 @@ roadmaps:
 ./sprucegoose todo add tsk-... "Attach evidence"
 ./sprucegoose todo list tsk-...
 ./sprucegoose todo done tsk-... todo-...
-./sprucegoose inbox add "Unclassified operator note"
-./sprucegoose inbox list
 
 # Governed revision: propose, review, then sign off on the exact bytes.
 ./sprucegoose revise propose --file /abs/path/rev.toml --as openclaw
@@ -247,23 +244,17 @@ requires finding, regression, and SOP references plus completion of every
 subordinate TODO. Task JSON includes those references, reasons,
 SOP acknowledgment, and ledger-import provenance.
 
-Kanban administration uses the same canonical CLI:
+A task's typed metadata (rank, priority, assignees, labels, custom fields) is
+revised under its own optimistic lock:
 
 ```sh
-./sprucegoose board add PROJECT ROADMAP WORKFLOW KEY "Board name"
-./sprucegoose board list PROJECT ROADMAP WORKFLOW
-./sprucegoose column add BOARD_ID KEY POSITION STATE "Column name"
-./sprucegoose column list BOARD_ID
-./sprucegoose task move TASK_ID BOARD_ID COLUMN_ID RANK
 ./sprucegoose task metadata TASK_ID '{"priority":2,"labels":["audit"]}'
-./sprucegoose filter add BOARD_ID NAME '{"assignee":"jimbo"}'
-./sprucegoose filter list BOARD_ID
-./sprucegoose filter apply FILTER_ID
 ```
 
-Moves are one governed Ash transaction: board, column, workflow, lifecycle
-state, rank, and optimistic revisions must agree. TODO admission is serialized
-with completion and is rejected after completion or cancellation.
+Boards, columns, saved filters and inbox captures are retired in biz-kit
+(`../../docs/architecture/2026-10-20-sprucegoose-salvage.md`). TODO admission
+is serialized with completion and is rejected after completion or
+cancellation.
 
 Run the focused contract:
 
