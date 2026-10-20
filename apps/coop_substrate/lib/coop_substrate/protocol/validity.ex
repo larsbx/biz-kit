@@ -169,6 +169,30 @@ defmodule CoopSubstrate.Protocol.Validity do
     end
   end
 
+  # Charter constants set finance caps, cure windows and harness gates, so
+  # declaring one is a governance act. 1A left the type ungated, "enforceable
+  # by the 1D governance workflow later" (docs/phase1b_plan.md); this is that
+  # enforcement. Before genesis: bootstrap, as for every role. After it: the
+  # `author` key must be a currently declared governance key — the runbook
+  # already signs this way (Harness.Ops.declare_constants/5).
+  defp type_check(
+         %Envelope{type: "CharterConstantDeclared", chapter_id: ch, signers: signers},
+         gate
+       ) do
+    case gate.role_keys[{ch, "governance"}] do
+      nil ->
+        :ok
+
+      governance ->
+        case Enum.find(signers, &(&1.role == "author")) do
+          %{key_id: key_id, pubkey: pubkey} ->
+            if Map.get(governance, key_id) == pubkey,
+              do: :ok,
+              else: {:error, {:charter_constant_requires_governance, key_id}}
+        end
+    end
+  end
+
   # -- Phase 2A: harness events (docs/phase2a_plan.md; corpus 11) --------------
 
   defp type_check(

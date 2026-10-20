@@ -153,7 +153,8 @@ defmodule CoopSubstrate.DispatchDemoTest do
            }
 
     # Declaring the constant turns the count into minutes — nothing else moves.
-    author = new_member("author")
+    # It is a governance act: the sim's governance key signs as author.
+    author = put_in(ctx.governance, [:signer, :role], "author")
 
     {:ok, _} =
       Log.append(

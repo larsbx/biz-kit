@@ -59,7 +59,8 @@ defmodule CoopSubstrate.Sim.Demo do
   defp execute(ch) do
     ctx = GateD.run(ch)
     base = %{"member_id" => ctx.member_id, "entity_id" => ctx.entity_id}
-    author = actor("author")
+    # A charter constant is a governance act (see Sim.GateD).
+    author = put_in(ctx.governance, [:signer, :role], "author")
 
     # The carrier's declared ceiling and terms (member-signed, versioned).
     append!(
