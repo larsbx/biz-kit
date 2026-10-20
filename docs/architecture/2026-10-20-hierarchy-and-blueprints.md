@@ -174,7 +174,8 @@ other step.
 ## Limits
 
 - **Not shown in the web view or the feed.** The tasks a run creates appear
-  in the project's feed like any other task.
+  in the project's feed like any other task. [Workflows in the view](2026-10-20-workflow-view.md)
+  adds both.
 - **No Quint model yet.** `task_lifecycle.qnt` still models a Definition of
   Done defined only while a task is proposed; a run's tasks start with one.
   Queuing requires a Definition of Done either way.

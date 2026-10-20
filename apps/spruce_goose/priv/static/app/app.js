@@ -42,9 +42,12 @@ import {
   receiptFor,
   revocable,
   revocationType,
+  runOf,
+  runTaskIds,
   taskSummary,
   timingForm,
   toReview,
+  workflows,
 } from "./view.js";
 
 const params = new URLSearchParams(location.search);
@@ -112,6 +115,7 @@ function render() {
               ? el("div", { className: "muted", textContent: "Last scheduled by a delegated agent" })
               : null,
             cancelledBecause(t) ? el("div", { className: "muted", textContent: cancelledBecause(t) }) : null,
+            runOf(t, view) ? el("div", { className: "muted", textContent: runOf(t, view) }) : null,
             stepControl(id, t),
             otherControls(id, t),
           ),
@@ -126,6 +130,7 @@ function render() {
       : [el("p", { className: "muted", textContent: "None." })]),
   );
 
+  renderWorkflows();
   renderReviews();
   renderAdmin();
   renderDelegations();
@@ -188,6 +193,62 @@ function otherControls(id, t) {
       };
       return button;
     }),
+  );
+}
+
+// -- workflows (docs/architecture/2026-10-20-workflow-view.md) ----------------------
+
+// Each workflow the project's blueprints define, its steps in order, and a
+// run: one task per step, named after the run, signed like any step.
+function renderWorkflows() {
+  const all = workflows(view);
+  $("workflow-section").hidden = all.length === 0;
+  $("workflows").replaceChildren(
+    ...all.map((w) => {
+      const run = el("button", { textContent: "Run…", disabled: !pair || !enrolled || deciding });
+      run.onclick = () => runWorkflow(w);
+      return el(
+        "div",
+        { className: "card" },
+        el(
+          "div",
+          { className: "row" },
+          el("strong", { textContent: w.name }),
+          el("span", { className: "muted", textContent: w.roadmap_name }),
+        ),
+        el(
+          "ol",
+          {},
+          ...w.definitions.map((d) =>
+            el("li", {
+              textContent: d.depends_on.length ? `${d.title} (after ${d.depends_on.join(", ")})` : d.title,
+            }),
+          ),
+        ),
+        el("div", {
+          className: "muted",
+          textContent: `From ${w.source.repository} at ${w.source.commit.slice(0, 12)}, ${w.source.path}`,
+        }),
+        el("div", { className: "actions" }, run),
+      );
+    }),
+  );
+}
+
+function runWorkflow(w) {
+  const run = prompt(`Name this run of ${w.name}. Each step becomes a task named <run>-<step>.`);
+  if (run === null) return;
+  const { ids, error } = runTaskIds(w, run.trim(), view.tasks);
+  if (error) return status(`Not run: ${error}.`, true);
+  const fields = {
+    revision_event_id: w.revision_event_id,
+    roadmap_key: w.roadmap_key,
+    workflow_id: w.workflow_id,
+    task_ids: ids,
+  };
+  signAndSubmit(
+    () => postJSON(`${projectPath}/commands`, { action: "instantiate", ...fields, key_id: keyId }),
+    { type: "TaskWorkflowInstantiatedV1", payload: fields },
   );
 }
 

@@ -185,6 +185,10 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/web/administrator_controller.ex
           apps/spruce_goose/lib/mix/tasks/coop.blueprint.ex
           apps/spruce_goose/test/spruce_goose/web/blueprint_test.exs
+          apps/coop_substrate/lib/coop_substrate/feed/view.ex
+          apps/coop_substrate/test/support/task_histories.ex
+          apps/coop_substrate/test/change_feed_view_test.exs
+          apps/spruce_goose/test/spruce_goose/web/browser_test.exs
           apps/task_core/lib/task_core/admission.ex
           apps/task_core/lib/task_core/state.ex
           apps/task_core/lib/task_core/steps.ex

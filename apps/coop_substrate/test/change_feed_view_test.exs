@@ -110,6 +110,7 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
     end
   end
 
+  # And a task a workflow run made (2026-10-20-workflow-view.md).
   test "generated histories put every kind in the views", %{
     world: w,
     gate0: gate0
@@ -122,16 +123,21 @@ defmodule CoopSubstrate.ChangeFeedViewTest do
         ops = gen |> StreamData.seeded(20_261_018 + i) |> Enum.at(0)
         {_steps, gate} = run(ops, w, gate0)
 
-        for v <- @views,
-            {kind, entities} <- view(gate, v),
-            entities != %{},
-            do: kind
+        runs =
+          for {_, %{blueprint: %{}}} <- view(gate, {@scope, nil}).tasks, do: :workflow_runs
+
+        Enum.uniq(runs) ++
+          for v <- @views,
+              {kind, entities} <- view(gate, v),
+              entities != %{},
+              do: kind
       end)
       |> MapSet.new()
 
     assert kinds ==
              MapSet.new(
-               ~w(tasks suggestions delegations receipts devices projects administrators)a
+               ~w(tasks suggestions delegations receipts devices workflows projects administrators
+                  workflow_runs)a
              )
   end
 end

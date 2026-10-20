@@ -330,6 +330,20 @@ async function signIn(browser, subject) {
     await signOn(admin, "RoleKeyRevoked");
     await admin.locator("#admin-section").waitFor({ state: "hidden" });
 
+    // Run the project's workflow: each step becomes a task named after the
+    // run, signed by this device (docs/architecture/2026-10-20-workflow-view.md).
+    const workflow = page.locator("#workflows .card").filter({ hasText: "Release" });
+    await workflow.getByText("Ship it (after build)").waitFor();
+    page.once("dialog", (prompt) => prompt.accept("r1"));
+    await workflow.getByRole("button", { name: "Run…" }).click();
+    await dialog.waitFor({ state: "visible" });
+    const run = await page.locator("#confirm-body").textContent();
+    if (!["TaskWorkflowInstantiatedV1", "r1-build", "r1-ship"].every((t) => run.includes(t)))
+      throw new Error(`unexpected run: ${run}`);
+    await page.getByRole("button", { name: "Sign and send" }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await page.locator("#tasks .card").filter({ hasText: "Ship it" }).getByText("From workflow Release, step ship").waitFor(live);
+
     // Retire this device: confirm, check the signed command, and the page
     // no longer counts it as enrolled.
     page.once("dialog", (dialog) => dialog.accept());
