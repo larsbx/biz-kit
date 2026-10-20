@@ -59,7 +59,9 @@ defmodule CoopSubstrate.Sim.GateD do
     carrier = actor("member")
     gov = actor("governance")
     checkpoint = actor("checkpoint")
-    author = actor("author")
+    # Charter constants are governance acts: the governance key signs in the
+    # `author` slot, as the runbook does (Harness.Ops.declare_constants/5).
+    author = put_in(gov, [:signer, :role], "author")
     alice = actor("interviewee")
     bob = actor("interviewee")
     {key_id, seed} = {steward.signer.key_id, steward.seed}
@@ -67,7 +69,7 @@ defmodule CoopSubstrate.Sim.GateD do
     # 13A: the sim world carries a real trust chain — genesis governance
     # (self-certified TOFU) and a checkpoint key, declared before any
     # governance-signed act, so the demo can anchor and verify bundles
-    # self-contained. Steward/author stay bootstrap (undeclared).
+    # self-contained. Steward stays bootstrap (undeclared).
     append!(chapter_id, gov, "RoleKeyDeclared", %{
       "role" => "governance",
       "key_id" => gov.signer.key_id,

@@ -121,9 +121,9 @@ These defects stand regardless of whether Keel is adopted.
 
 | # | Where | Defect | Status |
 | --- | --- | --- | --- |
-| D1 | `coop_substrate/lib/coop_substrate/halaqa/buzz_bridge.ex:93-94` | `apply_revocation/2` returns its input: revoking a delegation changes nothing | ✓ at `f3e2a61` |
-| D2 | `coop_substrate` `protocol/validity.ex` (no clause); `projections/membership.ex:486-488` | `CharterConstantDeclared` has no validity gate and the last write wins, contradicting "declared before first evaluation; retro-fit void" (`constants.ex`) | ✓ at `f3e2a61` |
-| D3 | `coop_substrate` `protocol/type_registry.ex:45` | `CorrectionRecorded` is registered but no projection handles it, so corrections are stored and have no effect | ✓ at `f3e2a61` |
+| D1 | `coop_substrate/lib/coop_substrate/halaqa/buzz_bridge.ex:93-94` | `apply_revocation/2` returns its input: revoking a delegation changes nothing | **Not a defect.** Specified: revocation blocks new effects (`delegation_revoked`, test P18) and must never rewrite committed certificates (test P19; `docs/halaqa_buzz_integration_v1.md:63`). |
+| D2 | `coop_substrate` `protocol/validity.ex` (no clause); `projections/membership.ex:486-488` | `CharterConstantDeclared` has no validity gate. Worse than first recorded: `author` is never a declared role, so after genesis any key could set finance caps, cure windows and harness gates. Overwriting is intended (honorarium clearance toggles 0 → 1). | **Fixed.** After governance genesis the author key must be a declared governance key, as the runbook already signs (`charter_constant_authority_test.exs`). |
+| D3 | `coop_substrate` `protocol/type_registry.ex:45` | `CorrectionRecorded` is registered but no projection handles it, so corrections are stored and have no effect | **Not a defect.** Specified as an annotation, "not a rewrite" (`corrections_test.exs`); typed reversals exist where state changes (`CreditMemoIssued`). Demoting a machine-extraction proposal has no dependent state: promotion is a separate human-signed `FindingExtracted`. |
 | D4 | `coop_substrate/lib/coop_substrate/enrolments.ex:137-148` | approving an enrolment needs only one governance key; no check that the approver is not the person being enrolled was found | ✓ (no such check in `prepare_approval`) |
 | D5 | `coop_substrate` `protocol/validity.ex:163-165` | last-admin protection counts keys, so one person with two keys satisfies "not orphaned" and can be the only admin left | inference from the code |
 | D6 | `coop_substrate` `RoleKeyDeclared` | `member_id` is optional and never checked against registered members, so a key can be bound to nobody | reported |
@@ -139,9 +139,9 @@ These defects stand regardless of whether Keel is adopted.
 
 ## Recommended order
 
-1. **Fix D1–D3.** These are ledger correctness bugs: an unenforced
-   revocation, rewritable constants, corrections with no effect. D4–D6 next,
-   because they bear on who holds governance.
+1. **Fix D2** (done: charter constants now need governance). D1 and D3
+   turned out to be specified behaviour. D4–D6 next, because they bear on who
+   holds governance.
 2. **Give the `prn_` principal a kind** (person, entity, agent, system). This
    is the precondition for agent accountability (C6 and the founding party).
 3. **Decide C1** (one seat per request) and **C2** (instant type) in Keel
