@@ -76,4 +76,5 @@ The delivery contract is unchanged (`spec/change_feed.qnt`).
 - **Applying is the governance tool's job.** The page shows workflows but
   does not apply blueprints; `mix coop.blueprint` does.
 - **Runs are not grouped on the page.** Runs and their tasks are shown as
-  tasks; the run name is only their prefix.
+  tasks; the run name is only their prefix. [Readiness for a run](2026-10-20-run-readiness.md)
+  groups them under their workflow, with their progress.

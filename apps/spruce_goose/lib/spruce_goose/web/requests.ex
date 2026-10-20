@@ -115,7 +115,8 @@ defmodule SpruceGoose.Web.Requests do
     :key_id_mismatch,
     :invalid_label,
     :invalid_role,
-    :signature_count
+    :signature_count,
+    :missing_input
   ]
   @not_found [
     :unknown_command,
@@ -127,6 +128,7 @@ defmodule SpruceGoose.Web.Requests do
   ]
   @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named]
   @conflict [
+    :nothing_to_define,
     :unknown_suggestion,
     :suggestion_not_pending,
     :unknown_task,

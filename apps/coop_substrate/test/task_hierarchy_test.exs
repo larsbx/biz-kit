@@ -9,7 +9,7 @@ defmodule CoopSubstrate.TaskHierarchyTest do
 
   import CoopSubstrate.TaskTimingFixtures
 
-  alias CoopSubstrate.{Commands, Crypto, Log}
+  alias CoopSubstrate.{Commands, Crypto, Log, RunReadiness}
   alias CoopSubstrate.Projections.Tasks, as: Projection
 
   @key {"chapter-genesis", "tenant-1", "project-1"}
@@ -132,6 +132,74 @@ defmodule CoopSubstrate.TaskHierarchyTest do
     # The same run again names tasks that now exist: refused before signing.
     assert {:error, {:invalid, :task_exists}} =
              Commands.prepare("alice", w.laptop.signer.key_id, scope, action)
+  end
+
+  describe "readiness for a run (2026-10-20-run-readiness.md)" do
+    setup w do
+      {:ok, [revision]} = Log.append(applied(w.gov, yaml()))
+      ids = %{"build" => "build-r", "announce" => "announce-r"}
+      {:ok, [run]} = Log.append(run(w.laptop, w.grant, revision.event_id, ids))
+      %{run: run.event_id}
+    end
+
+    defp key(id), do: {"chapter-genesis", "tenant-1", "project-1", id}
+
+    defp propose!(w, id) do
+      version = Log.gate().orchestration.tasks[key(id)].version
+      {:ok, _} = Log.append(propose(w.laptop, w.grant, id, version))
+    end
+
+    defp sign_all(w, held) do
+      for c <- held.commands, do: Crypto.sign(c.signing_bytes, w.gov.seed)
+    end
+
+    @sop :crypto.hash(:sha256, "the run's SOP")
+    @source :crypto.hash(:sha256, "source tarball")
+    @scope {"chapter-genesis", "tenant-1", "project-1"}
+
+    test "governance defines every waiting task of a run in one signed batch", w do
+      # Nothing waits until a task is proposed: inbox tasks cannot be readied.
+      assert RunReadiness.prepare(@scope, w.run, @sop, %{}, w.gov.signer.key_id) ==
+               {:error, :nothing_to_define}
+
+      propose!(w, "build-r")
+      propose!(w, "announce-r")
+
+      # Build requires the "source" input; its digest must be given.
+      assert RunReadiness.prepare(@scope, w.run, @sop, %{}, w.gov.signer.key_id) ==
+               {:error, :missing_input}
+
+      inputs = %{"build-r" => %{"source" => @source}}
+      {:ok, held} = RunReadiness.prepare(@scope, w.run, @sop, inputs, w.gov.signer.key_id)
+      assert Enum.map(held.commands, & &1.payload["task_id"]) == ["announce-r", "build-r"]
+
+      {:ok, [_, _]} = RunReadiness.define(@scope, w.run, held.id, sign_all(w, held))
+
+      o = Log.gate().orchestration
+      assert o.tasks[key("announce-r")].readiness.predecessor_ids == ["build-r"]
+
+      assert o.tasks[key("build-r")].readiness.artifact_requirements == %{
+               "source" => {:bytes, @source}
+             }
+
+      assert o.tasks[key("build-r")].readiness.sop_digest == {:bytes, @sop}
+
+      # Defined: nothing left to define for this run.
+      assert RunReadiness.prepare(@scope, w.run, @sop, inputs, w.gov.signer.key_id) ==
+               {:error, :nothing_to_define}
+    end
+
+    test "only governance keys sign, and a batch belongs to its run", w do
+      propose!(w, "announce-r")
+
+      assert RunReadiness.prepare(@scope, w.run, @sop, %{}, w.laptop.signer.key_id) ==
+               {:error, :unknown_governance_key}
+
+      {:ok, held} = RunReadiness.prepare(@scope, w.run, @sop, %{}, w.gov.signer.key_id)
+
+      assert {:error, _} =
+               RunReadiness.define(@scope, "another-run", held.id, sign_all(w, held))
+    end
   end
 
   test "a retried run returns its original acknowledgement", w do
