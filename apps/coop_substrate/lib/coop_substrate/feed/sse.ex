@@ -18,6 +18,15 @@ defmodule CoopSubstrate.Feed.SSE do
       "\n\n"
     ]
 
+  @doc """
+  The reader's access ended (`Feed.advance/2` returned `:revoked`): the last
+  event before the stream closes, so a client stops at once instead of
+  learning it from a refused reconnect
+  (docs/architecture/2026-10-19-chapter-offboarding.md).
+  """
+  @spec revoked() :: iodata()
+  def revoked, do: "event: revoked\ndata: {}\n\n"
+
   @doc "A comment line: keeps intermediaries from timing the stream out."
   @spec heartbeat() :: iodata()
   def heartbeat, do: ": heartbeat\n\n"

@@ -36,6 +36,15 @@ defmodule SpruceGoose.Web.Requests do
   def string(_value), do: {:error, :bad_request}
 
   @doc "Unpadded base64url bytes, as the web view and the approval tool send them."
+  def bytes(values) when is_list(values) do
+    Enum.reduce_while(values, {:ok, []}, fn value, {:ok, acc} ->
+      case bytes(value) do
+        {:ok, b} -> {:cont, {:ok, acc ++ [b]}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
   def bytes(value) do
     with {:ok, text} <- string(value),
          {:ok, bytes} <- Base.url_decode64(text, padding: false) do
@@ -63,6 +72,31 @@ defmodule SpruceGoose.Web.Requests do
     })
   end
 
+  @doc "A batch held as one (`Commands.hold_batch/4`): each command to sign, in order."
+  def held_batch(conn, batch) do
+    conn
+    |> put_status(201)
+    |> json(%{
+      id: batch.id,
+      expires_at: batch.expires_at,
+      commands:
+        Enum.map(
+          batch.commands,
+          &%{
+            type: &1.type,
+            payload: json_safe(&1.payload),
+            signing_bytes: encode(&1.signing_bytes)
+          }
+        )
+    })
+  end
+
+  def appended(conn, [_ | _] = envs),
+    do:
+      conn
+      |> put_status(201)
+      |> json(%{events: Enum.map(envs, &%{event_id: &1.event_id, global_seq: &1.global_seq})})
+
   def appended(conn, env),
     do: conn |> put_status(201) |> json(%{event_id: env.event_id, global_seq: env.global_seq})
 
@@ -80,7 +114,8 @@ defmodule SpruceGoose.Web.Requests do
     :invalid_pubkey,
     :key_id_mismatch,
     :invalid_label,
-    :invalid_role
+    :invalid_role,
+    :signature_count
   ]
   @not_found [
     :unknown_command,

@@ -52,6 +52,7 @@ defmodule SpruceGoose.Web.OffboardingTest do
     assert output =~ "operator  Laptop  key #{w.laptop.payload["key_id"]}"
     assert output =~ "reviewer  -"
     assert output =~ "offboarded: #{w.chapter} / #{tenant()} / project-2"
+    assert next(resp) == :revoked
     assert next(resp) == :done
 
     refute holds?(w, "project-1")
@@ -117,6 +118,52 @@ defmodule SpruceGoose.Web.OffboardingTest do
     # Another chapter's governance sees nothing of this one.
     other = world()
     assert {:ok, %{"projects" => []}} = Client.get_signed(w.base <> path, governance(other))
+  end
+
+  test "from the whole chapter: every project and the person's administrator key, in one signed batch",
+       w do
+    browser = member("governance")
+
+    append!(
+      event(w, w.gov, "RoleKeyDeclared", %{
+        "role" => "governance",
+        "key_id" => browser.signer.key_id,
+        "pubkey" => {:bytes, browser.signer.pubkey},
+        "member_id" => w.person
+      })
+    )
+
+    principal = w.base <> "/api/v1/principals/" <> Client.segment(w.person)
+    assert {:ok, %{"keys" => [%{"key_id" => key}]}} = Client.get_signed(principal, governance(w))
+    assert key == browser.signer.key_id
+
+    url = principal <> "/chapter_offboarding"
+    params = %{"chapter_id" => w.chapter}
+
+    expected = [
+      {"TaskPrincipalOffboardedV1", %{"tenant_id" => tenant(), "project_id" => "project-1"}},
+      {"TaskPrincipalOffboardedV1", %{"tenant_id" => tenant(), "project_id" => "project-2"}},
+      {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key}}
+    ]
+
+    shown? = fn cores ->
+      Enum.map(cores, &{&1["type"], Map.delete(&1["payload"], "principal_id")}) == expected
+    end
+
+    # Signed by another chapter's key: refused before anything is held.
+    assert {:error, {401, _}} = Client.sign_batch(url, governance(world()), shown?, params)
+
+    # The page would refuse a batch other than the one shown: nothing is signed.
+    assert Client.sign_batch(url, governance(w), &(length(&1) == 2), params) ==
+             {:error, :not_what_was_shown}
+
+    assert {:ok, %{"events" => [_, _, _]}} = Client.sign_batch(url, governance(w), shown?, params)
+
+    refute holds?(w, "project-1") or holds?(w, "project-2")
+    refute Map.has_key?(CoopSubstrate.Log.gate().role_keys[{w.chapter, "governance"}], key)
+
+    assert {:error, {409, body}} = Client.sign_batch(url, governance(w), shown?, params)
+    assert body =~ "nothing_to_offboard"
   end
 
   test "the administrator signs only the offboarding it was shown", w do

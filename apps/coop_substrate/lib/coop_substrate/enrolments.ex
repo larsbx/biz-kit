@@ -160,8 +160,9 @@ defmodule CoopSubstrate.Enrolments do
     do: GenServer.call(@server, {:approve, code, id, signature})
 
   @doc """
-  Drop the principal's pending requests for the project (offboarding). Once
-  it returns, no approval of them can be admitted.
+  Drop the principal's pending requests for the project, or for any project
+  of the chapter when `scope` is `{chapter}` (offboarding). Once it returns,
+  no approval of them can be admitted.
   """
   @spec cancel(String.t(), CoopSubstrate.Feed.View.scope()) :: :ok
   def cancel(principal, scope), do: GenServer.call(@server, {:cancel, principal, scope})
@@ -306,12 +307,17 @@ defmodule CoopSubstrate.Enrolments do
   end
 
   def handle_call({:cancel, principal, scope}, _from, state) do
-    for {key, _, %{scope: ^scope}, _} <-
+    for {key, _, %{scope: request_scope}, _} <-
           :ets.match_object(@table, {{:request, :_}, principal, :_, :_}),
+        within?(request_scope, scope),
         do: :ets.delete(@table, key)
 
     {:reply, :ok, state}
   end
+
+  defp within?(scope, {chapter}), do: elem(scope, 0) == chapter
+  defp within?(scope, scope), do: true
+  defp within?(_request_scope, _scope), do: false
 
   @impl true
   def handle_info(:sweep, state) do

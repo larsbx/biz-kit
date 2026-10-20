@@ -8,7 +8,15 @@ defmodule CoopSubstrate.Offboarding do
   the server signs nothing.
 
   Admission, not preparation, decides what ends, so a grant appended between
-  the two ends too. History stays: the principal, its identity binding and
+  the two ends too.
+
+  **From the whole chapter** (`prepare_chapter/3`, `offboard_chapter/3`;
+  docs/architecture/2026-10-19-chapter-offboarding.md): one offboarding per
+  project the principal holds something in, then a `RoleKeyRevoked` for each
+  governance key declared for them, the signer's own last, held together for
+  `{:chapter_offboarding, principal}` and appended as one batch: all or none.
+  The revocations are governance-signed, in the governance history, so an
+  export derives the same keys. History stays: the principal, its identity binding and
   everything it signed remain on the ledger, and governance may grant it
   afresh later.
   """
@@ -27,9 +35,14 @@ defmodule CoopSubstrate.Offboarding do
   What the principal holds, per project in `chapters`, for an administrator
   to judge (`Governance.Read` decides the chapters).
   """
-  @spec fetch(String.t(), [String.t()]) :: %{principal_id: String.t(), projects: [map()]}
+  @spec fetch(String.t(), [String.t()]) :: %{
+          principal_id: String.t(),
+          projects: [map()],
+          keys: [%{chapter_id: String.t(), key_id: String.t()}]
+        }
   def fetch(principal, chapters) do
-    o = Log.gate().orchestration
+    gate = Log.gate()
+    o = gate.orchestration
 
     projects =
       for kind <- Map.keys(@kinds),
@@ -53,9 +66,75 @@ defmodule CoopSubstrate.Offboarding do
             project_id: project,
             held: Enum.map(held, &describe(o, principal, &1))
           }
-        end)
+        end),
+      keys:
+        for(
+          chapter <- chapters,
+          key_id <- keys(gate, principal, chapter),
+          do: %{chapter_id: chapter, key_id: key_id}
+        )
     }
   end
+
+  @doc """
+  Prepare the principal's offboarding from every project of `chapter`, and
+  the revocation of their governance keys there, to be signed together by
+  the named governance key.
+  """
+  @spec prepare_chapter(String.t(), String.t(), String.t()) ::
+          {:ok, %{id: String.t(), commands: [map()], expires_at: integer()}} | {:error, term()}
+  def prepare_chapter(principal, chapter, governance_key_id) do
+    gate = Log.gate()
+
+    offboardings =
+      for p <- CoopSubstrate.Administrators.projects(gate.orchestration, chapter),
+          principal in p.people,
+          do:
+            {"TaskPrincipalOffboardedV1",
+             %{
+               "tenant_id" => p.tenant_id,
+               "project_id" => p.project_id,
+               "principal_id" => principal
+             }}
+
+    # The signer's own key last: every command before it is signed by a key still declared.
+    revocations =
+      for key_id <- Enum.sort_by(keys(gate, principal, chapter), &(&1 == governance_key_id)),
+          do: {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key_id}}
+
+    with true <- offboardings ++ revocations != [] or {:error, :nothing_to_offboard},
+         {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
+      Commands.hold_batch(
+        {:chapter_offboarding, principal},
+        chapter,
+        offboardings ++ revocations,
+        signer
+      )
+    end
+  end
+
+  @doc """
+  Submit the signatures, one per prepared command. The principal's pending
+  enrolment requests anywhere in the chapter are cancelled first.
+  """
+  @spec offboard_chapter(String.t(), String.t(), [binary()]) ::
+          {:ok, [CoopSubstrate.Protocol.Envelope.t()]} | {:error, term()}
+  def offboard_chapter(principal, held_id, signatures) do
+    owner = {:chapter_offboarding, principal}
+
+    with {:ok, [held | _]} <- Commands.peek(owner, held_id),
+         :ok <- Enrolments.cancel(principal, {held.chapter_id}),
+         do: Commands.submit_batch(owner, held_id, signatures)
+  end
+
+  # The governance keys of `chapter` declared for `principal`, sorted.
+  defp keys(gate, principal, chapter),
+    do:
+      for(
+        k <- CoopSubstrate.Administrators.keys(gate, chapter),
+        k.principal_id == principal,
+        do: k.key_id
+      )
 
   @doc "Prepare the offboarding in one project, to be signed by the named governance key."
   @spec prepare(String.t(), CoopSubstrate.Feed.View.scope(), String.t()) ::
@@ -84,7 +163,7 @@ defmodule CoopSubstrate.Offboarding do
   @spec offboard(String.t(), String.t(), binary()) ::
           {:ok, CoopSubstrate.Protocol.Envelope.t()} | {:error, term()}
   def offboard(principal, held_id, signature) do
-    with {:ok, held} <- Commands.peek({:offboarding, principal}, held_id),
+    with {:ok, [held]} <- Commands.peek({:offboarding, principal}, held_id),
          :ok <- Enrolments.cancel(principal, State.scope(held)),
          do: Commands.submit({:offboarding, principal}, held_id, signature)
   end

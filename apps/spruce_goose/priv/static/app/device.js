@@ -52,6 +52,17 @@ export const isExpectedCommand = (core, { keyId, type, payload, chapter, exact =
     ? same(core.payload, payload)
     : Object.entries(payload).every(([field, value]) => same(core.payload?.[field], value)));
 
+// A batch held as one (an offboarding from a chapter): exactly the commands
+// shown, each exactly, each once, in whatever order the server holds them.
+export const isExpectedBatch = (cores, { keyId, chapter, commands }) => {
+  const matches = (core, c) => isExpectedCommand(core, { keyId, chapter, exact: true, ...c });
+  return (
+    cores.length === commands.length &&
+    commands.every((c) => cores.filter((core) => matches(core, c)).length === 1) &&
+    cores.every((core) => commands.some((c) => matches(core, c)))
+  );
+};
+
 // What a governance-signed read signs (`Governance.Read`): the request, never
 // a command, canonically encoded.
 export const governanceReadBytes = ({ method, path, timestamp_ms, nonce, key_id }) =>

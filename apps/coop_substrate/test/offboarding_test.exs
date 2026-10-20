@@ -201,6 +201,160 @@ defmodule CoopSubstrate.OffboardingTest do
     end
   end
 
+  describe "from the whole chapter (docs/architecture/2026-10-19-chapter-offboarding.md)" do
+    alias CoopSubstrate.Administrators
+
+    defp administrator!(gov, principal) do
+      browser = new_member("governance")
+
+      {:ok, _} =
+        Log.append(
+          signed_event(gov, "RoleKeyDeclared", %{
+            "role" => "governance",
+            "key_id" => browser.signer.key_id,
+            "pubkey" => {:bytes, browser.signer.pubkey},
+            "member_id" => principal
+          })
+        )
+
+      browser
+    end
+
+    defp keys, do: Enum.map(Administrators.list("chapter-genesis"), & &1.key_id)
+
+    defp signatures(batch, member),
+      do: Enum.map(batch.commands, &Crypto.sign(&1.signing_bytes, member.seed))
+
+    test "ends everything the principal holds in every project, and their administrator keys, at once",
+         w do
+      browser = administrator!(w.gov, "alice")
+
+      assert %{keys: [%{chapter_id: "chapter-genesis", key_id: key}]} =
+               Offboarding.fetch("alice", ["chapter-genesis"])
+
+      assert key == browser.signer.key_id
+
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+
+      assert Enum.map(batch.commands, &{&1.type, &1.payload}) == [
+               {"TaskPrincipalOffboardedV1",
+                %{
+                  "tenant_id" => "tenant-1",
+                  "project_id" => "project-1",
+                  "principal_id" => "alice"
+                }},
+               {"TaskPrincipalOffboardedV1",
+                %{
+                  "tenant_id" => "tenant-1",
+                  "project_id" => "project-2",
+                  "principal_id" => "alice"
+                }},
+               {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key}}
+             ]
+
+      {:ok, appended} =
+        Offboarding.offboard_chapter("alice", batch.id, signatures(batch, w.gov))
+
+      # One append: consecutive positions.
+      [first | _] = seqs = Enum.map(appended, & &1.global_seq)
+      assert seqs == Enum.to_list(first..(first + 2))
+
+      assert held("alice") == []
+      assert held("alice", {"chapter-genesis", "tenant-1", "project-2"}) == []
+      refute key in keys()
+
+      assert Offboarding.fetch("alice", ["chapter-genesis"]) == %{
+               principal_id: "alice",
+               projects: [],
+               keys: []
+             }
+
+      assert Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id) ==
+               {:error, :nothing_to_offboard}
+    end
+
+    test "all or nothing: one bad signature, or an orphaned chapter, ends nothing", w do
+      browser = administrator!(w.gov, "alice")
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      [_ | rest] = signatures(batch, w.gov)
+
+      assert {:error, _} =
+               Offboarding.offboard_chapter("alice", batch.id, [
+                 Crypto.sign(hd(batch.commands).signing_bytes, w.laptop.seed) | rest
+               ])
+
+      assert length(held("alice")) == 6
+      assert browser.signer.key_id in keys()
+
+      # Alice's key is the chapter's last: her offboarding would orphan it.
+      {:ok, _} =
+        Log.append(
+          signed_event(browser, "RoleKeyRevoked", %{
+            "role" => "governance",
+            "key_id" => w.gov.signer.key_id
+          })
+        )
+
+      assert Offboarding.prepare_chapter("alice", "chapter-genesis", browser.signer.key_id) ==
+               {:error, {:invalid, :cannot_orphan_governance}}
+
+      assert length(held("alice")) == 6
+    end
+
+    test "an administrator offboarding themselves gives up the signing key last", w do
+      first = administrator!(w.gov, "alice")
+      second = administrator!(w.gov, "alice")
+
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", second.signer.key_id)
+
+      assert [_, _, %{payload: %{"key_id" => k1}}, %{payload: %{"key_id" => k2}}] =
+               batch.commands
+
+      assert {k1, k2} == {first.signer.key_id, second.signer.key_id}
+      assert {:ok, _} = Offboarding.offboard_chapter("alice", batch.id, signatures(batch, second))
+      assert keys() == [w.gov.signer.key_id]
+    end
+
+    test "drops the principal's pending requests anywhere in the chapter", w do
+      key = new_member("governance")
+      identity = %{issuer: "https://idp.test", subject: "sub-alice"}
+      elsewhere = {"chapter-genesis", "tenant-9", "nowhere"}
+
+      {:ok, c} =
+        Enrolments.begin(
+          "alice",
+          identity,
+          elsewhere,
+          key.signer.key_id,
+          key.signer.pubkey,
+          "Office",
+          "governance"
+        )
+
+      {:ok, request} = Enrolments.prove("alice", c.id, Crypto.sign(c.statement, key.seed))
+
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      {:ok, _} = Offboarding.offboard_chapter("alice", batch.id, signatures(batch, w.gov))
+
+      assert Enrolments.fetch(request.code) == {:error, :unknown_code}
+    end
+
+    test "only for the principal it was prepared for, once", w do
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+
+      assert Offboarding.offboard_chapter("bob", batch.id, signatures(batch, w.gov)) ==
+               {:error, :unknown_command}
+
+      assert Offboarding.offboard_chapter("alice", batch.id, tl(signatures(batch, w.gov))) ==
+               {:error, :signature_count}
+
+      assert {:ok, _} = Offboarding.offboard_chapter("alice", batch.id, signatures(batch, w.gov))
+
+      assert Offboarding.offboard_chapter("alice", batch.id, signatures(batch, w.gov)) ==
+               {:error, :unknown_command}
+    end
+  end
+
   describe "governance reads" do
     defp read(key_id, opts \\ []) do
       %{

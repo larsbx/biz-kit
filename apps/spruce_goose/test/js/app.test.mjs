@@ -12,6 +12,7 @@ import {
   isExpectedCommand,
   same,
   governanceReadBytes,
+  isExpectedBatch,
 } from "../../priv/static/app/device.js";
 import {
   applyFrame,
@@ -28,6 +29,7 @@ import {
   ownDevices,
   chapterProjects,
   chapterAdministrators,
+  chapterOffboarding,
 } from "../../priv/static/app/view.js";
 
 const vectors = JSON.parse(
@@ -514,4 +516,44 @@ test("live: a frame of any kind builds the view; the person's devices and the ch
     { key_id: "k-1", principal_id: null },
     { key_id: "k-2", principal_id: "p" },
   ]);
+});
+
+test("offboarding from a chapter: every project and key, signed only as the exact batch shown", () => {
+  const found = {
+    principal_id: "bob",
+    projects: [
+      { chapter_id: "c", tenant_id: "t", project_id: "a", held: [] },
+      { chapter_id: "other", tenant_id: "t", project_id: "x", held: [] },
+      { chapter_id: "c", tenant_id: "t", project_id: "b", held: [] },
+    ],
+    keys: [
+      { chapter_id: "c", key_id: "k-bob" },
+      { chapter_id: "other", key_id: "k-elsewhere" },
+    ],
+  };
+  const commands = chapterOffboarding(found, "c");
+  assert.deepEqual(commands, [
+    { type: "TaskPrincipalOffboardedV1", payload: { tenant_id: "t", project_id: "a", principal_id: "bob" } },
+    { type: "TaskPrincipalOffboardedV1", payload: { tenant_id: "t", project_id: "b", principal_id: "bob" } },
+    { type: "RoleKeyRevoked", payload: { role: "governance", key_id: "k-bob" } },
+  ]);
+
+  const core = ({ type, payload }, key_id = "k-admin", chapter_id = "c") => ({
+    type,
+    payload,
+    chapter_id,
+    signers: [{ role: "governance", key_id }],
+  });
+  const cores = commands.map((c) => core(c));
+  const ok = (cs) => isExpectedBatch(cs, { keyId: "k-admin", chapter: "c", commands });
+
+  assert.ok(ok(cores));
+  assert.ok(ok([...cores].reverse()), "order is the server's");
+  assert.ok(!ok(cores.slice(1)), "one missing");
+  assert.ok(!ok([...cores, cores[0]]), "one extra");
+  assert.ok(!ok([cores[0], cores[0], cores[2]]), "one twice, one missing");
+  assert.ok(!ok([cores[0], cores[1], core({ ...commands[2], payload: { ...commands[2].payload, key_id: "k-admin" } })]));
+  assert.ok(!ok([cores[0], cores[1], core({ ...commands[2], payload: { ...commands[2].payload, reason: "x" } })]));
+  assert.ok(!ok([core(commands[0], "k-other"), cores[1], cores[2]]), "another signer");
+  assert.ok(!ok([core(commands[0], "k-admin", "other"), cores[1], cores[2]]), "another chapter");
 });
