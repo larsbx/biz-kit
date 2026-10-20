@@ -43,7 +43,8 @@ defmodule TaskCore.Hierarchy do
   }
 
   @repository ~r/\A[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\z/
-  @object ~r/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/
+  # SHA-1 object IDs: what the forge verifier checks (`ForgejoVerifier`).
+  @object ~r/\A[0-9a-f]{40}\z/
   @path ~r/\A(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._\/-]{1,512}\z/
 
   def event_types do

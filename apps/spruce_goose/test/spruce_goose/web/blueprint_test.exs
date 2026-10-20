@@ -108,14 +108,22 @@ defmodule SpruceGoose.Web.BlueprintTest do
 
     params = Map.put(source, "manifest", Base.url_encode64(bytes, padding: false))
 
-    # Shown different bytes than it read, the tool does not sign.
-    assert {:error, :not_what_was_shown} =
-             Client.sign_held(
-               url,
-               governance(w),
-               &CoopSubstrate.Blueprints.expected?(&1, source, bytes <> "# changed\n"),
-               params
-             )
+    sign = fn scope, read ->
+      Client.sign_held(
+        url,
+        governance(w),
+        &CoopSubstrate.Blueprints.expected?(&1, scope, source, read),
+        params
+      )
+    end
+
+    here = {w.chapter, tenant(), "project-1"}
+
+    # Shown different bytes than it read, or for another scope than it was
+    # asked to apply to, the tool does not sign.
+    assert {:error, :not_what_was_shown} = sign.(here, bytes <> "# changed\n")
+    assert {:error, :not_what_was_shown} = sign.({w.chapter, tenant(), "project-2"}, bytes)
+    assert {:error, :not_what_was_shown} = sign.({"chapter-other", tenant(), "project-1"}, bytes)
 
     assert Log.gate().orchestration.hierarchy[{w.chapter, tenant(), "project-1"}] == nil
   end

@@ -58,7 +58,12 @@ defmodule Mix.Tasks.Coop.Blueprint do
 
         params = Map.put(source, "manifest", Base.url_encode64(bytes, padding: false))
 
-        case Client.sign_held(url, signer, &Blueprints.expected?(&1, source, bytes), params) do
+        case Client.sign_held(
+               url,
+               signer,
+               &Blueprints.expected?(&1, {chapter, tenant, project}, source, bytes),
+               params
+             ) do
           {:ok, %{"event_id" => id}} -> Mix.shell().info("applied: event #{id}")
           {:error, reason} -> Mix.raise("not applied: #{inspect(reason)}")
         end

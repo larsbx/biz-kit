@@ -39,7 +39,7 @@ decisions; the rest follow from them or from the existing ledger.
 | Workflow definition nesting | `workflow.definition = {schema_version, tasks}` | — | `workflow.tasks`, with one `schema_version` (2) per document | One version per document is simpler, and the formats cannot be confused. |
 | Runner `kind`, `input` | Oban / TaskFlow / OpenClaw, and a free map | — | Not in the schema | They describe an executor, not the work. A host that executes can add its own document. |
 | Identifiers | Lowercase `[a-z0-9][a-z0-9_-]`, up to 128 bytes | Scope segments `[A-Za-z0-9][A-Za-z0-9_.-]` | SpruceGoose's | Its form is a subset of a ledger segment, and case-insensitive storage cannot collide. |
-| Commit and tree IDs | 40 hex characters | — | 40 or 64 | Forges with SHA-256 repositories. |
+| Commit and tree IDs | 40 hex characters (SHA-1) | — | The same | The Forgejo verifier recomputes SHA-1 object IDs; SHA-256 repositories need a verifier that does the same for their format first. |
 | Bounds | Title 300 bytes, Definition of Done 2,000, 50 input names | Ledger: 32 predecessors, 32 inputs, 1–32 criteria | Title 300, description 2,000, the ledger's 32/32/1–32; 32 roadmaps, 32 workflows per roadmap, 64 tasks per workflow; 1 MiB per document | Readiness must be able to keep what the blueprint fixes. |
 | TODO checklists, boards, saved filters | Present | — | Not adopted | They are views and personal organization, not reviewed structure. |
 
@@ -131,7 +131,8 @@ The tool:
    `POST …/projects/:project_id/blueprints`, signed by the governance key
    (`Governance.Read`);
 4. signs the held event only if it applies exactly those bytes from exactly
-   that source (`CoopSubstrate.Blueprints.expected?/3`).
+   that source to exactly the chapter, tenant and project it was given
+   (`CoopSubstrate.Blueprints.expected?/4`).
 
 The server stores the bytes, normalizes them and holds the event.
 `POST …/blueprints/:held_id` submits the signature.

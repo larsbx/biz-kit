@@ -6,7 +6,7 @@ defmodule CoopSubstrate.Blueprints do
   exact bytes; the server stores them in custody, decodes and normalizes
   them, and holds a `TaskBlueprintAppliedV1` for the governance key to sign.
   The tool signs only the blueprint it read from the forge itself
-  (`expected?/3`). Admission rereads the bytes from custody
+  (`expected?/4`). Admission rereads the bytes from custody
   (`TaskHost.read_blueprint/1`).
   """
 
@@ -70,13 +70,19 @@ defmodule CoopSubstrate.Blueprints do
     do: Commands.submit({:blueprint, scope}, held_id, signature)
 
   @doc """
-  Whether a held core applies exactly these bytes from exactly this source:
-  what the tool checks before it signs.
+  Whether a held core applies exactly these bytes from exactly this source
+  to exactly this scope: what the tool checks before it signs.
   """
-  def expected?(%{"type" => "TaskBlueprintAppliedV1", "payload" => p}, source, bytes) do
+  def expected?(
+        %{"type" => "TaskBlueprintAppliedV1", "chapter_id" => chapter, "payload" => p},
+        {chapter, tenant, project},
+        source,
+        bytes
+      ) do
     case read(bytes) do
       {:ok, blueprint} ->
-        p["blueprint"] == blueprint and
+        {p["tenant_id"], p["project_id"]} == {tenant, project} and
+          p["blueprint"] == blueprint and
           p["manifest_digest"] == {:bytes, :crypto.hash(:sha256, bytes)} and
           Map.take(p, @source) == Map.take(source, @source)
 
@@ -85,7 +91,7 @@ defmodule CoopSubstrate.Blueprints do
     end
   end
 
-  def expected?(_core, _source, _bytes), do: false
+  def expected?(_core, _scope, _source, _bytes), do: false
 
   # Said before anyone signs, as the ledger would refuse it.
   defp invalid({:error, reason}), do: {:error, {:invalid, reason}}

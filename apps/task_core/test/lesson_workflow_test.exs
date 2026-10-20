@@ -239,6 +239,10 @@ defmodule TaskCore.LessonWorkflowTest do
       bad_source = Map.put(applied.payload, "commit", "main")
       assert admit(%{applied | payload: bad_source}, s) == {:error, :invalid_blueprint_source}
 
+      # SHA-256 object IDs are refused until a verifier checks them.
+      sha256 = Map.put(applied.payload, "commit", String.duplicate("a", 64))
+      assert admit(%{applied | payload: sha256}, s) == {:error, :invalid_blueprint_source}
+
       elsewhere = Map.put(applied.payload, "project_id", "english")
       assert admit(%{applied | payload: elsewhere}, s) == {:error, :blueprint_project_mismatch}
 
