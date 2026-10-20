@@ -4,22 +4,23 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   (`CoopSubstrate.ArtifactCustody.store/5`): one process for the whole
   cluster (`BizKit.Cluster.Singleton`).
 
-  **Durable** (docs/architecture/2026-10-20-durable-quota.md): every digest
-  committed to a key is recorded in `CoopSubstrate.Records` before the
-  commit returns, and the process rebuilds its charges from those records
-  when it starts, so moving to another node or restarting the cluster
-  forgets nothing stored. A reservation names what it charged, so a write
-  still in flight when the process restarts is recorded when it succeeds.
-  Only reservations in flight are in memory: a restart refunds them, which
-  only makes room for writes that did not land.
-
   Each digest occupies room once per key. Pending writes each hold a
-  monitored reservation; any successful write commits the digest. A failed
-  or abandoned write releases only its own reservation, never a concurrent
+  reservation; any successful write commits the digest. A failed or
+  abandoned write releases only its own reservation, never a concurrent
   success. On worker death, verify the artifact on that worker's node before
   releasing room: a completed write stays charged even if its caller died
   before committing. An unreachable store conservatively keeps the charge.
   Room is refunded only when no write succeeded or remains pending.
+
+  **Durable** (docs/architecture/2026-10-20-durable-quota.md): every
+  reservation is recorded in `CoopSubstrate.Records` before `charge/4`
+  replies, and how it settled before the settlement takes effect. On start,
+  the process folds those records: committed digests count, and
+  reservations still unsettled count too, as pending, so a restart or a
+  move to another node neither forgets what was stored nor makes room for
+  a second upload while the first may yet land. A restored reservation is
+  settled by its writer's commit or refund, or, after a grace period, by
+  the artifact on the writer's node, as on worker death.
   """
 
   use GenServer
@@ -29,6 +30,9 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   @table __MODULE__
   @server BizKit.Cluster.Singleton.name(__MODULE__)
   @stream "evidence-quota"
+
+  @typedoc "A pending write's reservation: its recorded ID, and what it charged."
+  @type reservation :: {String.t(), term(), binary(), non_neg_integer()}
 
   @doc "Run a local write with a reservation, committing only on success."
   def store(key, digest, bytes, limit, write) do
@@ -43,15 +47,12 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
             error
         end
       after
-        # Also covers exceptions and exits. A committed token is already
-        # settled, so this cannot refund a successful write.
+        # Also covers exceptions and exits. A committed reservation is
+        # already settled, so this cannot refund a successful write.
         refund(reservation)
       end
     end
   end
-
-  @typedoc "A pending write's reservation: its monitor, and what it charged."
-  @type reservation :: {reference(), term(), binary(), non_neg_integer()}
 
   @doc "Reserve room for a write, or return :held for a committed digest."
   @spec charge(term(), binary(), non_neg_integer(), non_neg_integer()) ::
@@ -65,14 +66,22 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
   @doc "Release only this failed write's reservation."
   def refund(reservation), do: GenServer.call(@server, {:finish, reservation, false})
 
+  # -- server -------------------------------------------------------------------------
+
+  # State: the reservations in flight, by ID: %{key, digest, bytes, node, monitor}.
+  # A restored reservation has no monitor; its writer ran before this process.
+
   @impl true
   def init(_opts) do
     :ets.new(@table, [:set, :protected, :named_table])
+    {committed, pending} = fold(recorded())
 
-    # What every earlier incarnation committed, wherever it ran.
-    for {key, digest, bytes} <- recorded(), do: settle(key, digest, bytes)
+    for {key, digest, bytes} <- committed, do: count(key, digest, bytes, :committed)
+    for {id, r} <- pending, do: count(r.key, r.digest, r.bytes, {:pending, id})
 
-    {:ok, %{}}
+    state = Map.new(pending, fn {id, r} -> {id, Map.put(r, :monitor, nil)} end)
+    if state != %{}, do: resolve_restored_after(grace_ms())
+    {:ok, state}
   end
 
   @impl true
@@ -88,113 +97,149 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
         {:reply, {:error, :quota_exceeded}, state}
 
       true ->
-        token = Process.monitor(pid)
-        used = if entry == nil, do: used + bytes, else: used
-        entry = entry || %{bytes: bytes, committed: false, pending: MapSet.new()}
-        entry = %{entry | pending: MapSet.put(entry.pending, token)}
-        :ets.insert(@table, {key, {used, Map.put(charged, digest, entry)}})
+        id = "r-" <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
+        writer = Atom.to_string(node(pid))
+        # Recorded before it is granted: no restart forgets room handed out.
+        record({:reserved, id, key, digest, bytes, writer})
+        count(key, digest, bytes, {:pending, id})
 
-        {:reply, {:ok, {token, key, digest, bytes}},
-         Map.put(state, token, {key, digest, node(pid), bytes})}
+        reservation = %{
+          key: key,
+          digest: digest,
+          bytes: bytes,
+          node: writer,
+          monitor: Process.monitor(pid)
+        }
+
+        {:reply, {:ok, {id, key, digest, bytes}}, Map.put(state, id, reservation)}
     end
   end
 
   def handle_call({:finish, :held, _success}, _from, state), do: {:reply, :ok, state}
 
-  def handle_call({:finish, {token, key, digest, bytes}, success}, _from, state) do
-    # A reservation this incarnation never made (it restarted mid-write):
-    # a success is still a stored digest, recorded like any other.
+  def handle_call({:finish, {id, key, digest, bytes}, success}, _from, state) do
     state =
-      if not Map.has_key?(state, token) and success,
-        do: tap(state, fn _ -> commit_new(key, digest, bytes) end),
-        else: finish(state, token, success)
+      if Map.has_key?(state, id) do
+        finish(state, id, success)
+      else
+        # Settled already (a restored reservation resolved before its writer
+        # returned): a success is still a stored digest, and counts.
+        if success, do: late_commit(key, digest, bytes)
+        state
+      end
 
     {:reply, :ok, state}
   end
 
   @impl true
-  def handle_info({:DOWN, token, :process, _pid, _reason}, state) do
-    success =
-      case Map.get(state, token) do
-        nil ->
-          false
-
-        {_key, digest, storage_node, bytes} ->
-          # The caller may have died after persistence but before commit.
-          # Read on its node: the singleton need not share its filesystem.
-          # Only proven absence releases room; uncertainty must not permit
-          # usable evidence to escape the quota.
-          :rpc.call(
-            storage_node,
-            CoopSubstrate.Harness.Artifacts,
-            :verify,
-            [digest, bytes],
-            2_000
-          ) !=
-            {:error, :not_found}
-      end
-
-    {:noreply, finish(state, token, success)}
-  end
-
-  defp finish(state, token, success) do
-    case Map.pop(state, token) do
-      {nil, state} ->
-        state
-
-      {{key, digest, _storage_node, _bytes}, state} ->
-        Process.demonitor(token, [:flush])
-        {used, charged} = :ets.lookup_element(@table, key, 2)
-        entry = Map.fetch!(charged, digest)
-
-        # Recorded before it counts as committed, so no restart forgets it.
-        if success and not entry.committed, do: record(key, digest, entry.bytes)
-
-        entry = %{
-          entry
-          | committed: entry.committed or success,
-            pending: MapSet.delete(entry.pending, token)
-        }
-
-        {used, charged} =
-          if not entry.committed and MapSet.size(entry.pending) == 0 do
-            {used - entry.bytes, Map.delete(charged, digest)}
-          else
-            {used, Map.put(charged, digest, entry)}
-          end
-
-        :ets.insert(@table, {key, {used, charged}})
-        state
+  def handle_info({:DOWN, monitor, :process, _pid, _reason}, state) do
+    case Enum.find(state, fn {_id, r} -> r.monitor == monitor end) do
+      nil -> {:noreply, state}
+      {id, r} -> {:noreply, finish(state, id, landed?(r))}
     end
   end
 
-  # A digest committed to a key: recorded once, then charged.
-  defp commit_new(key, digest, bytes) do
+  # Restored reservations whose writers have not come back: the store decides.
+  def handle_info(:resolve_restored, state) do
+    restored = for {id, %{monitor: nil} = r} <- state, do: {id, r}
+    {:noreply, Enum.reduce(restored, state, fn {id, r}, acc -> finish(acc, id, landed?(r)) end)}
+  end
+
+  # The caller may have died after persistence but before commit. Read on its
+  # node: the singleton need not share its filesystem. Only proven absence
+  # releases room; uncertainty must not let usable evidence escape the quota.
+  defp landed?(r) do
+    with {:ok, node} <- known_node(r.node) do
+      :rpc.call(node, CoopSubstrate.Harness.Artifacts, :verify, [r.digest, r.bytes], 2_000) !=
+        {:error, :not_found}
+    else
+      :unknown -> true
+    end
+  end
+
+  defp known_node(name) do
+    {:ok, String.to_existing_atom(name)}
+  rescue
+    ArgumentError -> :unknown
+  end
+
+  defp finish(state, id, success) do
+    {r, state} = Map.pop(state, id)
+    if r.monitor, do: Process.demonitor(r.monitor, [:flush])
+    # Recorded before it takes effect, so no restart undoes it.
+    record({:settled, id, success})
+
+    {used, charged} = :ets.lookup_element(@table, r.key, 2)
+    entry = Map.fetch!(charged, r.digest)
+
+    entry = %{
+      entry
+      | committed: entry.committed or success,
+        pending: MapSet.delete(entry.pending, id)
+    }
+
+    {used, charged} =
+      if not entry.committed and MapSet.size(entry.pending) == 0 do
+        {used - entry.bytes, Map.delete(charged, r.digest)}
+      else
+        {used, Map.put(charged, r.digest, entry)}
+      end
+
+    :ets.insert(@table, {r.key, {used, charged}})
+    state
+  end
+
+  defp late_commit(key, digest, bytes) do
     {_used, charged} = :ets.lookup_element(@table, key, 2, {0, %{}})
 
     unless match?(%{committed: true}, charged[digest]) do
-      record(key, digest, bytes)
-      settle(key, digest, bytes)
+      record({:committed, key, digest, bytes})
+      count(key, digest, bytes, :committed)
     end
   end
 
-  # Charge a recorded digest as committed, once per key.
-  defp settle(key, digest, bytes) do
+  # Charge `digest` to `key`, once per key: committed, or pending under a reservation.
+  defp count(key, digest, bytes, how) do
     {used, charged} = :ets.lookup_element(@table, key, 2, {0, %{}})
+    blank = %{bytes: bytes, committed: false, pending: MapSet.new()}
+    {used, entry} = if e = charged[digest], do: {used, e}, else: {used + bytes, blank}
 
-    {used, entry} =
-      case charged[digest] do
-        nil -> {used + bytes, %{bytes: bytes, committed: true, pending: MapSet.new()}}
-        entry -> {used, %{entry | committed: true}}
+    entry =
+      case how do
+        :committed -> %{entry | committed: true}
+        {:pending, id} -> %{entry | pending: MapSet.put(entry.pending, id)}
       end
 
     :ets.insert(@table, {key, {used, Map.put(charged, digest, entry)}})
   end
 
-  defp record(key, digest, bytes) do
+  # -- records ------------------------------------------------------------------------
+
+  # The committed digests, as {key, digest, bytes}, and the reservations not
+  # yet settled, by ID.
+  defp fold(records) do
+    {committed, pending} =
+      Enum.reduce(records, {[], %{}}, fn
+        {:reserved, id, key, digest, bytes, node}, {committed, pending} ->
+          {committed, Map.put(pending, id, %{key: key, digest: digest, bytes: bytes, node: node})}
+
+        {:settled, id, success}, {committed, pending} ->
+          {r, pending} = Map.pop(pending, id)
+
+          {if(success and r, do: [{r.key, r.digest, r.bytes} | committed], else: committed),
+           pending}
+
+        {:committed, key, digest, bytes}, {committed, pending} ->
+          {[{key, digest, bytes} | committed], pending}
+      end)
+
+    {Enum.reverse(committed), pending}
+  end
+
+  defp record(term) do
     :ok =
       Records.append_to_stream(@stream, :any_version, [
-        %EventStore.EventData{event_type: "EvidenceCommitted", data: {key, digest, bytes}}
+        %EventStore.EventData{event_type: "EvidenceQuota", data: term}
       ])
   end
 
@@ -204,4 +249,10 @@ defmodule CoopSubstrate.ArtifactCustody.Quota do
       events -> Enum.map(events, & &1.data)
     end
   end
+
+  defp grace_ms, do: Application.get_env(:coop_substrate, :quota_restore_grace_ms, 60_000)
+
+  # No grace: before anything else reaches this process.
+  defp resolve_restored_after(0), do: send(self(), :resolve_restored)
+  defp resolve_restored_after(ms), do: Process.send_after(self(), :resolve_restored, ms)
 end

@@ -28,42 +28,54 @@ Three alternatives were rejected:
 - **Not files beside the artifacts.** The artifact store is per node, and
   the quota's process may run on any node.
 
-**What is recorded.** One record per digest committed to a key (person,
-project, task):
+**What is recorded.** Every reservation, and how it settled, per key
+(person, project, task):
 
 ```
-stream "evidence-quota":  EvidenceCommitted  {key, digest, bytes}
+stream "evidence-quota":
+  {:reserved, id, key, digest, bytes, writer_node}   before charge/4 replies
+  {:settled, id, committed?}                          before the settlement takes effect
+  {:committed, key, digest, bytes}                    a success whose reservation was already settled
 ```
 
-- **When.** Before the commit returns, the first time a write of that
-  digest succeeds for that key. This includes a write proven to have landed
-  after its worker died, as the quota already checked
+- **A digest is committed to a key** the first time a write of it
+  succeeds. That includes a write proven to have landed after its worker
+  died, as the quota already checked
   ([#33](https://github.com/larsbx/biz-kit/pull/33)).
-- **Never.** A failed or refunded write leaves no record.
+- **A failed or refunded write** settles as not committed and gives its
+  room back.
 
-**On start.** The process folds the stream. Every recorded digest counts as
-committed, once per key, wherever it was charged.
+**On start.** The process folds the stream:
+- Committed digests count, once per key.
+- **Reservations still unsettled count too**, as pending. A full-limit
+  upload in flight across a restart or a move to another node therefore
+  still holds its room, and no second upload can take it while the first
+  may yet land.
 
-**A write in flight across a restart.** A reservation now names what it
-charged: `{monitor, key, digest, bytes}`. If the write succeeds after the
-process restarted, its commit reaches a process that never made that
-reservation. The commit is still recorded and charged, so a write that
-landed is never forgotten.
+A restored reservation is settled by its writer's commit or refund. A
+reservation now names its recorded ID and what it charged:
+`{id, key, digest, bytes}`. If the writer never returns, then after a grace
+period (`:quota_restore_grace_ms`, 60 s) the artifact on the writer's node
+decides, as on worker death:
+- found, or the node unknown or unreachable: the charge is kept;
+- proven absent: the room is released.
 
-**What a restart loses.** Only reservations still in flight. Losing those
-only makes room for writes that had not landed. A writer that dies after
-writing but before committing, across a restart, is the one case in
-which an extra copy of one file goes uncharged.
+A success that arrives after its reservation was settled that way is still
+recorded and counted.
 
 ## Setup
 
 `config :coop_substrate, event_stores:` now lists both stores, so
 `mix event_store.create` and `mix event_store.init` create and initialise
-both. The `records` schema is created in the same database.
+both for development and tests. The test alias drops the shared database
+once.
 
-- **Tests:** the alias drops the shared database once.
-- **Production:** reads the same `EVENTSTORE_*` variables for both stores
-  (`config/runtime.exs`).
+**Upgrading needs no manual step.** At application start, before the store
+starts, `Records.setup!/0` creates the `records` schema and its tables if
+they are missing, and is a no-op once they exist. It creates only the
+schema, not the database, which is the ledger's and already there, so it
+needs no right to create databases. Production reads the same
+`EVENTSTORE_*` variables for both stores (`config/runtime.exs`).
 
 ## Verification
 
@@ -72,18 +84,30 @@ both. The `records` schema is created in the same database.
   - committed files still count, and storing one again is held, not
     charged twice;
   - another key's room is its own;
-  - a write reserved before a restart and committed after it is recorded,
-    and still counts after a second restart;
+  - a write reserved before a restart still holds its room after it, so a
+    second full upload is refused; committed after the restart, it is
+    recorded and still counts after a second restart;
+  - refunded after the restart, it gives its room back;
+  - a restored reservation nobody settles is resolved by the store: kept
+    when the file is there, released when it is proven absent;
+  - an installation without the `records` schema gains it from
+    `setup!/0`, which is idempotent, and the quota then starts;
   - failed and refunded writes leave nothing behind.
 
   The existing tests (concurrent writers, exceptions, worker death, keys
   per person, scope and task) still pass.
-- **Mutation:** if a commit is not recorded, the restart test fails.
+- **Mutations:** if a commit is not recorded, the restart test fails; if a
+  reservation is not recorded, the in-flight, restored and restart tests
+  fail.
 - **Browser (Chromium):** the evidence path is unchanged. It fills the
   quota and restores a file within it.
 
 ## Limits
 
+- A writer still writing more than the grace period after a restart, whose
+  file is not yet there when checked, has its room released. Its later
+  success is still recorded, so the person can exceed the quota by that one
+  file.
 - Records are never pruned. A key's records stay after its task ends,
   which is what keeps the quota from being reset by finishing a task.
 - The rate limits are still in memory.

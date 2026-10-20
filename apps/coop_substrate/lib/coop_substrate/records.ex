@@ -12,6 +12,26 @@ defmodule CoopSubstrate.Records do
 
   use EventStore, otp_app: :coop_substrate
 
+  @doc """
+  Create the `records` schema and its tables if they are missing, before the
+  store starts: an installation that predates them needs no manual step. A
+  no-op once they exist.
+  """
+  @spec setup!() :: :ok
+  def setup! do
+    config = config()
+
+    # The database is the ledger's, already there: only the schema, which
+    # needs no right to create databases.
+    case EventStore.Storage.Schema.create(config) do
+      :ok -> :ok
+      {:error, :already_up} -> :ok
+      {:error, reason} -> raise "the records schema could not be created: #{reason}"
+    end
+
+    EventStore.Tasks.Init.exec(config, quiet: true)
+  end
+
   defmodule Serializer do
     @moduledoc "Erlang terms, read back with `:safe`: no atom is created from a stored record."
 

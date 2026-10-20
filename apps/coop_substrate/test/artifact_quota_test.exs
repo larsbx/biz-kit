@@ -93,17 +93,17 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
 
       writer =
         spawn(fn ->
-          {:ok, {token, _, _, _}} = Quota.charge(scope, digest, size, size)
+          {:ok, _reservation} = Quota.charge(scope, digest, size, size)
           if landed, do: {:ok, ^digest} = Artifacts.put(bytes)
-          send(parent, {:reserved, self(), token})
+          send(parent, {:reserved, self()})
           receive do: (:stop -> :ok)
         end)
 
-      assert_receive {:reserved, ^writer, token}, 1_000
+      assert_receive {:reserved, ^writer}, 1_000
       Process.exit(writer, :kill)
       # Observe delivery of the real monitor signal, then query the server
       # behind that handler. No sleeps or scheduler-dependent race window.
-      assert_receive {:trace, ^server, :receive, {:DOWN, ^token, :process, ^writer, :killed}},
+      assert_receive {:trace, ^server, :receive, {:DOWN, _, :process, ^writer, :killed}},
                      1_000
 
       if landed do
@@ -151,15 +151,72 @@ defmodule CoopSubstrate.ArtifactQuotaTest do
       assert {:ok, _} = Quota.charge(key <> "-other", "c", 16, 16)
     end
 
-    test "a write in flight across a restart is still recorded when it succeeds", %{key: key} do
+    test "a write in flight across a restart keeps its room, and is recorded when it succeeds",
+         %{key: key} do
       {:ok, reservation} = Quota.charge(key, "a", 8, 8)
       restart_quota()
+
+      # Still reserved: no second full upload while the first may yet land.
+      assert Quota.charge(key, "b", 8, 8) == {:error, :quota_exceeded}
 
       assert Quota.commit(reservation) == :ok
       assert Quota.charge(key, "b", 1, 8) == {:error, :quota_exceeded}
 
       restart_quota()
       assert Quota.charge(key, "a", 8, 8) == {:ok, :held}
+    end
+
+    test "a write in flight across a restart that then fails gives its room back", %{key: key} do
+      {:ok, reservation} = Quota.charge(key, "a", 8, 8)
+      restart_quota()
+      assert Quota.refund(reservation) == :ok
+      assert {:ok, _} = Quota.charge(key, "b", 8, 8)
+    end
+
+    test "a restored reservation nobody settles is resolved by what was stored", %{key: key} do
+      alias CoopSubstrate.Harness.Artifacts
+
+      bytes = "restored-#{key}"
+      landed = :crypto.hash(:sha256, bytes)
+      {:ok, ^landed} = Artifacts.put(bytes)
+      {:ok, _} = Quota.charge(key, landed, byte_size(bytes), 64)
+      {:ok, _} = Quota.charge(key <> "-gone", :crypto.hash(:sha256, "never #{key}"), 8, 8)
+
+      # Their writers never come back; after the grace, the store decides.
+      Application.put_env(:coop_substrate, :quota_restore_grace_ms, 0)
+      on_exit(fn -> Application.delete_env(:coop_substrate, :quota_restore_grace_ms) end)
+      restart_quota()
+      _ = :sys.get_state(BizKit.Cluster.Singleton.whereis_name(Quota))
+
+      assert Quota.charge(key, landed, byte_size(bytes), 64) == {:ok, :held}
+      assert {:ok, _} = Quota.charge(key <> "-gone", "other", 8, 8)
+    end
+
+    test "an installation from before the records gains their schema at start" do
+      {:ok, conn} = CoopSubstrate.LogCase.raw_conn()
+      Postgrex.query!(conn, ~s(DROP SCHEMA "records" CASCADE), [])
+
+      exists? = fn ->
+        %{rows: [[found]]} =
+          Postgrex.query!(
+            conn,
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables " <>
+              "WHERE table_schema = 'records' AND table_name = 'events')",
+            []
+          )
+
+        found
+      end
+
+      refute exists?.()
+      assert CoopSubstrate.Records.setup!() == :ok
+      assert exists?.()
+      # And again, as on every later start.
+      assert CoopSubstrate.Records.setup!() == :ok
+      GenServer.stop(conn)
+
+      restart_quota()
+      assert {:ok, _} = Quota.charge("after-upgrade-#{System.unique_integer()}", "a", 1, 1)
     end
 
     test "failed and refunded writes leave nothing behind", %{key: key} do
