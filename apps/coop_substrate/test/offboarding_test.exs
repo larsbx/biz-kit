@@ -544,4 +544,3 @@ defmodule CoopSubstrate.OffboardingTest do
     end
   end
 end
-
