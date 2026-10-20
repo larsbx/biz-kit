@@ -402,6 +402,79 @@ defmodule CoopSubstrate.OffboardingTest do
       assert {:ok, _} = Enrolments.fetch(request.code)
     end
 
+    test "a ledger change after preliminary validation rejects without losing requests", w do
+      key = new_member("operator")
+      identity = %{issuer: "https://idp.test", subject: "sub-alice"}
+
+      {:ok, challenge} =
+        Enrolments.begin(
+          "alice",
+          identity,
+          {"chapter-genesis", "tenant-9", "pending-only"},
+          key.signer.key_id,
+          key.signer.pubkey,
+          "Pending tablet"
+        )
+
+      {:ok, request} =
+        Enrolments.prove("alice", challenge.id, Crypto.sign(challenge.statement, key.seed))
+
+      {:ok, before} = Enrolments.fetch(request.code)
+      {:ok, approval} = Enrolments.prepare_approval(request.code, w.gov.signer.key_id)
+      approval_sig = Crypto.sign(approval.signing_bytes, w.gov.seed)
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      signed = signatures(batch, w.gov)
+      enrolments = BizKit.Cluster.Singleton.whereis_name(Enrolments)
+
+      # The offboarder reaches Enrolments only AFTER its preliminary holdings
+      # check. Hold it there while another administrator changes the ledger.
+      # This barrier forces the race; there is no scheduler/timing assumption.
+      :ok = :sys.suspend(enrolments)
+
+      result =
+        try do
+          task = traced_task(fn -> Offboarding.offboard_chapter("alice", batch.id, signed) end)
+          pid = task.pid
+          assert_receive {:trace, ^pid, :send, {:"$gen_call", _, _}, ^enrolments}, 2_000
+
+          late_key = new_member("operator")
+
+          {:ok, [_]} =
+            Log.append(
+              signed_event(w.gov, "TaskOperatorGrantedV1", %{
+                "tenant_id" => "tenant-1",
+                "project_id" => "project-3",
+                "principal_id" => "alice",
+                "key_id" => late_key.signer.key_id,
+                "pubkey" => {:bytes, late_key.signer.pubkey}
+              })
+            )
+
+          head = Log.head()
+          :ok = :sys.resume(enrolments)
+          assert Task.await(task) == {:error, :holdings_changed}
+          assert Log.head() == head
+          Enrolments.fetch(request.code)
+        after
+          :sys.resume(enrolments)
+        end
+
+      assert result == {:ok, before}
+      # The failed admission spends the offboarding batch, not the request
+      # or its separately held, already signed approval.
+      assert Offboarding.offboard_chapter("alice", batch.id, signed) ==
+               {:error, :unknown_command}
+
+      assert {:ok, _} = Enrolments.approve(request.code, approval.id, approval_sig)
+    end
+
+    defp traced_task(fun) do
+      task = Task.async(fn -> receive do: (:go -> fun.()) end)
+      :erlang.trace(task.pid, true, [:send, {:tracer, self()}])
+      send(task.pid, :go)
+      task
+    end
+
     test "only for the principal it was prepared for, once", w do
       {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
 
@@ -471,3 +544,4 @@ defmodule CoopSubstrate.OffboardingTest do
     end
   end
 end
+
