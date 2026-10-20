@@ -12,7 +12,7 @@ defmodule CoopSubstrate.OffboardingTest do
 
   alias CoopSubstrate.{Crypto, Enrolments, Feed, Log, Offboarding}
   alias CoopSubstrate.Governance.Read
-  alias CoopSubstrate.Projections.Tasks, as: State
+  alias TaskCore.State
 
   @scope {"chapter-genesis", "tenant-1", "project-1"}
   @project_2 %{"tenant_id" => "tenant-1", "project_id" => "project-2"}

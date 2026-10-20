@@ -110,10 +110,10 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   # Every registered task type routes to the task gate; deriving the list from
   # the registration keeps a new type from being registered but left unchecked.
-  @task_types Map.keys(CoopSubstrate.Tasks.event_types())
+  @task_types Map.keys(TaskCore.Admission.event_types())
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @task_types do
-    CoopSubstrate.Tasks.check(env, gate)
+    TaskCore.Admission.check(env, gate)
   end
 
   defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do

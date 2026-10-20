@@ -15,7 +15,7 @@ defmodule CoopSubstrate.Administrators do
   """
 
   alias CoopSubstrate.{Commands, Log}
-  alias CoopSubstrate.Projections.Tasks, as: State
+  alias TaskCore.State
 
   @doc "The chapter's governance keys, each with the principal it names, if any."
   @spec list(String.t()) :: [%{key_id: String.t(), principal_id: String.t() | nil}]
@@ -32,7 +32,7 @@ defmodule CoopSubstrate.Administrators do
   @doc """
   The chapter's projects: each with a task or a grant (active or not), its
   tasks by state, the principals holding something there now, as
-  offboarding counts them (`Projections.Tasks.held_by/3`), and the number of
+  offboarding counts them (`TaskCore.State.held_by/3`), and the number of
   active grants and delegations, so any change in access changes the
   project (docs/architecture/2026-10-19-live-view.md).
   """

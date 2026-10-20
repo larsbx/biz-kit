@@ -1,4 +1,4 @@
-defmodule CoopSubstrate.Tasks.Readiness do
+defmodule TaskCore.Readiness do
   @moduledoc """
   The operator's path proposed -> queued -> ready -> in_progress -> completed.
   Governance commits exact input digests, predecessor IDs and a required SOP
@@ -11,7 +11,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
     * `TaskStartedV1` (ready -> in_progress) rechecks what readiness
       admitted: the starter's own SOP acknowledgement and the input receipts,
       bytes included. It clears any evidence submitted earlier, so what
-      completes the task is evidence of this work (`Tasks.DoD`).
+      completes the task is evidence of this work (`TaskCore.DoD`).
     * `TaskCompletedV1` (in_progress -> completed) cites the review of the
       current submission, which must accept it. A review confers no
       lifecycle authority by itself: an operator completes the task.
@@ -29,9 +29,8 @@ defmodule CoopSubstrate.Tasks.Readiness do
       reason: who started it, the evidence and its review are cleared, and
       the task must be readied again.
   """
-  alias CoopSubstrate.Projections.Tasks, as: Projection
-  alias CoopSubstrate.Harness.Artifacts
-  alias CoopSubstrate.Protocol.Envelope
+  alias TaskCore.State
+  alias TaskCore.TaskLifecycle
 
   @commands ~w(TaskReadinessDefinedV1 TaskSOPAcknowledgedV1 TaskQueuedV1 TaskReadyV1
                 TaskStartedV1 TaskCompletedV1 TaskCancelledV1 TaskCancelledByGovernanceV1
@@ -49,6 +48,37 @@ defmodule CoopSubstrate.Tasks.Readiness do
     "authorization_event_id" => :string,
     "lifecycle_version" => :int
   }
+
+  # Each command's move: the states it may leave, and the state it enters.
+  # Each is part of `TaskCore.TaskLifecycle`, checked as this compiles; all of
+  # them together are the whole relation (TaskLifecycleMovesTest).
+  @moves %{
+    "TaskProposedV1" => {~w(inbox), "proposed"},
+    "TaskQueuedV1" => {~w(proposed), "queued"},
+    "TaskReadyV1" => {~w(queued), "ready"},
+    "TaskStartedV1" => {~w(ready), "in_progress"},
+    "TaskCompletedV1" => {~w(in_progress), "completed"},
+    # Before the work starts, a person may call it off; once under way, only
+    # governance may, or the task goes back to be readied again.
+    "TaskCancelledV1" => {~w(inbox proposed queued ready), "cancelled"},
+    "TaskCancelledByGovernanceV1" => {~w(inbox proposed queued ready in_progress), "cancelled"},
+    "TaskReopenedV1" => {~w(in_progress), "queued"}
+  }
+
+  for {type, {from, to}} <- @moves,
+      state <- from,
+      not TaskLifecycle.allowed?(String.to_atom(state), String.to_atom(to)) do
+    raise CompileError, description: "#{type}: #{state} -> #{to} is not in TaskCore.TaskLifecycle"
+  end
+
+  @doc "Each lifecycle command's move, as `%{type => {from_states, to_state}}`."
+  def moves, do: @moves
+
+  @doc "Whether the task's state admits the command's move."
+  def move(task, type) do
+    {from, to} = Map.fetch!(@moves, type)
+    transition(task, from, to)
+  end
 
   def event_types do
     %{
@@ -78,7 +108,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
     }
   end
 
-  def check(%Envelope{payload: p} = env, state, keys) do
+  def check(%{payload: p} = env, state, keys) do
     with :ok <- authority(env, state, keys),
          {:ok, task} <- current_task(env, state) do
       check_command(env, p, task, state)
@@ -88,36 +118,36 @@ defmodule CoopSubstrate.Tasks.Readiness do
   @doc "The cancelling commands (an operator's or governance's)."
   def cancels, do: @cancels
 
-  defp authority(%Envelope{type: type, signers: [signer]} = env, _, keys)
+  defp authority(%{type: type, signers: [signer]} = env, _, keys)
        when type in @governance do
     if get_in(keys, [{env.chapter_id, "governance"}, signer.key_id]) == signer.pubkey,
       do: :ok,
       else: {:error, :task_governance_not_declared}
   end
 
-  defp authority(%Envelope{payload: p} = env, state, _) do
+  defp authority(%{payload: p} = env, state, _) do
     with {:ok, grant} <- fetch(state.grants, p["authorization_event_id"], :unknown_task_grant),
-         :ok <- CoopSubstrate.Tasks.authorized(env, grant) do
+         :ok <- TaskCore.Admission.authorized(env, grant) do
       if p["lifecycle_version"] == 1, do: :ok, else: {:error, :unsupported_task_lifecycle}
     end
   end
 
   defp current_task(env, state) do
-    with {:ok, task} <- fetch(state.tasks, Projection.task_key(env), :unknown_task) do
+    with {:ok, task} <- fetch(state.tasks, State.task_key(env), :unknown_task) do
       if env.payload["expected_version"] == task.version,
         do: {:ok, task},
         else: {:error, {:stale_task_version, env.payload["expected_version"], task.version}}
     end
   end
 
-  defp check_command(%Envelope{type: "TaskReadinessDefinedV1"} = env, p, task, state) do
+  defp check_command(%{type: "TaskReadinessDefinedV1"} = env, p, task, state) do
     with :ok <- transition(task, ["proposed", "queued"], "define_readiness"),
          :ok <- requirements(p["artifact_requirements"]),
          :ok <- predecessors(env, p["predecessor_ids"], state),
          do: :ok
   end
 
-  defp check_command(%Envelope{type: "TaskSOPAcknowledgedV1"} = env, p, task, state) do
+  defp check_command(%{type: "TaskSOPAcknowledgedV1"} = env, p, task, state) do
     with :ok <- transition(task, ["proposed", "queued", "ready"], "acknowledge_sop"),
          {:ok, definition} <- definition(task),
          {:ok, _} <-
@@ -125,16 +155,16 @@ defmodule CoopSubstrate.Tasks.Readiness do
          do: :ok
   end
 
-  defp check_command(%Envelope{type: "TaskQueuedV1"} = env, _, task, state) do
-    with :ok <- transition(task, ["proposed"], "queued"),
+  defp check_command(%{type: "TaskQueuedV1"} = env, _, task, state) do
+    with :ok <- move(task, env.type),
          :ok <- dod_defined(task),
          {:ok, _} <- definition(task),
          :ok <- acknowledgment(env, task, state),
          do: :ok
   end
 
-  defp check_command(%Envelope{type: "TaskReadyV1"} = env, p, task, state) do
-    with :ok <- transition(task, ["queued"], "ready"),
+  defp check_command(%{type: "TaskReadyV1"} = env, p, task, state) do
+    with :ok <- move(task, env.type),
          {:ok, definition} <- definition(task),
          :ok <- acknowledgment(env, task, state),
          :ok <- completed_predecessors(env, definition.predecessor_ids, state),
@@ -145,18 +175,23 @@ defmodule CoopSubstrate.Tasks.Readiness do
 
   # Whoever starts acknowledged the SOP on this device, and the inputs are
   # still there.
-  defp check_command(%Envelope{type: "TaskStartedV1"} = env, _, task, state) do
-    with :ok <- transition(task, ["ready"], "in_progress"),
+  defp check_command(%{type: "TaskStartedV1"} = env, _, task, state) do
+    with :ok <- move(task, env.type),
          {:ok, definition} <- definition(task),
          :ok <- acknowledgment(env, task, state),
          :ok <- input_receipts(env, definition.artifact_requirements, task.ready_receipts, state),
          do: :ok
   end
 
-  # A new submission clears the review (Tasks.DoD), so a review on record is
+  # A new submission clears the review (`TaskCore.DoD`), so a review on record is
   # of the current submission.
-  defp check_command(%Envelope{type: "TaskCompletedV1"}, %{"review_event_id" => id}, task, _) do
-    with :ok <- transition(task, ["in_progress"], "completed") do
+  defp check_command(
+         %{type: "TaskCompletedV1" = type},
+         %{"review_event_id" => id},
+         task,
+         _
+       ) do
+    with :ok <- move(task, type) do
       case task.dod.review do
         %{event_id: ^id, decision: "accept"} -> :ok
         %{event_id: ^id} -> {:error, :dod_not_accepted}
@@ -165,20 +200,9 @@ defmodule CoopSubstrate.Tasks.Readiness do
     end
   end
 
-  # Before the work starts, a person may call it off; once under way, only
-  # governance may, or the task goes back to be readied again.
-  defp check_command(%Envelope{type: "TaskCancelledV1"}, p, task, _state) do
-    with :ok <- transition(task, ~w(inbox proposed queued ready), "cancelled"),
-         do: reason(p["reason"])
-  end
-
-  defp check_command(%Envelope{type: "TaskCancelledByGovernanceV1"}, p, task, _state) do
-    with :ok <- transition(task, ~w(inbox proposed queued ready in_progress), "cancelled"),
-         do: reason(p["reason"])
-  end
-
-  defp check_command(%Envelope{type: "TaskReopenedV1"}, p, task, _state) do
-    with :ok <- transition(task, ["in_progress"], "queued"), do: reason(p["reason"])
+  defp check_command(%{type: type}, p, task, _state)
+       when type in ~w(TaskCancelledV1 TaskCancelledByGovernanceV1 TaskReopenedV1) do
+    with :ok <- move(task, type), do: reason(p["reason"])
   end
 
   defp reason(text) do
@@ -193,7 +217,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
       else: {:error, {:invalid_task_transition, task.state, to}}
   end
 
-  # A DoD can only be defined while a task is proposed (Tasks.DoD), so queuing
+  # A DoD can only be defined while a task is proposed (`TaskCore.DoD`), so queuing
   # without one would leave the task unable ever to get one.
   defp dod_defined(%{dod: nil}), do: {:error, :dod_not_defined}
   defp dod_defined(_task), do: :ok
@@ -230,7 +254,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
 
   defp predecessors(_, _, _), do: {:error, :invalid_predecessors}
 
-  defp predecessor_key(env, id), do: put_elem(Projection.task_key(env), 3, id)
+  defp predecessor_key(env, id), do: put_elem(State.task_key(env), 3, id)
 
   defp completed_predecessors(env, ids, state) do
     if Enum.all?(ids, fn id ->
@@ -279,7 +303,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
              {receipt.chapter_id, receipt.tenant_id, receipt.project_id} or
              {:error, :task_grant_scope_mismatch},
          true <- receipt.digest == digest or {:error, :custody_digest_mismatch},
-         do: Artifacts.verify(elem(digest, 1), budget)
+         do: state.host.verify_artifact(elem(digest, 1), budget)
   end
 
   defp fetch(map, id, reason) do
@@ -294,9 +318,9 @@ defmodule CoopSubstrate.Tasks.Readiness do
       is_binary(value) and byte_size(value) in 1..128 and
         Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/, value)
 
-  def handle_event(%Envelope{type: type} = env, state) when type in @commands do
+  def handle_event(%{type: type} = env, state) when type in @commands do
     state
-    |> update_in([:tasks, Projection.task_key(env)], fn task ->
+    |> update_in([:tasks, State.task_key(env)], fn task ->
       task
       |> fold(env)
       |> Map.put(:version, task.version + 1)
@@ -307,7 +331,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
 
   def handle_event(_, state), do: state
 
-  defp fold(task, %Envelope{type: "TaskReadinessDefinedV1", payload: p} = env) do
+  defp fold(task, %{type: "TaskReadinessDefinedV1", payload: p} = env) do
     Map.put(task, :readiness, %{
       event_id: env.event_id,
       artifact_requirements: p["artifact_requirements"],
@@ -317,7 +341,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
     })
   end
 
-  defp fold(task, %Envelope{type: "TaskSOPAcknowledgedV1", payload: p, signers: [signer]} = env) do
+  defp fold(task, %{type: "TaskSOPAcknowledgedV1", payload: p, signers: [signer]} = env) do
     put_in(task, [:readiness, :acknowledgment], %{
       event_id: env.event_id,
       custody_receipt_id: p["custody_receipt_id"],
@@ -327,15 +351,15 @@ defmodule CoopSubstrate.Tasks.Readiness do
     })
   end
 
-  defp fold(task, %Envelope{type: "TaskQueuedV1"}), do: %{task | state: "queued"}
+  defp fold(task, %{type: "TaskQueuedV1"}), do: %{task | state: "queued"}
 
-  defp fold(task, %Envelope{type: "TaskReadyV1"} = env),
+  defp fold(task, %{type: "TaskReadyV1"} = env),
     do:
       task
       |> Map.put(:state, "ready")
       |> Map.put(:ready_receipts, env.payload["custody_receipts"])
 
-  defp fold(task, %Envelope{type: "TaskStartedV1", payload: p}),
+  defp fold(task, %{type: "TaskStartedV1", payload: p}),
     do:
       %{
         task
@@ -344,9 +368,9 @@ defmodule CoopSubstrate.Tasks.Readiness do
       }
       |> Map.put(:started_by, p["principal_id"])
 
-  defp fold(task, %Envelope{type: "TaskCompletedV1"}), do: %{task | state: "completed"}
+  defp fold(task, %{type: "TaskCompletedV1"}), do: %{task | state: "completed"}
 
-  defp fold(task, %Envelope{type: type, payload: p} = env) when type in @cancels,
+  defp fold(task, %{type: type, payload: p} = env) when type in @cancels,
     do:
       task
       |> Map.put(:state, "cancelled")
@@ -356,7 +380,7 @@ defmodule CoopSubstrate.Tasks.Readiness do
         reason: p["reason"]
       })
 
-  defp fold(task, %Envelope{type: "TaskReopenedV1"}),
+  defp fold(task, %{type: "TaskReopenedV1"}),
     do:
       %{
         task

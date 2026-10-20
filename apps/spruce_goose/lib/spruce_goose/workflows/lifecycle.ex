@@ -13,7 +13,7 @@ defmodule SpruceGoose.Workflows.Lifecycle do
   `:transition` and `:move` actions.
   """
 
-  use SpruceGoose.Lifecycle,
+  use TaskCore.Lifecycle,
     version: 1,
     initial: :inbox,
     transitions: [

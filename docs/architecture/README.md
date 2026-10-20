@@ -50,6 +50,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Cluster](2026-10-19-cluster.md): several nodes as one service over
   distributed Erlang; the ledger's appender and the in-memory stores run
   once per cluster, and feed notifications reach every node.
+- [Task core](2026-10-20-task-core.md): the task and workflow rules as a
+  dependency-free app (`apps/task_core`) any application can vendor, behind
+  two host ports; one lifecycle contract and DAG shared with SpruceGoose.
 - [Rate limits](2026-10-19-rate-limits.md): every request is limited per
   client before its body is read, in one of three buckets chosen by path;
   clients behind trusted proxies are told apart by `x-forwarded-for`.

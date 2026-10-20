@@ -45,11 +45,11 @@ jobs:
           mix format --check-formatted
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
           apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
-          apps/coop_substrate/lib/coop_substrate/tasks/readiness.ex
+          apps/task_core/lib/task_core/readiness.ex
           apps/coop_substrate/test/task_readiness_commands_test.exs
           apps/coop_substrate/lib/coop_substrate/tasks.ex
           apps/coop_substrate/lib/coop_substrate/buzz/tasks.ex
-          apps/coop_substrate/lib/coop_substrate/tasks/dod.ex
+          apps/task_core/lib/task_core/dod.ex
           apps/coop_substrate/test/no_surveillance_test.exs
           apps/coop_substrate/test/artifact_custody_store_test.exs
           apps/coop_substrate/test/task_dod_rules_test.exs
@@ -90,7 +90,7 @@ jobs:
           apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex
           apps/biz_kit_identity/test/identity_test.exs
           apps/coop_substrate/lib/coop_substrate/commands.ex
-          apps/coop_substrate/lib/coop_substrate/tasks/decisions.ex
+          apps/task_core/lib/task_core/decisions.ex
           apps/coop_substrate/test/commands_test.exs
           apps/spruce_goose/lib/spruce_goose/web/command_controller.ex
           apps/spruce_goose/lib/spruce_goose/web/app_controller.ex
@@ -143,7 +143,7 @@ jobs:
           apps/biz_kit_cluster/test/singleton_test.exs
           apps/coop_substrate/test/cluster_test.exs
           apps/biz_kit_identity/test/cluster_sessions_test.exs
-          apps/coop_substrate/lib/coop_substrate/tasks/lifecycle.ex
+          apps/task_core/lib/task_core/steps.ex
           apps/coop_substrate/test/lifecycle_test.exs
           apps/spruce_goose/test/spruce_goose/web/lifecycle_test.exs
           apps/spruce_goose/lib/spruce_goose/web/artifact_controller.ex
@@ -166,6 +166,30 @@ jobs:
           apps/coop_substrate/test/records_upgrade_test.exs
           apps/coop_substrate/test/support/quota_writer.ex
           apps/coop_substrate/test/live_view_test.exs
+          apps/task_core/mix.exs
+          apps/task_core/lib/task_core.ex
+          apps/task_core/lib/task_core/lifecycle.ex
+          apps/task_core/lib/task_core/task_lifecycle.ex
+          apps/task_core/lib/task_core/dag.ex
+          apps/task_core/test/lifecycle_test.exs
+          apps/task_core/test/dag_test.exs
+          apps/task_core/test/lesson_workflow_test.exs
+          apps/task_core/lib/task_core/admission.ex
+          apps/task_core/lib/task_core/state.ex
+          apps/task_core/lib/task_core/steps.ex
+          apps/task_core/lib/task_core/host.ex
+          apps/task_core/lib/task_core/event.ex
+          apps/task_core/lib/task_core/timing.ex
+          apps/task_core/lib/task_core/delegation.ex
+          apps/coop_substrate/lib/coop_substrate/tasks.ex
+          apps/coop_substrate/lib/coop_substrate/projections/tasks.ex
+          apps/coop_substrate/lib/coop_substrate/task_host.ex
+          apps/coop_substrate/lib/coop_substrate/commands.ex
+          apps/coop_substrate/test/task_lifecycle_moves_test.exs
+          apps/spruce_goose/test/lifecycle_test.exs
+      - name: Test the task core
+        working-directory: apps/task_core
+        run: mix test
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test
@@ -198,10 +222,10 @@ jobs:
         run: mix test --only browser
 
   ledger-model:
-    # Model-checks every spec in apps/coop_substrate/spec (task suggestions
-    # and delegation, readiness, the change feed): safety holds sampled and
-    # exhaustively to depth 5, and every witness state is reachable. About
-    # 7 minutes.
+    # Model-checks every spec in apps/task_core/spec (task suggestions and
+    # delegation, readiness, cancellation) and apps/coop_substrate/spec (the
+    # change feed): safety holds sampled and exhaustively to depth 5, and
+    # every witness state is reachable. About 7 minutes.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -216,5 +240,7 @@ jobs:
           java-version: 17
       - name: Install Quint
         run: npm install -g @informalsystems/quint@0.25.1
+      - name: Model-check the task core specs
+        run: apps/task_core/spec/check.sh
       - name: Model-check the ledger specs
         run: apps/coop_substrate/spec/check.sh

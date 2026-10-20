@@ -1,4 +1,4 @@
-defmodule CoopSubstrate.Tasks.Delegation do
+defmodule TaskCore.Delegation do
   @moduledoc """
   Delegated task changes (docs/architecture/2026-10-18-task-delegation.md;
   state machine in spec/task_suggestions.qnt).
@@ -12,8 +12,7 @@ defmodule CoopSubstrate.Tasks.Delegation do
   operator grants only, so they can never be delegated.
   """
 
-  alias CoopSubstrate.Protocol.Envelope
-  alias CoopSubstrate.Tasks.Timing
+  alias TaskCore.Timing
 
   @kinds ~w(timing create)
   @states ~w(inbox proposed queued ready)
@@ -84,7 +83,7 @@ defmodule CoopSubstrate.Tasks.Delegation do
 
   defp window?(_window), do: false
 
-  def check_revocation(%Envelope{payload: p} = env, state) do
+  def check_revocation(%{payload: p} = env, state) do
     with {:ok, d} <- fetch(state.delegations, p["delegation_event_id"], :unknown_delegation),
          :ok <- Timing.same_scope(env, d, :unknown_delegation) do
       cond do
@@ -101,7 +100,7 @@ defmodule CoopSubstrate.Tasks.Delegation do
   Liveness and identity of an agent acting under delegation `d`: steps 1 and 2
   of the admission rules. Also authorises recording reasoning artifacts.
   """
-  def live(%Envelope{payload: p, signers: [signer]} = env, d, state) do
+  def live(%{payload: p, signers: [signer]} = env, d, state) do
     with :ok <- Timing.same_scope(env, d, :task_grant_scope_mismatch) do
       cond do
         not d.active -> {:error, :delegation_revoked}
@@ -115,7 +114,7 @@ defmodule CoopSubstrate.Tasks.Delegation do
   end
 
   @doc "Steps 1 to 3: a live, correctly signed command of a delegated kind and target."
-  def admit(%Envelope{type: type, payload: p} = env, d, state) do
+  def admit(%{type: type, payload: p} = env, d, state) do
     with :ok <- live(env, d, state) do
       cond do
         p["lifecycle_version"] != 1 -> {:error, :unsupported_task_lifecycle}
@@ -175,7 +174,7 @@ defmodule CoopSubstrate.Tasks.Delegation do
 
   def init, do: %{delegations: %{}}
 
-  def handle_event(%Envelope{type: "TaskDelegationGrantedV1", payload: p} = env, state) do
+  def handle_event(%{type: "TaskDelegationGrantedV1", payload: p} = env, state) do
     delegation = %{
       chapter_id: env.chapter_id,
       tenant_id: p["tenant_id"],
@@ -198,11 +197,11 @@ defmodule CoopSubstrate.Tasks.Delegation do
     put_in(state, [:delegations, Access.key(env.event_id)], delegation)
   end
 
-  def handle_event(%Envelope{type: "TaskDelegationRevokedV1", payload: p}, state),
+  def handle_event(%{type: "TaskDelegationRevokedV1", payload: p}, state),
     do: put_in(state, [:delegations, p["delegation_event_id"], :active], false)
 
   @doc "Charge one change to the delegation behind `env`, if any; returns its ID or nil."
-  def charge(state, %Envelope{payload: %{"authorization_event_id" => id}}) do
+  def charge(state, %{payload: %{"authorization_event_id" => id}}) do
     if Map.has_key?(state.delegations, id),
       do: {update_in(state, [:delegations, id, :used], &(&1 + 1)), id},
       else: {state, nil}

@@ -1,4 +1,4 @@
-defmodule CoopSubstrate.Tasks.Lifecycle do
+defmodule TaskCore.Steps do
   @moduledoc """
   A person's lifecycle step on a task, as the command they sign
   (docs/architecture/2026-10-19-lifecycle.md). Pure.
@@ -55,7 +55,7 @@ defmodule CoopSubstrate.Tasks.Lifecycle do
   # principal and grant only.
   @unversioned ~w(TaskEvidenceSubmittedV2 TaskDoDReviewedV1 ArtifactCustodyRecordedV1)
 
-  @spec command(map(), CoopSubstrate.Feed.View.scope(), action(), map()) ::
+  @spec command(map(), TaskCore.State.scope(), action(), map()) ::
           {:ok, String.t(), map()} | {:error, term()}
   def command(_o, {_chapter, tenant, project}, {:record_custody, digest}, actor) do
     {:ok, "ArtifactCustodyRecordedV1",

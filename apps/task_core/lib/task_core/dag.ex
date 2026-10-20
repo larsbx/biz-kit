@@ -1,7 +1,11 @@
-defmodule SpruceGoose.Workflows.Dag do
-  @moduledoc false
-
-  alias SpruceGoose.Workflows.TaskDefinition
+defmodule TaskCore.Dag do
+  @moduledoc """
+  A versioned workflow's dependency graph: each task an `id` and the ids it
+  `depends_on`, as maps or structs with string or atom keys. `validate/1`
+  refuses duplicate ids, self, unknown and duplicate dependencies, and
+  cycles; `order/1` is a deterministic topological order (Kahn's algorithm,
+  ties broken by id). Pure.
+  """
 
   def validate(nil), do: :ok
   def validate([]), do: {:error, "must contain at least one task"}
@@ -91,11 +95,9 @@ defmodule SpruceGoose.Workflows.Dag do
     end)
   end
 
-  defp task_id(%TaskDefinition{id: id}), do: id
   defp task_id(%{id: id}), do: id
   defp task_id(%{"id" => id}), do: id
 
-  defp depends_on(%TaskDefinition{depends_on: dependencies}), do: dependencies
   defp depends_on(%{depends_on: dependencies}), do: dependencies
   defp depends_on(%{"depends_on" => dependencies}), do: dependencies
   defp depends_on(_), do: []

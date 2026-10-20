@@ -14,7 +14,7 @@ defmodule CoopSubstrate.ArtifactCustody do
   # What one receipt may cover: custody admission verifies at most this.
   @limit 8 * 1024 * 1024
   # Evidence a person may store for one task: two full submissions
-  # (Tasks.DoD verifies at most 16 MiB of evidence per submission).
+  # (TaskCore.DoD verifies at most 16 MiB of evidence per submission).
   @evidence_quota 32 * 1024 * 1024
 
   @doc """

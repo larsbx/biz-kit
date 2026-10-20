@@ -1,6 +1,6 @@
 defmodule CoopSubstrate.Tasks.DoDRulesTest do
   use ExUnit.Case, async: true
-  alias CoopSubstrate.Tasks.DoD
+  alias TaskCore.DoD
 
   @criteria [%{"id" => "report", "description" => "Inspection report reviewed"}]
 

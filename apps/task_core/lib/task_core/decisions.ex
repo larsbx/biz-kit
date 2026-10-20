@@ -1,4 +1,4 @@
-defmodule CoopSubstrate.Tasks.Decisions do
+defmodule TaskCore.Decisions do
   @moduledoc """
   An operator's decision on a pending suggestion, as the command the operator
   signs (docs/architecture/2026-10-18-decide.md). Pure.
@@ -26,7 +26,7 @@ defmodule CoopSubstrate.Tasks.Decisions do
   # What an edit may change, per kind: the fields the ledger compares.
   @editable %{"timing" => ~w(timing), "create" => ~w(title description timing)}
 
-  @spec command(map(), CoopSubstrate.Feed.View.scope(), decision(), map()) ::
+  @spec command(map(), TaskCore.State.scope(), decision(), map()) ::
           {:ok, String.t(), map()} | {:error, atom()}
   def command(o, scope, decision, actor) do
     with {:ok, s} <- pending(o, scope, elem(decision, 1)) do

@@ -1,7 +1,7 @@
 defmodule SpruceGoose.WorkflowDefinitionTest do
   use ExUnit.Case, async: true
 
-  alias SpruceGoose.Workflows.Dag
+  alias TaskCore.Dag
   alias SpruceGoose.Workflows.Definition
 
   test "parses a versioned definition and produces a stable native execution order" do

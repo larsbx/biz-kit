@@ -2,7 +2,7 @@
 
 Date: 2026-10-18. Status: **ledger events implemented** in
 `CoopSubstrate.Tasks.Timing`, specified in
-[`spec/task_suggestions.qnt`](../../apps/coop_substrate/spec/task_suggestions.qnt). The change
+[`spec/task_suggestions.qnt`](../../apps/task_core/spec/task_suggestions.qnt). The change
 stream, HTTP/MCP wrappers and calendar client are not built yet. Scope: the ledger
 events behind a calendar client in which people edit task timing directly
 and agents only suggest changes for a person to accept.
@@ -304,7 +304,7 @@ specified in a later document.
 ## Verification
 
 The admission rules are a state machine in
-[`spec/task_suggestions.qnt`](../../apps/coop_substrate/spec/task_suggestions.qnt).
+[`spec/task_suggestions.qnt`](../../apps/task_core/spec/task_suggestions.qnt).
 Its `safety` invariant combines the properties below.
 
 ```sh

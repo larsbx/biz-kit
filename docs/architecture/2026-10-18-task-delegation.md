@@ -3,7 +3,7 @@
 Date: 2026-10-18. Status: **implemented** in `CoopSubstrate.Tasks.Delegation`
 and `CoopSubstrate.Tasks.Timing`. Extends
 [task timing and agent suggestions](2026-10-18-task-timing-and-suggestions.md).
-State machine: [`spec/task_suggestions.qnt`](../../apps/coop_substrate/spec/task_suggestions.qnt).
+State machine: [`spec/task_suggestions.qnt`](../../apps/task_core/spec/task_suggestions.qnt).
 
 ## Why
 

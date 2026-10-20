@@ -87,7 +87,7 @@ defmodule CoopSubstrate.Projections.Membership do
 
   # Derived from the registration, as in Validity: a task type that is admitted
   # but not folded here would leave every later check reading stale state.
-  @task_types Map.keys(CoopSubstrate.Tasks.event_types())
+  @task_types Map.keys(TaskCore.Admission.event_types())
 
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @task_types do
