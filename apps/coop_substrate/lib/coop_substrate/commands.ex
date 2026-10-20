@@ -128,19 +128,38 @@ defmodule CoopSubstrate.Commands do
   @spec submit(term(), String.t(), binary(), integer()) ::
           {:ok, Envelope.t()} | {:error, term()}
   def submit(owner, id, signature, now_ms \\ System.system_time(:millisecond)) do
-    with {:ok, [appended]} <- submit_batch(owner, id, [signature], now_ms),
+    with {:ok, [appended]} <- submit_batch(owner, id, [signature], now_ms: now_ms),
          do: {:ok, appended}
   end
 
-  @doc "Submit one signature per held command, in order; appended all at once, or none."
-  @spec submit_batch(term(), String.t(), [binary()], integer()) ::
+  @doc """
+  Submit one signature per held command, in order; appended all at once, or
+  none. With `guard:` (`Log.append_if/3`), only if it holds at admission.
+  A wrong count leaves the batch held; a bad signature spends it, as it
+  spends a single command (`signed/3` checks without spending).
+  """
+  @spec submit_batch(term(), String.t(), [binary()], keyword()) ::
           {:ok, [Envelope.t()]} | {:error, term()}
-  def submit_batch(owner, id, signatures, now_ms \\ System.system_time(:millisecond)) do
+  def submit_batch(owner, id, signatures, opts \\ []) do
+    now_ms = Keyword.get_lazy(opts, :now_ms, fn -> System.system_time(:millisecond) end)
+
     with {:ok, held} <- peek(owner, id),
          true <- length(held) == length(signatures) or {:error, :signature_count},
          {:ok, envs} <- GenServer.call(@server, {:take, owner, id, now_ms}),
-         {:ok, signed} <- attach(envs, signatures),
-         do: Log.append(signed)
+         {:ok, signed} <- attach(envs, signatures) do
+      case opts[:guard] do
+        nil -> Log.append(signed)
+        guard -> Log.append_if(signed, guard)
+      end
+    end
+  end
+
+  @doc "The held batch with these signatures attached, without spending it: the count and each signature checked."
+  @spec signed(term(), String.t(), [binary()]) :: {:ok, [Envelope.t()]} | {:error, term()}
+  def signed(owner, id, signatures) do
+    with {:ok, held} <- peek(owner, id),
+         true <- length(held) == length(signatures) or {:error, :signature_count},
+         do: attach(held, signatures)
   end
 
   defp envelopes(chapter, commands, signer, now) do

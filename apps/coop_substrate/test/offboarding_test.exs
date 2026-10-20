@@ -339,6 +339,69 @@ defmodule CoopSubstrate.OffboardingTest do
       assert Enrolments.fetch(request.code) == {:error, :unknown_code}
     end
 
+    test "refused, ending nothing, if what the principal holds changed since it was prepared",
+         w do
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+
+      # Granted afresh in a project the batch does not name, while it waited.
+      {:ok, [late]} =
+        Log.append(
+          signed_event(
+            w.gov,
+            "TaskOperatorGrantedV1",
+            %{
+              "tenant_id" => "tenant-1",
+              "project_id" => "project-3",
+              "principal_id" => "alice",
+              "key_id" => new_member("operator").signer.key_id,
+              "pubkey" => {:bytes, new_member("operator").signer.pubkey}
+            }
+          )
+        )
+
+      assert Offboarding.offboard_chapter("alice", batch.id, signatures(batch, w.gov)) ==
+               {:error, :holdings_changed}
+
+      assert length(held("alice")) == 6
+      assert o().grants[late.event_id].active
+
+      # So with a key declared for them meanwhile.
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      browser = administrator!(w.gov, "alice")
+
+      assert Offboarding.offboard_chapter("alice", batch.id, signatures(batch, w.gov)) ==
+               {:error, :holdings_changed}
+
+      assert browser.signer.key_id in keys()
+    end
+
+    test "a bad submission keeps the principal's pending requests", w do
+      key = new_member("governance")
+      identity = %{issuer: "https://idp.test", subject: "sub-alice"}
+
+      {:ok, c} =
+        Enrolments.begin(
+          "alice",
+          identity,
+          @scope,
+          key.signer.key_id,
+          key.signer.pubkey,
+          "Office",
+          "governance"
+        )
+
+      {:ok, request} = Enrolments.prove("alice", c.id, Crypto.sign(c.statement, key.seed))
+      {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
+      [_ | rest] = signatures(batch, w.gov)
+      forged = Crypto.sign(hd(batch.commands).signing_bytes, w.laptop.seed)
+
+      assert {:error, {:invalid_signature, _}} =
+               Offboarding.offboard_chapter("alice", batch.id, [forged | rest])
+
+      assert Offboarding.offboard_chapter("alice", batch.id, rest) == {:error, :signature_count}
+      assert {:ok, _} = Enrolments.fetch(request.code)
+    end
+
     test "only for the principal it was prepared for, once", w do
       {:ok, batch} = Offboarding.prepare_chapter("alice", "chapter-genesis", w.gov.signer.key_id)
 

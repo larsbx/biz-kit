@@ -134,6 +134,7 @@ defmodule SpruceGoose.Web.Requests do
     :already_enrolled,
     :grant_already_revoked,
     :nothing_to_offboard,
+    :holdings_changed,
     :unknown_role_key,
     :no_submission
   ]

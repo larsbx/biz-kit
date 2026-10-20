@@ -84,8 +84,19 @@ defmodule CoopSubstrate.Offboarding do
   @spec prepare_chapter(String.t(), String.t(), String.t()) ::
           {:ok, %{id: String.t(), commands: [map()], expires_at: integer()}} | {:error, term()}
   def prepare_chapter(principal, chapter, governance_key_id) do
-    gate = Log.gate()
+    commands = chapter_commands(Log.gate(), principal, chapter, governance_key_id)
 
+    with true <- commands != [] or {:error, :nothing_to_offboard},
+         {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
+      Commands.hold_batch({:chapter_offboarding, principal}, chapter, commands, signer)
+    end
+  end
+
+  # Everything to end, against the membership projection `gate`: an
+  # offboarding per project the principal holds something in, then their
+  # keys, the signer's own last, so every command before it is signed by a
+  # key still declared.
+  defp chapter_commands(gate, principal, chapter, signer_key_id) do
     offboardings =
       for p <- CoopSubstrate.Administrators.projects(gate.orchestration, chapter),
           principal in p.people,
@@ -97,34 +108,48 @@ defmodule CoopSubstrate.Offboarding do
                "principal_id" => principal
              }}
 
-    # The signer's own key last: every command before it is signed by a key still declared.
     revocations =
-      for key_id <- Enum.sort_by(keys(gate, principal, chapter), &(&1 == governance_key_id)),
+      for key_id <- Enum.sort_by(keys(gate, principal, chapter), &(&1 == signer_key_id)),
           do: {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key_id}}
 
-    with true <- offboardings ++ revocations != [] or {:error, :nothing_to_offboard},
-         {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
-      Commands.hold_batch(
-        {:chapter_offboarding, principal},
-        chapter,
-        offboardings ++ revocations,
-        signer
-      )
-    end
+    offboardings ++ revocations
   end
 
   @doc """
-  Submit the signatures, one per prepared command. The principal's pending
-  enrolment requests anywhere in the chapter are cancelled first.
+  The guard a chapter offboarding is admitted under (`Log.append_if/3`): the
+  batch is still everything the principal holds in the chapter, so a grant
+  or key added while it was held refuses it whole (`:holdings_changed`).
+  """
+  def unchanged(gate, principal, chapter, signer_key_id, commands) do
+    if chapter_commands(gate, principal, chapter, signer_key_id) == commands,
+      do: :ok,
+      else: {:error, :holdings_changed}
+  end
+
+  @doc """
+  Submit the signatures, one per prepared command. Admitted only if the batch
+  is still everything the principal holds in the chapter (`unchanged/5`,
+  checked by the appender at admission). Once the signatures and the
+  holdings check out, the principal's pending enrolment requests anywhere in
+  the chapter are cancelled, before the append, so no approval of one can be
+  admitted after it.
   """
   @spec offboard_chapter(String.t(), String.t(), [binary()]) ::
           {:ok, [CoopSubstrate.Protocol.Envelope.t()]} | {:error, term()}
   def offboard_chapter(principal, held_id, signatures) do
     owner = {:chapter_offboarding, principal}
 
-    with {:ok, [held | _]} <- Commands.peek(owner, held_id),
-         :ok <- Enrolments.cancel(principal, {held.chapter_id}),
-         do: Commands.submit_batch(owner, held_id, signatures)
+    with {:ok, [first | _] = signed} <- Commands.signed(owner, held_id, signatures),
+         {m, f, args} = guard = guard(principal, signed),
+         :ok <- apply(m, f, [Log.gate() | args]),
+         :ok <- Enrolments.cancel(principal, {first.chapter_id}),
+         do: Commands.submit_batch(owner, held_id, signatures, guard: guard)
+  end
+
+  defp guard(principal, [first | _] = envs) do
+    signer = hd(first.signers).key_id
+    commands = Enum.map(envs, &{&1.type, &1.payload})
+    {__MODULE__, :unchanged, [principal, first.chapter_id, signer, commands]}
   end
 
   # The governance keys of `chapter` declared for `principal`, sorted.

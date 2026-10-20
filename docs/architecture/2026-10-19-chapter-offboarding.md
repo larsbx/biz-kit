@@ -42,18 +42,32 @@ unit, and `submit_batch/3` takes one signature per command:
   batch that would be refused is refused before anyone signs.
 - A batch is single-use, bound to its owner (`{:chapter_offboarding,
   principal}`), and held for five minutes, as a single command is.
-- A wrong number of signatures is refused (`signature_count`), and the batch
-  stays held.
+- A wrong number of signatures, or a bad one, is refused
+  (`signature_count`, `invalid_signature`), and the batch stays held.
 - `hold/5` and `submit/3` are now the one-command case of the same code.
 
 **Order.** The project offboardings come first, then the key revocations.
 The signer's own key comes last, so an administrator offboarding
 themselves signs every command with a key that is still declared.
 
-`Offboarding.prepare_chapter/3` builds the batch. `offboard_chapter/3`
-first cancels the person's pending enrolment requests anywhere in the
-chapter (`Enrolments.cancel/2` now also takes `{chapter}`), then submits
-the batch.
+`Offboarding.prepare_chapter/3` builds the batch.
+
+**Still complete at admission.** A batch names the projects and keys the
+person held when it was prepared. Another administrator may grant them a
+project, or declare a key for them, while it waits. So
+`offboard_chapter/3` submits it with a guard (`Log.append_if/3`, an
+`{m, f, args}` evaluated by the appender itself, against its gate, in the
+same call that admits the batch). The guard, `Offboarding.unchanged/5`,
+rebuilds the batch from that gate and requires it to be the same.
+Otherwise the batch is refused whole (`holdings_changed`, 409) and the
+administrator offboards again.
+
+**Requests last.** The person's pending enrolment requests anywhere in the
+chapter (`Enrolments.cancel/2` now also takes `{chapter}`) are cancelled
+before the append, so no approval of one can be admitted after it.
+Cancelling only happens once the count, every signature and the holdings
+have checked out. Only a change in the instant between that check and the
+append can cost a request, and the person can ask again.
 
 ## Over HTTP
 
@@ -103,6 +117,9 @@ same way ([live view](2026-10-19-live-view.md)).
   - one bad signature, or a batch that would orphan the chapter, ends
     nothing;
   - an administrator offboarding themselves signs with their own key last;
+  - a project granted or a key declared while the batch waited refuses it
+    whole (`holdings_changed`);
+  - a bad submission keeps the batch and the person's pending requests;
   - pending requests anywhere in the chapter are dropped;
   - a batch is only for its principal, needs one signature per command, and
     is used once.
@@ -114,6 +131,8 @@ same way ([live view](2026-10-19-live-view.md)).
   - a second attempt finds nothing to offboard.
 - **`FeedTest`, `OffboardingTest`:** a revoked reader's stream ends with
   `revoked`.
+- **`LogTest`:** `append_if/3` admits a batch only when its guard holds;
+  the guard is given the appender's gate, and a refusal appends nothing.
 - **Node:**
   - `chapterOffboarding` builds the expected commands from a lookup;
   - `isExpectedBatch` accepts the batch in any order, and refuses one
