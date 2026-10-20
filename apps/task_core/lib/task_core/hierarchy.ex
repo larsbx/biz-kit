@@ -21,7 +21,8 @@ defmodule TaskCore.Hierarchy do
       both, binding only the digests and the SOP (`TaskCore.Readiness`).
   """
 
-  alias TaskCore.{Admission, Blueprint, State}
+  alias TaskCore.{Admission, Blueprint, State, TaskLifecycle, Workflow}
+  alias TaskCore.Blueprint.Source
 
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @source %{
@@ -41,11 +42,6 @@ defmodule TaskCore.Hierarchy do
     "workflow_id" => :string,
     "task_ids" => :any
   }
-
-  @repository ~r/\A[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\z/
-  # SHA-1 object IDs: what the forge verifier checks (`ForgejoVerifier`).
-  @object ~r/\A[0-9a-f]{40}\z/
-  @path ~r/\A(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._\/-]{1,512}\z/
 
   def event_types do
     %{
@@ -92,10 +88,10 @@ defmodule TaskCore.Hierarchy do
   end
 
   defp source(p) do
-    if Regex.match?(@repository, p["repository"]) and Regex.match?(@object, p["commit"]) and
-         Regex.match?(@object, p["tree"]) and Regex.match?(@path, p["path"]),
-       do: :ok,
-       else: {:error, :invalid_blueprint_source}
+    case Source.normalize(p) do
+      {:ok, _source} -> :ok
+      error -> error
+    end
   end
 
   # One revision per source in a project, as SpruceGoose records it.
@@ -136,20 +132,23 @@ defmodule TaskCore.Hierarchy do
     Blueprint.workflow(blueprint, p["roadmap_key"], p["workflow_id"])
   end
 
-  defp run_ids(%{payload: %{"task_ids" => ids}} = env, workflow, state) when is_map(ids) do
-    keys = Enum.map(workflow["tasks"], & &1["id"])
-    values = Map.values(ids)
-
-    cond do
-      Enum.sort(Map.keys(ids)) != Enum.sort(keys) -> {:error, :invalid_workflow_run}
-      not Enum.all?(values, &Admission.segment?/1) -> {:error, :invalid_workflow_run}
-      Enum.uniq(values) != values -> {:error, :invalid_workflow_run}
-      Enum.any?(values, &Map.has_key?(state.tasks, key(env, &1))) -> {:error, :task_exists}
-      true -> :ok
+  defp run_ids(%{payload: p} = env, _workflow, state) do
+    with {:ok, _plan} <- plan(state, p) do
+      if Enum.any?(Map.values(p["task_ids"]), &Map.has_key?(state.tasks, key(env, &1))),
+        do: {:error, :task_exists},
+        else: :ok
     end
   end
 
-  defp run_ids(_env, _workflow, _state), do: {:error, :invalid_workflow_run}
+  defp plan(state, p) do
+    Workflow.plan(
+      state.blueprints[p["revision_event_id"]].blueprint,
+      p["roadmap_key"],
+      p["workflow_id"],
+      p["task_ids"],
+      {TaskLifecycle, p["lifecycle_version"]}
+    )
+  end
 
   # -- fold -------------------------------------------------------------------------
 
@@ -180,11 +179,9 @@ defmodule TaskCore.Hierarchy do
   end
 
   def handle_event(%{type: "TaskWorkflowInstantiatedV1", payload: p} = env, state) do
-    {:ok, workflow} = run_workflow(state, p)
+    {:ok, tasks} = plan(state, p)
 
-    ids = p["task_ids"]
-
-    workflow["tasks"]
+    tasks
     |> Enum.reduce(state, fn definition, acc ->
       task =
         env
@@ -204,11 +201,11 @@ defmodule TaskCore.Hierarchy do
           roadmap_key: p["roadmap_key"],
           workflow_id: p["workflow_id"],
           definition_id: definition["id"],
-          predecessor_ids: Enum.map(definition["depends_on"], &ids[&1]),
+          predecessor_ids: definition["predecessor_ids"],
           artifact_requirements: definition["artifact_requirements"]
         })
 
-      put_in(acc, [:tasks, Access.key(key(env, ids[definition["id"]]))], task)
+      put_in(acc, [:tasks, Access.key(key(env, definition["task_id"]))], task)
     end)
     |> put_in([:hierarchy_commands, Access.key(env.event_id)], env)
   end

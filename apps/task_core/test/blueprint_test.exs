@@ -6,37 +6,8 @@ defmodule TaskCore.BlueprintTest do
   def criteria(id), do: [%{"id" => id, "description" => "#{id}, done"}]
 
   def doc do
-    %{
-      "schema_version" => 2,
-      "project" => %{"key" => "maths", "name" => "Year 7 maths"},
-      "roadmaps" => [
-        %{
-          "key" => "autumn",
-          "name" => "Autumn term",
-          "workflows" => [
-            %{
-              "id" => "fractions",
-              "name" => "Fractions",
-              "tasks" => [
-                %{
-                  "id" => "adding",
-                  "title" => "Adding fractions",
-                  "definition_of_done" => criteria("quiz"),
-                  "depends_on" => ["intro"]
-                },
-                %{
-                  "id" => "intro",
-                  "title" => "Introducing fractions",
-                  "description" => "Halves, thirds and quarters",
-                  "definition_of_done" => criteria("worksheet"),
-                  "artifact_requirements" => ["worksheet"]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
+    {document, _} = Code.eval_file(Path.join(__DIR__, "fixtures/curriculum.exs"))
+    document
   end
 
   test "normalizes a curriculum: defaults filled, the author's order kept" do
