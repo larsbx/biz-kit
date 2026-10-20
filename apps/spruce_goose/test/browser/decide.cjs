@@ -365,10 +365,10 @@ async function signIn(browser, subject) {
 
     // A todo on the run's first step, added and then done from this device
     // (docs/architecture/2026-10-20-sprucegoose-salvage.md).
-    const onBuild = async (type, text) => {
+    const onBuild = async (...expected) => {
       await dialog.waitFor({ state: "visible" });
       const command = await page.locator("#confirm-body").textContent();
-      if (!command.includes(type) || !command.includes(text)) throw new Error(`unexpected command: ${command}`);
+      if (!expected.every((t) => command.includes(t))) throw new Error(`unexpected command: ${command}`);
       await page.getByRole("button", { name: "Sign and send" }).click();
       await dialog.waitFor({ state: "hidden" });
     };
@@ -376,7 +376,8 @@ async function signIn(browser, subject) {
     await build.getByRole("button", { name: "Add todo…" }).click();
     await onBuild("TaskTodoAddedV1", "tag-the-release");
     await build.locator("li").filter({ hasText: "Tag the release" }).getByRole("button", { name: "Done" }).click(live);
-    await onBuild("TaskTodoCompletedV1", "tag-the-release");
+    // The version shown is the one signed: a revision since would be refused.
+    await onBuild("TaskTodoCompletedV1", "tag-the-release", '"expected_todo_version": 1');
     await build.getByText("Tag the release (completed)").waitFor(live);
 
     // The administrator gives up this browser's key from its own device list

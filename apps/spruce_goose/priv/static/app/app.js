@@ -210,19 +210,22 @@ function todoControls(id, t) {
   const live = !["completed", "cancelled"].includes(t.state);
   if (!rows.length && !live) return null;
   const disabled = !pair || !enrolled || deciding;
-  const sign = (action, fields) =>
+  // `seen` is what the person saw and must sign: for a todo already there,
+  // the version shown, so a revision since is refused rather than signed.
+  const sign = (action, fields, seen = {}) =>
     signAndSubmit(
       () => postJSON(`${projectPath}/commands`, { action, task_id: id, ...fields, key_id: keyId }),
-      { type: stepTypes[action], payload: { task_id: id, ...fields } },
+      { type: stepTypes[action], payload: { task_id: id, ...fields, ...seen } },
     );
 
   const items = rows.map((r) => {
     const done = el("button", { textContent: "Done", disabled });
-    done.onclick = () => sign("complete_todo", { todo_id: r.id });
+    const seen = { expected_todo_version: r.version };
+    done.onclick = () => sign("complete_todo", { todo_id: r.id }, seen);
     const drop = el("button", { textContent: "Drop…", disabled });
     drop.onclick = () => {
       const reason = prompt(`Why drop “${r.title}”? The reason is recorded on the ledger.`);
-      if (reason?.trim()) sign("drop_todo", { todo_id: r.id, reason });
+      if (reason?.trim()) sign("drop_todo", { todo_id: r.id, reason }, seen);
     };
     const label = r.state === "open" ? r.title : `${r.title} (${r.state}${r.reason ? `: ${r.reason}` : ""})`;
     return el(
