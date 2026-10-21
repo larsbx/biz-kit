@@ -22,6 +22,10 @@ six role profiles and two people (a `DRIVER` and a `DISPATCHER`), and serves:
 | dispatch | `:4000` | `/v1`, the portal, its streams; `TOKEN_VERIFIER_ADAPTER=BizKitSession` |
 | SpruceGoose | `127.0.0.1:4001` | `/auth`: native sign-in, `/auth/me`, `/auth/logout` |
 
+Set `SPRUCE_GOOSE_PUBLIC_URL=http://10.0.2.2:4001` when an Android emulator
+signs in: the development provider sends the browser back to that URL, and
+the emulator reaches the host's loopback as `10.0.2.2`.
+
 `.e2e/stack.json` tells the tests who is who: each person's provider name,
 principal, participant and role assignment, and the tenant.
 
