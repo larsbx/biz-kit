@@ -117,9 +117,10 @@ defmodule SpruceGoose.GrantHistoryTest do
 
   test "history is an explicit admin-only CLI command" do
     subject = actor!("history-reader")
+    name = subject.name
     assert {:ok, {:grant_history, nil, nil}} = Command.parse(["grant", "history"])
 
-    assert {:ok, {:grant_history, subject.name, "reader"}} =
+    assert {:ok, {:grant_history, ^name, "reader"}} =
              Command.parse(["grant", "history", "--actor", subject.name, "--role", "reader"])
 
     assert {:error, _} = Executor.run({:grant_history, nil, nil}, subject.name)
