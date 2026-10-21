@@ -46,13 +46,11 @@ granted this, and when" and "revoke exactly this one".
 | role | grants |
 |---|---|
 | `reader` | read within scope |
-| `operator` | task lifecycle, board moves, metadata, todos, dependencies, inbox triage |
+| `operator` | task lifecycle, metadata, todos, dependencies |
 | `artifact_verifier` | verify and record artifact-custody receipts |
-| `derivation_executor` | record derivation outcome receipts |
-| `deployment_executor` | start, complete, and observe deployment operations |
 | `proposer` | propose and withdraw revisions |
-| `approver` | approve revisions, the entity `:revise` actions they apply through, and (humans only) deployment execution authorizations |
-| `author` | create and remove project, roadmap, workflow, board, column, filter; `rename` |
+| `approver` | approve revisions, and the entity `:revise` actions they apply through |
+| `author` | create and remove project, roadmap, workflow; `rename` |
 | `admin` | manage the actor registry itself |
 
 Roles do not imply one another, with one exception: **every grant implies
@@ -79,10 +77,8 @@ A record's scope is its owning project, resolved by SQL walk up to `projects`
 graph, because the check runs inside a policy where the record is loaded but its
 ancestors are not.
 
-Two things resolve to **global** scope and so need a `*` grant:
-
-- **Creating a project.** It cannot be scoped to itself before it exists.
-- **The inbox.** Captures arrive before triage, so they belong to no project yet.
+**Creating a project** resolves to **global** scope and so needs a `*` grant:
+it cannot be scoped to itself before it exists.
 
 Ledger parity and recovery import are a narrower exception. Both require
 `admin` at global scope because they read fleet-wide historical state through

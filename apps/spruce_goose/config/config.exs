@@ -7,8 +7,7 @@ config :spruce_goose,
   ash_domains: [
     SpruceGoose.Accounts,
     SpruceGoose.Actors,
-    SpruceGoose.Workflows,
-    SpruceGoose.Knowledge.Domain
+    SpruceGoose.Workflows
   ]
 
 config :spruce_goose, ecto_repos: [SpruceGoose.Repo]

@@ -2,6 +2,10 @@
 
 Verified 2026-08-22 under task `tsk-20260822T230747Z-f2749517`.
 
+> This snapshot describes the standalone `sprucegoose` deployment. In biz-kit
+> the runtime integration, derivation permits, release provenance and the
+> deployment domain are retired ([Deployment domain](#deployment-domain)).
+
 ## Production authority
 
 - Mama runs the persistent SpruceGoose OTP service. The deployed application
