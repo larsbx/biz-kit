@@ -725,7 +725,17 @@
         "callbacks": {},
         "description": "Self-service: the proof shows the caller's installation holds the key, and\nno one approves it. Registering the same key again returns the device. An\ninstallation registered with another key, or to someone else, is a\nconflict; a new installation is how a key changes.\n",
         "operationId": "DispatchWeb.DeviceController.create",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under, when there are several. The device is the participant's, whichever is selected.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

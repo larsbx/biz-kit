@@ -25,6 +25,15 @@ defmodule DispatchWeb.DeviceController do
     conflict; a new installation is how a key changes.
     """,
     security: [%{"bearerAuth" => []}],
+    parameters: [
+      "x-role-assignment-id": [
+        in: :header,
+        type: :string,
+        description:
+          "Selects which held role assignment the request acts under, when there are several. " <>
+            "The device is the participant's, whichever is selected."
+      ]
+    ],
     request_body: {"Registration", "application/json", DeviceRegistrationRequest},
     responses: [
       created: {"Registered", "application/json", DeviceRegistration},
