@@ -27,6 +27,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Identity](2026-10-18-identity.md): biz-kit's own principal IDs, a
   replaceable sign-in provider (WorkOS first), explicit identity bindings and
   local sessions. The ledger keeps all authority.
+- [Native sign-in](2026-10-21-native-sign-in.md): apps sign in through the
+  system browser (RFC 8252, PKCE) and get the same biz-kit session as a bearer
+  token, which dispatch's `/v1` accepts.
 - [Deciding on suggestions](2026-10-18-decide.md): the first end-to-end
   workflow. A person accepts or declines an agent's suggestion in the web
   view; the command is signed by a key held in their browser.
