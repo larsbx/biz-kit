@@ -102,6 +102,14 @@ defmodule SpruceGoose.ShadowEventAppendTest do
       |> Enum.sort()
       |> Enum.map(&%{"path" => &1, "sha256" => String.replace_prefix(digest(&1), "sha256:", "")})
 
+    versions =
+      Enum.map(
+        migrations,
+        &(&1["path"] |> Path.basename() |> String.split("_") |> hd() |> String.to_integer())
+      )
+
+    assert Enum.uniq(versions) == versions, "migration versions must be unique"
+
     # Each migration's path and digest, NUL-separated, one per line.
     set = Enum.map_join(migrations, &(&1["path"] <> <<0>> <> &1["sha256"] <> "\n"))
     assert roots["schema"] == "sha256:" <> Base.encode16(:crypto.hash(:sha256, set), case: :lower)

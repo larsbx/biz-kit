@@ -229,6 +229,16 @@ jobs:
           apps/dispatch/test/dispatch/access/capability_signer_test.exs
           apps/dispatch/test/dispatch_web/role_capability_controller_test.exs
           apps/dispatch/lib/dispatch/accounts/validations/known_constraints.ex
+          apps/spruce_goose/lib/spruce_goose/actors/grant.ex
+          apps/spruce_goose/lib/spruce_goose/actors/registry.ex
+          apps/spruce_goose/lib/spruce_goose/cli/command.ex
+          apps/spruce_goose/lib/spruce_goose/cli/executor.ex
+          apps/spruce_goose/priv/repo/migrations/20261021100000_preserve_actor_grant_history.exs
+          apps/spruce_goose/test/grant_history_test.exs
+          apps/spruce_goose/test/migration_upgrade_test.exs
+          apps/spruce_goose/test/actors_test.exs
+          apps/spruce_goose/test/actors_separate_sessions_test.exs
+          apps/spruce_goose/test/shadow_event_append_test.exs
       # Dispatch's unit tier: no PostGIS here, so the integration tier stays
       # local (`mix test --include integration`). The contract check keeps
       # apps/dispatch/contracts/openapi.json, which the field app is held to,
@@ -256,6 +266,9 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
+      - name: Test registry revocation across separate database sessions
+        working-directory: apps/spruce_goose
+        run: SPRUCE_GOOSE_TEST_DOGFOOD=true mix test test/actors_separate_sessions_test.exs --include separate_sessions
       # The web view: its modules against the ledger's canonical vectors, then
       # the first workflow in Chromium (sign in, enrol the device key, accept
       # an agent's suggestion, signed in the browser).

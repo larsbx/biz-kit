@@ -121,12 +121,17 @@ defmodule SpruceGoose.Actors.Registry do
 
   def revoke(name, role, scope, acting) do
     registry_write(fn ->
-      with {:ok, _current_admin} <- require_current_admin(acting),
+      with {:ok, current_admin} <- require_current_admin(acting),
            {:ok, role} <- parse_role(role),
            {:ok, actor} <- fetch(name),
            {:ok, grant} <- fetch_grant(actor, role, scope),
            :ok <- refuse_last_admin(actor, grant),
-           {:ok, notifications} <- destroy(grant) do
+           {:ok, _closed, notifications} <-
+             Ash.update(grant, %{revoked_by: current_admin.name},
+               action: :revoke,
+               authorize?: false,
+               return_notifications?: true
+             ) do
         {:ok, Map.put(actor_json(actor), :grants, Scope.summary(actor)), notifications}
       end
     end)
@@ -135,6 +140,13 @@ defmodule SpruceGoose.Actors.Registry do
   def grants(name, role, acting) do
     with :ok <- require_admin(acting),
          {:ok, grants} <- read_grants(name, role) do
+      {:ok, %{grants: grants}}
+    end
+  end
+
+  def grant_history(name, role, acting) do
+    with {:ok, _current_admin} <- require_current_admin(acting),
+         {:ok, grants} <- read_grants(name, role, :history) do
       {:ok, %{grants: grants}}
     end
   end
@@ -371,9 +383,10 @@ defmodule SpruceGoose.Actors.Registry do
 
   defp read_actors(_kind), do: {:error, "--kind must be one of #{Enum.join(valid_kinds(), ", ")}"}
 
-  defp read_grants(name, role) do
+  defp read_grants(name, role, action \\ :read) do
     with {:ok, filter} <- grant_filter(name, role),
-         {:ok, grants} <- Ash.read(Ash.Query.filter_input(Grant, filter), authorize?: false),
+         {:ok, grants} <-
+           Ash.read(Ash.Query.filter_input(Grant, filter), action: action, authorize?: false),
          {:ok, actors} <- Ash.read(Actor, authorize?: false) do
       names = Map.new(actors, &{&1.id, &1.name})
 
@@ -381,14 +394,20 @@ defmodule SpruceGoose.Actors.Registry do
        grants
        |> Enum.map(
          &%{
+           id: &1.id,
            actor: Map.get(names, &1.actor_id),
            role: &1.role,
            scope: &1.scope,
            granted_by: &1.granted_by,
-           granted_at: &1.granted_at
+           granted_at: &1.granted_at,
+           revoked_at: &1.revoked_at,
+           revoked_by: &1.revoked_by
          }
        )
-       |> Enum.sort_by(&{&1.actor, to_string(&1.role), &1.scope})}
+       |> Enum.sort_by(
+         &{&1.actor, to_string(&1.role), &1.scope, DateTime.to_unix(&1.granted_at, :microsecond),
+          &1.id}
+       )}
     end
   end
 
@@ -405,10 +424,6 @@ defmodule SpruceGoose.Actors.Registry do
 
   defp actor_filter(name) do
     with {:ok, actor} <- fetch(name), do: {:ok, [actor_id: actor.id]}
-  end
-
-  defp destroy(record) do
-    Ash.destroy(record, authorize?: false, return_notifications?: true)
   end
 
   defp actor_json(actor) do
