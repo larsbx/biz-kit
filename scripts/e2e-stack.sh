@@ -5,6 +5,7 @@
 #
 #   scripts/e2e-stack.sh            prepare, then run in the foreground
 #   scripts/e2e-stack.sh --prepare  prepare only
+#   scripts/e2e-stack.sh fixture …  priv/repo/e2e.exs against the running stack
 #
 # Needs PostgreSQL with PostGIS on localhost (PGPASSWORD, default "postgres").
 # Writes $E2E_STATE_DIR/stack.json (default .e2e/), which the tests read.
@@ -16,6 +17,12 @@ export MIX_ENV=dev
 export PGPASSWORD="${PGPASSWORD:-postgres}"
 export EVENTSTORE_PASSWORD="${EVENTSTORE_PASSWORD:-$PGPASSWORD}"
 export DATABASE_URL="${DATABASE_URL:-ecto://postgres:${PGPASSWORD}@localhost:5432/dispatch_e2e}"
+
+# The fixtures during a run, with the stack's own databases.
+if [ "${1:-}" = "fixture" ]; then
+  shift
+  cd apps/dispatch && exec mix run priv/repo/e2e.exs "$@"
+fi
 
 state="$(mkdir -p "${E2E_STATE_DIR:-.e2e}" && cd "${E2E_STATE_DIR:-.e2e}" && pwd)"
 stack="$state/stack.json"

@@ -41,7 +41,7 @@ to principals, and dispatch's `/v1` checks.
 
 ## Fixtures during a run
 
-`mix run priv/repo/e2e.exs revoke <tenant> <role_assignment_id>` ends an
+`scripts/e2e-stack.sh fixture revoke <tenant> <role_assignment_id>` ends an
 assignment as an administrator would (scenario 16: a dispatcher loses the
 operations stream on the next heartbeat).
 
