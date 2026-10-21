@@ -229,8 +229,8 @@ defmodule SpruceGoose.CLITest do
   test "parses operator lifecycle commands" do
     id = "tsk-20260727T044500Z-1234abcd"
 
-    assert {:ok, {:list_tasks, %{state: "waiting"}}} =
-             Command.parse(["task", "list", "--state", "waiting"])
+    assert {:ok, {:list_tasks, %{state: "queued"}}} =
+             Command.parse(["task", "list", "--state", "queued"])
 
     assert {:ok, {:transition_task, ^id, :proposed, nil}} =
              Command.parse(["task", "propose", id])
@@ -241,8 +241,11 @@ defmodule SpruceGoose.CLITest do
     assert {:ok, {:transition_task, ^id, :in_progress, nil}} =
              Command.parse(["task", "start", id])
 
-    assert {:ok, {:transition_task, ^id, :waiting, "operator review"}} =
-             Command.parse(["task", "wait", id, "operator", "review"])
+    assert {:ok, {:transition_task, ^id, :queued, "operator review"}} =
+             Command.parse(["task", "reopen", id, "operator", "review"])
+
+    assert {:error, _} = Command.parse(["task", "reopen", id])
+    assert {:error, _} = Command.parse(["task", "wait", id, "operator", "review"])
 
     assert {:ok, {:link_task, ^id, "evidence", "/tmp/proof"}} =
              Command.parse(["task", "link", id, "evidence", "/tmp/proof"])

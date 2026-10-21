@@ -48,10 +48,9 @@ defmodule SpruceGoose.WorkflowPlanTest do
 
     assert build["state"] == "inbox"
     assert publish["predecessor_ids"] == ["build-42"]
+    # The legacy writer's lifecycle is the ledger's, state for state.
     assert Lifecycle.version() == TaskLifecycle.version()
-    assert Lifecycle.allowed?(:failed, :queued)
-    refute TaskLifecycle.allowed?(:failed, :queued)
-    assert TaskLifecycle.allowed?(:in_progress, :queued)
-    refute Lifecycle.allowed?(:in_progress, :queued)
+    assert Lifecycle.states() == TaskLifecycle.states()
+    assert Lifecycle.transitions() == TaskLifecycle.transitions()
   end
 end

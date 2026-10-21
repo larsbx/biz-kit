@@ -92,11 +92,11 @@ defmodule SpruceGoose.ReauditRegressionTest do
     assert {:ok, %{state: :ready}} = Executor.run({:transition_task, @a, :ready, nil})
     assert {:ok, %{state: :in_progress}} = Executor.run({:transition_task, @a, :in_progress, nil})
 
-    assert {:ok, waiting} =
-             Executor.run({:transition_task, @a, :waiting, "collecting evidence"})
+    assert {:ok, reopened} =
+             Executor.run({:transition_task, @a, :queued, "collecting evidence"})
 
-    assert waiting.state == :waiting
-    assert waiting.wait_reason == "collecting evidence"
+    assert reopened.state == :queued
+    assert reopened.reopen_reason == "collecting evidence"
 
     assert {:ok, %{state: :ready}} = Executor.run({:transition_task, @a, :ready, nil})
     assert {:ok, %{state: :in_progress}} = Executor.run({:transition_task, @a, :in_progress, nil})

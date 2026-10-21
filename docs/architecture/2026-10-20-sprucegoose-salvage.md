@@ -73,6 +73,14 @@ acknowledgment, so work under way keeps the SOP it started under.
   derivation permits and outcome receipts; release provenance; the
   deployment domain. None is migrated. SpruceGoose's code for them goes
   when its writer is retired.
+- **The legacy writer's lifecycle is the ledger's.** `waiting`, `blocked`
+  and `failed` are gone from `SpruceGoose.Workflows.Lifecycle`, and with
+  them `task wait`; `task reopen ID REASON` mirrors `TaskReopenedV1`
+  (in_progress → queued, reason required). Migration
+  `20261021090000_retire_task_states` moves stored tasks: waiting →
+  in_progress, blocked and failed → queued. The moves are not certified, so
+  `ledger replay-status` reports each moved task as a difference until its
+  next certified mutation.
 
 ## Verification
 
