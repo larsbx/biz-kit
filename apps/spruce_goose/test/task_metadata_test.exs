@@ -1,19 +1,21 @@
-defmodule SpruceGoose.BoardMetadataTest do
+defmodule SpruceGoose.TaskMetadataTest do
+  @moduledoc """
+  A task's typed metadata (rank, priority, assignees, labels, custom fields),
+  revised under its own optimistic lock. Boards, columns and saved filters
+  are retired (docs/architecture/2026-10-20-sprucegoose-salvage.md).
+  """
   use SpruceGoose.DataCase, async: false
 
   alias SpruceGoose.Workflows.{
-    Board,
-    BoardColumn,
     Definition,
     Project,
     Roadmap,
-    SavedFilter,
     Task,
     Workflow
   }
 
-  test "board metadata, typed custom fields, and saved filters persist" do
-    %{task: task, board: board, column: column} = fixture("metadata")
+  test "typed metadata and custom fields persist" do
+    task = fixture("metadata")
 
     custom_fields = %{
       "estimate" => %{"type" => "number", "value" => 3},
@@ -24,8 +26,6 @@ defmodule SpruceGoose.BoardMetadataTest do
              Ash.update(
                task,
                %{
-                 board_id: board.id,
-                 column_id: column.id,
                  rank: "a0",
                  priority: 2,
                  assignees: ["agent:jimbo"],
@@ -39,19 +39,10 @@ defmodule SpruceGoose.BoardMetadataTest do
     assert updated.custom_fields == custom_fields
     assert updated.assignees == ["agent:jimbo"]
     assert updated.labels == ["roadmap", "kanban"]
-
-    assert {:ok, filter} =
-             Ash.create(SavedFilter, %{
-               board_id: board.id,
-               name: "My active work",
-               criteria: %{"assignee" => "agent:jimbo", "state" => ["ready", "in_progress"]}
-             })
-
-    assert filter.criteria["assignee"] == "agent:jimbo"
   end
 
-  test "concurrent board edits reject a stale revision" do
-    %{task: task, board: board, column: column} = fixture("concurrency")
+  test "concurrent metadata edits reject a stale revision" do
+    task = fixture("concurrency")
 
     updates =
       ["first", "second"]
@@ -59,7 +50,7 @@ defmodule SpruceGoose.BoardMetadataTest do
         fn rank ->
           Ash.update(
             task,
-            %{board_id: board.id, column_id: column.id, rank: rank},
+            %{rank: rank},
             action: :update_board_metadata
           )
         end,
@@ -76,45 +67,46 @@ defmodule SpruceGoose.BoardMetadataTest do
            end)
   end
 
-  test "database rejects a column from another board" do
-    %{task: task, board: board} = fixture("membership-a")
-    %{column: foreign_column} = fixture("membership-b")
-
-    assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
-             Repo.query(
-               """
-               UPDATE workflow_tasks
-               SET board_id = $1::text::uuid, column_id = $2::text::uuid
-               WHERE id = $3::text::uuid
-               """,
-               [board.id, foreign_column.id, task.id]
-             )
-  end
-
-  test "invalid custom values and filter keys fail closed" do
-    %{task: task, board: board, column: column} = fixture("validation")
+  test "invalid custom values fail closed" do
+    task = fixture("validation")
 
     assert {:error, custom_error} =
              Ash.update(
                task,
                %{
-                 board_id: board.id,
-                 column_id: column.id,
                  custom_fields: %{"estimate" => %{"type" => "number", "value" => "three"}}
                },
                action: :update_board_metadata
              )
 
     assert Exception.message(custom_error) =~ "invalid typed value"
+  end
 
-    assert {:error, filter_error} =
-             Ash.create(SavedFilter, %{
-               board_id: board.id,
-               name: "Unsafe",
-               criteria: %{"sql" => "drop table workflow_tasks"}
-             })
+  test "a task placed on a retired board still moves through its lifecycle" do
+    task = fixture("placed")
 
-    assert Exception.message(filter_error) =~ "unsupported filter keys"
+    # A placement made before boards were retired, written as the old CLI did.
+    %{rows: [[board_id]]} =
+      Repo.query!(
+        "INSERT INTO boards (id, workflow_id, key, name) VALUES (gen_random_uuid(), $1::text::uuid, 'main', 'Main') RETURNING id::text",
+        [task.workflow_id]
+      )
+
+    %{rows: [[column_id]]} =
+      Repo.query!(
+        "INSERT INTO board_columns (id, board_id, key, name, position, task_state) VALUES (gen_random_uuid(), $1::text::uuid, 'inbox', 'Inbox', 1, 'inbox') RETURNING id::text",
+        [board_id]
+      )
+
+    Repo.query!(
+      "UPDATE workflow_tasks SET board_id = $1::text::uuid, column_id = $2::text::uuid WHERE id = $3::text::uuid",
+      [board_id, column_id, task.id]
+    )
+
+    task = Ash.get!(Task, task.id)
+
+    assert {:ok, %{state: :proposed}} =
+             Ash.update(task, %{to_state: :proposed}, action: :transition)
   end
 
   test "the unified task model has no parallel issue resource or table" do
@@ -146,28 +138,16 @@ defmodule SpruceGoose.BoardMetadataTest do
         definition: definition
       })
 
-    {:ok, board} =
-      Ash.create(Board, %{workflow_id: workflow.id, key: "main", name: "Main"})
-
-    {:ok, column} =
-      Ash.create(BoardColumn, %{
-        board_id: board.id,
-        key: "inbox",
-        name: "Inbox",
-        position: 1,
-        task_state: :inbox
-      })
-
     {:ok, task} =
       Ash.create(Task, %{
         workflow_id: workflow.id,
         task_id:
           "tsk-20260727T150000Z-#{String.slice(:crypto.hash(:sha256, suffix) |> Base.encode16(case: :lower), 0, 8)}",
         title: "Task #{suffix}",
-        definition_of_done: "Board metadata tests pass",
+        definition_of_done: "Metadata tests pass",
         runner: :oban
       })
 
-    %{task: task, board: board, column: column}
+    task
   end
 end

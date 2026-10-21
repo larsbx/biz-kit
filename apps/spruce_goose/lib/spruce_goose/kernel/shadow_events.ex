@@ -12,10 +12,7 @@ defmodule SpruceGoose.Kernel.ShadowEvents do
   @notifications_key :spruce_goose_shadow_notifications
   @shadowed_verbs [
     :acknowledge_sop,
-    :add_board,
-    :add_column,
     :add_dependency,
-    :add_filter,
     :add_task,
     :add_todo,
     :add_todo_dependency,
@@ -23,16 +20,10 @@ defmodule SpruceGoose.Kernel.ShadowEvents do
     :complete_todo,
     :instantiate_task,
     :link_task,
-    :move_task,
     :record_artifact_receipt,
-    :remove_board,
-    :remove_column,
     :remove_dependency,
-    :remove_filter,
     :remove_todo,
     :remove_todo_dependency,
-    :rename_board,
-    :rename_column,
     :transition_task,
     :unlink_task,
     :update_task_metadata

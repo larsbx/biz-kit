@@ -34,7 +34,6 @@ defmodule SpruceGoose.CLI.Command do
        "link ID --remove KIND VALUE",
        "acknowledge-sop ID PATH",
        "artifact-receipt ID NAME SOURCE_PATH SOURCE_IDENTITY",
-       "move ID BOARD COLUMN RANK",
        "metadata ID JSON"
      ]},
     {"dep",
@@ -52,23 +51,6 @@ defmodule SpruceGoose.CLI.Command do
        "dep add TASK_ID TODO_ID --after PREDECESSOR_ID",
        "dep remove TASK_ID TODO_ID --after PREDECESSOR_ID",
        "dep list TASK_ID"
-     ]},
-    {"board",
-     [
-       "add PROJECT ROADMAP WORKFLOW KEY NAME",
-       "list PROJECT ROADMAP WORKFLOW",
-       "rename BOARD NAME",
-       "remove BOARD"
-     ]},
-    {"column",
-     ["add BOARD KEY POSITION STATE NAME", "list BOARD", "rename COLUMN NAME", "remove COLUMN"]},
-    {"filter", ["add BOARD NAME JSON", "list BOARD", "apply FILTER", "remove FILTER"]},
-    {"inbox",
-     [
-       "add TEXT",
-       "list [--state pending|resolved|dropped|all]",
-       "done CAPTURE_ID",
-       "drop CAPTURE_ID REASON"
      ]},
     {"revise",
      [
@@ -273,25 +255,6 @@ defmodule SpruceGoose.CLI.Command do
     end
   end
 
-  def parse(["inbox", "list" | args]) do
-    with {:ok, opts} <- scope_options(args, state: :string) do
-      {:ok, {:list_inbox, Keyword.get(opts, :state)}}
-    end
-  end
-
-  def parse(["inbox", "add" | body]) when body != [],
-    do: {:ok, {:add_inbox, Enum.join(body, " ")}}
-
-  def parse(["inbox", "done", capture_id]), do: {:ok, {:resolve_inbox, capture_id, nil}}
-
-  def parse(["inbox", "drop", capture_id | reason]) when reason != [],
-    do: {:ok, {:drop_inbox, capture_id, Enum.join(reason, " ")}}
-
-  def parse(["inbox", "promote" | _args]) do
-    {:error,
-     "inbox promote is retired; commit a TaskDefinition, apply its blueprint, then use task instantiate"}
-  end
-
   def parse(["todo", "list", task_id]), do: {:ok, {:list_todos, task_id}}
 
   def parse(["todo", "add", task_id | body]) when body != [],
@@ -317,39 +280,8 @@ defmodule SpruceGoose.CLI.Command do
     end
   end
 
-  def parse(["board", "add", project, roadmap, workflow, key | name]) when name != [],
-    do: {:ok, {:add_board, project, roadmap, workflow, key, Enum.join(name, " ")}}
-
-  def parse(["board", "list", project, roadmap, workflow]),
-    do: {:ok, {:list_boards, project, roadmap, workflow}}
-
-  def parse(["board", "rename", board_id | name]) when name != [],
-    do: {:ok, {:rename_board, board_id, Enum.join(name, " ")}}
-
-  def parse(["board", "remove", board_id]), do: {:ok, {:remove_board, board_id}}
-
-  def parse(["column", "add", board_id, key, position, state | name]) when name != [],
-    do: {:ok, {:add_column, board_id, key, position, state, Enum.join(name, " ")}}
-
-  def parse(["column", "list", board_id]), do: {:ok, {:list_columns, board_id}}
-
-  def parse(["column", "rename", column_id | name]) when name != [],
-    do: {:ok, {:rename_column, column_id, Enum.join(name, " ")}}
-
-  def parse(["column", "remove", column_id]), do: {:ok, {:remove_column, column_id}}
-
-  def parse(["task", "move", task_id, board_id, column_id, rank]),
-    do: {:ok, {:move_task, task_id, board_id, column_id, rank}}
-
   def parse(["task", "metadata", task_id, json]),
     do: {:ok, {:update_task_metadata, task_id, json}}
-
-  def parse(["filter", "add", board_id, name, json]),
-    do: {:ok, {:add_filter, board_id, name, json}}
-
-  def parse(["filter", "list", board_id]), do: {:ok, {:list_filters, board_id}}
-  def parse(["filter", "apply", filter_id]), do: {:ok, {:apply_filter, filter_id}}
-  def parse(["filter", "remove", filter_id]), do: {:ok, {:remove_filter, filter_id}}
 
   def parse(["revise", "propose" | args]) do
     with {:ok, opts} <- revise_options(args, file: :string),

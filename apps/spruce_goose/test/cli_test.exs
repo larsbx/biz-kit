@@ -8,7 +8,7 @@ defmodule SpruceGoose.CLITest do
 
   test "returns scoped help for every command family and rejects unknown families" do
     families =
-      ~w(id project blueprint roadmap workflow task dep todo board column filter inbox ledger outbox)
+      ~w(id project blueprint roadmap workflow task dep todo ledger outbox)
 
     for family <- families, help_arg <- ["help", "--help"] do
       assert {:ok, help} = CLI.run([family, help_arg])
@@ -270,45 +270,21 @@ defmodule SpruceGoose.CLITest do
     assert {:error, :usage} = Command.parse(["task", "cancel", id])
   end
 
-  test "parses governed Kanban commands" do
-    assert {:ok, {:add_board, "pi", "buzz", "integration", "main", "Main board"}} =
-             Command.parse(["board", "add", "pi", "buzz", "integration", "main", "Main", "board"])
-
-    assert {:ok, {:list_boards, "pi", "buzz", "integration"}} =
-             Command.parse(["board", "list", "pi", "buzz", "integration"])
-
-    assert {:ok, {:add_column, "board-id", "ready", "1", "ready", "Ready work"}} =
-             Command.parse(["column", "add", "board-id", "ready", "1", "ready", "Ready", "work"])
-
-    assert {:ok, {:move_task, "task-id", "board-id", "column-id", "a0"}} =
-             Command.parse(["task", "move", "task-id", "board-id", "column-id", "a0"])
-
+  test "parses task metadata, and refuses the retired board, column, filter and inbox families" do
     assert {:ok, {:update_task_metadata, "task-id", ~s({"priority":2})}} =
              Command.parse(["task", "metadata", "task-id", ~s({"priority":2})])
 
-    assert {:ok, {:add_filter, "board-id", "mine", ~s({"assignee":"jimbo"})}} =
-             Command.parse(["filter", "add", "board-id", "mine", ~s({"assignee":"jimbo"})])
-
-    assert {:ok, {:apply_filter, "filter-id"}} =
-             Command.parse(["filter", "apply", "filter-id"])
+    for retired <- [
+          ["board", "list", "pi", "buzz", "integration"],
+          ["column", "list", "board-id"],
+          ["filter", "apply", "filter-id"],
+          ["inbox", "add", "note"],
+          ["task", "move", "task-id", "board-id", "column-id", "a0"]
+        ],
+        do: assert({:error, :usage} = Command.parse(retired))
   end
 
-  test "parses rename and removal commands for projection entities" do
-    assert {:ok, {:rename_board, "board-id", "Main board"}} =
-             Command.parse(["board", "rename", "board-id", "Main", "board"])
-
-    assert {:ok, {:remove_board, "board-id"}} =
-             Command.parse(["board", "remove", "board-id"])
-
-    assert {:ok, {:rename_column, "column-id", "In review"}} =
-             Command.parse(["column", "rename", "column-id", "In", "review"])
-
-    assert {:ok, {:remove_column, "column-id"}} =
-             Command.parse(["column", "remove", "column-id"])
-
-    assert {:ok, {:remove_filter, "filter-id"}} =
-             Command.parse(["filter", "remove", "filter-id"])
-
+  test "parses removal and unlink commands" do
     id = "tsk-20260727T044500Z-1234abcd"
 
     assert {:ok, {:remove_todo, ^id, "todo-abc"}} =
@@ -323,9 +299,6 @@ defmodule SpruceGoose.CLITest do
   end
 
   test "rename and removal commands reject missing names and stray arguments" do
-    assert {:error, :usage} = Command.parse(["board", "rename", "board-id"])
-    assert {:error, :usage} = Command.parse(["column", "rename", "column-id"])
-    assert {:error, :usage} = Command.parse(["filter", "remove"])
     assert {:error, :usage} = Command.parse(["todo", "remove", "tsk-20260727T044500Z-1234abcd"])
   end
 
@@ -356,40 +329,6 @@ defmodule SpruceGoose.CLITest do
 
     assert {:error, :usage} = Command.parse(["dep", "list"])
     assert {:error, :usage} = Command.parse(["dep", "bogus", id])
-  end
-
-  test "parses fail-closed inbox capture" do
-    assert {:ok, {:add_inbox, "Unclassified operator note"}} =
-             Command.parse(["inbox", "add", "Unclassified", "operator", "note"])
-
-    assert {:ok, {:list_inbox, nil}} = Command.parse(["inbox", "list"])
-    assert {:error, :usage} = Command.parse(["inbox", "add"])
-  end
-
-  test "parses inbox triage commands" do
-    assert {:ok, {:list_inbox, "all"}} = Command.parse(["inbox", "list", "--state", "all"])
-
-    assert {:ok, {:list_inbox, "resolved"}} =
-             Command.parse(["inbox", "list", "--state", "resolved"])
-
-    assert {:ok, {:resolve_inbox, "inbox-abc", nil}} =
-             Command.parse(["inbox", "done", "inbox-abc"])
-
-    assert {:ok, {:drop_inbox, "inbox-abc", "not actionable"}} =
-             Command.parse(["inbox", "drop", "inbox-abc", "not", "actionable"])
-
-    assert {:error, message} = Command.parse(["inbox", "promote", "inbox-abc"])
-    assert message =~ "retired"
-    assert message =~ "task instantiate"
-  end
-
-  test "inbox triage commands fail closed on malformed arguments" do
-    assert {:error, :usage} = Command.parse(["inbox", "done"])
-    assert {:error, :usage} = Command.parse(["inbox", "drop", "inbox-abc"])
-    assert {:error, "invalid list arguments"} = Command.parse(["inbox", "list", "stray"])
-
-    assert {:error, message} = Command.parse(["inbox", "promote", "inbox-abc", "stray"])
-    assert message =~ "retired"
   end
 
   test "parses subordinate TODO commands" do
