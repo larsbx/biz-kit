@@ -88,9 +88,18 @@ defmodule DispatchWeb.StatusEventController do
 
   defp declare(conn, params) do
     case parse(params) do
-      {:ok, attrs} -> respond(conn, run(conn, params, attrs))
+      {:ok, attrs} -> respond(conn, run(conn, params, Map.put(attrs, :signed, signed(conn))))
       {:error, field} -> respond(conn, {:error, {:malformed, field}})
     end
+  end
+
+  # What a device signed is the body as sent, less the signature itself: the
+  # body, not `params`, which would also carry path and query parameters.
+  defp signed(conn) do
+    %{
+      fields: Map.delete(conn.body_params, "device_signature"),
+      signature: conn.body_params["device_signature"]
+    }
   end
 
   # Section 21.1 keeps this layer to transport, and that is what makes the
@@ -139,6 +148,24 @@ defmodule DispatchWeb.StatusEventController do
         409,
         "DEVICE_SEQUENCE_CONFLICT",
         "This device sequence already carries a different declaration."
+      )
+
+  defp respond(conn, {:error, :device_signature_required}),
+    do:
+      Problem.send(
+        conn,
+        422,
+        "DEVICE_SIGNATURE_REQUIRED",
+        "A declaration naming a registered device must be signed by it."
+      )
+
+  defp respond(conn, {:error, :device_signature_invalid}),
+    do:
+      Problem.send(
+        conn,
+        422,
+        "DEVICE_SIGNATURE_INVALID",
+        "The device signature does not verify over this declaration."
       )
 
   defp respond(conn, {:error, :key_reused}),

@@ -353,18 +353,89 @@ defmodule DispatchWeb.StatusEventControllerTest do
       assert [] = read_events(ctx)
     end
 
-    test "a declaration naming the caller's own active device is accepted", ctx do
-      device = Fixtures.device(ctx.tenant, ctx.driver)
+    test "a declaration naming the caller's own active device is accepted, signed by it", ctx do
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
 
       conn =
         post(
           "/v1/me/status-events",
-          declaration(%{"device_id" => device.id, "device_sequence" => 1}),
+          Fixtures.signed(declaration(%{"device_id" => device.id, "device_sequence" => 1}), seed),
           token: ctx.token
         )
 
       assert conn.status == 201
-      assert Jason.decode!(conn.resp_body)["event"]["device_id"] == device.id
+      event = Jason.decode!(conn.resp_body)["event"]
+      assert event["device_id"] == device.id
+      assert event["verification"] == "DEVICE_AUTHENTICATED"
+    end
+  end
+
+  describe "Section 23.1: a device's declarations carry its signature" do
+    setup ctx do
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
+
+      %{
+        device: device,
+        seed: seed,
+        body:
+          declaration(%{"device_id" => device.id, "device_sequence" => 1, "note" => "on my way"})
+      }
+    end
+
+    test "unsigned, it is refused", ctx do
+      conn = post("/v1/me/status-events", ctx.body, token: ctx.token)
+
+      assert conn.status == 422
+      assert problem(conn) == "DEVICE_SIGNATURE_REQUIRED"
+      assert [] = read_events(ctx)
+    end
+
+    test "a field changed after signing, or another key's signature, is refused", ctx do
+      altered = %{Fixtures.signed(ctx.body, ctx.seed) | "note" => "somewhere else"}
+      {_public_key, stranger} = CoopSubstrate.Crypto.generate_keypair()
+
+      for body <- [
+            altered,
+            Fixtures.signed(ctx.body, stranger),
+            # The sequence changed after signing.
+            Map.put(Fixtures.signed(ctx.body, ctx.seed), "device_sequence", 2),
+            Map.put(ctx.body, "device_signature", "not base64!")
+          ] do
+        conn = post("/v1/me/status-events", body, token: ctx.token)
+        assert conn.status == 422
+        assert problem(conn) == "DEVICE_SIGNATURE_INVALID"
+      end
+
+      assert [] = read_events(ctx)
+    end
+
+    test "a retry of a signed declaration is the original event", ctx do
+      body = Fixtures.signed(ctx.body, ctx.seed)
+
+      first = post("/v1/me/status-events", body, token: ctx.token)
+      again = post("/v1/me/status-events", body, token: ctx.token)
+
+      assert {first.status, again.status} == {201, 201}
+
+      assert Jason.decode!(again.resp_body)["event"]["id"] ==
+               Jason.decode!(first.resp_body)["event"]["id"]
+    end
+
+    test "a declaration without a device is not device-authenticated", ctx do
+      conn = post("/v1/me/status-events", declaration(), token: ctx.token)
+
+      assert conn.status == 201
+      assert Jason.decode!(conn.resp_body)["event"]["verification"] == "NONE"
+    end
+
+    test "the verification is the server's to decide, not the client's", ctx do
+      conn =
+        post("/v1/me/status-events", declaration(%{"verification" => "DEVICE_AUTHENTICATED"}),
+          token: ctx.token
+        )
+
+      assert conn.status == 201
+      assert Jason.decode!(conn.resp_body)["event"]["verification"] == "NONE"
     end
   end
 
@@ -451,8 +522,10 @@ defmodule DispatchWeb.StatusEventControllerTest do
 
   describe "device sequences (Sections 22.3, 24.1)" do
     test "a retry with the same content returns the original event", ctx do
-      device = Fixtures.device(ctx.tenant, ctx.driver).id
-      body = declaration(%{"device_id" => device, "device_sequence" => 412})
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
+
+      body =
+        Fixtures.signed(declaration(%{"device_id" => device.id, "device_sequence" => 412}), seed)
 
       first = post("/v1/me/status-events", body, token: ctx.token)
       second = post("/v1/me/status-events", body, token: ctx.token)
@@ -468,25 +541,31 @@ defmodule DispatchWeb.StatusEventControllerTest do
     end
 
     test "the same sequence with different content is a conflict", ctx do
-      device = Fixtures.device(ctx.tenant, ctx.driver).id
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
       at = DateTime.utc_now() |> DateTime.to_iso8601()
 
       first =
         post(
           "/v1/me/status-events",
-          declaration(%{"device_id" => device, "device_sequence" => 7, "occurred_at" => at}),
+          Fixtures.signed(
+            declaration(%{"device_id" => device.id, "device_sequence" => 7, "occurred_at" => at}),
+            seed
+          ),
           token: ctx.token
         )
 
       second =
         post(
           "/v1/me/status-events",
-          declaration(%{
-            "device_id" => device,
-            "device_sequence" => 7,
-            "occurred_at" => at,
-            "status" => "AT_PICKUP"
-          }),
+          Fixtures.signed(
+            declaration(%{
+              "device_id" => device.id,
+              "device_sequence" => 7,
+              "occurred_at" => at,
+              "status" => "AT_PICKUP"
+            }),
+            seed
+          ),
           token: ctx.token
         )
 
@@ -578,6 +657,8 @@ defmodule DispatchWeb.StatusEventControllerTest do
                Jason.decode!(theirs.resp_body)["event"]["id"]
     end
   end
+
+  defp problem(conn), do: Jason.decode!(conn.resp_body)["code"]
 
   defp read_events(ctx) do
     ParticipantStatusEvent

@@ -1,6 +1,6 @@
 # biz-kit roadmap
 
-Updated 2026-10-20 (dispatch field app added). The direction is
+Updated 2026-10-21 (dispatch native sign-in and device keys). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
 registry and one PostgreSQL database. Task, dispatch, ownership and economic
@@ -78,6 +78,10 @@ has not been switched.
 - [Native sign-in](architecture/2026-10-21-native-sign-in.md): an app signs in
   through the system browser (RFC 8252, PKCE) and gets a biz-kit session as a
   bearer token; dispatch's `/v1` accepts it (`BizKitSession` verifier).
+- [Device keys](architecture/2026-10-21-device-keys.md): `POST /v1/me/devices`
+  registers an installation's Ed25519 key by proof of possession; a status
+  declaration naming the device must carry its signature and is stored
+  `DEVICE_AUTHENTICATED`.
 
 ## Next
 
@@ -102,20 +106,18 @@ Ordered by what blocks real use first.
 
 Dispatch's server work happens here; d-patch keeps the Android, web and e2e
 clients (d-patch ADR-0010). The Android app's offline status flow is built,
-and biz-kit now serves [native sign-in](architecture/2026-10-21-native-sign-in.md).
+the app signs in through biz-kit's [native sign-in](architecture/2026-10-21-native-sign-in.md)
+(d-patch `core:auth`, ADR-0011), and biz-kit checks [device keys](architecture/2026-10-21-device-keys.md).
 What remains, in order:
 
-1. **The app's half of sign-in** (in d-patch): `core:auth` runs the RFC 8252
-   flow against `/auth/:provider/native/login` and `/auth/token`, keeps the
-   session, and learns its principal from `/auth/me`. Deployment sets
+1. **The app's half of device keys** (in d-patch): make and seal the key,
+   register it after sign-in, and sign each declaration when it is queued.
+   Deployment exposes SpruceGoose's `/auth` publicly, sets
    `BIZKIT_NATIVE_REDIRECT_URIS` and selects dispatch's `BizKitSession` verifier.
-2. **Device keys.** Enrol each installation's Ed25519 key through
-   `CoopSubstrate.Enrolments`, so offline status events are signed by a
-   governance-granted device key rather than dispatch's own `devices` table.
-3. **End-to-end runs.** d-patch's Slice 1 exit tests (1, 13–19, online and
+2. **End-to-end runs.** d-patch's Slice 1 exit tests (1, 13–19, online and
    after an offline interval) against this server rather than d-patch's frozen
    `central/`.
-4. **Grants instead of the document.** When dispatch's roles become ledger
+3. **Grants instead of the document.** When dispatch's roles become ledger
    grants (consolidation step 4), the app reads them from the change feed and
    the capability document retires.
 

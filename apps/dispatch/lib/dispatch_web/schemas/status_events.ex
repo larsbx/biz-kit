@@ -39,7 +39,14 @@ defmodule DispatchWeb.Schemas.StatusEventRequest do
       location_sample_id: %Schema{type: :string, format: :uuid},
       device_id: %Schema{type: :string, format: :uuid},
       device_sequence: %Schema{type: :integer, minimum: 0},
-      device_signature: %Schema{type: :string},
+      device_signature: %Schema{
+        type: :string,
+        description:
+          "Base64url Ed25519 signature by the registered device's key over the " <>
+            "CoopEventCanonicalV1 encoding of this body's other fields plus " <>
+            "\"schema\": \"DispatchStatusEventV1\". Required when device_id names the " <>
+            "caller's active device; the event is then DEVICE_AUTHENTICATED."
+      },
       supersedes_event_id: %Schema{
         type: :string,
         format: :uuid,

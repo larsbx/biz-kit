@@ -114,6 +114,50 @@
         "title": "DependenciesResponse",
         "type": "object"
       },
+      "DeviceRegistration": {
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "installation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "installation_id"
+        ],
+        "title": "DeviceRegistration",
+        "type": "object"
+      },
+      "DeviceRegistrationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "installation_id": {
+            "description": "Stable per-installation identifier, chosen by the app.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "proof": {
+            "description": "Base64url Ed25519 signature by that key over the CoopEventCanonicalV1 encoding of {schema: \"DispatchDeviceRegistrationV1\", tenant_id, participant_id, installation_id, public_key (bytes)}, the tenant and participant being the caller's.",
+            "type": "string"
+          },
+          "public_key": {
+            "description": "Base64url Ed25519 public key (32 bytes).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "installation_id",
+          "public_key",
+          "proof"
+        ],
+        "title": "DeviceRegistrationRequest",
+        "type": "object"
+      },
       "HealthCheck": {
         "additionalProperties": false,
         "properties": {
@@ -382,6 +426,7 @@
             "type": "integer"
           },
           "device_signature": {
+            "description": "Base64url Ed25519 signature by the registered device's key over the CoopEventCanonicalV1 encoding of this body's other fields plus \"schema\": \"DispatchStatusEventV1\". Required when device_id names the caller's active device; the event is then DEVICE_AUTHENTICATED.",
             "type": "string"
           },
           "event_id": {
@@ -672,6 +717,86 @@
         "summary": "Declare a driver status (compatibility projection)",
         "tags": [
           "status"
+        ]
+      }
+    },
+    "/v1/me/devices": {
+      "post": {
+        "callbacks": {},
+        "description": "Self-service: the proof shows the caller's installation holds the key, and\nno one approves it. Registering the same key again returns the device. An\ninstallation registered with another key, or to someone else, is a\nconflict; a new installation is how a key changes.\n",
+        "operationId": "DispatchWeb.DeviceController.create",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRegistrationRequest"
+              }
+            }
+          },
+          "description": "Registration",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRegistration"
+                }
+              }
+            },
+            "description": "Already registered"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRegistration"
+                }
+              }
+            },
+            "description": "Registered"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Register this installation's device key",
+        "tags": [
+          "devices"
         ]
       }
     },
