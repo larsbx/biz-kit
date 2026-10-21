@@ -9,14 +9,10 @@ defmodule SpruceGoose.OrchestrationDslTest do
                Workflows.Project,
                Workflows.Roadmap,
                Workflows.Workflow,
-               Workflows.Board,
-               Workflows.BoardColumn,
-               Workflows.SavedFilter,
                Workflows.Task,
                Workflows.Dependency,
                Workflows.Todo,
                Workflows.TodoDependency,
-               Workflows.InboxItem,
                Workflows.Revision,
                Workflows.BlueprintRevision
              ])

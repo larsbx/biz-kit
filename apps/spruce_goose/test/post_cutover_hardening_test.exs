@@ -2,7 +2,7 @@ defmodule SpruceGoose.PostCutoverHardeningTest do
   use SpruceGoose.DataCase, async: false
 
   alias SpruceGoose.CLI.Executor
-  alias SpruceGoose.Workflows.{Board, BoardColumn, Definition, Project, Roadmap, Task, Workflow}
+  alias SpruceGoose.Workflows.{Definition, Project, Roadmap, Task, Workflow}
 
   test "PC-01: completed authority cutover is immutable and import stays disabled" do
     previous_root = Application.get_env(:spruce_goose, :ledger_import_root)
@@ -127,59 +127,8 @@ defmodule SpruceGoose.PostCutoverHardeningTest do
              )
   end
 
-  test "PC-03/04: workflow and lifecycle stay coherent with board placement" do
-    %{task: task, board: board, column: ready} = fixture("coherent", :ready)
-    %{board: foreign_board, column: foreign_column} = fixture("foreign", :ready)
-    task = advance(task, [:proposed, :queued, :ready])
-
-    assert {:ok, placed} =
-             Ash.update(
-               task,
-               %{board_id: board.id, column_id: ready.id, rank: "a"},
-               action: :update_board_metadata
-             )
-
-    assert {:error, _} =
-             Ash.update(
-               task,
-               %{board_id: foreign_board.id, column_id: foreign_column.id, rank: "b"},
-               action: :update_board_metadata
-             )
-
-    assert {:error, %Postgrex.Error{}} =
-             Repo.query(
-               """
-               UPDATE workflow_tasks
-               SET board_id = $1::text::uuid, column_id = $2::text::uuid
-               WHERE id = $3::text::uuid
-               """,
-               [foreign_board.id, foreign_column.id, task.id]
-             )
-
-    {:ok, in_progress_column} =
-      Ash.create(BoardColumn, %{
-        board_id: board.id,
-        key: "doing",
-        name: "Doing",
-        position: 2,
-        task_state: :in_progress
-      })
-
-    assert {:ok, moved} =
-             Ash.update(placed, %{to_state: :in_progress}, action: :transition)
-
-    assert moved.state == :in_progress
-    assert moved.column_id == in_progress_column.id
-
-    assert {:error, %Postgrex.Error{}} =
-             Repo.query(
-               "UPDATE workflow_tasks SET state = 'completed' WHERE id = $1::text::uuid",
-               [task.id]
-             )
-  end
-
   test "PC-07/09: reasons and bounded typed metadata fail closed" do
-    %{task: task, board: board, column: column} = fixture("validation", :inbox)
+    %{task: task} = fixture("validation")
 
     assert {:error, _} = Ash.update(task, %{to_state: :cancelled}, action: :transition)
 
@@ -191,70 +140,30 @@ defmodule SpruceGoose.PostCutoverHardeningTest do
           %{labels: List.duplicate("x", 51)},
           %{custom_fields: %{"date" => %{"type" => "date", "value" => "yesterday"}}}
         ] do
-      input = Map.merge(%{board_id: board.id, column_id: column.id}, metadata)
-
-      case Ash.update(task, input, action: :update_board_metadata) do
+      case Ash.update(task, metadata, action: :update_board_metadata) do
         {:error, _} -> :ok
         {:ok, _} -> flunk("metadata unexpectedly accepted: #{inspect(metadata)}")
       end
     end
   end
 
-  test "PC-05: canonical CLI administers boards, columns, moves, metadata, and filters" do
-    %{task: task, project: project, roadmap: roadmap, workflow: workflow} = fixture("cli")
-
-    assert {:ok, board} =
-             Executor.run({
-               :add_board,
-               project.key,
-               roadmap.key,
-               workflow.workflow_id,
-               "operator",
-               "Operator board"
-             })
-
-    assert {:ok, %{boards: boards}} =
-             Executor.run({
-               :list_boards,
-               project.key,
-               roadmap.key,
-               workflow.workflow_id
-             })
-
-    assert Enum.any?(boards, &(&1.id == board.id))
-
-    assert {:ok, column} =
-             Executor.run({:add_column, board.id, "inbox", "1", "inbox", "Inbox"})
-
-    assert {:ok, %{columns: [%{id: column_id}]}} =
-             Executor.run({:list_columns, board.id})
-
-    assert column_id == column.id
-
-    assert {:ok, moved} =
-             Executor.run({:move_task, task.task_id, board.id, column.id, "a0"})
-
-    assert moved.board_id == board.id
-    assert moved.column_id == column.id
+  test "PC-05: the canonical CLI updates a task's typed metadata" do
+    %{task: task} = fixture("cli")
 
     assert {:ok, updated} =
              Executor.run({
                :update_task_metadata,
                task.task_id,
-               ~s({"board_id":"#{board.id}","column_id":"#{column.id}","priority":2,"assignees":["jimbo"],"labels":["audit"]})
+               ~s({"priority":2,"assignees":["jimbo"],"labels":["audit"]})
              })
 
-    assert updated.priority == 2
+    assert {updated.priority, updated.assignees, updated.labels} == {2, ["jimbo"], ["audit"]}
 
-    assert {:ok, filter} =
-             Executor.run({:add_filter, board.id, "mine", ~s({"assignee":"jimbo"})})
-
-    assert {:ok, %{filters: [_]}} = Executor.run({:list_filters, board.id})
-    assert {:ok, %{tasks: [%{id: task_id}]}} = Executor.run({:apply_filter, filter.id})
-    assert task_id == task.task_id
+    assert {:error, "metadata contains unsupported keys"} =
+             Executor.run({:update_task_metadata, task.task_id, ~s({"board_id":"x"})})
   end
 
-  defp fixture(suffix, column_state \\ :inbox) do
+  defp fixture(suffix) do
     {:ok, project} = Ash.create(Project, %{key: "pc-#{suffix}", name: "PC #{suffix}"})
 
     {:ok, roadmap} =
@@ -274,18 +183,6 @@ defmodule SpruceGoose.PostCutoverHardeningTest do
         definition: definition
       })
 
-    {:ok, board} =
-      Ash.create(Board, %{workflow_id: workflow.id, key: "main", name: "Main"})
-
-    {:ok, column} =
-      Ash.create(BoardColumn, %{
-        board_id: board.id,
-        key: Atom.to_string(column_state),
-        name: Atom.to_string(column_state),
-        position: 1,
-        task_state: column_state
-      })
-
     {:ok, task} =
       Ash.create(Task, %{
         workflow_id: workflow.id,
@@ -300,9 +197,7 @@ defmodule SpruceGoose.PostCutoverHardeningTest do
       project: project,
       roadmap: roadmap,
       workflow: workflow,
-      task: task,
-      board: board,
-      column: column
+      task: task
     }
   end
 

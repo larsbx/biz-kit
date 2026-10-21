@@ -147,11 +147,6 @@ defmodule SpruceGoose.PersistenceInvariantsTest do
 
     assert Exception.message(transition_error) =~ "incomplete predecessors"
 
-    assert {:error, move_error} =
-             Ash.update(successor, %{to_state: :in_progress}, action: :move)
-
-    assert Exception.message(move_error) =~ "incomplete predecessors"
-
     assert {:error, %Postgrex.Error{postgres: %{message: "task has incomplete predecessors"}}} =
              Repo.query(
                "UPDATE workflow_tasks SET state = 'in_progress' WHERE id = $1::text::uuid",

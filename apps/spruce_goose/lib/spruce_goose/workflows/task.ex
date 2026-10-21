@@ -23,7 +23,7 @@ defmodule SpruceGoose.Workflows.Task do
       authorize_if(HasRole.operator())
     end
 
-    policy action([:transition, :move, :update_board_metadata, :acknowledge_sop]) do
+    policy action([:transition, :update_board_metadata, :acknowledge_sop]) do
       authorize_if(HasRole.operator())
     end
 
@@ -101,16 +101,6 @@ defmodule SpruceGoose.Workflows.Task do
       public?(true)
     end
 
-    belongs_to :board, SpruceGoose.Workflows.Board do
-      attribute_writable?(true)
-      public?(true)
-    end
-
-    belongs_to :column, SpruceGoose.Workflows.BoardColumn do
-      attribute_writable?(true)
-      public?(true)
-    end
-
     has_many :todos, SpruceGoose.Workflows.Todo do
       destination_attribute(:task_id)
     end
@@ -141,8 +131,6 @@ defmodule SpruceGoose.Workflows.Task do
         :artifact_requirements,
         :origin_event_id,
         :description,
-        :board_id,
-        :column_id,
         :rank,
         :priority,
         :due_at,
@@ -199,8 +187,6 @@ defmodule SpruceGoose.Workflows.Task do
       require_atomic?(false)
 
       accept([
-        :board_id,
-        :column_id,
         :rank,
         :priority,
         :due_at,
@@ -209,36 +195,6 @@ defmodule SpruceGoose.Workflows.Task do
         :custom_fields
       ])
 
-      change(optimistic_lock(:board_revision))
-    end
-
-    update :move do
-      require_atomic?(false)
-      accept([:board_id, :column_id, :rank])
-      argument(:to_state, SpruceGoose.Workflows.TaskState, allow_nil?: false)
-
-      validate(fn changeset, _context ->
-        from = changeset.data.state
-        to = Ash.Changeset.get_argument(changeset, :to_state)
-
-        if from == to or SpruceGoose.Workflows.Lifecycle.allowed?(from, to),
-          do: :ok,
-          else: {:error, field: :state, message: "cannot transition from #{from} to #{to}"}
-      end)
-
-      validate(fn changeset, _context -> validate_start(changeset) end)
-      validate(fn changeset, _context -> validate_artifact_readiness(changeset) end)
-      validate(fn changeset, _context -> validate_predecessors(changeset) end)
-
-      change(fn changeset, _context ->
-        Ash.Changeset.change_attribute(
-          changeset,
-          :state,
-          Ash.Changeset.get_argument(changeset, :to_state)
-        )
-      end)
-
-      change(optimistic_lock(:lock_version))
       change(optimistic_lock(:board_revision))
     end
 
@@ -287,7 +243,6 @@ defmodule SpruceGoose.Workflows.Task do
 
         changeset
         |> Ash.Changeset.change_attribute(:state, to)
-        |> align_board_column(to)
         |> maybe_store_reason(to, reason)
       end)
 
@@ -377,7 +332,7 @@ defmodule SpruceGoose.Workflows.Task do
       |> valid_custom_fields()
     end)
 
-    validate(fn changeset, _context -> valid_board_metadata(changeset) end)
+    validate(fn changeset, _context -> valid_metadata(changeset) end)
     validate(fn changeset, _context -> valid_artifacts(changeset) end)
   end
 
@@ -542,14 +497,7 @@ defmodule SpruceGoose.Workflows.Task do
     end
   end
 
-  defp valid_board_metadata(changeset) do
-    board_id = Ash.Changeset.get_attribute(changeset, :board_id)
-    column_id = Ash.Changeset.get_attribute(changeset, :column_id)
-
-    workflow_id =
-      Ash.Changeset.get_attribute(changeset, :workflow_id) || changeset.data.workflow_id
-
-    state = Ash.Changeset.get_attribute(changeset, :state) || changeset.data.state
+  defp valid_metadata(changeset) do
     rank = Ash.Changeset.get_attribute(changeset, :rank)
     priority = Ash.Changeset.get_attribute(changeset, :priority)
     assignees = Ash.Changeset.get_attribute(changeset, :assignees) || []
@@ -572,63 +520,13 @@ defmodule SpruceGoose.Workflows.Task do
       map_size(fields) > 50 or not Enum.all?(Map.keys(fields), &bounded_name?/1) ->
         {:error, field: :custom_fields, message: "must contain at most 50 bounded names"}
 
-      is_nil(board_id) and is_nil(column_id) ->
-        :ok
-
-      is_nil(board_id) or is_nil(column_id) ->
-        {:error, field: :column_id, message: "board and column must be set together"}
-
       true ->
-        validate_board_scope(board_id, column_id, workflow_id, state)
-    end
-  end
-
-  defp validate_board_scope(board_id, column_id, workflow_id, state) do
-    sql = """
-    SELECT 1
-    FROM board_columns AS bc
-    JOIN boards AS board ON board.id = bc.board_id
-    WHERE bc.id = $1::text::uuid
-      AND board.id = $2::text::uuid
-      AND board.workflow_id = $3::text::uuid
-      AND bc.task_state = $4
-    """
-
-    # AUTHORIZATION: Ash change validation; the enclosing action carries the actor.
-    case Ecto.Adapters.SQL.query!(SpruceGoose.Repo, sql, [
-           column_id,
-           board_id,
-           workflow_id,
-           to_string(state)
-         ]).rows do
-      [[1]] -> :ok
-      _ -> {:error, field: :column_id, message: "does not match task workflow and state"}
+        :ok
     end
   end
 
   defp bounded_name?(value),
     do: is_binary(value) and String.trim(value) != "" and byte_size(value) <= 128
-
-  defp align_board_column(changeset, _state) when is_nil(changeset.data.board_id), do: changeset
-
-  defp align_board_column(changeset, state) do
-    sql = "SELECT id FROM board_columns WHERE board_id = $1::text::uuid AND task_state = $2"
-
-    # AUTHORIZATION: Ash transition hook; the enclosing action carries the actor.
-    case Ecto.Adapters.SQL.query!(SpruceGoose.Repo, sql, [
-           changeset.data.board_id,
-           to_string(state)
-         ]).rows do
-      [[column_id]] ->
-        Ash.Changeset.change_attribute(changeset, :column_id, Ecto.UUID.load!(column_id))
-
-      _ ->
-        Ash.Changeset.add_error(changeset,
-          field: :column_id,
-          message: "has no column for target state"
-        )
-    end
-  end
 
   defp completion_requirements(task) do
     with :ok <- diagnosis_evidence(task),

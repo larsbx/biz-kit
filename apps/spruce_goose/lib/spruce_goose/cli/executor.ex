@@ -13,15 +13,11 @@ defmodule SpruceGoose.CLI.Executor do
   alias SpruceGoose.{Authz, Ledger, Legibility, Repo, Revise, SopGate, TaskId}
 
   alias SpruceGoose.Workflows.{
-    Board,
-    BoardColumn,
     BlueprintRevision,
     Dependency,
     Graph,
-    InboxItem,
     Project,
     Roadmap,
-    SavedFilter,
     Task,
     TaskState,
     Todo,
@@ -292,48 +288,8 @@ defmodule SpruceGoose.CLI.Executor do
   defp dispatch({:remove_workflow, project_key, roadmap_key, workflow_key}) do
     with {:ok, workflow} <- resolve_workflow(project_key, roadmap_key, workflow_key),
          :ok <- require_no_dependents(Task, [workflow_id: workflow.id], "tasks"),
-         :ok <- require_no_dependents(Board, [workflow_id: workflow.id], "boards"),
          :ok <- destroy(workflow) do
       {:ok, %{removed: workflow_json(workflow)}}
-    end
-  end
-
-  defp dispatch({:rename_board, board_id, name}) do
-    with {:ok, board} <- read_one(Board, id: board_id),
-         {:ok, board} <- Authz.update(board, %{name: name}, action: :rename) do
-      {:ok, board_json(board)}
-    end
-  end
-
-  defp dispatch({:remove_board, board_id}) do
-    with {:ok, board} <- read_one(Board, id: board_id),
-         :ok <- require_no_dependents(BoardColumn, [board_id: board.id], "columns"),
-         :ok <- require_no_dependents(SavedFilter, [board_id: board.id], "filters"),
-         :ok <- require_no_dependents(Task, [board_id: board.id], "tasks"),
-         :ok <- destroy(board) do
-      {:ok, %{removed: board_json(board)}}
-    end
-  end
-
-  defp dispatch({:rename_column, column_id, name}) do
-    with {:ok, column} <- read_one(BoardColumn, id: column_id),
-         {:ok, column} <- Authz.update(column, %{name: name}, action: :rename) do
-      {:ok, column_json(column)}
-    end
-  end
-
-  defp dispatch({:remove_column, column_id}) do
-    with {:ok, column} <- read_one(BoardColumn, id: column_id),
-         :ok <- require_no_dependents(Task, [column_id: column.id], "tasks"),
-         :ok <- destroy(column) do
-      {:ok, %{removed: column_json(column)}}
-    end
-  end
-
-  defp dispatch({:remove_filter, filter_id}) do
-    with {:ok, filter} <- read_one(SavedFilter, id: filter_id),
-         :ok <- destroy(filter) do
-      {:ok, %{removed: filter_json(filter)}}
     end
   end
 
@@ -650,46 +606,6 @@ defmodule SpruceGoose.CLI.Executor do
     end
   end
 
-  defp dispatch({:add_inbox, body}) do
-    with {:ok, item} <-
-           Authz.create(InboxItem, %{capture_id: generate_record_id("inbox"), body: body}) do
-      {:ok, inbox_json(item)}
-    end
-  end
-
-  defp dispatch({:list_inbox, state}) do
-    with {:ok, filter} <- inbox_scope(state),
-         {:ok, items} <- Authz.read(Ash.Query.filter_input(InboxItem, filter)) do
-      {:ok, %{items: items |> Enum.sort_by(& &1.capture_id) |> Enum.map(&inbox_json/1)}}
-    end
-  end
-
-  defp dispatch({:resolve_inbox, capture_id, reason}) do
-    with {:ok, item} <- read_one(InboxItem, capture_id: capture_id),
-         {:ok, item} <- resolve_capture(item, :resolved, %{resolution_reason: reason}) do
-      {:ok, inbox_json(item)}
-    end
-  end
-
-  defp dispatch({:drop_inbox, capture_id, reason}) do
-    with {:ok, item} <- read_one(InboxItem, capture_id: capture_id),
-         {:ok, item} <- resolve_capture(item, :dropped, %{resolution_reason: reason}) do
-      {:ok, inbox_json(item)}
-    end
-  end
-
-  defp dispatch({:promote_inbox, capture_id, input}) do
-    with {:ok, item} <- read_one(InboxItem, capture_id: capture_id),
-         :ok <- require_open_capture(item),
-         true <- is_map(input) do
-      {:error,
-       "inbox promotion cannot create executable work; commit a TaskDefinition and use task instantiate"}
-    else
-      false -> {:error, "invalid inbox promotion input"}
-      result -> result
-    end
-  end
-
   defp dispatch({:list_todos, task_id}) do
     with :ok <- require_valid_id(task_id),
          {:ok, task} <- read_one(Task, task_id: task_id),
@@ -716,102 +632,12 @@ defmodule SpruceGoose.CLI.Executor do
     end
   end
 
-  defp dispatch({:add_board, project_key, roadmap_key, workflow_key, key, name}) do
-    with {:ok, project} <- read_one(Project, key: project_key),
-         {:ok, roadmap} <- read_one(Roadmap, project_id: project.id, key: roadmap_key),
-         {:ok, workflow} <-
-           read_one(Workflow, roadmap_id: roadmap.id, workflow_id: workflow_key),
-         {:ok, board} <-
-           Authz.create(Board, %{workflow_id: workflow.id, key: key, name: name}) do
-      {:ok, board_json(board)}
-    end
-  end
-
-  defp dispatch({:list_boards, project_key, roadmap_key, workflow_key}) do
-    with {:ok, project} <- read_one(Project, key: project_key),
-         {:ok, roadmap} <- read_one(Roadmap, project_id: project.id, key: roadmap_key),
-         {:ok, workflow} <-
-           read_one(Workflow, roadmap_id: roadmap.id, workflow_id: workflow_key),
-         {:ok, boards} <- Authz.read(Ash.Query.filter_input(Board, workflow_id: workflow.id)) do
-      {:ok, %{boards: Enum.map(boards, &board_json/1)}}
-    end
-  end
-
-  defp dispatch({:add_column, board_ref, key, position, state, name}) do
-    with {position, ""} <- Integer.parse(position),
-         {:ok, state} <- optional_state(state),
-         {:ok, board_id} <- resolve_board_ref(board_ref),
-         {:ok, column} <-
-           Authz.create(BoardColumn, %{
-             board_id: board_id,
-             key: key,
-             name: name,
-             position: position,
-             task_state: state
-           }) do
-      {:ok, column_json(column)}
-    else
-      :error -> {:error, "position must be an integer"}
-      error -> error
-    end
-  end
-
-  defp dispatch({:list_columns, board_ref}) do
-    with {:ok, board_id} <- resolve_board_ref(board_ref),
-         {:ok, columns} <- Authz.read(Ash.Query.filter_input(BoardColumn, board_id: board_id)) do
-      {:ok, %{columns: columns |> Enum.sort_by(& &1.position) |> Enum.map(&column_json/1)}}
-    end
-  end
-
-  defp dispatch({:move_task, task_id, board_ref, column_ref, rank}) do
-    with :ok <- require_valid_id(task_id),
-         {:ok, task} <- read_one(Task, task_id: task_id),
-         {:ok, board_id} <- resolve_board_ref(board_ref),
-         {:ok, column} <- resolve_column(board_id, column_ref),
-         column_id = column.id,
-         {:ok, task} <-
-           Authz.update(
-             task,
-             %{board_id: board_id, column_id: column_id, rank: rank, to_state: column.task_state},
-             action: :move
-           ) do
-      {:ok, task_json(task)}
-    end
-  end
-
   defp dispatch({:update_task_metadata, task_id, json}) do
     with :ok <- require_valid_id(task_id),
          {:ok, input} <- decode_metadata(json),
          {:ok, task} <- read_one(Task, task_id: task_id),
          {:ok, task} <- Authz.update(task, input, action: :update_board_metadata) do
       {:ok, task_json(task)}
-    end
-  end
-
-  defp dispatch({:add_filter, board_ref, name, json}) do
-    with {:ok, board_id} <- resolve_board_ref(board_ref),
-         {:ok, criteria} <- decode_json_object(json),
-         {:ok, filter} <-
-           Authz.create(SavedFilter, %{board_id: board_id, name: name, criteria: criteria}) do
-      {:ok, filter_json(filter)}
-    end
-  end
-
-  defp dispatch({:list_filters, board_ref}) do
-    with {:ok, board_id} <- resolve_board_ref(board_ref),
-         {:ok, filters} <- Authz.read(Ash.Query.filter_input(SavedFilter, board_id: board_id)) do
-      {:ok, %{filters: Enum.map(filters, &filter_json/1)}}
-    end
-  end
-
-  defp dispatch({:apply_filter, filter_id}) do
-    with {:ok, filter} <- read_one(SavedFilter, id: filter_id),
-         {:ok, tasks} <- Authz.read(Ash.Query.filter_input(Task, board_id: filter.board_id)) do
-      {:ok,
-       %{
-         tasks:
-           tasks |> Enum.filter(&matches_filter?(&1, filter.criteria)) |> Enum.map(&task_json/1)
-       }}
     end
   end
 
@@ -1126,28 +952,6 @@ defmodule SpruceGoose.CLI.Executor do
     }
   end
 
-  @inbox_states ~w(pending resolved dropped)
-
-  defp inbox_scope(nil), do: {:ok, [state: :pending]}
-  defp inbox_scope("all"), do: {:ok, []}
-
-  defp inbox_scope(state) when state in @inbox_states,
-    do: {:ok, [state: String.to_existing_atom(state)]}
-
-  defp inbox_scope(_state),
-    do: {:error, "state must be one of pending, resolved, dropped, all"}
-
-  defp require_open_capture(%{state: :pending}), do: :ok
-
-  defp require_open_capture(%{state: state}),
-    do: {:error, "capture is already #{state}"}
-
-  defp resolve_capture(item, to_state, attrs) do
-    item
-    |> Ash.Changeset.for_update(:resolve, Map.put(attrs, :to_state, to_state))
-    |> Authz.update_changeset()
-  end
-
   defp roadmap_scope(nil), do: {:ok, []}
 
   defp roadmap_scope(project_key) do
@@ -1222,33 +1026,6 @@ defmodule SpruceGoose.CLI.Executor do
   defp require_valid_id(id) do
     if TaskId.valid?(id), do: :ok, else: {:error, "invalid task ID"}
   end
-
-  # Accept either a UUID or a friendly key. board add/list take
-  # project/roadmap/workflow keys, so column, filter, and move should not
-  # demand raw UUIDs for the same board.
-  defp resolve_board_ref(ref) do
-    if uuid?(ref) do
-      {:ok, ref}
-    else
-      with {:ok, board} <- read_one(Board, key: ref) do
-        {:ok, board.id}
-      end
-    end
-  end
-
-  defp resolve_column(board_id, ref) do
-    if uuid?(ref) do
-      read_one(BoardColumn, id: ref, board_id: board_id)
-    else
-      read_one(BoardColumn, key: ref, board_id: board_id)
-    end
-  end
-
-  defp uuid?(value) when is_binary(value) do
-    match?({:ok, _}, Ecto.UUID.cast(value))
-  end
-
-  defp uuid?(_value), do: false
 
   defp optional_task_type(nil), do: {:ok, nil}
   defp optional_task_type("task"), do: {:ok, :task}
@@ -1587,8 +1364,6 @@ defmodule SpruceGoose.CLI.Executor do
       state: task.state,
       workflow_id: task.workflow_id,
       lock_version: task.lock_version,
-      board_id: task.board_id,
-      column_id: task.column_id,
       rank: task.rank,
       priority: task.priority,
       due_at: task.due_at,
@@ -1609,16 +1384,6 @@ defmodule SpruceGoose.CLI.Executor do
         )
     }
   end
-
-  defp inbox_json(item),
-    do: %{
-      id: item.capture_id,
-      body: item.body,
-      state: item.state,
-      resolution_reason: item.resolution_reason,
-      promoted_task_id: item.promoted_task_id,
-      resolved_at: item.resolved_at
-    }
 
   defp project_json(project), do: %{id: project.id, key: project.key, name: project.name}
 
@@ -1646,22 +1411,6 @@ defmodule SpruceGoose.CLI.Executor do
     }
   end
 
-  defp board_json(board),
-    do: %{id: board.id, workflow_id: board.workflow_id, key: board.key, name: board.name}
-
-  defp column_json(column),
-    do: %{
-      id: column.id,
-      board_id: column.board_id,
-      key: column.key,
-      name: column.name,
-      position: column.position,
-      state: column.task_state
-    }
-
-  defp filter_json(filter),
-    do: %{id: filter.id, board_id: filter.board_id, name: filter.name, criteria: filter.criteria}
-
   # `apply_blueprint` is a shadowed verb, so it runs
   # inside ShadowEvents.transaction/2. Notifying directly from there delivered
   # notifications for a mutation the certified-event append could still roll
@@ -1682,7 +1431,7 @@ defmodule SpruceGoose.CLI.Executor do
     %{id: todo.todo_id, body: todo.body, position: todo.position, completed: todo.completed}
   end
 
-  @metadata_keys ~w(board_id column_id rank priority due_at assignees labels custom_fields)
+  @metadata_keys ~w(rank priority due_at assignees labels custom_fields)
   defp decode_metadata(json) do
     with {:ok, input} <- decode_json_object(json),
          [] <- Map.keys(input) -- @metadata_keys do
@@ -1706,17 +1455,5 @@ defmodule SpruceGoose.CLI.Executor do
         do: {:error, "artifact verifier must not also hold operator over the task"},
         else: :ok
     end
-  end
-
-  defp matches_filter?(task, criteria) do
-    Enum.all?(criteria, fn
-      {"assignee", value} -> value in task.assignees
-      {"column", value} -> value == task.column_id
-      {"label", value} -> value in task.labels
-      {"priority", value} -> value == task.priority
-      {"state", values} when is_list(values) -> to_string(task.state) in values
-      {"state", value} -> to_string(task.state) == value
-      {"text", value} -> String.contains?(String.downcase(task.title), String.downcase(value))
-    end)
   end
 end

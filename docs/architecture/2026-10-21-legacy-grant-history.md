@@ -76,9 +76,9 @@ This governed change re-pins only `agent_charter` (exact registry source)
 and `schema` (sorted migration paths and their byte digests) in
 `priv/kernel/shadow-event-roots.json`. No past certified event is modified
 or re-rooted. `grant_epoch` is unchanged because `Actors.Scope` is unchanged.
-PR #51 also changes the migration set and that scope source: whichever change
-lands second must recompute from the combined tree and pass the root-policy
-test, rather than retaining either branch's migration-set digest.
+PR #51 landed first and changed the migration set and that scope source. This
+policy retains its `grant_epoch` and recomputes `schema` from the combined
+migration set; the root-policy test checks the resulting artifacts together.
 
 ## Validation contract
 
