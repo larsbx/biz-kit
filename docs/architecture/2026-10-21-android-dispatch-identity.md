@@ -138,3 +138,9 @@ existing Dispatch registry allows one active participant/tenant binding for that
 installation; switching roles never generates another installation identifier
 to evade that constraint. A different participant/tenant requires the existing
 retirement/re-enrolment process for a fresh installation.
+
+Android also applies the existing browser `isOwnEnrolment` guard before signing:
+the statement must have the closed enrolment schema, its complete key, the
+authenticated platform principal and the requested operator role. A command or
+reviewer/governance request is never signed through the enrolment flow. The
+shared `native-enrolment-vector.json` exercises that boundary in Kotlin.
