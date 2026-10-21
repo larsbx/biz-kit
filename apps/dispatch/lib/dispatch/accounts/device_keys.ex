@@ -30,7 +30,11 @@ defmodule Dispatch.Accounts.DeviceKeys do
   @max_installation_id 200
 
   @type registration_error ::
-          :invalid_installation_id | :invalid_public_key | :invalid_proof | :installation_conflict
+          :invalid_installation_id
+          | :invalid_public_key
+          | :invalid_proof
+          | :installation_conflict
+          | :invalid_registration
 
   @doc "What a device signs to register `public_key` for `actor`."
   @spec registration_statement(Actor.t(), String.t(), <<_::256>>) :: binary()
@@ -106,6 +110,23 @@ defmodule Dispatch.Accounts.DeviceKeys do
     end
   end
 
+  @doc """
+  Names the refusal behind an Ash error from registering. Inside an enclosing
+  transaction (an idempotency key's), Ash answers a refused insert by rolling
+  that transaction back with its changeset, so a caller meets it there rather
+  than as a `register/4` result, and names it with this.
+  """
+  @spec refusal(term()) :: :installation_conflict | :invalid_registration
+  def refusal(error) do
+    taken? =
+      error
+      |> Ash.Error.to_error_class()
+      |> Map.get(:errors, [])
+      |> Enum.any?(&(Map.get(&1, :field) == :installation_id))
+
+    if taken?, do: :installation_conflict, else: :invalid_registration
+  end
+
   defp own_active_device(actor, device_id) when is_binary(device_id) do
     case Ecto.UUID.cast(device_id) do
       {:ok, id} ->
@@ -147,13 +168,13 @@ defmodule Dispatch.Accounts.DeviceKeys do
       {:ok, device} ->
         {:ok, :created, device}
 
-      # The installation is taken: concurrently by this same registration,
-      # which settles as a re-registration, or in another tenant.
-      {:error, _error} ->
-        case installation(actor, installation_id) do
-          nil -> {:error, :installation_conflict}
-          device -> same(actor, device, public_key)
-        end
+      # The global unique index refused it: the installation is taken in
+      # another tenant (one in this tenant was found above). Not re-read: the
+      # refusal may have aborted an enclosing transaction. Two identical
+      # registrations racing each other also land here; the loser's next
+      # attempt finds the device and is a re-registration.
+      {:error, error} ->
+        {:error, refusal(error)}
     end
   end
 

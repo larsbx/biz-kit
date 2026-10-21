@@ -80,27 +80,27 @@ defmodule DispatchWeb.StatusEventController do
 
   @doc "Canonical self-service declaration route."
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def create(conn, params), do: declare(conn, params)
+  def create(conn, _params), do: declare(conn)
 
   @doc "The DRIVER compatibility projection of `create/2`. Same behaviour, same events."
   @spec create_driver(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def create_driver(conn, params), do: declare(conn, params)
+  def create_driver(conn, _params), do: declare(conn)
 
-  defp declare(conn, params) do
-    case parse(params) do
-      {:ok, attrs} -> respond(conn, run(conn, params, Map.put(attrs, :signed, signed(conn))))
+  # The declaration is the body and nothing else. `params` would also carry the
+  # query string, which no device signs: a field slipped in there must not be
+  # stored on an event recorded as signed.
+  defp declare(conn) do
+    body = conn.body_params
+
+    case parse(body) do
+      {:ok, attrs} -> respond(conn, run(conn, body, Map.put(attrs, :signed, signed(body))))
       {:error, field} -> respond(conn, {:error, {:malformed, field}})
     end
   end
 
-  # What a device signed is the body as sent, less the signature itself: the
-  # body, not `params`, which would also carry path and query parameters.
-  defp signed(conn) do
-    %{
-      fields: Map.delete(conn.body_params, "device_signature"),
-      signature: conn.body_params["device_signature"]
-    }
-  end
+  # What a device signed: the body as sent, less the signature itself.
+  defp signed(body),
+    do: %{fields: Map.delete(body, "device_signature"), signature: body["device_signature"]}
 
   # Section 21.1 keeps this layer to transport, and that is what makes the
   # transaction below possible: the mutation reports a status and a body rather

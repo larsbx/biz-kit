@@ -409,6 +409,21 @@ defmodule DispatchWeb.StatusEventControllerTest do
       assert [] = read_events(ctx)
     end
 
+    test "only the signed body is stored: a field slipped into the query string is not", ctx do
+      body = Fixtures.signed(Map.delete(ctx.body, "note"), ctx.seed)
+
+      conn =
+        post("/v1/me/status-events?note=forged&assignment_id=#{Ash.UUID.generate()}", body,
+          token: ctx.token
+        )
+
+      assert conn.status == 201
+      event = Jason.decode!(conn.resp_body)["event"]
+      assert event["verification"] == "DEVICE_AUTHENTICATED"
+      assert event["note"] == nil
+      assert event["assignment_id"] == nil
+    end
+
     test "a retry of a signed declaration is the original event", ctx do
       body = Fixtures.signed(ctx.body, ctx.seed)
 

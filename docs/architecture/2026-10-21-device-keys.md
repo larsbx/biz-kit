@@ -40,11 +40,13 @@ app ── POST /v1/me/status-events {…, device_id, device_sequence, device_si
   The server builds the registration statement from the caller's tenant and
   participant, so a proof made for anyone else does not verify. The event
   statement is built from the body as received (`conn.body_params`), so a
-  field changed after signing fails.
+  field changed after signing fails, and the declaration stored is read from
+  that same body: nothing in the query string reaches a signed event.
 - **Self-service.** Proof of possession is the whole check; no one approves
   a handset. The same key again is a no-op. An installation registered with
   another key, to someone else, or in another tenant is a conflict
   (`409 INSTALLATION_CONFLICT`): a new installation is how a key changes.
+  Registration honours `Idempotency-Key` like every mutation (Section 24).
 - **A device's events are signed.** Naming the caller's own active device
   without a signature is `422 DEVICE_SIGNATURE_REQUIRED`; a signature that does
   not verify, or was made over fields naming another device, is
@@ -76,17 +78,20 @@ the person was present (that is `SYSTEM_BIOMETRIC` or `FACE_1_TO_1`).
 
 ## Verification
 
-- `DispatchWeb.DeviceControllerTest` (6): registration once and again; proofs
+- `DispatchWeb.DeviceControllerTest` (8): registration once and again; proofs
   by another key, for another participant or with a `type` refused; an
-  installation keeping its key across keys and tenants; malformed bodies; a
-  domain caller whose signed fields name another device; a registered
-  device's declaration stored `DEVICE_AUTHENTICATED`.
+  installation keeping its key across keys and tenants, with and without an
+  idempotency key; key replay and reuse; malformed bodies; a domain caller
+  whose signed fields name another device; a registered device's declaration
+  stored `DEVICE_AUTHENTICATED`.
 - `DispatchWeb.StatusEventControllerTest`: unsigned, altered, foreign-key and
-  undecodable signatures refused; a signed retry is the original event; no
+  undecodable signatures refused; a field slipped into the query string is not
+  stored; a signed retry is the original event; no
   device is `NONE`; a client-sent `verification` is ignored.
 - Mutations: removing the event-signature check, the required signature, the
   registration proof, the participant binding, the same-key rule on
-  re-registration, the signed-device match or the server-decided verification
-  each fails a test.
+  re-registration, the signed-device match, the server-decided verification,
+  the body-only declaration, the idempotency key on registration, or the
+  conflict named after a rolled-back insert each fails a test.
 - d-patch reproduces both statements and signatures byte for byte from
   vectors this server generated (`device-signing-vectors.json`).

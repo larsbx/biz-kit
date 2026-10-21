@@ -37,11 +37,14 @@ defmodule DispatchWeb.DeviceControllerTest do
     }
   end
 
-  defp post(path, body, token) do
+  defp post(path, body, token, headers \\ []) do
     :post
     |> conn(path, Jason.encode!(body))
     |> put_req_header("content-type", "application/json")
     |> put_req_header("authorization", "Bearer " <> token)
+    |> then(fn conn ->
+      Enum.reduce(headers, conn, fn {k, v}, c -> put_req_header(c, k, v) end)
+    end)
     |> Plug.Parsers.call(Plug.Parsers.init(parsers: [:json], pass: ["*/*"], json_decoder: Jason))
     |> DispatchWeb.Router.call(@opts)
   end
@@ -137,6 +140,46 @@ defmodule DispatchWeb.DeviceControllerTest do
 
     taken = registration(ctx, theirs.installation_id, Crypto.generate_keypair())
     assert post("/v1/me/devices", taken, ctx.token).status == 409
+  end
+
+  test "a registration honours Idempotency-Key, like every mutation (Section 24)", ctx do
+    key = [{"idempotency-key", "key-" <> Ash.UUID.generate()}]
+    body = registration(ctx, "install-1", Crypto.generate_keypair())
+
+    first = post("/v1/me/devices", body, ctx.token, key)
+    replay = post("/v1/me/devices", body, ctx.token, key)
+    assert {first.status, replay.status} == {201, 201}
+    assert Jason.decode!(replay.resp_body) == Jason.decode!(first.resp_body)
+
+    reused =
+      post(
+        "/v1/me/devices",
+        registration(ctx, "install-2", Crypto.generate_keypair()),
+        ctx.token,
+        key
+      )
+
+    assert reused.status == 409
+    assert Jason.decode!(reused.resp_body)["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert length(devices(ctx)) == 1
+  end
+
+  test "under an Idempotency-Key, an installation taken in another tenant is still a conflict",
+       ctx do
+    elsewhere = Fixtures.carrier()
+    %{participant: stranger} = Fixtures.person(elsewhere.id, elsewhere)
+    theirs = Fixtures.device(elsewhere.id, stranger)
+
+    conn =
+      post(
+        "/v1/me/devices",
+        registration(ctx, theirs.installation_id, Crypto.generate_keypair()),
+        ctx.token,
+        [{"idempotency-key", "key-" <> Ash.UUID.generate()}]
+      )
+
+    assert conn.status == 409
+    assert Jason.decode!(conn.resp_body)["code"] == "INSTALLATION_CONFLICT"
   end
 
   test "malformed registrations are refused", ctx do

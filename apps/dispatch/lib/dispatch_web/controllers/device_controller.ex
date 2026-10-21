@@ -9,6 +9,7 @@ defmodule DispatchWeb.DeviceController do
   use OpenApiSpex.ControllerSpecs
 
   alias Dispatch.Accounts.DeviceKeys
+  alias Dispatch.Idempotency
   alias DispatchWeb.Problem
   alias DispatchWeb.Schemas.{DeviceRegistration, DeviceRegistrationRequest}
 
@@ -26,6 +27,11 @@ defmodule DispatchWeb.DeviceController do
     """,
     security: [%{"bearerAuth" => []}],
     parameters: [
+      "idempotency-key": [
+        in: :header,
+        type: :string,
+        description: "Replaying a mutation with the same key returns the stored response."
+      ],
       "x-role-assignment-id": [
         in: :header,
         type: :string,
@@ -45,19 +51,42 @@ defmodule DispatchWeb.DeviceController do
   )
 
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def create(conn, params) do
-    case DeviceKeys.register(
-           conn.assigns.actor,
-           params["installation_id"],
-           params["public_key"],
-           params["proof"]
-         ) do
-      {:ok, outcome, device} ->
-        conn
-        |> put_status(if outcome == :created, do: 201, else: 200)
-        |> json(%{device_id: device.id, installation_id: device.installation_id})
+  def create(conn, _params) do
+    actor = conn.assigns.actor
+    body = conn.body_params
 
-      {:error, :installation_conflict} ->
+    # Section 24: every mutation honours `Idempotency-Key`. A rejection rolls
+    # back and releases the key, as for status declarations.
+    Idempotency.execute(actor, idempotency_key(conn), body, fn ->
+      case DeviceKeys.register(actor, body["installation_id"], body["public_key"], body["proof"]) do
+        {:ok, outcome, device} ->
+          {:ok, if(outcome == :created, do: 201, else: 200),
+           %{device_id: device.id, installation_id: device.installation_id}}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end)
+    |> then(&respond(conn, &1))
+  end
+
+  defp idempotency_key(conn) do
+    case get_req_header(conn, "idempotency-key") do
+      [key | _rest] -> key
+      [] -> nil
+    end
+  end
+
+  defp respond(conn, {:ok, status, body}), do: conn |> put_status(status) |> json(body)
+
+  # A refusal from inside the idempotency ledger's transaction: Ash rolled it
+  # back with its changeset, which the ledger hands back as it is.
+  defp respond(conn, %Ash.Changeset{} = rolled_back),
+    do: respond(conn, {:error, DeviceKeys.refusal(rolled_back)})
+
+  defp respond(conn, {:error, reason}) do
+    case reason do
+      :installation_conflict ->
         Problem.send(
           conn,
           409,
@@ -65,14 +94,31 @@ defmodule DispatchWeb.DeviceController do
           "This installation is registered with another key or to someone else."
         )
 
-      {:error, :invalid_proof} ->
+      :invalid_proof ->
         Problem.send(conn, 422, "PROOF_INVALID", "The proof does not verify under this key.")
 
-      {:error, field} ->
+      :key_reused ->
+        Problem.send(
+          conn,
+          409,
+          "IDEMPOTENCY_KEY_REUSED",
+          "This idempotency key was used for a different request."
+        )
+
+      :in_progress ->
+        Problem.send(
+          conn,
+          409,
+          "IDEMPOTENCY_KEY_IN_PROGRESS",
+          "An identical request is still being processed; retry shortly."
+        )
+
+      field ->
         Problem.send(conn, 422, "VALIDATION_FAILED", "#{field_name(field)} is not valid.")
     end
   end
 
   defp field_name(:invalid_installation_id), do: "installation_id"
   defp field_name(:invalid_public_key), do: "public_key"
+  defp field_name(:invalid_registration), do: "The registration"
 end

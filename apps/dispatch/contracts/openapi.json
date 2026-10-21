@@ -727,6 +727,15 @@
         "operationId": "DispatchWeb.DeviceController.create",
         "parameters": [
           {
+            "description": "Replaying a mutation with the same key returns the stored response.",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Selects which held role assignment the request acts under, when there are several. The device is the participant's, whichever is selected.",
             "in": "header",
             "name": "x-role-assignment-id",
