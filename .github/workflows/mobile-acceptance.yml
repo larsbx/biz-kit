@@ -1,0 +1,41 @@
+name: Mobile identity and device acceptance
+on:
+  pull_request:
+    paths: ["apps/biz_kit_identity/**", "apps/dispatch/**", "apps/coop_substrate/**", ".github/workflows/mobile-acceptance.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dispatch_mobile_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MIX_ENV: test
+      DATABASE_URL: ecto://postgres:postgres@localhost:5432/dispatch_mobile_test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with: {elixir-version: "1.19.6", otp-version: "28.3.3"}
+      - uses: dtolnay/rust-toolchain@stable
+      - run: mix deps.get
+      - run: mix test
+        working-directory: apps/biz_kit_identity
+      - run: mix event_store.create --quiet && mix event_store.init --quiet
+        working-directory: apps/coop_substrate
+      - run: mix ash.setup --quiet
+        working-directory: apps/dispatch
+      - run: mix test test/dispatch_web/mobile_acceptance_test.exs --include integration
+        working-directory: apps/dispatch

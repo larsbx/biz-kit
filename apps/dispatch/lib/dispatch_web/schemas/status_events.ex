@@ -39,7 +39,15 @@ defmodule DispatchWeb.Schemas.StatusEventRequest do
       location_sample_id: %Schema{type: :string, format: :uuid},
       device_id: %Schema{type: :string, format: :uuid},
       device_sequence: %Schema{type: :integer, minimum: 0},
-      device_signature: %Schema{type: :string},
+      device_signature: %Schema{
+        type: :string,
+        description:
+          "Base64url Ed25519 over DispatchStatusV1 canonical bytes; required for native device submissions."
+      },
+      subject: %Schema{
+        type: :string,
+        description: "Native session's explicit Dispatch account binding; signed with the event."
+      },
       supersedes_event_id: %Schema{
         type: :string,
         format: :uuid,

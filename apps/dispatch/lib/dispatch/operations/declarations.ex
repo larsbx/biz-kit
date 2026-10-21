@@ -51,7 +51,7 @@ defmodule Dispatch.Operations.Declarations do
   # What makes two declarations the same declaration. Deliberately excludes
   # `correlation_id` and every server-assigned field: a retry is a retry even
   # when the transport around it differs.
-  @identifying ~w(participant_id status occurred_at note assignment_id
+  @identifying ~w(participant_id role_assignment_id device_id device_sequence status occurred_at note assignment_id
                   location_sample_id supersedes_event_id)a
 
   @doc """
@@ -62,7 +62,8 @@ defmodule Dispatch.Operations.Declarations do
   event back rather than a second one.
   """
   @spec declare(Actor.t(), attrs()) :: result()
-  def declare(%Actor{} = actor, attrs) do
+  @spec declare(Actor.t(), attrs(), keyword()) :: result()
+  def declare(%Actor{} = actor, attrs, opts \\ []) do
     input =
       attrs
       |> Map.take(@accepted)
@@ -75,9 +76,12 @@ defmodule Dispatch.Operations.Declarations do
         participant_id: actor.principal_id,
         role_assignment_id: actor.role_assignment.id
       })
+      |> then(fn input ->
+        if Keyword.get(opts, :proof), do: Map.put(input, :verification, :DEVICE_AUTHENTICATED), else: input
+      end)
 
     case existing(actor, input) do
-      nil -> create(actor, input)
+      nil -> create(actor, input, opts)
       {matched_on, event} -> reconcile(matched_on, event, input)
     end
   end
@@ -104,11 +108,11 @@ defmodule Dispatch.Operations.Declarations do
 
   def by_id(_actor, _event_id), do: nil
 
-  defp create(actor, input) do
+  defp create(actor, input, opts) do
     Dispatch.Repo.transaction(fn ->
       case create_event(actor, input) do
         {:ok, event} ->
-          record_audit!(actor, event)
+          record_audit!(actor, event, Keyword.get(opts, :proof))
           enqueue_stream_refreshes!(actor, event)
           event
 
@@ -137,7 +141,7 @@ defmodule Dispatch.Operations.Declarations do
     |> Ash.create()
   end
 
-  defp record_audit!(actor, event) do
+  defp record_audit!(actor, event, proof) do
     # REVIEWED-UNAUTHORIZED: this is the audit record of an already-authorized
     # mutation. It must be written even when the actor cannot read audit data.
     _audit =
@@ -152,11 +156,15 @@ defmodule Dispatch.Operations.Declarations do
         subject_id: event.participant_id,
         occurred_at: event.recorded_at,
         correlation_id: event.correlation_id,
-        payload_json: %{
-          "event_id" => event.id,
-          "status" => to_string(event.status),
-          "source" => to_string(event.source)
-        }
+        payload_json:
+          %{
+            "event_id" => event.id,
+            "status" => to_string(event.status),
+            "source" => to_string(event.source)
+          }
+          |> then(fn payload ->
+            if proof, do: Map.put(payload, "device_proof", proof), else: payload
+          end)
       })
       # REVIEWED-UNAUTHORIZED: audit append follows an authorized mutation.
       |> Ash.create!(authorize?: false, tenant: actor.tenant_id)

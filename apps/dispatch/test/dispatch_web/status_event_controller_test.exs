@@ -310,7 +310,7 @@ defmodule DispatchWeb.StatusEventControllerTest do
           token: ctx.token
         )
 
-      assert conn.status == 422
+      assert conn.status == 403
       assert [] = read_events(ctx)
     end
 
@@ -330,7 +330,7 @@ defmodule DispatchWeb.StatusEventControllerTest do
 
       # Section 13 makes revocation lost-device handling. A revoked handset
       # must not keep consuming sequence numbers.
-      assert conn.status == 422
+      assert conn.status == 403
       assert [] = read_events(ctx)
     end
 
@@ -349,11 +349,11 @@ defmodule DispatchWeb.StatusEventControllerTest do
           token: ctx.token
         )
 
-      assert conn.status == 422
+      assert conn.status == 403
       assert [] = read_events(ctx)
     end
 
-    test "a declaration naming the caller's own active device is accepted", ctx do
+    test "even the caller's own device requires a signed native session", ctx do
       device = Fixtures.device(ctx.tenant, ctx.driver)
 
       conn =
@@ -363,8 +363,9 @@ defmodule DispatchWeb.StatusEventControllerTest do
           token: ctx.token
         )
 
-      assert conn.status == 201
-      assert Jason.decode!(conn.resp_body)["event"]["device_id"] == device.id
+      assert conn.status == 403
+      assert Jason.decode!(conn.resp_body)["code"] == "DEVICE_REJECTED"
+      assert [] = read_events(ctx)
     end
   end
 
@@ -449,53 +450,8 @@ defmodule DispatchWeb.StatusEventControllerTest do
     end
   end
 
-  describe "device sequences (Sections 22.3, 24.1)" do
-    test "a retry with the same content returns the original event", ctx do
-      device = Fixtures.device(ctx.tenant, ctx.driver).id
-      body = declaration(%{"device_id" => device, "device_sequence" => 412})
-
-      first = post("/v1/me/status-events", body, token: ctx.token)
-      second = post("/v1/me/status-events", body, token: ctx.token)
-
-      assert first.status == 201
-      assert second.status == 201
-
-      # The *original* 201 body, not a second event that looks like it.
-      assert Jason.decode!(first.resp_body)["event"]["id"] ==
-               Jason.decode!(second.resp_body)["event"]["id"]
-
-      assert length(read_events(ctx)) == 1
-    end
-
-    test "the same sequence with different content is a conflict", ctx do
-      device = Fixtures.device(ctx.tenant, ctx.driver).id
-      at = DateTime.utc_now() |> DateTime.to_iso8601()
-
-      first =
-        post(
-          "/v1/me/status-events",
-          declaration(%{"device_id" => device, "device_sequence" => 7, "occurred_at" => at}),
-          token: ctx.token
-        )
-
-      second =
-        post(
-          "/v1/me/status-events",
-          declaration(%{
-            "device_id" => device,
-            "device_sequence" => 7,
-            "occurred_at" => at,
-            "status" => "AT_PICKUP"
-          }),
-          token: ctx.token
-        )
-
-      assert first.status == 201
-      assert second.status == 409
-      assert Jason.decode!(second.resp_body)["code"] == "DEVICE_SEQUENCE_CONFLICT"
-      assert length(read_events(ctx)) == 1
-    end
-  end
+  # Signed device sequence acceptance and replay are exercised end-to-end in
+  # MobileAcceptanceTest against Identity and the governance enrolment ledger.
 
   describe "idempotency keys (Section 24)" do
     test "a replayed key returns the stored response without a second event", ctx do
