@@ -235,6 +235,10 @@ jobs:
           apps/dispatch/lib/dispatch/identity/tokens/biz_kit_session.ex
           apps/dispatch/test/dispatch/identity/biz_kit_session_test.exs
           apps/spruce_goose/test/dispatch_runtime_config_test.exs
+          apps/dispatch/lib/dispatch/accounts/device_keys.ex
+          apps/dispatch/lib/dispatch_web/controllers/device_controller.ex
+          apps/dispatch/lib/dispatch_web/schemas/devices.ex
+          apps/dispatch/test/dispatch_web/device_controller_test.exs
           apps/spruce_goose/lib/spruce_goose/actors/grant.ex
           apps/spruce_goose/lib/spruce_goose/actors/registry.ex
           apps/spruce_goose/lib/spruce_goose/cli/command.ex

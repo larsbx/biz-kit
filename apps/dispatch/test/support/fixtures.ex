@@ -141,15 +141,36 @@ defmodule Dispatch.Support.Fixtures do
 
   @doc "An active device registered to `participant`."
   @spec device(Ash.UUID.t(), Participant.t()) :: Device.t()
-  def device(tenant, participant) do
-    Device
-    |> Ash.Changeset.for_create(:register, %{
-      tenant_id: tenant,
-      participant_id: participant.id,
-      installation_id: unique("installation"),
-      public_key: Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
-    })
-    |> Ash.create!(authorize?: false, tenant: tenant)
+  def device(tenant, participant), do: tenant |> keyed_device(participant) |> elem(0)
+
+  @doc "A registered device with a real Ed25519 key, and its seed for signing."
+  @spec keyed_device(Ash.UUID.t(), struct()) :: {struct(), binary()}
+  def keyed_device(tenant, participant) do
+    {public_key, seed} = CoopSubstrate.Crypto.generate_keypair()
+
+    device =
+      Device
+      |> Ash.Changeset.for_create(:register, %{
+        tenant_id: tenant,
+        participant_id: participant.id,
+        installation_id: unique("installation"),
+        public_key: Base.url_encode64(public_key, padding: false)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    {device, seed}
+  end
+
+  @doc "`body` as the device holding `seed` sends it: signed over its own fields."
+  @spec signed(map(), binary()) :: map()
+  def signed(body, seed) do
+    {:ok, statement} = Dispatch.Accounts.DeviceKeys.event_statement(body)
+
+    Map.put(
+      body,
+      "device_signature",
+      Base.url_encode64(CoopSubstrate.Crypto.sign(statement, seed), padding: false)
+    )
   end
 
   @doc """

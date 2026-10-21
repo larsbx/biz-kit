@@ -157,6 +157,9 @@ defmodule DispatchWeb.Router do
 
     get "/role-capabilities", RoleCapabilityController, :capabilities
 
+    # Section 23.1: the app registers its installation key after sign-in.
+    post "/me/devices", DeviceController, :create
+
     # Section 24.1: the canonical self-service route and the DRIVER
     # compatibility projection. Both reach the same controller function.
     post "/me/status-events", StatusEventController, :create

@@ -27,9 +27,17 @@ defmodule Dispatch.Operations.Declarations do
   after a lost response may legitimately resend with a different correlation ID
   or header set, and that is the same declaration; changing the status under a
   sequence number already used is not, whatever else matches.
+
+  ## Device signatures
+
+  A declaration naming the participant's own active device must be signed by
+  that device's key over the fields it was sent with (`:signed`), and is then
+  recorded `verification: :DEVICE_AUTHENTICATED`. Without a device it is
+  `:NONE`. The verification is decided here, never taken from the caller.
   """
 
   alias Dispatch.Access.Actor
+  alias Dispatch.Accounts.DeviceKeys
   alias Dispatch.Operations.ParticipantStatusEvent
 
   require Ash.Query
@@ -43,10 +51,11 @@ defmodule Dispatch.Operations.Declarations do
           | {:ok, :duplicate, ParticipantStatusEvent.t()}
           | {:error, :device_sequence_conflict}
           | {:error, :event_id_conflict}
+          | {:error, :device_signature_required | :device_signature_invalid}
           | {:error, Ash.Error.t()}
 
   @accepted ~w(id status occurred_at note assignment_id location_sample_id
-               supersedes_event_id device_id device_sequence correlation_id)a
+               supersedes_event_id device_id device_sequence correlation_id verification)a
 
   # What makes two declarations the same declaration. Deliberately excludes
   # `correlation_id` and every server-assigned field: a retry is a retry even
@@ -60,9 +69,28 @@ defmodule Dispatch.Operations.Declarations do
   Returns `{:ok, :duplicate, event}` when this device sequence already carries
   the same declaration, so a caller that lost the first response gets the first
   event back rather than a second one.
+
+  `attrs[:signed]` is `%{fields: body_fields, signature: device_signature}`:
+  what the device signed, as received.
   """
   @spec declare(Actor.t(), attrs()) :: result()
   def declare(%Actor{} = actor, attrs) do
+    with {:ok, verification} <- verification(actor, attrs) do
+      record(actor, Map.put(attrs, :verification, verification))
+    end
+  end
+
+  defp verification(actor, attrs) do
+    %{fields: fields, signature: signature} =
+      Map.get(attrs, :signed, %{fields: %{"device_id" => attrs[:device_id]}, signature: nil})
+
+    # The device verified is the one recorded: the signed fields must name it.
+    if fields["device_id"] == attrs[:device_id],
+      do: DeviceKeys.verify_event(actor, fields, signature),
+      else: {:error, :device_signature_invalid}
+  end
+
+  defp record(actor, attrs) do
     input =
       attrs
       |> Map.take(@accepted)
