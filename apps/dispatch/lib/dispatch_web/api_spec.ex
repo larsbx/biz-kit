@@ -31,7 +31,14 @@ defmodule DispatchWeb.ApiSpec do
       components: %Components{
         securitySchemes: %{
           # Section 23.1: short-lived OIDC access tokens.
-          "bearerAuth" => %SecurityScheme{type: "http", scheme: "bearer", bearerFormat: "JWT"}
+          "bearerAuth" => %SecurityScheme{type: "http", scheme: "bearer", bearerFormat: "JWT"},
+          "nativeSession" => %SecurityScheme{
+            type: "apiKey",
+            in: :header,
+            name: "Authorization",
+            description:
+              "BizKit <session>, obtained through the PKCE native handoff. Revocable BizKit.Identity session."
+          }
         }
       }
     }

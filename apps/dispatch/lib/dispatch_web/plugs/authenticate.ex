@@ -18,6 +18,25 @@ defmodule DispatchWeb.Plugs.Authenticate do
 
   @impl Plug
   def call(conn, _opts) do
+    case get_req_header(conn, "authorization") do
+      ["BizKit " <> token] -> native(conn, token)
+      _ -> oidc(conn)
+    end
+  end
+
+  defp native(conn, token) do
+    with {:ok, session} <- BizKit.Identity.session(token),
+         {:ok, subject} <- Dispatch.Identity.Native.subject(session) do
+      conn
+      |> assign(:bizkit_session, session)
+      |> assign(:bizkit_session_id, token)
+      |> assign(:oidc_claims, %{subject: subject, issuer: session.identity.issuer})
+    else
+      _ -> deny(conn)
+    end
+  end
+
+  defp oidc(conn) do
     with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
          {:ok, claims} <- Verifier.verify(token) do
       assign(conn, :oidc_claims, claims)
@@ -31,6 +50,6 @@ defmodule DispatchWeb.Plugs.Authenticate do
   # say whether the token was absent, expired or wrongly signed — that
   # distinction helps an attacker more than a client.
   defp deny(conn) do
-    DispatchWeb.Problem.send(conn, 401, "UNAUTHENTICATED", "A valid bearer token is required.")
+    DispatchWeb.Problem.send(conn, 401, "UNAUTHENTICATED", "A valid session or access token is required.")
   end
 end

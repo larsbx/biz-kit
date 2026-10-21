@@ -69,6 +69,7 @@ defmodule Dispatch.MixProject do
       # bytes, for the signed capability document. Code only — dispatch does not
       # start or write the ledger, so the application is not started from here.
       {:coop_substrate, in_umbrella: true, runtime: false},
+      {:biz_kit_identity, in_umbrella: true},
 
       # Outbound HTTP, used directly for OIDC key discovery (Section 23.1).
       # Declared here rather than relied on transitively: the TLS trust store

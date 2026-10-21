@@ -162,6 +162,184 @@
         "title": "LivenessResponse",
         "type": "object"
       },
+      "MobileAuthorizeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code_challenge": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code_challenge",
+          "state"
+        ],
+        "title": "MobileAuthorizeRequest",
+        "type": "object"
+      },
+      "MobileAuthorizeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_url"
+        ],
+        "title": "MobileAuthorizeResponse",
+        "type": "object"
+      },
+      "MobileChallengeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "statement"
+        ],
+        "title": "MobileChallengeResponse",
+        "type": "object"
+      },
+      "MobileCodeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at"
+        ],
+        "title": "MobileCodeResponse",
+        "type": "object"
+      },
+      "MobileDeviceResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id"
+        ],
+        "title": "MobileDeviceResponse",
+        "type": "object"
+      },
+      "MobileEnrolmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "key_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "public_key",
+          "label"
+        ],
+        "title": "MobileEnrolmentRequest",
+        "type": "object"
+      },
+      "MobileProofRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signature"
+        ],
+        "title": "MobileProofRequest",
+        "type": "object"
+      },
+      "MobileRegisterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "installation_id": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "public_key",
+          "installation_id"
+        ],
+        "title": "MobileRegisterRequest",
+        "type": "object"
+      },
+      "MobileTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "code_verifier": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "code_verifier"
+        ],
+        "title": "MobileTokenRequest",
+        "type": "object"
+      },
+      "MobileTokenResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "integer"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "subject",
+          "principal",
+          "expires_at"
+        ],
+        "title": "MobileTokenResponse",
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": false,
         "properties": {
@@ -382,6 +560,7 @@
             "type": "integer"
           },
           "device_signature": {
+            "description": "Base64url Ed25519 over DispatchStatusV1 canonical bytes; required for native device submissions.",
             "type": "string"
           },
           "event_id": {
@@ -423,6 +602,10 @@
             ],
             "type": "string"
           },
+          "subject": {
+            "description": "Native session's explicit Dispatch account binding; signed with the event.",
+            "type": "string"
+          },
           "supersedes_event_id": {
             "description": "The event this corrects. History is appended, never rewritten.",
             "format": "uuid",
@@ -459,6 +642,12 @@
         "bearerFormat": "JWT",
         "scheme": "bearer",
         "type": "http"
+      },
+      "nativeSession": {
+        "description": "BizKit <session>, obtained through the PKCE native handoff. Revocable BizKit.Identity session.",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey"
       }
     }
   },
@@ -667,12 +856,225 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "nativeSession": []
           }
         ],
         "summary": "Declare a driver status (compatibility projection)",
         "tags": [
           "status"
         ]
+      }
+    },
+    "/v1/me/device-enrolment": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileDeviceController.request",
+        "parameters": [
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileEnrolmentRequest"
+              }
+            }
+          },
+          "description": "Request",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileChallengeResponse"
+                }
+              }
+            },
+            "description": "Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rejected"
+          }
+        },
+        "security": [
+          {
+            "nativeSession": []
+          }
+        ],
+        "summary": "Request governance-approved device enrolment",
+        "tags": []
+      }
+    },
+    "/v1/me/device-enrolment/{id}/proof": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileDeviceController.prove",
+        "parameters": [
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileProofRequest"
+              }
+            }
+          },
+          "description": "Request",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileCodeResponse"
+                }
+              }
+            },
+            "description": "Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rejected"
+          }
+        },
+        "security": [
+          {
+            "nativeSession": []
+          }
+        ],
+        "summary": "Prove possession of the requested key",
+        "tags": []
+      }
+    },
+    "/v1/me/devices": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileDeviceController.register",
+        "parameters": [
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileRegisterRequest"
+              }
+            }
+          },
+          "description": "Request",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileDeviceResponse"
+                }
+              }
+            },
+            "description": "Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rejected"
+          }
+        },
+        "security": [
+          {
+            "nativeSession": []
+          }
+        ],
+        "summary": "Register an approved installation",
+        "tags": []
       }
     },
     "/v1/me/role-assignments": {
@@ -706,6 +1108,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "nativeSession": []
           }
         ],
         "summary": "List the role assignments this principal may act under",
@@ -815,12 +1220,208 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "nativeSession": []
           }
         ],
         "summary": "Declare a participant status",
         "tags": [
           "status"
         ]
+      }
+    },
+    "/v1/mobile/authorize": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileSessionController.start",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileAuthorizeRequest"
+              }
+            }
+          },
+          "description": "Request",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileAuthorizeResponse"
+                }
+              }
+            },
+            "description": "Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rejected"
+          }
+        },
+        "security": [],
+        "summary": "Begin native sign-in",
+        "tags": []
+      }
+    },
+    "/v1/mobile/callback": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileSessionController.callback",
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Single-use native handoff redirect"
+          },
+          "401": {
+            "description": "Invalid flow"
+          }
+        },
+        "security": [],
+        "summary": "Provider callback for a held native flow",
+        "tags": []
+      }
+    },
+    "/v1/mobile/login": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileSessionController.login",
+        "parameters": [
+          {
+            "description": "",
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Provider redirect"
+          },
+          "401": {
+            "description": "Invalid flow"
+          }
+        },
+        "security": [],
+        "summary": "Open the held native sign-in in a browser",
+        "tags": []
+      }
+    },
+    "/v1/mobile/session": {
+      "delete": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileSessionController.logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Session revoked"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        },
+        "security": [
+          {
+            "nativeSession": []
+          }
+        ],
+        "summary": "Revoke the current native session",
+        "tags": []
+      }
+    },
+    "/v1/mobile/token": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.MobileSessionController.exchange",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileTokenRequest"
+              }
+            }
+          },
+          "description": "Request",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileTokenResponse"
+                }
+              }
+            },
+            "description": "Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rejected"
+          }
+        },
+        "security": [],
+        "summary": "Exchange single-use PKCE handoff",
+        "tags": []
       }
     },
     "/v1/role-capabilities": {
@@ -884,6 +1485,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "nativeSession": []
           }
         ],
         "summary": "The signed capability document for the selected role assignment",

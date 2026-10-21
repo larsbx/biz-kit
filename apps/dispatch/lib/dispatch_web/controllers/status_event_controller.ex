@@ -63,7 +63,7 @@ defmodule DispatchWeb.StatusEventController do
     participant is derived from the token and the active role assignment; it is
     not a parameter.
     """,
-    security: [%{"bearerAuth" => []}],
+    security: [%{"bearerAuth" => []}, %{"nativeSession" => []}],
     parameters: @headers,
     request_body: {"Declaration", "application/json", StatusEventRequest},
     responses: @responses
@@ -72,7 +72,7 @@ defmodule DispatchWeb.StatusEventController do
   operation(:create_driver,
     summary: "Declare a driver status (compatibility projection)",
     description: "Section 24.1's DRIVER compatibility route. Identical behaviour to /v1/me.",
-    security: [%{"bearerAuth" => []}],
+    security: [%{"bearerAuth" => []}, %{"nativeSession" => []}],
     parameters: @headers,
     request_body: {"Declaration", "application/json", StatusEventRequest},
     responses: @responses
@@ -103,12 +103,29 @@ defmodule DispatchWeb.StatusEventController do
     # Section 24: the key is optional, and a request without one simply runs.
     # The ledger is not a way to make clients send keys; it is how the ones that
     # do are honoured.
-    Idempotency.execute(actor, idempotency_key(conn), params, fn ->
-      case Declarations.declare(actor, attrs) do
-        {:ok, _created_or_duplicate, event} -> {:ok, 201, body(actor, event)}
-        {:error, reason} -> {:error, reason}
-      end
-    end)
+    run = fn proof ->
+      Idempotency.execute(actor, idempotency_key(conn), params, fn ->
+        verified_attrs =
+          if proof, do: Map.put(attrs, :verification, :DEVICE_AUTHENTICATED), else: attrs
+
+        case Declarations.declare(actor, verified_attrs, proof: proof) do
+          {:ok, _created_or_duplicate, event} -> {:ok, 201, body(actor, event)}
+          {:error, reason} -> {:error, reason}
+        end
+      end)
+    end
+
+    case conn.assigns[:bizkit_session] do
+      nil ->
+        if is_nil(params["device_id"]), do: run.(nil), else: {:error, :device_rejected}
+
+      session ->
+        if Dispatch.Access.can?(actor.role_assignment, "status.declare.self", actor.at) do
+          Dispatch.MobileDevices.submit(actor, session, params, run)
+        else
+          {:error, %Ash.Error.Forbidden{}}
+        end
+    end
   end
 
   defp idempotency_key(conn) do
@@ -122,6 +139,24 @@ defmodule DispatchWeb.StatusEventController do
 
   defp respond(conn, {:error, {:malformed, field}}),
     do: Problem.send(conn, 400, "MALFORMED_REQUEST", "#{field} is not a valid value.")
+
+  defp respond(conn, {:error, :device_unavailable}),
+    do:
+      Problem.send(
+        conn,
+        503,
+        "DEVICE_UNAVAILABLE",
+        "Device verification is temporarily unavailable; retry this declaration."
+      )
+
+  defp respond(conn, {:error, :device_rejected}),
+    do:
+      Problem.send(
+        conn,
+        403,
+        "DEVICE_REJECTED",
+        "Device key, signature or sequence was rejected. Enrol a new key or contact your administrator."
+      )
 
   defp respond(conn, {:error, :event_id_conflict}),
     do:

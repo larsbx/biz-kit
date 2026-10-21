@@ -1,0 +1,15 @@
+{
+  "signature": "FaGtF7VpvvCKqN9nzABdmMhl-6eX2A9fQqBu0V_2pSwUrz-DrYK3F5J0wPLINRMU2Hul9DIjtEFhVLXrObJZCw",
+  "public_key": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
+  "signing_bytes": "o2ZzY2hlbWFwRGlzcGF0Y2hTdGF0dXNWMWdwYXlsb2Fkp2Rub3RlamNhZsOpIPCfmppmc3RhdHVzaUFUX1BJQ0tVUGdzdWJqZWN0cmRpc3BhdGNoLWFjY291bnQtMWhldmVudF9pZHgkMDE5ZTlmYWMtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxaWRldmljZV9pZHgkMDE5ZTlmYWMtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAya29jY3VycmVkX2F0dDIwMjYtMTAtMjFUMDQ6MTY6MDBab2RldmljZV9zZXF1ZW5jZRgYcnJvbGVfYXNzaWdubWVudF9pZHgkMDE5ZTlmYWMtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAz",
+  "payload": {
+    "device_id": "019e9fac-0000-7000-8000-000000000002",
+    "device_sequence": 24,
+    "event_id": "019e9fac-0000-7000-8000-000000000001",
+    "note": "café 🚚",
+    "occurred_at": "2026-10-21T04:16:00Z",
+    "status": "AT_PICKUP",
+    "subject": "dispatch-account-1"
+  },
+  "role_assignment_id": "019e9fac-0000-7000-8000-000000000003"
+}

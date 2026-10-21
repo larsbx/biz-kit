@@ -8,7 +8,11 @@ defmodule BizKit.Identity.Application do
     # them a principal's authority.
     case BizKit.Identity.Resolver.check() do
       :ok ->
-        Supervisor.start_link([{BizKit.Cluster.Singleton, BizKit.Identity.Sessions}],
+        Supervisor.start_link(
+          [
+            {BizKit.Cluster.Singleton, BizKit.Identity.Sessions},
+            {BizKit.Cluster.Singleton, BizKit.Identity.Native}
+          ],
           strategy: :one_for_one,
           name: BizKit.Identity.Supervisor
         )
