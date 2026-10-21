@@ -229,6 +229,11 @@ jobs:
           apps/dispatch/test/dispatch/access/capability_signer_test.exs
           apps/dispatch/test/dispatch_web/role_capability_controller_test.exs
           apps/dispatch/lib/dispatch/accounts/validations/known_constraints.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/native_logins.ex
+          apps/biz_kit_identity/test/native_sign_in_test.exs
+          apps/spruce_goose/test/spruce_goose/web/native_sign_in_test.exs
+          apps/dispatch/lib/dispatch/identity/tokens/biz_kit_session.ex
+          apps/dispatch/test/dispatch/identity/biz_kit_session_test.exs
       # Dispatch's unit tier: no PostGIS here, so the integration tier stays
       # local (`mix test --include integration`). The contract check keeps
       # apps/dispatch/contracts/openapi.json, which the field app is held to,

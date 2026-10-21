@@ -75,6 +75,9 @@ has not been switched.
   with the ledger's scheme (Ed25519 over canonical bytes); the d-patch field
   app verifies it against a pinned key and gates its status screen on it.
   `GET /v1/me/role-assignments` lists the assignments a principal may select.
+- [Native sign-in](architecture/2026-10-21-native-sign-in.md): an app signs in
+  through the system browser (RFC 8252, PKCE) and gets a biz-kit session as a
+  bearer token; dispatch's `/v1` accepts it (`BizKitSession` verifier).
 
 ## Next
 
@@ -98,12 +101,14 @@ Ordered by what blocks real use first.
 ## Dispatch field app (d-patch)
 
 Dispatch's server work happens here; d-patch keeps the Android, web and e2e
-clients (d-patch ADR-0010). The Android app's offline status flow is built and
-currently reports itself signed out. What it needs from biz-kit, in order:
+clients (d-patch ADR-0010). The Android app's offline status flow is built,
+and biz-kit now serves [native sign-in](architecture/2026-10-21-native-sign-in.md).
+What remains, in order:
 
-1. **Mobile sign-in.** `BizKit.Identity` sessions are browser cookies; the app
-   needs a flow that yields a bearer token `apps/dispatch` accepts for `/v1`,
-   resolving to the same principal.
+1. **The app's half of sign-in** (in d-patch): `core:auth` runs the RFC 8252
+   flow against `/auth/:provider/native/login` and `/auth/token`, keeps the
+   session, and learns its principal from `/auth/me`. Deployment sets
+   `BIZKIT_NATIVE_REDIRECT_URIS` and selects dispatch's `BizKitSession` verifier.
 2. **Device keys.** Enrol each installation's Ed25519 key through
    `CoopSubstrate.Enrolments`, so offline status events are signed by a
    governance-granted device key rather than dispatch's own `devices` table.

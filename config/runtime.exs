@@ -520,6 +520,15 @@ if config_env() == :prod do
            )
   end
 
+  # Native apps' redirect URIs, comma-separated and matched exactly
+  # (docs/architecture/2026-10-21-native-sign-in.md), e.g. the field app's
+  # "com.dispatch.driver:/oauth2redirect". Unset, no native app can sign in.
+  if uris = System.get_env("BIZKIT_NATIVE_REDIRECT_URIS") do
+    config :biz_kit_identity,
+           :native_redirect_uris,
+           uris |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  end
+
   if public_url = System.get_env("SPRUCE_GOOSE_PUBLIC_URL") do
     config :spruce_goose, :public_url, public_url
   end
