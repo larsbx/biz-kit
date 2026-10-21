@@ -105,10 +105,7 @@ defmodule DispatchWeb.StatusEventController do
     # do are honoured.
     run = fn proof ->
       Idempotency.execute(actor, idempotency_key(conn), params, fn ->
-        verified_attrs =
-          if proof, do: Map.put(attrs, :verification, :DEVICE_AUTHENTICATED), else: attrs
-
-        case Declarations.declare(actor, verified_attrs, proof: proof) do
+        case Declarations.declare(actor, attrs, proof: proof) do
           {:ok, _created_or_duplicate, event} -> {:ok, 201, body(actor, event)}
           {:error, reason} -> {:error, reason}
         end
