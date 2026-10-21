@@ -106,19 +106,26 @@ defmodule SpruceGoose.Web.AuthController do
 
   @doc "RFC 6749 §4.1.3 for a native app: one-time code and PKCE verifier for a session."
   def token(conn, params) do
-    with "authorization_code" <- params["grant_type"],
-         [code, verifier, redirect_uri]
-         when is_binary(code) and is_binary(verifier) and is_binary(redirect_uri) <-
-           [params["code"], params["code_verifier"], params["redirect_uri"]],
+    %{"code" => code, "code_verifier" => verifier, "redirect_uri" => redirect_uri} =
+      Map.merge(%{"code" => nil, "code_verifier" => nil, "redirect_uri" => nil}, params)
+
+    with true <- params["grant_type"] == "authorization_code" or :unsupported_grant_type,
+         true <- Enum.all?([code, verifier, redirect_uri], &is_binary/1) or :missing_parameters,
          {:ok, session, expires_in} <- Identity.native_exchange(code, verifier, redirect_uri) do
       conn
       |> put_resp_header("cache-control", "no-store")
       |> json(%{access_token: session, token_type: "Bearer", expires_in: expires_in})
     else
-      reason ->
-        Logger.info("native token refused: #{inspect(reason)}")
-        conn |> put_status(400) |> json(%{error: "invalid_grant"})
+      # A category only, never the values: the request may carry a live code
+      # and its verifier.
+      {:error, :invalid_grant} -> refuse_token(conn, :invalid_grant)
+      category -> refuse_token(conn, category)
     end
+  end
+
+  defp refuse_token(conn, category) do
+    Logger.info("native token refused: #{category}")
+    conn |> put_status(400) |> json(%{error: "invalid_grant"})
   end
 
   def callback(conn, %{"provider" => provider}) do
@@ -129,11 +136,16 @@ defmodule SpruceGoose.Web.AuthController do
 
     expected = conn.cookies[@state_cookie]
 
-    with true <- Enum.all?([code, state, expected], &is_binary/1) or :missing_code_or_state,
+    # The state is checked before the code: a provider that refuses or a person
+    # who cancels returns `error` and no code, and a native app still has to be
+    # told, or it waits for a callback that never comes.
+    with true <- Enum.all?([state, expected], &is_binary/1) or :missing_state,
          true <- Plug.Crypto.secure_compare(expected, state) or :state_mismatch do
-      if Identity.native_request?(state),
-        do: native_callback(conn, provider, state, code),
-        else: web_callback(conn, provider, code)
+      cond do
+        Identity.native_request?(state) -> native_callback(conn, provider, state, code)
+        is_binary(code) -> web_callback(conn, provider, code)
+        true -> refuse(conn, :missing_code)
+      end
     else
       reason -> refuse(conn, reason)
     end

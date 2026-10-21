@@ -108,6 +108,14 @@ config :dispatch, :agent,
       configured.(:agent, :streaming_runtime, Dispatch.Integrations.Agent.Fake.StreamingRuntime)
     )
 
+# Read once: the identity section below selects it, and the production block
+# requires the OIDC issuer's settings only when it is the OIDC verifier.
+dispatch_token_verifier =
+  module_env.(
+    "TOKEN_VERIFIER_ADAPTER",
+    configured.(:identity, :token_verifier, Dispatch.Identity.Tokens.Oidc)
+  )
+
 config :dispatch, :identity,
   face_verifier:
     module_env.(
@@ -125,11 +133,7 @@ config :dispatch, :identity,
   face_attestation_retention_days: System.get_env("FACE_ATTESTATION_RETENTION_DAYS"),
   consent_text_version: System.get_env("FACE_CONSENT_TEXT_VERSION"),
   jurisdiction_policy_version: System.get_env("FACE_JURISDICTION_POLICY_VERSION"),
-  token_verifier:
-    module_env.(
-      "TOKEN_VERIFIER_ADAPTER",
-      configured.(:identity, :token_verifier, Dispatch.Identity.Tokens.Oidc)
-    )
+  token_verifier: dispatch_token_verifier
 
 config :dispatch, :breakglass,
   enabled: boolean_env.("BREAKGLASS_ENABLED", false),
@@ -190,11 +194,18 @@ if config_env() == :prod and dispatch_released? do
     server: true
 
   config :dispatch,
-    oidc_issuer: require_env.("OIDC_ISSUER"),
-    oidc_client_id_api: require_env.("OIDC_CLIENT_ID_API"),
-    oidc_audience: require_env.("OIDC_AUDIENCE"),
     application_encryption_key_id: require_env.("APPLICATION_ENCRYPTION_KEY_ID"),
     diagnostics_token: require_env.("DIAGNOSTICS_TOKEN")
+
+  # Only the OIDC token verifier reads its issuer settings. A deployment that
+  # selects biz-kit sessions instead (Dispatch.Identity.Tokens.BizKitSession,
+  # docs/architecture/2026-10-21-native-sign-in.md) needs none of them.
+  if dispatch_token_verifier == Dispatch.Identity.Tokens.Oidc do
+    config :dispatch,
+      oidc_issuer: require_env.("OIDC_ISSUER"),
+      oidc_client_id_api: require_env.("OIDC_CLIENT_ID_API"),
+      oidc_audience: require_env.("OIDC_AUDIENCE")
+  end
 else
   config :dispatch,
     oidc_issuer: System.get_env("OIDC_ISSUER", "http://localhost:5556/dex"),

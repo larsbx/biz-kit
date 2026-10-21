@@ -11,6 +11,8 @@ defmodule SpruceGoose.Web.NativeSignInTest do
 
   alias BizKit.Identity.Principal
 
+  require Logger
+
   @app "com.dispatch.driver:/oauth2redirect"
 
   setup do
@@ -119,6 +121,51 @@ defmodule SpruceGoose.Web.NativeSignInTest do
     assert callback.status == 302
     assert %{"error" => "access_denied", "state" => "app-state"} = query(location(callback))
     refute Map.has_key?(query(location(callback)), "code")
+  end
+
+  test "a provider refusal or a cancelled sign-in still returns the browser to the app", ctx do
+    login = native_login(ctx)
+    state = cookie(login, "bizkit_login_state")
+
+    callback =
+      call(:get, "/auth/workos/callback?error=access_denied&state=#{state}", [
+        {"cookie", "bizkit_login_state=#{state}"}
+      ])
+
+    assert callback.status == 302
+    assert %{"error" => "access_denied", "state" => "app-state"} = query(location(callback))
+
+    # A web sign-in without a code is still refused outright.
+    web = call(:get, "/auth/workos/login", [])
+    web_state = cookie(web, "bizkit_login_state")
+
+    assert call(:get, "/auth/workos/callback?error=access_denied&state=#{web_state}", [
+             {"cookie", "bizkit_login_state=#{web_state}"}
+           ]).status == 401
+  end
+
+  test "a refused token request logs a category, never the code or verifier", ctx do
+    workos_signs_in("user_A")
+    %{"code" => code} = ctx |> browser_round_trip() |> location() |> query()
+
+    # Test config logs at :warning; this module is not async, so raising the
+    # level for this one check affects no other test.
+    level = Logger.level()
+    Logger.configure(level: :info)
+    on_exit(fn -> Logger.configure(level: level) end)
+
+    log =
+      ExUnit.CaptureLog.capture_log([level: :info, format: "$message\n"], fn ->
+        assert token(%{"code" => code, "code_verifier" => ctx.verifier}).status == 400
+      end)
+
+    assert log =~ "native token refused: missing_parameters"
+    refute log =~ code
+    refute log =~ ctx.verifier
+
+    # The code was not presented to an exchange, so it still works.
+    assert token(%{"code" => code, "code_verifier" => ctx.verifier, "redirect_uri" => @app}).status ==
+             200
   end
 
   test "a request that could not be honoured never redirects anywhere", ctx do

@@ -72,11 +72,16 @@ defmodule BizKit.Identity do
   request is spent. The reason for a denial is returned for the log, never
   sent to the app.
   """
-  @spec native_complete(String.t(), String.t(), String.t(), String.t()) ::
+  @spec native_complete(String.t(), String.t(), String.t() | nil, String.t()) ::
           {:ok, String.t()} | {:denied, String.t(), term()} | {:error, :unknown_request}
   def native_complete(provider, request_id, code, redirect_uri) do
     with {:ok, %{provider: ^provider} = request} <- NativeLogins.take_request(request_id) do
-      case authenticate(provider, code, redirect_uri) do
+      # No code: the person cancelled or the provider refused. Still a denial
+      # the app must hear about, not a request left hanging.
+      case if(is_binary(code),
+             do: authenticate(provider, code, redirect_uri),
+             else: {:error, :no_code}
+           ) do
         {:ok, principal, identity} ->
           grant = %{
             principal: principal,

@@ -140,6 +140,14 @@ defmodule BizKit.Identity.NativeSignInTest do
     assert {:denied, _url, :rejected} = Identity.native_complete("static", request, "bad", "cb")
   end
 
+  test "a cancelled or refused sign-in, with no code at all, is still denied to the app", ctx do
+    {:ok, request} = Identity.native_begin("static", @app, ctx.challenge, "S256", "s")
+
+    assert {:denied, url, :no_code} = Identity.native_complete("static", request, nil, "cb")
+    assert %{"error" => "access_denied", "state" => "s"} = code_from(url)
+    refute Identity.native_request?(request)
+  end
+
   test "a request completes once, and only through the provider it began with", ctx do
     {:ok, request} = Identity.native_begin("static", @app, ctx.challenge, "S256", nil)
     assert {:error, :unknown_request} = Identity.native_complete("other", request, "alice", "cb")
