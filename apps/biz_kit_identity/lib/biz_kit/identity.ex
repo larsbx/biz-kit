@@ -101,18 +101,19 @@ defmodule BizKit.Identity do
   end
 
   @doc """
-  Exchanges a one-time code and its PKCE verifier for a session. The code is
-  spent by this call whatever its outcome, and the identity is resolved again,
-  so a binding removed since sign-in yields no session.
+  Exchanges a one-time code and its PKCE verifier for a native session, which
+  lasts until signed out (`Sessions.create_native/2`). The code is spent by this
+  call whatever its outcome, and the identity is resolved again, so a binding
+  removed since sign-in yields no session.
   """
   @spec native_exchange(String.t(), String.t(), String.t()) ::
-          {:ok, Sessions.id(), pos_integer()} | {:error, :invalid_grant}
+          {:ok, Sessions.id()} | {:error, :invalid_grant}
   def native_exchange(code, verifier, redirect_uri) do
     with {:ok, grant} <- NativeLogins.take_code(code),
          true <- grant.redirect_uri == redirect_uri,
          true <- NativeLogins.verifies?(verifier, grant.challenge),
          {:ok, principal} when principal == grant.principal <- Resolver.resolve(grant.identity) do
-      {:ok, Sessions.create(principal, grant.identity), div(Sessions.ttl_ms(), 1000)}
+      {:ok, Sessions.create_native(principal, grant.identity)}
     else
       _ -> {:error, :invalid_grant}
     end

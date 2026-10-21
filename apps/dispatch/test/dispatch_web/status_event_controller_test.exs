@@ -592,6 +592,34 @@ defmodule DispatchWeb.StatusEventControllerTest do
   end
 
   describe "idempotency keys (Section 24)" do
+    test "a declaration the selected role may not make is refused under a key too, not a 500",
+         ctx do
+      dispatcher = Fixtures.assignment(ctx.tenant, ctx.org, ctx.driver, "DISPATCHER")
+      key = {"idempotency-key", "key-" <> Ash.UUID.generate()}
+
+      # The app's body: its own event ID and a device sequence. Ash refuses
+      # inside the ledger's transaction and rolls it back itself.
+      body = declaration(%{"event_id" => Ash.UUID.generate(), "device_sequence" => 1})
+
+      conn =
+        post("/v1/me/status-events", body,
+          token: ctx.token,
+          headers: [{"x-role-assignment-id", dispatcher.id}, key]
+        )
+
+      assert conn.status == 403
+      assert Jason.decode!(conn.resp_body)["code"] == "FORBIDDEN"
+
+      # The refusal released the key: the same key under the right role works.
+      conn =
+        post("/v1/me/status-events", body,
+          token: ctx.token,
+          headers: [{"x-role-assignment-id", ctx.assignment.id}, key]
+        )
+
+      assert conn.status == 201
+    end
+
     test "a replayed key returns the stored response without a second event", ctx do
       body = declaration()
       headers = [{"idempotency-key", "key-" <> Ash.UUID.generate()}]

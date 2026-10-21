@@ -148,6 +148,12 @@ defmodule Dispatch.Operations.Declarations do
       {:ok, event} ->
         {:ok, :created, event}
 
+      # A refusal is not a lost race, and there is nothing to re-read: inside an
+      # enclosing transaction (the Idempotency-Key ledger's) the rollback above
+      # has already doomed it, and any further query would fail.
+      {:error, %Ash.Error.Forbidden{} = refused} ->
+        {:error, refused}
+
       {:error, error} ->
         # Another copy of the same request won the unique index between the read
         # above and this write. Re-reading is what turns that race into the

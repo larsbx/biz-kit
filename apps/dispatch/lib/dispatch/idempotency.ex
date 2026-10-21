@@ -112,9 +112,12 @@ defmodule Dispatch.Idempotency do
   end
 
   # `Repo.transaction/1` wraps the committed value and hands back a rollback
-  # value unchanged; both are already the shape a caller expects.
+  # value unchanged. Ours are already `{:error, reason}`; Ash rolls the
+  # transaction back itself when an action fails inside it, with its own error
+  # as the value, and that is a rejection like any other.
   defp unwrap({:ok, result}), do: result
-  defp unwrap({:error, result}), do: result
+  defp unwrap({:error, {:error, _reason} = rejection}), do: rejection
+  defp unwrap({:error, rolled_back}), do: {:error, rolled_back}
 
   @doc """
   Deletes records past their retention window.

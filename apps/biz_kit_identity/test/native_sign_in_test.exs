@@ -68,9 +68,8 @@ defmodule BizKit.Identity.NativeSignInTest do
   test "a native sign-in ends in a session for the bound principal", ctx do
     %{"code" => code, "state" => "app-state"} = signed_in(ctx)
 
-    assert {:ok, session, ttl} = Identity.native_exchange(code, ctx.verifier, @app)
-    assert ttl == div(Identity.session_ttl_ms(), 1000)
-    assert {:ok, %{principal: principal}} = Identity.session(session)
+    assert {:ok, session} = Identity.native_exchange(code, ctx.verifier, @app)
+    assert {:ok, %{principal: principal, expires_at: :never}} = Identity.session(session)
     assert principal == ctx.principal
   end
 
@@ -124,7 +123,7 @@ defmodule BizKit.Identity.NativeSignInTest do
              Identity.native_exchange(code, ctx.verifier, "other.app:/cb")
 
     %{"code" => code} = signed_in(ctx)
-    assert {:ok, _session, _ttl} = Identity.native_exchange(code, ctx.verifier, @app)
+    assert {:ok, _session} = Identity.native_exchange(code, ctx.verifier, @app)
     assert {:error, :invalid_grant} = Identity.native_exchange(code, ctx.verifier, @app)
 
     assert {:error, :invalid_grant} = Identity.native_exchange("made-up", ctx.verifier, @app)

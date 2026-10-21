@@ -22,7 +22,10 @@ defmodule DispatchWeb.Components.Operations do
   @spec participant_page(map()) :: Phoenix.LiveView.Rendered.t()
   def participant_page(assigns) do
     ~H"""
-    <section id="participant-page">
+    <section
+      id="participant-page"
+      data-dispatch-stream={"/ui/participants/#{@view.participant_id}/stream"}
+    >
       <header id="participant-header">
         <h1>{@view.public_name}</h1>
         <p class="participant-state">{@view.status}</p>
@@ -56,7 +59,7 @@ defmodule DispatchWeb.Components.Operations do
   @spec operations_page(map()) :: Phoenix.LiveView.Rendered.t()
   def operations_page(assigns) do
     ~H"""
-    <main id="operations-page">
+    <main id="operations-page" data-dispatch-stream="/ui/operations/stream">
       <h1>Operations</h1>
       <.operations_roster view={@view} />
     </main>

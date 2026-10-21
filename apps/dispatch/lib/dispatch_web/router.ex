@@ -84,6 +84,14 @@ defmodule DispatchWeb.Router do
   # with a test rather than an edit to a page template.
   pipeline :portal do
     plug :accepts, ["html"]
+    plug :portal_session
+  end
+
+  # Section 24.5's streams: the portal's pipeline without content negotiation.
+  # They answer `text/event-stream` and nothing else, and `accepts` cannot name
+  # it (MIME has no extension for it), so every real EventSource would be
+  # refused with a 406 before reaching its authorization.
+  pipeline :portal_session do
     plug :fetch_session
     plug :protect_from_forgery
     plug :put_secure_browser_headers, @portal_headers
@@ -131,13 +139,17 @@ defmodule DispatchWeb.Router do
   end
 
   scope "/", DispatchWeb do
-    pipe_through :portal
+    pipe_through :portal_session
 
-    # Section 24.5's live endpoints. Same pipeline as the pages they patch,
-    # because a stream is not a lesser surface: it carries the same fragments to
-    # the same viewer and must be authorized the same way.
+    # Section 24.5's live endpoints. Same session, headers and authorization as
+    # the pages they patch, because a stream is not a lesser surface: it carries
+    # the same fragments to the same viewer.
     get "/ui/operations/stream", StreamController, :operations
     get "/ui/participants/:participant_id/stream", StreamController, :participant
+  end
+
+  scope "/", DispatchWeb do
+    pipe_through :portal
 
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/operations", PortalController, :operations

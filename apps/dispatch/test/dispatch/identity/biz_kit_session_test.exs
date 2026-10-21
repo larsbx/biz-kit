@@ -56,6 +56,16 @@ defmodule Dispatch.Identity.Tokens.BizKitSessionTest do
       assert {:error, :invalid_token} = BizKitSession.verify(session)
     end
 
+    test "a native app's session has no expiry, and still ends at logout", ctx do
+      session = Sessions.create_native(ctx.principal, @identity)
+
+      assert {:ok, %{subject: subject, expires_at: nil}} = BizKitSession.verify(session)
+      assert subject == ctx.principal
+
+      Identity.logout(session)
+      assert {:error, :invalid_token} = BizKitSession.verify(session)
+    end
+
     test "an expired session is reported as expired" do
       Application.put_env(:biz_kit_identity, :session_ttl_ms, -1)
       principal = Principal.new_id()

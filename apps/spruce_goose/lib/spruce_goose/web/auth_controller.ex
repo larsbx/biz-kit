@@ -111,10 +111,12 @@ defmodule SpruceGoose.Web.AuthController do
 
     with true <- params["grant_type"] == "authorization_code" or :unsupported_grant_type,
          true <- Enum.all?([code, verifier, redirect_uri], &is_binary/1) or :missing_parameters,
-         {:ok, session, expires_in} <- Identity.native_exchange(code, verifier, redirect_uri) do
+         {:ok, session} <- Identity.native_exchange(code, verifier, redirect_uri) do
+      # No `expires_in` (RFC 6749 §5.1 makes it optional): the session lasts
+      # until signed out.
       conn
       |> put_resp_header("cache-control", "no-store")
-      |> json(%{access_token: session, token_type: "Bearer", expires_in: expires_in})
+      |> json(%{access_token: session, token_type: "Bearer"})
     else
       # A category only, never the values: the request may carry a live code
       # and its verifier.
