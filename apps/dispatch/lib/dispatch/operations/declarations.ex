@@ -46,7 +46,7 @@ defmodule Dispatch.Operations.Declarations do
           | {:error, Ash.Error.t()}
 
   @accepted ~w(id status occurred_at note assignment_id location_sample_id
-               supersedes_event_id device_id device_sequence correlation_id verification)a
+               supersedes_event_id device_id device_sequence correlation_id)a
 
   # What makes two declarations the same declaration. Deliberately excludes
   # `correlation_id` and every server-assigned field: a retry is a retry even
@@ -76,6 +76,9 @@ defmodule Dispatch.Operations.Declarations do
         participant_id: actor.principal_id,
         role_assignment_id: actor.role_assignment.id
       })
+      |> then(fn input ->
+        if Keyword.get(opts, :proof), do: Map.put(input, :verification, :DEVICE_AUTHENTICATED), else: input
+      end)
 
     case existing(actor, input) do
       nil -> create(actor, input, opts)

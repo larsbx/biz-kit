@@ -129,6 +129,7 @@ defmodule DispatchWeb.MobileAcceptanceTest do
     queued = declaration(ctx)
     first = call(ctx, :post, "/v1/me/status-events", queued) |> body(201)
     assert first["event"]["role_assignment_id"] == ctx.role.id
+    assert first["event"]["verification"] == "DEVICE_AUTHENTICATED"
     assert call(ctx, :post, "/v1/me/status-events", queued) |> body(201) == first
     # A changed declaration with a valid signature is a conflicting duplicate.
     altered = Map.delete(queued, "device_signature") |> Map.put("status", "AT_PICKUP")

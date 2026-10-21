@@ -118,12 +118,7 @@ defmodule Dispatch.MobileDevices do
 
         case result do
           {:ok, _, _} ->
-            Dispatch.Repo.update_all(from(d in "devices", where: d.id == ^uuid),
-              set: [
-                last_sequence: max(sequence, device.last_sequence),
-                last_seen_at: DateTime.utc_now()
-              ]
-            )
+            if sequence > device.last_sequence, do: advance_sequence!(actor, device_id, sequence)
 
             result
 
@@ -137,6 +132,20 @@ defmodule Dispatch.MobileDevices do
     |> case do
       {:ok, result} -> result
       {:error, error} -> error
+    end
+  end
+
+  defp advance_sequence!(actor, device_id, sequence) do
+    # REVIEWED-UNAUTHORIZED: this exact actor-owned row is locked above, and
+    # its active grant and signature have already been verified. Reuse the
+    # registry action so its timestamp and version lifecycle stay consistent.
+    device = Ash.get!(Device, device_id, authorize?: false, tenant: actor.tenant_id)
+    device
+    |> Ash.Changeset.for_update(:record_sequence, %{last_sequence: sequence}, tenant: actor.tenant_id)
+    |> Ash.update(authorize?: false)
+    |> case do
+      {:ok, _updated} -> :ok
+      {:error, error} -> Dispatch.Repo.rollback({:error, error})
     end
   end
 
