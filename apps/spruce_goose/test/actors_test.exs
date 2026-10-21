@@ -467,7 +467,7 @@ defmodule SpruceGoose.ActorsTest do
   defp system, do: Application.fetch_env!(:spruce_goose, :default_actor)
 
   defp empty_registry do
-    for grant <- Ash.read!(Grant, authorize?: false), do: Ash.destroy!(grant, authorize?: false)
+    Repo.query!("TRUNCATE actor_grants")
     for actor <- Ash.read!(Actor, authorize?: false), do: Ash.destroy!(actor, authorize?: false)
     :ok
   end

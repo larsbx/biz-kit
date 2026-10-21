@@ -11,6 +11,82 @@ defmodule SpruceGoose.MigrationUpgradeTest do
 
   @migrations Path.expand("../priv/repo/migrations", __DIR__)
 
+  test "grant-history upgrade preserves authority, protects old writers and refuses lossy rollback" do
+    database = "sprucegoose_grants_upgrade_#{System.unique_integer([:positive])}"
+
+    config =
+      SpruceGoose.Repo.config()
+      |> Keyword.drop([:name, :pool, :pool_size])
+      |> Keyword.put(:database, database)
+      |> Keyword.put(:pool_size, 2)
+
+    assert :ok = Ecto.Adapters.Postgres.storage_up(config)
+
+    on_exit(fn ->
+      if pid = Process.whereis(UpgradeRepo), do: GenServer.stop(pid)
+      Ecto.Adapters.Postgres.storage_down(config)
+    end)
+
+    {:ok, _pid} = UpgradeRepo.start_link(config)
+    Ecto.Migrator.run(UpgradeRepo, @migrations, :up, to: 20_261_020_200_000)
+    sql = &Ecto.Adapters.SQL.query!(UpgradeRepo, &1, [])
+
+    %{rows: [[actor_id]]} =
+      sql.("""
+      INSERT INTO actors (name, kind, created_by)
+      VALUES ('upgrade-admin', 'human', 'genesis') RETURNING id
+      """)
+
+    %{rows: [[grant_id, granted_at]]} =
+      sql.("""
+      INSERT INTO actor_grants (actor_id, role, scope, granted_by, granted_at)
+      SELECT id, 'admin', '*', 'genesis', now() AT TIME ZONE 'utc'
+      FROM actors WHERE name = 'upgrade-admin' RETURNING id, granted_at
+      """)
+
+    Ecto.Migrator.run(UpgradeRepo, @migrations, :up, all: true)
+    assert [] == Ecto.Migrator.run(UpgradeRepo, @migrations, :up, all: true)
+
+    assert %{rows: [[^grant_id, ^actor_id, "admin", "*", "genesis", ^granted_at, nil, nil]]} =
+             sql.(
+               "SELECT id, actor_id, role, scope, granted_by, granted_at, revoked_at, revoked_by FROM actor_grants"
+             )
+
+    # An all-active database can safely roll back and forward before adoption.
+    Ecto.Migrator.run(UpgradeRepo, @migrations, :down, step: 1)
+    Ecto.Migrator.run(UpgradeRepo, @migrations, :up, all: true)
+    assert_raise Postgrex.Error, fn -> sql.("DELETE FROM actor_grants") end
+
+    assert_raise Postgrex.Error, fn ->
+      sql.(
+        "INSERT INTO actor_grants (actor_id, role, scope, granted_by, granted_at) SELECT actor_id, role, scope, 'duplicate', granted_at FROM actor_grants"
+      )
+    end
+
+    sql.(
+      "UPDATE actor_grants SET revoked_at = now() AT TIME ZONE 'utc', revoked_by = 'upgrade-admin'"
+    )
+
+    sql.(
+      "INSERT INTO actor_grants (actor_id, role, scope, granted_by, granted_at) SELECT actor_id, role, scope, 'upgrade-admin', now() AT TIME ZONE 'utc' FROM actor_grants"
+    )
+
+    assert %{rows: [[2, 1]]} =
+             sql.("SELECT count(*), count(*) FILTER (WHERE revoked_at IS NULL) FROM actor_grants")
+
+    assert_raise Postgrex.Error, ~r/cannot downgrade actor grants/, fn ->
+      Ecto.Migrator.run(UpgradeRepo, @migrations, :down, step: 1)
+    end
+
+    # The failed migration is transactional: history and the guard still stand.
+    assert %{rows: [[2, 1]]} =
+             sql.("SELECT count(*), count(*) FILTER (WHERE revoked_at IS NULL) FROM actor_grants")
+
+    assert_raise Postgrex.Error, fn -> sql.("DELETE FROM actor_grants") end
+    assert [] == Ecto.Migrator.run(UpgradeRepo, @migrations, :up, all: true)
+    GenServer.stop(UpgradeRepo)
+  end
+
   test "hierarchy migration backfills a workflow created under the prior schema" do
     database = "sprucegoose_upgrade_#{System.unique_integer([:positive])}"
 

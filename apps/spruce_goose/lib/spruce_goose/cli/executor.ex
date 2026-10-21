@@ -42,7 +42,8 @@ defmodule SpruceGoose.CLI.Executor do
     :enable_actor,
     :grant_role,
     :revoke_role,
-    :list_grants
+    :list_grants,
+    :grant_history
   ]
 
   @doc """
@@ -117,6 +118,9 @@ defmodule SpruceGoose.CLI.Executor do
     do: Registry.revoke(name, role, scope, acting)
 
   defp registry({:list_grants, name, role}, acting), do: Registry.grants(name, role, acting)
+
+  defp registry({:grant_history, name, role}, acting),
+    do: Registry.grant_history(name, role, acting)
 
   defp resolve_optional(actor_name) do
     case Resolver.resolve(actor_name) do

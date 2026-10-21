@@ -83,6 +83,8 @@ and its [documented current state](../../apps/spruce_goose/docs/current-state.md
   what dispatch offers a role assignment, as Ed25519-signed canonical bytes the
   d-patch field app verifies against a pinned key. An attestation for the
   client, not authority; retired when dispatch's roles become ledger grants.
+- [Legacy grant history during retirement](2026-10-21-legacy-grant-history.md):
+  D7 repair, active-only authorization, retained revocations and guarded upgrades.
 - [Company-structure primitive audit — 2026-10-20](2026-10-20-primitive-audit.md):
   every party, role, seat, delegation, ownership and decision model across
   biz-kit and the remaining repos, compared with Keel; conflicts to decide,

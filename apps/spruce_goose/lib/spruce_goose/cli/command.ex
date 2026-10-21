@@ -90,6 +90,7 @@ defmodule SpruceGoose.CLI.Command do
      [
        "add NAME --role ROLE --scope '*'|project:KEY",
        "list [--actor NAME] [--role ROLE]",
+       "history [--actor NAME] [--role ROLE]",
        "remove NAME --role ROLE --scope SCOPE"
      ]},
     {"ledger",
@@ -433,6 +434,12 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["grant", "list" | args]) do
     with {:ok, opts} <- scope_options(args, actor: :string, role: :string) do
       {:ok, {:list_grants, Keyword.get(opts, :actor), Keyword.get(opts, :role)}}
+    end
+  end
+
+  def parse(["grant", "history" | args]) do
+    with {:ok, opts} <- scope_options(args, actor: :string, role: :string) do
+      {:ok, {:grant_history, Keyword.get(opts, :actor), Keyword.get(opts, :role)}}
     end
   end
 
