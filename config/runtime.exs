@@ -529,7 +529,28 @@ if config_env() == :prod do
              raise("WORKOS_API_KEY is required when WORKOS_CLIENT_ID is set")}
     }
   end
+end
 
+# Development sign-in, for local runs and the end-to-end stack: each
+# "name=subject" in BIZKIT_DEVELOPMENT_SIGN_IN becomes a provider that signs in
+# as that subject with no real provider (BizKit.Identity.Providers.Development).
+# It works only where :allow_development_provider is set, which is here alone.
+if config_env() == :dev do
+  config :biz_kit_identity, :allow_development_provider, true
+
+  if people = System.get_env("BIZKIT_DEVELOPMENT_SIGN_IN") do
+    config :biz_kit_identity,
+           :providers,
+           for(
+             entry <- String.split(people, ",", trim: true),
+             [name, subject] = entry |> String.trim() |> String.split("=", parts: 2),
+             into: %{},
+             do: {name, {BizKit.Identity.Providers.Development, subject: subject}}
+           )
+  end
+end
+
+if config_env() in [:dev, :prod] do
   if bindings = System.get_env("BIZKIT_IDENTITY_BINDINGS") do
     config :biz_kit_identity,
            :bindings,
@@ -551,7 +572,9 @@ if config_env() == :prod do
   if public_url = System.get_env("SPRUCE_GOOSE_PUBLIC_URL") do
     config :spruce_goose, :public_url, public_url
   end
+end
 
+if config_env() == :prod do
   # The other nodes of this service's cluster, e.g.
   # "biz_kit@10.0.0.11,biz_kit@10.0.0.12" (docs/architecture/2026-10-19-cluster.md).
   # Each node also needs RELEASE_DISTRIBUTION=name, its own RELEASE_NODE and

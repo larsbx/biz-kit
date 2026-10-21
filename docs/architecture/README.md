@@ -30,6 +30,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Native sign-in](2026-10-21-native-sign-in.md): apps sign in through the
   system browser (RFC 8252, PKCE) and get the same biz-kit session as a bearer
   token, which dispatch's `/v1` accepts.
+- [End-to-end stack](2026-10-21-end-to-end-stack.md): one command serves
+  dispatch and `/auth` with seeded people who sign in through a development-only
+  provider, for d-patch's end-to-end tests.
 - [Device keys](2026-10-21-device-keys.md): the field app registers its
   installation's Ed25519 key itself, and its status declarations carry that
   key's signature over canonical statements (`DEVICE_AUTHENTICATED`).
