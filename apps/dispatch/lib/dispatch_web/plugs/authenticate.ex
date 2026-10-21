@@ -50,6 +50,11 @@ defmodule DispatchWeb.Plugs.Authenticate do
   # say whether the token was absent, expired or wrongly signed — that
   # distinction helps an attacker more than a client.
   defp deny(conn) do
-    DispatchWeb.Problem.send(conn, 401, "UNAUTHENTICATED", "A valid session or access token is required.")
+    DispatchWeb.Problem.send(
+      conn,
+      401,
+      "UNAUTHENTICATED",
+      "A valid session or access token is required."
+    )
   end
 end

@@ -61,7 +61,6 @@ defmodule DispatchWeb.MobileDeviceController do
         |> Plug.Conn.halt()
   end
 
-
   @spec request(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def request(conn, params) do
     with %{principal: principal, identity: identity} <- conn.assigns[:bizkit_session],
