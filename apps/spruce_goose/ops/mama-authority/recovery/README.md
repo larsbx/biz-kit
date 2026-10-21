@@ -6,7 +6,7 @@
 > - It states that "the reviewed migration set has no supported GA PostgreSQL
 >   target today". That was the correct conclusion at the time. The migration
 >   set no longer requires SQL/PGQ — see
->   [`docs/dependency-graph-queries.md`](../../../docs/dependency-graph-queries.md)
+>   [`20260908000000_drop_task_dependency_property_graph`](../../../priv/repo/migrations/20260908000000_drop_task_dependency_property_graph.exs)
 >   — so a GA target exists and this upgrade is no longer blocked on a beta.
 > - It names the production major as PostgreSQL 19. Three documents in this
 >   tree said so while the live system was on a different beta major. Read the

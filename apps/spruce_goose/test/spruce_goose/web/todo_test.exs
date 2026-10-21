@@ -57,8 +57,6 @@ defmodule SpruceGoose.Web.TodoTest do
     {conn.status, Jason.decode!(conn.resp_body)}
   end
 
-  defp task(w, id), do: Log.gate().orchestration.tasks[{w.chapter, tenant(), "project-1", id}]
-
   test "a person adds, completes and drops todos; the feed carries them in order", w do
     add = fn id, title, deps ->
       step(w, %{
