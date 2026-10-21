@@ -233,11 +233,12 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/actors/registry.ex
           apps/spruce_goose/lib/spruce_goose/cli/command.ex
           apps/spruce_goose/lib/spruce_goose/cli/executor.ex
-          apps/spruce_goose/priv/repo/migrations/20261021090000_preserve_actor_grant_history.exs
+          apps/spruce_goose/priv/repo/migrations/20261021100000_preserve_actor_grant_history.exs
           apps/spruce_goose/test/grant_history_test.exs
           apps/spruce_goose/test/migration_upgrade_test.exs
           apps/spruce_goose/test/actors_test.exs
           apps/spruce_goose/test/actors_separate_sessions_test.exs
+          apps/spruce_goose/test/shadow_event_append_test.exs
       # Dispatch's unit tier: no PostGIS here, so the integration tier stays
       # local (`mix test --include integration`). The contract check keeps
       # apps/dispatch/contracts/openapi.json, which the field app is held to,

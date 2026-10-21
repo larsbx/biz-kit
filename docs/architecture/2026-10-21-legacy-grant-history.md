@@ -52,7 +52,7 @@ ordinary SQL write protections, not an owner-proof audit store.
 1. Back up the database and stop legacy CLI/service writers. Do not resume
    old binaries against the migrated schema: their revoke operation will fail.
 2. Run the normal release migration before starting the new release. Migration
-   `20261021090000` adds nullable fields without backfilling dates, replaces
+   `20261021100000` adds nullable fields without backfilling dates, replaces
    the unique index in the same DDL transaction, and installs the checks and
    guard. Existing grants remain active under their original IDs and times.
    Ordinary index creation locks writes; schedule a maintenance window.
@@ -76,9 +76,12 @@ This governed change re-pins only `agent_charter` (exact registry source)
 and `schema` (sorted migration paths and their byte digests) in
 `priv/kernel/shadow-event-roots.json`. No past certified event is modified
 or re-rooted. `grant_epoch` is unchanged because `Actors.Scope` is unchanged.
-PR #51 landed first and changed the migration set and that scope source. This
-policy retains its `grant_epoch` and recomputes `schema` from the combined
-migration set; the root-policy test checks the resulting artifacts together.
+PRs #51 and #55 landed first and changed the migration set; #51 also changed
+that scope source. This policy retains their `grant_epoch` and recomputes
+`schema` from all three migrations together. The grant-history migration uses
+version `20261021100000`, after the task-state retirement at `20261021090000`.
+The root-policy test also refuses duplicate migration versions, so a re-pin
+cannot bless an ambiguous upgrade chain.
 
 ## Validation contract
 

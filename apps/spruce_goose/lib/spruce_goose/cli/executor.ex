@@ -1372,7 +1372,7 @@ defmodule SpruceGoose.CLI.Executor do
       custom_fields: task.custom_fields,
       board_revision: task.board_revision,
       references: Map.get(task.input, "references", []),
-      wait_reason: Map.get(task.input, "wait_reason"),
+      reopen_reason: Map.get(task.input, "reopen_reason"),
       cancel_reason: Map.get(task.input, "cancel_reason"),
       import_provenance:
         if(Map.get(task.input, "legacy_source"),

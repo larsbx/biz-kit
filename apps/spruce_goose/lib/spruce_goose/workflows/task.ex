@@ -221,9 +221,9 @@ defmodule SpruceGoose.Workflows.Task do
         reason = Ash.Changeset.get_argument(changeset, :reason)
 
         cond do
-          to in [:waiting, :cancelled] and
+          reason_key(task.state, to) != nil and
               (not is_binary(reason) or String.trim(reason) == "") ->
-            {:error, field: :reason, message: "is required when waiting or cancelling"}
+            {:error, field: :reason, message: "is required when reopening or cancelling"}
 
           to == :completed ->
             completion_requirements(task)
@@ -243,7 +243,7 @@ defmodule SpruceGoose.Workflows.Task do
 
         changeset
         |> Ash.Changeset.change_attribute(:state, to)
-        |> maybe_store_reason(to, reason)
+        |> store_reason(reason_key(changeset.data.state, to), reason)
       end)
 
       change(optimistic_lock(:lock_version))
@@ -559,21 +559,17 @@ defmodule SpruceGoose.Workflows.Task do
 
   defp diagnosis_evidence(_task), do: :ok
 
-  defp maybe_store_reason(changeset, target, reason)
-       when target in [:waiting, :cancelled] and is_binary(reason) do
-    key = if(target == :waiting, do: "wait_reason", else: "cancel_reason")
-    stale = if(target == :waiting, do: "cancel_reason", else: "wait_reason")
+  # A cancelled or reopened task records why, as the ledger's commands do;
+  # any other transition clears a reason left by an earlier one.
+  @reasons ["cancel_reason", "reopen_reason"]
 
-    input =
-      changeset.data.input
-      |> Map.delete(stale)
-      |> Map.put(key, reason)
+  defp reason_key(_from, :cancelled), do: "cancel_reason"
+  defp reason_key(:in_progress, :queued), do: "reopen_reason"
+  defp reason_key(_from, _to), do: nil
 
-    Ash.Changeset.change_attribute(changeset, :input, input)
-  end
-
-  defp maybe_store_reason(changeset, _target, _reason) do
-    input = changeset.data.input |> Map.delete("wait_reason") |> Map.delete("cancel_reason")
+  defp store_reason(changeset, key, reason) do
+    input = Map.drop(changeset.data.input, @reasons)
+    input = if key, do: Map.put(input, key, reason), else: input
     Ash.Changeset.change_attribute(changeset, :input, input)
   end
 end
