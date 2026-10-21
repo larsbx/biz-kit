@@ -537,6 +537,9 @@ end
 # It works only where :allow_development_provider is set, which is here alone.
 if config_env() == :dev do
   config :biz_kit_identity, :allow_development_provider, true
+  # Development serves /auth over plain HTTP; a secure cookie would never come
+  # back, and sign-in could not complete. Every other environment keeps it.
+  config :spruce_goose, :secure_cookies, false
 
   if people = System.get_env("BIZKIT_DEVELOPMENT_SIGN_IN") do
     config :biz_kit_identity,

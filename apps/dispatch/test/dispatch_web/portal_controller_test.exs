@@ -333,6 +333,30 @@ defmodule DispatchWeb.PortalControllerTest do
     end
   end
 
+  describe "Section 24.5: a live page opens its own stream" do
+    test "without Datastar expressions, which the CSP's script-src forbids", ctx do
+      %{user: dispatcher_user, participant: dispatcher} = Fixtures.person(ctx.tenant, ctx.carrier)
+      dispatch_assignment = Fixtures.assignment(ctx.tenant, ctx.carrier, dispatcher, "DISPATCHER")
+      %{participant: driver} = Fixtures.person(ctx.tenant, ctx.carrier)
+
+      session = [
+        session: [
+          {PortalSession.subject_key(), dispatcher_user.oidc_subject},
+          {PortalSession.assignment_key(), dispatch_assignment.id}
+        ]
+      ]
+
+      for {page, stream} <- [
+            {"/operations", "/ui/operations/stream"},
+            {"/operations/participants/#{driver.id}", "/ui/participants/#{driver.id}/stream"}
+          ] do
+        body = get(page, session).resp_body
+        assert body =~ ~s(data-dispatch-stream="#{stream}"), page
+        assert body =~ ~s(src="/static/js/streams.js"), page
+      end
+    end
+  end
+
   describe "signing in with a token" do
     test "a verified token opens a session; an unverifiable one does not", ctx do
       # Section 26.4 requires CSRF protection on action forms, so the form is

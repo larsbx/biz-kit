@@ -53,9 +53,10 @@ defmodule DispatchWeb.StreamControllerTest do
     )
   end
 
-  defp get(path, session_entries) do
+  defp get(path, session_entries, headers \\ []) do
     :get
     |> conn(path)
+    |> then(&Enum.reduce(headers, &1, fn {k, v}, acc -> put_req_header(acc, k, v) end))
     |> with_secret()
     |> Plug.Session.call(@session)
     |> fetch_session()
@@ -70,6 +71,22 @@ defmodule DispatchWeb.StreamControllerTest do
       {PortalSession.subject_key(), ctx.dispatcher_user.oidc_subject},
       {PortalSession.assignment_key(), ctx.assignment.id}
     ]
+  end
+
+  describe "what a browser sends" do
+    test "EventSource's Accept: text/event-stream reaches the stream rather than a 406", ctx do
+      elsewhere = Fixtures.carrier()
+      %{participant: stranger} = Fixtures.person(elsewhere.id, elsewhere)
+
+      # Refused by the controller, which is the point: the request got there.
+      # An authorized stream would stay open and hold the test.
+      conn =
+        get("/ui/participants/#{stranger.id}/stream", signed_in(ctx), [
+          {"accept", "text/event-stream"}
+        ])
+
+      assert conn.status == 404
+    end
   end
 
   describe "an unauthorized stream" do

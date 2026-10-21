@@ -47,3 +47,23 @@ operations stream on the next heartbeat).
   test environment, deliberately; the dev stack does not have it.
 - The development provider is the only one; a WorkOS round trip is covered by
   SpruceGoose's own tests with WorkOS stubbed.
+
+## What the first runs found
+
+Each of these passed dispatch's own suite and failed in a browser or under the
+app's real request shapes. Each fix carries a dispatch test that fails without it.
+
+- **No portal page ever opened its stream.** Datastar's attributes compile
+  their expressions with `Function()`, which Section 26.1's `script-src 'self'`
+  forbids. `priv/static/js/streams.js` opens the stream a page names with
+  `data-dispatch-stream` and applies `datastar-patch-elements` by id: plain
+  SSE, no expressions, no CSP change.
+- **Every real `EventSource` got a 406.** The streams shared the pages'
+  `accepts ["html"]`, and MIME has no extension for `text/event-stream`. They
+  now use the same pipeline without content negotiation (`:portal_session`).
+- **A refused declaration under an `Idempotency-Key` answered 500, then 422.**
+  Ash rolls the ledger's transaction back itself, and `Declarations` then
+  re-read inside the doomed transaction to look for a lost race. A refusal is
+  not a race: it is answered as the 403 it is.
+- **The login-state cookie was `Secure` over plain HTTP** in dev, so the
+  callback never saw it. Dev, and only dev, sets `:secure_cookies false`.

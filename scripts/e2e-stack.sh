@@ -24,15 +24,18 @@ prepare() {
   mix deps.get >/dev/null
   (cd apps/coop_substrate && mix event_store.drop --quiet -e CoopSubstrate.EventStore &&
     mix event_store.create --quiet && mix event_store.init --quiet)
-  (cd apps/spruce_goose && mix ecto.drop --quiet && mix ecto.create --quiet && mix ecto.migrate --quiet)
-  (cd apps/dispatch && mix ecto.drop --quiet && mix ash.setup --quiet)
+  # --force-drop: a server stopped a moment ago may still hold connections.
+  (cd apps/spruce_goose && mix ecto.drop --quiet --force-drop && mix ecto.create --quiet && mix ecto.migrate --quiet)
+  (cd apps/dispatch && mix ecto.drop --quiet --force-drop && mix ash.setup --quiet)
   (cd apps/dispatch && mix run priv/repo/e2e.exs seed "$stack")
 }
 
 field() { elixir -e "IO.write(JSON.decode!(File.read!(\"$stack\"))[\"$1\"] |> then(&if(is_binary(&1), do: &1, else: JSON.encode!(&1))))"; }
 
-[ "${1:-}" = "--serve-only" ] || prepare
-[ "${1:-}" = "--prepare" ] && exit 0
+# Not `[ … ] || prepare`: set -e does not apply inside an || list, and a
+# failed step must stop the script.
+if [ "${1:-}" != "--serve-only" ]; then prepare; fi
+if [ "${1:-}" = "--prepare" ]; then exit 0; fi
 
 # Dispatch accepts biz-kit sessions; /auth signs people in through the
 # development provider, one provider name per seeded person.

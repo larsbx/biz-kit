@@ -79,9 +79,9 @@ defmodule DispatchWeb.DeviceController do
 
   defp respond(conn, {:ok, status, body}), do: conn |> put_status(status) |> json(body)
 
-  # A refusal from inside the idempotency ledger's transaction: Ash rolled it
-  # back with its changeset, which the ledger hands back as it is.
-  defp respond(conn, %Ash.Changeset{} = rolled_back),
+  # A refusal from inside the idempotency ledger's transaction, which Ash
+  # rolled back with its own changeset.
+  defp respond(conn, {:error, %Ash.Changeset{} = rolled_back}),
     do: respond(conn, {:error, DeviceKeys.refusal(rolled_back)})
 
   defp respond(conn, {:error, reason}) do
