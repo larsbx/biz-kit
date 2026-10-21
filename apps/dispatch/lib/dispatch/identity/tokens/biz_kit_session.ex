@@ -7,7 +7,8 @@ defmodule Dispatch.Identity.Tokens.BizKitSession do
   PKCE) and carries the resulting session as `Authorization: Bearer`. Here the
   session is looked up and its identity resolved again on every request, so
   logout, expiry, revoking the principal's sessions and removing the identity
-  binding each end `/v1` access at once.
+  binding each end `/v1` access at once. A native app's session has no expiry
+  (`expires_at: nil`): it lasts until the person signs out.
 
   The subject is the biz-kit principal (`prn_…`): a dispatch user acting
   through biz-kit is registered with that principal as its `oidc_subject`.
@@ -29,7 +30,7 @@ defmodule Dispatch.Identity.Tokens.BizKitSession do
            subject: principal,
            issuer: @issuer,
            audience: [@issuer],
-           expires_at: DateTime.from_unix!(expires_at, :millisecond)
+           expires_at: expiry(expires_at)
          }}
 
       {:error, :expired} ->
@@ -41,4 +42,7 @@ defmodule Dispatch.Identity.Tokens.BizKitSession do
   end
 
   def verify(_token), do: {:error, :invalid_token}
+
+  defp expiry(:never), do: nil
+  defp expiry(at_ms), do: DateTime.from_unix!(at_ms, :millisecond)
 end

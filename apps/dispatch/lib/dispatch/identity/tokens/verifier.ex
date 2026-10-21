@@ -18,7 +18,8 @@ defmodule Dispatch.Identity.Tokens.Verifier do
           required(:subject) => String.t(),
           required(:issuer) => String.t(),
           required(:audience) => [String.t()],
-          required(:expires_at) => DateTime.t(),
+          # nil: valid until revoked (a native app's biz-kit session).
+          required(:expires_at) => DateTime.t() | nil,
           optional(:email) => String.t() | nil,
           optional(:name) => String.t() | nil
         }

@@ -505,6 +505,14 @@ if config_env() == :prod do
 end
 
 # ── biz_kit_identity ────────────────────────────────────────────────────────
+# Native apps' sessions last until the person signs out, kept by hash in
+# SpruceGoose's Postgres so a restart does not end them
+# (docs/architecture/2026-10-21-native-sign-in.md). Both releases carry
+# SpruceGoose; tests of the apps that do not configure their own.
+if config_env() in [:dev, :prod] do
+  config :biz_kit_identity, :session_store, SpruceGoose.Web.NativeSessionStore
+end
+
 # Human sign-in. WorkOS is the first provider; any BizKit.Identity.Provider can
 # take its place. Bindings map a verified {issuer, subject} to a biz-kit
 # principal, and are administrator-controlled: JSON

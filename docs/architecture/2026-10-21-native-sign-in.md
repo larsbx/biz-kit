@@ -24,14 +24,19 @@ app ── system browser ──► GET  /auth/:provider/native/login?redirect_u
 browser ◄── provider ──── GET  /auth/:provider/callback        (shared with web sign-in)
                               → 302 redirect_uri?code=…&state=…   (or error=access_denied)
 app ─────────────────────► POST /auth/token  grant_type=authorization_code, code, code_verifier, redirect_uri
-                              → {access_token, token_type: "Bearer", expires_in}
+                              → {access_token, token_type: "Bearer"}   (no expires_in: until signed out)
 app ─────────────────────► dispatch /v1 …   Authorization: Bearer <access_token>
 ```
 
-- **The access token is a biz-kit session**: the same one a browser gets, with
-  the same lifetime, revocation and per-use re-resolution of the identity.
-  Logging out, revoking the principal's sessions or removing the binding ends
-  the app's access at once, in SpruceGoose and in dispatch.
+- **The access token is a biz-kit session that lasts until the person signs
+  out** (decided 2026-10-21). It has no time limit, unlike a browser's
+  one-hour session, and is kept by hash in SpruceGoose's Postgres
+  (`BizKit.Identity.SessionStore`, `SpruceGoose.Web.NativeSessionStore`), so a
+  restart or a move of the session process does not end it. Native tokens are
+  `nat_`-prefixed, so a browser's cookie never reaches the store. The identity
+  is still resolved again on every use: logging out, revoking the principal's
+  sessions or removing the binding ends the app's access at once, in
+  SpruceGoose and in dispatch (whose claims carry `expires_at: nil`).
 - **Redirect URIs are allowlisted** (`:native_redirect_uris`,
   `BIZKIT_NATIVE_REDIRECT_URIS`), matched exactly. A request that fails a check
   gets a `400` and is never redirected anywhere (RFC 6749 §4.1.2.1).
@@ -62,21 +67,30 @@ there it still means a signed request.
 | --- | --- |
 | The app runs PKCE against WorkOS directly; dispatch verifies WorkOS JWTs | The app and dispatch would both be bound to the provider, and replacing it would mean an app release. Identity's rule is that a provider change changes how sessions start, nothing else |
 | SpruceGoose's local OAuth 2.1 server (AshAuthentication) | It is a removal target in [one source of truth](2026-10-11-single-source-of-truth.md); new clients must not deepen it |
-| A long-lived refresh token | A second credential with its own revocation story. The app re-signs in through the browser when the session expires, which with a provider session is a redirect, not a password prompt. Revisit with durable sessions |
+| A long-lived refresh token | A second credential with its own revocation story; a durable session that lasts until sign-out gives the same continuity with one credential |
+| A one-hour session, re-signed in through the browser | The first version. A shift outlasts it, and a restart signed every device out |
 | Accept `plain` PKCE for older clients | Every supported Android release has SHA-256 |
 
 ## Limits
 
-- Sessions, requests and codes live in memory in one process for the
-  [cluster](2026-10-19-cluster.md); a restart signs everyone out, as it does for
-  the web.
-- A session lasts `:session_ttl_ms` (one hour by default). Queued work on the
-  device survives expiry: dispatch answers `401`, and the field app keeps the
-  event queued until the person signs in again.
+- Requests and codes live in memory in one process for the
+  [cluster](2026-10-19-cluster.md); a restart loses sign-ins in flight, which
+  are simply begun again. Native sessions are cached there and kept in Postgres.
+- A stolen device token works until the person signs out, the principal's
+  sessions are revoked, or the binding is removed. That is the price of no
+  time limit; device revocation and the signed device key bound what it can do.
 - Dispatch selects one token verifier. A deployment that turns this on stops
   accepting its former OIDC issuer's tokens on `/v1`.
 
 ## Verification
+
+- `BizKit.Identity.DurableSessionsTest` (8): no time limit; surviving a
+  restart of the session process with only a hash stored; logout, principal
+  revocation and unbinding ending it, restart or not; browsers' sessions
+  keeping their limit and never stored or looked up there.
+- Mutations: removing the read-back, the stored deletion on logout or
+  revocation, the absent time limit, the native-only lookup or the hashing each
+  fails a test.
 
 - `BizKit.Identity.NativeSignInTest` (9): the round trip; redirect, method,
   challenge and state checks before anything is stored; a code without its
@@ -86,7 +100,8 @@ there it still means a signed request.
 - Mutations: removing the PKCE check, the redirect match, the re-resolution,
   single use, the `S256`-only rule, the allowlist, or the provider binding each
   fails a test.
-- `SpruceGoose.Web.NativeSignInTest` (7): the browser round trip over HTTP to a
+- `SpruceGoose.Web.NativeSignInTest` (10): a session surviving a restart until
+  sign-out, against Postgres; the browser round trip over HTTP to a
   bearer session, `/auth/me` and bearer logout; refusals; a request that fails
   validation never redirects; the shared callback still needs the browser's own
   state; web sign-in unchanged.
