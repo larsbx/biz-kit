@@ -15,7 +15,6 @@ defmodule SpruceGoose.CLI.Executor do
   alias SpruceGoose.Workflows.{
     BlueprintRevision,
     Dependency,
-    Graph,
     Project,
     Roadmap,
     Task,
@@ -235,17 +234,6 @@ defmodule SpruceGoose.CLI.Executor do
     end
   end
 
-  defp dispatch({:workflow_critical_path, project_key, roadmap_key, workflow_key}) do
-    with {:ok, workflow} <- resolve_workflow(project_key, roadmap_key, workflow_key),
-         {:ok, path} <- Graph.critical_path(workflow) do
-      {:ok,
-       path
-       |> Map.put(:project, project_key)
-       |> Map.put(:roadmap, roadmap_key)
-       |> Map.put(:workflow, workflow_key)}
-    end
-  end
-
   defp dispatch({:rename_project, key, name}) do
     with {:ok, project} <- read_one(Project, key: key),
          {:ok, project} <- Authz.update(project, %{name: name}, action: :rename) do
@@ -445,22 +433,6 @@ defmodule SpruceGoose.CLI.Executor do
     with :ok <- require_valid_id(id),
          {:ok, task} <- read_one(Task, task_id: id) do
       {:ok, task_json(task)}
-    end
-  end
-
-  defp dispatch({:task_blockers, id}) do
-    with :ok <- require_valid_id(id),
-         {:ok, task} <- read_one(Task, task_id: id),
-         {:ok, blockers} <- Graph.blockers(task) do
-      {:ok, %{task: task.task_id, blockers: blockers}}
-    end
-  end
-
-  defp dispatch({:task_impact, id}) do
-    with :ok <- require_valid_id(id),
-         {:ok, task} <- read_one(Task, task_id: id),
-         {:ok, impacted} <- Graph.impact(task) do
-      {:ok, %{task: task.task_id, impacted: impacted}}
     end
   end
 

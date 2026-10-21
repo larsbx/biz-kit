@@ -10,6 +10,8 @@ defmodule SpruceGoose.MigrationUpgradeTest do
   alias SpruceGoose.MigrationUpgradeRepo, as: UpgradeRepo
 
   @migrations Path.expand("../priv/repo/migrations", __DIR__)
+  @grant_history_version 20_261_021_100_000
+  @grant_history_migration SpruceGoose.Repo.Migrations.PreserveActorGrantHistory
 
   test "grant-history upgrade preserves authority, protects old writers and refuses lossy rollback" do
     database = "sprucegoose_grants_upgrade_#{System.unique_integer([:positive])}"
@@ -52,8 +54,9 @@ defmodule SpruceGoose.MigrationUpgradeTest do
                "SELECT id, actor_id, role, scope, granted_by, granted_at, revoked_at, revoked_by FROM actor_grants"
              )
 
+    # Target D7 explicitly: later retirement migrations may follow it.
     # An all-active database can safely roll back and forward before adoption.
-    Ecto.Migrator.run(UpgradeRepo, @migrations, :down, step: 1)
+    Ecto.Migrator.down(UpgradeRepo, @grant_history_version, @grant_history_migration)
     Ecto.Migrator.run(UpgradeRepo, @migrations, :up, all: true)
     assert_raise Postgrex.Error, fn -> sql.("DELETE FROM actor_grants") end
 
@@ -75,7 +78,7 @@ defmodule SpruceGoose.MigrationUpgradeTest do
              sql.("SELECT count(*), count(*) FILTER (WHERE revoked_at IS NULL) FROM actor_grants")
 
     assert_raise Postgrex.Error, ~r/cannot downgrade actor grants/, fn ->
-      Ecto.Migrator.run(UpgradeRepo, @migrations, :down, step: 1)
+      Ecto.Migrator.down(UpgradeRepo, @grant_history_version, @grant_history_migration)
     end
 
     # The failed migration is transactional: history and the guard still stand.
