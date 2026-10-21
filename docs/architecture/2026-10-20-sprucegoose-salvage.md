@@ -81,6 +81,10 @@ acknowledgment, so work under way keeps the SOP it started under.
   in_progress, blocked and failed → queued. The moves are not certified, so
   `ledger replay-status` reports each moved task as a difference until its
   next certified mutation.
+- **The dependency graph views are gone.** `task blockers`, `task impact`
+  and `workflow critical-path` are removed, with `SpruceGoose.Workflows.Graph`.
+  Predecessor and cycle rules are unaffected: they are enforced on writes,
+  not by these views.
 
 ## Verification
 
