@@ -28,7 +28,7 @@ defmodule SpruceGoose.CLI.Command do
        "blockers ID",
        "impact ID",
        "propose|queue|ready|start|done ID",
-       "wait ID REASON",
+       "reopen ID REASON",
        "cancel ID REASON",
        "link ID KIND VALUE",
        "link ID --remove KIND VALUE",
@@ -226,8 +226,8 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["task", "cancel", id | reason]) when reason != [],
     do: {:ok, {:transition_task, id, :cancelled, Enum.join(reason, " ")}}
 
-  def parse(["task", "wait", id | reason]) when reason != [],
-    do: {:ok, {:transition_task, id, :waiting, Enum.join(reason, " ")}}
+  def parse(["task", "reopen", id | reason]) when reason != [],
+    do: {:ok, {:transition_task, id, :queued, Enum.join(reason, " ")}}
 
   def parse(["task", "link", id, "--remove", kind, value]),
     do: {:ok, {:unlink_task, id, kind, value}}

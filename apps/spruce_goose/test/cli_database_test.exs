@@ -661,16 +661,18 @@ defmodule SpruceGoose.CLIDatabaseTest do
                Executor.run({:transition_task, task.task_id, target, nil})
     end
 
-    assert {:ok, %{state: :waiting}} =
-             Executor.run({:transition_task, task.task_id, :waiting, "operator review"})
+    assert {:error, _} = Executor.run({:transition_task, task.task_id, :queued, nil})
+
+    assert {:ok, %{state: :queued}} =
+             Executor.run({:transition_task, task.task_id, :queued, "operator review"})
 
     assert {:ok, linked} =
              Executor.run({:link_task, task.task_id, "evidence", "/tmp/proof"})
 
     assert linked.lock_version > 1
 
-    assert {:ok, %{tasks: [%{id: id, state: :waiting}]}} =
-             Executor.run({:list_tasks, %{state: "waiting"}})
+    assert {:ok, %{tasks: [%{id: id, state: :queued}]}} =
+             Executor.run({:list_tasks, %{state: "queued"}})
 
     assert id == task.task_id
 
@@ -1067,7 +1069,7 @@ defmodule SpruceGoose.CLIDatabaseTest do
 
   test "task list accepts a comma separated state set" do
     list_fixture()
-    waiting = admit("Will wait", 1)
+    started = admit("Will start", 1)
     queued = admit("Will queue", 1)
     untouched = admit("Stays in inbox", 1)
 
@@ -1075,26 +1077,24 @@ defmodule SpruceGoose.CLIDatabaseTest do
       {:ok, _} = Executor.run({:transition_task, queued.id, target, nil})
     end
 
-    # waiting is only reachable from in_progress, which is SOP-gated.
+    # in_progress is SOP-gated.
     for target <- [:proposed, :queued, :ready, :in_progress] do
-      {:ok, _} = Executor.run({:transition_task, waiting.id, target, nil})
+      {:ok, _} = Executor.run({:transition_task, started.id, target, nil})
     end
 
-    {:ok, _} = Executor.run({:transition_task, waiting.id, :waiting, "holding"})
-
     assert {:ok, %{tasks: rows}} =
-             Executor.run({:list_tasks, %{workflow: "read-flow", state: "waiting,queued"}})
+             Executor.run({:list_tasks, %{workflow: "read-flow", state: "in_progress,queued"}})
 
     found = ids(rows)
-    assert MapSet.member?(found, waiting.id)
+    assert MapSet.member?(found, started.id)
     assert MapSet.member?(found, queued.id)
     refute MapSet.member?(found, untouched.id)
 
     assert {:error, "invalid task state"} =
-             Executor.run({:list_tasks, %{state: "waiting,bogus"}})
+             Executor.run({:list_tasks, %{state: "waiting,queued"}})
   end
 
-  test "leaving waiting clears its stale reason" do
+  test "a reopened task records why, and starting again clears it" do
     list_fixture()
     task = admit("Resume cleanly", 1)
 
@@ -1104,11 +1104,11 @@ defmodule SpruceGoose.CLIDatabaseTest do
         transitioned
       end)
 
-    assert {:ok, waiting} = Executor.run({:transition_task, task.id, :waiting, "holding"})
-    assert waiting.wait_reason == "holding"
+    assert {:ok, reopened} = Executor.run({:transition_task, task.id, :queued, "holding"})
+    assert reopened.reopen_reason == "holding"
 
     assert {:ok, resumed} = Executor.run({:transition_task, task.id, :ready, nil})
-    assert resumed.wait_reason == nil
+    assert resumed.reopen_reason == nil
     assert resumed.cancel_reason == nil
   end
 

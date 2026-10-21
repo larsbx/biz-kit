@@ -246,11 +246,11 @@ defmodule SpruceGoose.DependencyGraphTest do
       Ecto.UUID.dump!(first.id)
     ])
 
-    Repo.query!("UPDATE workflow_tasks SET state = 'waiting' WHERE id = $1", [
+    Repo.query!("UPDATE workflow_tasks SET state = 'queued' WHERE id = $1", [
       Ecto.UUID.dump!(second.id)
     ])
 
-    assert {:ok, %{blockers: [%{id: id, state: "waiting"}]}} =
+    assert {:ok, %{blockers: [%{id: id, state: "queued"}]}} =
              Executor.run({:task_blockers, third.task_id})
 
     assert id == second.task_id
@@ -326,6 +326,54 @@ defmodule SpruceGoose.DependencyGraphTest do
     Repo.one!(
       from(roadmap in Roadmap, where: roadmap.id == ^workflow.roadmap_id, select: roadmap.key)
     )
+  end
+
+  test "retiring waiting, blocked and failed moves each task to the ledger's state" do
+    %{first: first, second: second, third: third} = graph_fixture("retired-states")
+
+    for {predecessor, successor} <- [{first, second}, {second, third}] do
+      assert {:ok, _} =
+               Ash.create(Dependency, %{
+                 predecessor_id: predecessor.id,
+                 successor_id: successor.id
+               })
+    end
+
+    for {task, state} <- [{first, "blocked"}, {second, "waiting"}, {third, "failed"}] do
+      Repo.query!(
+        "UPDATE workflow_tasks SET state = $2, input = '{\"wait_reason\": \"held\"}' WHERE id = $1",
+        [Ecto.UUID.dump!(task.id), state]
+      )
+    end
+
+    migration = SpruceGoose.Repo.Migrations.RetireTaskStates
+
+    unless Code.ensure_loaded?(migration),
+      do:
+        Code.require_file(
+          "../priv/repo/migrations/20261021090000_retire_task_states.exs",
+          __DIR__
+        )
+
+    Enum.each(migration.statements(), &Repo.query!/1)
+
+    # The waiting task is moved past the predecessor guard: its predecessor is open.
+    assert [{"queued", %{}}, {"in_progress", %{}}, {"queued", %{}}] =
+             Enum.map([first, second, third], fn task ->
+               %{rows: [[state, input]]} =
+                 Repo.query!("SELECT state, input FROM workflow_tasks WHERE id = $1", [
+                   Ecto.UUID.dump!(task.id)
+                 ])
+
+               {state, input}
+             end)
+
+    # The guard is back.
+    assert_raise Postgrex.Error, ~r/incomplete predecessors/, fn ->
+      Repo.query!("UPDATE workflow_tasks SET state = 'in_progress' WHERE id = $1", [
+        Ecto.UUID.dump!(third.id)
+      ])
+    end
   end
 
   defp graph_fixture(workflow_key) do
