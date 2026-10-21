@@ -34,12 +34,9 @@ defmodule SpruceGoose.LifecycleTest do
       assert Workflows.Lifecycle.transitions() == %{
                inbox: [:proposed, :cancelled],
                proposed: [:queued, :cancelled],
-               queued: [:ready, :blocked, :cancelled],
-               ready: [:in_progress, :blocked, :cancelled],
-               in_progress: [:waiting, :blocked, :completed, :failed, :cancelled],
-               waiting: [:ready, :in_progress, :blocked, :cancelled],
-               blocked: [:ready, :cancelled],
-               failed: [:queued, :cancelled],
+               queued: [:ready, :cancelled],
+               ready: [:in_progress, :cancelled],
+               in_progress: [:completed, :queued, :cancelled],
                completed: [],
                cancelled: []
              }
@@ -51,12 +48,12 @@ defmodule SpruceGoose.LifecycleTest do
       assert TaskState.values() == Workflows.Lifecycle.states()
 
       assert Workflows.Lifecycle.states() ==
-               ~w(inbox proposed queued ready in_progress waiting blocked completed failed cancelled)a
+               ~w(inbox proposed queued ready in_progress completed cancelled)a
     end
 
-    test "failed is recoverable, completed and cancelled are absorbing" do
-      refute Workflows.Lifecycle.terminal?(:failed)
-      assert {:ok, :queued} = Workflows.Lifecycle.transition(:failed, :queued)
+    test "work under way reopens to queued, completed and cancelled are absorbing" do
+      refute Workflows.Lifecycle.terminal?(:in_progress)
+      assert {:ok, :queued} = Workflows.Lifecycle.transition(:in_progress, :queued)
 
       for terminal <- Workflows.Lifecycle.terminal_states(), to <- Workflows.Lifecycle.states() do
         assert {:error, :invalid_transition} = Workflows.Lifecycle.transition(terminal, to)

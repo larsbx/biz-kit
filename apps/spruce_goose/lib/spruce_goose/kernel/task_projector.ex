@@ -7,7 +7,7 @@ defmodule SpruceGoose.Kernel.TaskProjector do
 
   @projection_id "sprucegoose-authoritative-tasks-v1"
   @task_commands ~w(acknowledge_sop add_task instantiate_task link_task move_task record_artifact_receipt transition_task unlink_task update_task_metadata)
-  @fields ~w(artifact_receipts artifact_requirements assignees blueprint_revision_id board_id board_revision column_id custom_fields definition_key definition_of_done description due_at id labels lock_version priority rank sop_digest sop_gate_required sop_id sop_path sop_version state task_type title workflow_id)
+  @fields ~w(artifact_receipts artifact_requirements assignees blueprint_revision_id board_revision custom_fields definition_key definition_of_done description due_at id labels lock_version priority rank sop_digest sop_gate_required sop_id sop_path sop_version state task_type title workflow_id)
 
   def rebuild do
     with :ok <- authorize_admin() do

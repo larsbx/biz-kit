@@ -33,8 +33,6 @@ defmodule SpruceGoose.TodoCompletionAtomicityTest do
   alias SpruceGoose.CLI.Executor
 
   alias SpruceGoose.Workflows.{
-    Board,
-    BoardColumn,
     Definition,
     Project,
     Roadmap,
@@ -116,21 +114,6 @@ defmodule SpruceGoose.TodoCompletionAtomicityTest do
         name: "AT #{suffix}",
         definition: definition
       })
-
-    {:ok, board} = Ash.create(Board, %{workflow_id: workflow.id, key: "main", name: "Main"})
-
-    states = ~w(inbox proposed queued ready in_progress completed cancelled)a
-
-    for {state, position} <- Enum.with_index(states, 1) do
-      {:ok, _} =
-        Ash.create(BoardColumn, %{
-          board_id: board.id,
-          key: Atom.to_string(state),
-          name: Atom.to_string(state),
-          position: position,
-          task_state: state
-        })
-    end
 
     {:ok, task} =
       Ash.create(Task, %{

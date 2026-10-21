@@ -7,13 +7,14 @@ defmodule SpruceGoose.Ledger do
 
   @task_id ~r/^tsk-\d{8}T\d{6}Z-[0-9a-f]{8}$/
   @live_database Application.compile_env(:spruce_goose, :ledger_live_database)
+  # The lifecycle has no blocked or waiting state (20261021090000_retire_task_states).
   @states %{
     "active" => "in_progress",
-    "blocked" => "blocked",
+    "blocked" => "queued",
     "cancelled" => "cancelled",
     "done" => "completed",
     "queued" => "queued",
-    "waiting" => "waiting"
+    "waiting" => "in_progress"
   }
 
   def read(path) do

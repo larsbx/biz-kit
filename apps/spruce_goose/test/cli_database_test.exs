@@ -6,8 +6,6 @@ defmodule SpruceGoose.CLIDatabaseTest do
   alias SpruceGoose.Actors.{Actor, Grant}
 
   alias SpruceGoose.Workflows.{
-    Board,
-    BoardColumn,
     BlueprintRevision,
     Definition,
     Dependency,
@@ -473,9 +471,6 @@ defmodule SpruceGoose.CLIDatabaseTest do
     task = Ash.get!(Task, task.id)
     assert {:error, error} = Ash.update(task, %{to_state: :in_progress}, action: :transition)
     assert Exception.message(error) =~ "Systemwide SOP acknowledgment is stale"
-
-    assert {:error, error} = Ash.update(task, %{to_state: :in_progress}, action: :move)
-    assert Exception.message(error) =~ "Systemwide SOP acknowledgment is stale"
   end
 
   test "artifact-dependent tasks fail closed at ready until a verified receipt is recorded" do
@@ -666,16 +661,18 @@ defmodule SpruceGoose.CLIDatabaseTest do
                Executor.run({:transition_task, task.task_id, target, nil})
     end
 
-    assert {:ok, %{state: :waiting}} =
-             Executor.run({:transition_task, task.task_id, :waiting, "operator review"})
+    assert {:error, _} = Executor.run({:transition_task, task.task_id, :queued, nil})
+
+    assert {:ok, %{state: :queued}} =
+             Executor.run({:transition_task, task.task_id, :queued, "operator review"})
 
     assert {:ok, linked} =
              Executor.run({:link_task, task.task_id, "evidence", "/tmp/proof"})
 
     assert linked.lock_version > 1
 
-    assert {:ok, %{tasks: [%{id: id, state: :waiting}]}} =
-             Executor.run({:list_tasks, %{state: "waiting"}})
+    assert {:ok, %{tasks: [%{id: id, state: :queued}]}} =
+             Executor.run({:list_tasks, %{state: "queued"}})
 
     assert id == task.task_id
 
@@ -740,7 +737,7 @@ defmodule SpruceGoose.CLIDatabaseTest do
   end
 
   test "rename updates names across the hierarchy without touching keys" do
-    workflow = workflow("rename")
+    _workflow = workflow("rename")
 
     assert {:ok, %{key: "project-rename", name: "Renamed project"}} =
              Executor.run({:rename_project, "project-rename", "Renamed project"})
@@ -756,57 +753,18 @@ defmodule SpruceGoose.CLIDatabaseTest do
                 "Renamed workflow"}
              )
 
-    {:ok, board} = Ash.create(Board, %{workflow_id: workflow.id, key: "b", name: "Board"})
-
-    assert {:ok, %{name: "Renamed board"}} =
-             Executor.run({:rename_board, board.id, "Renamed board"})
-
-    {:ok, column} =
-      Ash.create(BoardColumn, %{
-        board_id: board.id,
-        key: "ready",
-        name: "Ready",
-        position: 1,
-        task_state: :ready
-      })
-
-    assert {:ok, %{name: "Renamed column", key: "ready"}} =
-             Executor.run({:rename_column, column.id, "Renamed column"})
-
     assert {:error, "not found"} =
              Executor.run({:rename_project, "missing", "Nope"})
   end
 
   test "removal refuses while dependents exist and succeeds once they are gone" do
-    workflow = workflow("removal")
+    _workflow = workflow("removal")
 
     assert {:error, "cannot remove while 1 roadmaps still reference it"} =
              Executor.run({:remove_project, "project-removal"})
 
     assert {:error, "cannot remove while 1 workflows still reference it"} =
              Executor.run({:remove_roadmap, "project-removal", "roadmap-removal"})
-
-    {:ok, board} = Ash.create(Board, %{workflow_id: workflow.id, key: "b", name: "Board"})
-
-    assert {:error, "cannot remove while 1 boards still reference it"} =
-             Executor.run(
-               {:remove_workflow, "project-removal", "roadmap-removal", "workflow-removal"}
-             )
-
-    {:ok, column} =
-      Ash.create(BoardColumn, %{
-        board_id: board.id,
-        key: "ready",
-        name: "Ready",
-        position: 1,
-        task_state: :ready
-      })
-
-    assert {:error, "cannot remove while 1 columns still reference it"} =
-             Executor.run({:remove_board, board.id})
-
-    assert {:ok, %{removed: %{key: "ready"}}} = Executor.run({:remove_column, column.id})
-    assert {:ok, %{removed: %{key: "b"}}} = Executor.run({:remove_board, board.id})
 
     assert {:ok, %{removed: %{workflow_id: "workflow-removal"}}} =
              Executor.run(
@@ -881,19 +839,6 @@ defmodule SpruceGoose.CLIDatabaseTest do
 
     assert {:error, "invalid task ID"} =
              Executor.run({:unlink_task, "nonsense", "repo", "x"})
-  end
-
-  test "filter removal clears saved filters" do
-    workflow = workflow("filter-removal")
-    {:ok, board} = Ash.create(Board, %{workflow_id: workflow.id, key: "b", name: "Board"})
-
-    {:ok, filter} =
-      Executor.run({:add_filter, board.id, "mine", ~s({"state":"ready"})})
-
-    assert {:ok, %{filters: [_]}} = Executor.run({:list_filters, board.id})
-    assert {:ok, %{removed: %{name: "mine"}}} = Executor.run({:remove_filter, filter.id})
-    assert {:ok, %{filters: []}} = Executor.run({:list_filters, board.id})
-    assert {:error, "not found"} = Executor.run({:remove_filter, filter.id})
   end
 
   test "dependency authoring creates, lists, and clears runtime task edges" do
@@ -1012,113 +957,6 @@ defmodule SpruceGoose.CLIDatabaseTest do
     task
   end
 
-  test "CLI inbox captures are distinct per capture and remain non-executable" do
-    assert {:ok, first} = Executor.run({:add_inbox, "Unclassified operator note"})
-    assert {:ok, second} = Executor.run({:add_inbox, "Unclassified operator note"})
-
-    # Capture identity is generated, so repeating the same note records a
-    # genuinely separate capture rather than collapsing onto the first.
-    assert first.id != second.id
-    assert first.state == :pending
-    assert second.state == :pending
-
-    assert {:ok, %{items: items}} = Executor.run({:list_inbox, nil})
-    assert Enum.sort(Enum.map(items, & &1.id)) == Enum.sort([first.id, second.id])
-  end
-
-  test "inbox triage resolves, drops, scopes listing, and fails closed on terminal captures" do
-    {:ok, keep} = Executor.run({:add_inbox, "Capture to resolve"})
-    {:ok, junk} = Executor.run({:add_inbox, "Capture to drop"})
-    {:ok, open} = Executor.run({:add_inbox, "Capture left open"})
-
-    assert {:ok, resolved} = Executor.run({:resolve_inbox, keep.id, nil})
-    assert resolved.state == :resolved
-    assert resolved.resolved_at
-
-    assert {:ok, dropped} = Executor.run({:drop_inbox, junk.id, "not actionable"})
-    assert dropped.state == :dropped
-    assert dropped.resolution_reason == "not actionable"
-
-    assert {:ok, %{items: pending}} = Executor.run({:list_inbox, nil})
-    assert Enum.map(pending, & &1.id) == [open.id]
-
-    assert {:ok, %{items: all}} = Executor.run({:list_inbox, "all"})
-    assert length(all) == 3
-
-    assert {:ok, %{items: [only_resolved]}} = Executor.run({:list_inbox, "resolved"})
-    assert only_resolved.id == keep.id
-
-    assert {:ok, %{items: [only_dropped]}} = Executor.run({:list_inbox, "dropped"})
-    assert only_dropped.id == junk.id
-
-    assert {:error, "state must be one of pending, resolved, dropped, all"} =
-             Executor.run({:list_inbox, "bogus"})
-
-    assert {:error, _} = Executor.run({:resolve_inbox, keep.id, nil})
-    assert {:error, _} = Executor.run({:drop_inbox, keep.id, "already closed"})
-    assert {:error, _} = Executor.run({:resolve_inbox, junk.id, nil})
-    assert {:error, "not found"} = Executor.run({:resolve_inbox, "inbox-missing", nil})
-  end
-
-  test "inbox capture cannot bypass repository-bound task admission" do
-    {:ok, definition} = Definition.parse(%{tasks: [%{id: "triage", kind: :oban}]})
-    {:ok, project} = Ash.create(Project, %{key: "triage", name: "Triage"})
-
-    {:ok, roadmap} =
-      Ash.create(Roadmap, %{project_id: project.id, key: "intake", name: "Intake"})
-
-    {:ok, _} =
-      Ash.create(Workflow, %{
-        roadmap_id: roadmap.id,
-        workflow_id: "promote",
-        name: "Promote",
-        definition: definition
-      })
-
-    membership = %{
-      project: "triage",
-      roadmap: "intake",
-      workflow: "promote",
-      priority: 2,
-      task_type: :task,
-      definition_of_done: "Capture is promoted",
-      sop_path: SopGate.path()
-    }
-
-    {:ok, capture} = Executor.run({:add_inbox, "Promote this capture"})
-
-    assert {:error, message} =
-             Executor.run({:promote_inbox, capture.id, Map.put(membership, :title, nil)})
-
-    assert message =~ "TaskDefinition"
-    assert message =~ "task instantiate"
-
-    assert {:ok, %{items: pending}} = Executor.run({:list_inbox, nil})
-    assert capture.id in Enum.map(pending, & &1.id)
-  end
-
-  test "inbox promote leaves the capture open when task admission fails" do
-    {:ok, capture} = Executor.run({:add_inbox, "Capture with bad membership"})
-
-    assert {:error, _} =
-             Executor.run(
-               {:promote_inbox, capture.id,
-                %{
-                  project: "missing-project",
-                  roadmap: "missing",
-                  workflow: "missing",
-                  priority: 3,
-                  task_type: :task,
-                  title: nil,
-                  definition_of_done: "Should not be admitted",
-                  sop_path: SopGate.path()
-                }}
-             )
-
-    assert {:ok, %{items: pending}} = Executor.run({:list_inbox, nil})
-    assert capture.id in Enum.map(pending, & &1.id)
-  end
-
   defp list_fixture do
     {:ok, definition} = Definition.parse(%{tasks: [%{id: "admit", kind: :oban}]})
     {:ok, project} = Ash.create(Project, %{key: "listing", name: "Listing"})
@@ -1231,7 +1069,7 @@ defmodule SpruceGoose.CLIDatabaseTest do
 
   test "task list accepts a comma separated state set" do
     list_fixture()
-    waiting = admit("Will wait", 1)
+    started = admit("Will start", 1)
     queued = admit("Will queue", 1)
     untouched = admit("Stays in inbox", 1)
 
@@ -1239,26 +1077,24 @@ defmodule SpruceGoose.CLIDatabaseTest do
       {:ok, _} = Executor.run({:transition_task, queued.id, target, nil})
     end
 
-    # waiting is only reachable from in_progress, which is SOP-gated.
+    # in_progress is SOP-gated.
     for target <- [:proposed, :queued, :ready, :in_progress] do
-      {:ok, _} = Executor.run({:transition_task, waiting.id, target, nil})
+      {:ok, _} = Executor.run({:transition_task, started.id, target, nil})
     end
 
-    {:ok, _} = Executor.run({:transition_task, waiting.id, :waiting, "holding"})
-
     assert {:ok, %{tasks: rows}} =
-             Executor.run({:list_tasks, %{workflow: "read-flow", state: "waiting,queued"}})
+             Executor.run({:list_tasks, %{workflow: "read-flow", state: "in_progress,queued"}})
 
     found = ids(rows)
-    assert MapSet.member?(found, waiting.id)
+    assert MapSet.member?(found, started.id)
     assert MapSet.member?(found, queued.id)
     refute MapSet.member?(found, untouched.id)
 
     assert {:error, "invalid task state"} =
-             Executor.run({:list_tasks, %{state: "waiting,bogus"}})
+             Executor.run({:list_tasks, %{state: "waiting,queued"}})
   end
 
-  test "leaving waiting clears its stale reason" do
+  test "a reopened task records why, and starting again clears it" do
     list_fixture()
     task = admit("Resume cleanly", 1)
 
@@ -1268,11 +1104,11 @@ defmodule SpruceGoose.CLIDatabaseTest do
         transitioned
       end)
 
-    assert {:ok, waiting} = Executor.run({:transition_task, task.id, :waiting, "holding"})
-    assert waiting.wait_reason == "holding"
+    assert {:ok, reopened} = Executor.run({:transition_task, task.id, :queued, "holding"})
+    assert reopened.reopen_reason == "holding"
 
     assert {:ok, resumed} = Executor.run({:transition_task, task.id, :ready, nil})
-    assert resumed.wait_reason == nil
+    assert resumed.reopen_reason == nil
     assert resumed.cancel_reason == nil
   end
 

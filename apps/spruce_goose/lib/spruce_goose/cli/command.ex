@@ -17,24 +17,20 @@ defmodule SpruceGoose.CLI.Command do
     {"workflow",
      [
        "list [--project KEY] [--roadmap KEY]",
-       "show PROJECT ROADMAP ID",
-       "critical-path PROJECT ROADMAP ID"
+       "show PROJECT ROADMAP ID"
      ]},
     {"task",
      [
        "instantiate --project KEY --roadmap KEY --workflow ID --blueprint REVISION --definition KEY --priority N [--type task|diagnosis]",
        "list [--state S] [--project KEY] [--roadmap KEY] [--workflow ID] [--type T] [--label L] [--assignee A] [--priority N] [--text T]",
        "show ID",
-       "blockers ID",
-       "impact ID",
        "propose|queue|ready|start|done ID",
-       "wait ID REASON",
+       "reopen ID REASON",
        "cancel ID REASON",
        "link ID KIND VALUE",
        "link ID --remove KIND VALUE",
        "acknowledge-sop ID PATH",
        "artifact-receipt ID NAME SOURCE_PATH SOURCE_IDENTITY",
-       "move ID BOARD COLUMN RANK",
        "metadata ID JSON"
      ]},
     {"dep",
@@ -52,23 +48,6 @@ defmodule SpruceGoose.CLI.Command do
        "dep add TASK_ID TODO_ID --after PREDECESSOR_ID",
        "dep remove TASK_ID TODO_ID --after PREDECESSOR_ID",
        "dep list TASK_ID"
-     ]},
-    {"board",
-     [
-       "add PROJECT ROADMAP WORKFLOW KEY NAME",
-       "list PROJECT ROADMAP WORKFLOW",
-       "rename BOARD NAME",
-       "remove BOARD"
-     ]},
-    {"column",
-     ["add BOARD KEY POSITION STATE NAME", "list BOARD", "rename COLUMN NAME", "remove COLUMN"]},
-    {"filter", ["add BOARD NAME JSON", "list BOARD", "apply FILTER", "remove FILTER"]},
-    {"inbox",
-     [
-       "add TEXT",
-       "list [--state pending|resolved|dropped|all]",
-       "done CAPTURE_ID",
-       "drop CAPTURE_ID REASON"
      ]},
     {"revise",
      [
@@ -90,6 +69,7 @@ defmodule SpruceGoose.CLI.Command do
      [
        "add NAME --role ROLE --scope '*'|project:KEY",
        "list [--actor NAME] [--role ROLE]",
+       "history [--actor NAME] [--role ROLE]",
        "remove NAME --role ROLE --scope SCOPE"
      ]},
     {"ledger",
@@ -206,12 +186,7 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["workflow", "show", project, roadmap, workflow_id]),
     do: {:ok, {:show_workflow, project, roadmap, workflow_id}}
 
-  def parse(["workflow", "critical-path", project, roadmap, workflow_id]),
-    do: {:ok, {:workflow_critical_path, project, roadmap, workflow_id}}
-
   def parse(["task", "show", id]), do: {:ok, {:show_task, id}}
-  def parse(["task", "blockers", id]), do: {:ok, {:task_blockers, id}}
-  def parse(["task", "impact", id]), do: {:ok, {:task_impact, id}}
 
   def parse(["task", "list" | args]) do
     case OptionParser.parse(args,
@@ -244,8 +219,8 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["task", "cancel", id | reason]) when reason != [],
     do: {:ok, {:transition_task, id, :cancelled, Enum.join(reason, " ")}}
 
-  def parse(["task", "wait", id | reason]) when reason != [],
-    do: {:ok, {:transition_task, id, :waiting, Enum.join(reason, " ")}}
+  def parse(["task", "reopen", id | reason]) when reason != [],
+    do: {:ok, {:transition_task, id, :queued, Enum.join(reason, " ")}}
 
   def parse(["task", "link", id, "--remove", kind, value]),
     do: {:ok, {:unlink_task, id, kind, value}}
@@ -273,25 +248,6 @@ defmodule SpruceGoose.CLI.Command do
     end
   end
 
-  def parse(["inbox", "list" | args]) do
-    with {:ok, opts} <- scope_options(args, state: :string) do
-      {:ok, {:list_inbox, Keyword.get(opts, :state)}}
-    end
-  end
-
-  def parse(["inbox", "add" | body]) when body != [],
-    do: {:ok, {:add_inbox, Enum.join(body, " ")}}
-
-  def parse(["inbox", "done", capture_id]), do: {:ok, {:resolve_inbox, capture_id, nil}}
-
-  def parse(["inbox", "drop", capture_id | reason]) when reason != [],
-    do: {:ok, {:drop_inbox, capture_id, Enum.join(reason, " ")}}
-
-  def parse(["inbox", "promote" | _args]) do
-    {:error,
-     "inbox promote is retired; commit a TaskDefinition, apply its blueprint, then use task instantiate"}
-  end
-
   def parse(["todo", "list", task_id]), do: {:ok, {:list_todos, task_id}}
 
   def parse(["todo", "add", task_id | body]) when body != [],
@@ -317,39 +273,8 @@ defmodule SpruceGoose.CLI.Command do
     end
   end
 
-  def parse(["board", "add", project, roadmap, workflow, key | name]) when name != [],
-    do: {:ok, {:add_board, project, roadmap, workflow, key, Enum.join(name, " ")}}
-
-  def parse(["board", "list", project, roadmap, workflow]),
-    do: {:ok, {:list_boards, project, roadmap, workflow}}
-
-  def parse(["board", "rename", board_id | name]) when name != [],
-    do: {:ok, {:rename_board, board_id, Enum.join(name, " ")}}
-
-  def parse(["board", "remove", board_id]), do: {:ok, {:remove_board, board_id}}
-
-  def parse(["column", "add", board_id, key, position, state | name]) when name != [],
-    do: {:ok, {:add_column, board_id, key, position, state, Enum.join(name, " ")}}
-
-  def parse(["column", "list", board_id]), do: {:ok, {:list_columns, board_id}}
-
-  def parse(["column", "rename", column_id | name]) when name != [],
-    do: {:ok, {:rename_column, column_id, Enum.join(name, " ")}}
-
-  def parse(["column", "remove", column_id]), do: {:ok, {:remove_column, column_id}}
-
-  def parse(["task", "move", task_id, board_id, column_id, rank]),
-    do: {:ok, {:move_task, task_id, board_id, column_id, rank}}
-
   def parse(["task", "metadata", task_id, json]),
     do: {:ok, {:update_task_metadata, task_id, json}}
-
-  def parse(["filter", "add", board_id, name, json]),
-    do: {:ok, {:add_filter, board_id, name, json}}
-
-  def parse(["filter", "list", board_id]), do: {:ok, {:list_filters, board_id}}
-  def parse(["filter", "apply", filter_id]), do: {:ok, {:apply_filter, filter_id}}
-  def parse(["filter", "remove", filter_id]), do: {:ok, {:remove_filter, filter_id}}
 
   def parse(["revise", "propose" | args]) do
     with {:ok, opts} <- revise_options(args, file: :string),
@@ -433,6 +358,12 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["grant", "list" | args]) do
     with {:ok, opts} <- scope_options(args, actor: :string, role: :string) do
       {:ok, {:list_grants, Keyword.get(opts, :actor), Keyword.get(opts, :role)}}
+    end
+  end
+
+  def parse(["grant", "history" | args]) do
+    with {:ok, opts} <- scope_options(args, actor: :string, role: :string) do
+      {:ok, {:grant_history, Keyword.get(opts, :actor), Keyword.get(opts, :role)}}
     end
   end
 

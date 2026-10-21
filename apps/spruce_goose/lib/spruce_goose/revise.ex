@@ -32,13 +32,10 @@ defmodule SpruceGoose.Revise do
   alias SpruceGoose.{Authz, PrefixedId, Repo, SopGate, TaskId}
 
   alias SpruceGoose.Workflows.{
-    Board,
-    BoardColumn,
     Definition,
     Project,
     Revision,
     Roadmap,
-    SavedFilter,
     Task,
     Workflow
   }
@@ -60,10 +57,7 @@ defmodule SpruceGoose.Revise do
   @revisable %{
     roadmap: ~w(name),
     workflow: ~w(name definition),
-    task: ~w(title description definition_of_done runner input),
-    board: ~w(name),
-    column: ~w(name position),
-    filter: ~w(name criteria)
+    task: ~w(title description definition_of_done runner input)
   }
 
   @states ~w(pending applied withdrawn)
@@ -334,24 +328,10 @@ defmodule SpruceGoose.Revise do
     end
   end
 
-  defp resolve_target("board:" <> id), do: by_uuid(:board, Board, id)
-  defp resolve_target("column:" <> id), do: by_uuid(:column, BoardColumn, id)
-  defp resolve_target("filter:" <> id), do: by_uuid(:filter, SavedFilter, id)
-
   defp resolve_target(_ref) do
     {:error,
      "target must name one of: " <>
        (@revisable |> Map.keys() |> Enum.map(&"#{&1}:") |> Enum.sort() |> Enum.join(" "))}
-  end
-
-  defp by_uuid(kind, resource, id) do
-    case Ecto.UUID.cast(id) do
-      {:ok, uuid} ->
-        with {:ok, record} <- fetch_one(resource, id: uuid), do: {:ok, kind, record}
-
-      :error ->
-        {:error, "#{kind} target must be #{kind}:UUID"}
-    end
   end
 
   defp require_same_target(%{target_id: target_id}, %{id: id}) when target_id == id, do: :ok
