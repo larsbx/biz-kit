@@ -69,6 +69,10 @@ defmodule Dispatch.MixProject do
       # bytes, for the signed capability document. Code only — dispatch does not
       # start or write the ledger, so the application is not started from here.
       {:coop_substrate, in_umbrella: true, runtime: false},
+
+      # Sign-in for the field app: a biz-kit session is accepted as the `/v1`
+      # bearer token (`Dispatch.Identity.Tokens.BizKitSession`). Started, since
+      # sessions live in its process.
       {:biz_kit_identity, in_umbrella: true},
 
       # Outbound HTTP, used directly for OIDC key discovery (Section 23.1).

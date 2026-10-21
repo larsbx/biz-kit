@@ -32,6 +32,8 @@ defmodule DispatchWeb.MobileSessionTest do
     principal = BizKit.Identity.Principal.new_id()
     Application.put_env(:biz_kit_identity, :providers, %{"test" => {Provider, []}})
 
+    Application.put_env(:biz_kit_identity, :native_redirect_uris, ["com.dispatch.driver://signin"])
+
     Application.put_env(:biz_kit_identity, :bindings, [
       %{issuer: "https://idp.test", subject: "person", principal: principal}
     ])
@@ -124,3 +126,4 @@ defmodule DispatchWeb.MobileSessionTest do
     assert call(:post, "/v1/mobile/token", %{"code" => nil, "code_verifier" => nil}).status == 401
   end
 end
+

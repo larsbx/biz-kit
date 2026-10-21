@@ -1,13 +1,16 @@
 # Android dispatch identity and device integration
 
-Date: 2026-10-21. Implementation: paired with d-patch Slice 1. Acceptance is
-pending the actual database/Android lane; this note does not claim a deployed
+Date: 2026-10-21. Implementation: paired with d-patch Slice 1. Automated acceptance
+results are recorded in the paired PRs; this note does not claim a deployed
 provider or an emulator acceptance run.
 
 ## Identity and authority
 
 Android opens the system browser through `POST /v1/mobile/authorize` and a
-server-held S256 PKCE challenge. The server's existing configured
+server-held S256 PKCE challenge. The endpoints delegate to the shared
+`BizKit.Identity.native_begin/native_complete/native_exchange` API and
+`NativeLogins` store; no separate native authority or handoff store is added.
+The server's existing configured
 `BizKit.Identity.Provider` authenticates, `Resolver` resolves an explicitly
 bound platform principal, and `Sessions` issues the existing revocable session.
 The callback checks a browser HttpOnly state cookie. It redirects to the fixed
@@ -38,6 +41,9 @@ config :dispatch, :native_identity,
   provider: "workos",
   public_url: "https://dispatch.example",
   redirect_uri: "com.dispatch.driver://signin"
+
+# Add this URI to the existing exact native redirect allowlist.
+config :biz_kit_identity, :native_redirect_uris, ["com.dispatch.driver://signin"]
 
 config :dispatch, :mobile_principals, %{
   "prn_<existing-platform-principal>" => "<existing-dispatch-user-oidc_subject>"

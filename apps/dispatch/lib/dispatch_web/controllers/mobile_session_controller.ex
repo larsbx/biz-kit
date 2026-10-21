@@ -52,7 +52,6 @@ defmodule DispatchWeb.MobileSessionController do
 
   import Plug.Conn
   alias BizKit.Identity
-  alias BizKit.Identity.Native
   alias DispatchWeb.Problem
 
   @spec start(Plug.Conn.t(), map()) :: Plug.Conn.t()
@@ -63,19 +62,19 @@ defmodule DispatchWeb.MobileSessionController do
          base when is_binary(base) <- config[:public_url],
          redirect when is_binary(redirect) <- config[:redirect_uri],
          {:ok, flow} <-
-           Native.begin(
+           Identity.native_begin(
              provider,
+             redirect,
              params["code_challenge"],
-             params["state"],
-             base <> "/v1/mobile/callback",
-             redirect
+             "S256",
+             params["state"]
            ) do
       # The browser visits this endpoint to acquire its own HttpOnly state cookie.
       json(conn, %{
         authorization_url:
           base <>
             "/v1/mobile/login?" <>
-            URI.encode_query(%{id: flow.id})
+            URI.encode_query(%{id: flow})
       })
     else
       _ -> Problem.send(conn, 400, "SIGN_IN_UNAVAILABLE", "Sign-in is not available.")
@@ -84,15 +83,18 @@ defmodule DispatchWeb.MobileSessionController do
 
   @spec login(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def login(conn, %{"id" => id}) do
-    # Retrieve the provider URL from the server, never redirect to a caller URL.
-    case Native.authorization_url(id) do
-      {:ok, url} ->
-        conn
-        |> put_resp_cookie("dispatch_native_state", id, cookie_options(600))
-        |> redirect(external: url)
-
-      _ ->
-        denied(conn)
+    config = Application.get_env(:dispatch, :native_identity, [])
+    # The configured provider and callback are server-owned. Identity owns the
+    # pending request and the PKCE grant, shared with the other native clients.
+    with true <- Identity.native_request?(id),
+         provider when is_binary(provider) <- config[:provider],
+         base when is_binary(base) <- config[:public_url],
+         {:ok, url} <- Identity.authorize_url(provider, id, base <> "/v1/mobile/callback") do
+      conn
+      |> put_resp_cookie("dispatch_native_state", id, cookie_options(600))
+      |> redirect(external: url)
+    else
+      _ -> denied(conn)
     end
   end
 
@@ -102,14 +104,16 @@ defmodule DispatchWeb.MobileSessionController do
   def callback(conn, %{"state" => state, "code" => code})
       when is_binary(state) and is_binary(code) do
     expected = fetch_cookies(conn).cookies["dispatch_native_state"]
+    config = Application.get_env(:dispatch, :native_identity, [])
 
     with true <- is_binary(expected) and Plug.Crypto.secure_compare(expected, state),
-         {:ok, flow} <- Native.complete(state, code) do
+         provider when is_binary(provider) <- config[:provider],
+         base when is_binary(base) <- config[:public_url],
+         {:ok, redirect} <-
+           Identity.native_complete(provider, state, code, base <> "/v1/mobile/callback") do
       conn
       |> delete_resp_cookie("dispatch_native_state", cookie_options(0))
-      |> redirect(
-        external: flow.redirect <> "?" <> URI.encode_query(%{code: flow.code, state: flow.state})
-      )
+      |> redirect(external: redirect)
     else
       _ -> denied(conn)
     end
@@ -119,7 +123,11 @@ defmodule DispatchWeb.MobileSessionController do
 
   @spec exchange(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def exchange(conn, params) do
-    with {:ok, token} <- Native.exchange(params["code"], params["code_verifier"]),
+    config = Application.get_env(:dispatch, :native_identity, [])
+
+    with redirect when is_binary(redirect) <- config[:redirect_uri],
+         {:ok, token, _expires_in} <-
+           Identity.native_exchange(params["code"], params["code_verifier"], redirect),
          {:ok, session} <- Identity.session(token),
          {:ok, subject} <- Dispatch.Identity.Native.subject(session) do
       json(conn, %{
@@ -157,3 +165,4 @@ defmodule DispatchWeb.MobileSessionController do
       secure: Application.get_env(:dispatch, :native_secure_cookies, true)
     ]
 end
+

@@ -54,7 +54,9 @@ defmodule SpruceGoose.Web.Router do
   # Human sign-in through BizKit.Identity's configured providers.
   scope "/auth", SpruceGoose.Web do
     get("/:provider/login", AuthController, :login)
+    get("/:provider/native/login", AuthController, :native_login)
     get("/:provider/callback", AuthController, :callback)
+    post("/token", AuthController, :token)
     post("/logout", AuthController, :logout)
     get("/me", AuthController, :me)
   end

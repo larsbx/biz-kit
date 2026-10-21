@@ -17,16 +17,13 @@ defmodule SpruceGoose.CLI.Command do
     {"workflow",
      [
        "list [--project KEY] [--roadmap KEY]",
-       "show PROJECT ROADMAP ID",
-       "critical-path PROJECT ROADMAP ID"
+       "show PROJECT ROADMAP ID"
      ]},
     {"task",
      [
        "instantiate --project KEY --roadmap KEY --workflow ID --blueprint REVISION --definition KEY --priority N [--type task|diagnosis]",
        "list [--state S] [--project KEY] [--roadmap KEY] [--workflow ID] [--type T] [--label L] [--assignee A] [--priority N] [--text T]",
        "show ID",
-       "blockers ID",
-       "impact ID",
        "propose|queue|ready|start|done ID",
        "reopen ID REASON",
        "cancel ID REASON",
@@ -72,6 +69,7 @@ defmodule SpruceGoose.CLI.Command do
      [
        "add NAME --role ROLE --scope '*'|project:KEY",
        "list [--actor NAME] [--role ROLE]",
+       "history [--actor NAME] [--role ROLE]",
        "remove NAME --role ROLE --scope SCOPE"
      ]},
     {"ledger",
@@ -188,12 +186,7 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["workflow", "show", project, roadmap, workflow_id]),
     do: {:ok, {:show_workflow, project, roadmap, workflow_id}}
 
-  def parse(["workflow", "critical-path", project, roadmap, workflow_id]),
-    do: {:ok, {:workflow_critical_path, project, roadmap, workflow_id}}
-
   def parse(["task", "show", id]), do: {:ok, {:show_task, id}}
-  def parse(["task", "blockers", id]), do: {:ok, {:task_blockers, id}}
-  def parse(["task", "impact", id]), do: {:ok, {:task_impact, id}}
 
   def parse(["task", "list" | args]) do
     case OptionParser.parse(args,
@@ -365,6 +358,12 @@ defmodule SpruceGoose.CLI.Command do
   def parse(["grant", "list" | args]) do
     with {:ok, opts} <- scope_options(args, actor: :string, role: :string) do
       {:ok, {:list_grants, Keyword.get(opts, :actor), Keyword.get(opts, :role)}}
+    end
+  end
+
+  def parse(["grant", "history" | args]) do
+    with {:ok, opts} <- scope_options(args, actor: :string, role: :string) do
+      {:ok, {:grant_history, Keyword.get(opts, :actor), Keyword.get(opts, :role)}}
     end
   end
 

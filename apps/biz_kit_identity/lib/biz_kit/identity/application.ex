@@ -11,7 +11,7 @@ defmodule BizKit.Identity.Application do
         Supervisor.start_link(
           [
             {BizKit.Cluster.Singleton, BizKit.Identity.Sessions},
-            {BizKit.Cluster.Singleton, BizKit.Identity.Native}
+            {BizKit.Cluster.Singleton, BizKit.Identity.NativeLogins}
           ],
           strategy: :one_for_one,
           name: BizKit.Identity.Supervisor

@@ -149,7 +149,7 @@ defmodule SpruceGoose.ActorsSeparateSessionsTest do
   end
 
   defp clear_registry do
-    Repo.delete_all(Grant)
+    Repo.query!("TRUNCATE actor_grants")
     Repo.delete_all(Actor)
   end
 end

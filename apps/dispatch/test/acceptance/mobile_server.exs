@@ -26,6 +26,7 @@ defmodule DispatchAcceptance.Provider do
 end
 
 principal = BizKit.Identity.Principal.new_id()
+Application.put_env(:biz_kit_identity, :native_redirect_uris, ["com.dispatch.driver://signin"])
 
 Application.put_env(:biz_kit_identity, :providers, %{
   "acceptance" => {DispatchAcceptance.Provider, base: base}
@@ -161,3 +162,7 @@ end
 
 {:ok, _} = Bandit.start_link(plug: DispatchAcceptance.Router, port: port, ip: {127, 0, 0, 1})
 IO.puts("SLICE1_ACCEPTANCE_READY")
+# Keep the linked Bandit supervisor's owner alive after the script is evaluated.
+# --no-halt keeps the VM alive but does not keep this script process alive.
+Process.sleep(:infinity)
+
