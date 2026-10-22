@@ -595,3 +595,18 @@ if config_env() == :prod do
            trusted_proxies: proxies |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
   end
 end
+
+# Separate proof-reference encryption key; no production default. A deployment
+# without one can read other partner data but reference additions fail closed.
+if config_env() == :prod do
+  case System.get_env("DOCUMENT_REFERENCE_KEY") do
+    nil ->
+      :ok
+
+    encoded ->
+      case Base.decode64(encoded) do
+        {:ok, key} when byte_size(key) == 32 -> config :dispatch, :document_reference_key, key
+        _ -> raise "DOCUMENT_REFERENCE_KEY must be base64 for 32 bytes"
+      end
+  end
+end

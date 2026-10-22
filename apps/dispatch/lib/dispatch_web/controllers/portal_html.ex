@@ -56,6 +56,52 @@ defmodule DispatchWeb.PortalHTML do
     """
   end
 
+  attr :view, :any, required: true
+  attr :actor, :any, required: true
+  attr :assignments, :list, default: []
+
+  def partner_loads(assigns) do
+    ~H"""
+    <Layouts.root page_title="Contracted loads" actor={@actor} assignments={@assignments}>
+      <section id="partner-loads">
+        <h1>Contracted loads</h1>
+        <ul>
+          <li :for={load <- @view}>
+            <a href={"/loads/#{load.load_id}"}>{load.external_reference || load.load_id}</a>
+          </li>
+        </ul>
+      </section>
+    </Layouts.root>
+    """
+  end
+
+  attr :view, :any, required: true
+  attr :actor, :any, required: true
+  attr :assignments, :list, default: []
+
+  def partner_load(assigns) do
+    ~H"""
+    <Layouts.root page_title="Contracted load" actor={@actor} assignments={@assignments}>
+      <Partner.load_page view={@view} />
+    </Layouts.root>
+    """
+  end
+
+  attr :message, :string, required: true
+
+  def partner_refused(assigns) do
+    ~H"""
+    <!DOCTYPE html><html lang="en">
+      <head>
+        <meta charset="utf-8" /><title>{@message}</title>
+      </head>
+      <body>
+        <h1 id="partner-message">{@message}</h1>
+      </body>
+    </html>
+    """
+  end
+
   @doc """
   The response for anything this actor may not see.
 

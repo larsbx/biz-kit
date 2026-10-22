@@ -1,6 +1,6 @@
 # biz-kit roadmap
 
-Updated 2026-10-21 (dispatch native sign-in and device keys). The direction is
+Updated 2026-10-22 (dispatch partner actions). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
 registry and one PostgreSQL database. Task, dispatch, ownership and economic
@@ -108,15 +108,21 @@ Dispatch's server work happens here; d-patch keeps the Android, web and e2e
 clients (d-patch ADR-0010). The Android app's offline status flow is built,
 the app signs in through biz-kit's [native sign-in](architecture/2026-10-21-native-sign-in.md)
 (d-patch `core:auth`, ADR-0011), and biz-kit checks [device keys](architecture/2026-10-21-device-keys.md).
-What remains, in order:
+The native session/device-key and courier/role-administration work is followed
+by [partner actions](architecture/2026-10-22-partner-actions.md): stop readiness,
+nonbinding proposals, encrypted proof references, and a relationship-scoped
+broker load and own-thread-metadata view. d-patch's real-server suite exercises
+17–19 with JavaScript enabled and disabled, including a stale offline form.
+The paired PRs preserve #61/#18 behavior and use separate acceptance branches.
 
-1. **The app's half of device keys** (in d-patch): make and seal the key,
-   register it after sign-in, and sign each declaration when it is queued.
-   Deployment exposes SpruceGoose's `/auth` publicly, sets
-   `BIZKIT_NATIVE_REDIRECT_URIS` and selects dispatch's `BizKitSession` verifier.
-2. **End-to-end runs.** d-patch's Slice 1 exit tests (1, 13–19, online and
-   after an offline interval) against this server rather than d-patch's frozen
-   `central/`.
+Remaining:
+
+1. **Later-slice sources.** Consented location/status/ETA summaries (Slice 2)
+   and provider message content/intake (Slice 4); their absence is explicit on
+   partner pages. Approval/execution requires the common controls in Slice 5.
+2. **Hosted acceptance.** Run the new PostGIS partner gate and the paired
+   browser suite; retain Android driver/courier emulator jobs. Local passing
+   tests are not evidence that a hosted or emulator check ran.
 3. **Grants instead of the document.** When dispatch's roles become ledger
    grants (consolidation step 4), the app reads them from the change feed and
    the capability document retires.

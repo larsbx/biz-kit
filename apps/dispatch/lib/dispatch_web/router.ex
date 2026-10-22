@@ -154,6 +154,11 @@ defmodule DispatchWeb.Router do
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/operations", PortalController, :operations
     get "/partner/stops/:stop_id", PortalController, :partner_stop
+    post "/partner/stops/:stop_id/readiness-events", PartnerActionController, :readiness
+    post "/partner/stops/:stop_id/document-references", PartnerActionController, :document
+    post "/partner/stops/:stop_id/proposals", PartnerActionController, :proposal
+    get "/loads", PortalController, :partner_loads
+    get "/loads/:load_id", PortalController, :partner_load
     get "/operations/participants/:participant_id", PortalController, :operations_participant
     get "/operations/drivers/:driver_id", PortalController, :operations_driver
 
@@ -174,6 +179,11 @@ defmodule DispatchWeb.Router do
     pipe_through :api
 
     get "/role-capabilities", RoleCapabilityController, :capabilities
+    get "/stops/:stop_id", PartnerApiController, :stop
+    get "/loads/:load_id", PartnerApiController, :load
+    post "/stops/:stop_id/readiness-events", PartnerApiController, :readiness
+    post "/stops/:stop_id/document-references", PartnerApiController, :document
+    post "/actions/proposals", PartnerApiController, :proposal
 
     # Section 23.1: the app registers its installation key after sign-in.
     post "/me/devices", DeviceController, :create

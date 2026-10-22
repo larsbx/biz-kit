@@ -1,0 +1,42 @@
+name: Dispatch partner acceptance
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'apps/dispatch/**'
+      - 'apps/biz_kit_identity/**'
+      - 'config/**'
+      - 'mix.*'
+      - '.github/workflows/dispatch-partners.yml'
+permissions:
+  contents: read
+jobs:
+  dispatch-partners:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MIX_ENV: test
+      PGPASSWORD: postgres
+      DATABASE_URL: ecto://dispatch:dispatch@localhost:5432/dispatch_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Create dispatch database role
+        run: psql -h localhost -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
+      - name: Migrate and run all dispatch tests including partner authorization
+        working-directory: apps/dispatch
+        run: mix ash.setup --quiet && mix test --include integration
+      - name: Verify the machine contract and resource snapshots
+        working-directory: apps/dispatch
+        run: mix openapi.check && mix ash_postgres.generate_migrations --check

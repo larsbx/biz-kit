@@ -12,6 +12,7 @@ defmodule Dispatch.Fleet do
   use Ash.Domain
 
   resources do
+    resource Dispatch.Fleet.DocumentReference
     resource Dispatch.Fleet.Vehicle
     resource Dispatch.Fleet.Trailer
     resource Dispatch.Fleet.Load

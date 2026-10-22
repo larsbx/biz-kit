@@ -64,3 +64,6 @@ config :dispatch, :diagnostics_token, String.duplicate("dev-diagnostics-token", 
 config :logger, level: :debug
 config :phoenix, :stacktrace_depth, 20
 config :phoenix, :plug_init_mode, :runtime
+
+# Published synthetic key, exclusively for local reference fixtures.
+config :dispatch, :document_reference_key, :crypto.hash(:sha256, "dispatch-dev-reference-key")

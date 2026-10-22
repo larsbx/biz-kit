@@ -104,6 +104,9 @@ defmodule DispatchWeb.SessionController do
       actor.role_assignment.scope_type == :STOP ->
         "/partner/stops/#{actor.role_assignment.scope_id}"
 
+      actor.role_assignment.scope_type == :LOAD ->
+        "/loads"
+
       Dispatch.Access.operations_projection(actor.role_assignment) == :settings ->
         "/settings/users"
 

@@ -18,7 +18,8 @@ defmodule Dispatch.Fleet.Stop do
   use Ash.Resource,
     otp_app: :dispatch,
     domain: Dispatch.Fleet,
-    data_layer: AshPostgres.DataLayer
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "stops"
@@ -93,6 +94,10 @@ defmodule Dispatch.Fleet.Stop do
   actions do
     defaults [:read]
 
+    read :partner do
+      description "Relationship-scoped partner projection."
+    end
+
     create :add do
       accept [
         :tenant_id,
@@ -124,6 +129,13 @@ defmodule Dispatch.Fleet.Stop do
       require_atomic? false
       argument :expected_version, :integer
       change Dispatch.Accounts.Changes.IncrementVersion
+      change optimistic_lock(:version)
+    end
+  end
+
+  policies do
+    policy action(:partner) do
+      authorize_if {Dispatch.Access.Checks.PartnerScope, subject: :stop, capability: "stop.read"}
     end
   end
 
