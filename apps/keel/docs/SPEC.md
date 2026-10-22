@@ -1,6 +1,7 @@
 # Keel company primitives — specification v1
 
-**Status:** normative. It describes `apps/keel` as of this revision: 84 tests and 8 properties, all passing.
+**Status:** normative v1, corrected after PR #63. The executable conformance suite is
+`apps/keel/test`; validation results belong in the contribution record, not this contract.
 **Companion:** [`PRIMITIVES.md`](PRIMITIVES.md) is non-normative and holds the formal
 model's rationale, the soundness lemmas with their proofs, and the amendment record (A1–A5).
 This document is the contract. It says what any implementation of Keel must do, the
@@ -14,15 +15,18 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 An implementation conforms when, for every org `O` and instant `t`:
 
-- **C1.** It accepts exactly the values of §1 and builds `O` as §1.3 says.
+- **C1.** It constructs the primitive sorts and organizations of §1.3, including invariant-invalid fixtures; §1.1–1.2 describe intended field domains, not constructor rejection rules.
 - **C2.** Every query of §4 returns the same value as the reference, up to the order of sets.
 - **C3.** `decide` (§5) returns the same outcome and tally.
-- **C4.** `check` (§6) returns the same set of violations, compared by `(name, detail)` with the earliest `t`.
-- **C5.** Every operation of §7 returns the same result, or the same error atom.
+- **C4.** `check` (§6) returns the same non-cycle violations, compared by `(name, detail)` with the earliest `t`. Cycle diagnostics MUST satisfy the witness and existence comparison in §6.
+- **C5.** Every operation of §7 returns the same tagged success variant and payload, or the same tagged error variant and reason (including structured reasons).
 - **C6.** Every form of §8 builds the same set of primitives.
 
 The reference test suite (`apps/keel/test`) is the conformance suite. A port MUST pass it,
-translated case by case, and MUST NOT weaken any assertion.
+translated case by case, and MUST NOT weaken any assertion. Translation preserves tagged
+variants, record fields, exact arithmetic, and options/default semantics; host-language
+syntax may differ. Cycle tests use the explicit comparison rule in §6, not an
+arbitrary reference traversal path. Existing assertions remain mandatory.
 
 Everything is pure and immutable. No operation mutates an org or reads a clock, and
 history is never rewritten: change is a new interval (§2, §7).
@@ -65,7 +69,9 @@ Edges carry `during : Interval` (default: always) and have no id.
 - `new(items)` takes a list of primitives, which may be nested, flattens it and adds every item in order.
 - Adding a node whose id already exists MUST fail with `ArgumentError`: duplicate ids are a construction error, not a violation.
 - Edges MAY repeat.
-- Referential integrity is not enforced at construction. It is reported by `check` (I1).
+- `new`, `put_all`, and `put` accept the six node sorts and three edge sorts above without validating field domains. Unsupported item sorts are construction errors (`FunctionClauseError` in Elixir); duplicate ids remain `ArgumentError`.
+- Referential integrity is not enforced at construction. It is reported by `check` (I1). Unknown kinds, empty/reversed date intervals, and non-positive stake units are likewise constructible and diagnosed by I2–I4. A port MUST preserve these negative fixtures through construction.
+- Constructibility does not imply invariant validity: `valid?(O)` means exactly `check(O) = []`, not that every intended domain has been checked. §9 records unchecked domains. Arbitrary malformed host values are not promised to be safely checkable; the mandatory suite and each invariant's supported inputs remain binding. Queries and ownership operations are not promised to be total on malformed organizations.
 
 ## 2. Time
 
@@ -213,16 +219,31 @@ Temporal invariants are evaluated at every `t ∈ epochs(O)`:
 | I14 | `ownership_acyclic` | the entity-held stakes `{(h, e) │ kind(h) = entity}` have a cycle at `t` | `{:cycle, path}` |
 | I17 | `mandates` | a mandate `(p, b, _)` at `t` where `b` is not `{:stake, _}`, or `p ∉ members(b, t)` | `{:not_owner, p, b}` |
 
-**Cycle detail.** A cycle is reported as one closed path `[v, …, v]`, at most one per
-check and epoch. Which cycle is reported MAY differ between implementations. A conforming
-port MUST agree on whether some cycle exists, and SHOULD report a minimal one.
+**Cycle detail and conformance comparison.** I5 (only its `:cycle` variant), I6,
+I7, and I14 report at most one closed directed path `[v, …, v]` per invariant
+invocation (once for I5, once per epoch for I6/I7/I14). Every reported path MUST
+contain at least one edge and every consecutive pair MUST be an edge of the
+corresponding graph: unit-to-parent for I5; active reporting or delegation lines
+for I6/I7; active entity-holder-to-owned-entity stakes for I14. A self-loop is valid.
+Which cycle is selected MAY differ; a shortest path is not required.
+
+For conformance, compare cycle **existence separately for each invariant at every
+epoch**, and validate every returned witness against that graph. I5 uses the static
+graph and `t = nil`. Non-cycle I5 details still compare exactly under C4. In the
+aggregate `check` result, retain the ordinary `(name, detail)` deduplication and
+earliest time for each selected path; different selections can therefore produce
+different numbers of cycle diagnostics. Compare aggregate cycle diagnostics by
+invariant name and earliest occurrence, ignoring path identity and subsequent
+path-dependent counts, **only after** the per-epoch existence and witness checks
+pass. Merely dropping paths from `check` is insufficient: it could hide a missed
+later cycle. All non-cycle names, details and earliest times remain exact.
 
 The numbering follows the order in which the invariants were introduced; `names()` lists
 the static ones first, then the temporal ones.
 
 ## 7. Ownership operations
 
-Each operation is a pure `Org → Org` effective from `t`. Edges whose interval contains `t`
+State-changing operations are pure functions returning tagged results (§7.2), effective from `t`; `partition` returns a plan directly. Edges whose interval contains `t`
 are closed at `t` and successors are opened, so `σ_{t'}` is unchanged for every `t' < t`.
 
 ### 7.1 `move` (internal; defines every stake change)
@@ -240,10 +261,29 @@ Moved units and remainders keep the end date `b` of the stake they came from.
 
 ### 7.2 Operations
 
+Exact Elixir public calling conventions and return variants follow. `O'` is the
+successor org; `T` is `%Keel.Ownership.Transfer{}` and `P` is
+`%Keel.Ownership.Partition{}`. Ports MUST preserve these variant distinctions and
+all record fields. `opts` is a keyword list, default `[]`; `price:` defaults to
+`nil` (a gift). Error reasons below are wrapped, never returned bare.
+
+| Public call | Success | Error |
+| --- | --- | --- |
+| `withdraw(O, p, e, t)` | `{:ok, O'}` | `{:error, :not_owner \| :binding}` |
+| `transfer(O, p, q, e, c, n, t, opts \\ [])` | `{:ok, O', T}` | `{:error, :units \| {:insufficient, held} \| :ineligible}` |
+| `preempt(O, T, takers)` | `{:ok, O'}` | `{:error, :not_entitled \| :indivisible}` |
+| `partition(O, e, c, t)` | `P` (no wrapper) | none |
+| `dissolve(O, b, v, c, t)` | `{:ok, O', P}` | `{:error, :not_carried}` |
+
+`Transfer` fields are `from`, `to`, `in`, `class`, `units`, `at`, `price`,
+`claimants`. `Partition` fields are `allot`, `sell`, `proceeds`. The table describes
+supported calls; it does not turn runtime failures on malformed inputs or forged
+transfer records into new error variants.
+
 | Operation | Errors, checked in this order | Effect |
 | --- | --- | --- |
 | `withdraw(p, e, t)` | `:not_owner` if `p` holds no class in `e` at `t`; `:binding` unless every such class is revocable | `move(p, nil, e, c, holding, t)` for each class `c` |
-| `transfer(p, q, e, c, n, t, price?)` | `:units` unless `n ∈ ℕ⁺`; `{:insufficient, held}` if `holding < n`; `:ineligible` if, after the move, `{:ineligible, q, e, c} ∈ I13(t)` | `move(p, q, e, c, n, t)`; returns `Transfer(from, to, in, class, units, at, price, claimants)` |
+| `transfer(p, q, e, c, n, t, opts = [])` | `:units` unless `n ∈ ℕ⁺`; `{:insufficient, held}` if `holding < n`; `:ineligible` if, after the move, `{:ineligible, q, e, c} ∈ I13(t)` | `move(p, q, e, c, n, t)`; returns `{:ok, O', Transfer(from, to, in, class, units, at, price, claimants)}` |
 | `preempt(O, T, takers)` | `:not_entitled` if `takers = ∅` or `takers ⊄ claimants(T)`; `:indivisible` if some `k` has `H ∤ n·h_k` | each `k` takes `n·h_k / H` from the buyer by `transfer`. Here `h_k = holding(k, e, c, t)` in the given `O`, and `H = Σ h_k` |
 | `partition(e, c, t)` | none | a `Partition` record: see below |
 | `dissolve(b, v, c, t)` | `:not_carried` unless `decide(b, dissolve, v, t) = carried` | closes every stake in `of(b)` at `t`, and returns `partition(of(b), c, t)` computed on the org before closing |
@@ -273,12 +313,20 @@ so forms compose by list concatenation. `fundamental = [sell, merge, dissolve, a
 | `owners(e, H, c = :equity, R = fundamental)` | `Body({e, :owners}, {:stake, c}, {:units, c}, grants [*], reserves R)`; one `Stake` per `(p, n) ∈ H` |
 | `executive(e, r, P, sup, seats = :any)` | `Role({e, r}, {e, :hq}, [*], seats)`; `Line({e, r} → sup, :reports)`; a `Seat` for each `p ∈ P` |
 | `sole_proprietorship(e, o)` | `entity` + `owners(e, [(o, 1)], :equity, [])` + `executive(e, :principal, [o], {e, :owners}, 1)` |
-| `partnership(e, H, managers?, preemption? = false)` | `entity` + `owners(e, H)` + `Class({e, :class, :equity}, tenure revocable, preemption)` + `executive(e, :manager, managers ∨ partners, {e, :owners})` |
+| `partnership(e, H, opts = [])` | `entity` + `owners(e, H)` + `Class({e, :class, :equity}, tenure revocable, preemption)` + `executive(e, :manager, managers ∨ partners, {e, :owners})` |
 | `corporation(e, H, D, ceo)` | `entity` + `owners(e, H, :common)` + `Role({e, :director}, grants [govern], seats │D│)` reporting to `{e, :owners}` + `Body({e, :board}, {:seats, [{e, :director}]}, grants [*])` + director seats + `executive(e, :ceo, [ceo], {e, :board}, 1)` |
-| `cooperative(e, M, mgr, capital? = %{})` | `entity` + `Body({e, :assembly}, {:stake, :membership}, per capita, grants [*], reserves fundamental)` + one `:membership` stake per member + `:capital` stakes + `executive(e, :manager, [mgr], {e, :assembly}, 1)` |
-| `worker_cooperative(e, M, mgr, capital?)` | `cooperative` + `Class({e, :class, :membership}, eligible :employees)` + `Role({e, :worker})` + a worker seat for each member |
+| `cooperative(e, M, mgr, opts = [])` | `entity` + `Body({e, :assembly}, {:stake, :membership}, per capita, grants [*], reserves fundamental)` + one `:membership` stake per member + `:capital` stakes + `executive(e, :manager, [mgr], {e, :assembly}, 1)` |
+| `worker_cooperative(e, M, mgr, opts = [])` | `cooperative` + `Class({e, :class, :membership}, eligible :employees)` + `Role({e, :worker})` + a worker seat for each member |
 | `employee_trust(tr, co, trustee, A, R, weight = {:units, :beneficial})` | `entity(tr)` + `Class(:beneficial, eligible {:employees, co})` + `Role({tr, :trustee}, [administer], 1)` seated by `trustee` + `Body({tr, :trustees}, {:seats, [trustee role]}, grants [*], voices [*])` + `Body({tr, :beneficiaries}, {:stake, :beneficial}, weight, grants = voices = 𝒜 ∪ R)` + allocation stakes |
 | `department(e, d, sup, G)` | `Unit({e, d}, parent {e, :hq}, kind :department)` + `Role({e, d, :head}, seats 1)` + a `:reports` line and a `:delegates` line with `G` from `sup` |
+
+In Elixir, `opts` is a keyword list, not the capital map itself. Both cooperative
+forms read `capital: %{party => units}`, default `%{}`; the worker form forwards
+these options unchanged. For example, `Forms.cooperative(:co, [:ann], :ann,
+capital: %{ann: 10})` and `Forms.worker_cooperative(:wc, [:ann], :ann)` are valid
+calls. Partnership options are `managers:` (default all partners) and
+`preemption:` (default `false`). A port may use native named options, but MUST
+preserve option names, defaults, and generated primitives.
 
 Every form, as the tests instantiate it, satisfies `check = []`.
 
@@ -293,7 +341,7 @@ listed here as an extension, as long as it documents doing so.
 | G1 | I2 does not check `Role.seats ∈ ℕ ∪ {:any}`, `Body.quorum` or `Body.pass` | `check` accepts, for example, `seats: :two` or `quorum: :bad`. A non-integer `seats` is then treated as unbounded (I9 skips it), and a malformed `quorum` or `pass` makes `decide` fail at run time |
 | G2 | `seats: 0` is valid and means the role can never be held | likely unintended; SHOULD become `ℕ⁺ ∪ {:any}` |
 | G3 | `alien(*)` holds, so a body deciding the matter `*` follows the alienation rule | intended (a plenary matter includes sale), but surprising; callers SHOULD decide specific matters |
-| G4 | `Ownership`'s moduledoc says the stakes it opens are open-ended; §7.1 (the code) keeps the source stake's end | the moduledoc is stale; §7.1 is normative |
+| G4 | Resolved: successor stakes retain the source end date (§7.1); the ownership moduledoc now agrees | no contract change |
 | G5 | Dates before `origin` (−9999-01-01) fall outside the epoch argument | not reachable through `Date` in practice |
 | G6 | Transferring to yourself (`p = q`) | unspecified (§7.2) |
 

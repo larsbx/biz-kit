@@ -43,6 +43,8 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/keel/test/conformance_test.exs
+          apps/keel/lib/keel/ownership.ex
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
           apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
           apps/task_core/lib/task_core/readiness.ex
@@ -269,6 +271,9 @@ jobs:
       - name: Test dispatch (unit tier) and its contract
         working-directory: apps/dispatch
         run: mix test && mix openapi.check
+      - name: Test Keel normative conformance
+        working-directory: apps/keel
+        run: mix test
       - name: Test the task core
         working-directory: apps/task_core
         run: mix test
