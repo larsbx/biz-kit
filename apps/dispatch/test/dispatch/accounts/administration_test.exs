@@ -113,6 +113,13 @@ defmodule Dispatch.Accounts.AdministrationTest do
       %{participant: stranger} = Fixtures.person(ctx.tenant, elsewhere)
 
       assert grant(ctx, stranger, "DRIVER") == {:error, :not_found}
+
+      suspended =
+        ctx.driver
+        |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+        |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+
+      assert grant(ctx, suspended, "DRIVER") == {:error, :not_found}
       assert grant(ctx, ctx.driver, "SHIPPER") == {:error, :not_found}
 
       assert Administration.grant(ctx.actor, %{"participant_id" => "nope"}, ctx.now) ==
@@ -136,23 +143,57 @@ defmodule Dispatch.Accounts.AdministrationTest do
                Administration.revoke(ctx.actor, granted.id, granted.version, ctx.now)
 
       # Gone from what the administrator can act on.
-      assert Administration.revoke(ctx.actor, granted.id, nil, ctx.now) == {:error, :not_found}
+      assert Administration.revoke(ctx.actor, granted.id, granted.version + 1, ctx.now) ==
+               {:error, :not_found}
+    end
+
+    test "without the version the page showed, nothing is revoked", ctx do
+      {:ok, granted} = grant(ctx, ctx.driver, "DISPATCHER")
+
+      assert Administration.revoke(ctx.actor, granted.id, nil, ctx.now) == {:error, :stale}
     end
 
     test "needs a recent sign-in too", ctx do
       {:ok, granted} = grant(ctx, ctx.driver, "DRIVER")
 
-      assert Administration.revoke(ctx.actor, granted.id, nil, minutes_ago(ctx, 6)) ==
+      assert Administration.revoke(ctx.actor, granted.id, granted.version, minutes_ago(ctx, 6)) ==
                {:error, :step_up_required}
     end
 
     test "the organization's last administrator stays", ctx do
-      assert Administration.revoke(ctx.actor, ctx.admin_assignment.id, nil, ctx.now) ==
+      own = ctx.admin_assignment
+
+      assert Administration.revoke(ctx.actor, own.id, own.version, ctx.now) ==
                {:error, :last_administrator}
 
       {:ok, _second} = grant(ctx, ctx.driver, "ADMIN")
 
-      assert {:ok, _} = Administration.revoke(ctx.actor, ctx.admin_assignment.id, nil, ctx.now)
+      assert {:ok, _} = Administration.revoke(ctx.actor, own.id, own.version, ctx.now)
+    end
+
+    test "an administrator who can no longer sign in does not count as another", ctx do
+      own = ctx.admin_assignment
+      {:ok, _second} = grant(ctx, ctx.driver, "ADMIN")
+
+      ctx.driver
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+
+      assert Administration.revoke(ctx.actor, own.id, own.version, ctx.now) ==
+               {:error, :last_administrator}
+    end
+
+    test "nor does one whose user is no longer active", ctx do
+      own = ctx.admin_assignment
+      %{user: user, participant: other} = Fixtures.person(ctx.tenant, ctx.carrier)
+      {:ok, _second} = grant(ctx, other, "ADMIN")
+
+      user
+      |> Ash.Changeset.for_update(:set_status, %{status: :CLOSED})
+      |> Ash.update!(authorize?: false)
+
+      assert Administration.revoke(ctx.actor, own.id, own.version, ctx.now) ==
+               {:error, :last_administrator}
     end
   end
 end

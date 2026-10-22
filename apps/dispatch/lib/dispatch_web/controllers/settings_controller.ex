@@ -106,6 +106,7 @@ defmodule DispatchWeb.SettingsController do
     end
   end
 
+  # Absent is not a wildcard: Administration refuses it as stale.
   defp version(_absent), do: nil
 
   defp page(conn, status, message) do

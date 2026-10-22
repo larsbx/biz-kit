@@ -11,8 +11,10 @@ defmodule Dispatch.Accounts.Administration do
     the time of sign-in is asked, not the session's age.
   - An administrator cannot create, expand or reactivate their own
     assignment: a grant to oneself is refused whatever the role.
-  - The organization's last assignment carrying `role_assignment.manage`
-    cannot be revoked.
+  - The organization's last assignment carrying `role_assignment.manage` held
+    by someone who can still sign in (an active participant of an active
+    user, as `Dispatch.Identity.PrincipalResolution` requires) cannot be
+    revoked. Roles are granted to active participants only.
   - A grant names a whole role definition; nothing can be assigned that the
     definition does not carry. Only `SELF` and `ORGANIZATION` profiles are
     granted here: a `LOAD` or `STOP` grant also needs its party row, which
@@ -28,6 +30,8 @@ defmodule Dispatch.Accounts.Administration do
   """
 
   require Ash.Query
+
+  import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access
   alias Dispatch.Access.{Actor, RoleProfile}
@@ -90,7 +94,10 @@ defmodule Dispatch.Accounts.Administration do
     end)
   end
 
-  @doc "Revokes `assignment_id`, if it is still at `expected_version`."
+  @doc """
+  Revokes `assignment_id`, if it is still at `expected_version`. The version
+  is required: without it a stale page could revoke whatever is current.
+  """
   @spec revoke(Actor.t(), String.t(), integer() | nil, DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def revoke(%Actor{} = actor, assignment_id, expected_version, authenticated_at) do
@@ -136,18 +143,23 @@ defmodule Dispatch.Accounts.Administration do
        else: :ok
   end
 
-  defp current(%RoleAssignment{version: version}, expected) when expected in [nil, version],
-    do: :ok
+  defp current(%RoleAssignment{version: version}, version), do: :ok
 
   defp current(_assignment, _expected), do: {:error, :stale}
 
   defp not_last_administrator(actor, assignment) do
     administers? = &Access.can?(&1, @manage, actor.at)
+    can_sign_in = signs_in(actor)
 
-    if administers?.(assignment) and
-         not Enum.any?(active(actor), &(&1.id != assignment.id and administers?.(&1))),
-       do: {:error, :last_administrator},
-       else: :ok
+    others =
+      Enum.filter(active(actor), fn other ->
+        other.id != assignment.id and administers?.(other) and
+          MapSet.member?(can_sign_in, other.principal_id)
+      end)
+
+    if administers?.(assignment) and others == [],
+      do: {:error, :last_administrator},
+      else: :ok
   end
 
   defp participants(actor) do
@@ -160,7 +172,7 @@ defmodule Dispatch.Accounts.Administration do
 
   defp participant(actor, id) when is_binary(id) do
     case Ash.get(Participant, id, authorize?: false, tenant: actor.tenant_id) do
-      {:ok, %Participant{home_organization_id: org} = participant} ->
+      {:ok, %Participant{home_organization_id: org, status: :ACTIVE} = participant} ->
         if org == organization(actor), do: {:ok, participant}, else: {:error, :not_found}
 
       _unknown ->
@@ -169,6 +181,21 @@ defmodule Dispatch.Accounts.Administration do
   end
 
   defp participant(_actor, _id), do: {:error, :not_found}
+
+  # Participants of the tenant who can sign in: active, of an active user. The
+  # same conditions `PrincipalResolution` puts on every request.
+  defp signs_in(actor) do
+    from(p in "participants",
+      join: u in "users",
+      on: u.id == p.user_id,
+      where: p.tenant_id == type(^actor.tenant_id, :binary_id),
+      where: p.status == "ACTIVE" and u.status == "ACTIVE",
+      select: type(p.id, :binary_id)
+    )
+    # REVIEWED-UNAUTHORIZED: who can still sign in, to keep one administrator.
+    |> Dispatch.Repo.all()
+    |> MapSet.new()
+  end
 
   defp active(actor) do
     RoleAssignment
