@@ -3,8 +3,9 @@
 # and nothing here runs in production.
 #
 #   mix run priv/repo/e2e.exs seed <stack.json>     a carrier, its roles, a
-#       driver with a planned trip, a dispatcher, a courier, two administrators
-#       and a broker of an unrelated load, bound to biz-kit principals; writes
+#       driver with a planned trip, a dispatcher, a dispatcher who may see live
+#       positions, a courier, two administrators and a broker of an unrelated
+#       load, bound to biz-kit principals; writes
 #       what the tests need (and the identity bindings the server boots with)
 #   mix run priv/repo/e2e.exs revoke <tenant> <role_assignment_id>
 #       ends an assignment, as an administrator would (scenario 16)
@@ -37,13 +38,26 @@ defmodule Dispatch.E2E do
     }
   }
 
+  # A dispatcher explicitly given precise location (Section 23.2): whose
+  # watching makes a sharing device report in real time.
+  defp tracker do
+    {:ok, dispatcher} = SeedManifest.fetch("DISPATCHER")
+
+    %{
+      dispatcher
+      | key: "TRACKER",
+        label: "Dispatcher (live location)",
+        capabilities: ["operations.location.precise.read" | dispatcher.capabilities]
+    }
+  end
+
   def seed(path) do
     carrier = organization("E2E Freight", :CARRIER)
 
     tenant = carrier.id
 
     definitions =
-      Map.new([@courier | SeedManifest.all()], &{&1.key, {&1, definition(tenant, &1)}})
+      Map.new([@courier, tracker() | SeedManifest.all()], &{&1.key, {&1, definition(tenant, &1)}})
 
     # Scenario 2: a broker, but of a load the driver's trip is not on.
     broker_org = organization("E2E Brokerage", :BROKER)
@@ -53,6 +67,7 @@ defmodule Dispatch.E2E do
       for {name, key, org, scope_id} <- [
             {"driver", "DRIVER", carrier, nil},
             {"dispatcher", "DISPATCHER", carrier, nil},
+            {"tracker", "TRACKER", carrier, nil},
             {"courier", "COURIER", carrier, nil},
             # Scenario 15: two, because no one may grant themselves a role.
             {"admin", "ADMIN", carrier, nil},

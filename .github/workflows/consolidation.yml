@@ -260,6 +260,11 @@ jobs:
           apps/dispatch/lib/dispatch_web/schemas/locations.ex
           apps/dispatch/test/dispatch/operations/locations_test.exs
           apps/dispatch/test/dispatch_web/location_controller_test.exs
+          apps/dispatch/lib/dispatch/operations/location_demand.ex
+          apps/dispatch/lib/dispatch_web/streams/transport.ex
+          apps/dispatch/lib/dispatch_web/streams/location_demand.ex
+          apps/dispatch/test/dispatch/operations/location_demand_test.exs
+          apps/dispatch/test/dispatch_web/streams/location_demand_stream_test.exs
           apps/spruce_goose/lib/spruce_goose/actors/grant.ex
           apps/spruce_goose/lib/spruce_goose/actors/registry.ex
           apps/spruce_goose/lib/spruce_goose/cli/command.ex

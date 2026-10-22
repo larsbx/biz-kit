@@ -186,6 +186,51 @@ defmodule Dispatch.Support.Fixtures do
   end
 
   @doc """
+  A sample from `ctx.device` (signed with `ctx.seed`) on `ctx.trip` under
+  `grant`: London, 12 m, acquired now.
+  """
+  @spec location_sample(map(), struct(), map()) :: map()
+  def location_sample(%{trip: trip, device: device, seed: seed}, grant, overrides \\ %{}) do
+    %{
+      "sample_id" => Ash.UUID.generate(),
+      "assignment_id" => trip.id,
+      "lat_e7" => 515_074_000,
+      "lng_e7" => -1_278_000,
+      "accuracy_cm" => 1_200,
+      "provider" => "fused",
+      "is_mock" => false,
+      "occurred_at" => DateTime.to_iso8601(DateTime.utc_now()),
+      "device_id" => device.id,
+      "device_sequence" => System.unique_integer([:positive]),
+      "consent_grant_id" => grant.id
+    }
+    |> Map.merge(overrides)
+    |> signed_sample(seed)
+  end
+
+  @doc """
+  A dispatcher explicitly given precise location (Section 23.2): DISPATCHER's
+  capabilities plus `operations.location.precise.read`, over the organization.
+  """
+  @spec tracker(Ash.UUID.t(), Organization.t(), Participant.t()) :: Actor.t()
+  def tracker(tenant, org, subject) do
+    {:ok, manifest} = Dispatch.Access.SeedManifest.fetch("DISPATCHER")
+
+    definition =
+      Dispatch.Accounts.RoleDefinition
+      |> Ash.Changeset.for_create(:seed, %{
+        tenant_id: tenant,
+        key: "TRACKER",
+        label: "Dispatcher (live location)",
+        capabilities_json: ["operations.location.precise.read" | manifest.capabilities],
+        profile_module: inspect(manifest.profile_module)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    actor(tenant, org, subject, "TRACKER", definition: definition, scope_type: :ORGANIZATION)
+  end
+
+  @doc """
   A planned operational assignment for `operator`.
 
   Named `assignment_record` because `assignment/5` above builds a *role*

@@ -152,3 +152,34 @@ defmodule DispatchWeb.Schemas.LocationSampleResults do
     additionalProperties: false
   })
 end
+
+defmodule DispatchWeb.Schemas.LocationDemandPolicy do
+  @moduledoc """
+  The `data` of a `location-demand` event on `GET /v1/me/location-demand`:
+  how often the device samples and uploads until the next event.
+  """
+
+  alias OpenApiSpex.Schema
+
+  require OpenApiSpex
+
+  OpenApiSpex.schema(%{
+    title: "LocationDemandPolicy",
+    type: :object,
+    properties: %{
+      mode: %Schema{
+        type: :string,
+        enum: ["realtime", "trickle"],
+        description: "`realtime` while someone entitled to the position is watching it."
+      },
+      sample_interval_ms: %Schema{type: :integer, minimum: 0},
+      upload_interval_ms: %Schema{
+        type: :integer,
+        minimum: 0,
+        description: "`0`: upload each sample as soon as it is acquired."
+      }
+    },
+    required: [:mode, :sample_interval_ms, :upload_interval_ms],
+    additionalProperties: false
+  })
+end

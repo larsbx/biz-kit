@@ -33,6 +33,7 @@ defmodule DispatchWeb.ViewModels.OperationsParticipantView do
   alias Dispatch.Access.Actor
   alias Dispatch.Identity.PrincipalResolution
   alias Dispatch.Accounts.Participant
+  alias Dispatch.Operations.{LocationDemand, LocationSample}
   alias DispatchWeb.ViewModels.FactSummary
 
   require Ash.Query
@@ -43,7 +44,8 @@ defmodule DispatchWeb.ViewModels.OperationsParticipantView do
     :public_name,
     :status,
     :current_status,
-    :location_freshness
+    :location_freshness,
+    :live_position
   ]
 
   @type t :: %__MODULE__{
@@ -51,7 +53,20 @@ defmodule DispatchWeb.ViewModels.OperationsParticipantView do
           public_name: String.t(),
           status: atom(),
           current_status: FactSummary.t() | nil,
-          location_freshness: FactSummary.t() | nil
+          location_freshness: FactSummary.t() | nil,
+          live_position: live_position() | nil
+        }
+
+  @typedoc """
+  Where the participant's device last was. Present only for a viewer who may
+  see it now: `operations.location.precise.read` and active consent
+  (`Dispatch.Operations.LocationDemand.precise?/2`).
+  """
+  @type live_position :: %{
+          lat: float(),
+          lng: float(),
+          accuracy_m: float(),
+          occurred_at: DateTime.t()
         }
 
   @doc """
@@ -101,16 +116,28 @@ defmodule DispatchWeb.ViewModels.OperationsParticipantView do
       public_name: participant.public_name,
       status: participant.status,
       current_status: current_status(participant, actor),
-      location_freshness: location_freshness(participant, actor)
+      location_freshness: location_freshness(participant, actor),
+      live_position: live_position(participant, actor)
     }
   end
 
+  defp live_position(participant, actor) do
+    with true <- LocationDemand.precise?(actor, participant.id),
+         {:ok, %{} = sample} <-
+           LocationSample.latest(participant.id, actor: actor, tenant: actor.tenant_id) do
+      {lng, lat} = sample.position.coordinates
+      %{lat: lat, lng: lng, accuracy_m: sample.accuracy_m, occurred_at: sample.occurred_at}
+    else
+      _not_theirs_to_see -> nil
+    end
+  end
+
   # Section 6.1: a location is shown with its accuracy and age, as an
-  # observation. Only that: coordinates need `operations.location.precise.read`
-  # and active consent (Section 23.2), which no seeded operations profile holds,
-  # so the struct has nowhere to put them.
+  # observation. Coordinates need `operations.location.precise.read` and active
+  # consent (Section 23.2), which no seeded operations profile holds; they live
+  # apart, in `live_position`, so freshness never depends on them.
   defp location_freshness(participant, actor) do
-    Dispatch.Operations.LocationSample.latest(participant.id,
+    LocationSample.latest(participant.id,
       actor: actor,
       tenant: actor.tenant_id
     )
@@ -119,7 +146,7 @@ defmodule DispatchWeb.ViewModels.OperationsParticipantView do
         FactSummary.new(
           %{
             accuracy_m: sample.accuracy_m,
-            low_accuracy: Dispatch.Operations.LocationSample.low_accuracy?(sample)
+            low_accuracy: LocationSample.low_accuracy?(sample)
           },
           :OBSERVED,
           sample.occurred_at,

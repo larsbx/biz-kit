@@ -31,23 +31,7 @@ defmodule Dispatch.Operations.LocationsTest do
     }
   end
 
-  defp sample(ctx, grant, overrides \\ %{}) do
-    %{
-      "sample_id" => Ash.UUID.generate(),
-      "assignment_id" => ctx.trip.id,
-      "lat_e7" => 515_074_000,
-      "lng_e7" => -1_278_000,
-      "accuracy_cm" => 1_200,
-      "provider" => "fused",
-      "is_mock" => false,
-      "occurred_at" => DateTime.to_iso8601(DateTime.utc_now()),
-      "device_id" => ctx.device.id,
-      "device_sequence" => System.unique_integer([:positive]),
-      "consent_grant_id" => grant.id
-    }
-    |> Map.merge(overrides)
-    |> Fixtures.signed_sample(ctx.seed)
-  end
+  defp sample(ctx, grant, overrides \\ %{}), do: Fixtures.location_sample(ctx, grant, overrides)
 
   defp results(ctx, samples) do
     {:ok, results} = Locations.ingest(ctx.actor, samples)

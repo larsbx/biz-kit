@@ -258,6 +258,35 @@
         "title": "LocationConsentRequest",
         "type": "object"
       },
+      "LocationDemandPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "description": "`realtime` while someone entitled to the position is watching it.",
+            "enum": [
+              "realtime",
+              "trickle"
+            ],
+            "type": "string"
+          },
+          "sample_interval_ms": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "upload_interval_ms": {
+            "description": "`0`: upload each sample as soon as it is acquired.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "sample_interval_ms",
+          "upload_interval_ms"
+        ],
+        "title": "LocationDemandPolicy",
+        "type": "object"
+      },
       "LocationSampleBatch": {
         "additionalProperties": false,
         "properties": {
@@ -1229,6 +1258,55 @@
           }
         ],
         "summary": "Stop sharing location",
+        "tags": [
+          "location"
+        ]
+      }
+    },
+    "/v1/me/location-demand": {
+      "get": {
+        "callbacks": {},
+        "description": "Server-sent events while the caller shares location. Each `location-demand`\nevent's `data` is the policy to apply until the next one: on opening, and\nwhenever someone entitled to the caller's position starts or stops watching\nit. The stream closes when the consent or the role assignment ends.\n",
+        "operationId": "DispatchWeb.LocationController.demand",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationDemandPolicy"
+                }
+              }
+            },
+            "description": "Policy events"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Hear when sharing should be live",
         "tags": [
           "location"
         ]

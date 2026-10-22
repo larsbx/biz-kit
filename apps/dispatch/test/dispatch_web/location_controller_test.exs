@@ -194,4 +194,24 @@ defmodule DispatchWeb.LocationControllerTest do
       refute conn.resp_body =~ "Last reported"
     end
   end
+
+  describe "GET /v1/me/location-demand" do
+    defp demand(token) do
+      :get
+      |> conn("/v1/me/location-demand")
+      |> put_req_header("accept", "text/event-stream")
+      |> put_req_header("authorization", "Bearer " <> token)
+      |> DispatchWeb.Router.call(@opts)
+    end
+
+    test "an EventSource's Accept reaches it, and without consent it is a 404", ctx do
+      conn = demand(ctx.token)
+      assert conn.status == 404
+      assert Jason.decode!(conn.resp_body)["code"] == "NO_ACTIVE_CONSENT"
+    end
+
+    test "it needs a signed-in caller", _ctx do
+      assert demand("not-a-token").status == 401
+    end
+  end
 end

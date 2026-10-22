@@ -70,6 +70,14 @@ defmodule DispatchWeb.Router do
     plug DispatchWeb.Plugs.Authenticate
   end
 
+  # `:api` without content negotiation, for `/v1`'s event streams: `accepts`
+  # cannot name `text/event-stream`, as with the portal's (below).
+  pipeline :api_stream do
+    plug :put_no_store
+    plug DispatchWeb.Plugs.Authenticate
+    plug DispatchWeb.Plugs.ResolveActor
+  end
+
   scope "/health", DispatchWeb do
     pipe_through :health
 
@@ -188,6 +196,13 @@ defmodule DispatchWeb.Router do
     post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent
     post "/me/location-samples:batch", LocationController, :ingest
     post "/driver/location-samples:batch", LocationController, :ingest_driver
+  end
+
+  scope "/v1", DispatchWeb do
+    pipe_through :api_stream
+
+    # The device hears when someone watches its position (Section 25.3).
+    get "/me/location-demand", LocationController, :demand
   end
 
   scope "/health", DispatchWeb do

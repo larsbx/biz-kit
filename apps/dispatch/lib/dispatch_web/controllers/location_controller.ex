@@ -11,10 +11,12 @@ defmodule DispatchWeb.LocationController do
   alias Dispatch.Idempotency
   alias Dispatch.Operations.Locations
   alias DispatchWeb.Problem
+  alias DispatchWeb.Streams.{LocationDemand, Transport}
 
   alias DispatchWeb.Schemas.{
     LocationConsent,
     LocationConsentRequest,
+    LocationDemandPolicy,
     LocationSampleBatch,
     LocationSampleResults
   }
@@ -87,6 +89,22 @@ defmodule DispatchWeb.LocationController do
     ]
   )
 
+  operation(:demand,
+    summary: "Hear when sharing should be live",
+    description: """
+    Server-sent events while the caller shares location. Each `location-demand`
+    event's `data` is the policy to apply until the next one: on opening, and
+    whenever someone entitled to the caller's position starts or stops watching
+    it. The stream closes when the consent or the role assignment ends.
+    """,
+    security: [%{"bearerAuth" => []}],
+    parameters: Keyword.take(@headers, [:"x-role-assignment-id"]),
+    responses: [
+      ok: {"Policy events", "text/event-stream", LocationDemandPolicy},
+      not_found: @problem
+    ]
+  )
+
   @spec begin_consent(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def begin_consent(conn, _params) do
     mutate(conn, fn actor ->
@@ -127,6 +145,20 @@ defmodule DispatchWeb.LocationController do
   end
 
   defp batch(conn, _not_this_route), do: Problem.send(conn, 404, "NOT_FOUND", "Not found.")
+
+  @spec demand(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def demand(conn, _params) do
+    actor = conn.assigns.actor
+    open = fn -> LocationDemand.open(actor) end
+
+    case Transport.serve(conn, LocationDemand, "participant:#{actor.principal_id}", open) do
+      {:error, :not_found} ->
+        Problem.send(conn, 404, "NO_ACTIVE_CONSENT", "Nothing is being shared.")
+
+      served ->
+        served
+    end
+  end
 
   defp too_large?(conn) do
     case get_req_header(conn, "content-length") do

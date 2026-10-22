@@ -1,9 +1,10 @@
 # Location sharing: consented, signed, and kept only within consent
 
 Date: 2026-10-22. Status: **implemented** in `Dispatch.Operations.Locations`,
-`ConsentGrant`, `LocationSample` and `DispatchWeb.LocationController`. The
-client is the d-patch field app (its ADR-0013); d-patch's scenario 2 runs
-against it end to end.
+`ConsentGrant`, `LocationSample`, `LocationDemand` and
+`DispatchWeb.LocationController`. The client is the d-patch field app (its
+ADR-0013 and ADR-0014); d-patch's scenario 2 and demand flow run against it
+end to end.
 
 ## Why
 
@@ -42,6 +43,34 @@ capabilities, and nothing else.
   seeded operations profile holds. A new sample patches open pages through
   the outbox.
 
+## Demand
+
+Real time exactly while someone entitled to the position is looking at it
+(d-patch ADR-0014, amending §25.3's single cadence).
+
+- **Who counts.** `LocationDemand.precise?/2`: `operations.location.precise.read`,
+  the participant in the viewer's organization, and a consent covering now.
+  For that viewer, and no other, the participant page also carries
+  `live_position` (the latest sample's coordinates).
+- **Watching** is membership of a `:pg` group per participant, joined by the
+  viewer's participant stream while `precise?` holds (re-decided each tick)
+  and left when the stream ends (`Streams.Participant.release/1`, run by
+  `Streams.Transport` in an `after`: Bandit serves the next keep-alive request
+  from the same process, so process exit is not enough). A crashed or killed
+  stream leaves by exiting.
+- **The device hears** on `GET /v1/me/location-demand` (`Streams.LocationDemand`):
+  server-sent `location-demand` events whose `data` is the policy, sent on
+  opening and on each change, from a `:pg.monitor/2` on the group. `realtime`
+  is a sample every 3 s uploaded at once; `trickle` a sample every 2 minutes
+  uploaded every 10 (`:location_demand` overrides either). No active consent:
+  `404 NO_ACTIVE_CONSENT`. Revalidated at each heartbeat and on each change to
+  the participant (a revocation enqueues one), it closes when consent or the
+  role assignment ends.
+- **Shared transport.** `Streams.Transport` now runs every SSE stream: the
+  portal's two and the device's. It subscribes, opens, loops on outbox,
+  `:pg` and heartbeat messages, and stops at the first failed write, whatever
+  the error (a reset peer reports `:econnreset`, not `:closed`).
+
 ## Limits
 
 - No map, geocoder or router yet: those are the next parts of Slice 2.
@@ -49,6 +78,9 @@ capabilities, and nothing else.
   clock-offset tracking is not built.
 - Brokers see no location at all: summary location for brokers comes with
   the partner surfaces.
+- A watcher who closes their tab is noticed at the stream's next write. While
+  the device is live that is its next upload (seconds); a stream with nothing
+  to send notices at its next heartbeat or the one after (20 to 40 s).
 
 ## Verification
 
@@ -59,3 +91,14 @@ checks: revocation ignored, signature unchecked, another trip's grant
 accepted, any route suffix, no batch cap; all caught. d-patch's
 `location.spec.js` against `scripts/e2e-stack.sh`, and the shared signing
 vector `location_sample`.
+
+Demand: `location_demand_test.exs` (who counts, join and leave including a
+killed viewer), `streams/participant_stream_test.exs` (a precise reader
+watches and sees coordinates; a plain dispatcher does neither; consent ending
+stops the watch), `streams/location_demand_stream_test.exs` (trickle →
+realtime → trickle, no event without a change, revocation closes) and the
+`404` in `location_controller_test.exs`. Mutation checks: watching without
+`precise?`, coordinates without `precise?`, `precise?` without the
+capability, an event on every notification, the device stream not
+revalidating consent; all caught. d-patch's `location.spec.js` drives the
+whole flow with a seeded `tracker`.

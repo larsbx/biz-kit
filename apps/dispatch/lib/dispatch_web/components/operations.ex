@@ -51,8 +51,13 @@ defmodule DispatchWeb.Components.Operations do
             low accuracy
           </span>
         </p>
-        <!-- Section 23.2 makes precise location a separate capability that also
-             requires active consent, so this card reports freshness only. -->
+        <!-- Section 23.2: where, not only when, needs the precise-location
+             capability and active consent; the view carries it only then. -->
+        <p :if={@view.live_position} id="participant-live-position" class="location-live">
+          <span class="location-coordinates">
+            {coordinate(@view.live_position.lat)}, {coordinate(@view.live_position.lng)}
+          </span>
+        </p>
         <p :if={is_nil(@view.location_freshness)}>No location shared.</p>
       </section>
     </section>
@@ -99,4 +104,7 @@ defmodule DispatchWeb.Components.Operations do
     </section>
     """
   end
+
+  # Five decimals: about a metre, more than any phone fix is worth.
+  defp coordinate(degrees), do: :erlang.float_to_binary(degrees / 1, decimals: 5)
 end
