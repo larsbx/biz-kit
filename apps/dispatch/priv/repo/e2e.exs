@@ -36,6 +36,8 @@ defmodule Dispatch.E2E do
     }
   }
 
+  require Ash.Query
+
   def seed(path) do
     {:ok, carrier} =
       Organization
@@ -64,7 +66,11 @@ defmodule Dispatch.E2E do
         {name, person(tenant, carrier, name, definitions[key])}
       end
 
+    {partners, partner_fixtures} = partners(tenant, carrier, definitions)
+    people = Map.merge(people, partners)
+
     stack = %{
+      partner_fixtures: partner_fixtures,
       tenant_id: tenant,
       people: people,
       bindings:
@@ -103,8 +109,121 @@ defmodule Dispatch.E2E do
     |> Ash.create!(authorize?: false, tenant: tenant)
   end
 
+  defp partners(tenant, carrier, definitions) do
+    alias Dispatch.Fleet.{Load, Stop, StopParty, LoadParty}
+
+    load =
+      Load
+      |> Ash.Changeset.for_create(:create_load, %{
+        tenant_id: tenant,
+        carrier_organization_id: carrier.id,
+        external_reference: "E2E-CONTRACT",
+        agreed_rate_minor: 917_500,
+        currency: "USD",
+        commodity_text: "CARRIER-PRIVATE-NOTE"
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    unrelated =
+      Load
+      |> Ash.Changeset.for_create(:create_load, %{
+        tenant_id: tenant,
+        carrier_organization_id: carrier.id,
+        external_reference: "UNRELATED-LOAD-SECRET"
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    stops =
+      for {kind, sequence, address} <- [
+            {:PICKUP, 1, "Pickup dock 4"},
+            {:DELIVERY, 2, "Delivery bay 9"}
+          ],
+          into: %{} do
+        stop =
+          Stop
+          |> Ash.Changeset.for_create(:add, %{
+            tenant_id: tenant,
+            load_id: load.id,
+            kind: kind,
+            sequence: sequence,
+            address_text: address,
+            window_start: ~U[2026-10-23 09:00:00Z],
+            window_end: ~U[2026-10-23 10:00:00Z]
+          })
+          |> Ash.create!(authorize?: false, tenant: tenant)
+
+        {kind, stop}
+      end
+
+    people =
+      for {name, role, subject} <- [
+            {"shipper", "SHIPPER", stops[:PICKUP]},
+            {"receiver", "RECEIVER", stops[:DELIVERY]},
+            {"broker", "BROKER", load}
+          ],
+          into: %{} do
+        org =
+          Organization
+          |> Ash.Changeset.for_create(:register, %{
+            name: "E2E #{name}",
+            kind: String.to_existing_atom(role)
+          })
+          |> Ash.create!(authorize?: false)
+
+        {resource, field} =
+          if role == "BROKER", do: {LoadParty, :load_id}, else: {StopParty, :stop_id}
+
+        resource
+        |> Ash.Changeset.for_create(:add, %{
+          field => subject.id,
+          tenant_id: tenant,
+          organization_id: org.id,
+          relationship: String.to_existing_atom(role),
+          starts_at: DateTime.add(DateTime.utc_now(), -3600)
+        })
+        |> Ash.create!(authorize?: false, tenant: tenant)
+
+        if role == "BROKER" do
+          for {organization_id, title} <- [
+                {org.id, "Broker's own thread"},
+                {carrier.id, "OTHER-PARTY-THREAD-SECRET"}
+              ] do
+            Dispatch.Communications.Conversation
+            |> Ash.Changeset.for_create(
+              :open,
+              %{
+                tenant_id: tenant,
+                load_id: load.id,
+                organization_id: organization_id,
+                subject: title,
+                channel: :PORTAL
+              }
+            )
+            |> Ash.create!(authorize?: false, tenant: tenant)
+          end
+        end
+
+        {name, person(tenant, org, name, definitions[role], scope_id: subject.id)}
+      end
+
+    {people,
+     %{
+       load_id: load.id,
+       unrelated_load_id: unrelated.id,
+       pickup_id: stops[:PICKUP].id,
+       delivery_id: stops[:DELIVERY].id
+     }}
+  end
+
+  def change_stop(tenant, stop_id) do
+    Dispatch.Fleet.Stop
+    |> Ash.get!(stop_id, tenant: tenant, authorize?: false)
+    |> Ash.Changeset.for_update(:update_instructions, %{address_text: "Confirmed detail revised"})
+    |> Ash.update!(tenant: tenant, authorize?: false)
+  end
+
   # A person signs in as a biz-kit principal; dispatch knows them by it.
-  defp person(tenant, carrier, name, {manifest, definition}) do
+  defp person(tenant, carrier, name, {manifest, definition}, opts \\ []) do
     principal = Principal.new_id()
     subject = "e2e-#{name}-#{System.unique_integer([:positive])}"
 
@@ -131,6 +250,7 @@ defmodule Dispatch.E2E do
         principal_id: participant.id,
         organization_id: carrier.id,
         role_definition_id: definition.id,
+        scope_id: Keyword.get(opts, :scope_id),
         scope_type: manifest.scope_type,
         starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
       })
@@ -149,6 +269,7 @@ end
 
 case System.argv() do
   ["seed", path] -> Dispatch.E2E.seed(path)
+  ["change-stop", tenant, stop_id] -> Dispatch.E2E.change_stop(tenant, stop_id)
   ["revoke", tenant, assignment_id] -> Dispatch.E2E.revoke(tenant, assignment_id)
   _ -> raise "usage: mix run priv/repo/e2e.exs seed <stack.json> | revoke <tenant> <assignment>"
 end
