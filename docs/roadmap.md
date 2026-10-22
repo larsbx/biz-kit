@@ -103,6 +103,14 @@ authority or claiming production cutover readiness.
 | P1 | Revalidate administrative authority inside the mutation transaction after acquiring its organization lock. `Administration` currently checks the actor's preloaded assignment, which can have been revoked while the request waited. | With separate database sessions, resolve an actor, block its mutation, revoke its authority, then release it. No grant, revocation, or audit record may commit under the stale authority. Cover participant/user suspension and role-definition changes with the appropriate shared locks or serialization. |
 | P2 | Require PostgreSQL/PostGIS-backed Dispatch integration checks in hosted CI. The current Consolidation job runs its unit tier and excludes integration-tagged authorization tests. | A required job creates and migrates the PostGIS database and runs `mix test --include integration`, including administrative and portal regressions. Record the exact tested PR head; a green unit-only run does not close this obligation. |
 
+Native-session correction: the focused implementation and validation are described
+in [atomic native-session revocation](architecture/2026-10-22-atomic-native-session-revocation.md).
+Its local deterministic races reproduce the original defect and pass with the
+correction, including PostgreSQL and singleton migration checks. This is PR
+implementation evidence; the gate still requires review and hosted validation.
+The portal-authentication, administrative-transaction and required Dispatch CI
+obligations above remain open and are not resolved by this correction.
+
 Implementation anchors:
 [`Sessions`](../apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex),
 [`SessionController`](../apps/dispatch/lib/dispatch_web/controllers/session_controller.ex),
