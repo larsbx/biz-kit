@@ -14,12 +14,17 @@ defmodule SpruceGoose.Web.NativeSessionStore do
   @table "identity_native_sessions"
 
   @impl true
-  def put(hash, principal, %{issuer: issuer, subject: subject}) do
+  def put(hash, principal, %{issuer: issuer, subject: subject}, authenticated_at) do
+    row = %{
+      token_hash: hash,
+      principal: principal,
+      issuer: issuer,
+      subject: subject,
+      inserted_at: DateTime.from_unix!(authenticated_at, :millisecond)
+    }
+
     # AUTHORIZATION: identity's own session rows, written at a proven sign-in.
-    {1, _} =
-      Repo.insert_all(@table, [
-        %{token_hash: hash, principal: principal, issuer: issuer, subject: subject}
-      ])
+    {1, _} = Repo.insert_all(@table, [row])
 
     :ok
   end
@@ -28,7 +33,12 @@ defmodule SpruceGoose.Web.NativeSessionStore do
   def get(hash) do
     from(s in @table,
       where: s.token_hash == ^hash,
-      select: %{principal: s.principal, issuer: s.issuer, subject: s.subject}
+      select: %{
+        principal: s.principal,
+        issuer: s.issuer,
+        subject: s.subject,
+        inserted_at: type(s.inserted_at, :utc_datetime_usec)
+      }
     )
     # AUTHORIZATION: identity's own lookup, by the hash of a presented token.
     |> Repo.one()
@@ -37,7 +47,12 @@ defmodule SpruceGoose.Web.NativeSessionStore do
         :error
 
       row ->
-        {:ok, %{principal: row.principal, identity: %{issuer: row.issuer, subject: row.subject}}}
+        {:ok,
+         %{
+           principal: row.principal,
+           identity: %{issuer: row.issuer, subject: row.subject},
+           authenticated_at: DateTime.to_unix(row.inserted_at, :millisecond)
+         }}
     end
   end
 

@@ -43,6 +43,13 @@ defmodule Dispatch.Identity.Tokens.BizKitSessionTest do
       assert subject == ctx.principal
     end
 
+    test "it says when the person signed in, for a step-up to ask", ctx do
+      {:ok, %{authenticated_at: signed_in}} = BizKit.Identity.session(ctx.session)
+
+      assert {:ok, %{authenticated_at: at}} = BizKitSession.verify(ctx.session)
+      assert DateTime.to_unix(at, :millisecond) == signed_in
+    end
+
     test "logout, revocation and unbinding each end it at once", ctx do
       Identity.logout(ctx.session)
       assert {:error, :invalid_token} = BizKitSession.verify(ctx.session)

@@ -10,9 +10,20 @@ defmodule BizKit.Identity.SessionStore do
   """
 
   @type hash :: <<_::256>>
-  @type row :: %{principal: String.t(), identity: BizKit.Identity.identity()}
+  @typedoc "`authenticated_at` is when the person signed in, in Unix milliseconds."
+  @type row :: %{
+          principal: String.t(),
+          identity: BizKit.Identity.identity(),
+          authenticated_at: integer()
+        }
 
-  @callback put(hash(), principal :: String.t(), BizKit.Identity.identity()) :: :ok
+  @callback put(
+              hash(),
+              principal :: String.t(),
+              BizKit.Identity.identity(),
+              authenticated_at :: integer()
+            ) ::
+              :ok
   @callback get(hash()) :: {:ok, row()} | :error
   @callback delete(hash()) :: :ok
   @callback delete_principal(principal :: String.t()) :: :ok
@@ -26,7 +37,7 @@ defmodule BizKit.Identity.SessionStore do
     @behaviour BizKit.Identity.SessionStore
 
     @impl true
-    def put(_hash, _principal, _identity), do: :ok
+    def put(_hash, _principal, _identity, _authenticated_at), do: :ok
     @impl true
     def get(_hash), do: :error
     @impl true

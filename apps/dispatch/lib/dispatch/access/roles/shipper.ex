@@ -8,7 +8,9 @@ defmodule Dispatch.Access.Roles.Shipper do
   this surface entirely.
   """
 
-  use Dispatch.Access.Roles.Base, projection: :partner_stop
+  use Dispatch.Access.Roles.Base,
+    projection: :partner_stop,
+    scope: :STOP
 
   @doc """
   Whether this profile may act on a stop of the given kind.

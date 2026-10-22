@@ -20,6 +20,9 @@ defmodule Dispatch.Identity.Tokens.Verifier do
           required(:audience) => [String.t()],
           # nil: valid until revoked (a native app's biz-kit session).
           required(:expires_at) => DateTime.t() | nil,
+          # When the person signed in, where the token says: what a step-up
+          # asks (Section 23.3). Absent means unknown, never recent.
+          optional(:authenticated_at) => DateTime.t() | nil,
           optional(:email) => String.t() | nil,
           optional(:name) => String.t() | nil
         }

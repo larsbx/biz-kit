@@ -3,8 +3,9 @@
 # and nothing here runs in production.
 #
 #   mix run priv/repo/e2e.exs seed <stack.json>     a carrier, its roles, a
-#       driver and a dispatcher bound to biz-kit principals; writes what the
-#       tests need (and the identity bindings the server boots with)
+#       driver, a dispatcher, a courier and two administrators bound to biz-kit
+#       principals; writes what the tests need (and the identity bindings the
+#       server boots with)
 #   mix run priv/repo/e2e.exs revoke <tenant> <role_assignment_id>
 #       ends an assignment, as an administrator would (scenario 16)
 
@@ -18,6 +19,23 @@ defmodule Dispatch.E2E do
   # The development provider's issuer (BizKit.Identity.Providers.Development).
   @issuer "biz-kit-development"
 
+  # Scenario 14's second field role: the test profile (compiled in dev for this),
+  # with the driver's self-service capabilities it has features for. Nothing
+  # else is new: the same participant, device, assignment and status resources.
+  @courier %{
+    key: "COURIER",
+    label: "Courier",
+    profile_module: Dispatch.Support.Roles.Courier,
+    scope_type: :SELF,
+    capabilities:
+      ~w(profile.read.self assignment.read.self status.declare.self communications.read.self),
+    constraints: %{
+      "status.declare.self" => ["self_only"],
+      "assignment.read.self" => ["self_only", "active_assignment_only"],
+      "communications.read.self" => ["self_only"]
+    }
+  }
+
   def seed(path) do
     {:ok, carrier} =
       Organization
@@ -29,11 +47,21 @@ defmodule Dispatch.E2E do
       |> Ash.create(authorize?: false)
 
     tenant = carrier.id
-    definitions = Map.new(SeedManifest.all(), &{&1.key, definition(tenant, &1)})
+
+    definitions =
+      Map.new([@courier | SeedManifest.all()], &{&1.key, {&1, definition(tenant, &1)}})
 
     people =
-      for {name, key} <- [{"driver", "DRIVER"}, {"dispatcher", "DISPATCHER"}], into: %{} do
-        {name, person(tenant, carrier, name, key, definitions)}
+      for {name, key} <- [
+            {"driver", "DRIVER"},
+            {"dispatcher", "DISPATCHER"},
+            {"courier", "COURIER"},
+            # Scenario 15: two, because no one may grant themselves a role.
+            {"admin", "ADMIN"},
+            {"admin2", "ADMIN"}
+          ],
+          into: %{} do
+        {name, person(tenant, carrier, name, definitions[key])}
       end
 
     stack = %{
@@ -76,7 +104,7 @@ defmodule Dispatch.E2E do
   end
 
   # A person signs in as a biz-kit principal; dispatch knows them by it.
-  defp person(tenant, carrier, name, key, definitions) do
+  defp person(tenant, carrier, name, {manifest, definition}) do
     principal = Principal.new_id()
     subject = "e2e-#{name}-#{System.unique_integer([:positive])}"
 
@@ -95,8 +123,6 @@ defmodule Dispatch.E2E do
       })
       |> Ash.create!(authorize?: false, tenant: tenant)
 
-    definition = Map.fetch!(definitions, key)
-
     assignment =
       RoleAssignment
       |> Ash.Changeset.for_create(:grant, %{
@@ -105,7 +131,7 @@ defmodule Dispatch.E2E do
         principal_id: participant.id,
         organization_id: carrier.id,
         role_definition_id: definition.id,
-        scope_type: SeedManifest.fetch(key) |> elem(1) |> Map.fetch!(:scope_type),
+        scope_type: manifest.scope_type,
         starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
       })
       |> Ash.create!(authorize?: false, tenant: tenant)
@@ -115,7 +141,7 @@ defmodule Dispatch.E2E do
       subject: subject,
       principal: principal,
       participant_id: participant.id,
-      role_key: key,
+      role_key: manifest.key,
       role_assignment_id: assignment.id
     }
   end

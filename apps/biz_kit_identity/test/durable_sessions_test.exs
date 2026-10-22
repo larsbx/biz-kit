@@ -18,9 +18,10 @@ defmodule BizKit.Identity.DurableSessionsTest do
     def rows, do: Agent.get(__MODULE__, & &1)
 
     @impl true
-    def put(hash, principal, identity),
-      do:
-        Agent.update(__MODULE__, &Map.put(&1, hash, %{principal: principal, identity: identity}))
+    def put(hash, principal, identity, authenticated_at) do
+      row = %{principal: principal, identity: identity, authenticated_at: authenticated_at}
+      Agent.update(__MODULE__, &Map.put(&1, hash, row))
+    end
 
     @impl true
     def get(hash), do: Agent.get(__MODULE__, &Map.fetch(&1, hash))
@@ -88,10 +89,15 @@ defmodule BizKit.Identity.DurableSessionsTest do
 
   test "it survives a restart, and only a hash of it is stored", ctx do
     session = Sessions.create_native(ctx.principal, @identity)
+    {:ok, %{authenticated_at: signed_in}} = Identity.session(session)
 
     restart_sessions()
 
-    assert {:ok, %{principal: principal}} = Identity.session(session)
+    # A session that lasts until sign-out says nothing of how recently it was
+    # earned; when it was earned survives with it, for a step-up to ask.
+    assert {:ok, %{principal: principal, authenticated_at: ^signed_in}} =
+             Identity.session(session)
+
     assert principal == ctx.principal
     assert Map.keys(MemoryStore.rows()) == [:crypto.hash(:sha256, session)]
     refute Map.has_key?(MemoryStore.rows(), session)
@@ -142,8 +148,20 @@ defmodule BizKit.Identity.DurableSessionsTest do
 
     # A browser's token never reaches the store, so one stored under its hash is not found.
     web = "made-up"
-    MemoryStore.put(:crypto.hash(:sha256, web), ctx.principal, @identity)
+    MemoryStore.put(:crypto.hash(:sha256, web), ctx.principal, @identity, 0)
     assert {:error, :unknown_session} = Identity.session(web)
+  end
+
+  test "a session knows when it was signed in", ctx do
+    before = System.system_time(:millisecond)
+    native = Sessions.create_native(ctx.principal, @identity)
+    web = Sessions.create(ctx.principal, @identity)
+    later = System.system_time(:millisecond)
+
+    for session <- [native, web] do
+      assert {:ok, %{authenticated_at: at}} = Identity.session(session)
+      assert at in before..later
+    end
   end
 
   test "a native token says so; a browser's does not", ctx do

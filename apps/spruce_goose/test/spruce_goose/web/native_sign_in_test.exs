@@ -99,8 +99,11 @@ defmodule SpruceGoose.Web.NativeSignInTest do
       token(%{"code" => code, "code_verifier" => ctx.verifier, "redirect_uri" => @app}).resp_body
       |> Jason.decode!()
 
+    {:ok, %{authenticated_at: signed_in}} = BizKit.Identity.session(session)
     restart_sessions()
     assert call(:get, "/auth/me", [{"authorization", "Bearer " <> session}]).status == 200
+    # When it was earned comes back from Postgres too, to the millisecond.
+    assert {:ok, %{authenticated_at: ^signed_in}} = BizKit.Identity.session(session)
 
     assert call(:post, "/auth/logout", [{"authorization", "Bearer " <> session}]).status == 204
     restart_sessions()

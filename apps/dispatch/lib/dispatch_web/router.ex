@@ -156,6 +156,12 @@ defmodule DispatchWeb.Router do
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     get "/operations/participants/:participant_id", PortalController, :operations_participant
     get "/operations/drivers/:driver_id", PortalController, :operations_driver
+
+    # Section 4.3: ADMIN's primary route, and Section 26.2's /settings/users.
+    get "/settings", SettingsController, :index
+    get "/settings/users", SettingsController, :users
+    post "/settings/users/assignments", SettingsController, :grant
+    post "/settings/users/assignments/:assignment_id/revoke", SettingsController, :revoke
   end
 
   scope "/v1", DispatchWeb do
