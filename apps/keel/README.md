@@ -33,6 +33,7 @@ org =
 - `Keel.Ownership` — owner rights: withdrawal, transfer of one's own share, pre-emption, partition and dissolution
 - `Keel.Forms` — canonical forms; compose by list concatenation
 
+The normative specification, the contract any implementation or port must meet: [`docs/SPEC.md`](docs/SPEC.md).
 The formal model, invariants, soundness lemmas and the record of policy amendments: [`docs/PRIMITIVES.md`](docs/PRIMITIVES.md).
 
 ```sh
