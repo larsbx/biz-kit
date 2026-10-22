@@ -3,8 +3,9 @@
 # and nothing here runs in production.
 #
 #   mix run priv/repo/e2e.exs seed <stack.json>     a carrier, its roles, a
-#       driver, a dispatcher and a courier bound to biz-kit principals; writes
-#       what the tests need (and the identity bindings the server boots with)
+#       driver, a dispatcher, a courier and two administrators bound to biz-kit
+#       principals; writes what the tests need (and the identity bindings the
+#       server boots with)
 #   mix run priv/repo/e2e.exs revoke <tenant> <role_assignment_id>
 #       ends an assignment, as an administrator would (scenario 16)
 
@@ -54,7 +55,10 @@ defmodule Dispatch.E2E do
       for {name, key} <- [
             {"driver", "DRIVER"},
             {"dispatcher", "DISPATCHER"},
-            {"courier", "COURIER"}
+            {"courier", "COURIER"},
+            # Scenario 15: two, because no one may grant themselves a role.
+            {"admin", "ADMIN"},
+            {"admin2", "ADMIN"}
           ],
           into: %{} do
         {name, person(tenant, carrier, name, definitions[key])}

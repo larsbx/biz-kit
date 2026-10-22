@@ -13,6 +13,7 @@ defmodule Dispatch.Access.Roles.Base do
   @doc false
   defmacro __using__(opts) do
     projection = Keyword.fetch!(opts, :projection)
+    scope = Keyword.fetch!(opts, :scope)
     features = Keyword.get(opts, :android_features, [])
 
     quote do
@@ -30,6 +31,9 @@ defmodule Dispatch.Access.Roles.Base do
 
       @impl Dispatch.Access.RoleProfile
       def android_features(_assignment), do: unquote(features)
+
+      @impl Dispatch.Access.RoleProfile
+      def scope_type, do: unquote(scope)
 
       @impl Dispatch.Access.RoleProfile
       def validate_status_transition(_current, _requested, _context),

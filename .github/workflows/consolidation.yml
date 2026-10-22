@@ -246,6 +246,12 @@ jobs:
           apps/dispatch/lib/dispatch_web/controllers/device_controller.ex
           apps/dispatch/lib/dispatch_web/schemas/devices.ex
           apps/dispatch/test/dispatch_web/device_controller_test.exs
+          apps/dispatch/lib/dispatch/accounts/administration.ex
+          apps/dispatch/lib/dispatch_web/controllers/settings_controller.ex
+          apps/dispatch/lib/dispatch_web/controllers/settings_html.ex
+          apps/dispatch/lib/dispatch_web/components/settings.ex
+          apps/dispatch/test/dispatch/accounts/administration_test.exs
+          apps/dispatch/test/dispatch_web/settings_controller_test.exs
           apps/spruce_goose/lib/spruce_goose/actors/grant.ex
           apps/spruce_goose/lib/spruce_goose/actors/registry.ex
           apps/spruce_goose/lib/spruce_goose/cli/command.ex

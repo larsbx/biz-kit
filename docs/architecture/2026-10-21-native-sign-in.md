@@ -61,6 +61,10 @@ its principal (the `sub` its capability document is bound to) and sign out.
 Nowhere else in SpruceGoose does an `Authorization` header mean a session:
 there it still means a signed request.
 
+Each session also records when the person signed in (`authenticated_at`),
+kept with a native session across restarts, so an operation that needs a
+recent sign-in can ask (2026-10-22-role-administration.md).
+
 ## Rejected alternatives
 
 | Alternative | Why not |

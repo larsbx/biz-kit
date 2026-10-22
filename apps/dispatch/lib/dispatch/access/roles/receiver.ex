@@ -8,7 +8,9 @@ defmodule Dispatch.Access.Roles.Receiver do
   that a runtime argument rather than a property of the role.
   """
 
-  use Dispatch.Access.Roles.Base, projection: :partner_stop
+  use Dispatch.Access.Roles.Base,
+    projection: :partner_stop,
+    scope: :STOP
 
   @doc "Whether this profile may act on a stop of the given kind."
   @spec validate_stop_kind(atom() | String.t()) :: :ok | {:error, :stop_kind_mismatch}

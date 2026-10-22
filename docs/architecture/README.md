@@ -36,6 +36,10 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Device keys](2026-10-21-device-keys.md): the field app registers its
   installation's Ed25519 key itself, and its status declarations carry that
   key's signature over canonical statements (`DEVICE_AUTHENTICATED`).
+- [Role administration](2026-10-22-role-administration.md): an administrator
+  grants and revokes role assignments at `/settings/users`, after a sign-in in
+  the last five minutes, never to themselves and never removing the last
+  administrator.
 - [Deciding on suggestions](2026-10-18-decide.md): the first end-to-end
   workflow. A person accepts or declines an agent's suggestion in the web
   view; the command is signed by a key held in their browser.

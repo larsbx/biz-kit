@@ -35,7 +35,7 @@ defmodule DispatchWeb.SessionController do
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"token" => token}) when is_binary(token) do
     case Verifier.verify(token) do
-      {:ok, %{subject: subject}} ->
+      {:ok, %{subject: subject} = claims} ->
         # `renew: true` renews the session id and *keeps* its contents, so a
         # previous user's selection would survive into this one. It would then
         # be presented on the next request, fail to resolve, and sign the new
@@ -44,6 +44,7 @@ defmodule DispatchWeb.SessionController do
         |> configure_session(renew: true)
         |> clear_session()
         |> put_session(PortalSession.subject_key(), subject)
+        |> PortalSession.put_authenticated_at(claims[:authenticated_at])
         |> redirect_to("/select-role")
 
       {:error, _reason} ->
@@ -99,9 +100,15 @@ defmodule DispatchWeb.SessionController do
   # Section 4.3's primary route per profile. A profile with no page of its own
   # yet lands on role selection rather than a route that does not exist.
   defp landing_for(actor) do
-    case actor.role_assignment.scope_type do
-      :STOP -> "/partner/stops/#{actor.role_assignment.scope_id}"
-      _otherwise -> "/select-role"
+    cond do
+      actor.role_assignment.scope_type == :STOP ->
+        "/partner/stops/#{actor.role_assignment.scope_id}"
+
+      Dispatch.Access.operations_projection(actor.role_assignment) == :settings ->
+        "/settings/users"
+
+      true ->
+        "/select-role"
     end
   end
 

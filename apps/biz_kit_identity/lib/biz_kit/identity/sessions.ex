@@ -13,6 +13,11 @@ defmodule BizKit.Identity.Sessions do
   `BizKit.Identity.SessionStore`, by hash, so a restart or a move does not end
   it; the first use afterwards reads it back.
 
+  Each session records when the person signed in (`authenticated_at`), so an
+  operation that needs a recent sign-in, a step-up, can ask for one: holding a
+  session that lasts until sign-out says nothing about how recently it was
+  earned.
+
   A session authenticates a principal only. Every protected operation still
   checks the principal's current ledger grants.
   """
@@ -26,11 +31,15 @@ defmodule BizKit.Identity.Sessions do
   @default_ttl_ms 3_600_000
 
   @type id :: String.t()
-  @typedoc "`expires_at` is `:never` for a native session."
+  @typedoc """
+  `expires_at` is `:never` for a native session. `authenticated_at` is when the
+  person signed in. Both are Unix milliseconds.
+  """
   @type t :: %{
           principal: String.t(),
           identity: BizKit.Identity.identity(),
-          expires_at: integer() | :never
+          expires_at: integer() | :never,
+          authenticated_at: integer()
         }
 
   @server BizKit.Cluster.Singleton.name(__MODULE__)
@@ -41,13 +50,8 @@ defmodule BizKit.Identity.Sessions do
   @spec create(String.t(), BizKit.Identity.identity()) :: id()
   def create(principal, identity) do
     id = new_id()
-
-    :ok =
-      GenServer.call(
-        @server,
-        {:create, {id, principal, identity, System.system_time(:millisecond) + ttl_ms()}}
-      )
-
+    now = System.system_time(:millisecond)
+    :ok = GenServer.call(@server, {:create, {id, principal, identity, now + ttl_ms(), now}})
     id
   end
 
@@ -55,8 +59,9 @@ defmodule BizKit.Identity.Sessions do
   @spec create_native(String.t(), BizKit.Identity.identity()) :: id()
   def create_native(principal, identity) do
     id = @native <> new_id()
-    :ok = SessionStore.impl().put(hash(id), principal, identity)
-    :ok = GenServer.call(@server, {:create, {id, principal, identity, :never}})
+    now = System.system_time(:millisecond)
+    :ok = SessionStore.impl().put(hash(id), principal, identity, now)
+    :ok = GenServer.call(@server, {:create, {id, principal, identity, :never, now}})
     id
   end
 
@@ -69,9 +74,10 @@ defmodule BizKit.Identity.Sessions do
   def fetch(id, now_ms) do
     with {:error, :unknown_session} <- GenServer.call(@server, {:fetch, id, now_ms}),
          true <- native?(id) || {:error, :unknown_session},
-         {:ok, %{principal: principal, identity: identity}} <- SessionStore.impl().get(hash(id)) do
-      :ok = GenServer.call(@server, {:restore, {id, principal, identity, :never}})
-      {:ok, %{principal: principal, identity: identity, expires_at: :never}}
+         {:ok, %{principal: principal, identity: identity, authenticated_at: at}} <-
+           SessionStore.impl().get(hash(id)) do
+      :ok = GenServer.call(@server, {:restore, {id, principal, identity, :never, at}})
+      {:ok, %{principal: principal, identity: identity, expires_at: :never, authenticated_at: at}}
     else
       :error -> {:error, :unknown_session}
       found_or_refused -> found_or_refused
@@ -80,13 +86,13 @@ defmodule BizKit.Identity.Sessions do
 
   @spec revoke(id()) :: :ok
   def revoke(id) do
-    :ok = GenServer.call(@server, {:revoke, {id, :_, :_, :_}})
+    :ok = GenServer.call(@server, {:revoke, {id, :_, :_, :_, :_}})
     if native?(id), do: SessionStore.impl().delete(hash(id)), else: :ok
   end
 
   @spec revoke_principal(String.t()) :: :ok
   def revoke_principal(principal) do
-    :ok = GenServer.call(@server, {:revoke, {:_, principal, :_, :_}})
+    :ok = GenServer.call(@server, {:revoke, {:_, principal, :_, :_, :_}})
     SessionStore.impl().delete_principal(principal)
   end
 
@@ -120,8 +126,14 @@ defmodule BizKit.Identity.Sessions do
     reply =
       case :ets.lookup(@table, id) do
         # A native session's `:never` passes: every number sorts before an atom.
-        [{^id, principal, identity, expires_at}] when now_ms <= expires_at ->
-          {:ok, %{principal: principal, identity: identity, expires_at: expires_at}}
+        [{^id, principal, identity, expires_at, at}] when now_ms <= expires_at ->
+          {:ok,
+           %{
+             principal: principal,
+             identity: identity,
+             expires_at: expires_at,
+             authenticated_at: at
+           }}
 
         [_expired] ->
           :ets.delete(@table, id)
@@ -143,7 +155,7 @@ defmodule BizKit.Identity.Sessions do
   # `:never` is never below `now`, so native sessions are not swept.
   def handle_info(:sweep, state) do
     now = System.system_time(:millisecond)
-    :ets.select_delete(@table, [{{:_, :_, :_, :"$1"}, [{:<, :"$1", now}], [true]}])
+    :ets.select_delete(@table, [{{:_, :_, :_, :"$1", :_}, [{:<, :"$1", now}], [true]}])
     schedule()
     {:noreply, state}
   end

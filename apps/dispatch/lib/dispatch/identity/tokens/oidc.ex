@@ -98,6 +98,8 @@ defmodule Dispatch.Identity.Tokens.Oidc do
          issuer: fields["iss"],
          audience: audiences,
          expires_at: expires_at,
+         # OIDC Core's `auth_time`, when the provider sends it.
+         authenticated_at: auth_time(fields["auth_time"]),
          email: fields["email"],
          name: fields["name"]
        }}
@@ -109,6 +111,9 @@ defmodule Dispatch.Identity.Tokens.Oidc do
 
   defp expiry(%{"exp" => exp}) when is_integer(exp), do: DateTime.from_unix(exp)
   defp expiry(_fields), do: {:error, :invalid_token}
+
+  defp auth_time(seconds) when is_integer(seconds), do: DateTime.from_unix!(seconds)
+  defp auth_time(_absent), do: nil
 
   defp unexpired(expires_at) do
     case DateTime.compare(DateTime.utc_now(), expires_at) do

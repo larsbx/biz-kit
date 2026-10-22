@@ -40,6 +40,7 @@ defmodule Dispatch.Support.Tokens.StaticVerifier do
       issuer: Keyword.get(opts, :issuer, "https://test.invalid"),
       audience: Keyword.get(opts, :audience, ["dispatch-api"]),
       expires_at: Keyword.get(opts, :expires_at, DateTime.add(DateTime.utc_now(), 300, :second)),
+      authenticated_at: Keyword.get(opts, :authenticated_at, DateTime.utc_now()),
       email: Keyword.get(opts, :email),
       name: Keyword.get(opts, :name)
     })

@@ -21,6 +21,7 @@ defmodule Dispatch.Support.Roles.Courier do
 
   use Dispatch.Access.Roles.Base,
     projection: :participant,
+    scope: :SELF,
     android_features: ~w(home status inbox),
     concurrent_assignments: true
 end

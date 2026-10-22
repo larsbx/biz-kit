@@ -24,13 +24,14 @@ defmodule Dispatch.Identity.Tokens.BizKitSession do
   @impl Dispatch.Identity.Tokens.Verifier
   def verify(token) when is_binary(token) and token != "" do
     case BizKit.Identity.session(token) do
-      {:ok, %{principal: principal, expires_at: expires_at}} ->
+      {:ok, %{principal: principal, expires_at: expires_at} = session} ->
         {:ok,
          %{
            subject: principal,
            issuer: @issuer,
            audience: [@issuer],
-           expires_at: expiry(expires_at)
+           expires_at: expiry(expires_at),
+           authenticated_at: at(session[:authenticated_at])
          }}
 
       {:error, :expired} ->
@@ -45,4 +46,7 @@ defmodule Dispatch.Identity.Tokens.BizKitSession do
 
   defp expiry(:never), do: nil
   defp expiry(at_ms), do: DateTime.from_unix!(at_ms, :millisecond)
+
+  defp at(ms) when is_integer(ms), do: DateTime.from_unix!(ms, :millisecond)
+  defp at(_unknown), do: nil
 end

@@ -12,5 +12,7 @@ defmodule Dispatch.Access.Roles.Broker do
   existence-bearing metadata — not a 403 that confirms the load exists.
   """
 
-  use Dispatch.Access.Roles.Base, projection: :load
+  use Dispatch.Access.Roles.Base,
+    projection: :load,
+    scope: :LOAD
 end

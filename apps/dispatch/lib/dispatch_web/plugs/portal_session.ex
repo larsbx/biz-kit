@@ -27,6 +27,7 @@ defmodule DispatchWeb.Plugs.PortalSession do
 
   @session_subject "oidc_subject"
   @session_assignment "role_assignment_id"
+  @session_authenticated_at "authenticated_at"
 
   @doc "The session key holding the authenticated subject."
   @spec subject_key() :: String.t()
@@ -35,6 +36,25 @@ defmodule DispatchWeb.Plugs.PortalSession do
   @doc "The session key holding the selected role assignment."
   @spec assignment_key() :: String.t()
   def assignment_key, do: @session_assignment
+
+  @doc """
+  Records when the person signed in, as the token said (Section 23.3's
+  step-up). Unknown is left unset, and reads as not recent.
+  """
+  @spec put_authenticated_at(Plug.Conn.t(), DateTime.t() | nil) :: Plug.Conn.t()
+  def put_authenticated_at(conn, %DateTime{} = at),
+    do: put_session(conn, @session_authenticated_at, DateTime.to_unix(at))
+
+  def put_authenticated_at(conn, _unknown), do: conn
+
+  @doc "When this session's person signed in, if the token said."
+  @spec authenticated_at(Plug.Conn.t()) :: DateTime.t() | nil
+  def authenticated_at(conn) do
+    case get_session(conn, @session_authenticated_at) do
+      seconds when is_integer(seconds) -> DateTime.from_unix!(seconds)
+      _unknown -> nil
+    end
+  end
 
   @impl Plug
   def init(opts), do: opts
