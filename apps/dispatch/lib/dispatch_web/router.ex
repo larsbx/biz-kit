@@ -182,6 +182,12 @@ defmodule DispatchWeb.Router do
     # compatibility projection. Both reach the same controller function.
     post "/me/status-events", StatusEventController, :create
     post "/driver/status-events", StatusEventController, :create_driver
+
+    # Section 24.2 and Section 25.3: consented location sharing.
+    post "/me/location-consents", LocationController, :begin_consent
+    post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent
+    post "/me/location-samples:batch", LocationController, :ingest
+    post "/driver/location-samples:batch", LocationController, :ingest_driver
   end
 
   scope "/health", DispatchWeb do

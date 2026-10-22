@@ -17,6 +17,11 @@ defmodule Dispatch.Accounts.DeviceKeys do
 
       DispatchDeviceRegistrationV1  tenant_id, participant_id, installation_id, public_key (bytes)
       DispatchStatusEventV1         the event body's own fields, less device_signature
+      DispatchLocationSampleV1      a location sample's own fields, less device_signature
+
+  The canonical form has no floats, deliberately: a signature needs the same
+  bytes on the handset and here. So a location sample carries its coordinates
+  and measurements as fixed-point integers (`lat_e7`, `accuracy_cm`, ...).
   """
 
   alias CoopSubstrate.{Canonical, Crypto}
@@ -27,6 +32,7 @@ defmodule Dispatch.Accounts.DeviceKeys do
 
   @registration_schema "DispatchDeviceRegistrationV1"
   @event_schema "DispatchStatusEventV1"
+  @sample_schema "DispatchLocationSampleV1"
   @max_installation_id 200
 
   @type registration_error ::
@@ -55,6 +61,10 @@ defmodule Dispatch.Accounts.DeviceKeys do
   """
   @spec event_statement(%{String.t() => term()}) :: {:ok, binary()} | {:error, term()}
   def event_statement(fields), do: Canonical.encode(Map.put(fields, "schema", @event_schema))
+
+  @doc "What a device signs for a location sample: its fields, without `device_signature`."
+  @spec sample_statement(%{String.t() => term()}) :: {:ok, binary()} | {:error, term()}
+  def sample_statement(fields), do: Canonical.encode(Map.put(fields, "schema", @sample_schema))
 
   @doc """
   Registers the installation's key for `actor`, given a `proof` signed by it.
@@ -99,8 +109,29 @@ defmodule Dispatch.Accounts.DeviceKeys do
     end
   end
 
-  defp verify_with(device, fields, signature) do
-    with {:ok, statement} <- event_statement(fields),
+  @doc """
+  Checks a location sample's signature. Unlike a status declaration, a sample
+  always names its device and is always signed: it is only ever acquired by a
+  registered handset (Section 24.2).
+  """
+  @spec verify_sample(Actor.t(), %{String.t() => term()}, term()) ::
+          :ok | {:error, :device_signature_required | :device_signature_invalid}
+  def verify_sample(%Actor{} = actor, fields, signature) do
+    case own_active_device(actor, fields["device_id"]) do
+      nil ->
+        {:error, :device_signature_invalid}
+
+      _device when is_nil(signature) ->
+        {:error, :device_signature_required}
+
+      device ->
+        with {:ok, _verified} <- verify_with(device, fields, signature, &sample_statement/1),
+             do: :ok
+    end
+  end
+
+  defp verify_with(device, fields, signature, statement \\ &event_statement/1) do
+    with {:ok, statement} <- statement.(fields),
          {:ok, signature} <- decode(signature, 64, :invalid),
          {:ok, key} <- decode(device.public_key, 32, :invalid),
          true <- Crypto.verify(statement, signature, key) do

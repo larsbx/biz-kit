@@ -173,6 +173,18 @@ defmodule Dispatch.Support.Fixtures do
     )
   end
 
+  @doc "A location sample as the device holding `seed` sends it: signed over its own fields."
+  @spec signed_sample(map(), binary()) :: map()
+  def signed_sample(body, seed) do
+    {:ok, statement} = Dispatch.Accounts.DeviceKeys.sample_statement(body)
+
+    Map.put(
+      body,
+      "device_signature",
+      Base.url_encode64(CoopSubstrate.Crypto.sign(statement, seed), padding: false)
+    )
+  end
+
   @doc """
   A planned operational assignment for `operator`.
 
@@ -199,7 +211,8 @@ defmodule Dispatch.Support.Fixtures do
       tenant_id: tenant,
       load_id: load.id,
       operator_participant_id: operator.id,
-      starts_at: Keyword.get(opts, :starts_at, DateTime.utc_now())
+      starts_at: Keyword.get(opts, :starts_at, DateTime.utc_now()),
+      ends_at: Keyword.get(opts, :ends_at)
     })
     |> Ash.create!(authorize?: false, tenant: tenant)
   end

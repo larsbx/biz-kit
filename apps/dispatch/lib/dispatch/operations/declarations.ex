@@ -38,7 +38,7 @@ defmodule Dispatch.Operations.Declarations do
 
   alias Dispatch.Access.Actor
   alias Dispatch.Accounts.DeviceKeys
-  alias Dispatch.Operations.ParticipantStatusEvent
+  alias Dispatch.Operations.{ParticipantStatusEvent, StreamRefresh}
 
   require Ash.Query
 
@@ -137,7 +137,11 @@ defmodule Dispatch.Operations.Declarations do
       case create_event(actor, input) do
         {:ok, event} ->
           record_audit!(actor, event)
-          enqueue_stream_refreshes!(actor, event)
+
+          StreamRefresh.enqueue!(actor, event.participant_id, "status.declared", %{
+            "event_id" => event.id
+          })
+
           event
 
         {:error, error} ->
@@ -196,27 +200,6 @@ defmodule Dispatch.Operations.Declarations do
       |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
 
     :ok
-  end
-
-  defp enqueue_stream_refreshes!(actor, event) do
-    now = DateTime.utc_now()
-
-    [
-      {"participant:#{event.participant_id}", %{"event_id" => event.id}},
-      {"operations:#{actor.role_assignment.organization_id}", %{"event_id" => event.id}}
-    ]
-    |> Enum.each(fn {topic, payload} ->
-      _outbox =
-        %Dispatch.Outbox.Event{
-          id: Ash.UUID.generate(),
-          tenant_id: actor.tenant_id,
-          topic: topic,
-          event_type: "status.declared",
-          payload: payload,
-          occurred_at: now
-        }
-        |> Dispatch.Repo.insert!()
-    end)
   end
 
   # The ID is taken, and the lookup above — scoped to this participant's own

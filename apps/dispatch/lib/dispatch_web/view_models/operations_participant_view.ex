@@ -101,8 +101,34 @@ defmodule DispatchWeb.ViewModels.OperationsParticipantView do
       public_name: participant.public_name,
       status: participant.status,
       current_status: current_status(participant, actor),
-      location_freshness: nil
+      location_freshness: location_freshness(participant, actor)
     }
+  end
+
+  # Section 6.1: a location is shown with its accuracy and age, as an
+  # observation. Only that: coordinates need `operations.location.precise.read`
+  # and active consent (Section 23.2), which no seeded operations profile holds,
+  # so the struct has nowhere to put them.
+  defp location_freshness(participant, actor) do
+    Dispatch.Operations.LocationSample.latest(participant.id,
+      actor: actor,
+      tenant: actor.tenant_id
+    )
+    |> case do
+      {:ok, %{} = sample} ->
+        FactSummary.new(
+          %{
+            accuracy_m: sample.accuracy_m,
+            low_accuracy: Dispatch.Operations.LocationSample.low_accuracy?(sample)
+          },
+          :OBSERVED,
+          sample.occurred_at,
+          received_at: sample.received_at
+        )
+
+      _none ->
+        nil
+    end
   end
 
   # The latest declaration, carrying its source. Section 1 keeps a declaration

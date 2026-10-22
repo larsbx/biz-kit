@@ -42,8 +42,14 @@ defmodule DispatchWeb.Components.Operations do
 
       <section id="participant-location-card">
         <h2>Location</h2>
-        <p :if={@view.location_freshness}>
+        <p :if={@view.location_freshness} class="location-reported">
           Last reported <.summary_badge summary={@view.location_freshness} />
+          <span class="location-accuracy">
+            ±{round(@view.location_freshness.value.accuracy_m)} m
+          </span>
+          <span :if={@view.location_freshness.value.low_accuracy} class="location-low-accuracy">
+            low accuracy
+          </span>
         </p>
         <!-- Section 23.2 makes precise location a separate capability that also
              requires active consent, so this card reports freshness only. -->
