@@ -43,6 +43,9 @@ config :dispatch, :breakglass,
 
 # Section 23.2: only these compiled modules may be named by a role definition.
 config :dispatch, :role_profile_module_allowlist, [
+  # The test profile, compiled in dev for the end-to-end stack's second field
+  # role (scenario 14). Releases compile `lib` alone, so prod cannot name it.
+  Dispatch.Support.Roles.Courier,
   Dispatch.Access.Roles.Driver,
   Dispatch.Access.Roles.Admin,
   Dispatch.Access.Roles.Dispatcher,

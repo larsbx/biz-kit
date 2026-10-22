@@ -14,8 +14,9 @@ defmodule Dispatch.Support.Roles.Courier do
   Section 33.2 anticipates exactly this — "a fake field-role profile can declare
   status and share location through canonical participant endpoints without
   adding a table, controller, tool schema, or Android repository." It compiles
-  only in the test environment and appears only in the test allowlist, so it
-  cannot be selected anywhere else.
+  in the test and development environments and appears only in their
+  allowlists: the end-to-end stack seeds it as scenario 14's second profile. A
+  release compiles `lib` alone, so it cannot be selected in production.
   """
 
   use Dispatch.Access.Roles.Base,

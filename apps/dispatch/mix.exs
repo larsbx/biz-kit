@@ -40,6 +40,9 @@ defmodule Dispatch.MixProject do
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  # The test role profile, so the end-to-end stack can seed a second field role
+  # (Section 33.4 scenario 14). Never in a release, which compiles `lib` alone.
+  defp elixirc_paths(:dev), do: ["lib", "test/support/roles"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do

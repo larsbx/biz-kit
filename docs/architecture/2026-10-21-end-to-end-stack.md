@@ -15,7 +15,8 @@ scripts/e2e-stack.sh --prepare  # fresh databases and fixtures only
 
 It needs PostgreSQL with PostGIS on localhost. It drops and recreates the
 event store, SpruceGoose's and dispatch's databases, seeds a carrier with its
-six role profiles and two people (a `DRIVER` and a `DISPATCHER`), and serves:
+six role profiles, a second field profile (`COURIER`), and three people (a
+`DRIVER`, a `DISPATCHER` and a `COURIER`), and serves:
 
 | | Where | What |
 | --- | --- | --- |
@@ -47,8 +48,11 @@ operations stream on the next heartbeat).
 
 ## Limits
 
-- Scenario 14's second role profile (`Courier`) compiles only in dispatch's
-  test environment, deliberately; the dev stack does not have it.
+- Scenario 14's second profile is the test profile `Courier`, compiled in
+  dev and test and allowlisted there only. A release compiles `lib` alone, so
+  production can never name it.
+- `/auth` limits sign-in requests per client (30 a minute). The tests sign
+  each person in once and keep the session, as the app does.
 - The development provider is the only one; a WorkOS round trip is covered by
   SpruceGoose's own tests with WorkOS stubbed.
 
