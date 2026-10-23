@@ -1,6 +1,6 @@
 # biz-kit roadmap
 
-Updated 2026-10-21 (dispatch native sign-in and device keys). The direction is
+Updated 2026-10-22 (security audit priorities and Slice 1 status). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
 registry and one PostgreSQL database. Task, dispatch, ownership and economic
@@ -82,10 +82,66 @@ has not been switched.
   registers an installation's Ed25519 key by proof of possession; a status
   declaration naming the device must carry its signature and is stored
   `DEVICE_AUTHENTICATED`.
+- [Role administration](architecture/2026-10-22-role-administration.md):
+  Courier capabilities and the administrator grant/revoke surface are merged
+  ([biz-kit #61](https://github.com/larsbx/biz-kit/pull/61),
+  [d-patch #18](https://github.com/larsbx/d-patch/pull/18)). Scenario 15 has
+  end-to-end coverage; the audit obligations below still apply.
+
+## Security and validation gate (2026-10-22 audit)
+
+These source-review findings were checked at main
+[`40cb89a`](https://github.com/larsbx/biz-kit/commit/40cb89ad0020b040f2fbaffe3812e5d154b98319).
+They are open obligations, not implemented fixes or demonstrated production
+incidents. Resolve them before extending affected session or administrative
+authority or claiming production cutover readiness.
+
+| Priority | Obligation | Required evidence for closure |
+| --- | --- | --- |
+| P1 | Make native-session restoration atomic with logout and principal revocation. `Sessions.fetch/2` reads the persistent store outside the singleton, while revocation clears memory and storage separately; an overlapping restore can repopulate a revoked session. | Deterministically pause a store read/restore, revoke the token or principal, then resume it. The token must remain refused after both operations finish, after restart, and on another node. Preserve durable sessions that have not been revoked. |
+| P1 | Bind Dispatch portal authentication to revocable server-side session state. The token exchange keeps a subject and authentication time; subsequent portal requests resolve assignments without checking the originating Identity session. | With assignments unchanged, prove that logout, principal-session revocation, identity unbinding, and source-session expiry refuse subsequent protected portal requests. Apply the same authentication rule to streams and reconnects. Keep bearer tokens out of cookies and logs. |
+| P1 | Revalidate administrative authority inside the mutation transaction after acquiring its organization lock. `Administration` currently checks the actor's preloaded assignment, which can have been revoked while the request waited. | With separate database sessions, resolve an actor, block its mutation, revoke its authority, then release it. No grant, revocation, or audit record may commit under the stale authority. Cover participant/user suspension and role-definition changes with the appropriate shared locks or serialization. |
+| P2 | Require PostgreSQL/PostGIS-backed Dispatch integration checks in hosted CI. The current Consolidation job runs its unit tier and excludes integration-tagged authorization tests. | A required job creates and migrates the PostGIS database and runs `mix test --include integration`, including administrative and portal regressions. Record the exact tested PR head; a green unit-only run does not close this obligation. |
+
+Native-session correction: the focused implementation and validation are described
+in [atomic native-session revocation](architecture/2026-10-22-atomic-native-session-revocation.md).
+Its local deterministic races reproduce the original defect and pass with the
+correction, including PostgreSQL and singleton migration checks. This is PR
+implementation evidence; the gate still requires review and hosted validation.
+The portal-authentication, administrative-transaction and required Dispatch CI
+obligations above remain open and are not resolved by this correction.
+
+Implementation anchors:
+[`Sessions`](../apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex),
+[`SessionController`](../apps/dispatch/lib/dispatch_web/controllers/session_controller.ex),
+[`PortalSession`](../apps/dispatch/lib/dispatch_web/plugs/portal_session.ex),
+[`Administration`](../apps/dispatch/lib/dispatch/accounts/administration.ex), and
+[Consolidation](../.github/workflows/consolidation.yml).
+
+The original task singleton-signer rejection remains implemented in
+[`TaskCore.Admission`](../apps/task_core/lib/task_core/admission.ex); preserve it,
+the existing cooperative-event signature semantics, and canonical encoding.
+
+Audit baseline: [main CI run 39753381007](https://github.com/larsbx/biz-kit/actions/runs/39753381007)
+passed ledger/orchestration, release smoke, and model checks at `a85aea3`.
+Its Dispatch tier reported 217 excluded tests. The audit also ran 25 browser
+module tests successfully; it did not run local Elixir/PostgreSQL reproductions
+of the findings. CI success is evidence for the checks actually run, not for
+absence of these races.
 
 ## Next
 
-Ordered by what blocks real use first.
+1. **Close the security and validation gate above.** Land focused corrections
+   with the specified regressions and fresh validation before expanding the
+   affected authority surfaces.
+2. **Finish Slice 1 partner actions.** Review and validate
+   [biz-kit PR #62](https://github.com/larsbx/biz-kit/pull/62) with its paired
+   [d-patch PR #19](https://github.com/larsbx/d-patch/pull/19). Scenarios 17–19
+   remain pending integration; do not count an open PR as delivered.
+
+## Next: workflow usability
+
+After the security gate, retain the existing workflow usability work:
 
 1. **Workflows for administrators.** The chapter's feed and its projects card
    carry each project's workflows and runs, so an administrator sees which
@@ -108,16 +164,21 @@ Dispatch's server work happens here; d-patch keeps the Android, web and e2e
 clients (d-patch ADR-0010). The Android app's offline status flow is built,
 the app signs in through biz-kit's [native sign-in](architecture/2026-10-21-native-sign-in.md)
 (d-patch `core:auth`, ADR-0011), and biz-kit checks [device keys](architecture/2026-10-21-device-keys.md).
+The native-session and device-signing client integration is merged
+([d-patch #17](https://github.com/larsbx/d-patch/pull/17)); it is no longer
+a missing implementation step. Deployment still exposes SpruceGoose's `/auth`,
+sets `BIZKIT_NATIVE_REDIRECT_URIS`, and selects Dispatch's `BizKitSession`
+verifier.
+
 What remains, in order:
 
-1. **The app's half of device keys** (in d-patch): make and seal the key,
-   register it after sign-in, and sign each declaration when it is queued.
-   Deployment exposes SpruceGoose's `/auth` publicly, sets
-   `BIZKIT_NATIVE_REDIRECT_URIS` and selects dispatch's `BizKitSession` verifier.
-2. **End-to-end runs.** d-patch's Slice 1 exit tests (1, 13–19, online and
-   after an offline interval) against this server rather than d-patch's frozen
-   `central/`.
-3. **Grants instead of the document.** When dispatch's roles become ledger
+1. **Security and required CI.** Close the session, administrative-admission,
+   and integration-gate obligations above.
+2. **Partner actions and end-to-end acceptance.** Complete scenarios 17–19
+   through biz-kit #62 and d-patch #19. Record real-server browser and Android
+   emulator/handset evidence separately; merged code alone does not establish
+   deployed provider or device acceptance.
+3. **Grants instead of the document.** When Dispatch's roles become ledger
    grants (consolidation step 4), the app reads them from the change feed and
    the capability document retires.
 
@@ -143,3 +204,5 @@ What remains, in order:
 - **Single-project offboarding.** Should it, like chapter offboarding,
   cancel the person's pending requests only once the offboarding is
   admitted?
+
+Portal correction in progress: see [revocation-aware portal authentication](architecture/2026-10-23-revocation-aware-portal.md). This implementation is not yet acceptance evidence and does not close the administrative P1 or required hosted-integration P2.

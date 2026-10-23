@@ -14,7 +14,7 @@ defmodule DispatchWeb.PortalControllerTest do
   import Plug.Test
 
   alias Dispatch.Support.Fixtures
-  alias Dispatch.Support.Tokens.StaticVerifier
+  alias Dispatch.Support.PortalIdentity, as: StaticVerifier
   alias DispatchWeb.Plugs.PortalSession
 
   @moduletag :integration
@@ -30,6 +30,7 @@ defmodule DispatchWeb.PortalControllerTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
+    :ok = Dispatch.Support.PortalIdentity.setup()
 
     carrier = Fixtures.carrier()
     tenant = carrier.id
@@ -76,8 +77,13 @@ defmodule DispatchWeb.PortalControllerTest do
     |> fetch_session()
     |> then(fn conn ->
       case Keyword.get(opts, :session) do
-        nil -> conn
-        entries -> Enum.reduce(entries, conn, fn {k, v}, acc -> put_session(acc, k, v) end)
+        nil ->
+          conn
+
+        entries ->
+          Enum.reduce(Dispatch.Support.PortalIdentity.bind(entries), conn, fn {k, v}, acc ->
+            put_session(acc, k, v)
+          end)
       end
     end)
     |> DispatchWeb.Router.call(@opts)

@@ -23,6 +23,7 @@ defmodule Dispatch.Identity.Tokens.Verifier do
           # When the person signed in, where the token says: what a step-up
           # asks (Section 23.3). Absent means unknown, never recent.
           optional(:authenticated_at) => DateTime.t() | nil,
+          optional(:session_reference) => String.t(),
           optional(:email) => String.t() | nil,
           optional(:name) => String.t() | nil
         }

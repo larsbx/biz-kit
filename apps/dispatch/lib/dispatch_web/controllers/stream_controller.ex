@@ -10,6 +10,7 @@ defmodule DispatchWeb.StreamController do
 
   import Plug.Conn
 
+  alias DispatchWeb.Plugs.PortalSession
   alias DispatchWeb.Streams.{Operations, Participant, Transport}
 
   @doc "The carrier-scoped operations roster stream."
@@ -19,7 +20,9 @@ defmodule DispatchWeb.StreamController do
     topic = "operations:#{actor.role_assignment.organization_id}"
 
     conn
-    |> Transport.serve(Operations, topic, fn -> Operations.open(actor) end)
+    |> Transport.serve(Operations, topic, fn -> Operations.open(actor) end,
+      authorize: &authorized_tick/2
+    )
     |> or_not_found(conn)
   end
 
@@ -40,8 +43,22 @@ defmodule DispatchWeb.StreamController do
     end
 
     conn
-    |> Transport.serve(Participant, "participant:#{participant_id}", open)
+    |> Transport.serve(Participant, "participant:#{participant_id}", open,
+      authorize: &authorized_tick/2
+    )
     |> or_not_found(conn)
+  end
+
+  @doc """
+  Runs `tick` only while the portal session behind `conn` is still live
+  (docs/architecture/2026-10-23-revocation-aware-portal.md): a browser session
+  revoked at its source loses its stream at the next tick, heartbeat included.
+  """
+  def authorized_tick(conn, tick) do
+    case PortalSession.authenticate(conn) do
+      {:ok, _, _} -> tick.()
+      _ -> {:close, :unauthorized}
+    end
   end
 
   defp or_not_found(%Plug.Conn{} = served, _conn), do: served

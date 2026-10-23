@@ -28,6 +28,7 @@ defmodule Dispatch.Identity.Tokens.BizKitSession do
         {:ok,
          %{
            subject: principal,
+           session_reference: BizKit.Identity.Sessions.reference(token),
            issuer: @issuer,
            audience: [@issuer],
            expires_at: expiry(expires_at),

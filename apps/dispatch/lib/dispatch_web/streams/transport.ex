@@ -37,13 +37,20 @@ defmodule DispatchWeb.Streams.Transport do
   client leaves or `stream` closes it. Returns `{:error, :not_found}` without
   sending anything when `open` refuses, so each caller answers that its own way.
 
+  `authorize: (conn, tick -> result)` wraps every tick: the portal's streams
+  pass `StreamController.authorized_tick/2`, so a portal session revoked at
+  its source closes them at the next tick.
+
   Subscription precedes `open`. An overlapping mutation may therefore cause one
   redundant refresh, but can never fall into the gap between the snapshot query
   and listener registration.
   """
-  @spec serve(Plug.Conn.t(), module(), String.t(), opener()) ::
+  @spec serve(Plug.Conn.t(), module(), String.t(), opener(), keyword()) ::
           Plug.Conn.t() | {:error, :not_found}
-  def serve(conn, stream, topic, open) do
+  def serve(conn, stream, topic, open, opts \\ []) do
+    authorize = Keyword.get(opts, :authorize, fn _conn, tick -> tick.() end)
+    tick = fn session, reason -> authorize.(conn, fn -> stream.tick(session, reason) end) end
+
     :ok = Phoenix.PubSub.subscribe(Dispatch.PubSub, topic)
 
     try do
@@ -55,7 +62,7 @@ defmodule DispatchWeb.Streams.Transport do
           # stream and navigated away.
           case write(opened, snapshot) do
             :closed -> opened
-            written -> run(written, stream, session)
+            written -> run(written, tick, session)
           end
         after
           if function_exported?(stream, :release, 1), do: stream.release(session)
@@ -76,27 +83,27 @@ defmodule DispatchWeb.Streams.Transport do
     |> send_chunked(200)
   end
 
-  defp run(conn, stream, session) do
+  defp run(conn, tick, session) do
     receive do
       {:outbox, _payload} ->
-        advance(conn, stream, session, :refresh)
+        advance(conn, tick, session, :refresh)
 
       {ref, change, _group, _pids} when is_reference(ref) and change in [:join, :leave] ->
-        advance(conn, stream, session, :demand)
+        advance(conn, tick, session, :demand)
     after
-      Datastar.heartbeat_interval_ms() -> advance(conn, stream, session, :heartbeat)
+      Datastar.heartbeat_interval_ms() -> advance(conn, tick, session, :heartbeat)
     end
   end
 
-  defp advance(conn, stream, session, reason) do
-    case stream.tick(session, reason) do
+  defp advance(conn, tick, session, reason) do
+    case tick.(session, reason) do
       {:emit, chunk, session} ->
         # A closed socket ends the loop and returns the connection as it was.
         # Returning anything else would leak a non-conn out of a plug, which
         # Dialyzer catches and a browser would meet as a crash.
         case write(conn, chunk) do
           :closed -> conn
-          written -> run(written, stream, session)
+          written -> run(written, tick, session)
         end
 
       # The stream ends with the connection, not with an error frame: a client

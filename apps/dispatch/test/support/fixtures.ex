@@ -74,7 +74,7 @@ defmodule Dispatch.Support.Fixtures do
   defp register(opts, name) do
     User
     |> Ash.Changeset.for_create(:register, %{
-      oidc_subject: Keyword.get(opts, :oidc_subject, unique("sub")),
+      oidc_subject: Keyword.get(opts, :oidc_subject, BizKit.Identity.Principal.new_id()),
       display_name: name
     })
     |> Ash.create!(authorize?: false)
