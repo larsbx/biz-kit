@@ -14,5 +14,7 @@ defmodule Dispatch.Operations do
 
   resources do
     resource Dispatch.Operations.ParticipantStatusEvent
+    resource Dispatch.Operations.ConsentGrant
+    resource Dispatch.Operations.LocationSample
   end
 end

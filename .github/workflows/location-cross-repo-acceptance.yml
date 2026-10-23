@@ -1,0 +1,104 @@
+name: Location cross-repository acceptance
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  location-integration:
+    name: location-integration (${{ matrix.client }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [browser, driver, courier]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      ERL_FLAGS: '+S 4:4'
+      PGPASSWORD: postgres
+      BIZ_KIT_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      # Android and browser implementation from d-patch#20, plus the client
+      # storing only fixes its consent covers (claude/d-patch-continuation-rkqpx1).
+      # Pin the client, while actions/checkout above tests this server's merge ref.
+      - uses: actions/checkout@v4
+        with:
+          repository: larsbx/d-patch
+          ref: 368c2bb3526856b8f5610e90e678e8bbb6e71ce1
+          path: d-patch
+      - uses: erlef/setup-beam@v1
+        with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            apps/coop_substrate/priv/native
+          key: location-dev-${{ runner.os }}-${{ hashFiles('mix.lock', 'apps/coop_substrate/native/**') }}
+      - name: Start this server revision
+        env:
+          CLIENT: ${{ matrix.client }}
+        run: |
+          git rev-parse HEAD
+          git -C d-patch rev-parse HEAD
+          if [ "$CLIENT" = browser ]; then
+            export SPRUCE_GOOSE_PUBLIC_URL=http://127.0.0.1:4001
+          else
+            export SPRUCE_GOOSE_PUBLIC_URL=http://10.0.2.2:4001
+          fi
+          nohup scripts/e2e-stack.sh > "$RUNNER_TEMP/biz-kit-stack.log" 2>&1 &
+          for _ in $(seq 1 120); do
+            if curl -sf -o /dev/null http://127.0.0.1:4000/health/live && curl -s -o /dev/null http://127.0.0.1:4001/auth/me; then
+              exit 0
+            fi
+            sleep 5
+          done
+          tail -100 "$RUNNER_TEMP/biz-kit-stack.log"
+          exit 1
+      - uses: actions/setup-node@v4
+        if: matrix.client == 'browser'
+        with: { node-version: '22' }
+      - name: Browser acceptance
+        if: matrix.client == 'browser'
+        working-directory: d-patch/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test -c biz-kit.config.js
+      - uses: actions/setup-java@v4
+        if: matrix.client != 'browser'
+        with: { distribution: temurin, java-version: '21' }
+      - uses: gradle/actions/setup-gradle@v4
+        if: matrix.client != 'browser'
+      - name: Enable KVM
+        if: matrix.client != 'browser'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        if: matrix.client != 'browser'
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          working-directory: d-patch/apps/android-driver
+          script: ./gradlew :app:connectedDebugAndroidTest -Pdispatch.authProvider=${{ matrix.client }} --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: location-acceptance-${{ matrix.client }}
+          path: |
+            d-patch/e2e/playwright-report-biz-kit/
+            d-patch/apps/android-driver/app/build/reports/androidTests/
+            ${{ runner.temp }}/biz-kit-stack.log

@@ -3,15 +3,17 @@
 # and nothing here runs in production.
 #
 #   mix run priv/repo/e2e.exs seed <stack.json>     a carrier, its roles, a
-#       driver, a dispatcher, a courier and two administrators bound to biz-kit
-#       principals; writes what the tests need (and the identity bindings the
-#       server boots with)
+#       driver with a planned trip, a dispatcher, a dispatcher who may see live
+#       positions, a courier, two administrators and a broker of an unrelated
+#       load, bound to biz-kit principals; writes
+#       what the tests need (and the identity bindings the server boots with)
 #   mix run priv/repo/e2e.exs revoke <tenant> <role_assignment_id>
 #       ends an assignment, as an administrator would (scenario 16)
 
 alias BizKit.Identity.Principal
 alias Dispatch.Access.SeedManifest
 alias Dispatch.Accounts.{Organization, Participant, RoleAssignment, RoleDefinition, User}
+alias Dispatch.Fleet.{Assignment, Load}
 
 defmodule Dispatch.E2E do
   @moduledoc false
@@ -36,33 +38,48 @@ defmodule Dispatch.E2E do
     }
   }
 
+  # A dispatcher explicitly given precise location (Section 23.2): whose
+  # watching makes a sharing device report in real time.
+  defp tracker do
+    {:ok, dispatcher} = SeedManifest.fetch("DISPATCHER")
+
+    %{
+      dispatcher
+      | key: "TRACKER",
+        label: "Dispatcher (live location)",
+        capabilities: ["operations.location.precise.read" | dispatcher.capabilities]
+    }
+  end
+
   def seed(path) do
-    {:ok, carrier} =
-      Organization
-      |> Ash.Changeset.for_create(:register, %{
-        name: "E2E Freight",
-        kind: :CARRIER,
-        status: :ACTIVE
-      })
-      |> Ash.create(authorize?: false)
+    carrier = organization("E2E Freight", :CARRIER)
 
     tenant = carrier.id
 
     definitions =
-      Map.new([@courier | SeedManifest.all()], &{&1.key, {&1, definition(tenant, &1)}})
+      Map.new([@courier, tracker() | SeedManifest.all()], &{&1.key, {&1, definition(tenant, &1)}})
+
+    # Scenario 2: a broker, but of a load the driver's trip is not on.
+    broker_org = organization("E2E Brokerage", :BROKER)
+    unrelated = load(tenant, carrier)
 
     people =
-      for {name, key} <- [
-            {"driver", "DRIVER"},
-            {"dispatcher", "DISPATCHER"},
-            {"courier", "COURIER"},
+      for {name, key, org, scope_id} <- [
+            {"driver", "DRIVER", carrier, nil},
+            {"dispatcher", "DISPATCHER", carrier, nil},
+            {"tracker", "TRACKER", carrier, nil},
+            {"courier", "COURIER", carrier, nil},
             # Scenario 15: two, because no one may grant themselves a role.
-            {"admin", "ADMIN"},
-            {"admin2", "ADMIN"}
+            {"admin", "ADMIN", carrier, nil},
+            {"admin2", "ADMIN", carrier, nil},
+            {"broker", "BROKER", broker_org, unrelated.id}
           ],
           into: %{} do
-        {name, person(tenant, carrier, name, definitions[key])}
+        {name, person(tenant, org, name, definitions[key], scope_id)}
       end
+
+    # Scenario 2: the driver's planned trip, which location consent covers.
+    people = put_in(people, ["driver", :trip_id], trip(tenant, carrier, people["driver"]).id)
 
     stack = %{
       tenant_id: tenant,
@@ -104,7 +121,34 @@ defmodule Dispatch.E2E do
   end
 
   # A person signs in as a biz-kit principal; dispatch knows them by it.
-  defp person(tenant, carrier, name, {manifest, definition}) do
+  defp organization(name, kind) do
+    Organization
+    |> Ash.Changeset.for_create(:register, %{name: name, kind: kind, status: :ACTIVE})
+    |> Ash.create!(authorize?: false)
+  end
+
+  defp load(tenant, carrier) do
+    Load
+    |> Ash.Changeset.for_create(:create_load, %{
+      tenant_id: tenant,
+      carrier_organization_id: carrier.id,
+      external_reference: "E2E-#{System.unique_integer([:positive])}"
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  defp trip(tenant, carrier, driver) do
+    Assignment
+    |> Ash.Changeset.for_create(:plan, %{
+      tenant_id: tenant,
+      load_id: load(tenant, carrier).id,
+      operator_participant_id: driver.participant_id,
+      starts_at: DateTime.utc_now()
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  defp person(tenant, org, name, {manifest, definition}, scope_id) do
     principal = Principal.new_id()
     subject = "e2e-#{name}-#{System.unique_integer([:positive])}"
 
@@ -118,7 +162,7 @@ defmodule Dispatch.E2E do
       |> Ash.Changeset.for_create(:enroll, %{
         tenant_id: tenant,
         user_id: user.id,
-        home_organization_id: carrier.id,
+        home_organization_id: org.id,
         public_name: String.capitalize(name)
       })
       |> Ash.create!(authorize?: false, tenant: tenant)
@@ -129,9 +173,10 @@ defmodule Dispatch.E2E do
         tenant_id: tenant,
         principal_type: :PARTICIPANT,
         principal_id: participant.id,
-        organization_id: carrier.id,
+        organization_id: org.id,
         role_definition_id: definition.id,
         scope_type: manifest.scope_type,
+        scope_id: scope_id,
         starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
       })
       |> Ash.create!(authorize?: false, tenant: tenant)

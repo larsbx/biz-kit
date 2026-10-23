@@ -15,9 +15,11 @@ scripts/e2e-stack.sh --prepare  # fresh databases and fixtures only
 
 It needs PostgreSQL with PostGIS on localhost. It drops and recreates the
 event store, SpruceGoose's and dispatch's databases, seeds a carrier with its
-six role profiles, a second field profile (`COURIER`), and five people (a
-`DRIVER`, a `DISPATCHER`, a `COURIER` and two `ADMIN`s, since no one may grant
-themselves a role), and serves:
+six role profiles, a second field profile (`COURIER`), a dispatcher profile
+with precise location (`TRACKER`), and seven people (a `DRIVER` with a planned
+trip, a `DISPATCHER`, a `TRACKER`, a `COURIER`, two `ADMIN`s, since no one may
+grant themselves a role, and a `BROKER` of an unrelated load), and
+serves:
 
 | | Where | What |
 | --- | --- | --- |

@@ -70,6 +70,14 @@ defmodule DispatchWeb.Router do
     plug DispatchWeb.Plugs.Authenticate
   end
 
+  # `:api` without content negotiation, for `/v1`'s event streams: `accepts`
+  # cannot name `text/event-stream`, as with the portal's (below).
+  pipeline :api_stream do
+    plug :put_no_store
+    plug DispatchWeb.Plugs.Authenticate
+    plug DispatchWeb.Plugs.ResolveActor
+  end
+
   scope "/health", DispatchWeb do
     pipe_through :health
 
@@ -182,6 +190,23 @@ defmodule DispatchWeb.Router do
     # compatibility projection. Both reach the same controller function.
     post "/me/status-events", StatusEventController, :create
     post "/driver/status-events", StatusEventController, :create_driver
+
+    # The caller's own trips, and the consent covering each (Section 25.3).
+    get "/me/assignments", AssignmentController, :mine
+    get "/driver/assignments", AssignmentController, :driver
+
+    # Section 24.2 and Section 25.3: consented location sharing.
+    post "/me/location-consents", LocationController, :begin_consent
+    post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent
+    post "/me/location-samples:batch", LocationController, :ingest
+    post "/driver/location-samples:batch", LocationController, :ingest_driver
+  end
+
+  scope "/v1", DispatchWeb do
+    pipe_through :api_stream
+
+    # The device hears when someone watches its position (Section 25.3).
+    get "/me/location-demand", LocationController, :demand
   end
 
   scope "/health", DispatchWeb do

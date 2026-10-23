@@ -18,7 +18,9 @@ defmodule SpruceGoose.Web.RateLimit do
         limits: %{sign_in: {30, 60_000}, capability: {60, 60_000}, api: {600, 60_000}},
         trusted_proxies: ["10.0.0.0/8"]
 
-  and read on every request. Beyond it, the request gets `429` with
+  and read on every request. `overrides` replaces the buckets it names and
+  leaves the rest, for an environment that is not the limiter's test (the
+  end-to-end stack's `SPRUCE_GOOSE_SIGN_IN_LIMIT`). Beyond it, the request gets `429` with
   `retry-after` and goes no further.
 
   The client is the peer address, or, when the peer is a trusted proxy, the
@@ -40,7 +42,7 @@ defmodule SpruceGoose.Web.RateLimit do
   @impl Plug
   def call(conn, _opts) do
     bucket = bucket(conn.path_info)
-    {limit, period} = Map.fetch!(config(:limits, %{}), bucket)
+    {limit, period} = Map.fetch!(Map.merge(config(:limits, %{}), config(:overrides, %{})), bucket)
     now = System.system_time(:millisecond)
     ends = (div(now, period) + 1) * period
     key = {bucket, client(conn, trusted())}

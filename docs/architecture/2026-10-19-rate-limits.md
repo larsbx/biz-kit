@@ -87,3 +87,11 @@ The rest of the suite runs with limits set out of reach (`config/test.exs`).
   that process moves, counting starts afresh.
 - Limits are per address. Many people behind one NAT share a bucket; the
   defaults leave room for that, and they are configuration.
+
+## Overrides
+
+`overrides` (a map of buckets to `{limit, period_ms}`) replaces the buckets it
+names and leaves the rest of `limits`. Only development reads one, from
+`SPRUCE_GOOSE_SIGN_IN_LIMIT`: `scripts/e2e-stack.sh` signs every seeded person
+in from 127.0.0.1 within a minute, which is not what the sign-in bucket guards
+against, and the limiter's own tests set their limits directly.

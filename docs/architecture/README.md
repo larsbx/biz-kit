@@ -36,6 +36,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Device keys](2026-10-21-device-keys.md): the field app registers its
   installation's Ed25519 key itself, and its status declarations carry that
   key's signature over canonical statements (`DEVICE_AUTHENTICATED`).
+- [Location sharing](2026-10-22-location-sharing.md): consent per trip,
+  signed fixed-point samples judged one by one, the revocation race, and
+  freshness without position on the operations page.
 - [Role administration](2026-10-22-role-administration.md): an administrator
   grants and revokes role assignments at `/settings/users`, after a sign-in in
   the last five minutes, never to themselves and never removing the last
