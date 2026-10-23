@@ -298,6 +298,19 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
+      - name: Prepare eatsbot's locale data and database
+        working-directory: apps/eatsbot
+        run: mix localize.download_locales && mix ash.setup --quiet
+      - name: Test eatsbot (orders, deliveries, storefront API)
+        working-directory: apps/eatsbot
+        env:
+          ADMIN_API_KEY: test
+        run: mix test && mix ash.codegen --check
+      - name: Verify eatsbot formatting
+        run: >-
+          for app in eatsbot eatsbot_core eatsbot_extension_kafka
+          eatsbot_extension_prometheus eatsbot_extension_telegram_bot;
+          do (cd apps/$app && mix format --check-formatted) || exit 1; done
       - name: Test registry revocation across separate database sessions
         working-directory: apps/spruce_goose
         run: SPRUCE_GOOSE_TEST_DOGFOOD=true mix test test/actors_separate_sessions_test.exs --include separate_sessions

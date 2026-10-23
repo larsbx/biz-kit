@@ -11,9 +11,14 @@ under its directory.
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
 | `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task and orchestration control plane (CLI, MCP/OAuth endpoint) |
+| `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database |
+| `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
 
 Mix requires umbrella directory names to equal OTP application names, hence
-`coop_substrate` and `spruce_goose`.
+`coop_substrate`, `spruce_goose` and the `eatsbot_*` siblings. eatsbot's
+directory was renamed during its life, so it was imported with `git filter-repo`
+mapping both paths onto `apps/eatsbot` rather than with `git subtree`; all 133
+commits that touched it keep their authors, dates and messages.
 
 Not included, by design: the Android, web and e2e clients of `d-patch`
 (separate clients of this backend); `agent-runtime-platform` (Python and
@@ -38,6 +43,7 @@ mix compile
 (cd apps/dispatch       && mix test)                      # unit tier
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
+(cd apps/eatsbot        && MIX_ENV=test mix ash.setup && ADMIN_API_KEY=test mix test)
 ```
 
 dispatch's test database connects as the Postgres role `dispatch`; create it
@@ -74,6 +80,15 @@ SpruceGoose, without dispatch), its settings, migrations, and
   they differed) so that resolution moved as little as possible.
 - `dispatch`: `ash_authentication ~> 4.0` became `~> 5.0-rc` to match
   `spruce_goose`. dispatch declared the dependency but used none of it.
+- `eatsbot`: `ash_authentication` 4 → `~> 5.0-rc` (its token resource now
+  declares the actions v5 no longer generates) and `phoenix` 1.7 → `~> 1.8`, to
+  match the umbrella. Its Ash tracer is installed when eatsbot starts, not in
+  shared config: the other apps do not carry `opentelemetry_ash`.
+- `telegex` is vendored under `vendor/telegex` with a one-line guard fix; a
+  clean umbrella build otherwise fails depending on compile order
+  (`vendor/telegex/VENDOR.md`).
+- `config/runtime.exs` gates each app's production section on the release that
+  ships it (`RELEASE_NAME`), so no release needs another's secrets.
 - `dispatch` signs with the ledger's scheme (`coop_substrate`, code only), and
   its OpenAPI contract is `apps/dispatch/contracts/openapi.json` — the
   d-patch field app's DTOs are held to a copy of it.

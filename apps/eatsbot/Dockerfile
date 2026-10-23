@@ -9,11 +9,10 @@
 #   - https://hub.docker.com/r/hexpm/elixir/tags - for the build image
 #   - https://hub.docker.com/_/debian?tab=tags&page=1&name=bookworm-20260610-slim - for the release image
 #   - https://pkgs.org/ - resource for finding needed packages
-#   - Ex: hexpm/elixir:1.18.1-erlang-26.2.5.21-debian-bookworm-20260610-slim
+#   - Ex: hexpm/elixir:1.19.0-erlang-27.3.4-debian-bookworm-20260610-slim
 #
-ARG ELIXIR_VERSION=1.18.4
-# >= 26.2.5.8 (OTP-19240): older patches reject builds.hex.pm's CA chain in `mix local.hex`
-ARG OTP_VERSION=26.2.5.21
+ARG ELIXIR_VERSION=1.19.0
+ARG OTP_VERSION=27.3.4
 ARG DEBIAN_VERSION=bookworm-20260610-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
@@ -36,31 +35,34 @@ RUN mix local.hex --force && \
 ENV MIX_ENV="prod"
 
 # install mix dependencies
-COPY mix.exs mix.lock ./
+# Built from the biz-kit root (`docker build -f apps/eatsbot/Dockerfile .`):
+# eatsbot is an umbrella app, so only it, its sibling apps, the shared lock and
+# config, and its vendored dependency are copied. Mix commands run in
+# apps/eatsbot so they compile eatsbot alone, not the whole umbrella.
+COPY mix.lock ./
 COPY config config
-COPY extensions extensions
-COPY core core
+COPY vendor/telegex vendor/telegex
+COPY apps/eatsbot_core apps/eatsbot_core
+COPY apps/eatsbot_extension_kafka apps/eatsbot_extension_kafka
+COPY apps/eatsbot_extension_prometheus apps/eatsbot_extension_prometheus
+COPY apps/eatsbot_extension_telegram_bot apps/eatsbot_extension_telegram_bot
+COPY apps/eatsbot/mix.exs apps/eatsbot/
+COPY apps/eatsbot/config apps/eatsbot/config
+WORKDIR /app/apps/eatsbot
 RUN mix deps.get --only $MIX_ENV --check-locked
 
-COPY priv priv
-
-COPY lib lib
-
-COPY assets assets
-
-RUN mix deps.compile
+COPY apps/eatsbot/priv priv
+COPY apps/eatsbot/lib lib
+COPY apps/eatsbot/assets assets
 
 # compile assets
+RUN mix deps.compile
 RUN mix assets.deploy
 
-# Compile the release
 RUN mix compile --warnings-as-errors
 RUN mix localize.download_locales
 
-# Changes to config/runtime.exs don't require recompiling the code
-COPY config/runtime.exs config/
-
-COPY rel rel
+COPY apps/eatsbot/rel rel
 RUN mix release
 
 # start a new build stage so that the final image will only contain

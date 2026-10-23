@@ -14,7 +14,7 @@
   plugins: [Absinthe.Formatter, Spark.Formatter, Phoenix.LiveView.HTMLFormatter],
   inputs: [
     "*.{heex,ex,exs}",
-    "{config,lib,test,extensions,core}/**/*.{heex,ex,exs}",
+    "{config,lib,test}/**/*.{heex,ex,exs}",
     "priv/*/*.exs"
   ]
 ]

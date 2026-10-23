@@ -2,12 +2,19 @@
 
 Date: 2026-10-20. The shortest path to a running deployment.
 
-## Two releases
+## Releases
 
 | Release | Applications | Boots in production when |
 | --- | --- | --- |
 | `orchestration` | the ledger (`coop_substrate`), identity, cluster, SpruceGoose (web view, API, CLI service) | the settings below are set |
 | `biz_kit` | all of the above, plus `dispatch` and `keel` | dispatch's integrations are configured too |
+| `eatsbot` | `eatsbot` and its `eatsbot_*` siblings | `DATABASE_URL`, `SECRET_KEY_BASE`, `GEOCODING_TOKEN`, `TOKEN_SIGNING_SECRET` are set |
+
+`eatsbot` is built from its own directory, so it compiles only eatsbot and its
+siblings: `docker build -f apps/eatsbot/Dockerfile .` from the repository root.
+It has a database of its own. Its production section of `runtime.exs` runs
+only for this release (or an unset `RELEASE_NAME`), and the dispatch and
+SpruceGoose sections skip it.
 
 Nothing depends on dispatch, so `orchestration` leaves it out. In
 production, dispatch refuses to start until it has these:
