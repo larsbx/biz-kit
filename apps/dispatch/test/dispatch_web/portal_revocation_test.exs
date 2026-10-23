@@ -126,6 +126,7 @@ defmodule DispatchWeb.PortalRevocationTest do
         :remote_logout ->
           BizKit.Cluster.Peers.distribute!()
           {_, peer} = BizKit.Cluster.Peers.start!()
+          :ok = BizKit.Cluster.Peers.mesh!([peer])
 
           :ok =
             :erpc.call(peer, Application, :put_env, [
