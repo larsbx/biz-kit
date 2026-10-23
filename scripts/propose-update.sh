@@ -16,7 +16,9 @@ cd "$(dirname "$0")/.."
 
 branch=$1 title=$2 body=$3
 git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] && exit 0
-if [ -n "$(gh pr list --head "$branch" --state all --json number --jq '.[].number')" ]; then
+# Assigned first, so a failed lookup stops here rather than reading as "none".
+proposed=$(gh pr list --head "$branch" --state all --json number --jq '.[].number')
+if [ -n "$proposed" ]; then
   echo "$branch is already proposed."
   exit 0
 fi
