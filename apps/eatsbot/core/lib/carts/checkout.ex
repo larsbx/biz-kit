@@ -2,8 +2,9 @@ defmodule EatsbotCore.Carts.Checkout do
   @moduledoc """
   Turns an active cart into a placed `EatsbotCore.Orders.Order`, in one transaction.
 
-  - the cart is locked, so two concurrent checkouts of one cart cannot both pass
-  - a repeated `(channel, idempotency_key)` returns the existing order (I₅)
+  - the cart is locked before anything is read, so concurrent checkouts of one cart
+    serialize, and a repeated `(channel, idempotency_key)` returns the existing order
+    even when the copies race (I₅)
   - prices are copied from the variants in the cart's currency (I₁, I₂)
   - a delivery order also gets its `Delivery` (I₄)
 
@@ -22,16 +23,20 @@ defmodule EatsbotCore.Carts.Checkout do
   def run(%{arguments: args}, _opts, _context) do
     channel = Map.get(args, :channel, :web)
 
-    case existing_order(channel, args.idempotency_key) do
-      %Order{cart_id: cart_id} = order when cart_id == args.cart_id -> {:ok, result(order)}
-      %Order{} -> {:error, invalid(:idempotency_key, "was already used for another cart")}
-      nil -> place(args, channel)
+    # The cart lock comes first: copies of one checkout queue on it, so each copy's
+    # key lookup sees the order an earlier copy committed (look-then-lock races).
+    with {:ok, cart} <- lock_cart(args.cart_id) do
+      case existing_order(channel, args.idempotency_key) do
+        %Order{cart_id: cart_id} = order when cart_id == cart.id -> {:ok, result(order)}
+        %Order{} -> {:error, invalid(:idempotency_key, "was already used for another cart")}
+        nil -> place(cart, args, channel)
+      end
     end
   end
 
-  defp place(args, channel) do
+  defp place(cart, args, channel) do
     with :ok <- require_delivery_details(args),
-         {:ok, cart} <- lock_active_cart(args.cart_id),
+         :ok <- require_active(cart),
          {:ok, order} <- create_order(cart, args, channel),
          {:ok, _cart} <- Ash.update(cart, %{status: :completed}),
          {:ok, order} <- maybe_create_delivery(order, cart, args) do
@@ -47,6 +52,10 @@ defmodule EatsbotCore.Carts.Checkout do
 
   defp require_delivery_details(_args), do: :ok
 
+  defp require_active(%Cart{status: :active, cart_lines: [_ | _]}), do: :ok
+  defp require_active(%Cart{status: :active}), do: {:error, invalid(:cart_id, "cart is empty")}
+  defp require_active(%Cart{}), do: {:error, invalid(:cart_id, "cart is not active")}
+
   defp existing_order(channel, key) do
     Order
     |> Ash.Query.filter(channel == ^channel and idempotency_key == ^key)
@@ -54,18 +63,15 @@ defmodule EatsbotCore.Carts.Checkout do
     |> Ash.read_one!(actor: ActorIn.system())
   end
 
-  defp lock_active_cart(cart_id) do
+  defp lock_cart(cart_id) do
     Cart
     |> Ash.Query.filter(id == ^cart_id)
     |> Ash.Query.lock(:for_update)
     |> Ash.Query.load(cart_lines: [:subtotal, variant: [prices: [:currency]]])
     |> Ash.read_one()
     |> case do
-      {:ok, %Cart{status: :active, cart_lines: [_ | _]} = cart} -> {:ok, cart}
-      {:ok, %Cart{status: :active}} -> {:error, invalid(:cart_id, "cart is empty")}
-      {:ok, %Cart{}} -> {:error, invalid(:cart_id, "cart is not active")}
       {:ok, nil} -> {:error, invalid(:cart_id, "cart does not exist")}
-      error -> error
+      result -> result
     end
   end
 
