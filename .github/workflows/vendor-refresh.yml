@@ -1,0 +1,30 @@
+name: Vendored dependency refresh
+# Section 26.1: the Datastar bundle stays committed and hash-named, and moves
+# only through a dependency-review change. This proposes that change when
+# upstream releases; the pull request's own CI is the review gate.
+on:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  datastar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.VENDOR_PR_TOKEN || github.token }}
+      - id: refresh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "tag=$(scripts/vendor-datastar.sh apps/dispatch/priv/static/vendor)" >> "$GITHUB_OUTPUT"
+      - if: steps.refresh.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.VENDOR_PR_TOKEN || github.token }}
+          TAG: ${{ steps.refresh.outputs.tag }}
+        run: >-
+          scripts/propose-update.sh "vendor/datastar-$TAG"
+          "Update vendored Datastar to $TAG"
+          "Upstream released $TAG. Bundle and VENDOR.md updated by scripts/vendor-datastar.sh; the Datastar wire-format tests in this pull request's CI are the Section 26.1 review gate."
