@@ -42,6 +42,18 @@ defmodule DispatchWeb.Plugs.LocationBatchParserTest do
     assert parse(" " <> at_limit).status == 413
   end
 
+  test "form encoding cannot bypass the bounded JSON parser" do
+    conn =
+      :post
+      |> conn("/v1/me/location-samples:batch", "samples[]=" <> String.duplicate("x", 300_000))
+      |> put_req_header("content-type", "application/x-www-form-urlencoded")
+      |> LocationBatchParser.call([])
+
+    assert conn.halted
+    assert conn.status == 415
+    assert Jason.decode!(conn.resp_body)["code"] == "UNSUPPORTED_MEDIA_TYPE"
+  end
+
   test "leaves other endpoint bodies to the general parser" do
     conn = parse(String.duplicate("x", 300_000), "/v1/me/status-events")
     refute conn.halted

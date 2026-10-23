@@ -31,13 +31,21 @@ defmodule DispatchWeb.Plugs.LocationBatchParser do
       conn,
       Plug.Parsers.init(
         parsers: [:json],
-        pass: ["*/*"],
+        pass: [],
         json_decoder: Jason,
         length: @max_bytes,
         body_reader: {__MODULE__, :read_body, []}
       )
     )
   rescue
+    Plug.Parsers.UnsupportedMediaTypeError ->
+      DispatchWeb.Problem.send(
+        conn,
+        415,
+        "UNSUPPORTED_MEDIA_TYPE",
+        "Location batches require JSON."
+      )
+
     Plug.Parsers.RequestTooLargeError ->
       DispatchWeb.Problem.send(
         conn,
