@@ -7,14 +7,26 @@ defmodule DispatchWeb.Plugs.LocationBatchParser do
   @behaviour Plug
 
   @max_bytes 262_144
-  @paths ["/v1/me/location-samples:batch", "/v1/driver/location-samples:batch"]
 
   @impl Plug
   def init(opts), do: opts
 
   @impl Plug
-  def call(%Plug.Conn{method: "POST", request_path: path} = conn, _opts)
-      when path in @paths do
+  def call(%Plug.Conn{method: "POST", path_info: path_info} = conn, _opts) do
+    # Phoenix decodes segments for route matching; enforce the cap on the same
+    # paths, including escaped colons and trailing slashes.
+    case Enum.map(path_info, &URI.decode/1) do
+      ["v1", role, "location-samples:batch"] when role in ["me", "driver"] ->
+        parse_batch(conn)
+
+      _other ->
+        conn
+    end
+  end
+
+  def call(conn, _opts), do: conn
+
+  defp parse_batch(conn) do
     Plug.Parsers.call(
       conn,
       Plug.Parsers.init(
@@ -34,8 +46,6 @@ defmodule DispatchWeb.Plugs.LocationBatchParser do
         "A batch carries at most 100 samples and 256 KiB."
       )
   end
-
-  def call(conn, _opts), do: conn
 
   @doc false
   def read_body(conn, opts) do

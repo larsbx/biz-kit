@@ -166,6 +166,20 @@ defmodule DispatchWeb.LocationControllerTest do
     assert Jason.decode!(conn.resp_body)["code"] == "BATCH_TOO_LARGE"
   end
 
+  test "the endpoint enforces raw bytes before its general parser", _ctx do
+    for path <- ["/v1/me/location-samples:batch", "/v1/driver/location-samples%3Abatch/"] do
+      conn =
+        :post
+        |> conn(path, String.duplicate(" ", 300_000) <> ~s({"samples":[]}))
+        |> put_req_header("content-type", "application/json")
+        |> delete_req_header("content-length")
+        |> DispatchWeb.Endpoint.call(DispatchWeb.Endpoint.init([]))
+
+      assert conn.status == 413
+      assert Jason.decode!(conn.resp_body)["code"] == "BATCH_TOO_LARGE"
+    end
+  end
+
   test "someone else's trip is not found", ctx do
     %{participant: other} = Fixtures.person(ctx.tenant, ctx.org)
     theirs = Fixtures.assignment_record(ctx.tenant, ctx.org, other)

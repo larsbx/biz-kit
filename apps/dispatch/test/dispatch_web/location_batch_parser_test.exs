@@ -14,7 +14,12 @@ defmodule DispatchWeb.Plugs.LocationBatchParserTest do
   end
 
   test "counts whitespace on the wire, including the DRIVER route" do
-    for path <- ["/v1/me/location-samples:batch", "/v1/driver/location-samples:batch"] do
+    for path <- [
+          "/v1/me/location-samples:batch",
+          "/v1/driver/location-samples:batch",
+          "/v1/me/location-samples%3Abatch",
+          "/v1/driver/location-samples:batch/"
+        ] do
       conn = parse(String.duplicate(" ", 300_000) <> ~s({"samples":[]}), path)
       assert conn.halted
       assert conn.status == 413
