@@ -175,9 +175,14 @@ if seed = System.get_env("DISPATCH_CAPABILITY_SIGNING_SEED") do
   config :dispatch, :capability_signing_seed, seed
 end
 
-# The `orchestration` release carries no dispatch (mix.exs), so it needs none of
-# dispatch's production settings.
-dispatch_released? = System.get_env("RELEASE_NAME") != "orchestration"
+# Which apps this boot carries. A release runs this whole file, so each app's
+# production section is gated on the release that ships it (mix.exs); an unset
+# RELEASE_NAME (a Mix run) carries every app. The `orchestration` release has no
+# dispatch, and the `eatsbot` release has only eatsbot.
+release_name = System.get_env("RELEASE_NAME")
+dispatch_released? = release_name not in ["orchestration", "eatsbot"]
+spruce_goose_released? = release_name != "eatsbot"
+eatsbot_released? = release_name in [nil, "eatsbot"]
 
 if config_env() == :prod and dispatch_released? do
   config :dispatch, Dispatch.Repo,
@@ -337,7 +342,7 @@ cli_service_enabled? =
 # writer, whose CLI service gates work on that file. The ledger names each
 # task's SOP by digest in its readiness definition instead, so a node serving
 # only the ledger and the web view needs no SOP file (docs/deploy.md).
-if config_env() == :prod and not cli_service_enabled? do
+if config_env() == :prod and spruce_goose_released? and not cli_service_enabled? do
   config :spruce_goose, :verify_sop_adoption, false
 end
 
@@ -437,7 +442,7 @@ if mcp_enabled? do
     server: true
 end
 
-if config_env() == :prod do
+if config_env() == :prod and spruce_goose_released? do
   expected_genesis_actor =
     case System.get_env("SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR") do
       value when is_binary(value) and value != "" -> value
@@ -629,7 +634,7 @@ config :eatsbot,
          &is_nil(elem(&1, 1))
        )
 
-if config_env() == :prod do
+if config_env() == :prod and eatsbot_released? do
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """

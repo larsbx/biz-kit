@@ -10,7 +10,7 @@ module.exports = {
     "./js/**/*.js",
     "../lib/eatsbot_web.ex",
     "../lib/eatsbot_web/**/*.*ex",
-    "../deps/ash_authentication_phoenix/**/*.*ex"
+    "../../../deps/ash_authentication_phoenix/**/*.*ex"
   ],
   theme: {
     extend: {
@@ -34,7 +34,7 @@ module.exports = {
     // See your `CoreComponents.icon/1` for more information.
     //
     plugin(function({matchComponents, theme}) {
-      let iconsDir = path.join(__dirname, "../deps/heroicons/optimized")
+      let iconsDir = path.join(__dirname, "../../../deps/heroicons/optimized")
       let values = {}
       let icons = [
         ["", "/24/outline"],

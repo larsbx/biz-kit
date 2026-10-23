@@ -17,19 +17,15 @@ config :localize,
 
 config :ex_money, auto_start_exchange_rate_service: false
 
+# Shared with the umbrella's other apps, so only settings they agree with live
+# here. eatsbot's own read behaviour is set by Eatsbot.Application at startup.
 config :ash,
   default_string_length_count: :codepoints,
-  allow_forbidden_field_for_relationships_by_default?: true,
-  include_embedded_source_by_default?: false,
-  show_keysets_for_all_actions?: false,
-  default_page_type: :keyset,
-  policies: [no_filter_static_forbidden_reads?: false],
-  known_types: [AshMoney.Types.Money],
+  # Read at compile time, as a name lookup only. `known_types`, which Ash loads at
+  # runtime, is registered by Eatsbot.Application: the other apps lack ash_money.
   custom_types: [money: AshMoney.Types.Money]
 
 # custom_types: [ticket_status: Eatsbot.Support.Ticket.Types.Status]
-
-config :ash, :tracer, [OpentelemetryAsh]
 
 config :opentelemetry_ash,
   trace_types: [:custom, :action, :flow]
@@ -118,7 +114,8 @@ config :esbuild,
     args:
       ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
     cd: Path.expand("../assets", __DIR__),
-    env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
+    # The umbrella keeps every dependency in its root deps/.
+    env: %{"NODE_PATH" => Path.expand("../../../deps", __DIR__)}
   ]
 
 # Configure tailwind (the version is required)

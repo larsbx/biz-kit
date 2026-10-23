@@ -11,6 +11,27 @@ defmodule Eatsbot.Application do
       :httpc.set_option(:ipfamily, :inet6fb4)
     end
 
+    # Registered here rather than in config: the umbrella shares one
+    # configuration, and the other apps carry neither opentelemetry_ash nor
+    # ash_money, whose modules Ash loads from these keys at runtime.
+    register_with_ash(:tracer, OpentelemetryAsh)
+    register_with_ash(:known_types, AshMoney.Types.Money)
+
+    # eatsbot's read behaviour. Other apps rely on Ash's defaults: in spruce_goose
+    # a statically forbidden read must error, not come back filtered and empty.
+    Application.put_env(
+      :ash,
+      :policies,
+      Keyword.put(
+        Application.get_env(:ash, :policies, []),
+        :no_filter_static_forbidden_reads?,
+        false
+      )
+    )
+
+    Application.put_env(:ash, :default_page_type, :keyset)
+    Application.put_env(:ash, :show_keysets_for_all_actions?, false)
+
     :ok = OpentelemetryBandit.setup()
     :ok = OpentelemetryPhoenix.setup(adapter: :bandit)
 
@@ -61,4 +82,7 @@ defmodule Eatsbot.Application do
     Application.put_env(:eatsbot, :from_location, {lat, lng})
     Application.put_env(:eatsbot, :business_name, name)
   end
+
+  defp register_with_ash(key, module),
+    do: Application.put_env(:ash, key, Enum.uniq([module | Application.get_env(:ash, key, [])]))
 end
