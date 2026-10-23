@@ -51,6 +51,8 @@ export BIZKIT_DEVELOPMENT_SIGN_IN="$(field development_sign_in)"
 export BIZKIT_IDENTITY_BINDINGS="$(field bindings)"
 export BIZKIT_NATIVE_REDIRECT_URIS="com.dispatch.driver:/oauth2redirect"
 export SPRUCE_GOOSE_MCP_ENABLED=true
+# Every person signs in from 127.0.0.1 within a minute (config/runtime.exs).
+export SPRUCE_GOOSE_SIGN_IN_LIMIT="${SPRUCE_GOOSE_SIGN_IN_LIMIT:-600}"
 export MCP_PORT="${MCP_PORT:-4001}"
 # Where a browser reaches /auth, and where the development provider sends it
 # back: the Android emulator reaches the host as 10.0.2.2.

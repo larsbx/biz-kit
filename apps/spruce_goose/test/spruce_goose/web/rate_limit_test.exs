@@ -59,6 +59,22 @@ defmodule SpruceGoose.Web.RateLimitTest do
     assert get("/auth/me", client).status == 401
   end
 
+  # An environment that is not the limiter's test (the end-to-end stack)
+  # raises one bucket without restating the others.
+  test "an override replaces only the bucket it names" do
+    Application.put_env(:spruce_goose, RateLimit,
+      limits: %{sign_in: {1, 60_000}, capability: {1, 60_000}, api: {100, 60_000}},
+      overrides: %{sign_in: {3, 60_000}},
+      trusted_proxies: []
+    )
+
+    client = ip()
+    assert for(_ <- 1..3, do: get("/auth/me", client).status) == [401, 401, 401]
+    assert get("/auth/me", client).status == 429
+    assert get(@enrolment, client).status == 404
+    assert get(@enrolment, client).status == 429
+  end
+
   test "a new window starts afresh" do
     limits!(%{capability: {1, 100}})
     client = ip()
