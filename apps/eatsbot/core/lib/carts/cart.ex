@@ -16,12 +16,13 @@ defmodule EatsbotCore.Carts.Cart do
   - Automatic total calculation with discount support
   - Variant addition with quantity and notes
   - Validation ensures variant prices match cart currency
-  - Checkout creates a Delivery from cart contents
+  - Checkout places an Order (and its Delivery, for delivery orders)
   - Real-time updates via PubSub notifications
 
   ## Checkout Process
-  The `checkout_delivery` action converts the cart into a Delivery and returns
-  a public authentication key for tracking the order.
+  The `checkout` action places an `EatsbotCore.Orders.Order`; see
+  `EatsbotCore.Carts.Checkout`. `checkout_delivery` is a deprecated wrapper kept for
+  existing GraphQL clients.
   """
   use Ash.Resource,
     otp_app: :eatsbot,
@@ -41,6 +42,7 @@ defmodule EatsbotCore.Carts.Cart do
     mutations do
       create :create_cart, :create
       update :cart_add_variant, :add_variant
+      action :cart_checkout, :checkout
       action :cart_checkout_delivery, :checkout_delivery
     end
   end
@@ -60,27 +62,62 @@ defmodule EatsbotCore.Carts.Cart do
   code_interface do
     define :create
     define :add_variant, args: [:variant_id, {:optional, :quantity}, {:optional, :notes}]
+    define :checkout, args: [:cart_id, :fulfillment, :idempotency_key]
     define :checkout_delivery, args: [:cart_id, :delivery_input]
   end
 
   actions do
     defaults [:read, :destroy, create: :currency, update: :*]
 
+    action :checkout, :map do
+      description "Places an order from this cart. See EatsbotCore.Carts.Checkout."
+      transaction? true
+
+      constraints fields: [
+                    order_id: [type: :uuid, allow_nil?: false],
+                    tracking_key: [type: :uuid, allow_nil?: false],
+                    delivery_key: [type: :uuid, allow_nil?: true]
+                  ]
+
+      argument :cart_id, :uuid, allow_nil?: false
+
+      argument :fulfillment, :atom,
+        allow_nil?: false,
+        constraints: [one_of: EatsbotCore.Orders.Transitions.fulfillments()]
+
+      argument :idempotency_key, :string, allow_nil?: false, constraints: [min_length: 1]
+      argument :contact, :map, allow_nil?: false
+
+      argument :channel, :atom,
+        default: :web,
+        constraints: [one_of: [:web, :telegram, :whatsapp, :phone, :pos]]
+
+      argument :tip, :money
+      argument :delivery_fee, :money
+      argument :scheduled_for, :utc_datetime_usec
+      argument :delivery, :map
+
+      run EatsbotCore.Carts.Checkout
+    end
+
     action :checkout_delivery, :term do
+      description "Deprecated: use checkout with fulfillment :delivery. Returns the delivery's public key."
       argument :cart_id, :uuid, allow_nil?: false
       argument :delivery_input, :map, allow_nil?: false
 
-      run fn %{arguments: %{cart_id: cart_id, delivery_input: delivery_input}}, _ ->
-        cart =
-          Ash.get!(EatsbotCore.Carts.Cart, cart_id, load: [cart_lines: [:variant]])
+      run fn %{arguments: %{cart_id: cart_id, delivery_input: input}}, _ ->
+        delivery = Map.drop(input, [:delivery_order, "delivery_order"])
 
-        %{public_auth_key: public_auth_key} =
-          EatsbotCore.Deliveries.Delivery.initialize!(
-            Map.merge(delivery_input, %{delivery_order: cart_to_map(cart)}),
-            authorize?: false
-          )
-
-        {:ok, public_auth_key}
+        with {:ok, %{delivery_key: key}} <-
+               EatsbotCore.Carts.Cart.checkout(cart_id, :delivery, Ash.UUIDv7.generate(), %{
+                 # deliveryInput arrives over GraphQL as JSON, with string keys
+                 contact: %{
+                   name: delivery[:to_name] || delivery["to_name"],
+                   phone: delivery[:to_phone] || delivery["to_phone"]
+                 },
+                 delivery: delivery
+               }),
+             do: {:ok, key}
       end
     end
 
@@ -168,15 +205,5 @@ defmodule EatsbotCore.Carts.Cart do
 
   aggregates do
     sum :total_before_discount, [:cart_lines], :subtotal_before_discount
-  end
-
-  defp cart_to_map(cart) do
-    %{
-      cart_id: cart.id,
-      cart_lines:
-        Enum.map(cart.cart_lines, fn line ->
-          %{quantity: line.quantity, name: line.variant.name}
-        end)
-    }
   end
 end

@@ -176,6 +176,7 @@ type Delivery {
   toNotes: String
   deliveryStartedAt: Date
   deliveryEndedAt: Date
+  orderId: ID
   stateHistory(
     "How to sort the records in the response"
     sort: [DeliveryStateChangesSortInput]
@@ -330,6 +331,18 @@ type CartLine {
 input CartCheckoutDeliveryInput {
   cartId: ID!
   deliveryInput: JsonString!
+}
+
+input CartCheckoutInput {
+  cartId: ID!
+  fulfillment: String!
+  idempotencyKey: String!
+  contact: JsonString!
+  channel: String
+  tip: MoneyInput
+  deliveryFee: MoneyInput
+  scheduledFor: DateTime
+  delivery: JsonString
 }
 
 "The result of the :cart_add_variant mutation"
@@ -1482,10 +1495,19 @@ input MoneyInput {
 
 type RootMutationType {
   createCart(input: CreateCartInput): CreateCartResult!
+
   cartAddVariant(id: ID!, input: CartAddVariantInput!): CartAddVariantResult!
+
+  "Places an order from this cart. See EatsbotCore.Carts.Checkout."
+  cartCheckout(input: CartCheckoutInput!): JsonString!
+
+  "Deprecated: use checkout with fulfillment :delivery. Returns the delivery's public key."
   cartCheckoutDelivery(input: CartCheckoutDeliveryInput!): String!
+
   initDelivery(input: InitDeliveryInput!): InitDeliveryResult!
+
   updateState(id: ID!, input: UpdateStateInput): UpdateStateResult!
+
   updateLocation(id: ID!, input: UpdateLocationInput): UpdateLocationResult!
 }
 
@@ -1502,6 +1524,14 @@ character sequences. The Json type is most often used to represent a free-form
 human-readable json string.
 """
 scalar Json
+
+"""
+The `DateTime` scalar type represents a date and time in the UTC
+timezone. The DateTime appears in a JSON response as an ISO8601 formatted
+string, including UTC timezone ("Z"). The parsed date and time string will
+be converted to UTC if there is an offset.
+"""
+scalar DateTime
 
 """
 The `Date` scalar type represents a date. The Date appears in a JSON

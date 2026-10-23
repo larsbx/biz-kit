@@ -66,8 +66,9 @@ defmodule EatsbotCore.Deliveries.Delivery do
     end
 
     field_policy :public_auth_key do
-      description "public auth key should only be visible to admin"
+      description "public auth key should only be visible to admin, and to checkout as the system actor"
       authorize_if actor_attribute_equals(:access_level, :admin)
+      authorize_if actor_attribute_equals(:access_level, :system)
     end
 
     field_policy :* do
@@ -79,6 +80,7 @@ defmodule EatsbotCore.Deliveries.Delivery do
   code_interface do
     define :update_state, args: [:state], action: :update_state
     define :initialize, action: :initialize
+    define :for_order, action: :for_order
     define :empty, action: :empty
     define :get_via_token, args: [:token], action: :get_via_token
     define :get_via_display_id, args: [:display_id], action: :get_via_display_id
@@ -155,17 +157,25 @@ defmodule EatsbotCore.Deliveries.Delivery do
         :to_notes
       ]
 
-      change fn changeset, _context ->
-        {lat, lng} = Application.get_env(:eatsbot, :from_location, {0, 0})
-        name = Application.get_env(:eatsbot, :business_name, "A business")
+      change EatsbotCore.Deliveries.SetOrigin
+    end
 
-        changeset
-        |> Ash.Changeset.change_attributes(%{
-          from_name: name,
-          from_latitude: lat,
-          from_longitude: lng
-        })
-      end
+    create :for_order do
+      description "Used by Cart.checkout to create an order's delivery. Not exposed over GraphQL."
+
+      accept [
+        :order_id,
+        :delivery_person,
+        :delivery_order,
+        :to_name,
+        :to_latitude,
+        :to_longitude,
+        :to_address,
+        :to_phone,
+        :to_notes
+      ]
+
+      change EatsbotCore.Deliveries.SetOrigin
     end
 
     create :empty do
@@ -268,9 +278,15 @@ defmodule EatsbotCore.Deliveries.Delivery do
     end
 
     policy action_type(:read) do
-      description "read access is limited to users with public and private access"
+      description "read access is limited to users with public and private access, and the system actor"
       authorize_if actor_attribute_equals(:access_level, :public)
       authorize_if actor_attribute_equals(:access_level, :private)
+      authorize_if actor_attribute_equals(:access_level, :system)
+    end
+
+    policy action(:for_order) do
+      description "checkout creates an order's delivery as the system actor"
+      authorize_if actor_attribute_equals(:access_level, :system)
     end
 
     policy action_type(:update) do
@@ -403,6 +419,15 @@ defmodule EatsbotCore.Deliveries.Delivery do
     has_many :state_history, EatsbotCore.Deliveries.DeliveryStateChanges do
       public? true
     end
+
+    belongs_to :order, EatsbotCore.Orders.Order do
+      public? true
+      allow_nil? true
+    end
+  end
+
+  identities do
+    identity :unique_order, [:order_id]
   end
 end
 

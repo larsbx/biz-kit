@@ -1,0 +1,135 @@
+defmodule EatsbotCore.Carts.Checkout do
+  @moduledoc """
+  Turns an active cart into a placed `EatsbotCore.Orders.Order`, in one transaction.
+
+  - the cart is locked, so two concurrent checkouts of one cart cannot both pass
+  - a repeated `(channel, idempotency_key)` returns the existing order (I₅)
+  - prices are copied from the variants in the cart's currency (I₁, I₂)
+  - a delivery order also gets its `Delivery` (I₄)
+
+  Returns `%{order_id, tracking_key, delivery_key}`; `delivery_key` is nil unless
+  the order is for delivery.
+  """
+  use Ash.Resource.Actions.Implementation
+
+  require Ash.Query
+
+  alias EatsbotCore.Carts.Cart
+  alias EatsbotCore.Deliveries.Delivery
+  alias EatsbotCore.Orders.Order
+
+  @system %{access_level: :system}
+
+  @impl true
+  def run(%{arguments: args}, _opts, _context) do
+    channel = Map.get(args, :channel, :web)
+
+    case existing_order(channel, args.idempotency_key) do
+      %Order{cart_id: cart_id} = order when cart_id == args.cart_id -> {:ok, result(order)}
+      %Order{} -> {:error, invalid(:idempotency_key, "was already used for another cart")}
+      nil -> place(args, channel)
+    end
+  end
+
+  defp place(args, channel) do
+    with :ok <- require_delivery_details(args),
+         {:ok, cart} <- lock_active_cart(args.cart_id),
+         {:ok, order} <- create_order(cart, args, channel),
+         {:ok, _cart} <- Ash.update(cart, %{status: :completed}),
+         {:ok, order} <- maybe_create_delivery(order, cart, args) do
+      {:ok, result(order)}
+    end
+  end
+
+  defp require_delivery_details(%{fulfillment: :delivery} = args) do
+    if is_map(args[:delivery]),
+      do: :ok,
+      else: {:error, invalid(:delivery, "is required for a delivery order")}
+  end
+
+  defp require_delivery_details(_args), do: :ok
+
+  defp existing_order(channel, key) do
+    Order
+    |> Ash.Query.filter(channel == ^channel and idempotency_key == ^key)
+    |> Ash.Query.load(:delivery)
+    |> Ash.read_one!(actor: @system)
+  end
+
+  defp lock_active_cart(cart_id) do
+    Cart
+    |> Ash.Query.filter(id == ^cart_id)
+    |> Ash.Query.lock(:for_update)
+    |> Ash.Query.load(cart_lines: [:subtotal, variant: [prices: [:currency]]])
+    |> Ash.read_one()
+    |> case do
+      {:ok, %Cart{status: :active, cart_lines: [_ | _]} = cart} -> {:ok, cart}
+      {:ok, %Cart{status: :active}} -> {:error, invalid(:cart_id, "cart is empty")}
+      {:ok, %Cart{}} -> {:error, invalid(:cart_id, "cart is not active")}
+      {:ok, nil} -> {:error, invalid(:cart_id, "cart does not exist")}
+      error -> error
+    end
+  end
+
+  defp create_order(cart, args, channel) do
+    Order.place(
+      %{
+        cart_id: cart.id,
+        channel: channel,
+        fulfillment: args.fulfillment,
+        currency: cart.currency,
+        contact: args.contact,
+        scheduled_for: args[:scheduled_for],
+        idempotency_key: args.idempotency_key,
+        tip: args[:tip],
+        delivery_fee: args[:delivery_fee],
+        lines: Enum.map(cart.cart_lines, &line_snapshot(&1, cart.currency))
+      },
+      actor: @system
+    )
+  end
+
+  # unit_price is the variant's list price in the cart's currency; whatever the
+  # discount rules took off the line is kept as the line's discount.
+  defp line_snapshot(line, currency) do
+    %{money: unit_price} = Enum.find(line.variant.prices, &(&1.currency == currency))
+
+    %{
+      variant_id: line.variant_id,
+      name: line.variant.name,
+      quantity: line.quantity,
+      notes: line.notes,
+      unit_price: unit_price,
+      discount: unit_price |> Money.mult!(line.quantity) |> Money.sub!(line.subtotal)
+    }
+  end
+
+  defp maybe_create_delivery(%Order{fulfillment: :delivery} = order, cart, args) do
+    args.delivery
+    |> Map.merge(%{order_id: order.id, delivery_order: legacy_order_map(cart)})
+    |> Delivery.for_order(actor: @system)
+    |> case do
+      {:ok, delivery} -> {:ok, %{order | delivery: delivery}}
+      error -> error
+    end
+  end
+
+  defp maybe_create_delivery(order, _cart, _args), do: {:ok, %{order | delivery: nil}}
+
+  # Kept until the Telegram chains read lines from the order (spec E0.1, migration).
+  defp legacy_order_map(cart),
+    do: %{
+      cart_id: cart.id,
+      cart_lines: Enum.map(cart.cart_lines, &%{quantity: &1.quantity, name: &1.variant.name})
+    }
+
+  defp result(order),
+    do: %{
+      order_id: order.id,
+      tracking_key: order.tracking_key,
+      delivery_key: order.delivery && order.delivery.public_auth_key
+    }
+
+  defp invalid(field, message),
+    do: Ash.Error.Changes.InvalidArgument.exception(field: field, message: message)
+end
