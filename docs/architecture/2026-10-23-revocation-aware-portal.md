@@ -31,6 +31,10 @@ state are refreshed from the source, not trusted for step-up decisions.
 
 Portal logout also revokes the source reference before clearing the cookie, so
 replaying the previous cookie cannot restore access after a successful logout.
+If source revocation is unavailable (including a failing durable deletion), the
+browser cookie is still cleared, but the response is 503 and explicitly states
+that account sign-out is unavailable. It does not claim the source was revoked;
+a previously copied cookie may become usable again if the source recovers.
 
 Both SSE transport loops check the same source before every refresh or heartbeat,
 before invoking the existing stream authorization/rendering code. A failed check

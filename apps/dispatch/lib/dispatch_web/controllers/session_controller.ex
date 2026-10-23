@@ -63,10 +63,26 @@ defmodule DispatchWeb.SessionController do
   @doc "Ends the session."
   @spec delete(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def delete(conn, _params) do
-    :ok =
-      BizKit.Identity.Sessions.revoke_reference(get_session(conn, PortalSession.reference_key()))
+    result = revoke_source(get_session(conn, PortalSession.reference_key()))
+    conn = clear_session(conn)
 
-    conn |> clear_session() |> redirect_to("/login")
+    case result do
+      :ok ->
+        redirect_to(conn, "/login")
+
+      {:error, :unavailable} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> render(:login,
+          message: "Signed out of this browser. Account sign-out is temporarily unavailable."
+        )
+    end
+  end
+
+  defp revoke_source(reference) do
+    BizKit.Identity.Sessions.revoke_reference(reference)
+  catch
+    :exit, _ -> {:error, :unavailable}
   end
 
   @doc """

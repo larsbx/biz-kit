@@ -214,6 +214,24 @@ defmodule DispatchWeb.PortalRevocationTest do
     end
   end
 
+  test "logout clears the browser cookie even while Identity is unavailable", ctx do
+    choice = request(ctx.browser, :get, "/select-role")
+    [_all, csrf] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, choice.resp_body)
+    :ok = Supervisor.terminate_child(BizKit.Identity.Supervisor, Sessions)
+
+    try do
+      signed_out = request(choice, :delete, "/session", %{"_csrf_token" => csrf})
+      assert signed_out.status == 503
+      refute get_session(signed_out, PortalSession.reference_key())
+      refute get_session(signed_out, PortalSession.subject_key())
+      refute get_session(signed_out, PortalSession.assignment_key())
+      assert signed_out.resp_body =~ "Signed out of this browser."
+      assert request(signed_out, :get, "/operations").status == 302
+    after
+      {:ok, _} = Supervisor.restart_child(BizKit.Identity.Supervisor, Sessions)
+    end
+  end
+
   test "a verified subject without a revocable source cannot open a portal", ctx do
     Application.put_env(
       :dispatch,
