@@ -109,6 +109,7 @@ defmodule DispatchWeb.Streams.LocationDemandTest do
     assert heard(beat) =~ ": heartbeat"
 
     {:ok, _} = Locations.revoke_consent(ctx.driver_actor, grant.id)
+    assert LocationDemand.tick(session, :demand) == {:close, :unauthorized}
     assert LocationDemand.tick(session, :refresh) == {:close, :unauthorized}
     assert LocationDemand.tick(session, :heartbeat) == {:close, :unauthorized}
 

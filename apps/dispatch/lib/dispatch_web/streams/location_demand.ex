@@ -45,20 +45,23 @@ defmodule DispatchWeb.Streams.LocationDemand do
   @impl DispatchWeb.Streams.Transport
   @spec tick(t(), DispatchWeb.Streams.Transport.reason()) ::
           {:emit, iodata(), t()} | {:close, :unauthorized}
-  def tick(%__MODULE__{} = session, :demand) do
-    case mode(Demand.watched?(session.actor.principal_id)) do
-      unchanged when unchanged == session.mode -> {:emit, [], session}
-      mode -> {:emit, event(mode), %{session | mode: mode}}
+  def tick(%__MODULE__{} = session, reason) do
+    # Group changes can arrive continuously and postpone the heartbeat. They
+    # must not bypass consent/role validation while changing collection policy.
+    with {:ok, actor} <- revalidate(session.actor),
+         true <- sharing?(actor),
+         {:emit, change, session} <- policy_change(%{session | actor: actor}) do
+      chunk = if reason == :demand, do: change, else: [beat(reason), change]
+      {:emit, chunk, session}
+    else
+      _gone -> {:close, :unauthorized}
     end
   end
 
-  def tick(%__MODULE__{} = session, reason) do
-    with {:ok, actor} <- revalidate(session.actor),
-         true <- sharing?(actor),
-         {:emit, change, session} <- tick(%{session | actor: actor}, :demand) do
-      {:emit, [beat(reason), change], session}
-    else
-      _gone -> {:close, :unauthorized}
+  defp policy_change(session) do
+    case mode(Demand.watched?(session.actor.principal_id)) do
+      unchanged when unchanged == session.mode -> {:emit, [], session}
+      mode -> {:emit, event(mode), %{session | mode: mode}}
     end
   end
 
