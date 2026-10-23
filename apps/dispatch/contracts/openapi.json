@@ -717,6 +717,70 @@
         ],
         "title": "StatusEventResponse",
         "type": "object"
+      },
+      "Trip": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "load_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "location_consent": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LocationConsent"
+              }
+            ],
+            "description": "The consent covering this trip now, or null: none, revoked or expired.",
+            "nullable": true
+          },
+          "starts_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PLANNED",
+              "ACTIVE"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "load_id",
+          "status",
+          "starts_at",
+          "ends_at",
+          "location_consent"
+        ],
+        "title": "Trip",
+        "type": "object"
+      },
+      "TripList": {
+        "additionalProperties": false,
+        "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/Trip"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "assignments"
+        ],
+        "title": "TripList",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -828,6 +892,55 @@
         "summary": "Readiness",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/driver/assignments": {
+      "get": {
+        "callbacks": {},
+        "description": "Identical behaviour to /v1/me/assignments.",
+        "operationId": "DispatchWeb.AssignmentController.driver",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripList"
+                }
+              }
+            },
+            "description": "Trips"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Your trips not yet over (DRIVER compatibility projection)",
+        "tags": [
+          "assignments"
         ]
       }
     },
@@ -1016,6 +1129,55 @@
         "summary": "Declare a driver status (compatibility projection)",
         "tags": [
           "status"
+        ]
+      }
+    },
+    "/v1/me/assignments": {
+      "get": {
+        "callbacks": {},
+        "description": "PLANNED and ACTIVE assignments not past their end, soonest first, each with\nthe location consent covering it now. After a reboot this is the server's\nword that a persisted consent is still valid (Section 25.3).\n",
+        "operationId": "DispatchWeb.AssignmentController.mine",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripList"
+                }
+              }
+            },
+            "description": "Trips"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Your trips not yet over",
+        "tags": [
+          "assignments"
         ]
       }
     },

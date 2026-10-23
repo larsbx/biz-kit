@@ -191,6 +191,10 @@ defmodule DispatchWeb.Router do
     post "/me/status-events", StatusEventController, :create
     post "/driver/status-events", StatusEventController, :create_driver
 
+    # The caller's own trips, and the consent covering each (Section 25.3).
+    get "/me/assignments", AssignmentController, :mine
+    get "/driver/assignments", AssignmentController, :driver
+
     # Section 24.2 and Section 25.3: consented location sharing.
     post "/me/location-consents", LocationController, :begin_consent
     post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent

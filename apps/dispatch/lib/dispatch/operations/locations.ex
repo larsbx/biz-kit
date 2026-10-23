@@ -140,13 +140,21 @@ defmodule Dispatch.Operations.Locations do
     end
   end
 
-  defp current_grant(actor, assignment_id) do
+  defp current_grant(actor, assignment_id), do: Map.get(covering(actor), assignment_id)
+
+  @doc """
+  The actor's own location consents covering now, by the assignment each is
+  for. At most one covers an assignment: `begin_consent/2` returns it rather
+  than granting another.
+  """
+  @spec covering(Actor.t()) :: %{Ash.UUID.t() => struct()}
+  def covering(%Actor{} = actor) do
+    now = DateTime.utc_now()
+
     actor
     |> grants()
-    |> Enum.find(
-      &(&1.scope_json["assignment_id"] == assignment_id and
-          ConsentGrant.covers?(&1, DateTime.utc_now()))
-    )
+    |> Enum.filter(&ConsentGrant.covers?(&1, now))
+    |> Map.new(&{&1.scope_json["assignment_id"], &1})
   end
 
   defp own_grant(actor, id) do

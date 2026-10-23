@@ -71,6 +71,21 @@ Real time exactly while someone entitled to the position is looking at it
   `:pg` and heartbeat messages, and stops at the first failed write, whatever
   the error (a reset peer reports `:econnreset`, not `:closed`).
 
+## Which trip
+
+`GET /v1/me/assignments` (and the DRIVER projection `/v1/driver/assignments`,
+`Dispatch.Operations.Trips`) lists the caller's trips not yet over, soonest
+first, each with the consent covering it now or `null`. It is how the app
+learns which assignment to consent for, and, after a reboot, the server's
+confirmation §25.3 asks for: "the persisted consent is valid and the active
+assignment still exists".
+
+`assignment.read.self` is constrained `active_assignment_only` for DRIVER.
+Read as *not yet over*: PLANNED or ACTIVE and not past its end, exactly the
+assignments consent can be begun for. A status alone makes a trip history,
+with or without a recorded end. Completed, cancelled and ended trips are not
+this capability's to read.
+
 ## Limits
 
 - No map, geocoder or router yet: those are the next parts of Slice 2.

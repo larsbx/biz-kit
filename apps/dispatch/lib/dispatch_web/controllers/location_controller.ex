@@ -11,6 +11,8 @@ defmodule DispatchWeb.LocationController do
   alias Dispatch.Idempotency
   alias Dispatch.Operations.Locations
   alias DispatchWeb.Problem
+
+  import DispatchWeb.LocationJSON, only: [consent: 1]
   alias DispatchWeb.Streams.{LocationDemand, Transport}
 
   alias DispatchWeb.Schemas.{
@@ -185,16 +187,6 @@ defmodule DispatchWeb.LocationController do
       [key | _rest] -> key
       [] -> nil
     end
-  end
-
-  defp consent(grant) do
-    %{
-      consent_grant_id: grant.id,
-      assignment_id: grant.scope_json["assignment_id"],
-      granted_at: grant.granted_at,
-      expires_at: grant.expires_at,
-      revoked_at: grant.revoked_at
-    }
   end
 
   defp refused(conn, :forbidden),
