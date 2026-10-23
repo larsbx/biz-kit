@@ -51,7 +51,7 @@ defmodule BizKit.Identity.Sessions do
   def create(principal, identity) do
     id = new_id()
     now = System.system_time(:millisecond)
-    :ok = GenServer.call(@server, {:create, {id, principal, identity, now + ttl_ms(), now}})
+    :ok = GenServer.call(@server, {:create, {key(id), principal, identity, now + ttl_ms(), now}})
     id
   end
 
@@ -60,7 +60,7 @@ defmodule BizKit.Identity.Sessions do
   def create_native(principal, identity) do
     id = @native <> new_id()
     now = System.system_time(:millisecond)
-    :ok = GenServer.call(@server, {:create_native, {id, principal, identity, :never, now}})
+    :ok = GenServer.call(@server, {:create_native, {key(id), principal, identity, :never, now}})
     id
   end
 
@@ -72,10 +72,12 @@ defmodule BizKit.Identity.Sessions do
   every revocation before a recovered row can enter memory.
   """
   @spec fetch(id(), integer()) :: {:ok, t()} | {:error, :unknown_session | :expired}
-  def fetch(id, now_ms) do
+  def fetch(id, now_ms), do: fetch_key(key(id), now_ms)
+
+  defp fetch_key(id, now_ms) do
     with {:restore_ticket, ticket} <- GenServer.call(@server, {:fetch, id, now_ms}),
          {:ok, %{principal: principal, identity: identity, authenticated_at: at}} <-
-           SessionStore.impl().get(hash(id)) do
+           SessionStore.impl().get(digest(id)) do
       GenServer.call(@server, {:restore, ticket, {id, principal, identity, :never, at}})
     else
       :error -> {:error, :unknown_session}
@@ -85,7 +87,7 @@ defmodule BizKit.Identity.Sessions do
 
   @spec revoke(id()) :: :ok
   def revoke(id) do
-    GenServer.call(@server, {:revoke_token, id})
+    GenServer.call(@server, {:revoke_token, key(id)})
   end
 
   @spec revoke_principal(String.t()) :: :ok
@@ -97,8 +99,37 @@ defmodule BizKit.Identity.Sessions do
 
   # Native tokens say so, so a browser's cookie, forged or expired, never
   # reaches the store.
+  defp native?({native, _hash}), do: native
   defp native?(id), do: is_binary(id) and String.starts_with?(id, @native)
-  defp hash(id), do: :crypto.hash(:sha256, id)
+  defp key(id), do: {native?(id), :crypto.hash(:sha256, id)}
+  defp digest({_native, hash}), do: hash
+
+  @doc "Non-bearer lookup reference. Never accepted by fetch/2 as a token."
+  def reference(id) when is_binary(id) do
+    prefix = if native?(id), do: "nsr_", else: "wsr_"
+    prefix <> Base.url_encode64(:crypto.hash(:sha256, id), padding: false)
+  end
+
+  @doc "Look up a reference from a trusted, authenticated application session."
+  def fetch_reference(reference, now_ms) do
+    with <<prefix::binary-size(4), encoded::binary>> <- reference,
+         true <- prefix in ["nsr_", "wsr_"],
+         {:ok, hash} when byte_size(hash) == 32 <- Base.url_decode64(encoded, padding: false) do
+      fetch_key({prefix == "nsr_", hash}, now_ms)
+    else
+      _ -> {:error, :unknown_session}
+    end
+  end
+
+  def revoke_reference(reference) do
+    with <<prefix::binary-size(4), encoded::binary>> <- reference,
+         true <- prefix in ["nsr_", "wsr_"],
+         {:ok, hash} when byte_size(hash) == 32 <- Base.url_decode64(encoded, padding: false) do
+      GenServer.call(@server, {:revoke_token, {prefix == "nsr_", hash}})
+    else
+      _ -> :ok
+    end
+  end
 
   @impl true
   def init(_opts) do
@@ -115,7 +146,7 @@ defmodule BizKit.Identity.Sessions do
 
   # Durable writes and deletions share the same serialization point as ETS.
   def handle_call({:create_native, {id, principal, identity, :never, at} = row}, _from, state) do
-    :ok = SessionStore.impl().put(hash(id), principal, identity, at)
+    :ok = SessionStore.impl().put(digest(id), principal, identity, at)
     true = :ets.insert_new(@table, row)
     {:reply, :ok, state}
   end
@@ -136,7 +167,7 @@ defmodule BizKit.Identity.Sessions do
     reply =
       case :ets.lookup(@table, id) do
         # A native session's `:never` passes: every number sorts before an atom.
-        [{^id, principal, identity, expires_at, at}] when now_ms <= expires_at ->
+        [{^id, principal, identity, expires_at, at}] when now_ms < expires_at ->
           {:ok,
            %{
              principal: principal,
@@ -157,7 +188,7 @@ defmodule BizKit.Identity.Sessions do
   end
 
   def handle_call({:revoke_token, id}, _from, _state) do
-    if native?(id), do: :ok = SessionStore.impl().delete(hash(id))
+    if native?(id), do: :ok = SessionStore.impl().delete(digest(id))
     :ets.delete(@table, id)
     {:reply, :ok, make_ref()}
   end

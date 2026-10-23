@@ -29,6 +29,7 @@ defmodule DispatchWeb.StreamControllerTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
+    :ok = Dispatch.Support.PortalIdentity.setup()
 
     carrier = Fixtures.carrier()
     tenant = carrier.id
@@ -61,7 +62,9 @@ defmodule DispatchWeb.StreamControllerTest do
     |> Plug.Session.call(@session)
     |> fetch_session()
     |> then(fn conn ->
-      Enum.reduce(session_entries, conn, fn {k, v}, acc -> put_session(acc, k, v) end)
+      Enum.reduce(Dispatch.Support.PortalIdentity.bind(session_entries), conn, fn {k, v}, acc ->
+        put_session(acc, k, v)
+      end)
     end)
     |> DispatchWeb.Router.call(@opts)
   end

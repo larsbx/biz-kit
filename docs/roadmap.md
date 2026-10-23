@@ -204,3 +204,5 @@ What remains, in order:
 - **Single-project offboarding.** Should it, like chapter offboarding,
   cancel the person's pending requests only once the offboarding is
   admitted?
+
+Portal correction in progress: see [revocation-aware portal authentication](architecture/2026-10-23-revocation-aware-portal.md). This implementation is not yet acceptance evidence and does not close the administrative P1 or required hosted-integration P2.
