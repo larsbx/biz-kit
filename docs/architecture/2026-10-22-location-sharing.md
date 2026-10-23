@@ -117,3 +117,25 @@ realtime → trickle, no event without a change, revocation closes) and the
 capability, an event on every notification, the device stream not
 revalidating consent; all caught. d-patch's `location.spec.js` drives the
 whole flow with a seeded `tracker`.
+
+## Integration correction (2026-10-23)
+
+Consent begin and revoke now lock the assignment row in a database transaction
+before deciding which grants exist. Concurrent begins with different keys see
+one committed grant, and a revoke waiting behind a begin sees and ends its
+grant. Assignment completion/cancellation updates that same row before closing
+its consents. Audit and refresh writes remain inside the mutation transaction.
+`location_concurrency_test.exs` uses separate committed database sessions and
+checks PostgreSQL's blocking relationship before releasing the competing write;
+a shared sandbox connection would not test this ordering.
+
+The endpoint parses sample batches with a route-specific 256 KiB raw-body cap,
+before the general parser, JSON decoding, or signature verification. It returns
+413 `BATCH_TOO_LARGE` without trusting Content-Length or JSON re-encoding.
+Regressions include whitespace, escaped JSON, both routes, and the exact byte
+boundary. The general parser's 1 MB limit remains for other routes.
+
+`Location cross-repository acceptance` tests this server's merge revision
+against d-patch main as merged by #20 (pinned `96909d55`), running browser and
+both driver/courier emulator lanes. This is test-stack evidence, not production
+deployment or physical-device acceptance.

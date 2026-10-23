@@ -58,3 +58,13 @@ jobs:
       - name: Dispatch including portal, stream and role integration
         working-directory: apps/dispatch
         run: mix test --include integration
+      - name: Format location integration corrections
+        run: >-
+          mix format --check-formatted
+          apps/dispatch/lib/dispatch/operations/locations.ex
+          apps/dispatch/lib/dispatch_web/controllers/location_controller.ex
+          apps/dispatch/lib/dispatch_web/endpoint.ex
+          apps/dispatch/lib/dispatch_web/plugs/location_batch_parser.ex
+          apps/dispatch/test/dispatch/operations/location_concurrency_test.exs
+          apps/dispatch/test/dispatch_web/location_batch_parser_test.exs
+          apps/dispatch/test/dispatch_web/location_controller_test.exs

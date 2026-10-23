@@ -53,8 +53,10 @@ defmodule DispatchWeb.LocationControllerTest do
     |> put_req_header("content-type", "application/json")
     |> put_req_header("authorization", "Bearer " <> token)
     |> then(&Enum.reduce(headers, &1, fn {k, v}, c -> put_req_header(c, k, v) end))
-    |> Plug.Parsers.call(Plug.Parsers.init(parsers: [:json], pass: ["*/*"], json_decoder: Jason))
-    |> DispatchWeb.Router.call(@opts)
+    |> DispatchWeb.Plugs.LocationBatchParser.call([])
+    |> then(fn conn ->
+      if conn.halted, do: conn, else: DispatchWeb.Router.call(conn, @opts)
+    end)
   end
 
   defp page(path, user, assignment) do

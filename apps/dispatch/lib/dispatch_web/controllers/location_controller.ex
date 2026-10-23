@@ -25,9 +25,6 @@ defmodule DispatchWeb.LocationController do
 
   tags(["location"])
 
-  # Section 24.2: 256 KiB uncompressed per batch.
-  @max_batch_bytes 262_144
-
   @problem {"Problem", "application/problem+json", DispatchWeb.Schemas.Problem}
   @headers [
     "idempotency-key": [
@@ -132,9 +129,6 @@ defmodule DispatchWeb.LocationController do
   # only the custom method itself is this route.
   defp batch(conn, %{"batch" => ":batch"}) do
     cond do
-      too_large?(conn) ->
-        refused(conn, :batch_too_large)
-
       not is_list(conn.body_params["samples"]) ->
         Problem.send(conn, 400, "MALFORMED_REQUEST", "samples must be a list.")
 
@@ -159,25 +153,6 @@ defmodule DispatchWeb.LocationController do
 
       served ->
         served
-    end
-  end
-
-  # The declared length when there is one, and in any case the parsed body
-  # re-encoded: a chunked upload declares none, and the re-encoding is no
-  # larger than what arrived.
-  defp too_large?(conn) do
-    declared =
-      case get_req_header(conn, "content-length") do
-        [length | _] -> Integer.parse(length)
-        [] -> {0, ""}
-      end
-
-    case declared do
-      {length, ""} ->
-        length > @max_batch_bytes or byte_size(Jason.encode!(conn.body_params)) > @max_batch_bytes
-
-      _unreadable ->
-        true
     end
   end
 

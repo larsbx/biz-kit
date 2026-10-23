@@ -51,11 +51,20 @@ defmodule Dispatch.Operations.Locations do
           {:ok, struct()} | {:error, :not_found | :forbidden}
   def begin_consent(%Actor{} = actor, assignment_id) do
     with :ok <- may_share(actor),
-         {:ok, assignment} <- own_assignment(actor, assignment_id) do
-      case current_grant(actor, assignment.id) do
-        nil -> create_grant(actor, assignment)
-        grant -> {:ok, grant}
-      end
+         {:ok, id} <- uuid(assignment_id) do
+      with_trip_lock(actor.tenant_id, id, fn ->
+        # Read both the assignment and the current grant after taking the lock.
+        # Completion/cancellation updates this same row before closing grants.
+        with {:ok, assignment} <- own_assignment(actor, id) do
+          case current_grant(actor, id) do
+            nil -> create_grant(actor, assignment)
+            grant -> {:ok, grant}
+          end
+        end
+      end)
+    else
+      :error -> {:error, :not_found}
+      error -> error
     end
   end
 
@@ -65,24 +74,50 @@ defmodule Dispatch.Operations.Locations do
   def revoke_consent(%Actor{} = actor, grant_id) do
     with :ok <- may_share(actor),
          {:ok, grant} <- own_grant(actor, grant_id) do
-      if grant.revoked_at do
-        {:ok, grant}
-      else
-        # Every open grant for the trip, not only this one: two requests that
-        # raced each made one, and a twin left open would undo the revocation.
-        revoked =
-          actor
-          |> grants()
-          |> Enum.filter(&(is_nil(&1.revoked_at) and same_trip?(&1, grant)))
-          |> Enum.map(&revoke!(actor, &1))
+      with_trip_lock(actor.tenant_id, grant.scope_json["assignment_id"], fn ->
+        # The initial lookup only identifies the trip. Re-read under its lock:
+        # a waiting revocation must see everything the preceding begin committed.
+        with {:ok, current} <- own_grant(actor, grant_id) do
+          if current.revoked_at do
+            {:ok, current}
+          else
+            revoked =
+              actor
+              |> grants()
+              |> Enum.filter(&(is_nil(&1.revoked_at) and same_trip?(&1, current)))
+              |> Enum.map(&revoke!(actor, &1))
 
-        StreamRefresh.enqueue!(actor, actor.principal_id, "location_consent.revoked", %{
-          "grant_id" => grant.id
-        })
+            StreamRefresh.enqueue!(actor, actor.principal_id, "location_consent.revoked", %{
+              "grant_id" => current.id
+            })
 
-        {:ok, Enum.find(revoked, &(&1.id == grant.id))}
-      end
+            {:ok, Enum.find(revoked, &(&1.id == current.id))}
+          end
+        end
+      end)
     end
+  end
+
+  # A database row lock works across nodes and across different idempotency
+  # keys. Keep reads, mutations and audit/outbox writes in the same transaction.
+  defp with_trip_lock(tenant_id, assignment_id, fun) do
+    {:ok, result} =
+      Dispatch.Repo.transaction(fn ->
+        from(a in "assignments",
+          where:
+            a.id == type(^assignment_id, :binary_id) and
+              a.tenant_id == type(^tenant_id, :binary_id),
+          select: a.id,
+          lock: "FOR UPDATE"
+        )
+        |> Dispatch.Repo.one()
+        |> case do
+          nil -> {:error, :not_found}
+          _id -> fun.()
+        end
+      end)
+
+    result
   end
 
   @doc """
