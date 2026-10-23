@@ -171,4 +171,17 @@ defmodule DeliveryTest do
 
     assert state == "Delivery_With_Problems"
   end
+
+  describe "JSON encoding" do
+    test "fields the actor may not see are left out, never encoded" do
+      delivery = %{
+        Deliveries.Delivery.empty!(authorize?: false)
+        | display_id: %Ash.ForbiddenField{}
+      }
+
+      encoded = delivery |> Jason.encode!() |> Jason.decode!()
+      refute Map.has_key?(encoded, "display_id")
+      assert encoded["state"] == delivery.state
+    end
+  end
 end

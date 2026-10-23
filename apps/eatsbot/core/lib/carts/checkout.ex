@@ -16,9 +16,7 @@ defmodule EatsbotCore.Carts.Checkout do
 
   alias EatsbotCore.Carts.Cart
   alias EatsbotCore.Deliveries.Delivery
-  alias EatsbotCore.Orders.Order
-
-  @system %{access_level: :system}
+  alias EatsbotCore.Orders.{ActorIn, Order}
 
   @impl true
   def run(%{arguments: args}, _opts, _context) do
@@ -53,7 +51,7 @@ defmodule EatsbotCore.Carts.Checkout do
     Order
     |> Ash.Query.filter(channel == ^channel and idempotency_key == ^key)
     |> Ash.Query.load(:delivery)
-    |> Ash.read_one!(actor: @system)
+    |> Ash.read_one!(actor: ActorIn.system())
   end
 
   defp lock_active_cart(cart_id) do
@@ -85,7 +83,7 @@ defmodule EatsbotCore.Carts.Checkout do
         delivery_fee: args[:delivery_fee],
         lines: Enum.map(cart.cart_lines, &line_snapshot(&1, cart.currency))
       },
-      actor: @system
+      actor: ActorIn.system()
     )
   end
 
@@ -107,7 +105,7 @@ defmodule EatsbotCore.Carts.Checkout do
   defp maybe_create_delivery(%Order{fulfillment: :delivery} = order, cart, args) do
     args.delivery
     |> Map.merge(%{order_id: order.id, delivery_order: legacy_order_map(cart)})
-    |> Delivery.for_order(actor: @system)
+    |> Delivery.for_order(actor: ActorIn.system())
     |> case do
       {:ok, delivery} -> {:ok, %{order | delivery: delivery}}
       error -> error

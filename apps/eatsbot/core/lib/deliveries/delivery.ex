@@ -202,6 +202,7 @@ defmodule EatsbotCore.Deliveries.Delivery do
       require_atomic? false
 
       change EatsbotCore.Deliveries.UpdateHistory
+      change EatsbotCore.Orders.SyncFromDelivery
     end
 
     update :update_delivery_person do
@@ -268,6 +269,8 @@ defmodule EatsbotCore.Deliveries.Delivery do
             error
         end)
       end
+
+      change EatsbotCore.Orders.SyncFromDelivery
     end
   end
 
@@ -290,8 +293,9 @@ defmodule EatsbotCore.Deliveries.Delivery do
     end
 
     policy action_type(:update) do
-      description "update access is limited to users private access"
+      description "update access is limited to users private access, and the system actor"
       authorize_if actor_attribute_equals(:access_level, :private)
+      authorize_if actor_attribute_equals(:access_level, :system)
     end
 
     policy action_type([:read, :update]) do
@@ -451,7 +455,9 @@ defimpl Jason.Encoder, for: EatsbotCore.Deliveries.Delivery do
         :to_phone,
         :to_notes,
         :state
-      ]),
+      ])
+      # Fields the actor may not read are placeholders; leave them out.
+      |> Map.reject(fn {_key, field} -> match?(%Ash.ForbiddenField{}, field) end),
       opts
     )
   end
