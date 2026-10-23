@@ -67,6 +67,12 @@ defmodule Dispatch.Operations.ConsentGrant do
       change set_attribute(:granted_at, &DateTime.utc_now/0)
     end
 
+    update :close_location_consent do
+      description "Brings the expiry forward to the trip's end plus grace (Section 6.1). System work."
+      accept [:expires_at]
+      require_atomic? false
+    end
+
     update :revoke_location_consent do
       description "Ends the consent at once. A revoked grant is never reinstated."
       accept []

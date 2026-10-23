@@ -156,6 +156,8 @@ defmodule Dispatch.Fleet.Assignment do
       change set_attribute(:status, :COMPLETED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
       change Dispatch.Accounts.Changes.IncrementVersion
+      # Section 6.1: consent lasts for the trip plus grace, so it ends now too.
+      change Dispatch.Fleet.Changes.CloseLocationConsents
     end
 
     update :cancel do
@@ -165,8 +167,19 @@ defmodule Dispatch.Fleet.Assignment do
       change set_attribute(:status, :CANCELLED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
       change Dispatch.Accounts.Changes.IncrementVersion
+      # Section 6.1: consent lasts for the trip plus grace, so it ends now too.
+      change Dispatch.Fleet.Changes.CloseLocationConsents
     end
   end
+
+  @doc """
+  Whether a trip is not yet over at `at`: PLANNED or ACTIVE, and not past its
+  recorded end. What `Trips.mine/1` lists and `Locations.begin_consent/2` accepts.
+  """
+  @spec open?(struct(), DateTime.t()) :: boolean()
+  def open?(%{status: status, ends_at: ends_at}, %DateTime{} = at),
+    do:
+      status in [:PLANNED, :ACTIVE] and (is_nil(ends_at) or DateTime.compare(ends_at, at) == :gt)
 
   code_interface do
     define :plan

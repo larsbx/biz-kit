@@ -142,4 +142,113 @@ defmodule Dispatch.Operations.LocationsTest do
       assert Locations.ingest(ctx.actor, List.duplicate(%{}, 101)) == {:error, :batch_too_large}
     end
   end
+
+  describe "review findings (biz-kit#67)" do
+    alias Dispatch.Fleet.Assignment
+    alias Dispatch.Operations.{ConsentGrant, LocationDemand}
+
+    # Section 6.1: the collection window is the trip plus its grace. A trip
+    # consented to with no end recorded gets one when it completes or is
+    # cancelled, and its consent ends with it.
+    test "a consent ends with its trip, even one begun with no end recorded", ctx do
+      previous = Application.get_env(:dispatch, :location_grace_seconds)
+      Application.put_env(:dispatch, :location_grace_seconds, 0)
+
+      on_exit(fn ->
+        if previous,
+          do: Application.put_env(:dispatch, :location_grace_seconds, previous),
+          else: Application.delete_env(:dispatch, :location_grace_seconds)
+      end)
+
+      for finish <- [
+            &Assignment.complete!/1,
+            &(&1 |> Ash.Changeset.for_update(:cancel, %{}) |> Ash.update!(authorize?: false))
+          ] do
+        trip =
+          Fixtures.assignment_record(ctx.tenant, ctx.carrier, ctx.driver)
+          |> Assignment.activate!()
+
+        {:ok, grant} = Locations.begin_consent(ctx.actor, trip.id)
+        assert grant.expires_at == nil
+
+        ended = finish.(trip)
+
+        [closed] =
+          Ash.read!(ConsentGrant, authorize?: false, tenant: ctx.tenant)
+          |> Enum.filter(&(&1.id == grant.id))
+
+        assert closed.expires_at == ended.ends_at
+        refute LocationDemand.consenting?(ctx.tenant, ctx.driver.id)
+
+        later = DateTime.add(ended.ends_at, 1, :second) |> DateTime.to_iso8601()
+
+        assert results(%{ctx | trip: trip}, [
+                 sample(%{ctx | trip: trip}, grant, %{"occurred_at" => later})
+               ]) ==
+                 [{"REJECTED", "REJECTED_CONSENT"}]
+      end
+    end
+
+    # Two grants for one trip (two requests raced): revoking either ends both,
+    # so a revocation is never undone by a twin.
+    test "revoking ends every open consent for that trip", ctx do
+      {:ok, first} = Locations.begin_consent(ctx.actor, ctx.trip.id)
+
+      twin =
+        ConsentGrant
+        |> Ash.Changeset.for_create(:begin_location_consent, %{
+          tenant_id: ctx.tenant,
+          participant_id: ctx.driver.id,
+          role_assignment_id: ctx.actor.role_assignment.id,
+          scope_json: %{"assignment_id" => ctx.trip.id}
+        })
+        |> Ash.create!(authorize?: false, tenant: ctx.tenant)
+
+      {:ok, _} = Locations.revoke_consent(ctx.actor, twin.id)
+
+      assert Locations.covering(ctx.actor) == %{}
+      refute LocationDemand.consenting?(ctx.tenant, ctx.driver.id)
+
+      assert first.id in Enum.map(
+               Ash.read!(ConsentGrant, authorize?: false, tenant: ctx.tenant),
+               & &1.id
+             )
+    end
+
+    test "a trip past its recorded end cannot be consented to", ctx do
+      past = DateTime.add(DateTime.utc_now(), -60, :second)
+
+      over =
+        Fixtures.assignment_record(ctx.tenant, ctx.carrier, ctx.driver,
+          starts_at: DateTime.add(past, -3_600, :second),
+          ends_at: past
+        )
+
+      assert Locations.begin_consent(ctx.actor, over.id) == {:error, :not_found}
+    end
+
+    # The same identifiers carrying anything else are a conflict, not a
+    # duplicate the device would then discard as stored.
+    test "a sample's identifiers carrying other contents are refused, not called a duplicate",
+         ctx do
+      {:ok, grant} = Locations.begin_consent(ctx.actor, ctx.trip.id)
+      original = sample(ctx, grant)
+      assert results(ctx, [original]) == [{"ACCEPTED", nil}]
+      assert results(ctx, [original]) == [{"DUPLICATE", nil}]
+
+      fields = Map.delete(original, "device_signature")
+
+      for change <- [
+            %{"lat_e7" => 515_075_000},
+            %{"accuracy_cm" => 900},
+            %{
+              "occurred_at" => DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), -5, :second))
+            },
+            %{"is_mock" => true}
+          ] do
+        moved = fields |> Map.merge(change) |> Fixtures.signed_sample(ctx.seed)
+        assert results(ctx, [moved]) == [{"REJECTED", "DEVICE_SEQUENCE_CONFLICT"}]
+      end
+    end
+  end
 end

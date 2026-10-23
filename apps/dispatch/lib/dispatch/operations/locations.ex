@@ -36,7 +36,6 @@ defmodule Dispatch.Operations.Locations do
   @max_batch 100
   @max_skew_ms 300_000
   @default_grace_seconds 1_800
-  @consentable [:PLANNED, :ACTIVE]
 
   @type result :: %{sample_id: String.t() | nil, result: String.t(), code: String.t() | nil}
 
@@ -69,24 +68,47 @@ defmodule Dispatch.Operations.Locations do
       if grant.revoked_at do
         {:ok, grant}
       else
+        # Every open grant for the trip, not only this one: two requests that
+        # raced each made one, and a twin left open would undo the revocation.
         revoked =
-          grant
-          |> Ash.Changeset.for_update(:revoke_location_consent, %{},
-            actor: actor,
-            tenant: actor.tenant_id
-          )
-          |> Ash.update!()
-
-        audit!(actor, "location_consent.revoked", revoked)
+          actor
+          |> grants()
+          |> Enum.filter(&(is_nil(&1.revoked_at) and same_trip?(&1, grant)))
+          |> Enum.map(&revoke!(actor, &1))
 
         StreamRefresh.enqueue!(actor, actor.principal_id, "location_consent.revoked", %{
-          "grant_id" => revoked.id
+          "grant_id" => grant.id
         })
 
-        {:ok, revoked}
+        {:ok, Enum.find(revoked, &(&1.id == grant.id))}
       end
     end
   end
+
+  @doc """
+  Ends `trip`'s location consents at its end plus grace, when that is sooner
+  than they would have. Run as the trip completes or is cancelled; system
+  work, not any participant's request.
+  """
+  @spec close_consents(struct()) :: :ok
+  def close_consents(%Assignment{ends_at: %DateTime{}} = trip) do
+    closes = window_end(trip)
+
+    ConsentGrant
+    |> Ash.Query.filter(kind == :LOCATION_SHARING and is_nil(revoked_at))
+    # REVIEWED-UNAUTHORIZED: the trip's own end closes its consents; no
+    # participant acts, and nothing read leaves this function.
+    |> Ash.read!(authorize?: false, tenant: trip.tenant_id)
+    |> Enum.filter(&(&1.scope_json["assignment_id"] == trip.id))
+    |> Enum.filter(&(is_nil(&1.expires_at) or DateTime.compare(&1.expires_at, closes) == :gt))
+    |> Enum.each(fn grant ->
+      grant
+      |> Ash.Changeset.for_update(:close_location_consent, %{expires_at: closes})
+      |> Ash.update!(authorize?: false, tenant: trip.tenant_id)
+    end)
+  end
+
+  def close_consents(_trip_without_an_end), do: :ok
 
   @doc "Ingests a batch, one result per sample, in the order sent."
   @spec ingest(Actor.t(), [map()]) :: {:ok, [result()]} | {:error, :forbidden | :batch_too_large}
@@ -130,10 +152,10 @@ defmodule Dispatch.Operations.Locations do
 
   defp own_assignment(actor, id) do
     with {:ok, id} <- uuid(id),
-         {:ok, %Assignment{operator_participant_id: operator, status: status} = assignment}
-         when status in @consentable <-
+         {:ok, %Assignment{operator_participant_id: operator} = assignment} <-
            Ash.get(Assignment, id, authorize?: false, tenant: actor.tenant_id),
-         true <- operator == actor.principal_id do
+         true <- operator == actor.principal_id,
+         true <- Assignment.open?(assignment, DateTime.utc_now()) do
       {:ok, assignment}
     else
       _not_theirs -> {:error, :not_found}
@@ -174,6 +196,21 @@ defmodule Dispatch.Operations.Locations do
     ConsentGrant
     |> Ash.Query.filter(participant_id == ^actor.principal_id and kind == :LOCATION_SHARING)
     |> Ash.read!(actor: actor, tenant: actor.tenant_id)
+  end
+
+  defp same_trip?(a, b), do: a.scope_json["assignment_id"] == b.scope_json["assignment_id"]
+
+  defp revoke!(actor, grant) do
+    revoked =
+      grant
+      |> Ash.Changeset.for_update(:revoke_location_consent, %{},
+        actor: actor,
+        tenant: actor.tenant_id
+      )
+      |> Ash.update!()
+
+    audit!(actor, "location_consent.revoked", revoked)
+    revoked
   end
 
   defp create_grant(actor, assignment) do
@@ -298,7 +335,19 @@ defmodule Dispatch.Operations.Locations do
       select: %{
         id: type(s.id, :binary_id),
         device_id: type(s.device_id, :binary_id),
-        device_sequence: s.device_sequence
+        device_sequence: s.device_sequence,
+        contents: {
+          type(s.assignment_id, :binary_id),
+          type(s.consent_grant_id, :binary_id),
+          fragment("ST_X(?::geometry)", s.position),
+          fragment("ST_Y(?::geometry)", s.position),
+          s.accuracy_m,
+          s.speed_mps,
+          s.bearing_deg,
+          s.provider,
+          s.is_mock,
+          type(s.occurred_at, :utc_datetime_usec)
+        }
       }
     )
     # REVIEWED-UNAUTHORIZED: whether this sample ID or device sequence is taken.
@@ -307,14 +356,30 @@ defmodule Dispatch.Operations.Locations do
       [] ->
         :new
 
-      [%{id: id, device_id: device, device_sequence: sequence}]
+      # The same sample only if it says the same thing: identifiers carrying
+      # anything else would be discarded by the device as already stored.
+      [%{id: id, device_id: device, device_sequence: sequence, contents: contents}]
       when id == sample.id and device == sample.device_id and
              sequence == sample.device_sequence ->
-        :duplicate
+        if same_contents?(contents, sample),
+          do: :duplicate,
+          else: {:error, "DEVICE_SEQUENCE_CONFLICT"}
 
       _taken ->
         {:error, "DEVICE_SEQUENCE_CONFLICT"}
     end
+  end
+
+  defp same_contents?(
+         {assignment, grant, lng, lat, accuracy, speed, bearing, provider, mock, at},
+         sample
+       ) do
+    {sample_lng, sample_lat} = sample.position
+
+    {assignment, grant, lng, lat, accuracy, speed, bearing, provider, mock} ==
+      {sample.assignment_id, sample.consent_grant_id, sample_lng, sample_lat, sample.accuracy_m,
+       sample.speed_mps, sample.bearing_deg, sample.provider, sample.is_mock} and
+      DateTime.compare(at, sample.occurred_at) == :eq
   end
 
   defp consent(actor, sample) do

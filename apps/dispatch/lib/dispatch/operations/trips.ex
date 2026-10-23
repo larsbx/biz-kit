@@ -30,14 +30,13 @@ defmodule Dispatch.Operations.Trips do
 
       trips =
         Assignment
-        |> Ash.Query.filter(
-          operator_participant_id == ^actor.principal_id and status in [:PLANNED, :ACTIVE] and
-            (is_nil(ends_at) or ends_at > ^now)
-        )
+        |> Ash.Query.filter(operator_participant_id == ^actor.principal_id)
         |> Ash.Query.sort(starts_at: :asc, id: :asc)
         # REVIEWED-UNAUTHORIZED: Assignment has no policies yet; the filter on
         # the actor's own participant ID is the authorization, checked above.
         |> Ash.read!(authorize?: false, tenant: actor.tenant_id)
+        # The one definition of "not yet over", shared with begin_consent.
+        |> Enum.filter(&Assignment.open?(&1, now))
         |> Enum.map(&%{assignment: &1, consent: Map.get(covering, &1.id)})
 
       {:ok, trips}

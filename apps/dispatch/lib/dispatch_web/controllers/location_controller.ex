@@ -162,13 +162,23 @@ defmodule DispatchWeb.LocationController do
     end
   end
 
+  # The declared length when there is one, and in any case the parsed body
+  # re-encoded: a chunked upload declares none, and the re-encoding is no
+  # larger than what arrived.
   defp too_large?(conn) do
-    case get_req_header(conn, "content-length") do
-      [length | _] -> String.to_integer(length) > @max_batch_bytes
-      [] -> false
+    declared =
+      case get_req_header(conn, "content-length") do
+        [length | _] -> Integer.parse(length)
+        [] -> {0, ""}
+      end
+
+    case declared do
+      {length, ""} ->
+        length > @max_batch_bytes or byte_size(Jason.encode!(conn.body_params)) > @max_batch_bytes
+
+      _unreadable ->
+        true
     end
-  rescue
-    ArgumentError -> true
   end
 
   defp mutate(conn, fun) do

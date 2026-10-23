@@ -147,6 +147,16 @@ defmodule DispatchWeb.LocationControllerTest do
     assert post("/v1/me/location-samples:batch", %{"samples" => many}, ctx.token).status == 413
   end
 
+  # A chunked upload declares no length; the cap is on what arrived.
+  test "the 256 KiB cap holds without a Content-Length", ctx do
+    %{"consent_grant_id" => grant} = consent!(ctx)
+    padded = Map.put(sample(ctx, grant), "padding", String.duplicate("x", 300_000))
+    conn = post("/v1/me/location-samples:batch", %{"samples" => [padded]}, ctx.token)
+
+    assert conn.status == 413
+    assert Jason.decode!(conn.resp_body)["code"] == "BATCH_TOO_LARGE"
+  end
+
   test "someone else's trip is not found", ctx do
     %{participant: other} = Fixtures.person(ctx.tenant, ctx.org)
     theirs = Fixtures.assignment_record(ctx.tenant, ctx.org, other)
