@@ -28,12 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Android and browser implementation from d-patch#20, plus the client
-      # storing only fixes its consent covers (claude/d-patch-continuation-rkqpx1).
+      # storing only fixes its consent covers (d-patch#21).
       # Pin the client, while actions/checkout above tests this server's merge ref.
       - uses: actions/checkout@v4
         with:
           repository: larsbx/d-patch
-          ref: 368c2bb3526856b8f5610e90e678e8bbb6e71ce1
+          ref: 213d2e06f5bfc751b3870fb0925f6fff0e46ccf7
           path: d-patch
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
