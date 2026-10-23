@@ -136,6 +136,8 @@ Regressions include whitespace, escaped JSON, both routes, and the exact byte
 boundary. The general parser's 1 MB limit remains for other routes.
 
 `Location cross-repository acceptance` tests this server's merge revision
-against d-patch main as merged by #20 (pinned `96909d55`), running browser and
-both driver/courier emulator lanes. This is test-stack evidence, not production
+against d-patch main as it stands at run time (or a ref given to a manual
+run), on every pull request and push here and nightly, so client changes are
+picked up without a re-pin; each run logs the d-patch commit it tested. It
+runs browser and both driver/courier emulator lanes. This is test-stack evidence, not production
 deployment or physical-device acceptance.

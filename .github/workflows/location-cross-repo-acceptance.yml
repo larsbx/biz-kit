@@ -3,6 +3,15 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The client moves independently: pick up d-patch main nightly, not only
+  # when this repository changes.
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      d_patch_ref:
+        description: d-patch branch, tag or commit to test against
+        default: main
 permissions:
   contents: read
 jobs:
@@ -27,13 +36,12 @@ jobs:
       BIZ_KIT_DIR: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-      # Android and browser implementation from d-patch#20, plus the client
-      # storing only fixes its consent covers (claude/d-patch-continuation-rkqpx1).
-      # Pin the client, while actions/checkout above tests this server's merge ref.
+      # The client at d-patch main (or the ref a manual run names), resolved at
+      # run time; the commit tested is printed by "Start this server revision".
       - uses: actions/checkout@v4
         with:
           repository: larsbx/d-patch
-          ref: 368c2bb3526856b8f5610e90e678e8bbb6e71ce1
+          ref: ${{ inputs.d_patch_ref || 'main' }}
           path: d-patch
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
