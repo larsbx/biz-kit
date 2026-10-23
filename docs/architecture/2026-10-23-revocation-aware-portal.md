@@ -29,6 +29,9 @@ principal revocation, removed/reassigned identity bindings and expiry all deny
 access independently of Dispatch role assignments. Sign-in timestamps in cookie
 state are refreshed from the source, not trusted for step-up decisions.
 
+Portal logout also revokes the source reference before clearing the cookie, so
+replaying the previous cookie cannot restore access after a successful logout.
+
 Both SSE transport loops check the same source before every refresh or heartbeat,
 before invoking the existing stream authorization/rendering code. A failed check
 ends the loop without another frame; the existing subscription `after` releases
@@ -68,8 +71,10 @@ Local environment initially has no Elixir or PostgreSQL. An isolated extracted
 Elixir 1.14 / OTP 25 runtime compiled the Identity sources and ran the reference,
 existing durable-session, stale-read race and cluster-session files: **18 tests,
 0 failures**. This fallback is not the supported Elixir 1.19 / OTP 27 acceptance
-lane, nor Dispatch/PostgreSQL execution. Changed source parses and is formatted
-with that fallback; `git diff --check` passes.
+lane, nor Dispatch/PostgreSQL execution. Subsequently the same 18 tests passed
+on an isolated supported Elixir 1.19 / OTP 27.3.4 runner. These direct ExUnit
+runs do not exercise the unavailable Req provider dependencies or Dispatch.
+Changed source parses and is formatted; `git diff --check` passes.
 
 `Portal authentication acceptance / portal-auth-postgis` adds a focused hosted
 Elixir 1.19 / OTP 27 job with PostgreSQL 16 / PostGIS, full Identity regressions,

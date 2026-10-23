@@ -66,7 +66,7 @@ defmodule DispatchWeb.PortalRevocationTest do
     assert request(ctx.browser, :get, "/operations").status == 200
   end
 
-  for ending <- [:logout, :principal, :unbind, :expiry, :remote_logout] do
+  for ending <- [:logout, :portal_logout, :principal, :unbind, :expiry, :remote_logout] do
     @ending ending
     test "#{ending} ends pages, role selection, both stream ticks and reconnects", ctx do
       page = request(ctx.browser, :get, "/operations")
@@ -92,6 +92,11 @@ defmodule DispatchWeb.PortalRevocationTest do
       case @ending do
         :logout ->
           Identity.logout(ctx.token)
+
+        :portal_logout ->
+          signed_out = request(choice, :delete, "/session", %{"_csrf_token" => csrf})
+          assert signed_out.status == 302
+          refute get_session(signed_out, PortalSession.reference_key())
 
         :principal ->
           Identity.revoke_principal(ctx.user.oidc_subject)
@@ -160,6 +165,30 @@ defmodule DispatchWeb.PortalRevocationTest do
                  )
       end
     end
+  end
+
+  test "a verified subject without a revocable source cannot open a portal", ctx do
+    Application.put_env(
+      :dispatch,
+      :identity,
+      Keyword.put(
+        Application.get_env(:dispatch, :identity),
+        :token_verifier,
+        Dispatch.Support.Tokens.StaticVerifier
+      )
+    )
+
+    login = request(nil, :get, "/login")
+    [_all, csrf] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, login.resp_body)
+
+    refused =
+      request(login, :post, "/session", %{
+        "token" => Dispatch.Support.Tokens.StaticVerifier.token_for(ctx.user.oidc_subject),
+        "_csrf_token" => csrf
+      })
+
+    assert refused.status == 401
+    refute get_session(refused, PortalSession.reference_key())
   end
 
   test "legacy, malformed and mismatched browser bindings fail closed", ctx do

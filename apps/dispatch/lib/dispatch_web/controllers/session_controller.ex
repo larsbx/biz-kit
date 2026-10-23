@@ -62,7 +62,12 @@ defmodule DispatchWeb.SessionController do
 
   @doc "Ends the session."
   @spec delete(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def delete(conn, _params), do: conn |> clear_session() |> redirect_to("/login")
+  def delete(conn, _params) do
+    :ok =
+      BizKit.Identity.Sessions.revoke_reference(get_session(conn, PortalSession.reference_key()))
+
+    conn |> clear_session() |> redirect_to("/login")
+  end
 
   @doc """
   The role/scope switcher of Section 4.3.
