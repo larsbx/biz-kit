@@ -75,6 +75,35 @@ defmodule SpruceGoose.Web.RateLimitTest do
     assert get(@enrolment, client).status == 429
   end
 
+  test "the e2e sign-in environment variable does not configure production overrides" do
+    env = %{
+      "RELEASE_NAME" => "orchestration",
+      "SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR" => "00000000-0000-0000-0000-000000000001",
+      "DATABASE_URL" => "ecto://test:test@localhost/test",
+      "DATABASE_SSL" => "false",
+      "TOKEN_SIGNING_SECRET" => "test-only-runtime-config",
+      "SPRUCE_GOOSE_MCP_ENABLED" => "false",
+      "OUTBOX_DISPATCHER_ENABLED" => "false",
+      "SPRUCE_GOOSE_SIGN_IN_LIMIT" => "600"
+    }
+
+    previous = Map.new(env, fn {key, _} -> {key, System.get_env(key)} end)
+    System.put_env(env)
+
+    try do
+      runtime = Path.expand("../../../../../config/runtime.exs", __DIR__)
+      dev = Config.Reader.read!(runtime, env: :dev, target: :host)
+      prod = Config.Reader.read!(runtime, env: :prod, target: :host)
+      assert get_in(dev, [:spruce_goose, RateLimit, :overrides]) == %{sign_in: {600, 60_000}}
+      refute get_in(prod, [:spruce_goose, RateLimit, :overrides])
+    after
+      Enum.each(previous, fn
+        {key, nil} -> System.delete_env(key)
+        {key, value} -> System.put_env(key, value)
+      end)
+    end
+  end
+
   test "a new window starts afresh" do
     limits!(%{capability: {1, 100}})
     client = ip()
