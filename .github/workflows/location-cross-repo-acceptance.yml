@@ -27,12 +27,13 @@ jobs:
       BIZ_KIT_DIR: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-      # Android and browser implementation already merged by d-patch#20.
+      # Android and browser implementation from d-patch#20, plus the client
+      # storing only fixes its consent covers (claude/d-patch-continuation-rkqpx1).
       # Pin the client, while actions/checkout above tests this server's merge ref.
       - uses: actions/checkout@v4
         with:
           repository: larsbx/d-patch
-          ref: 96909d55f5b5ebd5e467ef2fc33b5711818b8374
+          ref: 368c2bb3526856b8f5610e90e678e8bbb6e71ce1
           path: d-patch
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
