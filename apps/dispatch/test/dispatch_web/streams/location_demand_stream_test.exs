@@ -72,7 +72,8 @@ defmodule DispatchWeb.Streams.LocationDemandTest do
     assert heard(chunk) =~ ~s("sample_interval_ms":3000)
 
     # A second notification with no change sends nothing.
-    assert {:emit, [], ^session} = LocationDemand.tick(session, :demand)
+    # Every tick revalidates the actor, so only the mode is compared.
+    assert {:emit, [], %{mode: :realtime}} = LocationDemand.tick(session, :demand)
 
     Process.exit(viewer, :kill)
     assert_receive {^ref, :leave, _group, [^viewer]}
