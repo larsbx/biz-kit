@@ -65,7 +65,11 @@ replay the encrypted cookie, retain the role assignment, and check protected
 pages, GET/POST role selection, both SSE tick paths and reconnects after each
 ending condition. A remote-node case checks authentication and revocation over
 the connected singleton; it does not claim a multi-node PostgreSQL deployment.
-Ordinary sessions and both streams have positive controls.
+Ordinary sessions and both streams have positive controls. Actual controller
+loop tests revoke at the first snapshot write, queue a refresh and forbid any
+subsequent chunk, so removing the transport check causes a deterministic failure.
+Production PostgreSQL native-store tests also assert invalidation and successful
+unrevoked restoration through the reference API.
 
 Local environment initially has no Elixir or PostgreSQL. An isolated extracted
 Elixir 1.14 / OTP 25 runtime compiled the Identity sources and ran the reference,
@@ -74,7 +78,12 @@ existing durable-session, stale-read race and cluster-session files: **18 tests,
 lane, nor Dispatch/PostgreSQL execution. Subsequently the same 18 tests passed
 on an isolated supported Elixir 1.19 / OTP 27.3.4 runner. These direct ExUnit
 runs do not exercise the unavailable Req provider dependencies or Dispatch.
-Changed source parses and is formatted; `git diff --check` passes.
+After fetching the unchanged locked dependencies through a local cache that
+retains Hex signature/checksum verification, normal `mix test` in
+`apps/biz_kit_identity` on Elixir 1.19 / OTP 27.3.4 passed: **44 tests,
+0 failures**. Existing intentional kill/restart tests emit logger formatter
+errors, as previously recorded for #66. Changed source parses and is formatted;
+`git diff --check` passes.
 
 `Portal authentication acceptance / portal-auth-postgis` adds a focused hosted
 Elixir 1.19 / OTP 27 job with PostgreSQL 16 / PostGIS, full Identity regressions,

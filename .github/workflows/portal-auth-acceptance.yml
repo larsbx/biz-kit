@@ -34,6 +34,21 @@ jobs:
           elixir-version: '1.19.0'
       - run: mix deps.get --check-locked
       - run: mix compile --warnings-as-errors
+      - name: Format portal correction
+        run: >-
+          mix format --check-formatted
+          apps/biz_kit_identity/lib/biz_kit/identity.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex
+          apps/biz_kit_identity/test/session_reference_test.exs
+          apps/dispatch/lib/dispatch/identity/tokens/biz_kit_session.ex
+          apps/dispatch/lib/dispatch/identity/tokens/verifier.ex
+          apps/dispatch/lib/dispatch_web/controllers/session_controller.ex
+          apps/dispatch/lib/dispatch_web/controllers/stream_controller.ex
+          apps/dispatch/lib/dispatch_web/plugs/portal_session.ex
+          apps/dispatch/lib/dispatch_web/plugs/require_subject.ex
+          apps/dispatch/test/dispatch_web/portal_revocation_test.exs
+          apps/dispatch/test/support/portal_identity.ex
+          apps/spruce_goose/test/native_session_revocation_test.exs
       - name: Identity and cross-node regressions
         working-directory: apps/biz_kit_identity
         run: mix test

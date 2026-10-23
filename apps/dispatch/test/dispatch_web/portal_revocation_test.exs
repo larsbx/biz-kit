@@ -19,6 +19,22 @@ defmodule DispatchWeb.PortalRevocationTest do
              encryption_salt: "Nn4vT2kA"
            )
 
+  # Uses the real controller receive loop. The first successful snapshot write
+  # is the barrier: revoke, queue a refresh, and forbid any subsequent chunk.
+  defmodule RevokeAfterSnapshot do
+    defdelegate send_chunked(state, status, headers), to: Plug.Adapters.Test.Conn
+
+    def chunk(%{after_snapshot: after_snapshot} = state, data) do
+      if state[:snapshot_written],
+        do: ExUnit.Assertions.flunk("frame emitted after source logout")
+
+      {:ok, body, state} = Plug.Adapters.Test.Conn.chunk(state, data)
+      after_snapshot.()
+      send(self(), {:outbox, :test_refresh})
+      {:ok, body, Map.put(state, :snapshot_written, true)}
+    end
+  end
+
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
     :ok = PortalIdentity.setup()
@@ -164,6 +180,36 @@ defmodule DispatchWeb.PortalRevocationTest do
                    fn -> Participant.tick(participant, reason) end
                  )
       end
+    end
+  end
+
+  for kind <- [:operations, :participant] do
+    @kind kind
+    test "the actual #{@kind} controller loop stops after source logout", ctx do
+      page = request(ctx.browser, :get, "/operations")
+      assert page.status == 200
+
+      stream =
+        conn(:get, "/stream")
+        |> init_test_session(get_session(page))
+        |> assign(:actor, page.assigns.actor)
+
+      {Plug.Adapters.Test.Conn, state} = stream.adapter
+      state = Map.put(state, :after_snapshot, fn -> Identity.logout(ctx.token) end)
+      stream = %{stream | adapter: {RevokeAfterSnapshot, state}}
+
+      finished =
+        case @kind do
+          :operations ->
+            StreamController.operations(stream, %{})
+
+          :participant ->
+            StreamController.participant(stream, %{"participant_id" => ctx.driver.id})
+        end
+
+      assert finished.state == :chunked
+      assert finished.resp_body =~ "event: datastar-patch-elements"
+      assert {:error, _} = PortalSession.authenticate(finished)
     end
   end
 
