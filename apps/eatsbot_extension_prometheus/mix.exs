@@ -4,11 +4,13 @@ defmodule Eatsbot.Extensions.Prometheus.MixProject do
   def project do
     [
       app: :eatsbot_extension_prometheus,
+      build_path: "../../_build",
+      config_path: "../../config/config.exs",
+      deps_path: "../../deps",
+      lockfile: "../../mix.lock",
       version: "0.1.0",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      # The application and its path dependencies resolve one shared security lock.
-      lockfile: Path.expand("../../mix.lock", __DIR__),
       deps: deps()
     ]
   end
@@ -21,12 +23,9 @@ defmodule Eatsbot.Extensions.Prometheus.MixProject do
 
   defp deps do
     [
-      {:phoenix, "~> 1.7.24"},
+      {:phoenix, "~> 1.8"},
       {:prom_ex, "~> 1.11.0"},
-      {:eatsbot_core,
-       path:
-         Path.join(["..", "..", "core"])
-         |> Path.expand()}
+      {:eatsbot_core, in_umbrella: true}
     ]
   end
 end

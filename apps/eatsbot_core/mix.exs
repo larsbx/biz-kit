@@ -4,12 +4,14 @@ defmodule EatsbotCore.MixProject do
   def project do
     [
       app: :eatsbot_core,
+      build_path: "../../_build",
+      config_path: "../../config/config.exs",
+      deps_path: "../../deps",
+      lockfile: "../../mix.lock",
       version: "0.1.0",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :dev,
-      # The application and its path dependencies resolve one shared security lock.
-      lockfile: Path.expand("../mix.lock", __DIR__),
       deps: deps()
     ]
   end
@@ -30,8 +32,8 @@ defmodule EatsbotCore.MixProject do
       {:igniter, "~> 0.5", only: [:dev, :test]},
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
-      {:ash_authentication, "~> 4.15.0"},
-      {:ash_authentication_phoenix, "~> 2.17.4"},
+      {:ash_authentication, "~> 5.0-rc"},
+      {:ash_authentication_phoenix, "~> 3.0-rc"},
       {:ash_graphql, "~> 1.12.0"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "~> 2.14.5"},

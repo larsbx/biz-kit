@@ -148,6 +148,7 @@ import_config "#{config_env()}.exs"
 # Import Telegram Bot Extension
 # Uncomment if needed
 
-import_config ["extensions", "telegram_bot", "config", "#{config_env()}.exs"]
-              |> Path.join()
-              |> Path.expand()
+import_config Path.expand(
+                "../../eatsbot_extension_telegram_bot/config/#{config_env()}.exs",
+                __DIR__
+              )

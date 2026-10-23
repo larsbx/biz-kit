@@ -4,8 +4,12 @@ defmodule Eatsbot.MixProject do
   def project do
     [
       app: :eatsbot,
+      build_path: "../../_build",
+      config_path: "../../config/config.exs",
+      deps_path: "../../deps",
+      lockfile: "../../mix.lock",
       version: "1.0.41",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :dev,
@@ -36,14 +40,14 @@ defmodule Eatsbot.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:ash_authentication, "~> 4.15.0"},
-      {:ash_authentication_phoenix, "~> 2.17.4"},
+      {:ash_authentication, "~> 5.0-rc"},
+      {:ash_authentication_phoenix, "~> 3.0-rc"},
       {:ash_graphql, "~> 1.12.0"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "~> 2.14.5"},
       {:ash, "~> 3.34.6"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
-      {:phoenix, "~> 1.7.24"},
+      {:phoenix, "~> 1.8"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.22.4"},
@@ -88,22 +92,10 @@ defmodule Eatsbot.MixProject do
       {:ash_money, "~> 0.2.6"},
       # {:ash_double_entry, "~> 1.0.12"},
       # Optional Enable Telegram Bot
-      {:eatsbot_extension_telegram_bot,
-       path:
-         Path.join(["extensions", "telegram_bot"])
-         |> Path.expand()},
-      {:eatsbot_extension_prometheus,
-       path:
-         Path.join(["extensions", "prometheus"])
-         |> Path.expand()},
-      {:eatsbot_extension_kafka,
-       path:
-         Path.join(["extensions", "kafka"])
-         |> Path.expand()},
-      {:eatsbot_core,
-       path:
-         Path.join(["core"])
-         |> Path.expand()}
+      {:eatsbot_extension_telegram_bot, in_umbrella: true},
+      {:eatsbot_extension_prometheus, in_umbrella: true},
+      {:eatsbot_extension_kafka, in_umbrella: true},
+      {:eatsbot_core, in_umbrella: true}
     ]
   end
 
