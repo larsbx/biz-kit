@@ -8,6 +8,8 @@ defmodule DispatchWeb.Streams.Operations do
   not inherit authority accidentally from what it happens to render.
   """
 
+  @behaviour DispatchWeb.Streams.Transport
+
   alias Dispatch.Access.Actor
   alias Dispatch.Identity.PrincipalResolution
   alias DispatchWeb.Components.Operations, as: OperationsComponents
@@ -40,6 +42,7 @@ defmodule DispatchWeb.Streams.Operations do
     end
   end
 
+  @impl DispatchWeb.Streams.Transport
   @spec tick(t(), reason()) :: {:emit, iodata(), t()} | {:close, :unauthorized}
   def tick(%__MODULE__{} = session, :heartbeat) do
     case revalidate(session.actor) do

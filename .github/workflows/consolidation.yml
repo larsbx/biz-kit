@@ -258,6 +258,26 @@ jobs:
           apps/dispatch/lib/dispatch_web/components/settings.ex
           apps/dispatch/test/dispatch/accounts/administration_test.exs
           apps/dispatch/test/dispatch_web/settings_controller_test.exs
+          apps/dispatch/lib/dispatch/operations/consent_grant.ex
+          apps/dispatch/lib/dispatch/operations/location_sample.ex
+          apps/dispatch/lib/dispatch/operations/locations.ex
+          apps/dispatch/lib/dispatch/operations/stream_refresh.ex
+          apps/dispatch/lib/dispatch_web/controllers/location_controller.ex
+          apps/dispatch/lib/dispatch_web/schemas/locations.ex
+          apps/dispatch/test/dispatch/operations/locations_test.exs
+          apps/dispatch/test/dispatch_web/location_controller_test.exs
+          apps/dispatch/lib/dispatch/operations/location_demand.ex
+          apps/dispatch/lib/dispatch_web/streams/transport.ex
+          apps/dispatch/lib/dispatch_web/streams/location_demand.ex
+          apps/dispatch/test/dispatch/operations/location_demand_test.exs
+          apps/dispatch/test/dispatch_web/streams/location_demand_stream_test.exs
+          apps/dispatch/lib/dispatch/operations/trips.ex
+          apps/dispatch/lib/dispatch/fleet/changes/close_location_consents.ex
+          apps/dispatch/lib/dispatch_web/controllers/assignment_controller.ex
+          apps/dispatch/lib/dispatch_web/controllers/location_json.ex
+          apps/dispatch/lib/dispatch_web/schemas/trips.ex
+          apps/dispatch/test/dispatch/operations/trips_test.exs
+          apps/dispatch/test/dispatch_web/assignment_controller_test.exs
           apps/spruce_goose/lib/spruce_goose/actors/grant.ex
           apps/spruce_goose/lib/spruce_goose/actors/registry.ex
           apps/spruce_goose/lib/spruce_goose/cli/command.ex

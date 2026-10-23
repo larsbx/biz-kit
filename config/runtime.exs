@@ -542,6 +542,14 @@ end
 # It works only where :allow_development_provider is set, which is here alone.
 if config_env() == :dev do
   config :biz_kit_identity, :allow_development_provider, true
+
+  # scripts/e2e-stack.sh signs a whole cast in, from one address, within a
+  # minute. It is not the limiter's test, so it raises that bucket alone.
+  if limit = System.get_env("SPRUCE_GOOSE_SIGN_IN_LIMIT") do
+    config :spruce_goose, SpruceGoose.Web.RateLimit,
+      overrides: %{sign_in: {String.to_integer(limit), 60_000}}
+  end
+
   # Development serves /auth over plain HTTP; a secure cookie would never come
   # back, and sign-in could not complete. Every other environment keeps it.
   config :spruce_goose, :secure_cookies, false
