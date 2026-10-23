@@ -4,6 +4,7 @@
 #
 #   scripts/propose-update.sh BRANCH TITLE BODY
 #
+# The pull request targets BASE, by default the repository's default branch.
 # GH_TOKEN opens the pull request. Changes pushed and opened with the default
 # GITHUB_TOKEN do not start other workflows, so set the VENDOR_PR_TOKEN secret
 # (a fine-grained token with contents and pull-requests write) for the pull
@@ -25,4 +26,4 @@ git switch -c "$branch"
 git add -A
 git commit -m "$title" -m "$body"
 git push origin "$branch"
-gh pr create --base "${BASE:-main}" --head "$branch" --title "$title" --body "$body"
+gh pr create --base "${BASE:-$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)}" --head "$branch" --title "$title" --body "$body"
