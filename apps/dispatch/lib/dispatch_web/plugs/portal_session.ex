@@ -25,6 +25,10 @@ defmodule DispatchWeb.Plugs.PortalSession do
 
   alias Dispatch.Identity.PrincipalResolution
 
+  @session_reference "identity_session_reference"
+
+  def reference_key, do: @session_reference
+
   @session_subject "oidc_subject"
   @session_assignment "role_assignment_id"
   @session_authenticated_at "authenticated_at"
@@ -61,10 +65,25 @@ defmodule DispatchWeb.Plugs.PortalSession do
 
   @impl Plug
   def call(conn, _opts) do
-    case get_session(conn, @session_subject) do
-      subject when is_binary(subject) -> resolve(conn, subject)
-      _signed_out -> redirect_to_login(conn)
+    case authenticate(conn) do
+      {:ok, subject, at} -> conn |> put_authenticated_at(at) |> resolve(subject)
+      _ -> conn |> clear_session() |> redirect_to_login()
     end
+  end
+
+  @doc "Check the originating Identity session and binding, including during SSE."
+  def authenticate(conn) do
+    subject = get_session(conn, @session_subject)
+
+    with true <- is_binary(subject),
+         {:ok, %{principal: ^subject, authenticated_at: at}} <-
+           BizKit.Identity.session_from_reference(get_session(conn, @session_reference)) do
+      {:ok, subject, DateTime.from_unix!(at, :millisecond)}
+    else
+      _ -> {:error, :unauthenticated}
+    end
+  catch
+    :exit, _ -> {:error, :unavailable}
   end
 
   defp resolve(conn, subject) do

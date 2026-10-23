@@ -8,3 +8,6 @@ for app <- ~w(keel coop_substrate dispatch spruce_goose),
     File.exists?(path) do
   import_config path
 end
+
+# Credentials submitted to sign-in must never enter Phoenix request logs.
+config :phoenix, :filter_parameters, ["password", "token", "authorization"]

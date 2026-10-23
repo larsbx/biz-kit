@@ -17,6 +17,7 @@ defmodule DispatchWeb.StreamController do
   import Plug.Conn
 
   alias DispatchWeb.Datastar
+  alias DispatchWeb.Plugs.PortalSession
   alias DispatchWeb.Streams.{Operations, Participant}
 
   @doc "The carrier-scoped operations roster stream."
@@ -95,7 +96,7 @@ defmodule DispatchWeb.StreamController do
   end
 
   defp advance(conn, session, reason) do
-    case Participant.tick(session, reason) do
+    case authorized_tick(conn, fn -> Participant.tick(session, reason) end) do
       {:emit, chunk, session} ->
         # A closed socket ends the loop and returns the connection as it was.
         # Returning anything else would leak a non-conn out of a plug, which
@@ -132,7 +133,7 @@ defmodule DispatchWeb.StreamController do
   end
 
   defp operations_advance(conn, session, reason) do
-    case Operations.tick(session, reason) do
+    case authorized_tick(conn, fn -> Operations.tick(session, reason) end) do
       {:emit, chunk, session} ->
         case write(conn, chunk) do
           :closed -> conn
@@ -141,6 +142,14 @@ defmodule DispatchWeb.StreamController do
 
       {:close, :unauthorized} ->
         conn
+    end
+  end
+
+  @doc false
+  def authorized_tick(conn, tick) do
+    case PortalSession.authenticate(conn) do
+      {:ok, _, _} -> tick.()
+      _ -> {:close, :unauthorized}
     end
   end
 

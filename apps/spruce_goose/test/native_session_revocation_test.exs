@@ -50,6 +50,7 @@ defmodule SpruceGoose.NativeSessionRevocationTest do
       identity = %{issuer: "https://idp.test", subject: principal}
       token = Sessions.create_native(principal, identity)
       other = Sessions.create_native(BizKit.Identity.Principal.new_id(), identity)
+      reference = Sessions.reference(token)
       now = System.system_time(:millisecond)
       restart_sessions()
       hash = :crypto.hash(:sha256, token)
@@ -66,9 +67,11 @@ defmodule SpruceGoose.NativeSessionRevocationTest do
       send(reader, {:resume, ref})
       assert Task.await(fetch) == {:error, :unknown_session}
       assert Sessions.fetch(token, now) == {:error, :unknown_session}
+      assert Sessions.fetch_reference(reference, now) == {:error, :unknown_session}
       assert NativeSessionStore.get(hash) == :error
       restart_sessions()
       assert Sessions.fetch(token, now) == {:error, :unknown_session}
+      assert {:ok, _} = Sessions.fetch_reference(Sessions.reference(other), now)
       assert {:ok, _} = Sessions.fetch(other, now)
     end
   end
