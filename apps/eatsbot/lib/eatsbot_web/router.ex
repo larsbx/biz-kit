@@ -3,8 +3,6 @@ defmodule EatsbotWeb.Router do
 
   use AshAuthentication.Phoenix.Router
 
-  import AshAuthentication.Plug.Helpers
-
   import AshAdmin.Router
   import Plug.BasicAuth
 

@@ -52,8 +52,8 @@ defmodule EatsbotWeb.DeliveryLive.LocationInputComponent do
 
   defp update_field_value(socket, field, new_value),
     do:
-      update(socket, field, fn field ->
-        %Phoenix.HTML.FormField{field | value: new_value}
+      update(socket, field, fn %Phoenix.HTML.FormField{} = field ->
+        %{field | value: new_value}
       end)
 end
 

@@ -4,7 +4,7 @@ defmodule Eatsbot.Extensions.TelegramBot.Controller do
 
   require Logger
 
-  use Phoenix.Controller
+  use Phoenix.Controller, formats: [:json]
 
   alias Eatsbot.Extensions.TelegramBot.Handler
 

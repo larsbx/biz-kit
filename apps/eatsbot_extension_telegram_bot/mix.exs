@@ -23,7 +23,7 @@ defmodule Eatsbot.Extensions.TelegramBot.MixProject do
 
   defp deps do
     [
-      {:telegex, "~> 1.8.0"},
+      {:telegex, path: "../../vendor/telegex"},
       {:finch, "~> 0.13"},
       {:multipart, "~> 0.4.0"},
       {:remote_ip, "~> 1.2"},

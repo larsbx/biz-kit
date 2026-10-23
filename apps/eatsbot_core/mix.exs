@@ -27,8 +27,6 @@ defmodule EatsbotCore.MixProject do
   defp deps do
     [
       {:ash_money, "~> 0.2.6"},
-      # Money 6's Localize runtime needs EEP 68 JSON support on OTP 26.
-      {:json_polyfill, "~> 0.2.3"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
