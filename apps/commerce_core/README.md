@@ -17,7 +17,7 @@ tests remain a consumer conformance check. New independent CommerceCore tests
 can run without database setup:
 
 ```sh
-cd apps/commerce_core && mix test
+cd apps/commerce_core && mix test --no-start
 ```
 
 The only declared runtime dependency is `ex_money`. This kernel does not
