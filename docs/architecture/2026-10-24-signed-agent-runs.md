@@ -143,3 +143,31 @@ See [draft PR #91](https://github.com/larsbx/biz-kit/pull/91),
 [TaskCore run intents](../../apps/task_core/lib/task_core/agent_runs.ex),
 [OpenShell optional experiment](../../experiments/openshell_taskcore/README.md),
 [one-source-of-truth architecture](2026-10-11-single-source-of-truth.md).
+
+## Follow-on: capability preflight and operational lease semantics
+
+The follow-on agent-neutral coordinator work is under a separate PR because
+PR #91 was merged before the later experiment-branch commits. The additional
+modules introduce **pure contracts**, not a deployed runner:
+
+- `AgentCore.Capabilities`: fail-closed comparison of trusted host-derived
+  feature, data classification, region, duration and output requirements with
+  an approved execution profile. A configuration claim is not an independent
+  demonstration of residency/isolation enforcement.
+- `AgentCore.Preflight`: matches the current signed run's immutable profile
+  digest and duration/output ceilings with those requirements, yielding a
+  normalized execution envelope and ledger-derived effect ID.
+- `AgentCore.Attempts`: defines a pure operational lifecycle: pending,
+  leased, candidate-ready, cancel-requested and cancelled. Lease epochs and
+  tokens reject stale workers, and retry after expiry is forbidden until a
+  trusted backend reconciliation proves absence through a bounded,
+  auditable reconciliation receipt ID. A bare timeout or unreferenced "absent"
+  response is refused. The host must independently validate that receipt's
+  provenance and persist its state atomically. Result hashes never become
+  accepted DoD evidence without separate custody and review.
+
+The authoritative task history stays exclusively in CoopSubstrate. The host
+must still implement a **durable, serializable operational store**, backend
+idempotency, leasing transactions, verified cancellation/reconciliation,
+current task-read/execution grants, consent gates and authenticated typed
+business tools. No worker framework or execution substrate is canonical.
