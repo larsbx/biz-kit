@@ -308,7 +308,7 @@ defmodule AgentCore.Attempts do
       segment?(ticket["task_id"]) and segment?(ticket["source_event_id"]) and
       positive_integer?(ticket["task_version"]) and
       is_binary(ticket["definition_digest"]) and
-      Regex.match?(~r/\\A[0-9a-f]{64}\\z/, ticket["definition_digest"])
+      Regex.match?(~r/\A[0-9a-f]{64}\z/, ticket["definition_digest"])
   end
 
   defp safe_ticket?(_ticket, _chapter, _tenant, _project), do: false
