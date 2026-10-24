@@ -50,6 +50,10 @@ jobs:
           apps/task_core/lib/task_core/readiness.ex
           apps/task_core/lib/task_core/agent_candidates.ex
           apps/task_core/lib/task_core/agent_runs.ex
+          apps/agent_core/mix.exs
+          apps/agent_core/lib/agent_core/execution_port.ex
+          apps/agent_core/lib/agent_core/profiles.ex
+          apps/agent_core/test/profiles_test.exs
           apps/task_core/test/agent_candidates_test.exs
           apps/task_core/test/agent_runs_test.exs
           apps/coop_substrate/test/task_agent_run_intents_test.exs
@@ -305,6 +309,9 @@ jobs:
         run: mix test
       - name: Test the task core
         working-directory: apps/task_core
+        run: mix test
+      - name: Test the agent-neutral execution contracts
+        working-directory: apps/agent_core
         run: mix test
       - name: Test the common ledger
         working-directory: apps/coop_substrate
