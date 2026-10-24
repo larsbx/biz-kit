@@ -32,7 +32,7 @@ defmodule AgentCore.Profiles do
     with {:ok, profile} <- fetch(registry, id),
          :ok <- approved(profile, id),
          :ok <- adapter_valid(profile),
-         :ok <- valid_manifest(profile.manifest, id),
+         :ok <- valid_manifest(profile.manifest, id, profile.adapter),
          :ok <- digest_matches(profile.manifest, digest, hash_manifest) do
       {:ok, profile}
     end
@@ -58,11 +58,25 @@ defmodule AgentCore.Profiles do
 
   defp approved(_profile, _id), do: {:error, :invalid_execution_profile}
 
-  defp valid_manifest(%{"id" => id, "version" => 1, "parameters" => params} = manifest, id)
-       when map_size(manifest) == 3 and is_map(params),
-       do: :ok
+  defp valid_manifest(
+         %{
+           "id" => id,
+           "version" => 1,
+           "parameters" => params,
+           "adapter_module" => declared
+         } = manifest,
+         id,
+         adapter
+       )
+       when map_size(manifest) == 4 and is_map(params) and is_binary(declared) and
+              is_atom(adapter) do
+    if declared == Atom.to_string(adapter),
+      do: :ok,
+      else: {:error, :execution_profile_adapter_mismatch}
+  end
 
-  defp valid_manifest(_manifest, _id), do: {:error, :invalid_execution_profile_manifest}
+  defp valid_manifest(_manifest, _id, _adapter),
+    do: {:error, :invalid_execution_profile_manifest}
 
   defp digest_matches(manifest, {:bytes, digest}, hash_manifest) do
     case safe_hash(manifest, hash_manifest) do
