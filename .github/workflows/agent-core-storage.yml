@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "deploy/agent-core/**"
+      - "apps/agent_core/README.md"
       - ".github/workflows/agent-core-storage.yml"
   workflow_dispatch:
 
