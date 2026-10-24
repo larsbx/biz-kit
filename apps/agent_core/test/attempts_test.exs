@@ -76,6 +76,35 @@ defmodule AgentCore.AttemptsTest do
              Attempts.renew(state, @effect, 1, "token1", 1100, 100)
   end
 
+  test "backend handles are immutable, attempt-fenced operational locators" do
+    {state, lease} = leased()
+
+    assert {:ok, attached} =
+             Attempts.attach_backend(state, @effect, lease.epoch, "token1", 1050, "backend-handle-1")
+
+    assert {:ok, ^attached} =
+             Attempts.attach_backend(attached, @effect, lease.epoch, "token1", 1050, "backend-handle-1")
+
+    assert {:error, :backend_reference_conflict} =
+             Attempts.attach_backend(attached, @effect, lease.epoch, "token1", 1050, "backend-handle-2")
+
+    assert {:error, :invalid_backend_reference} =
+             Attempts.attach_backend(attached, @effect, lease.epoch, "token1", 1050, "../unsafe")
+
+    assert {:error, :invalid_attempt_token} =
+             Attempts.attach_backend(attached, @effect, lease.epoch, "wrong", 1050, "other")
+
+    assert {:ok, row} = Attempts.get(attached, @effect)
+    assert row.backend_ref == "backend-handle-1"
+
+    assert {:ok, cancelled} = Attempts.request_cancel(attached, @effect)
+    assert {:ok, row} = Attempts.get(cancelled, @effect)
+    assert row.backend_ref == "backend-handle-1"
+
+    assert {:error, :no_active_attempt} =
+             Attempts.attach_backend(cancelled, @effect, lease.epoch, "token1", 1055, "new-handle")
+  end
+
   test "a candidate is never a business completion and stale workers cannot replace it" do
     {state, lease} = leased()
     digest = {:bytes, <<2::256>>}
