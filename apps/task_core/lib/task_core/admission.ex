@@ -60,6 +60,7 @@ defmodule TaskCore.Admission do
     |> Map.merge(TaskCore.DoD.event_types())
     |> Map.merge(TaskCore.Readiness.event_types())
     |> Map.merge(TaskCore.Timing.event_types())
+    |> Map.merge(TaskCore.AgentRuns.event_types())
     |> Map.merge(TaskCore.Hierarchy.event_types())
     |> Map.merge(TaskCore.Todos.event_types())
   end
@@ -108,6 +109,9 @@ defmodule TaskCore.Admission do
 
         Map.has_key?(TaskCore.Timing.event_types(), env.type) ->
           TaskCore.Timing.check(env, gate.orchestration, gate.role_keys)
+
+        Map.has_key?(TaskCore.AgentRuns.event_types(), env.type) ->
+          TaskCore.AgentRuns.check(env, gate.orchestration)
 
         Map.has_key?(TaskCore.Hierarchy.event_types(), env.type) ->
           TaskCore.Hierarchy.check(env, gate.orchestration, gate.role_keys)

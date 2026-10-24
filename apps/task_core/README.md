@@ -86,3 +86,35 @@ first with verified evidence and a separate reviewer before the second can
 become ready. Evaluating this trusted test fixture is **not** a production
 decoder: production hosts must not evaluate source code from a blueprint.
 The ledger/web fixtures separately cover YAML and source verification.
+
+## OpenShell sandbox candidate handoff (experimental)
+
+`TaskCore.AgentCandidates.plan/2` is a **pure, non-authoritative** adapter
+from the trusted TaskCore replay to the seven-field, content-free ticket used
+by `experiments/openshell_taskcore`. It requires a ready or in-progress task
+with a committed Definition of Done and a live matching suggester grant. The
+host still must authenticate and authorize the agent's task read and execution
+before calling it; a suggester grant alone does **not** authorize task reads
+or general execution.
+
+`AgentCandidates.current?/3` rechecks the ticket after execution against
+current committed replay, refusing stale revisions, revoked agents and
+cancelled tasks. Nothing in either function creates an execution ledger,
+modifies the task, submits DoD evidence, or delegates a business command.
+The signed CoopSubstrate append gate remains the only authoritative entry
+point for subsequent task changes.
+
+Signed operator run intents and cancellation are now modeled by
+`TaskCore.AgentRuns` and registered through the existing TaskCore admission
+and CoopSubstrate ledger path. Each intent binds a current task/version/DoD
+reference, an agent principal/suggester grant, a generic execution-profile
+ID and digest, and engine-independent duration/output limits.
+`runnable?/2` rechecks live grants and task freshness. It is not an
+execution service, task-read grant or runtime authorization.
+
+`AgentCore` is a separate dependency-free sibling app that defines generic
+execution ports and approved-profile lookup for *any* execution engine.
+TaskCore does not depend on it, on OpenShell, or on a named agent framework.
+See [the agent-agnostic run-intent ADR](../../docs/architecture/2026-10-24-signed-agent-runs.md).
+
+See [the POC and its limitations](../../experiments/openshell_taskcore/README.md).

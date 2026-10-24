@@ -29,6 +29,7 @@ defmodule TaskCore.State do
         TaskCore.Timing.init()
       )
       |> Map.merge(TaskCore.Hierarchy.init())
+      |> Map.merge(TaskCore.AgentRuns.init())
 
   @doc """
   A task entering the inbox at version 1. Baselines and operator creation share
@@ -116,7 +117,8 @@ defmodule TaskCore.State do
     state = TaskCore.DoD.handle_event(env, state)
     state = TaskCore.Hierarchy.handle_event(env, state)
     state = TaskCore.Todos.handle_event(env, state)
-    TaskCore.Timing.handle_event(env, state)
+    state = TaskCore.Timing.handle_event(env, state)
+    TaskCore.AgentRuns.handle_event(env, state)
   end
 
   @authority [:grants, :suggester_grants, :dod_grants, :delegations]
