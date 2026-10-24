@@ -116,7 +116,7 @@ defmodule TaskCore.AgentRunsTest do
     assert execution.intent_event_id == "run-event1"
     assert execution.ticket["task_version"] == 2
     assert execution.execution_profile_id == "approved-profile"
-    assert execution.execution_profile_digest == {:bytes, <<4::256>>
+    assert execution.execution_profile_digest == {:bytes, <<4::256>>}
     refute Map.has_key?(execution.ticket, "authorization_event_id")
     refute Map.has_key?(execution.ticket, "suggester_grant_event_id")
     refute Map.has_key?(execution.ticket, "principal_id")
