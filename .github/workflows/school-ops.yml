@@ -21,7 +21,8 @@ jobs:
       - name: Resolve locked umbrella dependencies
         run: mix deps.get --check-locked
       - name: Compile SchoolOps
-        run: MIX_ENV=test mix compile --warnings-as-errors --app school_ops
+        working-directory: apps/school_ops
+        run: MIX_ENV=test mix compile --warnings-as-errors
       - name: Verify formatting
         run: mix format --check-formatted apps/school_ops/mix.exs apps/school_ops/lib/school_ops.ex apps/school_ops/test/school_ops_test.exs
       - name: Test SchoolOps
