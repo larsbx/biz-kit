@@ -145,9 +145,11 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
     end
 
     {:ok, _} =
-      Log.append(command.("TaskSOPAcknowledgedV1", 4, %{
-        "custody_receipt_id" => receipt.event_id
-      }))
+      Log.append(
+        command.("TaskSOPAcknowledgedV1", 4, %{
+          "custody_receipt_id" => receipt.event_id
+        })
+      )
 
     {:ok, _} = Log.append(command.("TaskQueuedV1", 5, %{}))
 
@@ -213,7 +215,8 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
     )
   end
 
-  test "signed intent admits through common ledger; same-envelope retry, replay and restart", ctx do
+  test "signed intent admits through common ledger; same-envelope retry, replay and restart",
+       ctx do
     run = request(ctx)
     {:ok, [accepted]} = Log.append(run)
     head = Log.head()
@@ -246,6 +249,7 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
     end
 
     {:ok, _} = Log.append(request(ctx))
+
     assert {:error, {:reject, 0, :agent_run_id_already_used}} =
              Log.append(request(ctx, %{"execution_profile_id" => "other-approved"}))
   end
@@ -267,6 +271,7 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
 
     cancellation = cancel(ctx)
     assert {:ok, _} = Log.append(cancellation)
+
     assert {:error, :agent_run_cancelled} =
              AgentRuns.runnable?(current_state(), @run_key)
   end
