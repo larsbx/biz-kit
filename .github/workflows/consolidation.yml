@@ -48,6 +48,11 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
           apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
           apps/task_core/lib/task_core/readiness.ex
+          apps/task_core/lib/task_core/agent_candidates.ex
+          apps/task_core/lib/task_core/agent_runs.ex
+          apps/task_core/test/agent_candidates_test.exs
+          apps/task_core/test/agent_runs_test.exs
+          apps/coop_substrate/test/task_agent_run_intents_test.exs
           apps/task_core/lib/task_core/todos.ex
           apps/task_core/lib/task_core/steps.ex
           apps/task_core/test/salvage_test.exs
