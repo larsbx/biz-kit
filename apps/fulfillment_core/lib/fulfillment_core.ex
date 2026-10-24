@@ -86,8 +86,10 @@ defmodule FulfillmentCore do
   defp identifier(_), do: {:error, :invalid_reference}
 
   defp transition(state, :dispatch, %{op: :accept, transport_ref: reference}) do
-    with :ok <- phase(state, [:requested]), :ok <- identifier(reference) do
-      {:ok, %{state | phase: :accepted, transport_ref: reference}}
+    with :ok <- phase(state, [:requested, :cancel_requested]),
+         :ok <- identifier(reference) do
+      next = if state.phase == :cancel_requested, do: :cancel_requested, else: :accepted
+      {:ok, %{state | phase: next, transport_ref: reference}}
     end
   end
 
@@ -99,8 +101,7 @@ defmodule FulfillmentCore do
 
   defp transition(state, :commerce, %{op: :cancel}) do
     with :ok <- phase(state, [:requested, :accepted, :in_transit]) do
-      next = if state.phase == :requested, do: :cancelled, else: :cancel_requested
-      {:ok, %{state | phase: next}}
+      {:ok, %{state | phase: :cancel_requested}}
     end
   end
 
