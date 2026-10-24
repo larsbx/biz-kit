@@ -23,7 +23,10 @@ Shared apps developed in this umbrella:
 | App | Path | Role |
 | --- | --- | --- |
 | `task_core` | `apps/task_core` | Dependency-free task/workflow rules and command admission |
-| `commerce_core` | `apps/commerce_core` | Reusable commercial price arithmetic; extracted from Eatsbot with unchanged compatibility API |
+| `commerce_core` | `apps/commerce_core` | Commercial pricing, merchant-scoped catalog projection and read-only Eatsbot adapter |
+| `inventory_core` | `apps/inventory_core` | Pure scoped stock, reservations, transfers and deterministic replay (no live writer) |
+| `fulfillment_core` | `apps/fulfillment_core` | Cross-domain transport handoff protocol with Eatsbot/Dispatch adapters |
+| `sales_core` | `apps/sales_core` | Tenant-scoped lead pipeline, consent and campaign planning rules |
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
 | `school_ops` | `apps/school_ops` | School domain: K–12 curriculum catalog, lesson/assessment review, and TaskCore-based staff workflows |
@@ -224,10 +227,19 @@ task-run or deployed school portal. See
 
 [Modular business platform decision](docs/architecture/2026-10-24-modular-business-platform.md):
 biz-kit maintains shared technical and business capabilities, while Eatsbot,
-d-patch and SchoolOps remain independently evolvable domain products. The first
-small, behavior-preserving extraction is [commerce_core](apps/commerce_core/README.md):
-Eatsbot's order pricing algorithm now has a reusable owner and a compatibility
-facade. **Inventory, CRM, marketing, general order admission and cross-domain
-Dispatch fulfillment are not yet extracted or implemented.** Existing Eatsbot
-orders and delivery state remain authoritative in their current deployment;
-this change performs no data movement or writer cutover.
+d-patch and SchoolOps remain independently evolvable domain products. The initial reusable capabilities are:
+[CommerceCore](apps/commerce_core/README.md) (price arithmetic, merchant-scoped
+catalog rules and Eatsbot read-only projection adapter),
+[InventoryCore](apps/inventory_core/README.md) (stock/reservations/replay),
+[FulfillmentCore](apps/fulfillment_core/README.md) (commerce-to-transport
+handoff contract), and [SalesCore](apps/sales_core/README.md) (opportunities,
+marketing-consent decisions and candidate campaign planning).
+
+**These are portable rules and adapters, not deployed inventory/CRM/marketing
+services or a production fulfillment cutover.** Existing Eatsbot, Dispatch,
+and school operational writers remain in their existing contracts. Signed
+admission, persistent authorization, consumer E2E tests and writer parity
+remain separate obligations. See issues [#81](https://github.com/larsbx/biz-kit/issues/81),
+[#82](https://github.com/larsbx/biz-kit/issues/82),
+[#83](https://github.com/larsbx/biz-kit/issues/83), and
+[#84](https://github.com/larsbx/biz-kit/issues/84).
