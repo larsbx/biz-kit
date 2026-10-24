@@ -15,6 +15,7 @@ defmodule CommerceCore.PricingTest do
 
   test "computes exact commercial totals without changing currencies" do
     line = %{unit_price: m(:USD, 1250), quantity: 2, discount: m(:USD, 100)}
+
     adjustments = %{
       discount_total: m(:USD, 50),
       tax_total: m(:USD, 213),
@@ -32,6 +33,7 @@ defmodule CommerceCore.PricingTest do
     line = %{unit_price: m(:EUR, 100), quantity: 2, discount: m(:EUR, 0)}
 
     assert {:error, :no_lines} = Pricing.price(:EUR, [], zero(:EUR))
+
     assert {:error, {:invalid_quantity, 0}} =
              Pricing.price(:EUR, [%{line | quantity: 0}], zero(:EUR))
 
