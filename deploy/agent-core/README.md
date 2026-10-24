@@ -59,6 +59,10 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
   < deploy/agent-core/sql/001_agent_attempts.sql
 
+docker compose -f deploy/agent-core/compose.yaml exec -T db \
+  psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+  < deploy/agent-core/sql/002_attempt_cas.sql
+
 # Or replace 'docker' with 'podman'.
 ```
 
@@ -69,6 +73,38 @@ the container as a Compose secret and used by the official Postgres
 an installed external Compose provider, such as `podman-compose` or
 `docker-compose`, and support for Compose `secrets` in that provider;
 validate the resolved service definition before first start.
+
+## Transactional lease functions (staging contract)
+
+`sql/002_attempt_cas.sql` defines **SECURITY INVOKER** PostgreSQL functions
+for `claim_attempt`, `renew_attempt`, `attach_backend`,
+`record_candidate`, `request_cancel`, `confirm_cancel_preverified` and
+`reconcile_absent_preverified`. Every state change uses an expected
+`row_version` predicate, atomic SQL `UPDATE ... RETURNING`, and
+database-clock lease checks. A stale competing worker receives **zero
+updated rows**, never an unconditional success.
+
+Only a **trusted** coordinator service may execute these functions.
+The migration revokes their default `PUBLIC` execution privileges; an
+administrator must grant narrowly scoped execution to the coordinator role.
+The functions **do not** validate signed business grants, tenant read access,
+domain consent, provider policy, or external receipt signatures. Those are
+hard prerequisites of the privileged calling host; never expose the SQL
+entry points to agents, web clients or arbitrary plugins.
+
+A lease token is supplied to the store as a SHA-256 digest, never persisted
+in plaintext. A token must be generated with a CSPRNG and held in secret
+operational state by the trusted host. Cancel and candidate operations clear
+the stored token and lease. Expired leased rows are *not* claimable until a
+privileged reconciler proves the backend absent and supplies a verified
+receipt ID. An ID is provenance only: the SQL function itself cannot verify
+its cryptographic validity, so the host must verify and bind it first.
+
+`sql/ci_cas_contract.sql` exercises duplicate claim refusal, stale
+version/token/epoch fencing, candidate state, cancellation and a
+receipt-gated retry using a disposable CI database. These demonstrate
+transactional database rules, **not** a live multi-node coordinator,
+reconciler, service authorization, or external agent execution.
 
 ## Storage durability smoke
 
