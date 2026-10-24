@@ -66,8 +66,9 @@ defmodule FederationCore.Marketplace do
          :ok <- public_uri(verified_seller),
          :ok <- public_uri(value["id"]),
          :ok <- same_origin(verified_seller, value["id"]),
-         true <- is_integer(value["revision"]) and value["revision"] >= 0 and
-                   value["revision"] <= @max_amount,
+         true <-
+           is_integer(value["revision"]) and value["revision"] >= 0 and
+             value["revision"] <= @max_amount,
          :ok <- text(value["name"], 160),
          :ok <- text(value["summary"], 2048),
          :ok <- text(value["category"], 64),
@@ -214,7 +215,9 @@ defmodule FederationCore.Marketplace do
   defp encode_price(_), do: {:error, :invalid_price}
   defp validate_price(%{"mode" => "quote"} = value) when map_size(value) == 1, do: :ok
 
-  defp validate_price(%{"mode" => "fixed", "minor_units" => amount, "currency" => currency} = value)
+  defp validate_price(
+         %{"mode" => "fixed", "minor_units" => amount, "currency" => currency} = value
+       )
        when map_size(value) == 3 and is_integer(amount) and amount >= 0 and
               amount <= @max_amount and is_binary(currency) do
     if String.match?(currency, ~r/\A[A-Z]{3}\z/), do: :ok, else: {:error, :invalid_price}
@@ -233,8 +236,15 @@ defmodule FederationCore.Marketplace do
   # URL shape only; the HTTP host additionally needs DNS/IP/redirect SSRF checks.
   defp public_uri(value) when is_binary(value) and byte_size(value) <= 2048 do
     case URI.parse(value) do
-      %URI{scheme: "https", host: host, userinfo: nil, fragment: nil, query: nil, path: path,
-           port: port}
+      %URI{
+        scheme: "https",
+        host: host,
+        userinfo: nil,
+        fragment: nil,
+        query: nil,
+        path: path,
+        port: port
+      }
       when is_binary(host) and is_binary(path) and path != "" and port in [nil, 443] ->
         hostname = String.downcase(host)
 
@@ -243,8 +253,8 @@ defmodule FederationCore.Marketplace do
              not String.ends_with?(hostname, ".local") and
              not String.ends_with?(hostname, ".internal") and
              match?({:error, _}, :inet.parse_address(String.to_charlist(hostname))),
-          do: :ok,
-          else: {:error, :unsafe_url}
+           do: :ok,
+           else: {:error, :unsafe_url}
 
       _ ->
         {:error, :unsafe_url}
