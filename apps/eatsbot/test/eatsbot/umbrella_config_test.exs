@@ -45,6 +45,46 @@ defmodule Eatsbot.UmbrellaConfigTest do
     end
   end
 
+  # Spark's formatter reads one global :spark config, merged over spruce_goose's:
+  # eatsbot's remove_parens? and section_order reformatted spruce_goose's files.
+  test "eatsbot's configuration sets no Spark formatter options" do
+    eatsbot_config = Path.expand("../../config/config.exs", __DIR__)
+
+    for env <- [:dev, :test, :prod] do
+      config = Config.Reader.read!(eatsbot_config, env: env)
+      refute Keyword.has_key?(config, :spark), "#{env} sets :spark"
+    end
+  end
+
+  # scripts/e2e-stack.sh runs `mix phx.server` at the root, which serves every
+  # app's endpoint at once.
+  # The ports are judged as the boot sees them: compile-time config with the
+  # runtime config merged over it (spruce_goose moves its endpoint there).
+  test "in dev, eatsbot's endpoint shares a port with no other app's" do
+    runtime = Path.join(Path.dirname(@config), "runtime.exs")
+
+    config =
+      Config.Reader.merge(
+        Config.Reader.read!(@config, env: :dev),
+        Config.Reader.read!(runtime, env: :dev)
+      )
+
+    ports =
+      for {_app, entries} <- config,
+          {module, opts} <- entries,
+          is_atom(module) and is_list(opts),
+          module |> Atom.to_string() |> String.ends_with?("Endpoint"),
+          port = get_in(opts, [:http, :port]),
+          into: %{},
+          do: {module, port}
+
+    {eatsbot, others} = Map.pop!(ports, EatsbotWeb.Endpoint)
+    assert others != %{}, inspect(ports)
+
+    refute eatsbot in Map.values(others),
+           "EatsbotWeb.Endpoint shares port #{eatsbot}: #{inspect(others)}"
+  end
+
   test "eatsbot keeps its own read behaviour once it has started" do
     assert Application.get_env(:ash, :policies)[:no_filter_static_forbidden_reads?] == false
     assert Application.get_env(:ash, :default_page_type) == :keyset
