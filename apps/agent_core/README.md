@@ -90,3 +90,20 @@ provide idempotent backend launch using the same effect ID, and reconcile
 external execution handles. In-memory tests do not demonstrate crash-safe
 storage, mutual exclusion across nodes, real cancellation, or admissible
 business effects.
+
+## Container-volume persistence (Docker or Podman)
+
+The storage development fixture is at
+[`deploy/agent-core/`](../../deploy/agent-core/README.md). It uses one
+engine-managed **named volume** to persist PostgreSQL 16 data across container
+recreation, with the same Compose specification for Docker or Podman.
+`agent_ops.execution_attempts` is an operational schema, to be deployed
+inside biz-kit's **existing** PostgreSQL database after migration review.
+This does not introduce a second business ledger.
+
+Volumes provide persistence, **not** transactional serialization or
+independent guarantees against duplicate external side effects. The
+production coordinator still needs a PostgreSQL-backed CAS host adapter,
+idempotent backend effect IDs, proof-referenced reconciliation, explicit
+read/execution authorization, and recovery tests. Scratch storage for
+individual agents must remain isolated from this database volume.
