@@ -40,8 +40,8 @@ defmodule FulfillmentCore.Wire do
     if identifier(merchant) and identifier(request_id) and
          Map.get(wire, "merchant") === merchant and
          Map.get(wire, "request_id") === request_id,
-      do: :ok,
-      else: {:error, :wrong_fulfillment_scope}
+       do: :ok,
+       else: {:error, :wrong_fulfillment_scope}
   end
 
   defp permitted(actor, operation) do
@@ -55,8 +55,8 @@ defmodule FulfillmentCore.Wire do
   defp shape(wire, fields) do
     if wire["schema"] == @schema and
          Enum.sort(Map.keys(wire)) == Enum.sort(@base ++ fields),
-      do: :ok,
-      else: {:error, :invalid_fulfillment_shape}
+       do: :ok,
+       else: {:error, :invalid_fulfillment_shape}
   end
 
   defp values(wire, fields) do
@@ -64,8 +64,8 @@ defmodule FulfillmentCore.Wire do
 
     if Enum.all?(["id" | fields], &identifier(Map.get(wire, &1))) and
          is_integer(version) and version >= 0 and version <= @max_int,
-      do: :ok,
-      else: {:error, :invalid_fulfillment_value}
+       do: :ok,
+       else: {:error, :invalid_fulfillment_value}
   end
 
   defp identifier(value), do: is_binary(value) and byte_size(value) in 1..128
