@@ -111,13 +111,34 @@ defmodule AgentCore.AttemptsTest do
     {state, lease} = leased()
 
     assert {:ok, attached} =
-             Attempts.attach_backend(state, @effect, lease.epoch, "token1", 1050, "backend-handle-1")
+             Attempts.attach_backend(
+               state,
+               @effect,
+               lease.epoch,
+               "token1",
+               1050,
+               "backend-handle-1"
+             )
 
     assert {:ok, ^attached} =
-             Attempts.attach_backend(attached, @effect, lease.epoch, "token1", 1050, "backend-handle-1")
+             Attempts.attach_backend(
+               attached,
+               @effect,
+               lease.epoch,
+               "token1",
+               1050,
+               "backend-handle-1"
+             )
 
     assert {:error, :backend_reference_conflict} =
-             Attempts.attach_backend(attached, @effect, lease.epoch, "token1", 1050, "backend-handle-2")
+             Attempts.attach_backend(
+               attached,
+               @effect,
+               lease.epoch,
+               "token1",
+               1050,
+               "backend-handle-2"
+             )
 
     assert {:error, :invalid_backend_reference} =
              Attempts.attach_backend(attached, @effect, lease.epoch, "token1", 1050, "../unsafe")
@@ -133,7 +154,14 @@ defmodule AgentCore.AttemptsTest do
     assert row.backend_ref == "backend-handle-1"
 
     assert {:error, :no_active_attempt} =
-             Attempts.attach_backend(cancelled, @effect, lease.epoch, "token1", 1055, "new-handle")
+             Attempts.attach_backend(
+               cancelled,
+               @effect,
+               lease.epoch,
+               "token1",
+               1055,
+               "new-handle"
+             )
   end
 
   test "a candidate is never a business completion and stale workers cannot replace it" do
@@ -193,7 +221,8 @@ defmodule AgentCore.AttemptsTest do
     assert {:error, :lease_requires_reconciliation} =
              Attempts.claim(reclaimed, @effect, "worker3", "token3", 1250, 100, 2)
 
-    assert {:ok, exhausted} = Attempts.reconcile_timeout(reclaimed, @effect, 1250, {:absent, "not-running-2"})
+    assert {:ok, exhausted} =
+             Attempts.reconcile_timeout(reclaimed, @effect, 1250, {:absent, "not-running-2"})
 
     assert {:error, :attempt_budget_exhausted} =
              Attempts.claim(exhausted, @effect, "worker3", "token3", 1260, 100, 2)
@@ -204,7 +233,12 @@ defmodule AgentCore.AttemptsTest do
     digest = {:bytes, <<8::256>>}
 
     assert {:ok, recovered} =
-             Attempts.reconcile_timeout(state, @effect, 1100, {:candidate, digest, "stored-result-1"})
+             Attempts.reconcile_timeout(
+               state,
+               @effect,
+               1100,
+               {:candidate, digest, "stored-result-1"}
+             )
 
     assert {:ok, row} = Attempts.get(recovered, @effect)
     assert row.phase == :candidate_ready
@@ -226,7 +260,14 @@ defmodule AgentCore.AttemptsTest do
              Attempts.renew(cancelled_requested, @effect, lease.epoch, "token1", 1050, 100)
 
     assert {:error, :no_active_attempt} =
-             Attempts.candidate(cancelled_requested, @effect, lease.epoch, "token1", 1050, {:bytes, <<7::256>>})
+             Attempts.candidate(
+               cancelled_requested,
+               @effect,
+               lease.epoch,
+               "token1",
+               1050,
+               {:bytes, <<7::256>>}
+             )
 
     assert {:error, :cancel_requested} =
              Attempts.claim(cancelled_requested, @effect, "worker2", "token2", 1200, 100, 3)
