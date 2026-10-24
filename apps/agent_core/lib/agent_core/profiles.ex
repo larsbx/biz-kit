@@ -48,8 +48,12 @@ defmodule AgentCore.Profiles do
     end
   end
 
-  defp approved(%{id: id, approved: true, adapter: _adapter, manifest: _manifest}, id),
-    do: :ok
+  defp approved(
+         %{id: profile_id, approved: true, adapter: _adapter, manifest: _manifest},
+         requested_id
+       )
+       when profile_id == requested_id,
+       do: :ok
 
   defp approved(%{approved: false}, _id), do: {:error, :execution_profile_not_approved}
 
@@ -65,11 +69,11 @@ defmodule AgentCore.Profiles do
            "parameters" => params,
            "adapter_module" => declared
          } = manifest,
-         id,
+         requested_id,
          adapter
        )
        when map_size(manifest) == 4 and is_map(params) and is_binary(declared) and
-              is_atom(adapter) do
+              is_atom(adapter) and id == requested_id do
     if declared == Atom.to_string(adapter),
       do: :ok,
       else: {:error, :execution_profile_adapter_mismatch}
