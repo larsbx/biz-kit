@@ -1,4 +1,4 @@
-# OpenShell x TaskCore: isolated first slice (experiment)
+# OpenShell: optional agent execution adapter experiment
 
 **Status:** executable sandbox lifecycle/candidate **smoke** with offline fakes.
 No live gateway, real agent, model, TaskCore command, signed ledger append, DoD
@@ -14,26 +14,28 @@ Keep the existing authoritative biz-kit structure:
 2. **Agent coordinator (future)** reads a *committed* scoped task and current
    grants, derives a run ticket and persists a ledger-linked execution intent.
    An agent's self-reported project IDs and policy flags are never trusted.
-3. **OpenShell** executes the chosen agent image in a sandbox with a
-   pre-approved, pinned workload template and controlled network/filesystem
-   policy. The gateway's operational records are not business records.
+3. **AgentCore.ExecutionPort** defines a generic adapter contract for any
+   approved agent runtime: remote service, local worker, sandbox, or otherwise.
+   **OpenShell is one optional execution adapter**, not the coordinator or
+   canonical execution environment. Its operational records are not business
+   records.
 4. **Candidate results** return via a typed result validator, with bounded
    stdout and exact task/scope/source correlation. They have no state effect.
 5. **Authoritative effects** go through separate authenticated, typed biz-kit
    tools and the current ledger append gate; receipt/evidence custody and
    independent review are separate steps. Sandbox permissions are not grants.
 
-For Dispatch, retain the provider-neutral
-Dispatch.Integrations.Agent.Runtime and typed tool boundary. A later
-OpenShell-backed Hermes adapter can implement it without granting the
-language model a direct business writer. Do not replace or cut over the
-private agent-runtime-platform while its standalone parity check is red.
+For Dispatch, retain the existing provider-neutral turn/streaming runtime
+ports and typed business-tool boundary. Their adapters may connect to any
+approved execution engine. No worker framework is privileged. An optional
+OpenShell adapter must not require a particular agent framework, and existing
+private agent-runtime-platform cutover gates remain intact.
 
-## New: TaskCore-derived execution tickets
+## Engine-neutral task tickets and signed run intents
 
 The dependency-free Elixir module
 [TaskCore.AgentCandidates](../../apps/task_core/lib/task_core/agent_candidates.ex)
-derives the exact seven-field Python sandbox ticket **only from the trusted
+derives the seven-field engine-neutral execution ticket **only from trusted
 TaskCore replay**: a ready or in-progress task, its current version and last
 accepted event ID, its DoD definition digest, and a live matching project-scoped
 suggester grant. No source task title, personal data, agent signing key, grant
@@ -63,9 +65,23 @@ intents/cancellation now exist in the **same** CoopSubstrate ledger, but the
 durable coordinator, runtime effects, safe retry and cancellation execution
 remain separate implementation obligations.
 
+## Business run intents remain vendor neutral
+
+`TaskCore.AgentRuns` now records an execution profile **ID and canonical
+digest**, not a container image, gateway, vendor, model, hardware quota or
+specific agent framework. A separate trusted registry verifies the whole
+profile manifest before the selected engine-specific adapter is invoked.
+`AgentCore.ExecutionPort` defines the generic launch/poll/cancel interface,
+and `AgentCore.Profiles` checks an approved profile's exact configuration.
+
+This directory is intentionally **not** the shared agent execution layer.
+The Python OpenShell smoke below is a plugin-specific example and has no
+direct business API, deployable coordinator, or run dispatch.
+
 ## What the code demonstrates
 
-The runner.py module uses NVIDIA's Python SDK calls create_from_template,
+As one optional backend demonstration, runner.py uses NVIDIA's Python SDK
+calls create_from_template,
 wait_ready, exec, delete, wait_deleted. It feeds a **fixed non-agent smoke
 worker** a deliberately small immutable ticket, strictly validates the
 candidate's scope/source, hashes its output, and returns a
@@ -133,10 +149,11 @@ deletion must trigger out-of-band sandbox reconciliation before retrying.
   does **not** prove MCP/GraphQL application authorization.
 - Link **verified custody** and any reviewer decision to task DoD. Neither
   stdout, its hash, nor OpenShell execution status completes a task.
-- Demonstrate a genuine Hermes/Pi worker under OpenShell, plus a non-Hermes
-  worker, conformance with Dispatch's agent port, staging end-to-end tests,
-  runtime benchmarks (especially voice latency), and rollback to current
-  Podman runtime.
+- Demonstrate at least two genuinely different agent engines: for example,
+  one local isolated agent and one hosted remote agent, without changing
+  TaskCore or the run event. OpenShell isolation must be validated only for
+  its own adapter. Preserve the existing Dispatch runtime ports, staging
+  end-to-end tests, voice latency benchmarks and rollback options.
 - Preserve SchoolOps private learner boundaries and commerce/customer
   consent and Dispatch location permissions independently of sandbox policy.
 - Address unresolved biz-kit session, administrative and DB CI security gates
