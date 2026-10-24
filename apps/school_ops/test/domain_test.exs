@@ -31,6 +31,7 @@ defmodule SchoolOps.DomainTest do
   test "the SchoolOps proposal uses the common validated TaskCore blueprint" do
     assert {:ok, normalized} = Workflows.validate()
     assert normalized["schema_version"] == TaskCore.Blueprint.schema_version()
+
     assert {:ok, workflow} =
              TaskCore.Blueprint.workflow(normalized, "grade2", "place_value_readiness")
 
