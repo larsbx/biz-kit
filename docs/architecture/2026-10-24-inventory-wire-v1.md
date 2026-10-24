@@ -7,7 +7,7 @@ scope comparison against an already authenticated host binding:
 
 Version 1 supports `receive`, `reserve`, `commit`, `release`, and
 `transfer`. Only known operation/field names map to compile-time Elixir
-atoms. Unknown or duplicate-decoded fields, extra keys, foreign merchant
+atoms. Unknown fields, extra keys, foreign merchant
 scope, negative, fractional or >2^53-1 quantities, stale schema versions and any
 attempt to assert `approved` are refused.
 
@@ -24,3 +24,8 @@ client SDKs, not an additional writer or an API endpoint.
 The versioned command shape is intentionally narrow and is tested without
 Postgres, Ash or the web app. It remains compatible with `InventoryCore` as a
 standalone Elixir package.
+
+The wire parser accepts an **already decoded map**. Reject duplicate raw JSON
+object keys at the HTTP/JSON decoder before constructing that map: once a
+permissive JSON decoder has collapsed duplicate keys, this module cannot
+detect that ambiguity. Do not claim raw-byte canonicality from map validation.
