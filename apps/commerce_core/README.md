@@ -20,6 +20,10 @@ can run without database setup:
 cd apps/commerce_core && mix test --no-start
 ```
 
+In tests, the helper starts Localize's currency loader using the bundled
+English locale cache owned by Localize itself, without starting Eatsbot's web,
+database, or queue services. Production CommerceCore code never calls Eatsbot.
+
 The only declared runtime dependency is `ex_money`. This kernel does not
 depend on Eatsbot, Dispatch, SchoolOps, Ash resources, storage, network,
 tenant-specific policies or the umbrella runtime. Its source lives inside

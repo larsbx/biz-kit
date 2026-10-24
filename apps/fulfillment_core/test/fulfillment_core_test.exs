@@ -29,6 +29,7 @@ defmodule FulfillmentCoreTest do
     assert F.pending?(accepted)
 
     moving = applied(accepted, "restaurant", :dispatch, "move", :in_transit)
+
     delivered =
       applied(moving, "restaurant", :dispatch, "drop", :delivered, %{
         proof_ref: "custody-digest-1"
@@ -66,6 +67,7 @@ defmodule FulfillmentCoreTest do
 
   test "nonrestaurant transport uses the same contract with separate order owner" do
     {:ok, state} = F.new("parts-supplier", "req-kit", "sale-kit", "freight")
+
     state =
       applied(state, "parts-supplier", :dispatch, "ack", :accept, %{transport_ref: "load-5"})
 
@@ -82,6 +84,7 @@ defmodule FulfillmentCoreTest do
 
     final = applied(state, "parts-supplier", :dispatch, "confirm", :cancel_confirmed)
     assert final.phase == :cancelled
+
     assert {:error, :wrong_merchant} =
              F.apply(final, "other-merchant", :dispatch, event(final, "oops", :in_transit))
   end

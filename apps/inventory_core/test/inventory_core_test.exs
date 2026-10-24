@@ -17,6 +17,7 @@ defmodule InventoryCoreTest do
   test "holds prevent overselling and repeat admission is idempotent" do
     state = empty("restaurant")
     state = accepted(state, "restaurant", "r1", :receive, %{location: "walk-in", quantity: 10})
+
     hold =
       command(state, "h1", :reserve, %{
         location: "walk-in",

@@ -44,7 +44,12 @@ defmodule SalesCoreTest do
     {:ok, state, :accepted} = Consent.record(state, "restaurant", withdrawal)
 
     refute Consent.allowed?(
-             state, "restaurant", "customer-1", :telegram, "CL", :customer
+             state,
+             "restaurant",
+             "customer-1",
+             :telegram,
+             "CL",
+             :customer
            )
 
     stale = grant(state, "customer-1", :customer, "g2", 19)
@@ -126,6 +131,7 @@ defmodule SalesCoreTest do
 
   test "sales stages use shared, tenant-scoped quote references, not task completion" do
     {:ok, state} = Pipeline.new("merchant")
+
     {:ok, state} =
       Pipeline.create(state, "merchant", 0, %{
         id: "lead-1",
@@ -156,6 +162,7 @@ defmodule SalesCoreTest do
 
   test "unknown contact is suppressed; a recorded withdrawal survives replay" do
     {:ok, empty} = Consent.new("merchant")
+
     event =
       change(empty, "w", :withdraw, %{
         party_ref: "not-yet-known",

@@ -105,12 +105,23 @@ defmodule SpruceGoose.Web.RateLimitTest do
   end
 
   test "a new window starts afresh" do
-    limits!(%{capability: {1, 100}})
+    period_ms = 500
+    offset_ms = rem(System.system_time(:millisecond), period_ms)
+
+    # The limiter uses epoch-aligned fixed windows, not 100 ms starting at the
+    # first request. Place both assertions safely inside the same window to
+    # avoid nondeterministic 404s when CI happens to cross a boundary.
+    if offset_ms > 100, do: Process.sleep(period_ms - offset_ms + 10)
+
+    limits!(%{capability: {1, period_ms}})
     client = ip()
 
     assert get(@enrolment, client).status == 404
     assert get(@enrolment, client).status == 429
-    Process.sleep(110)
+
+    remaining_ms = period_ms - rem(System.system_time(:millisecond), period_ms)
+    Process.sleep(remaining_ms + 20)
+
     assert get(@enrolment, client).status == 404
   end
 
