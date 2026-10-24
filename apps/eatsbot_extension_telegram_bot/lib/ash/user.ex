@@ -18,9 +18,30 @@ defmodule Eatsbot.Extensions.TelegramBot.Ash.User do
     repo Eatsbot.Repo
   end
 
-  code_interface do
-    define :add_deliveries, args: [:deliveries]
-    define :get_available_users
+  attributes do
+    attribute :id, :string do
+      allow_nil? false
+      primary_key? true
+    end
+
+    attribute :status, :atom do
+      allow_nil? false
+      public? true
+    end
+
+    relationships do
+      has_many :deliveries, EatsbotCore.Deliveries.Delivery do
+        no_attributes? true
+
+        filter expr(id in parent(deliveries_id) and state == :In_Delivery)
+      end
+    end
+
+    attribute :deliveries_id, {:array, :uuid} do
+      public? true
+    end
+
+    timestamps()
   end
 
   actions do
@@ -83,30 +104,9 @@ defmodule Eatsbot.Extensions.TelegramBot.Ash.User do
     end
   end
 
-  attributes do
-    attribute :id, :string do
-      allow_nil? false
-      primary_key? true
-    end
-
-    attribute :status, :atom do
-      allow_nil? false
-      public? true
-    end
-
-    relationships do
-      has_many :deliveries, EatsbotCore.Deliveries.Delivery do
-        no_attributes? true
-
-        filter expr(id in parent(deliveries_id) and state == :In_Delivery)
-      end
-    end
-
-    attribute :deliveries_id, {:array, :uuid} do
-      public? true
-    end
-
-    timestamps()
+  code_interface do
+    define :add_deliveries, args: [:deliveries]
+    define :get_available_users
   end
 end
 

@@ -16,10 +16,6 @@ defmodule EatsbotCore.Products.VariantOption do
     end
   end
 
-  actions do
-    defaults [:read, :destroy, create: :*, update: :*]
-  end
-
   relationships do
     belongs_to :variant, EatsbotCore.Products.Variant do
       primary_key? true
@@ -32,5 +28,9 @@ defmodule EatsbotCore.Products.VariantOption do
       allow_nil? false
       public? true
     end
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
   end
 end

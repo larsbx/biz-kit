@@ -30,36 +30,6 @@ config :ash,
 config :opentelemetry_ash,
   trace_types: [:custom, :action, :flow]
 
-config :spark,
-  formatter: [
-    remove_parens?: true,
-    "Ash.Resource": [
-      section_order: [
-        :authentication,
-        :tokens,
-        :graphql,
-        :postgres,
-        :resource,
-        :code_interface,
-        :actions,
-        :policies,
-        :pub_sub,
-        :preparations,
-        :changes,
-        :validations,
-        :multitenancy,
-        :attributes,
-        :relationships,
-        :calculations,
-        :aggregates,
-        :identities
-      ]
-    ],
-    "Ash.Domain": [
-      section_order: [:graphql, :resources, :policies, :authorization, :domain, :execution]
-    ]
-  ]
-
 config :eatsbot,
   ecto_repos: [Eatsbot.Repo],
   generators: [timestamp_type: :utc_datetime],

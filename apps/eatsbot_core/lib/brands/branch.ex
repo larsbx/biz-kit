@@ -52,23 +52,6 @@ defmodule EatsbotCore.Brands.Branch do
     end
   end
 
-  field_policies do
-    field_policy :* do
-      description "the rest of the fields don't require any special policies"
-      authorize_if always()
-    end
-  end
-
-  code_interface do
-    define :create
-    define :update
-    define :read, get?: true
-  end
-
-  actions do
-    defaults [:read, :destroy, create: :*, update: :*]
-  end
-
   policies do
     bypass always() do
       description "admin has access to every action"
@@ -77,6 +60,13 @@ defmodule EatsbotCore.Brands.Branch do
 
     policy action_type(:read) do
       description "read access is always allowed"
+      authorize_if always()
+    end
+  end
+
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
       authorize_if always()
     end
   end
@@ -117,5 +107,15 @@ defmodule EatsbotCore.Brands.Branch do
     belongs_to :brand, EatsbotCore.Brands.Brand do
       public? true
     end
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  code_interface do
+    define :create
+    define :update
+    define :read, get?: true
   end
 end

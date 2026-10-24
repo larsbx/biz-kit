@@ -33,92 +33,6 @@ defmodule EatsbotCore.Orders.Order do
     end
   end
 
-  field_policies do
-    field_policy [:contact, :tracking_key, :idempotency_key, :external_ref, :cart_id] do
-      description "personal data and keys are hidden from public tracking"
-      authorize_if {ActorIn, levels: @internal}
-    end
-
-    field_policy :* do
-      authorize_if always()
-    end
-  end
-
-  code_interface do
-    define :place
-    define :track, args: [:tracking_key], get?: true
-    define :board
-    define :accept
-    define :start_preparing
-    define :mark_ready
-    define :dispatch
-    define :complete
-    define :cancel, args: [:reason]
-    define :fail, args: [:reason]
-  end
-
-  actions do
-    defaults [:read]
-
-    create :place do
-      description "Used by Cart.checkout and marketplace imports; prices the order and snapshots its lines."
-
-      accept [
-        :cart_id,
-        :channel,
-        :fulfillment,
-        :currency,
-        :contact,
-        :scheduled_for,
-        :idempotency_key,
-        :external_ref,
-        :discount_total,
-        :tax_total,
-        :delivery_fee,
-        :tip
-      ]
-
-      argument :lines, {:array, :map}, allow_nil?: false
-      change PriceOrder
-    end
-
-    read :track do
-      description "Public order tracking by the key returned at checkout."
-      argument :tracking_key, :uuid, allow_nil?: false
-      get? true
-      filter expr(tracking_key == ^arg(:tracking_key))
-    end
-
-    read :board do
-      description "Open orders, oldest first."
-      filter expr(state not in ^Transitions.terminal_states())
-      prepare build(sort: [inserted_at: :asc])
-    end
-
-    for {name, to} <- [
-          accept: :accepted,
-          start_preparing: :preparing,
-          mark_ready: :ready,
-          dispatch: :dispatched,
-          complete: :completed
-        ] do
-      update name do
-        accept []
-        require_atomic? false
-        change {Transition, to: to}
-      end
-    end
-
-    for {name, to} <- [cancel: :cancelled, fail: :failed] do
-      update name do
-        accept []
-        require_atomic? false
-        argument :reason, :string, allow_nil?: false, constraints: [min_length: 1]
-        change {Transition, to: to}
-      end
-    end
-  end
-
   policies do
     bypass {ActorIn, levels: [:admin]} do
       authorize_if always()
@@ -146,6 +60,17 @@ defmodule EatsbotCore.Orders.Order do
 
     policy action(:complete) do
       authorize_if {ActorIn, levels: @internal}
+    end
+  end
+
+  field_policies do
+    field_policy [:contact, :tracking_key, :idempotency_key, :external_ref, :cart_id] do
+      description "personal data and keys are hidden from public tracking"
+      authorize_if {ActorIn, levels: @internal}
+    end
+
+    field_policy :* do
+      authorize_if always()
     end
   end
 
@@ -216,6 +141,81 @@ defmodule EatsbotCore.Orders.Order do
       public? true
       destination_attribute :order_id
     end
+  end
+
+  actions do
+    defaults [:read]
+
+    create :place do
+      description "Used by Cart.checkout and marketplace imports; prices the order and snapshots its lines."
+
+      accept [
+        :cart_id,
+        :channel,
+        :fulfillment,
+        :currency,
+        :contact,
+        :scheduled_for,
+        :idempotency_key,
+        :external_ref,
+        :discount_total,
+        :tax_total,
+        :delivery_fee,
+        :tip
+      ]
+
+      argument :lines, {:array, :map}, allow_nil?: false
+      change PriceOrder
+    end
+
+    read :track do
+      description "Public order tracking by the key returned at checkout."
+      argument :tracking_key, :uuid, allow_nil?: false
+      get? true
+      filter expr(tracking_key == ^arg(:tracking_key))
+    end
+
+    read :board do
+      description "Open orders, oldest first."
+      filter expr(state not in ^Transitions.terminal_states())
+      prepare build(sort: [inserted_at: :asc])
+    end
+
+    for {name, to} <- [
+          accept: :accepted,
+          start_preparing: :preparing,
+          mark_ready: :ready,
+          dispatch: :dispatched,
+          complete: :completed
+        ] do
+      update name do
+        accept []
+        require_atomic? false
+        change {Transition, to: to}
+      end
+    end
+
+    for {name, to} <- [cancel: :cancelled, fail: :failed] do
+      update name do
+        accept []
+        require_atomic? false
+        argument :reason, :string, allow_nil?: false, constraints: [min_length: 1]
+        change {Transition, to: to}
+      end
+    end
+  end
+
+  code_interface do
+    define :place
+    define :track, args: [:tracking_key], get?: true
+    define :board
+    define :accept
+    define :start_preparing
+    define :mark_ready
+    define :dispatch
+    define :complete
+    define :cancel, args: [:reason]
+    define :fail, args: [:reason]
   end
 
   identities do

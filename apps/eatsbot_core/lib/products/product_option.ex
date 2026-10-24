@@ -16,10 +16,6 @@ defmodule EatsbotCore.Products.ProductOption do
     end
   end
 
-  actions do
-    defaults [:read, :destroy, create: :*, update: :*]
-  end
-
   relationships do
     belongs_to :product, EatsbotCore.Products.Product do
       primary_key? true
@@ -32,5 +28,9 @@ defmodule EatsbotCore.Products.ProductOption do
       allow_nil? false
       public? true
     end
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
   end
 end

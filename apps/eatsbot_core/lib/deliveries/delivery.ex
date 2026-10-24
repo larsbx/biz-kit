@@ -53,6 +53,37 @@ defmodule EatsbotCore.Deliveries.Delivery do
     repo Eatsbot.Repo
   end
 
+  policies do
+    bypass always() do
+      description "admin has access to every action"
+      authorize_if actor_attribute_equals(:access_level, :admin)
+    end
+
+    policy action_type(:read) do
+      description "read access is limited to users with public and private access, and the system actor"
+      authorize_if actor_attribute_equals(:access_level, :public)
+      authorize_if actor_attribute_equals(:access_level, :private)
+      authorize_if actor_attribute_equals(:access_level, :system)
+    end
+
+    policy action(:for_order) do
+      description "checkout creates an order's delivery as the system actor"
+      authorize_if actor_attribute_equals(:access_level, :system)
+    end
+
+    policy action_type(:update) do
+      description "update access is limited to users private access, and the system actor"
+      authorize_if actor_attribute_equals(:access_level, :private)
+      authorize_if actor_attribute_equals(:access_level, :system)
+    end
+
+    policy action_type([:read, :update]) do
+      description "delivery credentials are limited to their own delivery"
+      authorize_if expr(is_nil(^actor(:delivery_id)))
+      authorize_if expr(id == ^actor(:delivery_id))
+    end
+  end
+
   field_policies do
     field_policy :display_id do
       description "display id should only be visible to admin and people with private access"
@@ -77,23 +108,129 @@ defmodule EatsbotCore.Deliveries.Delivery do
     end
   end
 
-  code_interface do
-    define :update_state, args: [:state], action: :update_state
-    define :initialize, action: :initialize
-    define :for_order, action: :for_order
-    define :empty, action: :empty
-    define :get_via_token, args: [:token], action: :get_via_token
-    define :get_via_display_id, args: [:display_id], action: :get_via_display_id
+  pub_sub do
+    module EatsbotWeb.Endpoint
 
-    define :update_location,
-      args: [:current_latitude, :current_longitude],
-      action: :update_location
+    prefix "delivery"
+    publish :update_location, ["updated", :id]
 
-    define :get_ready_to_pickup
-    define :get_pending_stale
+    publish :update_state, ["updated", :id]
+    publish :update_state, ["updated"]
 
-    define :update_delivery_person
-    define :done_with_distance_check
+    publish :done_with_distance_check, ["updated", :id]
+    publish :done_with_distance_check, ["updated"]
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :display_id, :string do
+      default fn -> FriendlyID.generate(3) end
+      public? true
+    end
+
+    attribute :state, :string do
+      allow_nil? false
+      public? true
+      default :Init
+    end
+
+    attribute :private_auth_key, :uuid_v7 do
+      allow_nil? false
+      sensitive? true
+      public? true
+      default &Ash.UUIDv7.generate/0
+    end
+
+    attribute :public_auth_key, :uuid_v7 do
+      allow_nil? false
+      public? true
+      default &Ash.UUIDv7.generate/0
+    end
+
+    attribute :delivery_person, :map do
+      public? true
+    end
+
+    attribute :delivery_order, :map do
+      public? true
+    end
+
+    attribute :from_latitude, :float do
+      sensitive? true
+      public? true
+    end
+
+    attribute :from_longitude, :float do
+      sensitive? true
+      public? true
+    end
+
+    attribute :current_latitude, :float do
+      sensitive? true
+      public? true
+    end
+
+    attribute :current_longitude, :float do
+      sensitive? true
+      public? true
+    end
+
+    attribute :from_name, :string do
+      public? true
+    end
+
+    attribute :to_latitude, :float do
+      allow_nil? false
+      sensitive? true
+      public? true
+    end
+
+    attribute :to_longitude, :float do
+      allow_nil? false
+      sensitive? true
+      public? true
+    end
+
+    attribute :to_name, :string do
+      public? true
+    end
+
+    attribute :to_address, :string do
+      allow_nil? false
+      sensitive? true
+      public? true
+    end
+
+    attribute :to_phone, :string do
+      sensitive? true
+      public? true
+    end
+
+    attribute :to_notes, :string do
+      public? true
+    end
+
+    attribute :delivery_started_at, :date do
+      public? true
+    end
+
+    attribute :delivery_ended_at, :date do
+      public? true
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    has_many :state_history, EatsbotCore.Deliveries.DeliveryStateChanges do
+      public? true
+    end
+
+    belongs_to :order, EatsbotCore.Orders.Order do
+      public? true
+      allow_nil? true
+    end
   end
 
   actions do
@@ -274,160 +411,23 @@ defmodule EatsbotCore.Deliveries.Delivery do
     end
   end
 
-  policies do
-    bypass always() do
-      description "admin has access to every action"
-      authorize_if actor_attribute_equals(:access_level, :admin)
-    end
+  code_interface do
+    define :update_state, args: [:state], action: :update_state
+    define :initialize, action: :initialize
+    define :for_order, action: :for_order
+    define :empty, action: :empty
+    define :get_via_token, args: [:token], action: :get_via_token
+    define :get_via_display_id, args: [:display_id], action: :get_via_display_id
 
-    policy action_type(:read) do
-      description "read access is limited to users with public and private access, and the system actor"
-      authorize_if actor_attribute_equals(:access_level, :public)
-      authorize_if actor_attribute_equals(:access_level, :private)
-      authorize_if actor_attribute_equals(:access_level, :system)
-    end
+    define :update_location,
+      args: [:current_latitude, :current_longitude],
+      action: :update_location
 
-    policy action(:for_order) do
-      description "checkout creates an order's delivery as the system actor"
-      authorize_if actor_attribute_equals(:access_level, :system)
-    end
+    define :get_ready_to_pickup
+    define :get_pending_stale
 
-    policy action_type(:update) do
-      description "update access is limited to users private access, and the system actor"
-      authorize_if actor_attribute_equals(:access_level, :private)
-      authorize_if actor_attribute_equals(:access_level, :system)
-    end
-
-    policy action_type([:read, :update]) do
-      description "delivery credentials are limited to their own delivery"
-      authorize_if expr(is_nil(^actor(:delivery_id)))
-      authorize_if expr(id == ^actor(:delivery_id))
-    end
-  end
-
-  pub_sub do
-    module EatsbotWeb.Endpoint
-
-    prefix "delivery"
-    publish :update_location, ["updated", :id]
-
-    publish :update_state, ["updated", :id]
-    publish :update_state, ["updated"]
-
-    publish :done_with_distance_check, ["updated", :id]
-    publish :done_with_distance_check, ["updated"]
-  end
-
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :display_id, :string do
-      default fn -> FriendlyID.generate(3) end
-      public? true
-    end
-
-    attribute :state, :string do
-      allow_nil? false
-      public? true
-      default :Init
-    end
-
-    attribute :private_auth_key, :uuid_v7 do
-      allow_nil? false
-      sensitive? true
-      public? true
-      default &Ash.UUIDv7.generate/0
-    end
-
-    attribute :public_auth_key, :uuid_v7 do
-      allow_nil? false
-      public? true
-      default &Ash.UUIDv7.generate/0
-    end
-
-    attribute :delivery_person, :map do
-      public? true
-    end
-
-    attribute :delivery_order, :map do
-      public? true
-    end
-
-    attribute :from_latitude, :float do
-      sensitive? true
-      public? true
-    end
-
-    attribute :from_longitude, :float do
-      sensitive? true
-      public? true
-    end
-
-    attribute :current_latitude, :float do
-      sensitive? true
-      public? true
-    end
-
-    attribute :current_longitude, :float do
-      sensitive? true
-      public? true
-    end
-
-    attribute :from_name, :string do
-      public? true
-    end
-
-    attribute :to_latitude, :float do
-      allow_nil? false
-      sensitive? true
-      public? true
-    end
-
-    attribute :to_longitude, :float do
-      allow_nil? false
-      sensitive? true
-      public? true
-    end
-
-    attribute :to_name, :string do
-      public? true
-    end
-
-    attribute :to_address, :string do
-      allow_nil? false
-      sensitive? true
-      public? true
-    end
-
-    attribute :to_phone, :string do
-      sensitive? true
-      public? true
-    end
-
-    attribute :to_notes, :string do
-      public? true
-    end
-
-    attribute :delivery_started_at, :date do
-      public? true
-    end
-
-    attribute :delivery_ended_at, :date do
-      public? true
-    end
-
-    timestamps()
-  end
-
-  relationships do
-    has_many :state_history, EatsbotCore.Deliveries.DeliveryStateChanges do
-      public? true
-    end
-
-    belongs_to :order, EatsbotCore.Orders.Order do
-      public? true
-      allow_nil? true
-    end
+    define :update_delivery_person
+    define :done_with_distance_check
   end
 
   identities do

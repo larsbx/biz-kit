@@ -55,6 +55,18 @@ defmodule EatsbotCore.Products.Product do
     end
   end
 
+  policies do
+    bypass always() do
+      description "admin has access to every action"
+      authorize_if actor_attribute_equals(:access_level, :admin)
+    end
+
+    policy action_type(:read) do
+      description "read access is always allowed"
+      authorize_if always()
+    end
+  end
+
   field_policies do
     field_policy :* do
       description "the rest of the fields don't require any special policies"
@@ -62,13 +74,49 @@ defmodule EatsbotCore.Products.Product do
     end
   end
 
-  code_interface do
-    define :get_or_create_option, args: [:product, :option]
-    define :ensure_option_exists, args: [:option]
-    define :add_to_collection, args: [:collection_id]
-    define :generate_variants
-    define :create
-    define :update_price, args: [:money]
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :name, :string, public?: true, allow_nil?: false
+    attribute :description, :string, public?: true, allow_nil?: false
+    attribute :sku, :string, public?: true, allow_nil?: false
+
+    attribute :state, :atom do
+      constraints one_of: [:disabled, :enabled, :hidden]
+      allow_nil? false
+      public? true
+      default :disabled
+    end
+
+    attribute :discount_rules, {:array, EatsbotCore.Products.DiscountRule} do
+      public? true
+      default []
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :type, EatsbotCore.Products.Type do
+      public? true
+    end
+
+    has_many :prices, EatsbotCore.Products.Price, public?: true
+
+    many_to_many :collections, EatsbotCore.Products.Collection do
+      through EatsbotCore.Products.CollectionProduct
+      source_attribute_on_join_resource :product_id
+      destination_attribute_on_join_resource :collection_id
+      public? true
+    end
+
+    has_many :variants, EatsbotCore.Products.Variant do
+      public? true
+    end
+
+    has_many :options, EatsbotCore.Products.Option do
+      public? true
+    end
   end
 
   actions do
@@ -155,60 +203,12 @@ defmodule EatsbotCore.Products.Product do
     end
   end
 
-  policies do
-    bypass always() do
-      description "admin has access to every action"
-      authorize_if actor_attribute_equals(:access_level, :admin)
-    end
-
-    policy action_type(:read) do
-      description "read access is always allowed"
-      authorize_if always()
-    end
-  end
-
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :name, :string, public?: true, allow_nil?: false
-    attribute :description, :string, public?: true, allow_nil?: false
-    attribute :sku, :string, public?: true, allow_nil?: false
-
-    attribute :state, :atom do
-      constraints one_of: [:disabled, :enabled, :hidden]
-      allow_nil? false
-      public? true
-      default :disabled
-    end
-
-    attribute :discount_rules, {:array, EatsbotCore.Products.DiscountRule} do
-      public? true
-      default []
-    end
-
-    timestamps()
-  end
-
-  relationships do
-    belongs_to :type, EatsbotCore.Products.Type do
-      public? true
-    end
-
-    has_many :prices, EatsbotCore.Products.Price, public?: true
-
-    many_to_many :collections, EatsbotCore.Products.Collection do
-      through EatsbotCore.Products.CollectionProduct
-      source_attribute_on_join_resource :product_id
-      destination_attribute_on_join_resource :collection_id
-      public? true
-    end
-
-    has_many :variants, EatsbotCore.Products.Variant do
-      public? true
-    end
-
-    has_many :options, EatsbotCore.Products.Option do
-      public? true
-    end
+  code_interface do
+    define :get_or_create_option, args: [:product, :option]
+    define :ensure_option_exists, args: [:option]
+    define :add_to_collection, args: [:collection_id]
+    define :generate_variants
+    define :create
+    define :update_price, args: [:money]
   end
 end

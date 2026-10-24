@@ -24,15 +24,6 @@ defmodule EatsbotCore.Orders.OrderLine do
     end
   end
 
-  actions do
-    defaults [:read]
-
-    create :snapshot do
-      primary? true
-      accept [:variant_id, :name, :options, :quantity, :unit_price, :discount, :subtotal, :notes]
-    end
-  end
-
   policies do
     policy action_type(:read) do
       authorize_if {ActorIn, levels: [:admin, :staff, :system]}
@@ -67,5 +58,14 @@ defmodule EatsbotCore.Orders.OrderLine do
   relationships do
     belongs_to :order, EatsbotCore.Orders.Order, allow_nil?: false
     belongs_to :variant, EatsbotCore.Products.Variant, allow_nil?: true, public?: true
+  end
+
+  actions do
+    defaults [:read]
+
+    create :snapshot do
+      primary? true
+      accept [:variant_id, :name, :options, :quantity, :unit_price, :discount, :subtotal, :notes]
+    end
   end
 end

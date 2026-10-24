@@ -34,26 +34,15 @@ defmodule EatsbotCore.Carts.CartLine do
     repo Eatsbot.Repo
   end
 
-  field_policies do
-    field_policy :* do
-      description "the rest of the fields don't require any special policies"
+  policies do
+    bypass always() do
       authorize_if always()
     end
   end
 
-  actions do
-    defaults [:read, :destroy, update: :*]
-
-    create :create do
-      primary? true
-      upsert? true
-      upsert_identity :unique_variant
-      accept :*
-    end
-  end
-
-  policies do
-    bypass always() do
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
       authorize_if always()
     end
   end
@@ -76,6 +65,21 @@ defmodule EatsbotCore.Carts.CartLine do
     belongs_to :cart, EatsbotCore.Carts.Cart, public?: true, allow_nil?: false
   end
 
+  actions do
+    defaults [:read, :destroy, update: :*]
+
+    create :create do
+      primary? true
+      upsert? true
+      upsert_identity :unique_variant
+      accept :*
+    end
+  end
+
+  identities do
+    identity :unique_variant, [:variant_id, :cart_id]
+  end
+
   calculations do
     calculate :subtotal_before_discount,
               :money,
@@ -93,9 +97,5 @@ defmodule EatsbotCore.Carts.CartLine do
     calculate :subtotal,
               :money,
               EatsbotCore.Carts.DiscountsCalculation
-  end
-
-  identities do
-    identity :unique_variant, [:variant_id, :cart_id]
   end
 end

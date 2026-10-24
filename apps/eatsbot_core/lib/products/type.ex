@@ -35,17 +35,6 @@ defmodule EatsbotCore.Products.Type do
     repo Eatsbot.Repo
   end
 
-  field_policies do
-    field_policy :* do
-      description "the rest of the fields don't require any special policies"
-      authorize_if always()
-    end
-  end
-
-  actions do
-    defaults [:read, :destroy, create: :*, update: :*]
-  end
-
   policies do
     bypass always() do
       description "admin has access to every action"
@@ -54,6 +43,13 @@ defmodule EatsbotCore.Products.Type do
 
     policy action_type(:read) do
       description "read access is always allowed"
+      authorize_if always()
+    end
+  end
+
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
       authorize_if always()
     end
   end
@@ -75,5 +71,9 @@ defmodule EatsbotCore.Products.Type do
     end
 
     timestamps()
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
   end
 end

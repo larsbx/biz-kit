@@ -10,6 +10,16 @@ defmodule Eatsbot.Accounts.User do
     extensions: [AshAuthentication],
     data_layer: AshPostgres.DataLayer
 
+  policies do
+    bypass AshAuthentication.Checks.AshAuthenticationInteraction do
+      authorize_if always()
+    end
+
+    policy always() do
+      forbid_if always()
+    end
+  end
+
   authentication do
     tokens do
       enabled? true
@@ -33,6 +43,20 @@ defmodule Eatsbot.Accounts.User do
   postgres do
     table "users"
     repo Eatsbot.Repo
+  end
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :email, :ci_string do
+      allow_nil? false
+      public? true
+    end
+
+    attribute :admin?, :boolean do
+      default false
+      public? true
+    end
   end
 
   actions do
@@ -83,30 +107,6 @@ defmodule Eatsbot.Accounts.User do
       end
 
       run AshAuthentication.Strategy.MagicLink.Request
-    end
-  end
-
-  policies do
-    bypass AshAuthentication.Checks.AshAuthenticationInteraction do
-      authorize_if always()
-    end
-
-    policy always() do
-      forbid_if always()
-    end
-  end
-
-  attributes do
-    uuid_primary_key :id
-
-    attribute :email, :ci_string do
-      allow_nil? false
-      public? true
-    end
-
-    attribute :admin?, :boolean do
-      default false
-      public? true
     end
   end
 

@@ -23,19 +23,6 @@ defmodule EatsbotCore.Orders.OrderStateChange do
     end
   end
 
-  actions do
-    defaults [:read]
-
-    create :record do
-      accept [:order_id, :sequence, :from, :to, :reason, :actor_type]
-    end
-
-    read :for_order do
-      argument :order_id, :uuid, allow_nil?: false
-      filter expr(order_id == ^arg(:order_id))
-    end
-  end
-
   policies do
     policy action_type(:read) do
       authorize_if {ActorIn, levels: [:admin, :staff, :system]}
@@ -81,6 +68,19 @@ defmodule EatsbotCore.Orders.OrderStateChange do
 
   relationships do
     belongs_to :order, EatsbotCore.Orders.Order, allow_nil?: false
+  end
+
+  actions do
+    defaults [:read]
+
+    create :record do
+      accept [:order_id, :sequence, :from, :to, :reason, :actor_type]
+    end
+
+    read :for_order do
+      argument :order_id, :uuid, allow_nil?: false
+      filter expr(order_id == ^arg(:order_id))
+    end
   end
 
   identities do

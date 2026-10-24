@@ -28,10 +28,37 @@ defmodule EatsbotCore.Marketing.Subscriber do
     end
   end
 
-  code_interface do
-    define :subscribe
-    define :subscribed_to_branch, args: [:branch_id]
-    define :unsubscribe_all, args: [:channel, :address]
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :channel, :atom do
+      allow_nil? false
+      public? true
+      constraints one_of: [:telegram]
+    end
+
+    attribute :address, :string do
+      description "Channel-specific recipient, e.g. the Telegram chat id."
+      allow_nil? false
+      public? true
+      sensitive? true
+    end
+
+    attribute :status, :atom do
+      allow_nil? false
+      public? true
+      default :subscribed
+      constraints one_of: [:subscribed, :unsubscribed]
+    end
+
+    attribute :last_notified_at, :utc_datetime_usec, public?: true
+
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :branch, EatsbotCore.Brands.Branch, allow_nil?: false, public?: true
+    has_many :visits, EatsbotCore.Marketing.Visit, public?: true
   end
 
   actions do
@@ -76,46 +103,19 @@ defmodule EatsbotCore.Marketing.Subscriber do
     end
   end
 
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :channel, :atom do
-      allow_nil? false
-      public? true
-      constraints one_of: [:telegram]
-    end
-
-    attribute :address, :string do
-      description "Channel-specific recipient, e.g. the Telegram chat id."
-      allow_nil? false
-      public? true
-      sensitive? true
-    end
-
-    attribute :status, :atom do
-      allow_nil? false
-      public? true
-      default :subscribed
-      constraints one_of: [:subscribed, :unsubscribed]
-    end
-
-    attribute :last_notified_at, :utc_datetime_usec, public?: true
-
-    timestamps()
+  code_interface do
+    define :subscribe
+    define :subscribed_to_branch, args: [:branch_id]
+    define :unsubscribe_all, args: [:channel, :address]
   end
 
-  relationships do
-    belongs_to :branch, EatsbotCore.Brands.Branch, allow_nil?: false, public?: true
-    has_many :visits, EatsbotCore.Marketing.Visit, public?: true
+  identities do
+    identity :unique_address_per_branch, [:channel, :address, :branch_id]
   end
 
   aggregates do
     max :last_attributed_at, :visits, :checked_in_at do
       filter expr(attributed?)
     end
-  end
-
-  identities do
-    identity :unique_address_per_branch, [:channel, :address, :branch_id]
   end
 end

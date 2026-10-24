@@ -29,10 +29,32 @@ defmodule EatsbotCore.Marketing.Promotion do
     end
   end
 
-  code_interface do
-    define :create
-    define :announce
-    define :active_for_branch, args: [:branch_id], get?: true
+  pub_sub do
+    module EatsbotWeb.Endpoint
+    prefix "promotion"
+    publish :announce, ["announced"]
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :title, :string, allow_nil?: false, public?: true
+    attribute :body, :string, allow_nil?: false, public?: true
+
+    attribute :starts_at, :utc_datetime_usec do
+      allow_nil? false
+      public? true
+      default &DateTime.utc_now/0
+    end
+
+    attribute :ends_at, :utc_datetime_usec, public?: true
+    attribute :announced_at, :utc_datetime_usec, public?: true, writable?: false
+
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :branch, EatsbotCore.Brands.Branch, allow_nil?: false, public?: true
   end
 
   actions do
@@ -71,37 +93,15 @@ defmodule EatsbotCore.Marketing.Promotion do
     end
   end
 
-  pub_sub do
-    module EatsbotWeb.Endpoint
-    prefix "promotion"
-    publish :announce, ["announced"]
+  code_interface do
+    define :create
+    define :announce
+    define :active_for_branch, args: [:branch_id], get?: true
   end
 
   validations do
     validate compare(:ends_at, greater_than: :starts_at),
       where: [present([:starts_at, :ends_at])],
       message: "must end after it starts"
-  end
-
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :title, :string, allow_nil?: false, public?: true
-    attribute :body, :string, allow_nil?: false, public?: true
-
-    attribute :starts_at, :utc_datetime_usec do
-      allow_nil? false
-      public? true
-      default &DateTime.utc_now/0
-    end
-
-    attribute :ends_at, :utc_datetime_usec, public?: true
-    attribute :announced_at, :utc_datetime_usec, public?: true, writable?: false
-
-    timestamps()
-  end
-
-  relationships do
-    belongs_to :branch, EatsbotCore.Brands.Branch, allow_nil?: false, public?: true
   end
 end

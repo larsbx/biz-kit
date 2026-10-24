@@ -36,11 +36,39 @@ defmodule EatsbotCore.Marketing.Visit do
     end
   end
 
-  code_interface do
-    define :check_in, args: [:touchpoint_code, :channel, :address]
-    define :open_by_code, args: [:code], get?: true
-    define :redeem, args: [:code, :amount]
-    define :statement, args: [:branch_id, :from, :to]
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :code, :string, allow_nil?: false, public?: true
+
+    attribute :status, :atom do
+      allow_nil? false
+      public? true
+      default :checked_in
+      constraints one_of: [:checked_in, :redeemed]
+    end
+
+    attribute :attributed?, :boolean, allow_nil?: false, public?: true, default: false
+
+    attribute :commission_rate, :decimal do
+      allow_nil? false
+      public? true
+      default Decimal.new(0)
+      constraints min: 0, max: 1
+    end
+
+    attribute :checked_in_at, :utc_datetime_usec, allow_nil?: false, public?: true
+    attribute :redeemed_at, :utc_datetime_usec, public?: true
+    attribute :amount, :money, public?: true
+    attribute :commission, :money, public?: true
+
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :subscriber, Marketing.Subscriber, allow_nil?: false, public?: true
+    belongs_to :touchpoint, Marketing.Touchpoint, allow_nil?: false, public?: true
+    belongs_to :promotion, Marketing.Promotion, public?: true
   end
 
   actions do
@@ -135,38 +163,10 @@ defmodule EatsbotCore.Marketing.Visit do
     end
   end
 
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :code, :string, allow_nil?: false, public?: true
-
-    attribute :status, :atom do
-      allow_nil? false
-      public? true
-      default :checked_in
-      constraints one_of: [:checked_in, :redeemed]
-    end
-
-    attribute :attributed?, :boolean, allow_nil?: false, public?: true, default: false
-
-    attribute :commission_rate, :decimal do
-      allow_nil? false
-      public? true
-      default Decimal.new(0)
-      constraints min: 0, max: 1
-    end
-
-    attribute :checked_in_at, :utc_datetime_usec, allow_nil?: false, public?: true
-    attribute :redeemed_at, :utc_datetime_usec, public?: true
-    attribute :amount, :money, public?: true
-    attribute :commission, :money, public?: true
-
-    timestamps()
-  end
-
-  relationships do
-    belongs_to :subscriber, Marketing.Subscriber, allow_nil?: false, public?: true
-    belongs_to :touchpoint, Marketing.Touchpoint, allow_nil?: false, public?: true
-    belongs_to :promotion, Marketing.Promotion, public?: true
+  code_interface do
+    define :check_in, args: [:touchpoint_code, :channel, :address]
+    define :open_by_code, args: [:code], get?: true
+    define :redeem, args: [:code, :amount]
+    define :statement, args: [:branch_id, :from, :to]
   end
 end

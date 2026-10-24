@@ -41,38 +41,6 @@ defmodule EatsbotCore.Products.Option do
     end
   end
 
-  field_policies do
-    field_policy :* do
-      description "the rest of the fields don't require any special policies"
-      authorize_if always()
-    end
-  end
-
-  code_interface do
-    define :add_value, args: [:value]
-  end
-
-  actions do
-    defaults [:read, :destroy, update: :*]
-
-    create :create do
-      primary? true
-      upsert? true
-      upsert_identity :unique_option
-      accept :*
-    end
-
-    update :add_value do
-      require_atomic? false
-      argument :value, :string, allow_nil?: false
-
-      change fn %{arguments: %{value: value}} = changeset, _context ->
-        changeset
-        |> Ash.Changeset.manage_relationship(:option_values, %{value: value}, type: :create)
-      end
-    end
-  end
-
   policies do
     bypass always() do
       description "admin has access to every action"
@@ -81,6 +49,13 @@ defmodule EatsbotCore.Products.Option do
 
     policy action_type(:read) do
       description "read access is always allowed"
+      authorize_if always()
+    end
+  end
+
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
       authorize_if always()
     end
   end
@@ -113,6 +88,31 @@ defmodule EatsbotCore.Products.Option do
       public? true
       through EatsbotCore.Products.ProductOption
     end
+  end
+
+  actions do
+    defaults [:read, :destroy, update: :*]
+
+    create :create do
+      primary? true
+      upsert? true
+      upsert_identity :unique_option
+      accept :*
+    end
+
+    update :add_value do
+      require_atomic? false
+      argument :value, :string, allow_nil?: false
+
+      change fn %{arguments: %{value: value}} = changeset, _context ->
+        changeset
+        |> Ash.Changeset.manage_relationship(:option_values, %{value: value}, type: :create)
+      end
+    end
+  end
+
+  code_interface do
+    define :add_value, args: [:value]
   end
 
   identities do

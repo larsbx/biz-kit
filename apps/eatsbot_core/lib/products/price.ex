@@ -41,29 +41,6 @@ defmodule EatsbotCore.Products.Price do
     end
   end
 
-  field_policies do
-    field_policy :* do
-      description "the rest of the fields don't require any special policies"
-      authorize_if always()
-    end
-  end
-
-  actions do
-    defaults [:read, :destroy, update: :*]
-
-    create :create_for_variant do
-      upsert? true
-      upsert_identity :unique_variant
-      accept :*
-    end
-
-    create :create_for_product do
-      upsert? true
-      upsert_identity :unique_product
-      accept :*
-    end
-  end
-
   policies do
     bypass always() do
       description "admin has access to every action"
@@ -76,19 +53,10 @@ defmodule EatsbotCore.Products.Price do
     end
   end
 
-  validations do
-    validate fn changeset, _context ->
-      case Ash.Changeset.get_attribute(changeset, :money) do
-        %Money{amount: amount} ->
-          if Decimal.gt?(amount, 0) do
-            :ok
-          else
-            {:error, field: :money, message: "price amount must be positive"}
-          end
-
-        _ ->
-          :ok
-      end
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
+      authorize_if always()
     end
   end
 
@@ -110,12 +78,44 @@ defmodule EatsbotCore.Products.Price do
     end
   end
 
-  calculations do
-    calculate :currency, :string, expr(fragment("(money).currency_code"))
+  actions do
+    defaults [:read, :destroy, update: :*]
+
+    create :create_for_variant do
+      upsert? true
+      upsert_identity :unique_variant
+      accept :*
+    end
+
+    create :create_for_product do
+      upsert? true
+      upsert_identity :unique_product
+      accept :*
+    end
   end
 
   identities do
     identity :unique_product, [:currency, :product_id]
     identity :unique_variant, [:currency, :variant_id]
+  end
+
+  validations do
+    validate fn changeset, _context ->
+      case Ash.Changeset.get_attribute(changeset, :money) do
+        %Money{amount: amount} ->
+          if Decimal.gt?(amount, 0) do
+            :ok
+          else
+            {:error, field: :money, message: "price amount must be positive"}
+          end
+
+        _ ->
+          :ok
+      end
+    end
+  end
+
+  calculations do
+    calculate :currency, :string, expr(fragment("(money).currency_code"))
   end
 end

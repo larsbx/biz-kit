@@ -21,17 +21,6 @@ defmodule EatsbotCore.Deliveries.DeliveryStateChanges do
     end
   end
 
-  code_interface do
-    define :add_to_state_history,
-      args: [:delivery_id, :old_state, :new_state, :comment],
-      action: :create
-  end
-
-  actions do
-    defaults [:read, :create, :destroy]
-    default_accept [:delivery_id, :old_state, :new_state, :comment]
-  end
-
   attributes do
     uuid_v7_primary_key :id
 
@@ -53,5 +42,16 @@ defmodule EatsbotCore.Deliveries.DeliveryStateChanges do
 
   relationships do
     belongs_to :delivery, EatsbotCore.Deliveries.Delivery
+  end
+
+  actions do
+    defaults [:read, :create, :destroy]
+    default_accept [:delivery_id, :old_state, :new_state, :comment]
+  end
+
+  code_interface do
+    define :add_to_state_history,
+      args: [:delivery_id, :old_state, :new_state, :comment],
+      action: :create
   end
 end

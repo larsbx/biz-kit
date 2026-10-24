@@ -52,6 +52,12 @@ defmodule EatsbotCore.Carts.Cart do
     repo Eatsbot.Repo
   end
 
+  policies do
+    bypass always() do
+      authorize_if always()
+    end
+  end
+
   field_policies do
     field_policy :* do
       description "the rest of the fields don't require any special policies"
@@ -59,11 +65,28 @@ defmodule EatsbotCore.Carts.Cart do
     end
   end
 
-  code_interface do
-    define :create
-    define :add_variant, args: [:variant_id, {:optional, :quantity}, {:optional, :notes}]
-    define :checkout, args: [:cart_id, :fulfillment, :idempotency_key]
-    define :checkout_delivery, args: [:cart_id, :delivery_input]
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :status, :atom do
+      constraints one_of: [:active, :completed, :abandoned]
+      public? true
+      default :active
+    end
+
+    attribute :currency, :string do
+      public? true
+      # TODO use store config
+      default "CLP"
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    has_many :cart_lines, EatsbotCore.Carts.CartLine do
+      public? true
+    end
   end
 
   actions do
@@ -167,43 +190,20 @@ defmodule EatsbotCore.Carts.Cart do
     end
   end
 
-  policies do
-    bypass always() do
-      authorize_if always()
-    end
+  code_interface do
+    define :create
+    define :add_variant, args: [:variant_id, {:optional, :quantity}, {:optional, :notes}]
+    define :checkout, args: [:cart_id, :fulfillment, :idempotency_key]
+    define :checkout_delivery, args: [:cart_id, :delivery_input]
   end
 
-  attributes do
-    uuid_v7_primary_key :id
-
-    attribute :status, :atom do
-      constraints one_of: [:active, :completed, :abandoned]
-      public? true
-      default :active
-    end
-
-    attribute :currency, :string do
-      public? true
-      # TODO use store config
-      default "CLP"
-    end
-
-    timestamps()
-  end
-
-  relationships do
-    has_many :cart_lines, EatsbotCore.Carts.CartLine do
-      public? true
-    end
+  aggregates do
+    sum :total_before_discount, [:cart_lines], :subtotal_before_discount
   end
 
   calculations do
     calculate :total,
               :money,
               EatsbotCore.Carts.TotalCalculation
-  end
-
-  aggregates do
-    sum :total_before_discount, [:cart_lines], :subtotal_before_discount
   end
 end

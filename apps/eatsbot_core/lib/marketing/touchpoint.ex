@@ -32,25 +32,6 @@ defmodule EatsbotCore.Marketing.Touchpoint do
     end
   end
 
-  code_interface do
-    define :create
-    define :by_code, args: [:code], get?: true
-  end
-
-  actions do
-    defaults [:read, :destroy, create: [:branch_id, :label, :kind, :commission_rate]]
-
-    update :update do
-      primary? true
-      accept [:label, :kind, :commission_rate]
-    end
-
-    read :by_code do
-      argument :code, :string, allow_nil?: false
-      filter expr(code == ^arg(:code))
-    end
-  end
-
   attributes do
     uuid_v7_primary_key :id
 
@@ -82,6 +63,25 @@ defmodule EatsbotCore.Marketing.Touchpoint do
 
   relationships do
     belongs_to :branch, EatsbotCore.Brands.Branch, allow_nil?: false, public?: true
+  end
+
+  actions do
+    defaults [:read, :destroy, create: [:branch_id, :label, :kind, :commission_rate]]
+
+    update :update do
+      primary? true
+      accept [:label, :kind, :commission_rate]
+    end
+
+    read :by_code do
+      argument :code, :string, allow_nil?: false
+      filter expr(code == ^arg(:code))
+    end
+  end
+
+  code_interface do
+    define :create
+    define :by_code, args: [:code], get?: true
   end
 
   identities do

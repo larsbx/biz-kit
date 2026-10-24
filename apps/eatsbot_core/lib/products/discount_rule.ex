@@ -29,24 +29,6 @@ defmodule EatsbotCore.Products.DiscountRule do
     type :attributes
   end
 
-  validations do
-    validate fn changeset, _context ->
-      method = Ash.Changeset.get_attribute(changeset, :method)
-      discount = Ash.Changeset.get_attribute(changeset, :discount)
-
-      cond do
-        method == :percentage and discount != nil and (discount < 0 or discount > 1) ->
-          {:error, field: :discount, message: "percentage discount must be between 0.0 and 1.0"}
-
-        method in [:fixed, :x_for_fixed_price] and discount != nil and discount < 0 ->
-          {:error, field: :discount, message: "discount amount must be positive"}
-
-        true ->
-          :ok
-      end
-    end
-  end
-
   attributes do
     uuid_v7_primary_key :id
 
@@ -72,5 +54,23 @@ defmodule EatsbotCore.Products.DiscountRule do
     # TODO: Add currency-specific discount rules
     # attribute :currencies, {:array, :string}, public?: true, default: []
     # When currencies is empty, rule applies to all currencies
+  end
+
+  validations do
+    validate fn changeset, _context ->
+      method = Ash.Changeset.get_attribute(changeset, :method)
+      discount = Ash.Changeset.get_attribute(changeset, :discount)
+
+      cond do
+        method == :percentage and discount != nil and (discount < 0 or discount > 1) ->
+          {:error, field: :discount, message: "percentage discount must be between 0.0 and 1.0"}
+
+        method in [:fixed, :x_for_fixed_price] and discount != nil and discount < 0 ->
+          {:error, field: :discount, message: "discount amount must be positive"}
+
+        true ->
+          :ok
+      end
+    end
   end
 end

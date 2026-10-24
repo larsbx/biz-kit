@@ -52,21 +52,6 @@ defmodule EatsbotCore.Products.Collection do
     end
   end
 
-  field_policies do
-    field_policy :* do
-      description "the rest of the fields don't require any special policies"
-      authorize_if always()
-    end
-  end
-
-  code_interface do
-    define :create
-  end
-
-  actions do
-    defaults [:read, :destroy, create: :*, update: :*]
-  end
-
   policies do
     bypass always() do
       description "admin has access to every action"
@@ -75,6 +60,13 @@ defmodule EatsbotCore.Products.Collection do
 
     policy action_type(:read) do
       description "read access is always allowed"
+      authorize_if always()
+    end
+  end
+
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
       authorize_if always()
     end
   end
@@ -110,5 +102,13 @@ defmodule EatsbotCore.Products.Collection do
       source_attribute_on_join_resource :product_id
       destination_attribute_on_join_resource :collection_id
     end
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  code_interface do
+    define :create
   end
 end
