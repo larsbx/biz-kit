@@ -46,11 +46,12 @@ defmodule AgentOpsStore.Postgres do
   not a canonical ledger signature. A canonical signed run must already
   exist independently. No task content or credentials are stored here.
   """
-  @spec register(DBConnection.conn(), map()) ::
+  @spec register(pid() | atom(), map()) ::
           {:ok, :new | :existing} | {:error, atom()}
   def register(conn, plan) do
     with {:ok, %{records: records}, :new} <- Attempts.register(Attempts.init(), plan) do
       %{descriptor: d} = Map.fetch!(records, plan.effect_id)
+      effect_id = d.effect_id
       digest = descriptor_digest(d)
 
       params = [
@@ -62,7 +63,7 @@ defmodule AgentOpsStore.Postgres do
       ]
 
       case query(conn, @insert, params) do
-        {:ok, [[^d.effect_id]]} ->
+        {:ok, [[^effect_id]]} ->
           {:ok, :new}
 
         {:ok, []} ->
@@ -81,7 +82,7 @@ defmodule AgentOpsStore.Postgres do
   and pass the SAME signed effect ID to the selected backend for idempotency.
   The token must never appear in prompts, logs, task events or agent records.
   """
-  @spec claim(DBConnection.conn(), String.t(), pos_integer(), String.t(), pos_integer(), pos_integer()) ::
+  @spec claim(pid() | atom(), String.t(), pos_integer(), String.t(), pos_integer(), pos_integer()) ::
           {:ok, %{epoch: pos_integer(), version: pos_integer(), token: binary()}}
           | {:error, atom()}
   def claim(conn, effect_id, version, owner, lease_ms, attempt_limit) do
