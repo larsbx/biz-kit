@@ -12,6 +12,10 @@ on:
       d_patch_ref:
         description: d-patch branch, tag or commit to test against
         default: main
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
