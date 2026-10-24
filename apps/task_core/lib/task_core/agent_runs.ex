@@ -240,7 +240,6 @@ defmodule TaskCore.AgentRuns do
 
   def runnable?(_state, _key), do: {:error, :invalid_agent_run_key}
 
-
   @doc """
   Coordinator entry point: signed intent plus independent read AND execution
   grants for the ledger-bound agent principal. Grant identifiers are locators,
@@ -253,7 +252,13 @@ defmodule TaskCore.AgentRuns do
          {:ok, run} <- fetch(state.agent_runs, key, :unknown_agent_run),
          :ok <- task_access(state, execution.ticket, run.agent_principal_id, "read", read_grant),
          :ok <-
-           task_access(state, execution.ticket, run.agent_principal_id, "execute", execution_grant) do
+           task_access(
+             state,
+             execution.ticket,
+             run.agent_principal_id,
+             "execute",
+             execution_grant
+           ) do
       {:ok, execution}
     end
   end

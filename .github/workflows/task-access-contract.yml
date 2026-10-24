@@ -2,8 +2,6 @@ name: TaskCore independent access contract
 
 on:
   pull_request:
-  push:
-    branches: [integration/taskcore-independent-access]
 
 permissions:
   contents: read
@@ -18,19 +16,19 @@ jobs:
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
-      - name: Emit canonical formatting for changed sources
-        run: |
-          elixir -e 'for path <- System.argv() do
-            formatted = path |> File.read!() |> Code.format_string!() |> IO.iodata_to_binary()
-            IO.puts("FORMATTED " <> path <> " " <> Base.encode64(formatted <> "\\n"))
-          end' apps/task_core/lib/task_core/access.ex apps/task_core/test/access_test.exs apps/task_core/lib/task_core/agent_runs.ex apps/coop_substrate/test/task_agent_run_intents_test.exs apps/task_core/lib/task_core/dispatcher.ex apps/task_core/test/dispatcher_test.exs apps/agent_ops_store/lib/agent_ops_store/coordinator.ex
       - name: Test TaskCore outside the umbrella
         run: |
           cp -R apps/task_core "$RUNNER_TEMP/task_core"
           cd "$RUNNER_TEMP/task_core"
           MIX_ENV=test mix compile --warnings-as-errors
           mix test
+      - name: Test AgentCore outside the umbrella
+        run: |
+          cp -R apps/agent_core "$RUNNER_TEMP/agent_core"
+          cd "$RUNNER_TEMP/agent_core"
+          MIX_ENV=test mix compile --warnings-as-errors
+          mix test
       - name: Check permission source formatting
         run: |
           cd "$RUNNER_TEMP/task_core"
-          mix format --check-formatted lib/task_core/access.ex test/access_test.exs lib/task_core/agent_runs.ex
+          mix format --check-formatted lib/task_core/access.ex test/access_test.exs lib/task_core/agent_runs.ex lib/task_core/dispatcher.ex test/dispatcher_test.exs

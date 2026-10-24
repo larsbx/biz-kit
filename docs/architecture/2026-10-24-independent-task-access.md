@@ -69,3 +69,15 @@ cross-crash adoption, typed tools, result custody and full worker supervision
 remain open. withdraw/3 fences revoked/stale/cancelled intents in SQL and invokes
 the trusted host's immutable-effect termination request; it never records confirmed
 termination from that request. In particular, expiry never proves backend absence.
+
+## Local validation
+
+On 2026-10-24, both cores were copied outside the umbrella and compiled with
+`mix compile --warnings-as-errors` using the pinned Elixir 1.19 / OTP 27 runtime.
+All 87 TaskCore tests and 23 AgentCore tests passed via `mix test`. The
+AgentCore Mix project now keeps umbrella paths only inside an actual umbrella.
+These checks do not replace signed-ledger integration, PostgreSQL acceptance
+or live backend conformance. Hosted jobs remained queued at this update.
+The local and hosted staging targets are reported to exist, but no target
+identifiers/endpoints or approved profile registry could be retrieved from
+biz-kit, dev-ops or prior context. Do not invent or publish approved profiles.

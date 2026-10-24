@@ -12,7 +12,11 @@ defmodule TaskCore.AccessTest do
       event_id: id,
       type: type,
       chapter_id: "chapter",
-      payload: Map.merge(%{"tenant_id" => "tenant", "project_id" => "project", "task_id" => "task"}, attrs),
+      payload:
+        Map.merge(
+          %{"tenant_id" => "tenant", "project_id" => "project", "task_id" => "task"},
+          attrs
+        ),
       signers: [%{key_id: "gov-key", pubkey: @pubkey}]
     }
   end
@@ -23,12 +27,19 @@ defmodule TaskCore.AccessTest do
   end
 
   defp grant(action, attrs \\ %{}) do
-    event("grant-" <> action, "TaskAccessGrantedV1", Map.merge(%{
-      "principal_id" => "worker",
-      "action" => action,
-      "expected_task_version" => 3,
-      "source_event_id" => "source"
-    }, attrs))
+    event(
+      "grant-" <> action,
+      "TaskAccessGrantedV1",
+      Map.merge(
+        %{
+          "principal_id" => "worker",
+          "action" => action,
+          "expected_task_version" => 3,
+          "source_event_id" => "source"
+        },
+        attrs
+      )
+    )
   end
 
   defp check(env, state) do
@@ -58,6 +69,7 @@ defmodule TaskCore.AccessTest do
     state = State.handle_event(grant("read"), state)
     assert :ok = TaskAccess.authorize(state, request())
     assert {:error, :unknown_task_access_grant} = TaskAccess.authorize(state, request("execute"))
+
     assert {:error, :task_access_action_mismatch} =
              TaskAccess.authorize(state, %{request() | action: "execute"})
 
@@ -84,6 +96,7 @@ defmodule TaskCore.AccessTest do
 
   test "task revision and source must match both the grant and current replay" do
     state = State.handle_event(grant("read"), fixture())
+
     assert {:error, :stale_task_access_revision} =
              TaskAccess.authorize(put_in(state, [:tasks, @key, :version], 4), request())
 
@@ -104,6 +117,7 @@ defmodule TaskCore.AccessTest do
 
     offboard = event("offboard", "TaskPrincipalOffboardedV1", %{"principal_id" => "worker"})
     assert :ok = check(offboard, state)
+
     assert {:error, :task_access_revoked} =
              TaskAccess.authorize(State.handle_event(offboard, state), request())
   end
@@ -114,7 +128,13 @@ defmodule TaskCore.AccessTest do
     assert {:error, :task_governance_not_declared} = check(rogue, state)
     state = State.handle_event(grant("read"), state)
     assert {:error, :task_access_grant_already_recorded} = check(grant("read"), state)
-    revoke = event("revoke", "TaskAccessRevokedV1", %{"task_id" => "other", "grant_event_id" => "grant-read"})
+
+    revoke =
+      event("revoke", "TaskAccessRevokedV1", %{
+        "task_id" => "other",
+        "grant_event_id" => "grant-read"
+      })
+
     assert {:error, :task_access_scope_mismatch} = check(revoke, state)
   end
 

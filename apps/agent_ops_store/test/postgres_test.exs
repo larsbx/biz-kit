@@ -67,8 +67,7 @@ defmodule AgentOpsStore.PostgresTest do
 
     assert byte_size(token) == 32
 
-    assert {:error, :claim_refused} =
-             Postgres.claim(conn, p.effect_id, 1, "worker2", 60_000, 2)
+    assert {:error, :claim_refused} = Postgres.claim(conn, p.effect_id, 1, "worker2", 60_000, 2)
 
     assert {:error, :transition_refused} =
              Postgres.renew(conn, p.effect_id, 2, 1, :crypto.strong_rand_bytes(32), 60_000)
@@ -89,8 +88,7 @@ defmodule AgentOpsStore.PostgresTest do
     assert state.backend_ref == "backend-ci"
     assert state.candidate_digest == <<5::256>>
 
-    assert {:error, :claim_refused} =
-             Postgres.claim(conn, p.effect_id, 5, "worker3", 60_000, 2)
+    assert {:error, :claim_refused} = Postgres.claim(conn, p.effect_id, 5, "worker3", 60_000, 2)
   end
 
   test "cancel requests fence tokens and preserve proof reference", %{conn: conn} do
@@ -102,8 +100,7 @@ defmodule AgentOpsStore.PostgresTest do
 
     assert {:ok, 3} = Postgres.request_cancel(conn, p.effect_id, 2)
 
-    assert {:error, :transition_refused} =
-             Postgres.renew(conn, p.effect_id, 3, 1, token, 60_000)
+    assert {:error, :transition_refused} = Postgres.renew(conn, p.effect_id, 3, 1, token, 60_000)
 
     assert {:ok, 4} =
              Postgres.confirm_cancel_preverified(conn, p.effect_id, 3, "verified-termination")

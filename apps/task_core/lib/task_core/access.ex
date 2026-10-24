@@ -55,7 +55,8 @@ defmodule TaskCore.Access do
 
   def check(%{type: "TaskAccessRevokedV1", payload: p} = env, state, keys) do
     with :ok <- Admission.governance_declared(env, keys),
-         {:ok, grant} <- fetch(state.task_access_grants, p["grant_event_id"], :unknown_task_access_grant),
+         {:ok, grant} <-
+           fetch(state.task_access_grants, p["grant_event_id"], :unknown_task_access_grant),
          true <- grant.task_key == State.task_key(env) or {:error, :task_access_scope_mismatch} do
       if grant.active, do: :ok, else: {:error, :task_access_revoked}
     end

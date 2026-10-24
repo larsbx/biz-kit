@@ -266,15 +266,14 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
         )
       )
 
-    assert {:error, :agent_grant_revoked} =
-             AgentRuns.runnable?(current_state(), @run_key)
+    assert {:error, :agent_grant_revoked} = AgentRuns.runnable?(current_state(), @run_key)
 
     cancellation = cancel(ctx)
     assert {:ok, _} = Log.append(cancellation)
 
-    assert {:error, :agent_run_cancelled} =
-             AgentRuns.runnable?(current_state(), @run_key)
+    assert {:error, :agent_run_cancelled} = AgentRuns.runnable?(current_state(), @run_key)
   end
+
   defp access_grant(ctx, action) do
     signed_event(
       ctx.gov,
@@ -288,7 +287,8 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
     )
   end
 
-  test "independent permissions survive restart and revoke without changing the signed intent", ctx do
+  test "independent permissions survive restart and revoke without changing the signed intent",
+       ctx do
     {:ok, _} = Log.append(request(ctx))
     read = access_grant(ctx, "read")
     execute = access_grant(ctx, "execute")
@@ -298,6 +298,7 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
              AgentRuns.authorized?(current_state(), @run_key, grants)
 
     {:ok, _} = Log.append(read)
+
     assert {:error, :unknown_task_access_grant} =
              AgentRuns.authorized?(current_state(), @run_key, grants)
 
@@ -314,12 +315,16 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
 
     {:ok, _} =
       Log.append(
-        signed_event(ctx.gov, "TaskAccessRevokedV1",
-          Map.put(@subject, "grant_event_id", read.event_id))
+        signed_event(
+          ctx.gov,
+          "TaskAccessRevokedV1",
+          Map.put(@subject, "grant_event_id", read.event_id)
+        )
       )
 
     assert {:error, :task_access_revoked} =
              AgentRuns.authorized?(current_state(), @run_key, grants)
+
     assert {:ok, _} = AgentRuns.runnable?(current_state(), @run_key)
     assert current_state().tasks[@task_key].state == "ready"
     assert :ok = Log.verify_chains()
@@ -327,16 +332,19 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
 
   test "a suggester cannot sign its own independent execution permission", ctx do
     forged =
-      signed_event(ctx.agent, "TaskAccessGrantedV1", Map.merge(@subject, %{
-        "principal_id" => "agent-1",
-        "action" => "execute",
-        "expected_task_version" => 7,
-        "source_event_id" => ctx.ready.event_id
-      }))
+      signed_event(
+        ctx.agent,
+        "TaskAccessGrantedV1",
+        Map.merge(@subject, %{
+          "principal_id" => "agent-1",
+          "action" => "execute",
+          "expected_task_version" => 7,
+          "source_event_id" => ctx.ready.event_id
+        })
+      )
 
     head = Log.head()
     assert {:error, _} = Log.append(forged)
     assert Log.head() == head
   end
-
 end
