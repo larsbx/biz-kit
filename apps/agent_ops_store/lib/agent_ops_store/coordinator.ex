@@ -4,7 +4,8 @@ defmodule AgentOpsStore.Coordinator do
   outbox attempts and an approved execution adapter. No supervisor or production
   endpoint is installed. The database is biz-kit's existing governed database.
 
-  The trusted host supplies context/1, environment/0, consent/1 and reference/2.
+  The trusted host supplies context/1, committed_state/0, environment/0,
+  consent/1, reference/2 and request_termination/2.
   context returns current committed state, independent grant IDs, the approved
   registry, canonical hash function and trusted classification requirements.
   reference normalizes an adapter handle to a non-secret immutable locator.
@@ -41,6 +42,39 @@ defmodule AgentOpsStore.Coordinator do
 
   def deliver(conn, key, host, owner) do
     with :ok <- staging(host), do: Dispatcher.deliver(key, ports(conn, host, owner))
+  end
+
+  @doc "Fence withdrawn authority and request termination; never infer confirmed cancellation."
+  def withdraw(conn, key, host) do
+    with :ok <- staging(host),
+         {:ok, context} <- host.context(key),
+         {:ok, run} <- Map.fetch(context.state.agent_runs, key),
+         {:error, _reason} <- AgentRuns.authorized?(context.state, key, context.grants),
+         effect = "agent-run:" <> run.intent_event_id,
+         {:ok, row} <- Postgres.snapshot(conn, effect),
+         :ok <- fence_withdrawal(conn, effect, row) do
+      # The host resolves immutable historical backend identity, even when a
+      # profile or its execution grant has since been revoked. A successful
+      # request is deliberately NOT a termination receipt.
+      case host.request_termination(effect, row.backend_ref) do
+        :ok -> {:ok, :cancel_requested}
+        _ -> {:error, :cancellation_requires_reconciliation}
+      end
+    else
+      {:ok, _authorized_run} -> {:error, :run_authority_still_active}
+      :error -> {:error, :unknown_agent_run}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp fence_withdrawal(_conn, _effect, %{phase: "cancel_requested"}), do: :ok
+  defp fence_withdrawal(_conn, _effect, %{phase: "cancelled"}), do: {:error, :already_cancelled}
+
+  defp fence_withdrawal(conn, effect, row) do
+    case Postgres.request_cancel(conn, effect, row.version) do
+      {:ok, _version} -> :ok
+      {:error, _} = error -> error
+    end
   end
 
   defp staging(host) do

@@ -39,9 +39,8 @@ task scope, stale revisions, revocation, offboarding, governance signing,
 duplicate signed delivery and replay/restart. Signed-ledger integration is
 added to task_agent_run_intents_test.exs.
 
-This is a security prerequisite, not a dispatcher or staging acceptance:
-ledger-derived durable outbox ingestion/checkpointing, a worker using SQL CAS,
-backend idempotent launch and immutable-effect lookup, abandoned-execution
+This is a staging prerequisite, not staging acceptance:
+backend idempotency conformance and immutable-effect lookup, abandoned-execution
 reconciliation, typed tool proxy, bounded result custody and two real backend
 conformance runs remain required by issue #92. Fake adapters are not real
 backend evidence. No production cutover is authorized or performed.
@@ -67,4 +66,6 @@ authority before/after claim, a lost backend response and attachment failure.
 These are failure-path tests, not real backend or distributed database evidence.
 Ongoing cancellation polling, verified termination/absence receipts, automated
 cross-crash adoption, typed tools, result custody and full worker supervision
-remain open. In particular, expiry never becomes proof of backend absence.
+remain open. withdraw/3 fences revoked/stale/cancelled intents in SQL and invokes
+the trusted host's immutable-effect termination request; it never records confirmed
+termination from that request. In particular, expiry never proves backend absence.
