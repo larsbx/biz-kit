@@ -11,6 +11,57 @@ defmodule FulfillmentCoreTest do
     updated
   end
 
+  test "confirmed cancellation preserves transport facts and refuses later observations" do
+    {:ok, initial} = F.new("merchant", "request", "order", "courier")
+    ack = event(initial, "ack", :accept, %{transport_ref: "trip"})
+    {:ok, accepted, :accepted} = F.apply(initial, "merchant", :dispatch, ack)
+    moving = applied(accepted, "merchant", :dispatch, "move", :in_transit)
+    cancelling = applied(moving, "merchant", :commerce, "cancel", :cancel)
+    cancelled = applied(cancelling, "merchant", :dispatch, "confirm", :cancel_confirmed)
+    assert cancelled.transport_started
+    assert cancelled.transport_ref == "trip"
+    assert cancelled.proof_ref == nil
+    refute F.pending?(cancelled)
+    assert {:ok, ^cancelled, :duplicate} = F.apply(cancelled, "merchant", :dispatch, ack)
+
+    for {op, extras} <- [
+          {:accept, %{transport_ref: "other"}},
+          {:reject, %{reason: "late"}},
+          {:in_transit, %{}},
+          {:delivered, %{proof_ref: "late-proof"}},
+          {:failed, %{reason: "late"}},
+          {:cancel_confirmed, %{}}
+        ] do
+      assert {:error, :terminal_fulfillment} =
+               F.apply(cancelled, "merchant", :dispatch, event(cancelled, "late", op, extras))
+    end
+  end
+
+  test "proof after transit then cancellation delivers without deciding a refund" do
+    {:ok, initial} = F.new("merchant", "request", "order", "courier")
+    accepted = applied(initial, "merchant", :dispatch, "ack", :accept, %{transport_ref: "trip"})
+    moving = applied(accepted, "merchant", :dispatch, "move", :in_transit)
+    cancelling = applied(moving, "merchant", :commerce, "cancel", :cancel)
+
+    assert {:error, :invalid_reference} =
+             F.apply(
+               cancelling,
+               "merchant",
+               :dispatch,
+               event(cancelling, "bad-proof", :delivered, %{proof_ref: ""})
+             )
+
+    delivered =
+      applied(cancelling, "merchant", :dispatch, "proof", :delivered, %{
+        proof_ref: "custody-reference"
+      })
+
+    assert delivered.phase == :delivered
+    assert delivered.transport_ref == "trip"
+    assert delivered.proof_ref == "custody-reference"
+    refute Map.has_key?(delivered, :refund)
+  end
+
   test "restaurant handoff: transport and proof can only come from dispatch" do
     {:ok, initial} = F.new("restaurant", "req-1", "order-1", "restaurant-courier")
 
@@ -95,8 +146,7 @@ defmodule FulfillmentCoreTest do
     {:ok, state, :accepted} = F.apply(original, "merchant", :dispatch, ack)
     assert {:ok, state, :duplicate} = F.apply(state, "merchant", :dispatch, ack)
 
-    assert {:error, :idempotency_conflict} =
-             F.apply(state, "merchant", :commerce, ack)
+    assert {:error, :idempotency_conflict} = F.apply(state, "merchant", :commerce, ack)
 
     assert {:error, :stale_fulfillment_version} =
              F.apply(state, "merchant", :dispatch, %{ack | id: "two"})
@@ -136,7 +186,12 @@ defmodule FulfillmentCoreTest do
     assert delivered.proof_ref == "receipt"
 
     assert {:error, :terminal_fulfillment} =
-             F.apply(delivered, "merchant", :dispatch, event(delivered, "stop", :cancel_confirmed))
+             F.apply(
+               delivered,
+               "merchant",
+               :dispatch,
+               event(delivered, "stop", :cancel_confirmed)
+             )
   end
 
   test "late transport rejection resolves cancellation before carrier acceptance" do
@@ -153,8 +208,12 @@ defmodule FulfillmentCoreTest do
     refute F.pending?(rejected)
 
     assert {:error, :terminal_fulfillment} =
-             F.apply(rejected, "restaurant", :dispatch, event(rejected, "late", :accept,
-               %{transport_ref: "trip-1"}))
+             F.apply(
+               rejected,
+               "restaurant",
+               :dispatch,
+               event(rejected, "late", :accept, %{transport_ref: "trip-1"})
+             )
   end
 
   test "cancellation after acceptance cannot replace transport identity or invent proof" do
@@ -166,15 +225,25 @@ defmodule FulfillmentCoreTest do
     cancelling = applied(accepted, "restaurant", :commerce, "cancel", :cancel)
 
     assert {:error, :transport_already_accepted} =
-             F.apply(cancelling, "restaurant", :dispatch, event(cancelling, "a2", :accept,
-               %{transport_ref: "trip-2"}))
+             F.apply(
+               cancelling,
+               "restaurant",
+               :dispatch,
+               event(cancelling, "a2", :accept, %{transport_ref: "trip-2"})
+             )
 
     assert {:error, :delivery_without_transport_start} =
-             F.apply(cancelling, "restaurant", :dispatch, event(cancelling, "proof", :delivered,
-               %{proof_ref: "fake-proof"}))
+             F.apply(
+               cancelling,
+               "restaurant",
+               :dispatch,
+               event(cancelling, "proof", :delivered, %{proof_ref: "fake-proof"})
+             )
 
-    failed = applied(cancelling, "restaurant", :dispatch, "failed", :failed,
-      %{reason: "vehicle_unavailable"})
+    failed =
+      applied(cancelling, "restaurant", :dispatch, "failed", :failed, %{
+        reason: "vehicle_unavailable"
+      })
 
     assert failed.phase == :failed
     assert failed.transport_ref == "trip-1"
