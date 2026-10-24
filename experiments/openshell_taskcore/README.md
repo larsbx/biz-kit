@@ -29,6 +29,33 @@ OpenShell-backed Hermes adapter can implement it without granting the
 language model a direct business writer. Do not replace or cut over the
 private agent-runtime-platform while its standalone parity check is red.
 
+## New: TaskCore-derived execution tickets
+
+The dependency-free Elixir module
+[TaskCore.AgentCandidates](../../apps/task_core/lib/task_core/agent_candidates.ex)
+derives the exact seven-field Python sandbox ticket **only from the trusted
+TaskCore replay**: a ready or in-progress task, its current version and last
+accepted event ID, its DoD definition digest, and a live matching project-scoped
+suggester grant. No source task title, personal data, agent signing key, grant
+ID, or credentials are placed into the ticket.
+
+The adapter intentionally requires **additional trusted host authorization**
+before the task context may be read or execution may be dispatched. A
+suggester grant is *not* a general-purpose task-read or execution grant.
+The pure function is not the production authorization boundary, and its input
+state is never accepted from an agent.
+
+After the sandbox returns, the host must obtain CURRENT committed TaskCore
+state and invoke AgentCandidates.current?/3 to refuse stale task revisions,
+cancelled tasks and revoked grants. Even then, the candidate has no business
+effect: typed suggestions, evidence custody, reviewer decisions and completion
+must each pass their existing ledger gates.
+
+This makes the Elixir/Python payload shape compatible but deliberately stops
+short of wiring a live API or introducing a second task/run ledger. An
+authoritative coordinator with signed run-intent events, durable effects and
+safe retry/cancellation remains a separate implementation obligation.
+
 ## What the code demonstrates
 
 The runner.py module uses NVIDIA's Python SDK calls create_from_template,
