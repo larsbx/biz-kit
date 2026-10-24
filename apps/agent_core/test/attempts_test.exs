@@ -12,7 +12,23 @@ defmodule AgentCore.AttemptsTest do
     tenant_id: "tenant1",
     project_id: "project1",
     execution_profile_id: "approved1",
-    execution_profile_digest: {:bytes, <<1::256>>}
+    execution_profile_digest: {:bytes, <<1::256>>},
+    execution: %{
+      run_id: "run1",
+      ticket: %{
+        "chapter_id" => "chapter1",
+        "tenant_id" => "tenant1",
+        "project_id" => "project1",
+        "task_id" => "task1",
+        "task_version" => 3,
+        "source_event_id" => "task-source1",
+        "definition_digest" => String.duplicate("a", 64)
+      }
+    },
+    requirements: %{
+      "max_duration_ms" => 30_000,
+      "max_output_bytes" => 4096
+    }
   }
 
   defp registered(plan \\ @base) do
@@ -36,6 +52,16 @@ defmodule AgentCore.AttemptsTest do
     assert {:error, :agent_effect_conflict} =
              Attempts.register(state, %{@base | run_id: "other"})
 
+    changed_ticket = put_in(@base, [:execution, :ticket, "task_version"], 4)
+
+    assert {:error, :agent_effect_conflict} =
+             Attempts.register(state, changed_ticket)
+
+    changed_budget = put_in(@base, [:requirements, "max_output_bytes"], 8192)
+
+    assert {:error, :agent_effect_conflict} =
+             Attempts.register(state, changed_budget)
+
     assert {:error, :invalid_agent_effect_descriptor} =
              Attempts.register(state, %{@base | effect_id: "agent-run:other"})
 
@@ -47,6 +73,9 @@ defmodule AgentCore.AttemptsTest do
     refute Map.has_key?(row.descriptor, :ticket)
     refute Map.has_key?(row.descriptor, :adapter)
     refute Map.has_key?(row.descriptor, :credentials)
+    assert row.descriptor.task_version == 3
+    assert row.descriptor.task_source_event_id == "task-source1"
+    assert row.descriptor.max_output_bytes == 4096
     assert row.phase == :pending
     assert row.attempts == 0
   end
