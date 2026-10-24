@@ -1,9 +1,13 @@
 # biz-kit
 
 One Mix umbrella and one dependency lock for the Elixir core of the business
-platform, with two release profiles: `biz_kit` and `orchestration`.
-The four domain apps below were imported with `git subtree`, preserving each
-app's full history, `git log` and `git blame` under its directory.
+platform, with three release profiles: `biz_kit`, `orchestration` and `eatsbot`.
+The domain apps below were imported with their full history, so `git log` and
+`git blame` work under each directory: the first four with `git subtree`,
+eatsbot with `git filter-repo` (see below).
+The read-only `school_ops` curriculum app is a version-pinned content
+snapshot: it records its upstream commit rather than claiming a subtree history
+import.
 
 | App | Path | Imported from | Role |
 | --- | --- | --- | --- |
@@ -21,6 +25,7 @@ Shared apps developed in this umbrella:
 | `task_core` | `apps/task_core` | Dependency-free task/workflow rules and command admission |
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
+| `school_ops` | `apps/school_ops` | Reviewed K–12 curriculum, resources and assessments (read-only snapshot of `larsbx/school-ops` at `ccacc596d63a`) |
 
 Mix requires umbrella directory names to equal OTP application names, hence
 `coop_substrate`, `spruce_goose` and the `eatsbot_*` siblings. eatsbot's
@@ -55,6 +60,7 @@ mix compile
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 (cd apps/eatsbot        && MIX_ENV=test mix ash.setup && ADMIN_API_KEY=test mix test)
+(cd apps/school_ops     && mix test)                        # no database required
 ```
 
 dispatch's test database connects as the Postgres role `dispatch`; create it
@@ -193,3 +199,14 @@ evidence, independent review and authorized completion; the
 [retained task rules](docs/architecture/2026-10-20-sprucegoose-salvage.md) include
 todo completion gates, predecessor-cycle rejection and monotone SOP versions.
 These delivered stages do not establish production writer fencing or cutover.
+
+## School operations and curriculum
+
+The [`school_ops` app](apps/school_ops/README.md) brings the reviewed K–12
+curriculum, lessons, assessments, resources and planning templates into this
+umbrella as a **read-only, version-pinned** content snapshot. It preserves the
+school curriculum's Trivium/Quadrivium direction, explicit evidence/readiness
+rules and stable IDs; it does not create a second ledger, public learner records,
+or a new teaching-results authority. Curriculum source and open PRs remain at
+[`larsbx/school-ops`](https://github.com/larsbx/school-ops) until a reviewed
+cutover. See [the consolidation boundary](docs/architecture/2026-10-23-school-ops.md).

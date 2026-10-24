@@ -15,7 +15,8 @@ defmodule BizKit.MixProject do
             coop_substrate: :permanent,
             biz_kit_identity: :permanent,
             dispatch: :permanent,
-            spruce_goose: :permanent
+            spruce_goose: :permanent,
+            school_ops: :permanent
           ],
           # Inherited from spruce_goose's release: self-contained runtime and
           # unstripped beams (its provenance chunks must survive the build).
@@ -31,7 +32,8 @@ defmodule BizKit.MixProject do
             biz_kit_cluster: :permanent,
             coop_substrate: :permanent,
             biz_kit_identity: :permanent,
-            spruce_goose: :permanent
+            spruce_goose: :permanent,
+            school_ops: :permanent
           ],
           include_erts: true,
           strip_beams: false
