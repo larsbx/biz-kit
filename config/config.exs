@@ -3,7 +3,7 @@
 # per-environment files relative to themselves.
 import Config
 
-for app <- ~w(keel coop_substrate dispatch spruce_goose),
+for app <- ~w(keel coop_substrate dispatch spruce_goose eatsbot),
     path = Path.expand("../apps/#{app}/config/config.exs", __DIR__),
     File.exists?(path) do
   import_config path

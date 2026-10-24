@@ -34,6 +34,8 @@ prepare() {
   # --force-drop: a server stopped a moment ago may still hold connections.
   (cd apps/spruce_goose && mix ecto.drop --quiet --force-drop && mix ecto.create --quiet && mix ecto.migrate --quiet)
   (cd apps/dispatch && mix ecto.drop --quiet --force-drop && mix ash.setup --quiet)
+  # `mix phx.server` below starts every umbrella app; eatsbot needs its database.
+  (cd apps/eatsbot && mix ecto.drop --quiet --force-drop && mix ash.setup --quiet)
   (cd apps/dispatch && mix run priv/repo/e2e.exs seed "$stack")
 }
 

@@ -22,7 +22,9 @@ defmodule SpruceGoose.UmbrellaRuntime do
       {"OIDC_CLIENT_ID_API", "dispatch-api"},
       {"OIDC_AUDIENCE", "dispatch-api"},
       {"APPLICATION_ENCRYPTION_KEY_ID", "test-key"},
-      {"DIAGNOSTICS_TOKEN", "test-token"}
+      {"DIAGNOSTICS_TOKEN", "test-token"},
+      # eatsbot's; its SECRET_KEY_BASE and DATABASE_URL are shared with the above.
+      {"GEOCODING_TOKEN", "test-geocoding-token"}
     ]
   end
 end

@@ -1,9 +1,10 @@
 # biz-kit
 
 One Mix umbrella and one dependency lock for the Elixir core of the business
-platform, with two release profiles: `biz_kit` and `orchestration`.
-The four domain apps below were imported with `git subtree`, preserving each
-app's full history, `git log` and `git blame` under its directory.
+platform, with three release profiles: `biz_kit`, `orchestration` and `eatsbot`.
+The domain apps below were imported with their full history, so `git log` and
+`git blame` work under each directory: the first four with `git subtree`,
+eatsbot with `git filter-repo` (see below).
 The read-only `school_ops` curriculum app is a version-pinned content
 snapshot: it records its upstream commit rather than claiming a subtree history
 import.
@@ -14,6 +15,8 @@ import.
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
 | `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task/workflow views, web/MCP endpoint, and the legacy orchestration writer |
+| `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database |
+| `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
 
 Shared apps developed in this umbrella:
 
@@ -25,7 +28,10 @@ Shared apps developed in this umbrella:
 | `school_ops` | `apps/school_ops` | Reviewed K–12 curriculum, resources and assessments (read-only snapshot of `larsbx/school-ops` at `ccacc596d63a`) |
 
 Mix requires umbrella directory names to equal OTP application names, hence
-`coop_substrate` and `spruce_goose`.
+`coop_substrate`, `spruce_goose` and the `eatsbot_*` siblings. eatsbot's
+directory was renamed during its life, so it was imported with `git filter-repo`
+mapping both paths onto `apps/eatsbot` rather than with `git subtree`; all 133
+commits that touched it keep their authors, dates and messages.
 
 Not included, by design: the Android, web and e2e clients of `d-patch`
 (separate clients of this backend); `agent-runtime-platform` (Python and
@@ -53,6 +59,7 @@ mix compile
 (cd apps/dispatch       && mix test)                      # unit tier
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
+(cd apps/eatsbot        && MIX_ENV=test mix ash.setup && ADMIN_API_KEY=test mix test)
 (cd apps/school_ops     && mix test)                        # no database required
 ```
 
@@ -116,6 +123,15 @@ production writers have been consolidated.
   they differed) so that resolution moved as little as possible.
 - `dispatch`: `ash_authentication ~> 4.0` became `~> 5.0-rc` to match
   `spruce_goose`. dispatch declared the dependency but used none of it.
+- `eatsbot`: `ash_authentication` 4 → `~> 5.0-rc` (its token resource now
+  declares the actions v5 no longer generates) and `phoenix` 1.7 → `~> 1.8`, to
+  match the umbrella. Its Ash tracer is installed when eatsbot starts, not in
+  shared config: the other apps do not carry `opentelemetry_ash`.
+- `telegex` is vendored under `vendor/telegex` with a one-line guard fix; a
+  clean umbrella build otherwise fails depending on compile order
+  (`vendor/telegex/VENDOR.md`).
+- `config/runtime.exs` gates each app's production section on the release that
+  ships it (`RELEASE_NAME`), so no release needs another's secrets.
 - `dispatch` signs with the ledger's scheme (`coop_substrate`, code only), and
   its OpenAPI contract is `apps/dispatch/contracts/openapi.json` — the
   d-patch field app's DTOs are held to a copy of it.
