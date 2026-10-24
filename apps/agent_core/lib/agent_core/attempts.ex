@@ -88,6 +88,7 @@ defmodule AgentCore.Attempts do
           lease: lease,
           backend_ref: nil
       }
+
       {:ok, replace(state, effect_id, updated), lease}
     end
   end
