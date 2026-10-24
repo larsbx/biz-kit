@@ -22,12 +22,17 @@ defmodule AgentCore.ProfilesTest do
   # but does not make the test's representation the platform signing profile.
   defp hash_manifest(manifest), do: :crypto.hash(:sha256, :erlang.term_to_binary(manifest))
 
-  defp manifest(id, params) do
-    %{"id" => id, "version" => 1, "parameters" => params}
+  defp manifest(id, adapter, params) do
+    %{
+      "id" => id,
+      "version" => 1,
+      "adapter_module" => Atom.to_string(adapter),
+      "parameters" => params
+    }
   end
 
   defp profile(id, adapter, parameters) do
-    %{id: id, approved: true, adapter: adapter, manifest: manifest(id, parameters)}
+    %{id: id, approved: true, adapter: adapter, manifest: manifest(id, adapter, parameters)}
   end
 
   defp registry do
@@ -105,12 +110,12 @@ defmodule AgentCore.ProfilesTest do
              resolve(%{execution_profile_id: "standard"}, entries)
   end
 
-  test "adapter swapping without a manifest version changes the selected engine" do
-    # Registry entries are trusted/admin-controlled. This test documents that
-    # the host must PIN the adapter registry/version alongside the manifest.
+  test "adapter replacement without a new signed profile digest is refused" do
     entries = registry()
     run = ref(entries, "standard")
     swapped = put_in(entries, ["standard", :adapter], HostedAdapter)
-    assert {:ok, %{adapter: HostedAdapter}} = resolve(run, swapped)
+
+    assert {:error, :execution_profile_adapter_mismatch} =
+             resolve(run, swapped)
   end
 end
