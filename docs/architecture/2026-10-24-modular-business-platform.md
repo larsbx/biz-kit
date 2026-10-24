@@ -99,3 +99,13 @@ recovery semantics; do not silently decrement quantities at checkout.
 
 **Acceptance of first PR does not authorize switching Eatsbot or Dispatch
 production writers**, nor does it close the ongoing platform security gates.
+
+## Implementation progress, not production completion (2026-10-24)
+
+Initial modular capabilities landed via biz-kit PRs #80, #85, #86, #87 and
+#88. `CommerceCore` owns pure pricing/catalog rules; `InventoryCore` owns
+replayable stock policy; `FulfillmentCore` owns typed transport handoff
+semantics; `SalesCore` owns generic consent, campaign-candidate and
+opportunity rules. Original domain code and production writers are not
+silently replaced. Issues #81–84 retain the durable storage, security,
+integration, deployment, policy, privacy and authority tests.

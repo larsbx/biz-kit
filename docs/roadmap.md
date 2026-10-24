@@ -247,3 +247,18 @@ Each follow-on slice requires one consuming domain, one non-Eatsbot
 portability/conformance test, explicit authority, and a proved source/target
 contract. Independent deployments may consume version-pinned code or
 authenticated APIs; a single logical fact has one active writer.
+
+## Delivered rule kernels and remaining production gates (2026-10-24)
+
+| Scope | First slice merged | Remaining obligation |
+| --- | --- | --- |
+| Merchant catalog | [PR #85](https://github.com/larsbx/biz-kit/pull/85): pure product/variant/price rules and read-only Eatsbot adapter | #81: merchant-authorized persistent API, discount precedence, tenant price revisions, schema/event parity |
+| Inventory | [PR #86](https://github.com/larsbx/biz-kit/pull/86): exact units, holds, movements, idempotency, replay | #82: ledger admission, real concurrency/custody, durable expiry/reconciliation, consumer integration |
+| Fulfillment | [PR #87](https://github.com/larsbx/biz-kit/pull/87): request/ack/proof/cancel protocol, domain adapters | #83: authenticated Dispatch transport admission, outbox/inbox retry, cancellation race and legacy parity |
+| Sales/marketing | [PR #88](https://github.com/larsbx/biz-kit/pull/88): lead/quote state, evidence-based consent, suppression and candidate campaigns | #84: encrypted contacts, authenticated consent, privacy/regulatory policy, cross-channel suppression and delivery |
+
+All four are **code merged**, not a claim that their associated production
+milestones are complete. The original issues remain open for their explicit
+end-to-end obligations; new usage must not bypass identity, signed admission,
+or existing payment/transport authority. HR and actual financial accounting
+remain future capabilities.
