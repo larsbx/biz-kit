@@ -307,6 +307,8 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
     assert Log.head() == head
     assert {:ok, _} = AgentRuns.authorized?(current_state(), @run_key, grants)
     state = current_state()
+    holdings = CoopSubstrate.Offboarding.fetch("agent-1", ["chapter-genesis"])
+    assert Enum.any?(hd(holdings.projects).held, &(&1.kind == "task access"))
     restart_log()
     assert current_state() == state
 
