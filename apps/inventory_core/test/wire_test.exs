@@ -86,7 +86,7 @@ defmodule InventoryCore.WireTest do
   test "strict version and positive exact-unit bounds avoid JSON number ambiguity" do
     input = payload("receive", %{"location" => "van", "quantity" => 4})
 
-    for quantity <- [0, -1, 1.5, "4", 9_223_372_036_854_775_808] do
+    for quantity <- [0, -1, 1.5, "4", 9_007_199_254_740_992] do
       assert {:error, :invalid_inventory_value} =
                Wire.decode(%{input | "quantity" => quantity}, @scope)
     end
