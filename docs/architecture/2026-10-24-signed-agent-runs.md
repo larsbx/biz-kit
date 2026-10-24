@@ -160,7 +160,10 @@ modules introduce **pure contracts**, not a deployed runner:
 - `AgentCore.Attempts`: defines a pure operational lifecycle: pending,
   leased, candidate-ready, cancel-requested and cancelled. Lease epochs and
   tokens reject stale workers, and retry after expiry is forbidden until a
-  trusted backend reconciliation proves absence. Result hashes never become
+  trusted backend reconciliation proves absence through a bounded,
+  auditable reconciliation receipt ID. A bare timeout or unreferenced "absent"
+  response is refused. The host must independently validate that receipt's
+  provenance and persist its state atomically. Result hashes never become
   accepted DoD evidence without separate custody and review.
 
 The authoritative task history stays exclusively in CoopSubstrate. The host
