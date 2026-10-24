@@ -7,7 +7,6 @@ defmodule TaskCore.AgentRunsTest do
     def hash(term), do: :crypto.hash(:sha256, :erlang.term_to_binary(term))
   end
 
-  @scope {"chapter1", "tenant1", "project1"}
   @task_key {"chapter1", "tenant1", "project1", "task1"}
   @run_key {"chapter1", "tenant1", "project1", "run1"}
   @criteria [%{"id" => "review", "description" => "Check agent candidate independently"}]
