@@ -49,8 +49,10 @@ defmodule AgentCore.AttemptsTest do
     state = registered()
 
     assert {:ok, ^state, :existing} = Attempts.register(state, @base)
+    changed_run = put_in(%{@base | run_id: "other"}, [:execution, :run_id], "other")
+
     assert {:error, :agent_effect_conflict} =
-             Attempts.register(state, %{@base | run_id: "other"})
+             Attempts.register(state, changed_run)
 
     changed_ticket = put_in(@base, [:execution, :ticket, "task_version"], 4)
 
