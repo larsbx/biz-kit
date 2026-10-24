@@ -15,7 +15,10 @@ defmodule Eatsbot.Extensions.TelegramBot.Handler do
     # set the webhook (url is required)
     try do
       {:ok, true} = Telegex.delete_webhook()
-      {:ok, true} = Telegex.set_webhook(env_config[:webhook_url])
+
+      {:ok, true} =
+        Telegex.set_webhook(env_config[:webhook_url], secret_token: env_config[:webhook_secret])
+
       Logger.info("Telegram Webhook initialized")
     rescue
       _ -> Logger.info("Telegram Webhook not set")

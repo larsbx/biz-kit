@@ -642,6 +642,31 @@ config :eatsbot,
          &is_nil(elem(&1, 1))
        )
 
+# Telegram bot: read at boot, so one built release serves any bot. The webhook
+# rejects updates without the secret it registers with Telegram, so a webhook
+# without one could never take an update.
+if eatsbot_released? do
+  telegram_webhook = System.get_env("TELEGRAM_WEBHOOK")
+  telegram_webhook_secret = System.get_env("TELEGRAM_WEBHOOK_SECRET")
+
+  if telegram_webhook && !telegram_webhook_secret do
+    raise """
+    environment variable TELEGRAM_WEBHOOK_SECRET is missing.
+    TELEGRAM_WEBHOOK is set, and the webhook accepts only updates carrying the
+    secret: 1-256 characters from A-Z, a-z, 0-9, _ and -.
+    """
+  end
+
+  if token = System.get_env("TELEGRAM_BOT_TOKEN"), do: config(:telegex, token: token)
+
+  config :eatsbot,
+         Eatsbot.Extensions.TelegramBot.Handler,
+         Enum.reject(
+           [webhook_url: telegram_webhook, webhook_secret: telegram_webhook_secret],
+           &is_nil(elem(&1, 1))
+         )
+end
+
 if config_env() == :prod and eatsbot_released? do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -22,13 +22,18 @@ defmodule Eatsbot.ReleaseRuntimeConfigTest do
   @peer_vars ~w(PUBLIC_BASE_URL OIDC_ISSUER OIDC_CLIENT_ID_API OIDC_AUDIENCE
                 APPLICATION_ENCRYPTION_KEY_ID DIAGNOSTICS_TOKEN
                 SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR SPRUCE_GOOSE_MCP_ENABLED
-                OUTBOX_DISPATCHER_ENABLED SPRUCE_GOOSE_OBAN_ENABLED)
+                OUTBOX_DISPATCHER_ENABLED SPRUCE_GOOSE_OBAN_ENABLED TELEGRAM_BOT_TOKEN
+                TELEGRAM_WEBHOOK TELEGRAM_WEBHOOK_SECRET)
 
   defp read_runtime(env) do
     code = """
     config = Config.Reader.read!(#{inspect(@runtime)}, env: :prod)
     repo = get_in(config, [:eatsbot, Eatsbot.Repo]) || []
     IO.puts("eatsbot_repo_url=\#{inspect(repo[:url])}")
+    IO.puts("telegram_token=\#{inspect(get_in(config, [:telegex, :token]))}")
+    handler = get_in(config, [:eatsbot, Eatsbot.Extensions.TelegramBot.Handler]) || []
+    IO.puts("telegram_webhook=\#{inspect(handler[:webhook_url])}")
+    IO.puts("telegram_secret=\#{inspect(handler[:webhook_secret])}")
     """
 
     unset = for var <- @peer_vars ++ Enum.map(@eatsbot_env, &elem(&1, 0)), do: {var, nil}
@@ -48,6 +53,37 @@ defmodule Eatsbot.ReleaseRuntimeConfigTest do
 
     assert status != 0
     assert output =~ "TOKEN_SIGNING_SECRET"
+  end
+
+  # A release is built once and configured where it runs, so the bot's settings
+  # are read when it boots, not baked in when it is compiled.
+  test "the eatsbot release reads the Telegram bot's settings at boot" do
+    telegram = [
+      {"TELEGRAM_BOT_TOKEN", "123:token"},
+      {"TELEGRAM_WEBHOOK", "https://eatsbot.example/telegram"},
+      {"TELEGRAM_WEBHOOK_SECRET", "webhook-secret"}
+    ]
+
+    {output, status} = read_runtime([{"RELEASE_NAME", "eatsbot"} | @eatsbot_env ++ telegram])
+
+    assert status == 0, output
+    assert output =~ ~s(telegram_token="123:token")
+    assert output =~ ~s(telegram_webhook="https://eatsbot.example/telegram")
+    assert output =~ ~s(telegram_secret="webhook-secret")
+  end
+
+  # The webhook rejects every update that lacks the secret, so a webhook without
+  # one would be a bot that silently ignores everyone.
+  test "the eatsbot release refuses a Telegram webhook without its secret" do
+    env = [
+      {"RELEASE_NAME", "eatsbot"},
+      {"TELEGRAM_WEBHOOK", "https://eatsbot.example/telegram"} | @eatsbot_env
+    ]
+
+    {output, status} = read_runtime(env)
+
+    assert status != 0
+    assert output =~ "TELEGRAM_WEBHOOK_SECRET"
   end
 
   test "the orchestration release needs none of eatsbot's settings and gets none" do
