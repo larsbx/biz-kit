@@ -102,6 +102,14 @@ jobs:
           disable-animations: true
           working-directory: d-patch/apps/android-driver
           script: ./gradlew :app:connectedDebugAndroidTest -Pdispatch.authProvider=${{ matrix.client }} --no-daemon
+      # The artifact needs a download; why a run failed belongs in its log.
+      - name: Show the failure
+        if: failure()
+        run: |
+          find d-patch/apps/android-driver/app/build/outputs/androidTest-results -name 'TEST-*.xml' \
+            -exec sed -n '/<failure/,/<\/failure>/p' {} + 2>/dev/null | head -200 || true
+          echo "--- biz-kit stack log (tail) ---"
+          tail -150 "$RUNNER_TEMP/biz-kit-stack.log" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
