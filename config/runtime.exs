@@ -649,9 +649,11 @@ if eatsbot_released? do
   telegram_webhook = System.get_env("TELEGRAM_WEBHOOK")
   telegram_webhook_secret = System.get_env("TELEGRAM_WEBHOOK_SECRET")
 
-  if telegram_webhook && !telegram_webhook_secret do
+  if (telegram_webhook != nil or telegram_webhook_secret != nil) and
+       not (is_binary(telegram_webhook_secret) and
+              Regex.match?(~r/\A[A-Za-z0-9_-]{1,256}\z/, telegram_webhook_secret)) do
     raise """
-    environment variable TELEGRAM_WEBHOOK_SECRET is missing.
+    environment variable TELEGRAM_WEBHOOK_SECRET is missing or invalid.
     TELEGRAM_WEBHOOK is set, and the webhook accepts only updates carrying the
     secret: 1-256 characters from A-Z, a-z, 0-9, _ and -.
     """

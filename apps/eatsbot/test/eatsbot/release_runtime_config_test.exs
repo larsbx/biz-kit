@@ -86,6 +86,45 @@ defmodule Eatsbot.ReleaseRuntimeConfigTest do
     assert output =~ "TELEGRAM_WEBHOOK_SECRET"
   end
 
+  for {label, secret} <- [
+        {"empty", ""},
+        {"space", " "},
+        {"embedded space", "abc def"},
+        {"punctuation", "abc!"},
+        {"newline", "abc\n"},
+        {"unicode", "café"},
+        {"too long", String.duplicate("a", 257)}
+      ] do
+    test "the eatsbot release rejects a #{label} Telegram secret" do
+      for webhook <- [nil, "https://eatsbot.example/telegram"] do
+        env = [
+          {"RELEASE_NAME", "eatsbot"},
+          {"TELEGRAM_WEBHOOK", webhook},
+          {"TELEGRAM_WEBHOOK_SECRET", unquote(secret)} | @eatsbot_env
+        ]
+
+        {output, status} = read_runtime(env)
+        assert status != 0
+        assert output =~ "TELEGRAM_WEBHOOK_SECRET"
+        assert output =~ "1-256 characters"
+      end
+    end
+  end
+
+  test "the eatsbot release accepts both secret length boundaries and permitted characters" do
+    for secret <- ["a", String.duplicate("Az09_-", 42) <> "Az09"] do
+      env = [
+        {"RELEASE_NAME", "eatsbot"},
+        {"TELEGRAM_WEBHOOK", "https://eatsbot.example/telegram"},
+        {"TELEGRAM_WEBHOOK_SECRET", secret} | @eatsbot_env
+      ]
+
+      {output, status} = read_runtime(env)
+      assert status == 0, output
+      assert output =~ "telegram_secret=#{inspect(secret)}"
+    end
+  end
+
   test "the orchestration release needs none of eatsbot's settings and gets none" do
     {output, status} =
       read_runtime([

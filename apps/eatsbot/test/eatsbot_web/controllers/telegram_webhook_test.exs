@@ -35,6 +35,67 @@ defmodule EatsbotWeb.TelegramWebhookTest do
     assert json_response(conn, 200)
   end
 
+  test "invalid configured secrets fail closed even when the supplied value matches" do
+    original = Application.fetch_env!(:eatsbot, Handler)
+    on_exit(fn -> Application.put_env(:eatsbot, Handler, original) end)
+
+    for invalid <- [
+          nil,
+          "",
+          " ",
+          "abc def",
+          "abc!",
+          "abc\n",
+          "café",
+          String.duplicate("a", 257),
+          123
+        ] do
+      Application.put_env(:eatsbot, Handler, Keyword.put(original, :webhook_secret, invalid))
+
+      # A malformed body must never reach update decoding or the handler.
+      headers = if is_binary(invalid), do: [[], [{@header, invalid}]], else: [[]]
+
+      for request_headers <- headers do
+        conn =
+          Plug.Test.conn(:post, "/telegram", %{"message" => "forged"})
+          |> Map.put(:req_headers, request_headers)
+          |> Controller.call(Controller.init(:update))
+
+        assert conn.status == 401, inspect(invalid)
+        assert conn.halted
+      end
+    end
+  end
+
+  test "empty, malformed and duplicate request tokens fail closed" do
+    for headers <- [
+          [{@header, ""}],
+          [{@header, "bad token"}],
+          [{@header, String.duplicate("a", 257)}],
+          [{@header, secret()}, {@header, "forged"}],
+          [{@header, "forged"}, {@header, secret()}]
+        ] do
+      conn =
+        Plug.Test.conn(:post, "/telegram", %{"message" => "forged"})
+        |> Map.put(:req_headers, headers)
+        |> Controller.call(Controller.init(:update))
+
+      assert conn.status == 401
+      assert conn.halted
+    end
+  end
+
+  test "both valid configured secret length boundaries authenticate", %{conn: conn} do
+    original = Application.fetch_env!(:eatsbot, Handler)
+    on_exit(fn -> Application.put_env(:eatsbot, Handler, original) end)
+
+    for value <- ["a", String.duplicate("Az09_-", 42) <> "Az09"] do
+      Application.put_env(:eatsbot, Handler, Keyword.put(original, :webhook_secret, value))
+      response = conn |> put_req_header(@header, value) |> post_update(%{update_id: 1})
+      assert json_response(response, 200)
+    end
+  end
+
   test "keys Telegram does not define create no atoms", %{conn: conn} do
     key = "eatsbot_unknown_key_#{System.unique_integer([:positive])}"
 

@@ -47,11 +47,18 @@ defmodule Eatsbot.Extensions.TelegramBot.Controller do
   # could be anyone, posing as any Telegram user.
   defp verify_secret_token(conn, _opts) do
     expected = Application.get_env(:eatsbot, Handler, [])[:webhook_secret]
-    given = conn |> get_req_header("x-telegram-bot-api-secret-token") |> List.first()
+    given = get_req_header(conn, "x-telegram-bot-api-secret-token")
 
-    if is_binary(expected) and is_binary(given) and Plug.Crypto.secure_compare(given, expected),
-      do: conn,
-      else: conn |> send_resp(401, "") |> halt()
+    case given do
+      [token] when is_binary(expected) and is_binary(token) ->
+        if Regex.match?(~r/\A[A-Za-z0-9_-]{1,256}\z/, expected) and
+             Plug.Crypto.secure_compare(token, expected),
+          do: conn,
+          else: conn |> send_resp(401, "") |> halt()
+
+      _ ->
+        conn |> send_resp(401, "") |> halt()
+    end
   end
 
   @doc false
