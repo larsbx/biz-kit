@@ -78,8 +78,13 @@ defmodule TaskCore.AgentCandidates do
   defp task_key(r), do: {r.chapter_id, r.tenant_id, r.project_id, r.task_id}
 
   defp grant_valid(
-         %{active: true, principal_id: principal, chapter_id: chapter, tenant_id: tenant,
-           project_id: project},
+         %{
+           active: true,
+           principal_id: principal,
+           chapter_id: chapter,
+           tenant_id: tenant,
+           project_id: project
+         },
          r
        ) do
     if {principal, chapter, tenant, project} ==

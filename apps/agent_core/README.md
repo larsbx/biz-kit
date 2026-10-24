@@ -63,3 +63,47 @@ engine-neutral selection, signed-profile digest drift, adapter identity
 replacement and fail-closed behavior, **not** actual execution infrastructure.
 
 See [signed run intent architecture](../../docs/architecture/2026-10-24-signed-agent-runs.md).
+
+## Engine-neutral preflight and operational attempt rules (new slice)
+
+`AgentCore.Capabilities.check/2` rejects missing or unsupported features,
+data classes, regions, duration and output ceilings. Requirements must be
+computed by the trusted coordinating host; profile declarations do not
+independently prove physical residency or isolation.
+
+`AgentCore.Preflight.prepare/4` ties the signed TaskCore run version and
+profile digest to capabilities and exact resource bounds. It creates a
+uniform execution description and deterministic effect ID, without starting
+an agent or conferring any read/write authority.
+
+`AgentCore.Attempts` adds a pure operational state machine for registering a
+stable signed effect, lease claiming and renewal, epoch/token fencing,
+non-authoritative candidate digests, cancellation requests, and *explicit*
+backend reconciliation of uncertain expired attempts. Expiration alone never
+permits a duplicate launch: a backend must prove absence or recover an
+already-produced result first.
+
+**No durable dispatcher has been built.** A production host must persist each
+state transition with a transactional compare-and-swap, protect lease tokens,
+recheck signed ledger authority and user consent at each critical boundary,
+provide idempotent backend launch using the same effect ID, and reconcile
+external execution handles. In-memory tests do not demonstrate crash-safe
+storage, mutual exclusion across nodes, real cancellation, or admissible
+business effects.
+
+## Container-volume persistence (Docker or Podman)
+
+The storage development fixture is at
+[`deploy/agent-core/`](../../deploy/agent-core/README.md). It uses one
+engine-managed **named volume** to persist PostgreSQL 16 data across container
+recreation, with the same Compose specification for Docker or Podman.
+`agent_ops.execution_attempts` is an operational schema, to be deployed
+inside biz-kit's **existing** PostgreSQL database after migration review.
+This does not introduce a second business ledger.
+
+Volumes provide persistence, **not** transactional serialization or
+independent guarantees against duplicate external side effects. The
+production coordinator still needs a PostgreSQL-backed CAS host adapter,
+idempotent backend effect IDs, proof-referenced reconciliation, explicit
+read/execution authorization, and recovery tests. Scratch storage for
+individual agents must remain isolated from this database volume.

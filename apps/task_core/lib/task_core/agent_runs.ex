@@ -97,8 +97,11 @@ defmodule TaskCore.AgentRuns do
   defp valid_request_fields(p) do
     checks = [
       p["lifecycle_version"] == 1,
-      Enum.all?(~w(run_id task_id agent_principal_id suggester_grant_event_id
-                     source_event_id execution_profile_id), &Admission.segment?(p[&1])),
+      Enum.all?(
+        ~w(run_id task_id agent_principal_id suggester_grant_event_id
+                     source_event_id execution_profile_id),
+        &Admission.segment?(p[&1])
+      ),
       p["expected_task_version"] in 1..2_147_483_647,
       p["max_duration_ms"] in 1_000..@max_runtime_ms,
       p["max_output_bytes"] in 1..@max_result_bytes,
@@ -121,8 +124,8 @@ defmodule TaskCore.AgentRuns do
   defp validate_cancel_fields(p) do
     if Admission.segment?(p["run_id"]) and
          is_integer(p["expected_run_version"]) and p["expected_run_version"] >= 1,
-      do: :ok,
-      else: {:error, :invalid_agent_run_cancellation}
+       do: :ok,
+       else: {:error, :invalid_agent_run_cancellation}
   end
 
   defp validate_reason(value) when is_binary(value) do
@@ -184,7 +187,10 @@ defmodule TaskCore.AgentRuns do
 
   def handle_event(%{type: "TaskAgentRunCancelledV1"} = env, state) do
     state
-    |> update_in([:agent_runs, run_key(env)], &%{&1 | status: :cancelled, version: &1.version + 1})
+    |> update_in(
+      [:agent_runs, run_key(env)],
+      &%{&1 | status: :cancelled, version: &1.version + 1}
+    )
     |> put_in([:agent_run_commands, Access.key(env.event_id)], env)
   end
 
@@ -212,13 +218,15 @@ defmodule TaskCore.AgentRuns do
              principal_id: run.agent_principal_id,
              suggester_grant_event_id: run.suggester_grant_event_id
            }),
-         :ok <- matched_ticket(ticket, %{
-           "expected_task_version" => run.expected_task_version,
-           "source_event_id" => run.source_event_id,
-           "definition_digest" => run.definition_digest
-         }) do
+         :ok <-
+           matched_ticket(ticket, %{
+             "expected_task_version" => run.expected_task_version,
+             "source_event_id" => run.source_event_id,
+             "definition_digest" => run.definition_digest
+           }) do
       {:ok,
        %{
+         run_id: run_id,
          ticket: ticket,
          intent_event_id: run.intent_event_id,
          execution_profile_id: run.execution_profile_id,
