@@ -120,8 +120,7 @@ defmodule CommerceCore.CatalogWire do
            :ok <- identifier(variant["id"]),
            :ok <- identifier(variant["sku"]),
            {:ok, prices} <- price_map(variant["prices"]) do
-        {:cont,
-         {:ok, [%{id: variant["id"], sku: variant["sku"], prices: prices} | acc]}}
+        {:cont, {:ok, [%{id: variant["id"], sku: variant["sku"], prices: prices} | acc]}}
       else
         {:error, _} = error -> {:halt, error}
       end
