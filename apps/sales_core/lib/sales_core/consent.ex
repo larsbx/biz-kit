@@ -137,10 +137,12 @@ defmodule SalesCore.Consent do
 
   defp transition(_, _, _), do: {:error, :unknown_consent_operation}
 
-  defp distinct_new_evidence?(state, key, evidence) do
-    case Map.get(state.entries, key) do
-      %{evidence_ref: ^evidence} -> false
+  defp distinct_new_evidence?(state, _key, evidence) do
+    # A withdrawal replaces the current entry, but cannot make an old grant
+    # receipt new again. Scan admitted history, not only the latest status.
+    Enum.all?(state.seen, fn
+      {_id, %{op: :grant, evidence_ref: ^evidence}} -> false
       _ -> true
-    end
+    end)
   end
 end

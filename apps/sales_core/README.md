@@ -9,7 +9,9 @@ withdrawal and marketing audience plans. Two independent consumer classes
   grants; learner, guardian, driver and employee classifications never
   infer marketing permission.
 - Channel and jurisdiction must match, and a withdrawal suppresses even a
-  previously unknown contact. Fresh opt-in evidence is needed to regrant.
+  previously unknown contact. A previously admitted grant evidence ID may not
+  be reused to regrant after withdrawal, even with a new event ID/timestamp.
+  Hosts still verify that the evidence represents actual renewed consent.
 - A `Campaign.plan/5` result contains opaque IDs, no delivery transport,
   contact addresses or recipient PII. It is a *candidate*, not send approval.
 - `Pipeline` requires a quote reference before marking a proposal won,
