@@ -67,15 +67,19 @@ defmodule CommerceCore.CatalogTest do
     wrong = put_in(product("two", "TWO"), [:prices, :USD], Money.from_integer(5, :EUR))
     assert {:error, :invalid_prices} = Catalog.put(first, "merchant", 1, wrong)
 
-    duplicate = %{product("two", "TWO") | variants: [
-      %{id: "a", sku: "TWO", prices: %{USD: Money.from_integer(1, :USD)}}
-    ]}
+    duplicate = %{
+      product("two", "TWO")
+      | variants: [
+          %{id: "a", sku: "TWO", prices: %{USD: Money.from_integer(1, :USD)}}
+        ]
+    }
 
     assert {:error, :duplicate_sku} = Catalog.put(first, "merchant", 1, duplicate)
 
     hidden = %{product("hidden", "HIDDEN") | visibility: :hidden}
     {:ok, second} = Catalog.put(first, "merchant", 1, hidden)
     assert {:error, :not_published} = Catalog.quote(second, "merchant", "hidden", nil, :USD)
+
     assert {:error, :currency_not_offered} =
              Catalog.quote(second, "merchant", "one", nil, :EUR)
   end
