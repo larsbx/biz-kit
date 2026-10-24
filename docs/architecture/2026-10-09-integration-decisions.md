@@ -16,6 +16,32 @@ Source inspection establishes repository behavior and documented contracts;
 it does not establish the state of a running deployment. In particular,
 SpruceGoose's `current-state.md` carries its own dated production evidence.
 
+## Reading this comparison after the thread audit
+
+Reconciled 2026-10-23. The implementation descriptions, costs and recommendation
+tables below remain an October 9 snapshot. They are not current test totals,
+deployment acceptance or authorization to retain independent authorities.
+
+| Earlier recommendation | Selected disposition |
+| --- | --- |
+| Keep the domain writers and bridge their histories | Superseded: one signed business ledger and one command admission path. A temporary migration comparison must have a retirement condition. |
+| Keep separate databases | An interim isolation measure for incompatible schemas, not the destination. Consolidate only after explicit mappings and writer cutover checks. |
+| Keep existing identity implementations | Preserve identity and scoped permission semantics during migration. The [implemented identity boundary](2026-10-18-identity.md) separates provider authentication from stable platform principals; duplicate registries/issuers remain migration work. |
+| Add ownership events around pure Keel rules | Still requires a reviewed admission contract and replayable ownership fold; it is not implemented by this comparison. |
+| Evaluate truck-shop and Spruce selectively | Still optional and outside consolidation; neither recommendation constitutes an import or production-hardening claim. |
+
+The [selected contract](2026-10-11-single-source-of-truth.md) now exposes
+[delivered work versus remaining boundaries](2026-10-11-single-source-of-truth.md#delivered-work-and-remaining-boundaries),
+[transaction and replay requirements](2026-10-11-single-source-of-truth.md#commands-and-projections),
+[ownership admission](2026-10-11-single-source-of-truth.md#keel-ownership-admission)
+and [signature/checkpoint guarantees](2026-10-11-single-source-of-truth.md#signatures-identifiers-and-identity).
+These qualifications govern implementation; the historical tables below remain
+comparative evidence.
+
+The historical implementation references below are pinned to the declared import
+baseline, so later source changes cannot silently change their evidence. Links in
+this reconciliation section follow the selected architecture and current roadmap.
+
 ## Earlier recommendation — superseded
 
 Retain independent domain authorities with explicit adapters. Share the build,
@@ -350,50 +376,50 @@ ledger and identity tests were read as contract evidence ([coop-tests],
 [identity-tests]). Proposed cross-system acceptance checks remain future work.
 
 [integration-pr]: https://github.com/larsbx/biz-kit/pull/1
-[substrate]: ../../apps/coop_substrate/SUBSTRATE.md
-[coop-readme]: ../../apps/coop_substrate/README.md
-[coop-mix]: ../../apps/coop_substrate/mix.exs
-[coop-log]: ../../apps/coop_substrate/lib/coop_substrate/log.ex
-[envelope]: ../../apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex
-[types]: ../../apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
-[validity]: ../../apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
-[coop-config]: ../../apps/coop_substrate/config/config.exs
-[coop-prod]: ../../apps/coop_substrate/config/prod.exs
-[coop-tests]: ../../apps/coop_substrate/test/log_test.exs
-[dispatch-readme]: ../../apps/dispatch/README.md
-[dispatch-outbox]: ../../apps/dispatch/lib/dispatch/outbox/publisher.ex
-[dispatch-outbox-schema]: ../../apps/dispatch/priv/repo/migrations/20260918210000_add_transactional_outbox.exs
-[oidc]: ../../apps/dispatch/lib/dispatch/identity/tokens/oidc.ex
-[principal]: ../../apps/dispatch/lib/dispatch/identity/principal_resolution.ex
-[dispatch-user]: ../../apps/dispatch/lib/dispatch/accounts/user.ex
-[vehicle]: ../../apps/dispatch/lib/dispatch/fleet/vehicle.ex
-[authority-planes]: ../../apps/spruce_goose/docs/authority-planes.md
-[current-state]: ../../apps/spruce_goose/docs/current-state.md
-[sg-decisions]: ../../apps/spruce_goose/docs/decisions/2026-09-08-kernel-and-ledger-shape.md
-[notes]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/notes/note.ex
-[ash-event]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/events/event.ex
-[clear-notes]: https://github.com/larsbx/biz-kit/blob/303a6e3ab75027cb70a73e4e2c8deff09434f691/apps/spruce_goose/lib/spruce_goose/events/clear_records.ex
-[certified]: ../../apps/spruce_goose/lib/spruce_goose/kernel/certified_event.ex
-[canonical]: ../../apps/spruce_goose/lib/spruce_goose/kernel/canonical.ex
-[pg-ledger]: ../../apps/spruce_goose/lib/spruce_goose/kernel/postgres/event_ledger.ex
-[shadow]: ../../apps/spruce_goose/lib/spruce_goose/kernel/shadow_events.ex
-[outbox-delivery]: ../../apps/spruce_goose/docs/outbox-delivery.md
-[sg-outbox-schema]: ../../apps/spruce_goose/priv/repo/migrations/20260728131000_add_transactional_outbox.exs
-[identity]: ../../apps/spruce_goose/lib/spruce_goose/identity.ex
-[identity-local]: ../../apps/spruce_goose/lib/spruce_goose/identity/local.ex
-[identifier-model]: ../../apps/spruce_goose/docs/identifier-model.md
-[identity-tests]: ../../apps/spruce_goose/test/identity_local_test.exs
-[authorization]: ../../apps/spruce_goose/docs/authorization.md
-[sg-user]: ../../apps/spruce_goose/lib/spruce_goose/accounts/user.ex
-[sg-token]: ../../apps/spruce_goose/lib/spruce_goose/accounts/token.ex
-[sg-oauth]: ../../apps/spruce_goose/lib/spruce_goose/oauth2_server.ex
-[actor-plug]: ../../apps/spruce_goose/lib/spruce_goose/web/actor_plug.ex
-[keel-readme]: ../../apps/keel/README.md
-[ownership]: ../../apps/keel/lib/keel/ownership.ex
-[primitives]: ../../apps/keel/docs/PRIMITIVES.md
-[runtime]: ../../config/runtime.exs
-[root-mix]: ../../mix.exs
-[lock]: ../../mix.lock
+[substrate]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/SUBSTRATE.md
+[coop-readme]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/README.md
+[coop-mix]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/mix.exs
+[coop-log]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/lib/coop_substrate/log.ex
+[envelope]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex
+[types]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
+[validity]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
+[coop-config]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/config/config.exs
+[coop-prod]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/config/prod.exs
+[coop-tests]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/coop_substrate/test/log_test.exs
+[dispatch-readme]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/README.md
+[dispatch-outbox]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/lib/dispatch/outbox/publisher.ex
+[dispatch-outbox-schema]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/priv/repo/migrations/20260918210000_add_transactional_outbox.exs
+[oidc]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/lib/dispatch/identity/tokens/oidc.ex
+[principal]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/lib/dispatch/identity/principal_resolution.ex
+[dispatch-user]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/lib/dispatch/accounts/user.ex
+[vehicle]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/dispatch/lib/dispatch/fleet/vehicle.ex
+[authority-planes]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/docs/authority-planes.md
+[current-state]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/docs/current-state.md
+[sg-decisions]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/docs/decisions/2026-09-08-kernel-and-ledger-shape.md
+[notes]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/notes/note.ex
+[ash-event]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/events/event.ex
+[clear-notes]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/events/clear_records.ex
+[certified]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/kernel/certified_event.ex
+[canonical]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/kernel/canonical.ex
+[pg-ledger]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/kernel/postgres/event_ledger.ex
+[shadow]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/kernel/shadow_events.ex
+[outbox-delivery]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/docs/outbox-delivery.md
+[sg-outbox-schema]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/priv/repo/migrations/20260728131000_add_transactional_outbox.exs
+[identity]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/identity.ex
+[identity-local]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/identity/local.ex
+[identifier-model]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/docs/identifier-model.md
+[identity-tests]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/test/identity_local_test.exs
+[authorization]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/docs/authorization.md
+[sg-user]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/accounts/user.ex
+[sg-token]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/accounts/token.ex
+[sg-oauth]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/oauth2_server.ex
+[actor-plug]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/spruce_goose/lib/spruce_goose/web/actor_plug.ex
+[keel-readme]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/keel/README.md
+[ownership]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/keel/lib/keel/ownership.ex
+[primitives]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/apps/keel/docs/PRIMITIVES.md
+[runtime]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/config/runtime.exs
+[root-mix]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/mix.exs
+[lock]: https://github.com/larsbx/biz-kit/blob/8aa79ec1ca419718d70592f15d8cf39bb271e32f/mix.lock
 [coop-upstream]: https://github.com/larsbx/coop_substrate/blob/ef206957eb041f8b8f011a9721886e66048a09e2/README.md
 [sg-upstream]: https://github.com/larsbx/sprucegoose/blob/089db45cbe57abbde6c49a601eb3403897103020/README.md
 [truck-mix]: https://github.com/larsbx/truck-shop/blob/b12fcb11d6d2a933350bf5423fb29b0ff20c4557/mix.exs
