@@ -78,6 +78,7 @@ defmodule TaskCore.AgentRuns do
 
   def check(%{type: "TaskAgentRunCancelledV1", payload: p} = env, state) do
     with :ok <- authorized_operator(env, state),
+         :ok <- validate_cancel_fields(p),
          :ok <- validate_reason(p["reason"]),
          {:ok, run} <- fetch(state.agent_runs, run_key(env), :unknown_agent_run) do
       cond do
@@ -118,6 +119,13 @@ defmodule TaskCore.AgentRuns do
     if Map.has_key?(state.agent_runs, run_key(env)),
       do: {:error, :agent_run_id_already_used},
       else: :ok
+  end
+
+  defp validate_cancel_fields(p) do
+    if Admission.segment?(p["run_id"]) and
+         is_integer(p["expected_run_version"]) and p["expected_run_version"] >= 1,
+      do: :ok,
+      else: {:error, :invalid_agent_run_cancellation}
   end
 
   defp validate_reason(value) when is_binary(value) do
