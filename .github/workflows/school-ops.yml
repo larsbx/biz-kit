@@ -2,6 +2,14 @@ name: SchoolOps domain
 
 on:
   pull_request:
+    paths:
+      - 'apps/school_ops/**'
+      - 'apps/task_core/**'
+      - 'apps/coop_substrate/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/school-ops.yml'
   push:
     branches: [main]
 

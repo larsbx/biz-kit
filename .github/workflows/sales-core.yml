@@ -2,6 +2,13 @@ name: SalesCore consent and pipeline
 
 on:
   pull_request:
+    paths:
+      - 'apps/sales_core/**'
+      - 'apps/eatsbot_core/lib/marketing/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/sales-core.yml'
   push:
     branches: [main]
 
