@@ -23,6 +23,7 @@ defmodule AgentCore.CapabilitiesTest do
 
   test "accepts a subset under the exact budgets and region" do
     assert :ok = Capabilities.check(@profile, @req)
+
     assert :ok =
              Capabilities.check(@profile, %{
                @req
@@ -82,6 +83,7 @@ defmodule AgentCore.CapabilitiesTest do
 
   test "provider or framework names are not a capability requirement" do
     assert :ok = Capabilities.check(@profile, @req)
+
     assert {:error, :unsupported_agent_feature} =
              Capabilities.check(@profile, %{@req | "features" => ["agent_vendor_specific"]})
   end
