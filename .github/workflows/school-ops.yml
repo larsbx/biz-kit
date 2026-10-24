@@ -1,0 +1,30 @@
+name: SchoolOps curriculum
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  school-ops:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Resolve locked umbrella dependencies
+        run: mix deps.get --check-locked
+      - name: Compile SchoolOps
+        working-directory: apps/school_ops
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Verify formatting
+        run: mix format --check-formatted apps/school_ops/mix.exs apps/school_ops/lib/school_ops.ex apps/school_ops/test/school_ops_test.exs
+      - name: Test SchoolOps
+        working-directory: apps/school_ops
+        run: mix test
