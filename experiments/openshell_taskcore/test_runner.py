@@ -103,7 +103,8 @@ class RunnerTest(unittest.TestCase):
 
     def test_wrong_scope_or_source_rejected_and_cleaned_up(self):
         for change in [{"tenant_id": "other"}, {"source_event_id": "other"},
-                       {"task_version": 4}, {"action": "execute"}]:
+                       {"task_version": 4}, {"task_version": True},
+                       {"action": "execute"}]:
             with self.subTest(change=change):
                 client = MockSandbox()
                 client.stdout = candidate(change)
