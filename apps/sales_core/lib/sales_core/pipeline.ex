@@ -26,12 +26,15 @@ defmodule SalesCore.Pipeline do
          :ok <- identifier(id),
          :ok <- identifier(party),
          false <- Map.has_key?(state.opportunities, id) do
-      opp = %{id: id, party_ref: party, state: :lead, quote_ref: nil,
-              source: Map.get(attrs, :source, "unspecified")}
+      opp = %{
+        id: id,
+        party_ref: party,
+        state: :lead,
+        quote_ref: nil,
+        source: Map.get(attrs, :source, "unspecified")
+      }
 
-      {:ok,
-       %{state | opportunities: Map.put(state.opportunities, id, opp),
-                 version: version + 1}}
+      {:ok, %{state | opportunities: Map.put(state.opportunities, id, opp), version: version + 1}}
     else
       true -> {:error, :duplicate_opportunity}
       {:error, _} = error -> error
@@ -47,12 +50,14 @@ defmodule SalesCore.Pipeline do
          {:ok, opp} <- fetch(state, tenant, id),
          true <- target in Map.get(@transitions, opp.state, []),
          :ok <- quote_for_win(target, quote_ref) do
-      updated = %{opp | state: target,
-                        quote_ref: if(target == :won, do: quote_ref, else: opp.quote_ref)}
+      updated = %{
+        opp
+        | state: target,
+          quote_ref: if(target == :won, do: quote_ref, else: opp.quote_ref)
+      }
 
       {:ok,
-       %{state | opportunities: Map.put(state.opportunities, id, updated),
-                 version: version + 1}}
+       %{state | opportunities: Map.put(state.opportunities, id, updated), version: version + 1}}
     else
       false -> {:error, :invalid_pipeline_transition}
       {:error, _} = error -> error
