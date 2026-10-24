@@ -53,8 +53,8 @@ defmodule Eatsbot.Extensions.TelegramBot.Controller do
       [token] when is_binary(expected) and is_binary(token) ->
         if Regex.match?(~r/\A[A-Za-z0-9_-]{1,256}\z/, expected) and
              Plug.Crypto.secure_compare(token, expected),
-          do: conn,
-          else: conn |> send_resp(401, "") |> halt()
+           do: conn,
+           else: conn |> send_resp(401, "") |> halt()
 
       _ ->
         conn |> send_resp(401, "") |> halt()

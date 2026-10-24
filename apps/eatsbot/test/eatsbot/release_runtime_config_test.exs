@@ -37,7 +37,15 @@ defmodule Eatsbot.ReleaseRuntimeConfigTest do
     """
 
     unset = for var <- @peer_vars ++ Enum.map(@eatsbot_env, &elem(&1, 0)), do: {var, nil}
-    System.cmd("elixir", ["-e", code], env: unset ++ env, stderr_to_stdout: true)
+
+    # env(1), not System.cmd's :env, which unsets a variable whose value is "".
+    # env takes its -u options before the first assignment.
+    {removed, set} = unset |> Kernel.++(env) |> Map.new() |> Enum.split_with(&is_nil(elem(&1, 1)))
+
+    args =
+      Enum.flat_map(removed, &["-u", elem(&1, 0)]) ++ Enum.map(set, fn {k, v} -> "#{k}=#{v}" end)
+
+    System.cmd("env", args ++ ["elixir", "-e", code], stderr_to_stdout: true)
   end
 
   test "the eatsbot release boots on eatsbot's settings alone" do
