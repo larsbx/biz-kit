@@ -58,7 +58,13 @@ jobs:
             < deploy/agent-core/sql/001_agent_attempts.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/002_attempt_cas.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_storage_contract.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_cas_contract.sql
 
       - name: Recreate database container without deleting its volume
         shell: bash
