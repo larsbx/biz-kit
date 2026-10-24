@@ -8,7 +8,7 @@ scope comparison against an already authenticated host binding:
 Version 1 supports `receive`, `reserve`, `commit`, `release`, and
 `transfer`. Only known operation/field names map to compile-time Elixir
 atoms. Unknown or duplicate-decoded fields, extra keys, foreign merchant
-scope, negative or fractional quantities, stale schema versions and any
+scope, negative, fractional or >2^53-1 quantities, stale schema versions and any
 attempt to assert `approved` are refused.
 
 **Not on the external wire:** `adjust` (needs audited privileged approval)
