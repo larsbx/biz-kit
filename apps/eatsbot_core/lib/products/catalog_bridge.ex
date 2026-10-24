@@ -56,8 +56,14 @@ defmodule EatsbotCore.Products.CatalogBridge do
   defp variant_maps(_), do: {:error, :unloaded_catalog_projection}
 
   defp price_map(prices) when is_list(prices) and prices != [] do
-    if Enum.all?(prices, &match?(%{money: %Money{}}, &1)) do
-      {:ok, Map.new(prices, fn %{money: value} -> {value.currency, value} end)}
+    valid? = Enum.all?(prices, &match?(%{money: %Money{}}, &1))
+
+    if valid? do
+      currencies = Enum.map(prices, fn %{money: value} -> value.currency end)
+
+      if Enum.uniq(currencies) == currencies,
+        do: {:ok, Map.new(prices, fn %{money: value} -> {value.currency, value} end)},
+        else: {:error, :duplicate_currency_price}
     else
       {:error, :unloaded_catalog_projection}
     end
