@@ -12,7 +12,7 @@ defmodule SalesCore.Consent do
 
   @doc "Begin an empty tenant-scoped consent projection."
   def new(tenant) when is_binary(tenant) and byte_size(tenant) > 0 do
-    {:ok, %{tenant: tenant, version: 0, entries: %{}, seen: %{}}}
+    {:ok, %{tenant: tenant, version: 0, entries: %{}, seen: %{}, used_receipts: %{}}}
   end
 
   def new(_), do: {:error, :invalid_tenant}
@@ -31,7 +31,12 @@ defmodule SalesCore.Consent do
              %{
                updated
                | version: state.version + 1,
-                 seen: Map.put(state.seen, id, event)
+                 seen: Map.put(state.seen, id, event),
+                 used_receipts:
+                   if(op == :grant,
+                     do: Map.put(state.used_receipts, event.evidence_ref, id),
+                     else: state.used_receipts
+                   )
              }, :accepted}
           end
 
@@ -137,10 +142,8 @@ defmodule SalesCore.Consent do
 
   defp transition(_, _, _), do: {:error, :unknown_consent_operation}
 
-  defp distinct_new_evidence?(state, key, evidence) do
-    case Map.get(state.entries, key) do
-      %{evidence_ref: ^evidence} -> false
-      _ -> true
-    end
-  end
-end
+  defp distinct_new_evidence?(state, _key, evidence) do
+    # Withdrawals remove current consent, never its already-used receipt.
+    # Keep a replayable index rather than scanning every prior consent event.
+    not Map.has_key?(state.used_receipts, evidence)
+  endend

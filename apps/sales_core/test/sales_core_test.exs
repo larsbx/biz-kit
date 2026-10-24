@@ -57,6 +57,16 @@ defmodule SalesCoreTest do
     assert {:error, :stale_consent_evidence} =
              Consent.record(state, "restaurant", stale)
 
+    # Replaying an old consent receipt under a fresh event ID and timestamp
+    # cannot undo the withdrawal.
+    forged = %{
+      grant(state, "customer-1", :customer, "forged", 21)
+      | evidence_ref: "consent-g1"
+    }
+
+    assert {:error, :audience_or_evidence_not_authorized} =
+             Consent.record(state, "restaurant", forged)
+
     refreshed = grant(state, "customer-1", :customer, "g3", 21)
     {:ok, state, :accepted} = Consent.record(state, "restaurant", refreshed)
     assert state.version == 3
