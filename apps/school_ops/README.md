@@ -1,31 +1,71 @@
-# SchoolOps — K–12 curriculum in biz-kit
+# SchoolOps — the school domain within biz-kit
 
-This dependency-free Mix app packages the public, reviewed authoring records
-from [larsbx/school-ops](https://github.com/larsbx/school-ops) at
-`ccacc596d63a7b04d33d62bc77636fd93de9f995`. Its original source entrypoint is
-[priv/content/README.md](priv/content/README.md), with
-[Grade 2 mathematics](priv/content/curriculum/mathematics/grade-2/README.md),
-[assessments](priv/content/assessments/README.md),
-[resource reviews](priv/content/resources/README.md), and
-[curriculum rules](priv/content/docs/curriculum-model.md).
+SchoolOps is a **domain app**, just as Dispatch is. Its administration, task
+management, review, authorization and event history should use **the same
+biz-kit platform services** as the other domains. Only the school-specific
+vocabulary, records, rules and interfaces belong here.
+
+## Delivered domain features
+
+- `SchoolOps.Catalog`: stable-ID lookup for the first Grade 2 course, unit,
+  six lessons, two assessments and seven reviewed optional resources. It reads
+  the bundled public curriculum content and does not infer learner mastery.
+- `SchoolOps.Workflows`: the first **staff** readiness workflow for the
+  place-value unit. It proposes five linked tasks: scope, resource suitability,
+  lesson preparation, assessment review and a weekly teaching plan.
+  It emits TaskCore schema-2 data and delegates validation and planning to
+  `TaskCore.Blueprint` / `TaskCore.Workflow` with
+  `TaskCore.TaskLifecycle`. SchoolOps has no parallel task state machine.
+- `SchoolOps.read/1`: safe read-only access to public authored content.
+  Source materials remain pinned from
+  [larsbx/school-ops](https://github.com/larsbx/school-ops) at
+  `ccacc596d63a7b04d33d62bc77636fd93de9f995` (original Git blob IDs in
+  [source-manifest.tsv](source-manifest.tsv)).
+
+Example from inside the umbrella:
 
 ```elixir
-{:ok, source} = SchoolOps.read("curriculum/mathematics/grade-2/README.md")
+{:ok, unit} = SchoolOps.Catalog.fetch("U-MATH-001-01")
+{:ok, blueprint} = SchoolOps.Workflows.validate()
+
+ids = %{
+  "scope_review" => "scope-42",
+  "resource_review" => "resources-42",
+  "lesson_review" => "lessons-42",
+  "assessment_review" => "assessment-42",
+  "weekly_plan" => "weekly-42"
+}
+
+{:ok, proposed_tasks} = SchoolOps.Workflows.plan(ids)
 ```
 
-`SchoolOps.read/1` only reads files bundled under `priv/content`; it does not
-store student data, log mastery, enroll learners, grant permissions, dispatch
-assessments or expose an HTTP endpoint. Treat `draft` and `ready` as *material*
-statuses, not learner achievement. Stable curriculum and resource IDs survive
-this path move. All original relative links within the snapshot are retained.
+These are **proposals**, not persisted or authorized tasks. Using them in the
+shared platform still requires source attestation, scoped principal/grant
+checks, atomic task-ID allocation, the normal signed admission command and
+evidence custody/review. `SchoolOps` does not bypass those services.
 
-Use `mix test` in this directory to check its reader.
-The [upstream file manifest](source-manifest.tsv) gives the original Git blob
-for each imported path. The upstream commit is preserved as provenance; this
-is a content snapshot, **not a Git subtree history import**. Git log/blame for
-older curricular edits remain in the upstream repository.
+## Shared platform versus school-specific features
 
-Continue source-repository pull requests, including source-archiver PR #8, there
-until a reviewed editorial cutover; do not fork two authoritative curriculum
-branches. The [integration boundary](../../docs/architecture/2026-10-23-school-ops.md)
-sets conditions for future operations and non-public learner records.
+| Shared from biz-kit | Added by SchoolOps |
+| --- | --- |
+| `task_core` DAG, lifecycle, Definition of Done and reviews | Course → unit → lesson planning and prerequisites |
+| `coop_substrate` authorized ledger admission and provenance | Lesson preparation, material/assessment readiness criteria |
+| `biz_kit_identity` principal, authentication and grants | Teacher/reviewer school roles **mapped to** scoped grants (future integration) |
+| Task timing, delegation, workflow runs and change feed | Teaching calendar, resource suitability, class and learner workflows (future reviewed slices) |
+
+Learner identity, scores, accommodations and class-specific assignment links
+must never enter this public source package, proposed task descriptions or logs.
+Student-facing operations require an explicitly scoped private storage and
+access-control design; they will still reuse common platform admission, rather
+than establish another source of business truth. Material `ready`, completed
+staff tasks and learner mastery are separate facts.
+
+The original `school-ops` repository can continue as a **versioned source
+of educational materials**. There is no school-app *migration*, repo archival,
+editorial cutover or task-system replacement prerequisite to developing
+domain features in this app. When materials change upstream, review and pin a
+new content revision here, preserving all stable identifiers and source rights.
+
+See [domain architecture](../../docs/architecture/2026-10-23-school-ops.md)
+and [the source curriculum](priv/content/README.md). Run `mix test` from
+this app to exercise catalog and shared-workflow contracts.
