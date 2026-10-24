@@ -275,4 +275,66 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
     assert {:error, :agent_run_cancelled} =
              AgentRuns.runnable?(current_state(), @run_key)
   end
+  defp access_grant(ctx, action) do
+    signed_event(
+      ctx.gov,
+      "TaskAccessGrantedV1",
+      Map.merge(@subject, %{
+        "principal_id" => "agent-1",
+        "action" => action,
+        "expected_task_version" => 7,
+        "source_event_id" => ctx.ready.event_id
+      })
+    )
+  end
+
+  test "independent permissions survive restart and revoke without changing the signed intent", ctx do
+    {:ok, _} = Log.append(request(ctx))
+    read = access_grant(ctx, "read")
+    execute = access_grant(ctx, "execute")
+    grants = %{read: read.event_id, execute: execute.event_id}
+
+    assert {:error, :unknown_task_access_grant} =
+             AgentRuns.authorized?(current_state(), @run_key, grants)
+
+    {:ok, _} = Log.append(read)
+    assert {:error, :unknown_task_access_grant} =
+             AgentRuns.authorized?(current_state(), @run_key, grants)
+
+    {:ok, [accepted]} = Log.append(execute)
+    head = Log.head()
+    assert {:ok, [^accepted]} = Log.append(execute)
+    assert Log.head() == head
+    assert {:ok, _} = AgentRuns.authorized?(current_state(), @run_key, grants)
+    state = current_state()
+    restart_log()
+    assert current_state() == state
+
+    {:ok, _} =
+      Log.append(
+        signed_event(ctx.gov, "TaskAccessRevokedV1",
+          Map.put(@subject, "grant_event_id", read.event_id))
+      )
+
+    assert {:error, :task_access_revoked} =
+             AgentRuns.authorized?(current_state(), @run_key, grants)
+    assert {:ok, _} = AgentRuns.runnable?(current_state(), @run_key)
+    assert current_state().tasks[@task_key].state == "ready"
+    assert :ok = Log.verify_chains()
+  end
+
+  test "a suggester cannot sign its own independent execution permission", ctx do
+    forged =
+      signed_event(ctx.agent, "TaskAccessGrantedV1", Map.merge(@subject, %{
+        "principal_id" => "agent-1",
+        "action" => "execute",
+        "expected_task_version" => 7,
+        "source_event_id" => ctx.ready.event_id
+      }))
+
+    head = Log.head()
+    assert {:error, _} = Log.append(forged)
+    assert Log.head() == head
+  end
+
 end

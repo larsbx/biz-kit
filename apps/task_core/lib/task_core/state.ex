@@ -30,6 +30,7 @@ defmodule TaskCore.State do
       )
       |> Map.merge(TaskCore.Hierarchy.init())
       |> Map.merge(TaskCore.AgentRuns.init())
+      |> Map.merge(TaskCore.Access.init())
 
   @doc """
   A task entering the inbox at version 1. Baselines and operator creation share
@@ -118,10 +119,11 @@ defmodule TaskCore.State do
     state = TaskCore.Hierarchy.handle_event(env, state)
     state = TaskCore.Todos.handle_event(env, state)
     state = TaskCore.Timing.handle_event(env, state)
-    TaskCore.AgentRuns.handle_event(env, state)
+    state = TaskCore.AgentRuns.handle_event(env, state)
+    TaskCore.Access.handle_event(env, state)
   end
 
-  @authority [:grants, :suggester_grants, :dod_grants, :delegations]
+  @authority [:grants, :suggester_grants, :dod_grants, :delegations, :task_access_grants]
 
   @doc """
   Everything `principal` actively holds in the project, as `{kind, event_id}`:

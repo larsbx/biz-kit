@@ -55,11 +55,21 @@ defmodule AgentOpsStore.Postgres do
       digest = descriptor_digest(d)
 
       params = [
-        d.effect_id, d.intent_event_id, d.chapter_id, d.tenant_id,
-        d.project_id, d.run_id, d.task_id, d.task_version,
-        d.task_source_event_id, Base.decode16!(d.definition_digest, case: :lower),
-        d.execution_profile_id, elem(d.execution_profile_digest, 1),
-        d.max_duration_ms, d.max_output_bytes, digest
+        d.effect_id,
+        d.intent_event_id,
+        d.chapter_id,
+        d.tenant_id,
+        d.project_id,
+        d.run_id,
+        d.task_id,
+        d.task_version,
+        d.task_source_event_id,
+        Base.decode16!(d.definition_digest, case: :lower),
+        d.execution_profile_id,
+        elem(d.execution_profile_digest, 1),
+        d.max_duration_ms,
+        d.max_output_bytes,
+        digest
       ]
 
       case query(conn, @insert, params) do
@@ -113,7 +123,12 @@ defmodule AgentOpsStore.Postgres do
 
   @doc "Candidate digest only; completion and evidence are separately authorized."
   def record_candidate(conn, effect_id, version, epoch, token, {:bytes, <<_::256>>} = digest) do
-    invoke(conn, "record_candidate", [effect_id, version, epoch, hash_token(token), elem(digest, 1)], 5)
+    invoke(
+      conn,
+      "record_candidate",
+      [effect_id, version, epoch, hash_token(token), elem(digest, 1)],
+      5
+    )
   end
 
   def record_candidate(_conn, _effect_id, _version, _epoch, _token, _digest),
@@ -156,8 +171,11 @@ defmodule AgentOpsStore.Postgres do
            cancellation_receipt_id: cancellation
          }}
 
-      {:ok, []} -> {:error, :unknown_agent_effect}
-      {:error, _} -> {:error, :operational_db_unavailable}
+      {:ok, []} ->
+        {:error, :unknown_agent_effect}
+
+      {:error, _} ->
+        {:error, :operational_db_unavailable}
     end
   end
 

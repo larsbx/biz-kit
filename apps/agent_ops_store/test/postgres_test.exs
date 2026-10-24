@@ -66,6 +66,7 @@ defmodule AgentOpsStore.PostgresTest do
              Postgres.claim(conn, p.effect_id, 1, "worker1", 60_000, 2)
 
     assert byte_size(token) == 32
+
     assert {:error, :claim_refused} =
              Postgres.claim(conn, p.effect_id, 1, "worker2", 60_000, 2)
 
@@ -74,6 +75,7 @@ defmodule AgentOpsStore.PostgresTest do
 
     assert {:ok, 3} = Postgres.renew(conn, p.effect_id, 2, 1, token, 60_000)
     assert {:ok, 4} = Postgres.attach_backend(conn, p.effect_id, 3, 1, token, "backend-ci")
+
     assert {:error, :transition_refused} =
              Postgres.attach_backend(conn, p.effect_id, 4, 1, token, "different-backend")
 
@@ -94,6 +96,7 @@ defmodule AgentOpsStore.PostgresTest do
   test "cancel requests fence tokens and preserve proof reference", %{conn: conn} do
     p = plan()
     assert {:ok, :new} = Postgres.register(conn, p)
+
     assert {:ok, %{epoch: 1, version: 2, token: token}} =
              Postgres.claim(conn, p.effect_id, 1, "worker1", 60_000, 2)
 

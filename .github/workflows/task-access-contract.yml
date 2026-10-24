@@ -1,0 +1,30 @@
+name: TaskCore independent access contract
+
+on:
+  pull_request:
+  push:
+    branches: [integration/taskcore-independent-access]
+
+permissions:
+  contents: read
+
+jobs:
+  task-access:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Test TaskCore outside the umbrella
+        run: |
+          cp -R apps/task_core "$RUNNER_TEMP/task_core"
+          cd "$RUNNER_TEMP/task_core"
+          MIX_ENV=test mix compile --warnings-as-errors
+          mix test
+      - name: Check permission source formatting
+        run: |
+          cd "$RUNNER_TEMP/task_core"
+          mix format --check-formatted lib/task_core/access.ex test/access_test.exs lib/task_core/agent_runs.ex
