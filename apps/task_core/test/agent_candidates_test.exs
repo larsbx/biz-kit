@@ -28,28 +28,38 @@ defmodule TaskCore.AgentCandidatesTest do
   end
 
   defp ready_state do
-    State.init(TestHost)
-    |> State.handle_event(
-      event("grant1", "TaskSuggesterGrantedV1", %{
-        "principal_id" => "agent1",
-        "key_id" => "agent-key",
-        "pubkey" => {:bytes, <<1::256>>}
-      })
-    )
-    |> State.handle_event(
-      event("created1", "TaskCreatedV1", %{
-        "task_id" => "task1",
-        "title" => "Prepare a reviewed candidate",
-        "timing" => %{"schedule" => nil, "due_ms" => nil}
-      })
-    )
-    |> State.handle_event(
-      event("definition1", "TaskDoDDefinedV1", %{
-        "task_id" => "task1",
-        "criteria" => [%{"id" => "review", "description" => "Independently review evidence"}]
-      })
-    )
-    |> put_in([:tasks, {"chapter1", "tenant1", "project1", "task1"}, :state], "ready")
+    state = State.init(TestHost)
+
+    state =
+      State.handle_event(
+        event("grant1", "TaskSuggesterGrantedV1", %{
+          "principal_id" => "agent1",
+          "key_id" => "agent-key",
+          "pubkey" => {:bytes, <<1::256>>}
+        }),
+        state
+      )
+
+    state =
+      State.handle_event(
+        event("created1", "TaskCreatedV1", %{
+          "task_id" => "task1",
+          "title" => "Prepare a reviewed candidate",
+          "timing" => %{"schedule" => nil, "due_ms" => nil}
+        }),
+        state
+      )
+
+    state =
+      State.handle_event(
+        event("definition1", "TaskDoDDefinedV1", %{
+          "task_id" => "task1",
+          "criteria" => [%{"id" => "review", "description" => "Independently review evidence"}]
+        }),
+        state
+      )
+
+    put_in(state, [:tasks, {"chapter1", "tenant1", "project1", "task1"}, :state], "ready")
   end
 
   test "derives only a scope-bound, content-free ticket from task projection" do
