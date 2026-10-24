@@ -176,8 +176,7 @@ defmodule InventoryCore do
   defp transition(state, %{op: :release, reservation_id: ref}) do
     with :ok <- identifier(ref),
          {:ok, %{status: :active} = r} <- reservation(state, ref) do
-      {:ok,
-       %{state | reservations: Map.put(state.reservations, ref, %{r | status: :released})}}
+      {:ok, %{state | reservations: Map.put(state.reservations, ref, %{r | status: :released})}}
     else
       {:ok, _} -> {:error, :reservation_not_active}
       {:error, _} = error -> error
