@@ -59,8 +59,10 @@ defmodule SalesCoreTest do
 
     # Replaying an old consent receipt under a fresh event ID and timestamp
     # cannot undo the withdrawal.
-    forged = %{grant(state, "customer-1", :customer, "forged", 21) |
-      evidence_ref: "consent-g1"}
+    forged = %{
+      grant(state, "customer-1", :customer, "forged", 21)
+      | evidence_ref: "consent-g1"
+    }
 
     assert {:error, :audience_or_evidence_not_authorized} =
              Consent.record(state, "restaurant", forged)
