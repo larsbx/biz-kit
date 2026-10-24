@@ -42,7 +42,8 @@ defmodule AgentCore.Attempts do
             attempts: 0,
             lease: nil,
             candidate_digest: nil,
-            cancel_receipt: nil
+            cancel_receipt: nil,
+            reconciliation_receipt: nil
           }
 
           {:ok, put_in(state, [:records, plan.effect_id], row), :new}
@@ -157,29 +158,52 @@ defmodule AgentCore.Attempts do
   @doc """
   Reconcile a TIMED-OUT lease using a trusted backend observation.
 
-  :absent means the backend has PROVED that this effect ID has no running
-  or committed execution, so a subsequent claim can retry. When backend
-  state is unknown, refuse: time expiry alone never licenses a second launch.
-  A recovered candidate is still only a candidate digest.
+  {:absent, receipt_id} means a trusted backend reconciler has independently
+  PROVED that this effect ID has no running or committed execution, with a
+  durable receipt that can be audited. The coordinator must validate the
+  receipt's provenance and exact backend identity before calling this API.
+  When backend state is unknown, refuse: time expiry never licenses another
+  launch. A recovered candidate is still only a candidate digest.
   """
-  @spec reconcile_timeout(map(), String.t(), integer(), :absent | :unknown | {:candidate, tuple()}) ::
-          {:ok, map()} | {:error, atom()}
+  @spec reconcile_timeout(
+          map(),
+          String.t(),
+          integer(),
+          {:absent, String.t()} | :unknown | {:candidate, tuple(), String.t()}
+        ) :: {:ok, map()} | {:error, atom()}
   def reconcile_timeout(state, effect_id, now_ms, observation) do
     with :ok <- clock(now_ms),
          {:ok, row} <- fetch(state, effect_id),
          :ok <- expired_lease(row, now_ms) do
       case observation do
-        :absent ->
-          {:ok, replace(state, effect_id, %{row | phase: :pending, lease: nil})}
+        {:absent, receipt} ->
+          if segment?(receipt) do
+            updated = %{
+              row
+              | phase: :pending,
+                lease: nil,
+                reconciliation_receipt: receipt
+            }
 
-        {:candidate, {:bytes, <<_::256>>} = digest} ->
-          {:ok,
-           replace(state, effect_id, %{
-             row
-             | phase: :candidate_ready,
-               lease: nil,
-               candidate_digest: digest
-           })}
+            {:ok, replace(state, effect_id, updated)}
+          else
+            {:error, :invalid_reconciliation_receipt}
+          end
+
+        {:candidate, {:bytes, <<_::256>>} = digest, receipt} ->
+          if segment?(receipt) do
+            updated = %{
+              row
+              | phase: :candidate_ready,
+                lease: nil,
+                candidate_digest: digest,
+                reconciliation_receipt: receipt
+            }
+
+            {:ok, replace(state, effect_id, updated)}
+          else
+            {:error, :invalid_reconciliation_receipt}
+          end
 
         _ ->
           {:error, :backend_outcome_not_proven}
