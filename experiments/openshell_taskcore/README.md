@@ -45,16 +45,23 @@ suggester grant is *not* a general-purpose task-read or execution grant.
 The pure function is not the production authorization boundary, and its input
 state is never accepted from an agent.
 
+**Since this experiment was first authored**, TaskCore also gained
+`TaskCore.AgentRuns` with operator-signed, serialized run-intent and
+cancellation event types. See
+[the signed run-intent ADR](../../docs/architecture/2026-10-24-signed-agent-runs.md).
+It does **not** yet supply a durable coordinator/outbox or live tool proxy.
+
 After the sandbox returns, the host must obtain CURRENT committed TaskCore
 state and invoke AgentCandidates.current?/3 to refuse stale task revisions,
 cancelled tasks and revoked grants. Even then, the candidate has no business
 effect: typed suggestions, evidence custody, reviewer decisions and completion
 must each pass their existing ledger gates.
 
-This makes the Elixir/Python payload shape compatible but deliberately stops
-short of wiring a live API or introducing a second task/run ledger. An
-authoritative coordinator with signed run-intent events, durable effects and
-safe retry/cancellation remains a separate implementation obligation.
+The ticket payload shape is compatible across Elixir and Python; this still
+does not wire a live API or introduce a second task/run ledger. Signed run
+intents/cancellation now exist in the **same** CoopSubstrate ledger, but the
+durable coordinator, runtime effects, safe retry and cancellation execution
+remain separate implementation obligations.
 
 ## What the code demonstrates
 
@@ -114,8 +121,9 @@ deletion must trigger out-of-band sandbox reconciliation before retrying.
   inside the authoritative admission/dispatch boundary. Bind tickets to exact
   committed task revisions and artifact digests; do not treat a caller-supplied
   ticket as proof of authorization.
-- Add ledger-linked run IDs, durable dispatch/outbox, leases, cancellation,
-  recovery of orphans, result idempotency and sandbox-ID fencing. A post-append
+- Build a dispatcher for the now signed ledger run-intent/cancellation
+  records with durable outbox, leases, recovery of orphans, result idempotency
+  and sandbox-ID fencing. A post-append
   crash must not create a second business action or lose work.
 - Prove revoke-while-running: ongoing sandbox access can be terminated, and
   revoked agents cannot append **new** commands. No permission should derive
