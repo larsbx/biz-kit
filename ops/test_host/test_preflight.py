@@ -30,6 +30,8 @@ class TestHostPreflight(unittest.TestCase):
 
     def dispatch(self, argv):
         self.calls.append(argv)
+        if argv[:3] == ["systemctl", "--user", "is-active"] and self.reply["systemctl"].returncode == 0:
+            return proc("active\n")
         return self.reply[argv[0]]
 
     def run_audit(self, host="test-node", role="test", units=(), free_bytes=10 * 1024 ** 3,
