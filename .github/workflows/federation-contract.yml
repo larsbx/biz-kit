@@ -1,0 +1,32 @@
+name: Federation contract
+
+on:
+  pull_request:
+    paths:
+      - "apps/federation_core/**"
+      - ".github/workflows/federation-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/federation_core/**"
+      - ".github/workflows/federation-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  wire-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Format check
+        run: mix format --check-formatted
+        working-directory: apps/federation_core
+      - name: Pure federation contract tests
+        run: mix test
+        working-directory: apps/federation_core
