@@ -105,13 +105,19 @@ defmodule AgentCore.AttemptsTest do
              Attempts.claim(state, @effect, "worker2", "token2", 1100, 100, 2)
 
     assert {:error, :lease_not_expired} =
-             Attempts.reconcile_timeout(state, @effect, 1099, :absent)
+             Attempts.reconcile_timeout(state, @effect, 1099, {:absent, "not-running-1"})
 
     assert {:error, :backend_outcome_not_proven} =
              Attempts.reconcile_timeout(state, @effect, 1100, :unknown)
 
-    assert {:ok, reconciled} =
+    assert {:error, :backend_outcome_not_proven} =
              Attempts.reconcile_timeout(state, @effect, 1100, :absent)
+
+    assert {:error, :invalid_reconciliation_receipt} =
+             Attempts.reconcile_timeout(state, @effect, 1100, {:absent, "../bad"})
+
+    assert {:ok, reconciled} =
+             Attempts.reconcile_timeout(state, @effect, 1100, {:absent, "not-running-1"})
 
     assert {:ok, reclaimed, later} =
              Attempts.claim(reconciled, @effect, "worker2", "token2", 1110, 100, 2)
@@ -119,6 +125,7 @@ defmodule AgentCore.AttemptsTest do
     assert later.epoch == 2
     assert {:ok, row} = Attempts.get(reclaimed, @effect)
     assert row.attempts == 2
+    assert row.reconciliation_receipt == "not-running-1"
 
     assert {:error, :stale_attempt_epoch} =
              Attempts.candidate(reclaimed, @effect, 1, "token1", 1150, {:bytes, <<4::256>>})
@@ -126,7 +133,7 @@ defmodule AgentCore.AttemptsTest do
     assert {:error, :lease_requires_reconciliation} =
              Attempts.claim(reclaimed, @effect, "worker3", "token3", 1250, 100, 2)
 
-    assert {:ok, exhausted} = Attempts.reconcile_timeout(reclaimed, @effect, 1250, :absent)
+    assert {:ok, exhausted} = Attempts.reconcile_timeout(reclaimed, @effect, 1250, {:absent, "not-running-2"})
 
     assert {:error, :attempt_budget_exhausted} =
              Attempts.claim(exhausted, @effect, "worker3", "token3", 1260, 100, 2)
@@ -137,7 +144,7 @@ defmodule AgentCore.AttemptsTest do
     digest = {:bytes, <<8::256>>}
 
     assert {:ok, recovered} =
-             Attempts.reconcile_timeout(state, @effect, 1100, {:candidate, digest})
+             Attempts.reconcile_timeout(state, @effect, 1100, {:candidate, digest, "stored-result-1"})
 
     assert {:ok, row} = Attempts.get(recovered, @effect)
     assert row.phase == :candidate_ready
