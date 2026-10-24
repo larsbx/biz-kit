@@ -17,8 +17,10 @@ The SQL migration `sql/001_agent_attempts.sql` creates
 `agent_ops.execution_attempts` in **the existing PostgreSQL database**.
 It stores operational run descriptors, lease epochs, expiry, hashed lease
 tokens, immutable backend references, candidate digests and reconciliation
-receipt references. It does NOT store prompts, private artifacts, plaintext
-lease tokens, model credentials or an alternate signed business ledger.
+receipt references. Migration 003 additionally stores bounded candidate output
+bytes and normalized backend receipts in private operational tables. Plaintext
+lease tokens and model credentials are never stored; none of these tables is
+an alternate signed business ledger or accepted business evidence.
 
 Production uses the **existing biz-kit PostgreSQL server/database**, not this
 separate local fixture. Its authoritative accepted task and run-intent facts
@@ -62,6 +64,10 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
 docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
   < deploy/agent-core/sql/002_attempt_cas.sql
+
+docker compose -f deploy/agent-core/compose.yaml exec -T db \
+  psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+  < deploy/agent-core/sql/003_recovery_custody.sql
 
 # Or replace 'docker' with 'podman'.
 ```
@@ -166,8 +172,8 @@ before engine changes, upgrades or host migrations.
 
 - Apply the operational schema to the governed biz-kit database under
   a reviewed migration. Never create an independent source of business truth.
-- Implement the persistent host adapter using transactions, atomic
-  `row_version` checks and locked current-state transitions.
+- Validate the persistent host adapter and opt-in worker with native PostgreSQL
+  and concrete authenticated backend proof/cleanup integrations.
 - Use PostgreSQL's authoritative clock for lease expiry; do not trust a
   worker-reported time, lease token or reconciler self-attestation.
 - At least one running backend may exist after a network timeout. Before
@@ -187,3 +193,18 @@ before engine changes, upgrades or host migrations.
 See [AgentCore architecture](../../docs/architecture/2026-10-24-signed-agent-runs.md),
 [PR #103](https://github.com/larsbx/biz-kit/pull/103) and
 [coordinator issue #92](https://github.com/larsbx/biz-kit/issues/92).
+
+## Recovery, tools and candidate custody
+
+Migration 003 adds total-duration deadlines, receipt-bound recovery CAS and
+atomic bounded candidate-byte custody. The staging coordinator and opt-in
+worker now use these operations. Generic recovery decisions, worker supervision
+and task-read rules live in TaskCore. The private operational custody locator
+is not a signed artifact receipt or accepted evidence. Legacy digest-only
+results are not durable byte custody. The new worker never uses legacy
+`*_preverified` primitives as a substitute for proof verification.
+
+See [execution recovery architecture](../../docs/architecture/2026-10-24-execution-recovery.md)
+for trusted host callbacks, versioned adapter requirements, authentication,
+proof finality, opt-in supervision and remaining acceptance gates. No
+production startup or external execution target is enabled by this change.

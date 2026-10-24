@@ -28,7 +28,11 @@ jobs:
           cd "$RUNNER_TEMP/agent_core"
           MIX_ENV=test mix compile --warnings-as-errors
           mix test
-      - name: Check permission source formatting
+      - name: Check portable execution source formatting
         run: |
           cd "$RUNNER_TEMP/task_core"
-          mix format --check-formatted lib/task_core/access.ex test/access_test.exs lib/task_core/agent_runs.ex lib/task_core/dispatcher.ex test/dispatcher_test.exs
+          mix format --check-formatted lib/task_core/access.ex test/access_test.exs lib/task_core/agent_runs.ex lib/task_core/dispatcher.ex test/dispatcher_test.exs lib/task_core/execution_recovery.ex lib/task_core/execution_tools.ex lib/task_core/execution_worker.ex test/execution_recovery_test.exs test/execution_tools_test.exs test/execution_worker_test.exs
+      - name: Check recovery adapter formatting
+        run: |
+          cd "$RUNNER_TEMP/agent_core"
+          mix format --check-formatted lib/agent_core/recovery_port.ex test/recovery_port_test.exs

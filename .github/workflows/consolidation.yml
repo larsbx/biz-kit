@@ -67,6 +67,21 @@ jobs:
           apps/agent_ops_store/mix.exs
           apps/agent_ops_store/lib/agent_ops_store/postgres.ex
           apps/agent_ops_store/test/postgres_test.exs
+          apps/agent_ops_store/lib/agent_ops_store/coordinator.ex
+          apps/agent_ops_store/lib/agent_ops_store/host.ex
+          apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex
+          apps/agent_ops_store/lib/agent_ops_store/worker.ex
+          apps/agent_ops_store/test/coordinator_test.exs
+          apps/agent_ops_store/test/recovery_postgres_test.exs
+          apps/agent_ops_store/test/test_helper.exs
+          apps/agent_core/lib/agent_core/recovery_port.ex
+          apps/agent_core/test/recovery_port_test.exs
+          apps/task_core/lib/task_core/execution_recovery.ex
+          apps/task_core/lib/task_core/execution_tools.ex
+          apps/task_core/lib/task_core/execution_worker.ex
+          apps/task_core/test/execution_recovery_test.exs
+          apps/task_core/test/execution_tools_test.exs
+          apps/task_core/test/execution_worker_test.exs
           apps/task_core/test/agent_candidates_test.exs
           apps/task_core/test/agent_runs_test.exs
           apps/coop_substrate/test/task_agent_run_intents_test.exs

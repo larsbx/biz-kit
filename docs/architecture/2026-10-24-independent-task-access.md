@@ -26,11 +26,10 @@ model, vendor, image, container or hardware policy is added to task events.
 Database CAS remains an operational host adapter in the existing governed
 database; it never becomes a business ledger.
 
-The existing AgentCore.Attempts reducer contains further potentially reusable
-lease/recovery mechanics. Extract those into a generic TaskCore execution
-module before adding a non-agent worker; retain compatibility for existing
-callers and keep profile validation at the adapter boundary. This change
-does not claim that extraction is complete.
+The legacy AgentCore.Attempts API retains compatibility/descriptor-validation
+behavior. New generic recovery decisions, monitored worker ticks and task-read
+rules live in TaskCore; the durable coordinator does not use the legacy pure
+lease reducer as a persistence or proof service.
 
 ## Acceptance and remaining work
 
@@ -39,10 +38,10 @@ task scope, stale revisions, revocation, offboarding, governance signing,
 duplicate signed delivery and replay/restart. Signed-ledger integration is
 added to task_agent_run_intents_test.exs.
 
-This is a staging prerequisite, not staging acceptance:
-backend idempotency conformance and immutable-effect lookup, abandoned-execution
-reconciliation, typed tool proxy, bounded result custody and two real backend
-conformance runs remain required by issue #92. Fake adapters are not real
+This is a staging prerequisite, not staging acceptance. The implemented
+[recovery, tools and result custody](2026-10-24-execution-recovery.md) still
+require native integration, concrete trusted host authentication/verification
+and two distinct real backend conformance runs. Fake adapters are not real
 backend evidence. No production cutover is authorized or performed.
 
 ## Staging delivery bridge
@@ -55,20 +54,21 @@ interrupted scans are retried using stable signed effect IDs, with no independen
 business log or lossy enqueue acknowledgement.
 
 The bridge requires environment() == :staging and explicit host context, consent
-and sanitized backend-reference functions. No scheduler, endpoint or production
-application startup has been added. Claims use one attempt; retries of ambiguous
-effects require independent reconciliation. Duplicate delivery of a leased row
+and sanitized backend-reference functions. An opt-in monitored worker is now
+available; no endpoint or production application startup is added. Claims use
+at most two attempts within one duration budget; retries of ambiguous effects
+require independent reconciliation. Duplicate delivery of a leased row
 never launches again, regardless of time elapsed. Authorization is checked again
 after claim before launch. Invalidated claims are fenced for cancellation.
 
 Six deterministic dispatcher tests inject duplicate enqueue/delivery, revoked
 authority before/after claim, a lost backend response and attachment failure.
 These are failure-path tests, not real backend or distributed database evidence.
-Ongoing cancellation polling, verified termination/absence receipts, automated
-cross-crash adoption, typed tools, result custody and full worker supervision
-remain open. withdraw/3 fences revoked/stale/cancelled intents in SQL and invokes
-the trusted host's immutable-effect termination request; it never records confirmed
-termination from that request. In particular, expiry never proves backend absence.
+The durable reconciliation, bounded candidate custody, typed read proxy and
+opt-in worker are described in the recovery architecture. Their host proof and
+transport authentication callbacks have no permissive defaults. withdraw/3
+fences invalidated runs and requests termination; only a subsequently verified
+final observation can confirm cancellation. Expiry alone proves no absence.
 
 ## Local validation
 
@@ -78,6 +78,6 @@ All 87 TaskCore tests and 23 AgentCore tests passed via `mix test`. The
 AgentCore Mix project now keeps umbrella paths only inside an actual umbrella.
 These checks do not replace signed-ledger integration, PostgreSQL acceptance
 or live backend conformance. Hosted jobs remained queued at this update.
-The local and hosted staging targets are reported to exist, but no target
-identifiers/endpoints or approved profile registry could be retrieved from
-biz-kit, dev-ops or prior context. Do not invent or publish approved profiles.
+Target configuration is tracked separately in [dev-ops PR #5](https://github.com/larsbx/dev-ops/pull/5).
+Its entries remain disabled; connection setup and real backend conformance are
+not claimed by this implementation. Do not invent or publish approved profiles.

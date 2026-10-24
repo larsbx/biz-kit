@@ -11,8 +11,8 @@ defmodule AgentOpsStore.Postgres do
   business authority. This module neither launches an agent nor appends a
   business event, and it never sends a plaintext lease token to the database.
 
-  Precondition: reviewed migrations 001_agent_attempts.sql and
-  002_attempt_cas.sql have been applied; the database role has narrowly
+  Precondition: reviewed migrations 001_agent_attempts.sql,
+  002_attempt_cas.sql and 003_recovery_custody.sql have been applied; the database role has narrowly
   granted USAGE/SELECT/INSERT and EXECUTE rights. Never pass this connection
   to a sandbox or expose these functions as unauthenticated tools.
 
@@ -153,14 +153,48 @@ defmodule AgentOpsStore.Postgres do
   def snapshot(conn, effect_id) do
     statement = """
     SELECT phase, attempt_epoch, attempts, row_version, backend_ref,
-           candidate_digest, reconciliation_receipt_id, cancellation_receipt_id
+           candidate_digest, reconciliation_receipt_id, cancellation_receipt_id,
+           chapter_id, tenant_id, project_id, run_id,
+           execution_profile_id, execution_profile_digest, execution_deadline, max_output_bytes,
+           COALESCE(lease_expires_at <= clock_timestamp(), false),
+           COALESCE(execution_deadline <= clock_timestamp(), false)
       FROM agent_ops.execution_attempts WHERE effect_id=$1
     """
 
     case query(conn, statement, [effect_id]) do
-      {:ok, [[phase, epoch, attempts, version, backend, digest, reconciliation, cancellation]]} ->
+      {:ok,
+       [
+         [
+           phase,
+           epoch,
+           attempts,
+           version,
+           backend,
+           digest,
+           reconciliation,
+           cancellation,
+           chapter,
+           tenant,
+           project,
+           run,
+           profile_id,
+           profile_digest,
+           deadline,
+           max_output,
+           expired,
+           deadline_expired
+         ]
+       ]} ->
         {:ok,
          %{
+           effect_id: effect_id,
+           run_key: {chapter, tenant, project, run},
+           execution_profile_id: profile_id,
+           execution_profile_digest: {:bytes, profile_digest},
+           execution_deadline: deadline,
+           max_output_bytes: max_output,
+           expired: expired,
+           deadline_expired: deadline_expired,
            phase: phase,
            epoch: epoch,
            attempts: attempts,
@@ -173,6 +207,106 @@ defmodule AgentOpsStore.Postgres do
 
       {:ok, []} ->
         {:error, :unknown_agent_effect}
+
+      {:error, _} ->
+        {:error, :operational_db_unavailable}
+    end
+  end
+
+  @doc "Atomically persist bounded candidate bytes and receipt before marking a result ready."
+  def commit_candidate(conn, effect, version, epoch, token, bytes)
+      when is_binary(bytes) and byte_size(bytes) <= 16_777_216 do
+    case query(
+           conn,
+           "SELECT version, receipt_id, digest FROM agent_ops.commit_candidate($1,$2,$3,$4,$5)",
+           [effect, version, epoch, hash_token(token), bytes]
+         ) do
+      {:ok, [[next, receipt, digest]]} ->
+        {:ok, %{version: next, receipt_id: receipt, digest: digest}}
+
+      {:ok, []} ->
+        {:error, :candidate_custody_refused}
+
+      {:error, _} ->
+        {:error, :operational_db_unavailable}
+    end
+  end
+
+  def commit_candidate(_conn, _effect, _version, _epoch, _token, _bytes),
+    do: {:error, :candidate_too_large_or_invalid}
+
+  @doc "Apply an independently host-verified observation under DB version/epoch CAS."
+  def apply_recovery(conn, row, observation, owner) do
+    with {:ok, action} <- TaskCore.ExecutionRecovery.decide(row, observation),
+         true <- action != :request_termination or {:error, :termination_required} do
+      token = :crypto.strong_rand_bytes(32)
+
+      args = [
+        row.effect_id,
+        row.version,
+        row.epoch,
+        Atom.to_string(observation.state),
+        observation[:backend_ref],
+        observation.receipt,
+        owner,
+        hash(token),
+        5_000,
+        if(observation.state == :candidate, do: observation[:candidate_bytes], else: nil)
+      ]
+
+      case query(
+             conn,
+             "SELECT version, epoch, phase FROM agent_ops.apply_recovery($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+             args
+           ) do
+        {:ok, [[version, epoch, phase]]} ->
+          {:ok,
+           %{
+             version: version,
+             epoch: epoch,
+             phase: phase,
+             token: if(action == :adopt, do: token, else: nil)
+           }}
+
+        {:ok, []} ->
+          {:error, :recovery_cas_refused}
+
+        {:error, _} ->
+          {:error, :operational_db_unavailable}
+      end
+    end
+  end
+
+  @doc "Trusted-host scoped retrieval; caller must first check fresh read/run grants."
+  def candidate(conn, plan) do
+    t = plan.execution.ticket
+
+    args = [
+      plan.effect_id,
+      t["chapter_id"],
+      t["tenant_id"],
+      t["project_id"],
+      t["task_id"],
+      t["task_version"],
+      t["source_event_id"]
+    ]
+
+    sql = """
+    SELECT c.receipt_id, c.digest, c.bytes
+      FROM agent_ops.candidate_custody c JOIN agent_ops.execution_attempts a USING(effect_id)
+     WHERE a.effect_id=$1 AND a.chapter_id=$2 AND a.tenant_id=$3 AND a.project_id=$4
+       AND a.task_id=$5 AND a.task_version=$6 AND a.task_source_event_id=$7
+       AND a.phase='candidate_ready' AND c.digest=a.candidate_digest
+    """
+
+    case query(conn, sql, args) do
+      {:ok, [[receipt, digest, bytes]]} ->
+        if byte_size(bytes) <= plan.requirements["max_output_bytes"] and hash(bytes) == digest,
+          do: {:ok, %{receipt_id: receipt, digest: digest, bytes: bytes}},
+          else: {:error, :candidate_custody_corrupt}
+
+      {:ok, []} ->
+        {:error, :candidate_custody_not_found}
 
       {:error, _} ->
         {:error, :operational_db_unavailable}

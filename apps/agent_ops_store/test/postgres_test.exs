@@ -6,20 +6,7 @@ defmodule AgentOpsStore.PostgresTest do
   @moduletag :integration
 
   setup do
-    password_file = System.fetch_env!("BIZKIT_PG_PASSWORD_FILE")
-    password = password_file |> File.read!() |> String.trim()
-
-    conn =
-      start_supervised!(
-        {Postgrex,
-         [
-           hostname: "127.0.0.1",
-           port: 5544,
-           username: "bizkit",
-           password: password,
-           database: "bizkit_agent_dev"
-         ]}
-      )
+    conn = start_supervised!({Postgrex, AgentOpsStore.TestConnection.options()})
 
     %{conn: conn}
   end
