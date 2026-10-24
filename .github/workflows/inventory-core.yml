@@ -38,7 +38,9 @@ jobs:
           MIX_ENV=test mix format --check-formatted
           apps/inventory_core/mix.exs
           apps/inventory_core/lib/inventory_core.ex
+          apps/inventory_core/lib/inventory_core/wire.ex
           apps/inventory_core/test/inventory_core_test.exs
+          apps/inventory_core/test/wire_test.exs
       - name: Test replay and reservation rules
         working-directory: apps/inventory_core
         run: mix test --no-start
