@@ -129,8 +129,7 @@ defmodule SalesCore.Consent do
     with {:ok, key} <- basics(event),
          :ok <- newer(state, key, event) do
       # Withdrawing unknown consent is a suppression event, not a no-op.
-      entry = %{status: :withdrawn, audience: nil, at_ms: event.at_ms,
-                evidence_ref: nil}
+      entry = %{status: :withdrawn, audience: nil, at_ms: event.at_ms, evidence_ref: nil}
 
       {:ok, %{state | entries: Map.put(state.entries, key, entry)}}
     end
