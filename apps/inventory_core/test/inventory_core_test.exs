@@ -17,12 +17,13 @@ defmodule InventoryCoreTest do
   test "holds prevent overselling and repeat admission is idempotent" do
     state = empty("restaurant")
     state = accepted(state, "restaurant", "r1", :receive, %{location: "walk-in", quantity: 10})
-    hold = command(state, "h1", :reserve, %{
-      location: "walk-in",
-      quantity: 8,
-      reservation_id: "customer-1",
-      expires_at_ms: 1_000
-    })
+    hold =
+      command(state, "h1", :reserve, %{
+        location: "walk-in",
+        quantity: 8,
+        reservation_id: "customer-1",
+        expires_at_ms: 1_000
+      })
 
     {:ok, state, :accepted} = InventoryCore.apply(state, "restaurant", hold)
     assert {:ok, state, :duplicate} = InventoryCore.apply(state, "restaurant", hold)
@@ -47,6 +48,7 @@ defmodule InventoryCoreTest do
   test "partial commits consume only held stock and release the remainder" do
     state = empty("restaurant")
     state = accepted(state, "restaurant", "r", :receive, %{location: "fridge", quantity: 12})
+
     state =
       accepted(state, "restaurant", "h", :reserve, %{
         location: "fridge",
@@ -66,6 +68,7 @@ defmodule InventoryCoreTest do
   test "transfer is atomic within one stock aggregate and cannot take reserved stock" do
     state = empty("workshop")
     state = accepted(state, "workshop", "r", :receive, %{location: "warehouse", quantity: 7})
+
     state =
       accepted(state, "workshop", "h", :reserve, %{
         location: "warehouse",
@@ -99,6 +102,7 @@ defmodule InventoryCoreTest do
   test "expiry releases holds exactly once and refuses clock reversal" do
     state = empty("restaurant")
     state = accepted(state, "restaurant", "r", :receive, %{location: "store", quantity: 2})
+
     state =
       accepted(state, "restaurant", "h", :reserve, %{
         location: "store",
@@ -109,8 +113,13 @@ defmodule InventoryCoreTest do
 
     state = accepted(state, "restaurant", "tick", :expire, %{at_ms: 5})
     assert {:ok, 2} = InventoryCore.available(state, "restaurant", "store")
+
     assert {:error, :nonmonotone_clock} =
-             InventoryCore.apply(state, "restaurant", command(state, "past", :expire, %{at_ms: 4}))
+             InventoryCore.apply(
+               state,
+               "restaurant",
+               command(state, "past", :expire, %{at_ms: 4})
+             )
 
     assert {:error, :reservation_not_active} =
              InventoryCore.apply(
