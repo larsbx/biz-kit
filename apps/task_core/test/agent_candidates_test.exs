@@ -65,6 +65,7 @@ defmodule TaskCore.AgentCandidatesTest do
   test "derives only a scope-bound, content-free ticket from task projection" do
     state = ready_state()
     assert {:ok, ticket} = AgentCandidates.plan(state, @request)
+
     assert ticket == %{
              "chapter_id" => "chapter1",
              "tenant_id" => "tenant1",
@@ -74,7 +75,8 @@ defmodule TaskCore.AgentCandidatesTest do
              "source_event_id" => "definition1",
              "definition_digest" =>
                Base.encode16(
-                 :crypto.hash(:sha256,
+                 :crypto.hash(
+                   :sha256,
                    :erlang.term_to_binary([
                      %{"id" => "review", "description" => "Independently review evidence"}
                    ])
@@ -164,7 +166,7 @@ defmodule TaskCore.AgentCandidatesTest do
              AgentCandidates.plan(state, Map.put(@request, :command, "complete"))
 
     assert {:error, :invalid_agent_request} =
-             AgentCandidates.plan(state, %{ @request | task_id: "../path" })
+             AgentCandidates.plan(state, %{@request | task_id: "../path"})
   end
 
   test "suggester grant does not become a delegation or task admission command" do
