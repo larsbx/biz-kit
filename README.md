@@ -23,6 +23,7 @@ Shared apps developed in this umbrella:
 | App | Path | Role |
 | --- | --- | --- |
 | `task_core` | `apps/task_core` | Dependency-free task/workflow rules and command admission |
+| `commerce_core` | `apps/commerce_core` | Reusable commercial price arithmetic; extracted from Eatsbot with unchanged compatibility API |
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
 | `school_ops` | `apps/school_ops` | School domain: K–12 curriculum catalog, lesson/assessment review, and TaskCore-based staff workflows |
@@ -53,6 +54,7 @@ mix compile
 # Per app, from its directory:
 (cd apps/keel           && mix test)
 (cd apps/task_core      && mix test)
+(cd apps/commerce_core   && mix test --no-start)           # pure arithmetic, no umbrella runtime
 (cd apps/coop_substrate && mix test)
 (cd apps/biz_kit_identity && mix test)
 (cd apps/biz_kit_cluster  && mix test)
@@ -217,3 +219,15 @@ readiness rules remain intact. No private learner records or independent writer
 are introduced. The first workflow is a **pure proposal**, not an authorized
 task-run or deployed school portal. See
 [the SchoolOps domain contract](docs/architecture/2026-10-23-school-ops.md).
+
+## Composable business capabilities
+
+[Modular business platform decision](docs/architecture/2026-10-24-modular-business-platform.md):
+biz-kit maintains shared technical and business capabilities, while Eatsbot,
+d-patch and SchoolOps remain independently evolvable domain products. The first
+small, behavior-preserving extraction is [commerce_core](apps/commerce_core/README.md):
+Eatsbot's order pricing algorithm now has a reusable owner and a compatibility
+facade. **Inventory, CRM, marketing, general order admission and cross-domain
+Dispatch fulfillment are not yet extracted or implemented.** Existing Eatsbot
+orders and delivery state remain authoritative in their current deployment;
+this change performs no data movement or writer cutover.

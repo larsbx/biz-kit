@@ -1,0 +1,37 @@
+name: CommerceCore extraction
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  commerce-pricing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile shared price kernel
+        working-directory: apps/commerce_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Validate formatting
+        env:
+          MIX_ENV: test
+        run: >-
+          mix format --check-formatted
+          apps/commerce_core/mix.exs
+          apps/commerce_core/lib/commerce_core/pricing.ex
+          apps/commerce_core/test/pricing_test.exs
+          apps/eatsbot_core/lib/orders/pricing.ex
+      - name: Test CommerceCore independently of a database
+        working-directory: apps/commerce_core
+        run: mix test --no-start

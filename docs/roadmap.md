@@ -206,3 +206,44 @@ What remains, in order:
   admitted?
 
 Portal correction in progress: see [revocation-aware portal authentication](architecture/2026-10-23-revocation-aware-portal.md). This implementation is not yet acceptance evidence and does not close the administrative P1 or required hosted-integration P2.
+
+## Modular business platform (2026-10-24)
+
+[Architecture decision](architecture/2026-10-24-modular-business-platform.md):
+keep Eatsbot, d-patch and SchoolOps independently evolvable. Extract reusable
+capabilities from real domain implementations into narrowly scoped biz-kit
+modules and contract/SDK surfaces; do not freeze domain product development.
+This is additive to the existing signed-ledger consolidation and **does not
+satisfy** any pre-existing security or writer cutover gate above.
+
+1. **Commerce arithmetic — first slice:** extract Eatsbot I₂ line and total
+   pricing to `commerce_core`; keep `EatsbotCore.Orders.Pricing.price/3` as
+   a compatibility facade; prove exact parity in tests. No database changes.
+2. **Catalog/price model:** inventory Eatsbot Product, Variant, Price, option
+   and discount constraints, resolve tenant/merchant boundaries and public
+   API ownership, and identify contract-compatible extractions. Do not
+   automatically move its Ash resources or tables.
+3. **Inventory:** design a dedicated stock ledger (locations, adjustments,
+   reservations, committed movements, reconciliation). There is no delivered
+   generic inventory subsystem in Eatsbot to move wholesale. Protect stock
+   against concurrent reservations and avoid representing sale orders as
+   stock movements.
+4. **Commerce order vs restaurant order:** isolate generic line snapshots,
+   idempotency, pricing, order commitments, refunds/returns, and commercial
+   state from Eatsbot's kitchen and dine-in lifecycle. Preserve current order
+   IDs, checkout concurrency and transaction semantics through parity tests.
+5. **Dispatch contract:** define order fulfillment requests/results across
+   domains. Eatsbot retains commercial order state; Dispatch owns routing,
+   assignment, driver/device declarations and transportation state. Do not
+   blindly fuse their present delivery state machines or databases.
+6. **Cross-domain sales/marketing:** design contact/party relationships,
+   consent, account scopes, leads, opportunities, campaigns and event
+   provenance. Do not infer promotional consent from customer accounts.
+7. **Later HR and financial operations:** adopt reviewed domain models
+   for employment and accounting; do not mistake the existing signed
+   business-event ledger for double-entry accounting.
+
+Each follow-on slice requires one consuming domain, one non-Eatsbot
+portability/conformance test, explicit authority, and a proved source/target
+contract. Independent deployments may consume version-pinned code or
+authenticated APIs; a single logical fact has one active writer.
