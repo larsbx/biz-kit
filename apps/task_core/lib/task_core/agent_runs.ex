@@ -219,6 +219,7 @@ defmodule TaskCore.AgentRuns do
          }) do
       {:ok,
        %{
+         run_id: run_id,
          ticket: ticket,
          intent_event_id: run.intent_event_id,
          execution_profile_id: run.execution_profile_id,
