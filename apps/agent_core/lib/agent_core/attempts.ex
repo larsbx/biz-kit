@@ -246,17 +246,11 @@ defmodule AgentCore.Attempts do
     if attempts < maximum, do: :ok, else: {:error, :attempt_budget_exhausted}
   end
 
-  defp claimable(%{phase: :leased}), do: {:error, :lease_requires_reconciliation}
-  defp claimable(%{phase: :cancel_requested}), do: {:error, :cancel_requested}
-  defp claimable(_row, _maximum), do: {:error, :agent_effect_not_claimable}
-
-  defp claimable(row, maximum) when is_map(row), do: claimable_phase(row, maximum)
-
-  defp claimable_phase(%{phase: :leased}, _maximum),
+  defp claimable(%{phase: :leased}, _maximum),
     do: {:error, :lease_requires_reconciliation}
 
-  defp claimable_phase(%{phase: :cancel_requested}, _maximum), do: {:error, :cancel_requested}
-  defp claimable_phase(_row, _maximum), do: {:error, :agent_effect_not_claimable}
+  defp claimable(%{phase: :cancel_requested}, _maximum), do: {:error, :cancel_requested}
+  defp claimable(_row, _maximum), do: {:error, :agent_effect_not_claimable}
 
   defp active_lease(%{phase: :leased, lease: lease}, epoch, token, now_ms)
        when is_map(lease) do
