@@ -24,7 +24,7 @@ defmodule Eatsbot.Extensions.Kafka.MixProject do
   defp deps do
     [
       # Keep producer behavior on the existing line until the separate client spike.
-      {:kafka_ex, "~> 0.14.0", runtime: false},
+      {:kafka_ex, "~> 1.1.2", runtime: false},
       {:eatsbot_core, in_umbrella: true}
     ]
   end
