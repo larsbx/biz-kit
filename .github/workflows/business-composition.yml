@@ -1,0 +1,34 @@
+name: Business capability composition
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  composition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile composition with existing business cores
+        working-directory: apps/biz_kit_composition
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check composition formatting
+        run: >-
+          MIX_ENV=test mix format --check-formatted
+          apps/biz_kit_composition/mix.exs
+          apps/biz_kit_composition/lib/biz_kit/composition.ex
+          apps/biz_kit_composition/test/composition_test.exs
+      - name: Exercise restaurant and freight conformance
+        working-directory: apps/biz_kit_composition
+        run: mix test --no-start
