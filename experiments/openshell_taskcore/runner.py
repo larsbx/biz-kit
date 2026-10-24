@@ -115,6 +115,8 @@ def _candidate(stdout: str, ticket: Ticket) -> Mapping[str, Any]:
         raise HandoffError("sandbox output does not match source task and scope")
     if set(value) != set(expected) | {"summary"}:
         raise HandoffError("unexpected sandbox output fields")
+    if type(value["task_version"]) is not int:
+        raise HandoffError("candidate task_version must be an integer")
     if (not isinstance(value["summary"], str) or
             not (1 <= len(value["summary"]) <= 256)):
         raise HandoffError("invalid candidate summary")
