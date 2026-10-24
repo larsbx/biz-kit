@@ -9,8 +9,19 @@ The coordinator must treat agents as scoped principals, **not** as Hermes,
 Pi, a particular model vendor, a specific prompt format, or an OCI process.
 An agent may be backed by an embedded library, a local process, an isolated
 sandbox, a hosted/remote agent, a queue worker, or another implementation.
-The choice of execution mechanism belongs to a separately authorized,
-versioned **execution profile**.
+There are **two independent implementation choices**:
+
+- **Agent implementation:** a rules engine, model-backed agent, remote agent
+  service, human-in-the-loop worker, or another agent framework. No specific
+  SDK, reasoning loop or model provider is canonical.
+- **Execution substrate:** host process, external service, queue, sandbox,
+  container, VM or other isolation/compute environment. OpenShell is an
+  *optional* substrate, not an agent protocol or a required dependency.
+
+The host assembles these choices through a separately authorized,
+versioned **execution profile**, and an adapter may normalize them to the
+same platform-facing `launch/poll/cancel` interface. Both axes can evolve
+without rewriting TaskCore or changing business run events.
 
 Biz-kit defines *what* work is authorized, the current task/version, and
 the admissible effects. The execution adapter defines *how* to launch,
