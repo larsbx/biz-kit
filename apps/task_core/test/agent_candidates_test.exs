@@ -45,6 +45,7 @@ defmodule TaskCore.AgentCandidatesTest do
         event("created1", "TaskCreatedV1", %{
           "task_id" => "task1",
           "title" => "Prepare a reviewed candidate",
+          "authorization_event_id" => "fixture-operator",
           "timing" => %{"schedule" => nil, "due_ms" => nil}
         }),
         state
@@ -109,8 +110,8 @@ defmodule TaskCore.AgentCandidatesTest do
 
     revoked =
       State.handle_event(
-        state,
-        event("revoke1", "TaskSuggesterRevokedV1", %{"authorization_event_id" => "grant1"})
+        event("revoke1", "TaskSuggesterRevokedV1", %{"authorization_event_id" => "grant1"}),
+        state
       )
 
     assert {:error, :agent_grant_revoked} = AgentCandidates.plan(revoked, @request)

@@ -50,6 +50,7 @@ defmodule TaskCore.AgentRunsTest do
         event("created1", "TaskCreatedV1", %{
           "task_id" => "task1",
           "title" => "Review a candidate",
+          "authorization_event_id" => "opgrant1",
           "timing" => %{"schedule" => nil, "due_ms" => nil}
         }),
         state

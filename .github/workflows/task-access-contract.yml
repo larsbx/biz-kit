@@ -18,6 +18,12 @@ jobs:
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
+      - name: Emit canonical formatting for changed sources
+        run: |
+          elixir -e 'for path <- System.argv() do
+            formatted = path |> File.read!() |> Code.format_string!() |> IO.iodata_to_binary()
+            IO.puts("FORMATTED " <> path <> " " <> Base.encode64(formatted <> "\\n"))
+          end' apps/task_core/lib/task_core/access.ex apps/task_core/test/access_test.exs apps/task_core/lib/task_core/agent_runs.ex apps/coop_substrate/test/task_agent_run_intents_test.exs
       - name: Test TaskCore outside the umbrella
         run: |
           cp -R apps/task_core "$RUNNER_TEMP/task_core"
