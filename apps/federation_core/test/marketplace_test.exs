@@ -82,7 +82,8 @@ defmodule FederationCore.MarketplaceTest do
              M.decode_verified(published, %{verified_actor: "https://evil.example/actors/other"})
 
     assert {:error, :invalid_marketplace_activity} =
-             M.decode_verified(Map.put(published, "actor", "https://evil.example/actors/other"),
+             M.decode_verified(
+               Map.put(published, "actor", "https://evil.example/actors/other"),
                %{verified_actor: @seller}
              )
   end
@@ -91,12 +92,14 @@ defmodule FederationCore.MarketplaceTest do
     {:ok, published} = M.publish(:create, metadata!(), @activity, @metadata_url)
 
     assert {:error, :invalid_marketplace_activity} =
-             M.decode_verified(Map.put(published, "grant", "admin"),
+             M.decode_verified(
+               Map.put(published, "grant", "admin"),
                %{verified_actor: @seller}
              )
 
     assert {:error, :invalid_marketplace_activity} =
-             M.decode_verified(Map.put(published, "to", [@seller]),
+             M.decode_verified(
+               Map.put(published, "to", [@seller]),
                %{verified_actor: @seller}
              )
 
