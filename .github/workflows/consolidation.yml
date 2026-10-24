@@ -64,6 +64,9 @@ jobs:
           apps/agent_core/test/capabilities_test.exs
           apps/agent_core/test/preflight_test.exs
           apps/agent_core/test/attempts_test.exs
+          apps/agent_ops_store/mix.exs
+          apps/agent_ops_store/lib/agent_ops_store/postgres.ex
+          apps/agent_ops_store/test/postgres_test.exs
           apps/task_core/test/agent_candidates_test.exs
           apps/task_core/test/agent_runs_test.exs
           apps/coop_substrate/test/task_agent_run_intents_test.exs
