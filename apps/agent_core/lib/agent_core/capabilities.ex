@@ -27,8 +27,14 @@ defmodule AgentCore.Capabilities do
       when is_map(requirements) do
     with :ok <- validate_profile(capabilities),
          :ok <- validate_requirements(requirements),
-         :ok <- subset(requirements["features"], capabilities["features"], :unsupported_agent_feature),
-         :ok <- subset(requirements["data_classes"], capabilities["data_classes"], :data_class_not_allowed),
+         :ok <-
+           subset(requirements["features"], capabilities["features"], :unsupported_agent_feature),
+         :ok <-
+           subset(
+             requirements["data_classes"],
+             capabilities["data_classes"],
+             :data_class_not_allowed
+           ),
          :ok <- region_allowed(requirements["region"], capabilities["regions"]),
          :ok <- within_limits(requirements, capabilities) do
       :ok
@@ -38,7 +44,8 @@ defmodule AgentCore.Capabilities do
   def check(_manifest, _requirements), do: {:error, :invalid_agent_capabilities}
 
   defp validate_profile(p) when is_map(p) do
-    if MapSet.new(Map.keys(p)) == MapSet.new(~w(features data_classes regions max_duration_ms max_output_bytes)) and
+    if MapSet.new(Map.keys(p)) ==
+         MapSet.new(~w(features data_classes regions max_duration_ms max_output_bytes)) and
          identifiers?(p["features"], @features, 32) and
          identifiers?(p["data_classes"], @classes, 4) and
          identifiers?(p["regions"], @region, 16) and
@@ -51,7 +58,8 @@ defmodule AgentCore.Capabilities do
   defp validate_profile(_other), do: {:error, :invalid_agent_capabilities}
 
   defp validate_requirements(r) when is_map(r) do
-    if MapSet.new(Map.keys(r)) == MapSet.new(~w(features data_classes region max_duration_ms max_output_bytes)) and
+    if MapSet.new(Map.keys(r)) ==
+         MapSet.new(~w(features data_classes region max_duration_ms max_output_bytes)) and
          identifiers?(r["features"], @features, 32) and
          identifiers?(r["data_classes"], @classes, 4) and
          is_binary(r["region"]) and Regex.match?(@region, r["region"]) and
