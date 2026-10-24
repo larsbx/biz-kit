@@ -1,15 +1,15 @@
 defmodule TaskCore.AgentCandidates do
   @moduledoc """
-  Pure, *non-authoritative* TaskCore -> sandbox candidate handoff.
+  Pure, *non-authoritative* TaskCore -> execution candidate handoff.
 
   A trusted host supplies a CURRENT, committed TaskCore replay, and separately
   authorizes task reads. This module does not verify signatures, authorize
   reads, store runs, or append commands. In particular, a suggester grant
   permits suggestions, not general access to private task content.
 
-  The returned map matches the small ticket accepted by the experimental
-  OpenShell Python runner. It contains no task body, credential or authority
-  token. A caller MUST check freshness again after execution, and any actual
+  The returned map is a vendor-neutral task ticket (also consumed by the
+  optional OpenShell experiment). It contains no task body, credential or
+  authority token. An agent engine or framework is never selected here. A caller MUST check freshness again after execution, and any actual
   business command must pass the signed, serialized CoopSubstrate append gate.
   """
 
@@ -20,7 +20,7 @@ defmodule TaskCore.AgentCandidates do
   @max_version 2_147_483_647
 
   @doc """
-  Construct an inert sandbox ticket from trusted TaskCore replay.
+  Construct a minimal engine-neutral execution ticket from trusted TaskCore replay.
 
   A live project-scoped suggester grant is required to bind the agent principal.
   This is only one prerequisite: the host must independently authorize the
