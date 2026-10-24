@@ -31,7 +31,7 @@ jobs:
       SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -337,7 +337,7 @@ jobs:
       # The web view: its modules against the ledger's canonical vectors, then
       # the first workflow in Chromium (sign in, enrol the device key, accept
       # an agent's suggestion, signed in the browser).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Test the web view's modules
@@ -371,7 +371,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -389,12 +389,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       # Apalache, which `quint verify` downloads, needs Java 17+.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
