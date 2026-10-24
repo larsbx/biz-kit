@@ -77,6 +77,29 @@ committed task scope, version, last event, DoD reference and active grants.
 They must be rechecked immediately before start and result consideration;
 any **business command** is rechecked by the signed serialized ledger gate.
 
+## Trusted capability preflight
+
+A candidate run can require capabilities without choosing an agent framework.
+`AgentCore.Capabilities.check/2` compares a reviewed execution-profile
+manifest against **trusted host-derived** requirements: feature names,
+authorized data classifications, region constraints, maximum duration and
+maximum result bytes. An unsupported feature, region, data class, or exceeded
+budget is a refusal. Missing/malformed declarations never select a default.
+
+`AgentCore.Preflight.prepare/4` combines profile-manifest verification,
+exact signed run budget binding, capability matching, and a deterministic
+effect identifier derived from the accepted run-intent event. Two unrelated
+fake adapters (local and remote) produce an identical execution envelope.
+The preflight is pure and must never be passed untrusted agent-derived
+identity or requirements as if they were a current authorization decision.
+
+**Important limits:** Claiming "us-east-1" inside a manifest is not itself
+proof of data residency; an approved adapter/deployment must enforce and
+attest it. Capability strings need a versioned semantic catalog as additional
+engines are integrated. The operational coordinator must use durable leasing
+and idempotent effect execution; the pure plan is not a reservation or a
+running-agent receipt.
+
 ## Identity is distinct from implementation
 
 An agent principal is platform identity, not a process ID or framework
