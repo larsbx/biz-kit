@@ -20,7 +20,11 @@ can run without database setup:
 cd apps/commerce_core && mix test --no-start
 ```
 
-In umbrella tests, the test helper starts Localize's currency loader after\nloading the configured Eatsbot locale-cache metadata, without starting its\nweb or database services. Production CommerceCore code never calls Eatsbot.\n\nThe only declared runtime dependency is `ex_money`. This kernel does not
+In tests, the helper starts Localize's currency loader using the bundled
+English locale cache owned by Localize itself, without starting Eatsbot's web,
+database, or queue services. Production CommerceCore code never calls Eatsbot.
+
+The only declared runtime dependency is `ex_money`. This kernel does not
 depend on Eatsbot, Dispatch, SchoolOps, Ash resources, storage, network,
 tenant-specific policies or the umbrella runtime. Its source lives inside
 the umbrella; publishing a standalone artifact/version requires a separate
