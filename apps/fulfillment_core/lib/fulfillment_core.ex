@@ -139,6 +139,8 @@ defmodule FulfillmentCore do
     end
   end
 
+  defp transition(_, _, _), do: {:error, :wrong_event_authority}
+
   defp no_transport_ref(%{transport_ref: nil}), do: :ok
   defp no_transport_ref(_), do: {:error, :transport_already_accepted}
 
@@ -147,8 +149,6 @@ defmodule FulfillmentCore do
 
   defp has_started_transport(%{transport_started: true}), do: :ok
   defp has_started_transport(_), do: {:error, :delivery_without_transport_start}
-
-  defp transition(_, _, _), do: {:error, :wrong_event_authority}
 
   defp phase(state, allowed) do
     cond do
