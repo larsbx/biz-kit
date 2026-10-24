@@ -48,6 +48,33 @@ jobs:
           cd "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
           mix deps.get
           MIX_ENV=test mix compile --warnings-as-errors
+      - name: Consume the copied package from an unrelated Mix project
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/business-core-consumer"
+          cat > "$RUNNER_TEMP/business-core-consumer/mix.exs" <<'EOF'
+          defmodule IndependentConsumer.MixProject do
+            use Mix.Project
+
+            def project do
+              [
+                app: :independent_consumer,
+                version: "0.1.0",
+                elixir: "~> 1.19",
+                deps: [
+                  {:MODULE_PLACEHOLDER, path: "../business-core-vendor/MODULE_PLACEHOLDER"}
+                ]
+              ]
+            end
+
+            def application, do: [extra_applications: []]
+          end
+          EOF
+          sed -i "s/MODULE_PLACEHOLDER/${{ matrix.app }}/g" "$RUNNER_TEMP/business-core-consumer/mix.exs"
+          cd "$RUNNER_TEMP/business-core-consumer"
+          mix deps.get
+          MIX_ENV=test mix compile --warnings-as-errors
       - name: Execute independent package tests
         shell: bash
         run: |
