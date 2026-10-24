@@ -1,9 +1,11 @@
 # biz-kit
 
-One Mix umbrella, one dependency lock, one release (`biz_kit`) for the
-Elixir core of the business platform. Each app was imported with
-`git subtree`, so its full history, `git log` and `git blame` are preserved
-under its directory.
+One Mix umbrella, one dependency lock and shared releases for the Elixir
+core of the business platform. The original platform apps were imported with
+`git subtree`, retaining their source histories. Additional native apps
+include the dependency-free task core and a read-only `school_ops` curriculum
+snapshot, which records its upstream commit rather than claiming a subtree
+history import.
 
 | App | Path | Imported from | Role |
 | --- | --- | --- | --- |
@@ -11,6 +13,8 @@ under its directory.
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
 | `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task and orchestration control plane (CLI, MCP/OAuth endpoint) |
+| `task_core` | `apps/task_core` | native to `biz-kit` | Portable pure task/workflow and blueprint rules |
+| `school_ops` | `apps/school_ops` | `larsbx/school-ops` at `ccacc596d63a` | Reviewed K–12 curriculum, resources and assessments (read-only) |
 
 Mix requires umbrella directory names to equal OTP application names, hence
 `coop_substrate` and `spruce_goose`.
@@ -38,6 +42,7 @@ mix compile
 (cd apps/dispatch       && mix test)                      # unit tier
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
+(cd apps/school_ops     && mix test)                        # no database required
 ```
 
 dispatch's test database connects as the Postgres role `dispatch`; create it
@@ -131,3 +136,14 @@ The [queued/ready rehearsal stage](docs/architecture/2026-10-14-ledger-task-read
 adds governance-defined prerequisites, personal SOP acknowledgments, and scoped
 operator transitions from committed ledger state. Production writer fencing and
 execution/completion coverage remain prerequisites for cutover.
+
+## School operations and curriculum
+
+The [`school_ops` app](apps/school_ops/README.md) brings the reviewed K–12
+curriculum, lessons, assessments, resources and planning templates into this
+umbrella as a **read-only, version-pinned** content snapshot. It preserves the
+school curriculum's Trivium/Quadrivium direction, explicit evidence/readiness
+rules and stable IDs; it does not create a second ledger, public learner records,
+or a new teaching-results authority. Curriculum source and open PRs remain at
+[`larsbx/school-ops`](https://github.com/larsbx/school-ops) until a reviewed
+cutover. See [the consolidation boundary](docs/architecture/2026-10-23-school-ops.md).
