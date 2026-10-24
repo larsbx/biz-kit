@@ -85,13 +85,10 @@ defmodule TaskCore.AgentRunsTest do
           "expected_task_version" => 2,
           "source_event_id" => "definition1",
           "definition_digest" => {:bytes, Host.hash(@criteria)},
-          "template_name" => "approved-python",
-          "image_digest" => {:bytes, <<3::256>>},
-          "policy_digest" => {:bytes, <<4::256>>},
-          "cpu_millicores" => 500,
-          "memory_mib" => 256,
-          "max_runtime_ms" => 30_000,
-          "max_result_bytes" => 4096,
+          "execution_profile_id" => "approved-profile",
+          "execution_profile_digest" => {:bytes, <<4::256>>},
+          "max_duration_ms" => 30_000,
+          "max_output_bytes" => 4096,
           "lifecycle_version" => 1
         },
         attrs
@@ -118,7 +115,8 @@ defmodule TaskCore.AgentRunsTest do
     assert {:ok, execution} = AgentRuns.runnable?(state, @run_key)
     assert execution.intent_event_id == "run-event1"
     assert execution.ticket["task_version"] == 2
-    assert execution.template_name == "approved-python"
+    assert execution.execution_profile_id == "approved-profile"
+    assert execution.execution_profile_digest == {:bytes, <<4::256>>
     refute Map.has_key?(execution.ticket, "authorization_event_id")
     refute Map.has_key?(execution.ticket, "suggester_grant_event_id")
     refute Map.has_key?(execution.ticket, "principal_id")
@@ -152,12 +150,10 @@ defmodule TaskCore.AgentRunsTest do
 
   test "resource budgets and unapproved shapes fail closed" do
     for bad <- [
-          %{"cpu_millicores" => 10_000},
-          %{"memory_mib" => 100_000},
-          %{"max_runtime_ms" => 10_000_000},
-          %{"max_result_bytes" => 100_000},
-          %{"template_name" => "../escape"},
-          %{"policy_digest" => {:bytes, <<1>>}},
+          %{"max_duration_ms" => 10_000_000},
+          %{"max_output_bytes" => 100_000},
+          %{"execution_profile_id" => "../escape"},
+          %{"execution_profile_digest" => {:bytes, <<1>>}},
           %{"lifecycle_version" => 2}
         ] do
       assert {:error, :invalid_agent_run_request} = admitted?(requested(bad), fixture())
