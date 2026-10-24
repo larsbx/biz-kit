@@ -1,0 +1,93 @@
+name: AgentCore volume-backed PostgreSQL contract
+
+on:
+  pull_request:
+    paths:
+      - "deploy/agent-core/**"
+      - ".github/workflows/agent-core-storage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-named-volume:
+    # One Compose fixture is portable to Docker and Podman. This CI lane
+    # verifies Docker storage persistence; it does not claim Podman was tested.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision disposable test password outside the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 0700 -d "$RUNNER_TEMP/agent-ops-secrets"
+          umask 077
+          password_path="$RUNNER_TEMP/agent-ops-secrets/db_password"
+          openssl rand -base64 36 > "$password_path"
+          printf 'BIZKIT_PG_PASSWORD_FILE=%s\n' "$password_path" >> "$GITHUB_ENV"
+
+      - name: Validate portable Compose specification
+        shell: bash
+        run: docker compose -f deploy/agent-core/compose.yaml config --quiet
+
+      - name: Start PostgreSQL with a named volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/agent-core/compose.yaml up -d
+          for i in $(seq 1 60); do
+            if docker compose -f deploy/agent-core/compose.yaml exec -T db \
+              pg_isready -U bizkit -d bizkit_agent_dev; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready" >&2
+          exit 1
+
+      - name: Validate operational schema and CAS contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/001_agent_attempts.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_storage_contract.sql
+
+      - name: Recreate database container without deleting its volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/agent-core/compose.yaml stop db
+          docker compose -f deploy/agent-core/compose.yaml rm -f db
+          docker compose -f deploy/agent-core/compose.yaml up -d db
+
+          for i in $(seq 1 60); do
+            if docker compose -f deploy/agent-core/compose.yaml exec -T db \
+              pg_isready -U bizkit -d bizkit_agent_dev; then
+              break
+            fi
+            sleep 2
+          done
+
+          marker="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -Aqt \
+            -c "SELECT id FROM agent_ops.volume_probe WHERE id='volume-ok';")"
+          test "$marker" = "volume-ok"
+
+          attempt="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -Aqt \
+            -c "SELECT phase || ':' || row_version::text
+                FROM agent_ops.execution_attempts
+                WHERE effect_id='agent-run:signed-ci';")"
+          test "$attempt" = "leased:2"
+
+      - name: Stop service but retain volume
+        if: always()
+        shell: bash
+        run: docker compose -f deploy/agent-core/compose.yaml down || true
