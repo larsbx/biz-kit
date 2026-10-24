@@ -22,7 +22,7 @@ Shared apps developed in this umbrella:
 | `task_core` | `apps/task_core` | Dependency-free task/workflow rules and command admission |
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
-| `school_ops` | `apps/school_ops` | Reviewed K–12 curriculum, resources and assessments (read-only snapshot of `larsbx/school-ops` at `ccacc596d63a`) |
+| `school_ops` | `apps/school_ops` | School domain: K–12 curriculum catalog, lesson/assessment review, and TaskCore-based staff workflows |
 
 Mix requires umbrella directory names to equal OTP application names, hence
 `coop_substrate` and `spruce_goose`.
@@ -184,13 +184,20 @@ evidence, independent review and authorized completion; the
 todo completion gates, predecessor-cycle rejection and monotone SOP versions.
 These delivered stages do not establish production writer fencing or cutover.
 
-## School operations and curriculum
+## School operations
 
-The [`school_ops` app](apps/school_ops/README.md) brings the reviewed K–12
-curriculum, lessons, assessments, resources and planning templates into this
-umbrella as a **read-only, version-pinned** content snapshot. It preserves the
-school curriculum's Trivium/Quadrivium direction, explicit evidence/readiness
-rules and stable IDs; it does not create a second ledger, public learner records,
-or a new teaching-results authority. Curriculum source and open PRs remain at
-[`larsbx/school-ops`](https://github.com/larsbx/school-ops) until a reviewed
-cutover. See [the consolidation boundary](docs/architecture/2026-10-23-school-ops.md).
+[`school_ops`](apps/school_ops/README.md) is a **peer domain app** within
+biz-kit, following the same pattern as Dispatch and other domains. It shares
+TaskCore's tasks, dependencies, Definition of Done, evidence/review and workflow
+planning and relies on the platform's identity, scoped grants and signed ledger
+for admitted changes. School-specific features include a stable-ID curriculum
+catalog and a Grade 2 staff workflow for scope, resources, lessons, assessment
+readiness and weekly planning. These are additions to common task management,
+not a separate task manager or a project migration.
+
+Reviewed K–12 curriculum content is bundled at a pinned source commit;
+Trivium/Quadrivium pedagogical decisions, source IDs and distinct material
+readiness rules remain intact. No private learner records or independent writer
+are introduced. The first workflow is a **pure proposal**, not an authorized
+task-run or deployed school portal. See
+[the SchoolOps domain contract](docs/architecture/2026-10-23-school-ops.md).
