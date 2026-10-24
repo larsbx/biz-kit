@@ -106,6 +106,33 @@ receipt-gated retry using a disposable CI database. These demonstrate
 transactional database rules, **not** a live multi-node coordinator,
 reconciler, service authorization, or external agent execution.
 
+## PostgreSQL host adapter (staging-only)
+
+The separate `apps/agent_ops_store` package depends on Postgrex and
+`AgentCore`, leaving `AgentCore` itself free of database, agent engine,
+Docker and Podman dependencies. The storage adapter implements typed
+registration, claim, lease renewal, backend reference attachment,
+candidate digest recording, cancellation and preverified backend-absence
+reconciliation against the `002_attempt_cas.sql` functions.
+
+`AgentOpsStore.Postgres.claim/6` generates a fresh 256-bit lease token
+and stores **only its SHA-256 digest**. The caller retains the ephemeral
+token; workers and prompts must never receive it. Every transition
+requires current row version and lease generation. In a stale or contested
+case the adapter reports refusal instead of assuming success.
+
+The adapter does NOT check biz-kit's signed grants, execution/read authority
+or external receipt signatures. It must only be invoked by a privileged
+host coordinator which first validates the current signed TaskCore run and
+authorized profile, and **rechecks current authority before every tool
+call/result admission**. No public HTTP or agent-facing endpoint is added
+in this stage.
+
+The Compose CI now also exercises the Elixir Postgrex adapter against the
+disposable volume-backed database. This is a **real database integration
+test**, but not a distributed multi-node coordinator, live agent launch,
+outbox, or production cutover.
+
 ## Storage durability smoke
 
 To verify that database content survives a container restart, after
