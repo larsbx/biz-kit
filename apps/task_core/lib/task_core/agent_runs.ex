@@ -4,9 +4,12 @@ defmodule TaskCore.AgentRuns do
 
   TaskAgentRunRequestedV1 is an operator-signed, serialized ledger fact binding
   a run to the current task version, last event, DoD, and a named agent holding
-  an active project-scoped suggester grant. Admission NEVER grants task-read,
-  tool-write, or sandbox privileges: the runtime host independently authorizes
-  those. A suggester grant is only a prerequisite for this operator request.
+  an active project-scoped suggester grant. It names a portable execution
+  profile ID and immutable profile digest, never a specific engine, model,
+  container, image, policy implementation, or vendor. Profile resolution
+  and runtime selection are separate, authenticated host responsibilities.
+  Admission NEVER grants task-read, execution, or tool-write privileges.
+  A suggester grant is only a prerequisite for this operator request.
 
   TaskAgentRunCancelledV1 is an operator-signed withdrawal. The execution
   adapter must repeatedly recheck runnable?/2 against fresh committed ledger
@@ -33,13 +36,10 @@ defmodule TaskCore.AgentRuns do
             "expected_task_version" => :int,
             "source_event_id" => :string,
             "definition_digest" => :hash,
-            "template_name" => :string,
-            "image_digest" => :hash,
-            "policy_digest" => :hash,
-            "cpu_millicores" => :int,
-            "memory_mib" => :int,
-            "max_runtime_ms" => :int,
-            "max_result_bytes" => :int,
+            "execution_profile_id" => :string,
+            "execution_profile_digest" => :hash,
+            "max_duration_ms" => :int,
+            "max_output_bytes" => :int,
             "lifecycle_version" => :int
           })
           |> Map.merge(@actor)
@@ -98,15 +98,12 @@ defmodule TaskCore.AgentRuns do
     checks = [
       p["lifecycle_version"] == 1,
       Enum.all?(~w(run_id task_id agent_principal_id suggester_grant_event_id
-                     source_event_id template_name), &Admission.segment?(p[&1])),
+                     source_event_id execution_profile_id), &Admission.segment?(p[&1])),
       p["expected_task_version"] in 1..2_147_483_647,
-      p["cpu_millicores"] in 100..8_000,
-      p["memory_mib"] in 128..16_384,
-      p["max_runtime_ms"] in 1_000..@max_runtime_ms,
-      p["max_result_bytes"] in 1..@max_result_bytes,
+      p["max_duration_ms"] in 1_000..@max_runtime_ms,
+      p["max_output_bytes"] in 1..@max_result_bytes,
       hash?(p["definition_digest"]),
-      hash?(p["image_digest"]),
-      hash?(p["policy_digest"])
+      hash?(p["execution_profile_digest"])
     ]
 
     if Enum.all?(checks), do: :ok, else: {:error, :invalid_agent_run_request}
@@ -174,13 +171,10 @@ defmodule TaskCore.AgentRuns do
       expected_task_version: p["expected_task_version"],
       source_event_id: p["source_event_id"],
       definition_digest: p["definition_digest"],
-      template_name: p["template_name"],
-      image_digest: p["image_digest"],
-      policy_digest: p["policy_digest"],
-      cpu_millicores: p["cpu_millicores"],
-      memory_mib: p["memory_mib"],
-      max_runtime_ms: p["max_runtime_ms"],
-      max_result_bytes: p["max_result_bytes"]
+      execution_profile_id: p["execution_profile_id"],
+      execution_profile_digest: p["execution_profile_digest"],
+      max_duration_ms: p["max_duration_ms"],
+      max_output_bytes: p["max_output_bytes"]
     }
 
     state
@@ -199,9 +193,10 @@ defmodule TaskCore.AgentRuns do
   @doc """
   Revalidate an existing run against current committed task/authority state.
 
-  Returns a minimal ticket and approved-template reference for a separately
-  authorized executor. Does NOT authorize network access, read task details,
-  sign a command, or create a sandbox; the host must check policy deployment.
+  Returns a minimal ticket and portable execution-profile reference for a
+  separately authorized coordinator. A host must resolve the exact signed
+  profile digest to a current approved profile and independently authorize
+  execution/read/tool access. No runtime is selected here.
   """
   def runnable?(state, {chapter, tenant, project, run_id} = key) do
     with {:ok, run} <- fetch(state.agent_runs, key, :unknown_agent_run),
@@ -226,13 +221,10 @@ defmodule TaskCore.AgentRuns do
        %{
          ticket: ticket,
          intent_event_id: run.intent_event_id,
-         template_name: run.template_name,
-         image_digest: run.image_digest,
-         policy_digest: run.policy_digest,
-         cpu_millicores: run.cpu_millicores,
-         memory_mib: run.memory_mib,
-         max_runtime_ms: run.max_runtime_ms,
-         max_result_bytes: run.max_result_bytes
+         execution_profile_id: run.execution_profile_id,
+         execution_profile_digest: run.execution_profile_digest,
+         max_duration_ms: run.max_duration_ms,
+         max_output_bytes: run.max_output_bytes
        }}
     end
   end
