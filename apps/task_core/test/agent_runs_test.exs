@@ -126,6 +126,7 @@ defmodule TaskCore.AgentRunsTest do
   test "independent agent engines use the same signed run event and lifecycle" do
     state = fixture()
     one = requested()
+
     two =
       requested(%{
         "run_id" => "run2",
@@ -152,6 +153,7 @@ defmodule TaskCore.AgentRunsTest do
 
   test "same run identifier cannot create a competing intent" do
     {state, _command} = with_run()
+
     assert {:error, :agent_run_id_already_used} =
              admitted?(%{requested() | event_id: "different"}, state)
   end
@@ -246,11 +248,15 @@ defmodule TaskCore.AgentRunsTest do
     assert {:error, :agent_run_already_cancelled} = admitted?(cancellation, cancelled)
 
     assert {:error, :stale_agent_run_version} =
-             admitted?(%{cancellation | payload: %{cancellation.payload | "expected_run_version" => 2}}, state)
+             admitted?(
+               %{cancellation | payload: %{cancellation.payload | "expected_run_version" => 2}},
+               state
+             )
   end
 
   test "agent cannot self-cancel using suggester credentials" do
     {state, _command} = with_run()
+
     rogue =
       event("cancel2", "TaskAgentRunCancelledV1", %{
         "run_id" => "run1",
@@ -265,8 +271,10 @@ defmodule TaskCore.AgentRunsTest do
 
   test "cross-scope run key cannot be read as another tenant" do
     {state, _command} = with_run()
+
     assert {:error, :unknown_agent_run} =
              AgentRuns.runnable?(state, {"chapter1", "tenant2", "project1", "run1"})
+
     assert {:error, :invalid_agent_run_key} = AgentRuns.runnable?(state, "run1")
   end
 end
