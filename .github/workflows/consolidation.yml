@@ -57,7 +57,13 @@ jobs:
           apps/agent_core/mix.exs
           apps/agent_core/lib/agent_core/execution_port.ex
           apps/agent_core/lib/agent_core/profiles.ex
+          apps/agent_core/lib/agent_core/capabilities.ex
+          apps/agent_core/lib/agent_core/preflight.ex
+          apps/agent_core/lib/agent_core/attempts.ex
           apps/agent_core/test/profiles_test.exs
+          apps/agent_core/test/capabilities_test.exs
+          apps/agent_core/test/preflight_test.exs
+          apps/agent_core/test/attempts_test.exs
           apps/task_core/test/agent_candidates_test.exs
           apps/task_core/test/agent_runs_test.exs
           apps/coop_substrate/test/task_agent_run_intents_test.exs
