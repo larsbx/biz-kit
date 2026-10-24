@@ -17,71 +17,100 @@ defmodule AgentCore.ProfilesTest do
     def cancel(_, _), do: :ok
   end
 
-  @one {:bytes, <<1::256>>}
-  @two {:bytes, <<2::256>>}
+  # The actual biz-kit host must supply CoopSubstrate.Canonical.hash!/1, not
+  # this test's local digest. It verifies manifest immutability as a behavior,
+  # but does not make the test's representation the platform signing profile.
+  defp hash_manifest(manifest), do: :crypto.hash(:sha256, :erlang.term_to_binary(manifest))
+
+  defp manifest(id, params) do
+    %{"id" => id, "version" => 1, "parameters" => params}
+  end
+
+  defp profile(id, adapter, parameters) do
+    %{id: id, approved: true, adapter: adapter, manifest: manifest(id, parameters)}
+  end
 
   defp registry do
     %{
-      "standard" => %{
-        id: "standard",
-        digest: @one,
-        approved: true,
-        adapter: SandboxAdapter,
-        parameters: %{sandbox: %{policy: "sandbox-policy-v1"}}
-      },
-      "hosted" => %{
-        id: "hosted",
-        digest: @two,
-        approved: true,
-        adapter: HostedAdapter,
-        parameters: %{service: %{endpoint_alias: "approved-hosted-agent"}}
-      }
+      "standard" =>
+        profile("standard", SandboxAdapter, %{
+          "backend" => "sandbox",
+          "policy" => "sandbox-policy-v1"
+        }),
+      "hosted" =>
+        profile("hosted", HostedAdapter, %{
+          "backend" => "hosted",
+          "endpoint_alias" => "approved-hosted-agent"
+        })
     }
   end
 
-  test "same engine-neutral run shape supports distinct adapter implementations" do
+  defp ref(registry, id) do
+    %{
+      execution_profile_id: id,
+      execution_profile_digest: {:bytes, hash_manifest(registry[id].manifest)}
+    }
+  end
+
+  defp resolve(run, profiles), do: Profiles.resolve(run, profiles, &hash_manifest/1)
+
+  test "same engine-neutral run type accepts two genuinely different adapter contracts" do
+    entries = registry()
+
     assert {:ok, %{adapter: SandboxAdapter}} =
-             Profiles.resolve(
-               %{execution_profile_id: "standard", execution_profile_digest: @one},
-               registry()
-             )
+             resolve(ref(entries, "standard"), entries)
 
     assert {:ok, %{adapter: HostedAdapter}} =
-             Profiles.resolve(
-               %{execution_profile_id: "hosted", execution_profile_digest: @two},
-               registry()
-             )
+             resolve(ref(entries, "hosted"), entries)
   end
 
-  test "profile replacement or unapproved profile fails closed" do
-    run = %{execution_profile_id: "standard", execution_profile_digest: @one}
-    rotated = put_in(registry(), ["standard", :digest], @two)
+  test "changing runtime parameters without a new signed digest refuses a run" do
+    entries = registry()
+    original = ref(entries, "standard")
+    modified = put_in(entries, ["standard", :manifest, "parameters", "policy"], "allow-all")
 
     assert {:error, :execution_profile_digest_mismatch} =
-             Profiles.resolve(run, rotated)
-
-    disabled = put_in(registry(), ["standard", :approved], false)
-
-    assert {:error, :execution_profile_not_approved} =
-             Profiles.resolve(run, disabled)
+             resolve(original, modified)
   end
 
-  test "unknown and incomplete profiles fail closed" do
-    assert {:error, :execution_profile_not_found} =
-             Profiles.resolve(
-               %{execution_profile_id: "other", execution_profile_digest: @one},
-               registry()
-             )
+  test "unapproved or unknown execution profile is refused" do
+    entries = registry()
+    run = ref(entries, "standard")
+    disabled = put_in(entries, ["standard", :approved], false)
 
-    run = %{execution_profile_id: "standard", execution_profile_digest: @one}
+    assert {:error, :execution_profile_not_approved} =
+             resolve(run, disabled)
+
+    assert {:error, :execution_profile_not_found} =
+             resolve(%{run | execution_profile_id: "other"}, entries)
+  end
+
+  test "no arbitrary runtime module, executable configuration or hash bypass" do
+    entries = registry()
+    run = ref(entries, "standard")
 
     assert {:error, :invalid_execution_adapter} =
-             Profiles.resolve(run, put_in(registry(), ["standard", :adapter], "SandboxAdapter"))
+             resolve(run, put_in(entries, ["standard", :adapter], "Some.Module"))
 
-    assert {:error, :invalid_execution_profile_parameters} =
-             Profiles.resolve(run, put_in(registry(), ["standard", :parameters], nil))
+    assert {:error, :invalid_execution_profile_manifest} =
+             resolve(run, put_in(entries, ["standard", :manifest], %{bad: :shape}))
+
+    assert {:error, :execution_profile_hash_unavailable} =
+             Profiles.resolve(run, entries, fn _ -> :not_a_digest end)
+
+    assert {:error, :execution_profile_hash_unavailable} =
+             Profiles.resolve(run, entries, fn _ -> raise "unavailable" end)
 
     assert {:error, :invalid_execution_profile_reference} =
-             Profiles.resolve(%{execution_profile_id: nil}, registry())
+             resolve(%{execution_profile_id: "standard"}, entries)
+  end
+
+  test "adapter swapping without a manifest version changes the selected engine" do
+    # Registry entries are trusted/admin-controlled. This test documents that
+    # the host must PIN the adapter registry/version alongside the manifest.
+    entries = registry()
+    run = ref(entries, "standard")
+    swapped = put_in(entries, ["standard", :adapter], HostedAdapter)
+    assert {:ok, %{adapter: HostedAdapter}} = resolve(run, swapped)
   end
 end
