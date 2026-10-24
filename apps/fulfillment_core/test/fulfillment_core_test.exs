@@ -15,8 +15,12 @@ defmodule FulfillmentCoreTest do
     {:ok, initial} = F.new("restaurant", "req-1", "order-1", "restaurant-courier")
 
     assert {:error, :wrong_event_authority} =
-             F.apply(initial, "restaurant", :commerce, event(initial, "wrong", :accept,
-               %{transport_ref: "trip-1"}))
+             F.apply(
+               initial,
+               "restaurant",
+               :commerce,
+               event(initial, "wrong", :accept, %{transport_ref: "trip-1"})
+             )
 
     accepted =
       applied(initial, "restaurant", :dispatch, "ack", :accept, %{transport_ref: "trip-1"})
@@ -25,32 +29,44 @@ defmodule FulfillmentCoreTest do
     assert F.pending?(accepted)
 
     moving = applied(accepted, "restaurant", :dispatch, "move", :in_transit)
-    delivered = applied(moving, "restaurant", :dispatch, "drop", :delivered,
-      %{proof_ref: "custody-digest-1"})
+    delivered =
+      applied(moving, "restaurant", :dispatch, "drop", :delivered, %{
+        proof_ref: "custody-digest-1"
+      })
 
     assert delivered.phase == :delivered
     assert delivered.proof_ref == "custody-digest-1"
     refute F.pending?(delivered)
 
     assert {:error, :terminal_fulfillment} =
-             F.apply(delivered, "restaurant", :dispatch,
-               event(delivered, "again", :delivered, %{proof_ref: "different"}))
+             F.apply(
+               delivered,
+               "restaurant",
+               :dispatch,
+               event(delivered, "again", :delivered, %{proof_ref: "different"})
+             )
   end
 
   test "nonrestaurant transport uses the same contract with separate order owner" do
     {:ok, state} = F.new("parts-supplier", "req-kit", "sale-kit", "freight")
-    state = applied(state, "parts-supplier", :dispatch, "ack", :accept, %{transport_ref: "load-5"})
+    state =
+      applied(state, "parts-supplier", :dispatch, "ack", :accept, %{transport_ref: "load-5"})
+
     state = applied(state, "parts-supplier", :commerce, "cancel", :cancel)
     assert state.phase == :cancel_requested
 
     assert {:error, :wrong_event_authority} =
-             F.apply(state, "parts-supplier", :commerce, event(state, "confirm", :cancel_confirmed))
+             F.apply(
+               state,
+               "parts-supplier",
+               :commerce,
+               event(state, "confirm", :cancel_confirmed)
+             )
 
     final = applied(state, "parts-supplier", :dispatch, "confirm", :cancel_confirmed)
     assert final.phase == :cancelled
     assert {:error, :wrong_merchant} =
-             F.apply(final, "other-merchant", :dispatch,
-               event(final, "oops", :in_transit))
+             F.apply(final, "other-merchant", :dispatch, event(final, "oops", :in_transit))
   end
 
   test "duplicates replay safely; conflicting IDs and stale revisions refuse" do
@@ -58,24 +74,30 @@ defmodule FulfillmentCoreTest do
     ack = event(original, "one", :accept, %{transport_ref: "transport"})
     {:ok, state, :accepted} = F.apply(original, "merchant", :dispatch, ack)
     assert {:ok, state, :duplicate} = F.apply(state, "merchant", :dispatch, ack)
+
     assert {:error, :idempotency_conflict} =
              F.apply(state, "merchant", :commerce, ack)
 
     assert {:error, :stale_fulfillment_version} =
              F.apply(state, "merchant", :dispatch, %{ack | id: "two"})
 
-    assert {:ok, ^state} = F.replay(original, "merchant", [
-      {:dispatch, ack},
-      {:dispatch, ack}
-    ])
+    assert {:ok, ^state} =
+             F.replay(original, "merchant", [
+               {:dispatch, ack},
+               {:dispatch, ack}
+             ])
   end
 
   test "cannot deliver before transport or silently cancel after acceptance" do
     {:ok, state} = F.new("merchant", "r", "o", "courier")
 
     assert {:error, :invalid_fulfillment_transition} =
-             F.apply(state, "merchant", :dispatch,
-               event(state, "drop", :delivered, %{proof_ref: "proof"}))
+             F.apply(
+               state,
+               "merchant",
+               :dispatch,
+               event(state, "drop", :delivered, %{proof_ref: "proof"})
+             )
 
     state = applied(state, "merchant", :dispatch, "a", :accept, %{transport_ref: "t"})
     state = applied(state, "merchant", :commerce, "c", :cancel)
