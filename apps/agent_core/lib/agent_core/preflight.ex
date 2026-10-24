@@ -38,7 +38,13 @@ defmodule AgentCore.Preflight do
       {:ok,
        %{
          effect_id: "agent-run:" <> run.intent_event_id,
+         intent_event_id: run.intent_event_id,
          run_id: run.run_id,
+         chapter_id: run.ticket["chapter_id"],
+         tenant_id: run.ticket["tenant_id"],
+         project_id: run.ticket["project_id"],
+         execution_profile_id: run.execution_profile_id,
+         execution_profile_digest: run.execution_profile_digest,
          adapter: profile.adapter,
          profile: profile,
          execution: %{
