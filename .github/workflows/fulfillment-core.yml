@@ -1,0 +1,35 @@
+name: FulfillmentCore contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fulfillment-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile fulfillment contract
+        working-directory: apps/fulfillment_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Verify format
+        run: >-
+          MIX_ENV=test mix format --check-formatted
+          apps/fulfillment_core/mix.exs
+          apps/fulfillment_core/lib/fulfillment_core.ex
+          apps/fulfillment_core/test/fulfillment_core_test.exs
+          apps/eatsbot_core/lib/orders/fulfillment_bridge.ex
+          apps/dispatch/lib/dispatch/fulfillment_bridge.ex
+      - name: Validate shared contract
+        working-directory: apps/fulfillment_core
+        run: mix test --no-start

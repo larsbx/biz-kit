@@ -77,6 +77,7 @@ defmodule Dispatch.MixProject do
       # bearer token (`Dispatch.Identity.Tokens.BizKitSession`). Started, since
       # sessions live in its process.
       {:biz_kit_identity, in_umbrella: true},
+      {:fulfillment_core, in_umbrella: true},
 
       # Outbound HTTP, used directly for OIDC key discovery (Section 23.1).
       # Declared here rather than relied on transitively: the TLS trust store
