@@ -50,6 +50,33 @@ Every tool invocation and business action must independently satisfy current
 domain authority. For cancellation, `:ok` only means that the adapter accepted
 the cancellation request; an operational reconciler must confirm termination.
 
+
+## Fail-closed capability negotiation (pure preflight)
+
+`AgentCore.Capabilities.check/2` compares an immutable profile's declared
+feature set, permissible data classifications, execution regions and
+resource ceilings against **trusted host-derived** task requirements. A
+missing, unsupported or malformed capability never silently falls back.
+
+`AgentCore.Preflight.prepare/4` combines exact profile hash verification
+with those capability checks, binding signed TaskCore `max_duration_ms` and
+`max_output_bytes` budgets to the launch plan. Its output contains a stable
+ledger-derived `effect_id`, a common `execution` map, the selected reviewed
+adapter, profile and verified requirements. It performs **no** launch,
+authorization, task read, ledger append, artifact upload or business action.
+
+Execution-profile requirements and the `preflight` input are only valid
+when assembled by the trusted coordinating host from **fresh**
+`TaskCore.AgentRuns.runnable?/2` state and independently authorized data
+classification. Never use values supplied by a model as trusted host policy.
+Adapters must enforce their real-world isolation and capability claims.
+Data residency is an explicit host/runtime assertion, not something this
+pure function independently measures.
+
+Two unrelated test adapters (local sandbox-shaped and hosted-service-shaped)
+exercise the same normalized run/ticket and effect ID, without assuming a
+particular agent SDK, language or model.
+
 ## Validation
 
 ```sh
