@@ -106,10 +106,15 @@ point for subsequent task changes.
 
 Signed operator run intents and cancellation are now modeled by
 `TaskCore.AgentRuns` and registered through the existing TaskCore admission
-and CoopSubstrate ledger path. Each intent pins a current task/version/DoD
-reference, agent suggester grant and bounded sandbox resource references;
+and CoopSubstrate ledger path. Each intent binds a current task/version/DoD
+reference, an agent principal/suggester grant, a generic execution-profile
+ID and digest, and engine-independent duration/output limits.
 `runnable?/2` rechecks live grants and task freshness. It is not an
-execution service, task-read grant or sandbox policy approval. See
-[the signed run-intent ADR](../../docs/architecture/2026-10-24-signed-agent-runs.md).
+execution service, task-read grant or runtime authorization.
+
+`AgentCore` is a separate dependency-free sibling app that defines generic
+execution ports and approved-profile lookup for *any* execution engine.
+TaskCore does not depend on it, on OpenShell, or on a named agent framework.
+See [the agent-agnostic run-intent ADR](../../docs/architecture/2026-10-24-signed-agent-runs.md).
 
 See [the POC and its limitations](../../experiments/openshell_taskcore/README.md).
