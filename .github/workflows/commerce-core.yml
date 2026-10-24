@@ -34,4 +34,4 @@ jobs:
           apps/eatsbot_core/lib/orders/pricing.ex
       - name: Test CommerceCore independently of a database
         working-directory: apps/commerce_core
-        run: mix test
+        run: mix test --no-start
