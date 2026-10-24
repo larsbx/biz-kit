@@ -123,7 +123,60 @@ defmodule FulfillmentCoreTest do
     state = applied(state, "merchant", :commerce, "c", :cancel)
     assert state.phase == :cancel_requested
 
-    assert {:error, :invalid_fulfillment_transition} =
-             F.apply(state, "merchant", :dispatch, event(state, "move", :in_transit))
+    # A signed carrier observation can arrive after cancellation was requested
+    # but before it was confirmed. It is not a cancellation confirmation.
+    observed = applied(state, "merchant", :dispatch, "move", :in_transit)
+    assert observed.phase == :cancel_requested
+    assert observed.transport_started
+
+    delivered =
+      applied(observed, "merchant", :dispatch, "proof", :delivered, %{proof_ref: "receipt"})
+
+    assert delivered.phase == :delivered
+    assert delivered.proof_ref == "receipt"
+
+    assert {:error, :terminal_fulfillment} =
+             F.apply(delivered, "merchant", :dispatch, event(delivered, "stop", :cancel_confirmed))
+  end
+
+  test "late transport rejection resolves cancellation before carrier acceptance" do
+    {:ok, original} = F.new("restaurant", "req-1", "order-1", "courier")
+    cancelling = applied(original, "restaurant", :commerce, "cancel", :cancel)
+
+    assert {:error, :transport_not_accepted} =
+             F.apply(cancelling, "restaurant", :dispatch, event(cancelling, "early", :in_transit))
+
+    rejected =
+      applied(cancelling, "restaurant", :dispatch, "reject", :reject, %{reason: "no_route"})
+
+    assert rejected.phase == :rejected
+    refute F.pending?(rejected)
+
+    assert {:error, :terminal_fulfillment} =
+             F.apply(rejected, "restaurant", :dispatch, event(rejected, "late", :accept,
+               %{transport_ref: "trip-1"}))
+  end
+
+  test "cancellation after acceptance cannot replace transport identity or invent proof" do
+    {:ok, original} = F.new("restaurant", "request", "order", "courier")
+
+    accepted =
+      applied(original, "restaurant", :dispatch, "a1", :accept, %{transport_ref: "trip-1"})
+
+    cancelling = applied(accepted, "restaurant", :commerce, "cancel", :cancel)
+
+    assert {:error, :transport_already_accepted} =
+             F.apply(cancelling, "restaurant", :dispatch, event(cancelling, "a2", :accept,
+               %{transport_ref: "trip-2"}))
+
+    assert {:error, :delivery_without_transport_start} =
+             F.apply(cancelling, "restaurant", :dispatch, event(cancelling, "proof", :delivered,
+               %{proof_ref: "fake-proof"}))
+
+    failed = applied(cancelling, "restaurant", :dispatch, "failed", :failed,
+      %{reason: "vehicle_unavailable"})
+
+    assert failed.phase == :failed
+    assert failed.transport_ref == "trip-1"
   end
 end
