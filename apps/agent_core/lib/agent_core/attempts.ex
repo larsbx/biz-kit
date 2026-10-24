@@ -42,6 +42,7 @@ defmodule AgentCore.Attempts do
             attempts: 0,
             lease: nil,
             candidate_digest: nil,
+            backend_ref: nil,
             cancel_receipt: nil,
             reconciliation_receipt: nil
           }
@@ -79,8 +80,42 @@ defmodule AgentCore.Attempts do
         expires_at_ms: now_ms + lease_ms
       }
 
-      updated = %{row | phase: :leased, epoch: lease.epoch, attempts: row.attempts + 1, lease: lease}
+      updated = %{
+        row
+        | phase: :leased,
+          epoch: lease.epoch,
+          attempts: row.attempts + 1,
+          lease: lease,
+          backend_ref: nil
+      }
       {:ok, replace(state, effect_id, updated), lease}
+    end
+  end
+
+  @doc """
+  Bind a normalized backend execution reference to the current live lease.
+
+  This is an operational locator, not a credential, authorization grant or
+  proof of execution. The coordinator must also be able to recover by stable
+  effect ID when launch succeeded but the reference could not be persisted.
+  """
+  @spec attach_backend(map(), String.t(), integer(), String.t(), integer(), String.t()) ::
+          {:ok, map()} | {:error, atom()}
+  def attach_backend(state, effect_id, epoch, token, now_ms, backend_ref) do
+    with :ok <- clock(now_ms),
+         true <- segment?(backend_ref) or {:error, :invalid_backend_reference},
+         {:ok, row} <- fetch(state, effect_id),
+         :ok <- active_lease(row, epoch, token, now_ms) do
+      case row.backend_ref do
+        nil ->
+          {:ok, replace(state, effect_id, %{row | backend_ref: backend_ref})}
+
+        ^backend_ref ->
+          {:ok, state}
+
+        _other ->
+          {:error, :backend_reference_conflict}
+      end
     end
   end
 
