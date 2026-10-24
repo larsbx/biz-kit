@@ -188,13 +188,10 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
           "expected_task_version" => 7,
           "source_event_id" => ctx.ready.event_id,
           "definition_digest" => {:bytes, CoopSubstrate.Canonical.hash!(@criteria)},
-          "template_name" => "reviewed-python",
-          "image_digest" => {:bytes, <<3::256>>},
-          "policy_digest" => {:bytes, <<4::256>>},
-          "cpu_millicores" => 500,
-          "memory_mib" => 256,
-          "max_runtime_ms" => 30_000,
-          "max_result_bytes" => 4096,
+          "execution_profile_id" => "approved-profile",
+          "execution_profile_digest" => {:bytes, <<4::256>>},
+          "max_duration_ms" => 30_000,
+          "max_output_bytes" => 4096,
           "lifecycle_version" => 1
         }),
         changes
@@ -250,7 +247,7 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
 
     {:ok, _} = Log.append(request(ctx))
     assert {:error, {:reject, 0, :agent_run_id_already_used}} =
-             Log.append(request(ctx, %{"template_name" => "other-approved"}))
+             Log.append(request(ctx, %{"execution_profile_id" => "other-approved"}))
   end
 
   test "revoke during accepted run prevents execution; operator may still cancel", ctx do
