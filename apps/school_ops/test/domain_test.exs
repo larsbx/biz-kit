@@ -31,7 +31,9 @@ defmodule SchoolOps.DomainTest do
   test "the SchoolOps proposal uses the common validated TaskCore blueprint" do
     assert {:ok, normalized} = Workflows.validate()
     assert normalized["schema_version"] == TaskCore.Blueprint.schema_version()
-    assert {:ok, workflow} = TaskCore.Blueprint.workflow(normalized, "grade2", "place_value_readiness")
+    assert {:ok, workflow} =
+             TaskCore.Blueprint.workflow(normalized, "grade2", "place_value_readiness")
+
     assert length(workflow["tasks"]) == 5
 
     assert Enum.all?(workflow["tasks"], fn task ->
@@ -45,6 +47,7 @@ defmodule SchoolOps.DomainTest do
 
   test "the shared engine orders and links school work without storing anything" do
     assert {:ok, plan} = Workflows.plan(@task_ids)
+
     assert Enum.map(plan, & &1["id"]) == [
              "scope_review",
              "lesson_review",
@@ -65,6 +68,7 @@ defmodule SchoolOps.DomainTest do
 
   test "invalid or incomplete instance IDs are refused by TaskCore" do
     assert {:error, :invalid_workflow_run} = Workflows.plan(%{})
+
     assert {:error, :invalid_workflow_run} =
              Workflows.plan(Map.put(@task_ids, "weekly_plan", "scope-42"))
 
