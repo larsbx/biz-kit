@@ -24,6 +24,8 @@ jobs:
         working-directory: apps/commerce_core
         run: MIX_ENV=test mix compile --warnings-as-errors
       - name: Validate formatting
+        env:
+          MIX_ENV: test
         run: >-
           mix format --check-formatted
           apps/commerce_core/mix.exs
