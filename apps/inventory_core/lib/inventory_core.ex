@@ -1,4 +1,6 @@
 defmodule InventoryCore do
+  import Kernel, except: [apply: 3]
+
   @moduledoc """
   Pure, replayable, scoped inventory command rules.
 
