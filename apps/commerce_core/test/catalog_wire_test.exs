@@ -99,7 +99,10 @@ defmodule CommerceCore.CatalogWireTest do
              CatalogWire.decode(%{product() | "expected_version" => -1}, @trusted)
 
     assert {:error, :invalid_catalog_variants} =
-             CatalogWire.decode(%{product() | "variants" => List.duplicate(hd(product()["variants"]), 65)}, @trusted)
+             CatalogWire.decode(
+               %{product() | "variants" => List.duplicate(hd(product()["variants"]), 65)},
+               @trusted
+             )
   end
 
   test "catalog reducer still owns cross-product SKU and revision conflicts" do
