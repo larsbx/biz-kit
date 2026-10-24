@@ -23,8 +23,7 @@ defmodule CommerceCore.Catalog do
          :ok <- revision(state, expected),
          {:ok, item} <- normalize(product),
          :ok <- unique_skus(state, item) do
-      {:ok,
-       %{state | version: expected + 1, products: Map.put(state.products, item.id, item)}}
+      {:ok, %{state | version: expected + 1, products: Map.put(state.products, item.id, item)}}
     end
   end
 
