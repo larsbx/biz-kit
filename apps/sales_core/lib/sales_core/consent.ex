@@ -146,4 +146,5 @@ defmodule SalesCore.Consent do
     # Withdrawals remove current consent, never its already-used receipt.
     # Keep a replayable index rather than scanning every prior consent event.
     not Map.has_key?(state.used_receipts, evidence)
-  endend
+  end
+end
