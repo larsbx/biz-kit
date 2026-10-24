@@ -5,6 +5,7 @@ on:
     paths:
       - "deploy/agent-core/**"
       - "apps/agent_core/README.md"
+      - "apps/agent_ops_store/**"
       - ".github/workflows/agent-core-storage.yml"
   workflow_dispatch:
 
@@ -65,6 +66,21 @@ jobs:
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_cas_contract.sql
+
+      - name: Install Elixir and Erlang for PostgreSQL adapter acceptance
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+
+      - name: Test real PostgreSQL host adapter against volume-backed database
+        shell: bash
+        env:
+          MIX_ENV: test
+        run: |
+          set -euo pipefail
+          mix deps.get --check-locked
+          (cd apps/agent_ops_store && mix test --include integration)
 
       - name: Recreate database container without deleting its volume
         shell: bash
