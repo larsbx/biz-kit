@@ -1,0 +1,32 @@
+name: Test-host preflight contract
+
+on:
+  pull_request:
+    paths:
+      - ops/test_host/**
+      - .github/workflows/test-host-preflight.yml
+  push:
+    branches: [main]
+    paths:
+      - ops/test_host/**
+      - .github/workflows/test-host-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 pinned SHA
+        with:
+          persist-credentials: false
+      - name: Python syntax and non-authorizing refusal tests
+        run: |
+          python3 -m py_compile ops/test_host/preflight.py ops/test_host/test_preflight.py
+          python3 -m unittest discover -s ops/test_host -p 'test_*.py' -v
+      - name: This job does not contact a host or deploy
+        run: |
+          echo 'Contract validation only: live Evergreen evidence is not claimed.'
