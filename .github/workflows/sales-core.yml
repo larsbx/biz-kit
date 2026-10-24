@@ -1,0 +1,36 @@
+name: SalesCore consent and pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sales-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile sales and consent rules
+        working-directory: apps/sales_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check formatting
+        run: >-
+          MIX_ENV=test mix format --check-formatted
+          apps/sales_core/mix.exs
+          apps/sales_core/lib/sales_core/consent.ex
+          apps/sales_core/lib/sales_core/pipeline.ex
+          apps/sales_core/lib/sales_core/campaign.ex
+          apps/sales_core/test/sales_core_test.exs
+          apps/eatsbot_core/lib/marketing/consent_bridge.ex
+      - name: Test isolated business rules
+        working-directory: apps/sales_core
+        run: mix test --no-start
