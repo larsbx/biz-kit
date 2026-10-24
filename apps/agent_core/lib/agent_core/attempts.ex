@@ -256,6 +256,8 @@ defmodule AgentCore.Attempts do
 
   def get(_state, _effect_id), do: {:error, :invalid_operational_projection}
 
+  @ticket_keys ~w(chapter_id tenant_id project_id task_id task_version source_event_id definition_digest)
+
   defp descriptor(%{
          effect_id: effect,
          intent_event_id: intent,
@@ -264,10 +266,17 @@ defmodule AgentCore.Attempts do
          tenant_id: tenant,
          project_id: project,
          execution_profile_id: profile,
-         execution_profile_digest: {:bytes, <<_::256>>} = digest
+         execution_profile_digest: {:bytes, <<_::256>>} = digest,
+         execution: %{run_id: execution_run_id, ticket: ticket},
+         requirements: %{
+           "max_duration_ms" => max_duration,
+           "max_output_bytes" => max_output
+         }
        }) do
     if Enum.all?([intent, run_id, chapter, tenant, project, profile], &segment?/1) and
-         effect == "agent-run:" <> intent do
+         effect == "agent-run:" <> intent and execution_run_id == run_id and
+         safe_ticket?(ticket, chapter, tenant, project) and
+         positive_integer?(max_duration) and positive_integer?(max_output) do
       {:ok,
        %{
          effect_id: effect,
@@ -277,7 +286,13 @@ defmodule AgentCore.Attempts do
          tenant_id: tenant,
          project_id: project,
          execution_profile_id: profile,
-         execution_profile_digest: digest
+         execution_profile_digest: digest,
+         task_id: ticket["task_id"],
+         task_version: ticket["task_version"],
+         task_source_event_id: ticket["source_event_id"],
+         definition_digest: ticket["definition_digest"],
+         max_duration_ms: max_duration,
+         max_output_bytes: max_output
        }}
     else
       {:error, :invalid_agent_effect_descriptor}
@@ -285,6 +300,20 @@ defmodule AgentCore.Attempts do
   end
 
   defp descriptor(_), do: {:error, :invalid_agent_effect_descriptor}
+
+  defp safe_ticket?(ticket, chapter, tenant, project) when is_map(ticket) do
+    Enum.sort(Map.keys(ticket)) == Enum.sort(@ticket_keys) and
+      ticket["chapter_id"] == chapter and ticket["tenant_id"] == tenant and
+      ticket["project_id"] == project and
+      segment?(ticket["task_id"]) and segment?(ticket["source_event_id"]) and
+      positive_integer?(ticket["task_version"]) and
+      is_binary(ticket["definition_digest"]) and
+      Regex.match?(~r/\\A[0-9a-f]{64}\\z/, ticket["definition_digest"])
+  end
+
+  defp safe_ticket?(_ticket, _chapter, _tenant, _project), do: false
+
+  defp positive_integer?(v), do: is_integer(v) and v > 0
 
   defp claim_fields(effect_id, owner, token, now_ms, lease_ms, max_attempts) do
     if is_binary(effect_id) and String.starts_with?(effect_id, "agent-run:") and
