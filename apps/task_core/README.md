@@ -118,3 +118,13 @@ TaskCore does not depend on it, on OpenShell, or on a named agent framework.
 See [the agent-agnostic run-intent ADR](../../docs/architecture/2026-10-24-signed-agent-runs.md).
 
 See [the POC and its limitations](../../experiments/openshell_taskcore/README.md).
+
+## Generic execution support
+
+`ExecutionRecovery` provides pure effect/epoch-bound recovery decisions,
+`ExecutionTools` independently authorizes an allowlisted task-read projection,
+and `ExecutionWorker` supplies bounded monitored host ticks with redacted
+status. These modules select no agent framework or backend and cannot write
+business state. Database, credential, approved-profile and backend proof
+integration remain host responsibilities. See
+[execution recovery](../../docs/architecture/2026-10-24-execution-recovery.md).

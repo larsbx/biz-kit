@@ -6,20 +6,7 @@ defmodule AgentOpsStore.PostgresTest do
   @moduletag :integration
 
   setup do
-    password_file = System.fetch_env!("BIZKIT_PG_PASSWORD_FILE")
-    password = password_file |> File.read!() |> String.trim()
-
-    conn =
-      start_supervised!(
-        {Postgrex,
-         [
-           hostname: "127.0.0.1",
-           port: 5544,
-           username: "bizkit",
-           password: password,
-           database: "bizkit_agent_dev"
-         ]}
-      )
+    conn = start_supervised!({Postgrex, AgentOpsStore.TestConnection.options()})
 
     %{conn: conn}
   end
@@ -66,14 +53,15 @@ defmodule AgentOpsStore.PostgresTest do
              Postgres.claim(conn, p.effect_id, 1, "worker1", 60_000, 2)
 
     assert byte_size(token) == 32
-    assert {:error, :claim_refused} =
-             Postgres.claim(conn, p.effect_id, 1, "worker2", 60_000, 2)
+
+    assert {:error, :claim_refused} = Postgres.claim(conn, p.effect_id, 1, "worker2", 60_000, 2)
 
     assert {:error, :transition_refused} =
              Postgres.renew(conn, p.effect_id, 2, 1, :crypto.strong_rand_bytes(32), 60_000)
 
     assert {:ok, 3} = Postgres.renew(conn, p.effect_id, 2, 1, token, 60_000)
     assert {:ok, 4} = Postgres.attach_backend(conn, p.effect_id, 3, 1, token, "backend-ci")
+
     assert {:error, :transition_refused} =
              Postgres.attach_backend(conn, p.effect_id, 4, 1, token, "different-backend")
 
@@ -87,20 +75,19 @@ defmodule AgentOpsStore.PostgresTest do
     assert state.backend_ref == "backend-ci"
     assert state.candidate_digest == <<5::256>>
 
-    assert {:error, :claim_refused} =
-             Postgres.claim(conn, p.effect_id, 5, "worker3", 60_000, 2)
+    assert {:error, :claim_refused} = Postgres.claim(conn, p.effect_id, 5, "worker3", 60_000, 2)
   end
 
   test "cancel requests fence tokens and preserve proof reference", %{conn: conn} do
     p = plan()
     assert {:ok, :new} = Postgres.register(conn, p)
+
     assert {:ok, %{epoch: 1, version: 2, token: token}} =
              Postgres.claim(conn, p.effect_id, 1, "worker1", 60_000, 2)
 
     assert {:ok, 3} = Postgres.request_cancel(conn, p.effect_id, 2)
 
-    assert {:error, :transition_refused} =
-             Postgres.renew(conn, p.effect_id, 3, 1, token, 60_000)
+    assert {:error, :transition_refused} = Postgres.renew(conn, p.effect_id, 3, 1, token, 60_000)
 
     assert {:ok, 4} =
              Postgres.confirm_cancel_preverified(conn, p.effect_id, 3, "verified-termination")

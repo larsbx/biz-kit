@@ -50,6 +50,7 @@ defmodule TaskCore.AgentRunsTest do
         event("created1", "TaskCreatedV1", %{
           "task_id" => "task1",
           "title" => "Review a candidate",
+          "authorization_event_id" => "opgrant1",
           "timing" => %{"schedule" => nil, "due_ms" => nil}
         }),
         state
@@ -142,8 +143,7 @@ defmodule TaskCore.AgentRunsTest do
 
     assert {:ok, local} = AgentRuns.runnable?(state, @run_key)
 
-    assert {:ok, remote} =
-             AgentRuns.runnable?(state, {"chapter1", "tenant1", "project1", "run2"})
+    assert {:ok, remote} = AgentRuns.runnable?(state, {"chapter1", "tenant1", "project1", "run2"})
 
     assert local.execution_profile_id == "approved-profile"
     assert remote.execution_profile_id == "hosted-agent"
@@ -206,8 +206,7 @@ defmodule TaskCore.AgentRunsTest do
         state
       )
 
-    assert {:error, :agent_run_operator_revoked} =
-             AgentRuns.runnable?(revoked_operator, @run_key)
+    assert {:error, :agent_run_operator_revoked} = AgentRuns.runnable?(revoked_operator, @run_key)
 
     offboarded =
       State.handle_event(

@@ -18,6 +18,7 @@ defmodule TaskCore.AgentRuns do
   """
 
   alias TaskCore.{Admission, AgentCandidates}
+  alias TaskCore.Access, as: TaskAccess
 
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @run Map.merge(@scope, %{"run_id" => :string})
@@ -238,6 +239,45 @@ defmodule TaskCore.AgentRuns do
   end
 
   def runnable?(_state, _key), do: {:error, :invalid_agent_run_key}
+
+  @doc """
+  Coordinator entry point: signed intent plus independent read AND execution
+  grants for the ledger-bound agent principal. Grant identifiers are locators,
+  not bearer authority. The trusted host must recheck current replay at every
+  boundary, enforce consent/profile policy and authenticate all tool callers.
+  """
+  def authorized?(state, key, %{read: read_grant, execute: execution_grant} = grants)
+      when map_size(grants) == 2 do
+    with {:ok, execution} <- runnable?(state, key),
+         {:ok, run} <- fetch(state.agent_runs, key, :unknown_agent_run),
+         :ok <- task_access(state, execution.ticket, run.agent_principal_id, "read", read_grant),
+         :ok <-
+           task_access(
+             state,
+             execution.ticket,
+             run.agent_principal_id,
+             "execute",
+             execution_grant
+           ) do
+      {:ok, execution}
+    end
+  end
+
+  def authorized?(_state, _key, _grants), do: {:error, :invalid_task_access_request}
+
+  defp task_access(state, ticket, principal, action, grant_id) do
+    TaskAccess.authorize(state, %{
+      chapter_id: ticket["chapter_id"],
+      tenant_id: ticket["tenant_id"],
+      project_id: ticket["project_id"],
+      task_id: ticket["task_id"],
+      task_version: ticket["task_version"],
+      source_event_id: ticket["source_event_id"],
+      principal_id: principal,
+      action: action,
+      grant_event_id: grant_id
+    })
+  end
 
   defp run_open(%{status: :requested}), do: :ok
   defp run_open(_run), do: {:error, :agent_run_cancelled}

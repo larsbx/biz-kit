@@ -45,6 +45,7 @@ defmodule TaskCore.AgentCandidatesTest do
         event("created1", "TaskCreatedV1", %{
           "task_id" => "task1",
           "title" => "Prepare a reviewed candidate",
+          "authorization_event_id" => "fixture-operator",
           "timing" => %{"schedule" => nil, "due_ms" => nil}
         }),
         state
@@ -109,14 +110,13 @@ defmodule TaskCore.AgentCandidatesTest do
 
     revoked =
       State.handle_event(
-        state,
-        event("revoke1", "TaskSuggesterRevokedV1", %{"authorization_event_id" => "grant1"})
+        event("revoke1", "TaskSuggesterRevokedV1", %{"authorization_event_id" => "grant1"}),
+        state
       )
 
     assert {:error, :agent_grant_revoked} = AgentCandidates.plan(revoked, @request)
 
-    assert {:error, :agent_grant_revoked} =
-             AgentCandidates.current?(revoked, @request, ticket)
+    assert {:error, :agent_grant_revoked} = AgentCandidates.current?(revoked, @request, ticket)
   end
 
   test "task changes invalidate pending candidate tickets" do
@@ -138,14 +138,12 @@ defmodule TaskCore.AgentCandidatesTest do
     for status <- ~w(inbox completed cancelled proposed queued) do
       changed = put_in(state, [:tasks, key, :state], status)
 
-      assert {:error, :task_not_ready_for_agent} =
-               AgentCandidates.plan(changed, @request)
+      assert {:error, :task_not_ready_for_agent} = AgentCandidates.plan(changed, @request)
     end
 
     changed = put_in(state, [:tasks, key, :dod], nil)
 
-    assert {:error, :task_definition_missing_or_invalid} =
-             AgentCandidates.plan(changed, @request)
+    assert {:error, :task_definition_missing_or_invalid} = AgentCandidates.plan(changed, @request)
   end
 
   test "fail-closed on malformed digests, source IDs and incomplete snapshots" do

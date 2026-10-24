@@ -79,7 +79,7 @@ defmodule AgentCore.PreflightTest do
     }
   end
 
-  defp plan(r, entries \\ registry(), requirements \\ @requirements),
+  defp plan(r, entries, requirements \\ @requirements),
     do: Preflight.prepare(r, entries, &hash_manifest/1, requirements)
 
   test "local and remote worker produce the same engine-neutral execution contract" do

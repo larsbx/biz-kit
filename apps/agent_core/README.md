@@ -107,3 +107,12 @@ production coordinator still needs a PostgreSQL-backed CAS host adapter,
 idempotent backend effect IDs, proof-referenced reconciliation, explicit
 read/execution authorization, and recovery tests. Scratch storage for
 individual agents must remain isolated from this database volume.
+
+## Staging recovery extension
+
+`AgentCore.RecoveryPort` requires immutable-effect lookup plus versioned
+idempotency, cancellation and bounded-result capabilities for the staging
+coordinator. Callback presence/declarations are not live enforcement evidence;
+the host must independently verify backend observations. General recovery
+decisions and supervision live in TaskCore. See
+[execution recovery](../../docs/architecture/2026-10-24-execution-recovery.md).

@@ -12,6 +12,7 @@ defmodule AgentOpsStore.MixProject do
       lockfile: "../../mix.lock",
       deps: [
         {:agent_core, in_umbrella: true},
+        {:task_core, in_umbrella: true},
         {:postgrex, "~> 0.22"}
       ]
     ]

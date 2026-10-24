@@ -4,7 +4,8 @@ on:
   pull_request:
     paths:
       - "deploy/agent-core/**"
-      - "apps/agent_core/README.md"
+      - "apps/agent_core/**"
+      - "apps/task_core/**"
       - "apps/agent_ops_store/**"
       - ".github/workflows/agent-core-storage.yml"
   workflow_dispatch:
@@ -62,10 +63,16 @@ jobs:
             < deploy/agent-core/sql/002_attempt_cas.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/003_recovery_custody.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_storage_contract.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_cas_contract.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_recovery_custody.sql
 
       - name: Install Elixir and Erlang for PostgreSQL adapter acceptance
         uses: erlef/setup-beam@v1
