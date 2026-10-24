@@ -123,6 +123,33 @@ defmodule TaskCore.AgentRunsTest do
     assert state.tasks[@task_key].state == "ready"
   end
 
+  test "independent agent engines use the same signed run event and lifecycle" do
+    state = fixture()
+    one = requested()
+    two =
+      requested(%{
+        "run_id" => "run2",
+        "execution_profile_id" => "hosted-agent",
+        "execution_profile_digest" => {:bytes, <<8::256>>}
+      })
+
+    assert :ok = admitted?(one, state)
+    state = State.handle_event(one, state)
+
+    assert :ok = admitted?(two, state)
+    state = State.handle_event(%{two | event_id: "run-event2"}, state)
+
+    assert {:ok, local} = AgentRuns.runnable?(state, @run_key)
+
+    assert {:ok, remote} =
+             AgentRuns.runnable?(state, {"chapter1", "tenant1", "project1", "run2"})
+
+    assert local.execution_profile_id == "approved-profile"
+    assert remote.execution_profile_id == "hosted-agent"
+    assert local.ticket == remote.ticket
+    assert state.tasks[@task_key].state == "ready"
+  end
+
   test "same run identifier cannot create a competing intent" do
     {state, _command} = with_run()
     assert {:error, :agent_run_id_already_used} =
