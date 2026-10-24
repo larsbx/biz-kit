@@ -73,7 +73,8 @@ defmodule FulfillmentCore do
   def replay(_, _, _), do: {:error, :invalid_steps}
 
   @doc "Identify a handoff still awaiting transport resolution."
-  def pending?(%{phase: phase}), do: phase in [:requested, :accepted, :cancel_requested, :in_transit]
+  def pending?(%{phase: phase}),
+    do: phase in [:requested, :accepted, :cancel_requested, :in_transit]
 
   defp scope(%{merchant: expected}, merchant) when expected == merchant, do: :ok
   defp scope(%{merchant: _}, _), do: {:error, :wrong_merchant}
