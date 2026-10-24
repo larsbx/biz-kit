@@ -11,7 +11,8 @@ defmodule InventoryCore.Wire do
   """
 
   @schema "bizkit.inventory.command.v1"
-  @max_int 9_223_372_036_854_775_807
+  # Largest integer representable exactly by JSON/JavaScript consumers.
+  @max_int 9_007_199_254_740_991
   @common ~w(schema op id expected_version merchant item unit)
   @fields %{
     "receive" => ~w(location quantity),
