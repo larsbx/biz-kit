@@ -14,7 +14,8 @@ defmodule CommerceCore.MixProject do
   # A source package copied or fetched into an unrelated Mix host must not
   # refer to ../../mix.lock or another project's config/dependency directory.
   defp umbrella_paths do
-    if File.regular?(Path.expand("../../mix.exs", __DIR__)) and
+    if Path.basename(Path.dirname(__DIR__)) == "apps" and
+         File.regular?(Path.expand("../../mix.exs", __DIR__)) and
          File.dir?(Path.expand("../../apps", __DIR__)) do
       [
         build_path: "../../_build",
