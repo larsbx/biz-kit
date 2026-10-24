@@ -2,8 +2,21 @@ name: Business capability composition
 
 on:
   pull_request:
+    paths:
+      - 'apps/biz_kit_composition/**'
+      - 'apps/commerce_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/fulfillment_core/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/business-composition.yml'
   push:
     branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

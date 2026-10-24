@@ -2,6 +2,15 @@ name: FulfillmentCore contract
 
 on:
   pull_request:
+    paths:
+      - 'apps/fulfillment_core/**'
+      - 'apps/eatsbot_core/**'
+      - 'apps/dispatch/**'
+      - 'apps/biz_kit_composition/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/fulfillment-core.yml'
   push:
     branches: [main]
 

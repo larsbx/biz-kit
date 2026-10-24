@@ -2,6 +2,15 @@ name: CommerceCore extraction
 
 on:
   pull_request:
+    paths:
+      - 'apps/commerce_core/**'
+      - 'apps/eatsbot_core/**'
+      - 'apps/eatsbot/**'
+      - 'apps/biz_kit_composition/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/commerce-core.yml'
   push:
     branches: [main]
 

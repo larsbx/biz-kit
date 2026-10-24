@@ -2,6 +2,13 @@ name: InventoryCore rules
 
 on:
   pull_request:
+    paths:
+      - 'apps/inventory_core/**'
+      - 'apps/biz_kit_composition/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/inventory-core.yml'
   push:
     branches: [main]
 
