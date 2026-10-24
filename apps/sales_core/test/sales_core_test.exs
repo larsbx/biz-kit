@@ -25,12 +25,21 @@ defmodule SalesCoreTest do
     assert {:ok, state, :duplicate} = Consent.record(state, "restaurant", event)
 
     assert Consent.allowed?(
-             state, "restaurant", "customer-1", :telegram, "CL", :customer
+             state,
+             "restaurant",
+             "customer-1",
+             :telegram,
+             "CL",
+             :customer
            )
 
-    withdrawal = change(state, "w1", :withdraw, %{
-      party_ref: "customer-1", channel: :telegram, jurisdiction: "CL", at_ms: 20
-    })
+    withdrawal =
+      change(state, "w1", :withdraw, %{
+        party_ref: "customer-1",
+        channel: :telegram,
+        jurisdiction: "CL",
+        at_ms: 20
+      })
 
     {:ok, state, :accepted} = Consent.record(state, "restaurant", withdrawal)
 
@@ -39,6 +48,7 @@ defmodule SalesCoreTest do
            )
 
     stale = grant(state, "customer-1", :customer, "g2", 19)
+
     assert {:error, :stale_consent_evidence} =
              Consent.record(state, "restaurant", stale)
 
@@ -49,6 +59,7 @@ defmodule SalesCoreTest do
 
   test "guardian, learner, driver and employee roles confer no marketing grant" do
     {:ok, state} = Consent.new("school")
+
     for audience <- [:guardian, :learner, :driver, :employee] do
       assert {:error, :audience_or_evidence_not_authorized} =
                Consent.record(state, "school", grant(state, "p1", audience, "g", 1))
@@ -64,15 +75,30 @@ defmodule SalesCoreTest do
     {:ok, state, :accepted} = Consent.record(state, "logistics", event)
 
     assert Consent.allowed?(
-             state, "logistics", "broker-1", :telegram, "CL", :business_contact
+             state,
+             "logistics",
+             "broker-1",
+             :telegram,
+             "CL",
+             :business_contact
            )
 
     refute Consent.allowed?(
-             state, "other", "broker-1", :telegram, "CL", :business_contact
+             state,
+             "other",
+             "broker-1",
+             :telegram,
+             "CL",
+             :business_contact
            )
 
     refute Consent.allowed?(
-             state, "logistics", "broker-1", :sms, "CL", :business_contact
+             state,
+             "logistics",
+             "broker-1",
+             :sms,
+             "CL",
+             :business_contact
            )
 
     assert {:error, :wrong_tenant} = Consent.record(state, "other", event)
@@ -80,6 +106,7 @@ defmodule SalesCoreTest do
 
   test "campaign plan returns opaque, opted-in recipients without sending" do
     {:ok, state} = Consent.new("restaurant")
+
     {:ok, state, :accepted} =
       Consent.record(state, "restaurant", grant(state, "buyer-1", :customer, "g", 1))
 
@@ -99,9 +126,12 @@ defmodule SalesCoreTest do
 
   test "sales stages use shared, tenant-scoped quote references, not task completion" do
     {:ok, state} = Pipeline.new("merchant")
-    {:ok, state} = Pipeline.create(state, "merchant", 0, %{
-      id: "lead-1", party_ref: "contact-1", source: "inbound"
-    })
+    {:ok, state} =
+      Pipeline.create(state, "merchant", 0, %{
+        id: "lead-1",
+        party_ref: "contact-1",
+        source: "inbound"
+      })
 
     assert {:error, :invalid_pipeline_transition} =
              Pipeline.advance(state, "merchant", 1, "lead-1", :won)
@@ -113,6 +143,7 @@ defmodule SalesCoreTest do
              Pipeline.advance(state, "merchant", 3, "lead-1", :won)
 
     {:ok, state} = Pipeline.advance(state, "merchant", 3, "lead-1", :won, "quote-1")
+
     assert {:ok, %{state: :won, quote_ref: "quote-1"}} =
              Pipeline.fetch(state, "merchant", "lead-1")
 
@@ -125,9 +156,13 @@ defmodule SalesCoreTest do
 
   test "unknown contact is suppressed; a recorded withdrawal survives replay" do
     {:ok, empty} = Consent.new("merchant")
-    event = change(empty, "w", :withdraw, %{
-      party_ref: "not-yet-known", channel: :email, jurisdiction: "US", at_ms: 1
-    })
+    event =
+      change(empty, "w", :withdraw, %{
+        party_ref: "not-yet-known",
+        channel: :email,
+        jurisdiction: "US",
+        at_ms: 1
+      })
 
     {:ok, state} = Consent.replay(empty, "merchant", [event])
     refute Consent.allowed?(state, "merchant", "not-yet-known", :email, "US", :customer)
