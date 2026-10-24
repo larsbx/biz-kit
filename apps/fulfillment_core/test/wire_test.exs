@@ -23,8 +23,12 @@ defmodule FulfillmentCore.WireTest do
   test "only a dispatch producer can accept transport with a typed reference" do
     wire = payload("accept", %{"transport_ref" => "trip-1"})
     assert {:ok, :dispatch, event} = Wire.decode(wire, @transport)
-    assert event == %{id: "event-1", expected_version: 0, op: :accept,
-                      transport_ref: "trip-1"}
+    assert event == %{
+             id: "event-1",
+             expected_version: 0,
+             op: :accept,
+             transport_ref: "trip-1"
+           }
 
     {:ok, state} = FulfillmentCore.new("restaurant", "request-1", "order-1", "courier")
     assert {:ok, accepted, :accepted} =
