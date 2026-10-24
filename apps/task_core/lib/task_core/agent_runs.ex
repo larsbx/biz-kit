@@ -17,7 +17,7 @@ defmodule TaskCore.AgentRuns do
   Successful agent outputs are candidates, not DoD evidence or completion.
   """
 
-  alias TaskCore.{Admission, AgentCandidates, State}
+  alias TaskCore.{Admission, AgentCandidates}
 
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @run Map.merge(@scope, %{"run_id" => :string})
