@@ -47,6 +47,23 @@ defmodule FulfillmentCoreTest do
              )
   end
 
+  test "cancel before acknowledgment remains pending until dispatch confirms" do
+    {:ok, original} = F.new("merchant", "r", "o", "courier")
+    state = applied(original, "merchant", :commerce, "cancel", :cancel)
+    assert state.phase == :cancel_requested
+    assert F.pending?(state)
+
+    state =
+      applied(state, "merchant", :dispatch, "late-ack", :accept, %{
+        transport_ref: "transport-after-cancel"
+      })
+
+    assert state.phase == :cancel_requested
+    assert state.transport_ref == "transport-after-cancel"
+    done = applied(state, "merchant", :dispatch, "cancel-confirm", :cancel_confirmed)
+    assert done.phase == :cancelled
+  end
+
   test "nonrestaurant transport uses the same contract with separate order owner" do
     {:ok, state} = F.new("parts-supplier", "req-kit", "sale-kit", "freight")
     state =
