@@ -45,3 +45,26 @@ backend idempotent launch and immutable-effect lookup, abandoned-execution
 reconciliation, typed tool proxy, bounded result custody and two real backend
 conformance runs remain required by issue #92. Fake adapters are not real
 backend evidence. No production cutover is authorized or performed.
+
+## Staging delivery bridge
+
+TaskCore.Dispatcher now implements generic durable-register/claim/recheck/launch/
+attach delivery over trusted host ports. AgentOpsStore.Coordinator binds those
+ports to actual PostgreSQL CAS and the approved AgentCore adapter contract.
+enqueue_all reconstructs pending work by scanning current committed run intents;
+interrupted scans are retried using stable signed effect IDs, with no independent
+business log or lossy enqueue acknowledgement.
+
+The bridge requires environment() == :staging and explicit host context, consent
+and sanitized backend-reference functions. No scheduler, endpoint or production
+application startup has been added. Claims use one attempt; retries of ambiguous
+effects require independent reconciliation. Duplicate delivery of a leased row
+never launches again, regardless of time elapsed. Authorization is checked again
+after claim before launch. Invalidated claims are fenced for cancellation.
+
+Six deterministic dispatcher tests inject duplicate enqueue/delivery, revoked
+authority before/after claim, a lost backend response and attachment failure.
+These are failure-path tests, not real backend or distributed database evidence.
+Ongoing cancellation polling, verified termination/absence receipts, automated
+cross-crash adoption, typed tools, result custody and full worker supervision
+remain open. In particular, expiry never becomes proof of backend absence.
