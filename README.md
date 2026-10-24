@@ -54,7 +54,7 @@ mix compile
 # Per app, from its directory:
 (cd apps/keel           && mix test)
 (cd apps/task_core      && mix test)
-(cd apps/commerce_core   && mix test)                      # pure business rules
+(cd apps/commerce_core   && mix test --no-start)           # pure arithmetic, no umbrella runtime
 (cd apps/coop_substrate && mix test)
 (cd apps/biz_kit_identity && mix test)
 (cd apps/biz_kit_cluster  && mix test)
