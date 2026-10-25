@@ -334,4 +334,100 @@ defmodule FederationService.TwoInstanceTest do
     assert s["inbox_count"] == 3 and s["remote_withdrawn"] == 2 and s["listings"] == []
     assert s["ledger"] == "locally-owned-signed-history"
   end
+
+  test "explicit redelivery repairs a peer's lost cache using authenticated current snapshots",
+    do: repair_cache()
+
+  defp repair_cache do
+    dir = temp()
+    certs(dir)
+    a_port = port()
+    b_port = port()
+    alpha = "https://alpha.example/actors/shop"
+    beta = "https://beta.example/actors/shop"
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    gone = metadata(alpha, 0, %{listing_id: "https://alpha.example/listings/gone"})
+
+    assert command(a, %{op: "publish", event: "first", metadata: metadata(alpha), revision: 0})[
+             "ok"
+           ]
+
+    assert command(a, %{
+             op: "publish",
+             event: "current",
+             metadata: metadata(alpha, 3),
+             revision: 3
+           })["ok"]
+
+    assert command(a, %{op: "publish", event: "gone", metadata: gone, revision: 0})["ok"]
+    assert command(a, %{op: "withdraw", event: "delete", id: gone["id"]})["ok"]
+    command(a, %{op: "deliver"})
+    command(b, %{op: "drain"})
+    old = command(b, %{op: "snapshot"})
+    assert old["inbox_count"] == 2 and old["remote_withdrawn"] == 1
+    assert command(a, %{op: "snapshot"})["pending"] == 0
+
+    # Simulate losing only a receiver discovery journal. Its independently
+    # managed keys and business history remain; no home publication is stored
+    # on this receiver. This operation is deliberately outside the service API.
+    stop(b)
+    File.rm!(b_dir <> "/discovery.log")
+    b_key = File.read!(b_dir <> "/signing.key")
+    b2 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+    on_exit(fn -> stop(b2) end)
+    assert command(b2, %{op: "snapshot"})["inbox_count"] == 0
+    command(a, %{op: "deliver"})
+    assert command(b2, %{op: "snapshot"})["inbox_count"] == 0
+
+    # A trusted sender administrator requests repair. Persist the generation
+    # before any requeue; then restart the sender and partition the receiver.
+    assert command(a, %{op: "redeliver", peer: beta}) == %{"ok" => true, "status" => "1"}
+    stop(a)
+    stop(b2)
+    a2 = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    on_exit(fn -> stop(a2) end)
+    assert command(a2, %{op: "reconcile"})["stats"]["requeued"] == 2
+    command(a2, %{op: "deliver"})
+    assert command(a2, %{op: "snapshot"})["pending"] == 2
+    b3 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+    on_exit(fn -> stop(b3) end)
+
+    eventually(fn ->
+      command(a2, %{op: "deliver"})
+      command(a2, %{op: "snapshot"})["pending"] == 0
+    end)
+
+    command(b3, %{op: "drain"})
+    repaired = command(b3, %{op: "snapshot"})
+    assert repaired["inbox_count"] == 2 and repaired["remote_withdrawn"] == 1
+
+    assert [%{"metadata" => %{"revision" => 3}, "source" => "alpha.example"}] =
+             repaired["listings"]
+
+    assert repaired["listings"] |> Enum.map(& &1["activity_id"]) ==
+             old["listings"] |> Enum.map(& &1["activity_id"])
+
+    assert repaired["ledger"] == "locally-owned-signed-history"
+    assert File.read!(b_dir <> "/signing.key") == b_key
+
+    # Repeating the explicit operation is another generation, with ordinary
+    # activity deduplication at a receiver that already holds those IDs.
+    assert command(a2, %{op: "redeliver", peer: beta})["status"] == "2"
+    command(a2, %{op: "deliver"})
+    command(b3, %{op: "drain"})
+    duplicate = command(b3, %{op: "snapshot"})
+    assert duplicate["inbox_count"] == repaired["inbox_count"]
+    assert duplicate["listings"] == repaired["listings"]
+    assert command(a2, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+  end
 end

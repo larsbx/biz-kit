@@ -74,7 +74,15 @@ defmodule FederationService.RouterTest do
        c do
     initial = Store.call(c.s, :snapshot)
 
-    for path <- ["/commands", "/ledger", "/inventory/reserve", "/payments", "/publish"] do
+    for path <- [
+          "/commands",
+          "/ledger",
+          "/inventory/reserve",
+          "/payments",
+          "/publish",
+          "/redeliver",
+          "/resync"
+        ] do
       assert request(c.config, :post, path, ~s({"command":"approve","signed":true})).status == 404
     end
 

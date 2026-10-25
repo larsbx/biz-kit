@@ -194,6 +194,15 @@ retires unsent obsolete revisions. Reconciliation is bounded and journaled;
 remote projections do not become publications or business authority. This does
 not add subscriptions, a remote cache-reset protocol or retention/compaction.
 
+Explicit peer-cache recovery is a trusted sender-side redelivery request. It
+journals a new per-peer generation and resends only current home publications
+and terminal tombstones with their original activity IDs, in bounded batches.
+A pre-request in-flight acknowledgment cannot satisfy the new generation.
+No foreign activity can request this operation, change publication authority or
+reset a local ledger. This does not recover lost replay/moderation evidence or
+provide a cross-node consistent snapshot; coordinated backup recovery remains
+an administrator responsibility.
+
 ## Event-driven P2P discovery experiment
 
 The optional `FederationService.GossipWorker` publishes committed current

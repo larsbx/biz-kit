@@ -4,6 +4,18 @@ defmodule FederationService.Delivery do
   @batch 32
   @capacity 10_000
 
+  def generation(data, actor, peer) do
+    case Map.get(Map.get(data, :redeliveries, %{}), peer) do
+      %{actor: ^actor, generation: generation} -> generation
+      _ -> 0
+    end
+  end
+
+  def ready?(data, actor, peers, row),
+    do:
+      Map.get(row, :generation, 0) == generation(data, actor, row.destination) and
+        disposition(data, actor, peers, row) == :ready
+
   @doc "Current source and moderation decision; never derives business authority."
   def disposition(data, actor, peers, row) do
     activity = row.activity
@@ -41,8 +53,14 @@ defmodule FederationService.Delivery do
   def plan(data, actor, peers, now) do
     updates =
       data.outbox
-      |> Enum.sort_by(&elem(&1, 0))
-      |> Stream.filter(fn {_, row} -> row.status in [:pending, :held] end)
+      |> Enum.sort_by(fn {key, row} ->
+        {if(row.activity["type"] == "Delete", do: 0, else: 1), key}
+      end)
+      |> Stream.filter(fn {_, row} ->
+        row.status in [:pending, :held] or
+          (row.status == :delivered and
+             Map.get(row, :generation, 0) != generation(data, actor, row.destination))
+      end)
       |> Stream.map(fn {key, row} -> {key, row, reconcile_row(data, actor, peers, row, now)} end)
       |> Stream.reject(fn {_, old, new} -> old == new end)
       |> Enum.take(@batch + 1)
@@ -62,7 +80,7 @@ defmodule FederationService.Delivery do
         # Activities come only from the durable accepted source projection.
         case data.publications[source.activity_id] do
           nil -> []
-          activity -> Enum.map(peers, &new_row(activity, &1, now))
+          activity -> Enum.map(peers, &new_row(activity, &1, generation(data, actor, &1), now))
         end
       end)
       |> Stream.reject(fn {key, _} -> Map.has_key?(data.outbox, key) end)
@@ -76,8 +94,10 @@ defmodule FederationService.Delivery do
         Enum.map(inserts, fn {key, row} -> {:outbox, key, row} end)
 
     stats =
-      Enum.reduce(selected, %{held: 0, resumed: 0, superseded: 0, settled: 0}, fn {_, _, row},
-                                                                                  acc ->
+      Enum.reduce(selected, %{held: 0, resumed: 0, superseded: 0, settled: 0, requeued: 0}, fn {_,
+                                                                                                old,
+                                                                                                row},
+                                                                                               acc ->
         kind =
           case row.status do
             :held -> :held
@@ -86,7 +106,11 @@ defmodule FederationService.Delivery do
             :delivered -> :settled
           end
 
-        Map.update!(acc, kind, &(&1 + 1))
+        acc = Map.update!(acc, kind, &(&1 + 1))
+
+        if Map.get(old, :generation, 0) != Map.get(row, :generation, 0),
+          do: Map.update!(acc, :requeued, &(&1 + 1)),
+          else: acc
       end)
 
     {changes,
@@ -98,9 +122,26 @@ defmodule FederationService.Delivery do
   end
 
   defp reconcile_row(data, actor, peers, row, now) do
-    case disposition(data, actor, peers, row) do
+    wanted = generation(data, actor, row.destination)
+    decision = disposition(data, actor, peers, row)
+
+    row =
+      if decision != :superseded and row.activity["actor"] == actor and
+           Map.get(row, :generation, 0) != wanted do
+        row
+        |> Map.merge(%{generation: wanted, status: :pending, attempts: 0, next_at: now})
+        |> Map.delete(:hold_reason)
+      else
+        row
+      end
+
+    case decision do
       :ready when row.status == :held ->
-        status = if Map.has_key?(row, :acknowledged_at), do: :delivered, else: :pending
+        acknowledged =
+          Map.has_key?(row, :acknowledged_at) and
+            Map.get(row, :acknowledged_generation, 0) == Map.get(row, :generation, 0)
+
+        status = if acknowledged, do: :delivered, else: :pending
         row |> Map.put(:status, status) |> Map.put(:next_at, now) |> Map.delete(:hold_reason)
 
       :ready ->
@@ -114,11 +155,12 @@ defmodule FederationService.Delivery do
     end
   end
 
-  defp new_row(activity, destination, now) do
+  defp new_row(activity, destination, generation, now) do
     {{activity["id"], destination},
      %{
        activity: activity,
        destination: destination,
+       generation: generation,
        status: :pending,
        attempts: 0,
        next_at: now

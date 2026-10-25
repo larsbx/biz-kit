@@ -66,6 +66,11 @@ defmodule FederationService do
     Store.call(config.store, {:reconcile, config.actor, config.peers, now})
   end
 
+  @doc "Host-only request to resend current publications after a configured peer loses its cache."
+  def redeliver(config, peer, now \\ System.system_time(:second)) do
+    Store.call(config.store, {:redeliver, config.actor, config.peers, peer, now})
+  end
+
   def deliver(config, now \\ System.system_time(:second)) do
     {:ok, _} = reconcile(config, now)
     snapshot = Store.call(config.store, :snapshot)
@@ -73,7 +78,7 @@ defmodule FederationService do
     snapshot.outbox
     |> Enum.filter(fn {_, r} ->
       r.status == :pending and r.next_at <= now and
-        Delivery.disposition(snapshot, config.actor, config.peers, r) == :ready
+        Delivery.ready?(snapshot, config.actor, config.peers, r)
     end)
     |> Enum.sort_by(fn {key, row} ->
       {if(row.activity["type"] == "Delete", do: 0, else: 1), row.next_at, key}
@@ -82,17 +87,17 @@ defmodule FederationService do
     |> Enum.each(fn {key, row} ->
       success =
         with true <- row.destination in config.peers,
-             true <- Delivery.disposition(snapshot, config.actor, config.peers, row) == :ready,
+             true <- Delivery.ready?(snapshot, config.actor, config.peers, row),
              {:ok, remote} <- Signature.discover(row.destination, config.network),
              body <- Jason.encode!(row.activity),
              headers <- Signature.sign(remote.inbox, config.actor, config.private_key, body),
              true <-
-               Delivery.disposition(
+               Delivery.ready?(
                  Store.call(config.store, :snapshot),
                  config.actor,
                  config.peers,
                  row
-               ) == :ready,
+               ),
              {:ok, status, _, _} <-
                Network.request(:post, remote.inbox, headers, body, config.network) do
           status in [200, 202]
@@ -100,7 +105,7 @@ defmodule FederationService do
           _ -> false
         end
 
-      Store.call(config.store, {:delivery, key, success, now})
+      Store.call(config.store, {:delivery, key, Map.get(row, :generation, 0), success, now})
     end)
   end
 

@@ -196,3 +196,11 @@ Signature/scope tampering, origin substitution, stale revisions, durable replay,
 key revocation, moderation and cross-transport activity-ID refusal have focused
 adversarial regressions. This is not an independent security audit or proof of
 full Halaqa/SANAD+, Fediverse or Mastodon compatibility.
+
+Dependency scan: cargo-audit 0.22.2 against RustSec database
+`21d909e4c8bd4e14c7aea58bf980c881a0053ab1` reported no known vulnerability
+advisories for the 366 locked dependencies. It reported the maintenance warning
+[RUSTSEC-2024-0436](https://rustsec.org/advisories/RUSTSEC-2024-0436) for
+`paste` 1.0.15, a build-time procedural macro through iroh → netwatch →
+netlink-packet-core. That warning is recorded, not a proof of security or a
+reason to silently replace the pinned transport's dependency graph.

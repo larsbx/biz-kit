@@ -147,7 +147,7 @@ defmodule FederationService.StoreTest do
     s0 = Store.call(s, :snapshot)
     assert map_size(s0.outbox) == 1 and map_size(s0.publications) == 1
     [{id, _}] = Enum.to_list(s0.outbox)
-    Store.call(s, {:delivery, id, false, 1000})
+    Store.call(s, {:delivery, id, 0, false, 1000})
     GenServer.stop(s)
     {:ok, s} = Store.start_link(directory: dir)
     assert Store.call(s, :snapshot).outbox[id].attempts == 1
