@@ -230,7 +230,7 @@ defmodule FederationService.Store do
 
   def handle_call({:publish, event_id, activity, metadata, destinations, now}, _, s) do
     fingerprint =
-      :crypto.hash(:sha256, :erlang.term_to_binary({activity, metadata, destinations}))
+      :crypto.hash(:sha256, :erlang.term_to_binary({activity, metadata}))
 
     case s.data.events[event_id] do
       ^fingerprint ->

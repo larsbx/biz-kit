@@ -124,6 +124,16 @@ defmodule FederationService.StoreTest do
     assert {:ok, :published} = FederationService.publish(config, "source-event-one", m)
     assert {:ok, :duplicate} = FederationService.publish(config, "source-event-one", m)
 
+    assert {:ok, :duplicate} =
+             FederationService.publish(%{config | peers: []}, "source-event-one", m)
+
+    assert {:ok, :duplicate} =
+             FederationService.publish(
+               %{config | peers: ["https://new.example/actors/shop"]},
+               "source-event-one",
+               m
+             )
+
     assert {:error, :event_conflict} =
              FederationService.publish(config, "source-event-one", metadata(m["seller"], 1))
 

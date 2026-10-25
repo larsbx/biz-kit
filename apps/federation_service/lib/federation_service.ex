@@ -70,10 +70,11 @@ defmodule FederationService do
     |> Enum.each(fn {key, row} ->
       success =
         with true <- row.destination in config.peers,
-             false <- Store.blocked?(snapshot, row.destination, ""),
+             true <- delivery_allowed?(snapshot, row),
              {:ok, remote} <- Signature.discover(row.destination, config.network),
              body <- Jason.encode!(row.activity),
              headers <- Signature.sign(remote.inbox, config.actor, config.private_key, body),
+             true <- delivery_allowed?(Store.call(config.store, :snapshot), row),
              {:ok, status, _, _} <-
                Network.request(:post, remote.inbox, headers, body, config.network) do
           status in [200, 202]
@@ -83,6 +84,12 @@ defmodule FederationService do
 
       Store.call(config.store, {:delivery, key, success, now})
     end)
+  end
+
+  defp delivery_allowed?(data, row) do
+    not Store.blocked?(data, row.destination, "") and
+      (row.activity["type"] == "Delete" or
+         not Store.blocked?(data, row.activity["actor"], row.activity["object"]["id"]))
   end
 
   def refresh(config, now \\ System.system_time(:second)) do

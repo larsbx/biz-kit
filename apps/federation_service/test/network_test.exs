@@ -3,6 +3,9 @@ defmodule FederationService.TestPeer do
   def init(state), do: state
 
   def call(conn, state) do
+    if conn.method == "POST",
+      do: Agent.update(state, &Map.update(&1, :received, 1, fn n -> n + 1 end))
+
     case conn.request_path do
       "/redirect" ->
         conn |> put_resp_header("location", "https://127.0.0.1/private") |> send_resp(302, "")
@@ -99,6 +102,38 @@ defmodule FederationService.NetworkTest do
     for route <- ~w(redirect large compressed chunked duplicate slow) do
       assert {:error, _} = Network.json("https://alpha.example/" <> route, c.network)
     end
+  end
+
+  test "listing moderation holds pending advertisements while withdrawals can still deliver", c do
+    dir = temp()
+    {:ok, store} = FederationService.Store.start_link(directory: dir)
+
+    on_exit(fn ->
+      if Process.alive?(store), do: GenServer.stop(store)
+      File.rm_rf!(dir)
+    end)
+
+    config =
+      FederationService.config!(
+        actor: "https://beta.example/actors/shop",
+        private_key: key(),
+        store: store,
+        peers: ["https://alpha.example/actors/shop"],
+        network: c.network
+      )
+
+    m = metadata(config.actor)
+    assert {:ok, :published} = FederationService.publish(config, "source", m)
+    FederationService.Store.call(store, {:block, m["id"], true})
+    initial = Agent.get(c.state, &Map.get(&1, :received, 0))
+    FederationService.deliver(config)
+    assert Agent.get(c.state, &Map.get(&1, :received, 0)) == initial
+    assert {:ok, :published} = FederationService.withdraw(config, "withdraw", m["id"])
+    FederationService.deliver(config, System.system_time(:second) + 3)
+    assert Agent.get(c.state, &Map.get(&1, :received, 0)) == initial + 1
+    rows = FederationService.Store.call(store, :snapshot).outbox |> Map.values()
+    assert Enum.find(rows, &(&1.activity["type"] == "Delete")).status == :delivered
+    assert Enum.find(rows, &(&1.activity["type"] == "Create")).status == :pending
   end
 
   test "actor identity and exact key ownership come from current HTTPS document", c do

@@ -103,7 +103,10 @@ verify a source ledger event or grant by itself. The pilot supplies the service
 and integration interface, not a production adapter for every biz-kit domain's
 ledger/disclosure policy. Never connect untrusted request data directly to it.
 Repeated source events are idempotent; a changed payload under the same event
-ID is refused. Publication and all peer delivery rows commit together. Network
+ID is refused. The source-event fingerprint excludes peer configuration: changing
+or reordering peers does not invalidate a receipt. Peer changes apply to new
+publications; existing events are not automatically backfilled to new peers.
+Publication and all peer delivery rows commit together. Network
 failure cannot undo local business history or create another business writer.
 
 ## Security and recovery profile
@@ -141,7 +144,8 @@ serves HTTP/1.1 only.
 
 Administrators use the **local** store API for actor, hostname or listing
 moderation. Blocking immediately hides existing results and rechecks pending
-admission/projection/delivery; unblocking is explicit. This is not a public
+admission/projection/delivery; unblocking is explicit. Listing blocks hold
+pending Create/Update deliveries while allowing that listing's withdrawal. This is not a public
 moderation endpoint:
 
 ```elixir
