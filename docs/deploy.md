@@ -16,6 +16,13 @@ It has a database of its own. Its production section of `runtime.exs` runs
 only for this release (or an unset `RELEASE_NAME`), and the dispatch and
 SpruceGoose sections skip it.
 
+Production eatsbot is not deployed from here: Fly deploys it from
+`larsbx/eatsbot`, which remains the source of truth (see the
+[modular platform decision](architecture/2026-10-24-modular-business-platform.md)).
+Moving production to this release is a separate, tested cutover; until then
+this release exists for building and testing, and must not run as a second
+writer against eatsbot's production database.
+
 The Telegram bot reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK` (the full
 `https://…/telegram` URL) at boot. Setting `TELEGRAM_WEBHOOK` also requires
 `TELEGRAM_WEBHOOK_SECRET` (1–256 of `A-Z a-z 0-9 _ -`): the bot registers it
