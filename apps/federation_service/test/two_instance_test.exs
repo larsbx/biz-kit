@@ -1,0 +1,252 @@
+defmodule FederationService.TwoInstanceTest do
+  use ExUnit.Case, async: false
+  import FederationService.TestHelpers
+  alias FederationService.{Network, Signature}
+  @moduletag timeout: 120_000
+
+  defp port do
+    {:ok, s} = :gen_tcp.listen(0, [:binary, active: false])
+    {:ok, n} = :inet.port(s)
+    :gen_tcp.close(s)
+    n
+  end
+
+  defp node(dir, host, port, other, other_port, certs) do
+    beams = Path.wildcard(Path.expand("../../../../_build/test/lib/*/ebin", __DIR__))
+    # Under isolated staging, __DIR__ may point through a symlink; code paths
+    # already loaded in this VM are the authoritative build location.
+    beams = Enum.uniq(beams ++ Enum.map(:code.get_path(), &to_string/1))
+
+    args =
+      Enum.flat_map(beams, fn p -> ["-pa", p] end) ++
+        [
+          Path.join(__DIR__, "support/node.exs"),
+          dir,
+          host,
+          to_string(port),
+          other,
+          to_string(other_port),
+          certs
+        ]
+
+    p =
+      Port.open({:spawn_executable, System.find_executable("elixir")}, [
+        :binary,
+        :exit_status,
+        :use_stdio,
+        :stderr_to_stdout,
+        args: args,
+        env: [{~c"ERL_FLAGS", ~c"+S 2:2"}]
+      ])
+
+    line(p, "READY")
+    p
+  end
+
+  defp line(p, prefix, buffer \\ "") do
+    case String.split(buffer, "\n", parts: 2) do
+      [first, rest] ->
+        if String.starts_with?(first, prefix),
+          do: String.replace_prefix(first, prefix, ""),
+          else: line(p, prefix, rest)
+
+      _ ->
+        receive do
+          {^p, {:data, chunk}} -> line(p, prefix, buffer <> chunk)
+          {^p, {:exit_status, status}} -> flunk("node exited #{status}: #{buffer}")
+        after
+          20_000 -> flunk("node timed out: #{buffer}")
+        end
+    end
+  end
+
+  defp command(p, req) do
+    Port.command(p, Jason.encode!(req) <> "\n")
+    p |> line("RESULT ") |> Jason.decode!()
+  end
+
+  defp stop(p) do
+    if Port.info(p) do
+      Port.command(p, "{\"op\":\"stop\"}\n")
+
+      receive do
+        {^p, {:exit_status, 0}} -> :ok
+      after
+        5000 -> if Port.info(p), do: Port.close(p)
+      end
+    end
+  end
+
+  defp eventually(fun, attempts \\ 60) do
+    if fun.(),
+      do: :ok,
+      else:
+        (if attempts > 0 do
+           Process.sleep(100)
+           eventually(fun, attempts - 1)
+         else
+           flunk("eventual delivery did not complete")
+         end)
+  end
+
+  test "independent HTTPS nodes exchange, retry, restart, reject attacks, revise and withdraw" do
+    dir = temp()
+    ca = certs(dir)
+    a_port = port()
+    b_port = port()
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    network = [
+      test_routes: %{
+        "alpha.example" => {{127, 0, 0, 1}, a_port},
+        "beta.example" => {{127, 0, 0, 1}, b_port}
+      },
+      test_cacerts: [ca]
+    ]
+
+    alpha = "https://alpha.example/actors/shop"
+    beta = "https://beta.example/actors/shop"
+    am = metadata(alpha, 0, %{title: "<script>alert(1)</script> alpha part"})
+    bm = metadata(beta, 0, %{title: "Beta service", price: :quote})
+    assert command(a, %{op: "publish", event: "a0", metadata: am, revision: 0})["ok"]
+    assert command(b, %{op: "publish", event: "b0", metadata: bm, revision: 0})["ok"]
+    command(a, %{op: "deliver"})
+    command(b, %{op: "deliver"})
+    command(a, %{op: "drain"})
+    command(b, %{op: "drain"})
+
+    for p <- [a, b] do
+      s = command(p, %{op: "snapshot"})
+      assert length(s["listings"]) == 2
+      assert s["ledger"] == "locally-owned-signed-history"
+
+      assert Enum.sort(Enum.map(s["listings"], & &1["source"])) == [
+               "alpha.example",
+               "beta.example"
+             ]
+    end
+
+    {:ok, 200, _, html} =
+      Network.request(
+        :get,
+        "https://beta.example/market",
+        [{"host", "beta.example"}],
+        "",
+        network
+      )
+
+    assert html =~ "&lt;script&gt;" and html =~ "alpha.example" and html =~ "beta.example"
+    refute html =~ "<script>"
+    # Re-deliver an identical signed activity, then attempt tampering and
+    # origin/actor substitution using a valid sender key.
+    key = Signature.private!(a_dir <> "/signing.key")
+    a0 = activity(am, Base.encode16(:crypto.hash(:sha256, "a0"), case: :lower))
+    url = beta <> "/inbox"
+
+    send_activity = fn value ->
+      body = Jason.encode!(value)
+      Network.request(:post, url, Signature.sign(url, alpha, key, body), body, network)
+    end
+
+    assert {:ok, 202, _, _} = send_activity.(a0)
+    assert command(b, %{op: "snapshot"})["inbox_count"] == 1
+
+    for bad <- [
+          Map.put(a0, "actor", beta),
+          put_in(a0, ["object", "id"], bm["id"]),
+          Map.put(a0, "command", %{"type" => "reserve_stock"}),
+          Map.put(a0, "type", "Offer")
+        ] do
+      assert {:ok, 401, _, _} = send_activity.(bad)
+    end
+
+    body = Jason.encode!(a0)
+    h = Signature.sign(url, alpha, key, body)
+    assert {:ok, 401, _, _} = Network.request(:post, url, h, body <> " ", network)
+    # Crash the receiver after durable enqueue but before projection.
+    am1 = metadata(alpha, 1, %{title: "Revised alpha"})
+    assert command(a, %{op: "publish", event: "a1", metadata: am1, revision: 1})["ok"]
+    command(a, %{op: "deliver"})
+    stop(b)
+    b2 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+    on_exit(fn -> stop(b2) end)
+    command(b2, %{op: "drain"})
+
+    assert Enum.any?(
+             command(b2, %{op: "snapshot"})["listings"],
+             &(&1["metadata"]["revision"] == 1)
+           )
+
+    # Partition: durable outbound work survives sender restart and eventually
+    # removes the cached listing when the receiver returns.
+    stop(b2)
+    assert command(a, %{op: "withdraw", event: "a-delete", id: am["id"]})["ok"]
+    command(a, %{op: "deliver"})
+    assert command(a, %{op: "snapshot"})["pending"] == 1
+    stop(a)
+    a2 = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b3 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a2)
+      stop(b3)
+    end)
+
+    eventually(fn ->
+      command(a2, %{op: "deliver"})
+      command(a2, %{op: "snapshot"})["pending"] == 0
+    end)
+
+    command(b3, %{op: "drain"})
+    assert command(a2, %{op: "snapshot"})["pending"] == 0
+    assert length(command(b3, %{op: "snapshot"})["listings"]) == 1
+    # A re-signed delayed Create cannot resurrect a withdrawn listing.
+    assert {:ok, 202, _, _} = send_activity.(a0)
+    command(b3, %{op: "drain"})
+    assert length(command(b3, %{op: "snapshot"})["listings"]) == 1
+    assert command(b3, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+    # Current actor document is fetched on every authentication: old keys
+    # become unusable on a TLS-authenticated actor-key rotation.
+    stop(a2)
+    replacement = key()
+
+    File.write!(
+      a_dir <> "/signing.key",
+      :public_key.pem_encode([:public_key.pem_entry_encode(:RSAPrivateKey, replacement)])
+    )
+
+    a3 = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    on_exit(fn -> stop(a3) end)
+    assert {:ok, 401, _, _} = send_activity.(a0)
+    body = Jason.encode!(a0)
+
+    assert {:ok, 202, _, _} =
+             Network.request(
+               :post,
+               url,
+               Signature.sign(url, alpha, replacement, body),
+               body,
+               network
+             )
+
+    command(b3, %{op: "block", key: "alpha.example", blocked: true})
+
+    assert {:ok, 401, _, _} =
+             Network.request(
+               :post,
+               url,
+               Signature.sign(url, alpha, replacement, body),
+               body,
+               network
+             )
+  end
+end

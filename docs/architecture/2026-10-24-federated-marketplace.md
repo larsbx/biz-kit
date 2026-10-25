@@ -169,3 +169,18 @@ merchant on A, without either joining a central biz-kit server, and can
 complete a separate authorized transaction through domain interfaces even
 when A and B preserve independent ledgers and administration. Network
 partitions degrade availability, not ownership, history or safety.
+
+## Implementation update — 2026-10-25
+
+The pure wire contract was reviewed and merged in PR #114. The opt-in
+[`federation_service`](../../apps/federation_service/README.md) now supplies
+an explicit-peering read-only discovery pilot: HTTPS actor/key discovery,
+signed inbox verification, bounded IP-pinned safe fetching, journaled
+inbox/projections/delivery, revision and terminal-tombstone handling, durable
+moderation, source/freshness-attributed combined search and an isolated
+real-TLS two-OS-process harness. See its README for exact acceptance and limits.
+
+This does not establish general ActivityPub or Mastodon compatibility. Local
+ledger/disclosure adapters, subscriptions, production-scale retention and
+cross-node commerce remain separate gates. No foreign activity gains a local
+principal grant or a business-command path.
