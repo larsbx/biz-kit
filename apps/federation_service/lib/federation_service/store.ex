@@ -72,6 +72,13 @@ defmodule FederationService.Store do
 
   def handle_info({port, {:exit_status, _}}, %{lock: port} = s), do: {:stop, :writer_lock_lost, s}
 
+  def handle_info({:DOWN, ref, :process, pid, _}, s) do
+    case s.subscribers[pid] do
+      {^ref, _} -> {:noreply, %{s | subscribers: Map.delete(s.subscribers, pid)}}
+      _ -> {:noreply, s}
+    end
+  end
+
   defp restore(log, lock) do
     base = %{
       inbox: %{},
@@ -83,7 +90,8 @@ defmodule FederationService.Store do
       publications: %{}
     }
 
-    {:ok, %{log: log, lock: lock, data: replay(log, :start, base), rates: %{}}}
+    base = Map.merge(base, %{gossip_inbox: %{}, gossip_sends: %{}})
+    {:ok, %{log: log, lock: lock, data: replay(log, :start, base), rates: %{}, subscribers: %{}}}
   end
 
   defp replay(log, at, state) do
@@ -122,6 +130,70 @@ defmodule FederationService.Store do
 
   def handle_call(:snapshot, _, s), do: {:reply, s.data, s}
 
+  def handle_call(:subscribe, {pid, _}, s) do
+    cond do
+      Map.has_key?(s.subscribers, pid) ->
+        {:reply, :ok, s}
+
+      map_size(s.subscribers) >= 32 ->
+        {:reply, {:error, :capacity}, s}
+
+      true ->
+        {:reply, :ok,
+         %{s | subscribers: Map.put(s.subscribers, pid, {Process.monitor(pid), false})}}
+    end
+  end
+
+  def handle_call(:notifications_received, {pid, _}, s) do
+    subscribers = Map.update(s.subscribers, pid, {nil, false}, fn {ref, _} -> {ref, false} end)
+
+    subscribers =
+      if subscribers[pid] == {nil, false}, do: Map.delete(subscribers, pid), else: subscribers
+
+    {:reply, :ok, %{s | subscribers: subscribers}}
+  end
+
+  def handle_call({:gossip_enqueue, item}, _, s) do
+    id = item.candidate.activity_id
+
+    cross = s.data.inbox[id]
+
+    case if(cross == nil, do: s.data.gossip_inbox[id], else: {:cross, cross}) do
+      {:cross, %{activity: activity}} when activity == item.activity ->
+        {:reply, {:ok, :duplicate}, s}
+
+      {:cross, _} ->
+        {:reply, {:error, :activity_conflict}, s}
+
+      nil ->
+        if map_size(s.data.gossip_inbox) >= 10_000,
+          do: {:reply, {:error, :capacity}, s},
+          else: commit(s, [{:gossip_inbox, id, item}], {:ok, :queued})
+
+      %{hash: hash} when hash == item.hash ->
+        {:reply, {:ok, :duplicate}, s}
+
+      _ ->
+        {:reply, {:error, :activity_conflict}, s}
+    end
+  end
+
+  def handle_call({:gossip_project, id, metadata, now}, _, s),
+    do: project(s, :gossip_inbox, id, metadata, now)
+
+  def handle_call({:gossip_reject, id, reason}, _, s) do
+    row = Map.fetch!(s.data.gossip_inbox, id)
+    commit(s, [{:gossip_inbox, id, %{row | status: {:rejected, reason}}}], {:error, reason})
+  end
+
+  def handle_call({:gossip_sent, topic, id, now}, _, s) do
+    key = {topic, id}
+
+    if not Map.has_key?(s.data.gossip_sends, key) and map_size(s.data.gossip_sends) >= 10_000,
+      do: {:reply, {:error, :capacity}, s},
+      else: commit(s, [{:gossip_sends, key, now}], :ok)
+  end
+
   def handle_call({:rate, key, limit, now}, _, s) do
     rates = Map.filter(s.rates, fn {_, {at, _}} -> at == div(now, 60) end)
     {_, n} = Map.get(rates, key, {div(now, 60), 0})
@@ -139,7 +211,15 @@ defmodule FederationService.Store do
   def handle_call({:enqueue, activity, candidate, hash, now}, _, s) do
     id = candidate.activity_id
 
-    case s.data.inbox[id] do
+    cross = s.data.gossip_inbox[id]
+
+    case if(cross == nil, do: s.data.inbox[id], else: {:cross, cross}) do
+      {:cross, %{activity: ^activity}} ->
+        {:reply, {:ok, :duplicate}, s}
+
+      {:cross, _} ->
+        {:reply, {:error, :activity_conflict}, s}
+
       nil ->
         if map_size(s.data.inbox) >= 10_000 do
           {:reply, {:error, :capacity}, s}
@@ -186,47 +266,7 @@ defmodule FederationService.Store do
       )
 
   def handle_call({:project, id, metadata, now}, _, s) do
-    item = Map.fetch!(s.data.inbox, id)
-    c = item.candidate
-    old = s.data.remote[c.listing_id]
-
-    result =
-      cond do
-        item.status != :pending ->
-          {:error, :already_processed}
-
-        blocked?(s.data, c.actor, c.listing_id) ->
-          {:error, :blocked}
-
-        old != nil and old.actor != c.actor ->
-          {:error, :owner_substitution}
-
-        c.kind == :delete ->
-          {:ok,
-           %{
-             actor: c.actor,
-             source: URI.parse(c.actor).host,
-             listing_id: c.listing_id,
-             withdrawn: true,
-             verified_at: now,
-             metadata: nil,
-             activity_id: id
-           }}
-
-        old != nil and old.withdrawn ->
-          {:error, :withdrawn}
-
-        true ->
-          project_metadata(c, metadata, old, now)
-      end
-
-    case result do
-      {:ok, row} ->
-        commit(s, [{:remote, c.listing_id, row}, {:inbox, id, %{item | status: :applied}}], :ok)
-
-      {:error, reason} ->
-        commit(s, [{:inbox, id, %{item | status: {:rejected, reason}}}], {:error, reason})
-    end
+    project(s, :inbox, id, metadata, now)
   end
 
   def handle_call({:publish, event_id, activity, metadata, destinations, now}, _, s) do
@@ -332,6 +372,61 @@ defmodule FederationService.Store do
     commit(s, [{:outbox, key, row}], :ok)
   end
 
+  defp project(s, table, id, metadata, now) do
+    item = Map.fetch!(Map.fetch!(s.data, table), id)
+    c = item.candidate
+    old = s.data.remote[c.listing_id]
+
+    result =
+      cond do
+        item.status != :pending ->
+          {:error, :already_processed}
+
+        blocked?(s.data, c.actor, c.listing_id) ->
+          {:error, :blocked}
+
+        old != nil and old.actor != c.actor ->
+          {:error, :owner_substitution}
+
+        c.kind == :delete ->
+          {:ok,
+           %{
+             actor: c.actor,
+             source: URI.parse(c.actor).host,
+             listing_id: c.listing_id,
+             withdrawn: true,
+             verified_at: now,
+             metadata: nil,
+             activity_id: id
+           }}
+
+        old != nil and old.withdrawn ->
+          {:error, :withdrawn}
+
+        true ->
+          project_metadata(c, metadata, old, now)
+      end
+
+    case result do
+      {:ok, row} ->
+        row =
+          if table == :gossip_inbox do
+            Map.merge(row, %{
+              transport: "iroh-gossip",
+              halaqa_scope: Map.take(item.envelope, ~w(halaqa_id charter_hash epoch)),
+              publisher_key: item.envelope["publisher"]
+            })
+          else
+            row
+          end
+
+        commit(s, [{:remote, c.listing_id, row}, {table, id, %{item | status: :applied}}], :ok)
+
+      {:error, reason} ->
+        commit(s, [{table, id, %{item | status: {:rejected, reason}}}], {:error, reason})
+    end
+  end
+
   defp project_metadata(c, m, old, now) do
     with {:ok, _} <- Marketplace.validate_metadata(m, c.actor),
          true <- m["id"] == c.listing_id do
@@ -360,7 +455,21 @@ defmodule FederationService.Store do
 
   defp commit(s, changes, result) do
     with :ok <- :disk_log.log(s.log, {:transaction, changes}), :ok <- :disk_log.sync(s.log) do
-      {:reply, result, %{s | data: apply_changes({:transaction, changes}, s.data)}}
+      # Notifications are hints after durability, coalesced to one per subscriber.
+      subscribers =
+        if Enum.any?(changes, fn {table, _, _} ->
+             table in [:local, :blocks, :gossip_inbox]
+           end) do
+          Map.new(s.subscribers, fn {pid, {ref, pending}} ->
+            unless pending, do: send(pid, {:discovery_committed, self()})
+            {pid, {ref, true}}
+          end)
+        else
+          s.subscribers
+        end
+
+      {:reply, result,
+       %{s | data: apply_changes({:transaction, changes}, s.data), subscribers: subscribers}}
     else
       error -> {:stop, {:storage_failure, error}, {:error, :storage_failure}, s}
     end

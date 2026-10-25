@@ -4,6 +4,7 @@ on:
     paths:
       - 'apps/federation_core/**'
       - 'apps/federation_service/**'
+      - 'native/marketplace_gossip/**'
       - 'scripts/test-federation-service.sh'
       - '.github/workflows/federation-discovery.yml'
   push:
@@ -11,6 +12,7 @@ on:
     paths:
       - 'apps/federation_core/**'
       - 'apps/federation_service/**'
+      - 'native/marketplace_gossip/**'
       - 'scripts/test-federation-service.sh'
       - '.github/workflows/federation-discovery.yml'
 permissions:
@@ -26,4 +28,14 @@ jobs:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - run: mix local.hex --force && mix local.rebar --force
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt, clippy
+      - run: cargo fmt --check --manifest-path native/marketplace_gossip/Cargo.toml
+      - run: cargo clippy --locked --all-targets --manifest-path native/marketplace_gossip/Cargo.toml -- -D warnings
+      - run: cargo test --locked --manifest-path native/marketplace_gossip/Cargo.toml
+      - run: cargo build --locked --manifest-path native/marketplace_gossip/Cargo.toml
       - run: scripts/test-federation-service.sh
+        env:
+          BIZKIT_GOSSIP_EXECUTABLE: ${{ github.workspace }}/native/marketplace_gossip/target/debug/bizkit-marketplace-gossip

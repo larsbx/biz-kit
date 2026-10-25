@@ -129,7 +129,10 @@ defmodule FederationService do
     needle = query |> String.slice(0, 160) |> String.downcase()
 
     (Map.values(s.local) ++ Map.values(s.remote))
-    |> Enum.reject(&(&1.withdrawn or Store.blocked?(s, &1.actor, &1.listing_id)))
+    |> Enum.reject(
+      &(&1.withdrawn or Store.blocked?(s, &1.actor, &1.listing_id) or
+          not FederationService.Gossip.visible?(config, &1))
+    )
     |> Enum.filter(fn r ->
       String.contains?(
         String.downcase(r.metadata["name"] <> " " <> r.metadata["summary"]),

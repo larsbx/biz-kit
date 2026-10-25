@@ -193,3 +193,22 @@ work pauses on peer removal or moderation, resumes when locally permitted, and
 retires unsent obsolete revisions. Reconciliation is bounded and journaled;
 remote projections do not become publications or business authority. This does
 not add subscriptions, a remote cache-reset protocol or retention/compaction.
+
+## Event-driven P2P discovery experiment
+
+The optional `FederationService.GossipWorker` publishes committed current
+marketplace projections over a native iroh-gossip sidecar. Installations
+subscribe to a Halaqa-scoped topic; endpoint authentication protects connections,
+while an Ed25519 application signature and explicit local actor/key pins protect
+publisher identity through forwarding neighbors. The accepted Create/Update/Delete
+and listing-v1 schemas remain unchanged. Signed inline metadata avoids remote
+URL fetching on this transport.
+
+The circle ID, charter digest and epoch are signed routing context, not an
+assertion of adopted Halaqa rules, membership or delegation. This candidate
+transport cannot append a canonical Halaqa/business event or execute a local
+business command. A topic or peer connection confers no business authority.
+Lossy gossip is repaired by bounded reannouncement from durable home projections;
+a local broadcast receipt does not establish remote durable delivery. The exact
+candidate envelope, direct-connect limits, trust pins, recovery and tests are
+specified in `native/marketplace_gossip/README.md`.

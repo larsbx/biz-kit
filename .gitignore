@@ -6,3 +6,4 @@ erl_crash.dump
 *.ez
 /tmp/
 /.e2e/
+/native/marketplace_gossip/target/
