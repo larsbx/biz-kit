@@ -1,0 +1,29 @@
+name: Federation discovery
+on:
+  pull_request:
+    paths:
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'scripts/test-federation-service.sh'
+      - '.github/workflows/federation-discovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'scripts/test-federation-service.sh'
+      - '.github/workflows/federation-discovery.yml'
+permissions:
+  contents: read
+jobs:
+  two-node-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix local.hex --force && mix local.rebar --force
+      - run: scripts/test-federation-service.sh

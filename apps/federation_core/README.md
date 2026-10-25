@@ -18,3 +18,8 @@ perform that verification. Wire-level URL shape checks are NOT an SSRF defense.
 Use the design decision in
 [`docs/architecture/2026-10-24-federated-marketplace.md`](../../docs/architecture/2026-10-24-federated-marketplace.md)
 before deploying this contract. Run `mix test` in this directory.
+
+The optional host app [`federation_service`](../federation_service/README.md)
+provides the explicitly peered read-only discovery pilot around this unchanged
+wire contract. It owns transport authentication and a separate discovery cache;
+this pure module still does not authenticate requests or authorize business work.
