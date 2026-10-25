@@ -101,7 +101,9 @@ defmodule FederationService.Store do
         gossip_sends: %{},
         sync_incoming: %{},
         sync_outgoing: %{},
-        sync_meta: %{}
+        sync_meta: %{},
+        lease_local: %{},
+        lease_remote: %{}
       })
 
     {:ok,
@@ -150,6 +152,27 @@ defmodule FederationService.Store do
   end
 
   def handle_call(:snapshot, _, s), do: {:reply, s.data, s}
+
+  def handle_call({:lease_issue, ctx, activity_id, ttl, now}, _, s) do
+    case FederationService.GossipLease.issue(s.data, ctx, activity_id, ttl, now) do
+      {:ok, key, row} -> commit(s, [{:lease_local, key, row}], {:ok, row.message})
+      error -> {:reply, error, s}
+    end
+  end
+
+  def handle_call({:lease_accept, ctx, message, now}, _, s) do
+    case FederationService.GossipLease.accept(s.data, ctx, message, now) do
+      {:ok, key, row} -> commit(s, [{:lease_remote, key, row}], {:ok, :accepted})
+      result -> {:reply, result, s}
+    end
+  end
+
+  def handle_call({:lease_sent, id, now}, _, s) do
+    case FederationService.GossipLease.entry(s.data, id) do
+      {key, row} -> commit(s, [{:lease_local, key, %{row | last_sent: now}}], :ok)
+      nil -> {:reply, :ok, s}
+    end
+  end
 
   def handle_call({:sync_put, table, key, row}, _, s)
       when table in [:sync_incoming, :sync_outgoing] do
@@ -598,7 +621,14 @@ defmodule FederationService.Store do
       # Notifications are hints after durability, coalesced to one per subscriber.
       subscribers =
         if Enum.any?(changes, fn {table, _, _} ->
-             table in [:local, :blocks, :gossip_inbox, :sync_incoming, :sync_outgoing]
+             table in [
+               :local,
+               :blocks,
+               :gossip_inbox,
+               :sync_incoming,
+               :sync_outgoing,
+               :lease_local
+             ]
            end) do
           Map.new(s.subscribers, fn {pid, {ref, pending}} ->
             unless pending, do: send(pid, {:discovery_committed, self()})

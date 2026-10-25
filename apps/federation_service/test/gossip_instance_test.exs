@@ -136,6 +136,16 @@ defmodule FederationService.GossipInstanceTest do
     eventually(fn -> command(a, %{op: "catchup_status", round: round})["state"] == "complete" end)
     assert command(a, %{op: "catchup_status", round: round})["current"]
 
+    assert command(b, %{op: "renew", id: bm["id"]})["ok"]
+
+    eventually(fn ->
+      Enum.any?(command(a, %{op: "snapshot"})["listings"], fn row ->
+        row["actor"] == beta and row["freshness_source"] == "publisher_lease"
+      end)
+    end)
+
+    assert command(b, %{op: "snapshot"})["events"] == 1
+
     assert command(a, %{op: "publish", event: "a1", metadata: metadata(alpha, 1), revision: 1})[
              "ok"
            ]
@@ -180,6 +190,11 @@ defmodule FederationService.GossipInstanceTest do
     assert command(a2, %{op: "snapshot"})["completed_rounds"] == 1
     assert command(a2, %{op: "catchup_status", round: round})["state"] == "complete"
     refute command(a2, %{op: "catchup_status", round: round})["current"]
+
+    assert [%{"freshness_source" => "publisher_lease", "stale" => false}] =
+             command(a2, %{op: "snapshot"})["listings"]
+
+    assert command(b2, %{op: "snapshot"})["events"] == 1
 
     withdrawal_round = command(a2, %{op: "catchup", receiver: beta})["status"]
     assert is_binary(withdrawal_round)

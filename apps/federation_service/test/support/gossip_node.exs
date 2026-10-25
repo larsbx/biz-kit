@@ -65,6 +65,14 @@ Stream.repeatedly(fn -> IO.gets("") end)
         "withdraw" ->
           FederationService.withdraw(service, request["event"], request["id"])
 
+        "renew" ->
+          data = FederationService.Store.call(service.store, :snapshot)
+
+          case data.local[request["id"]] do
+            nil -> {:error, :unknown_listing}
+            row -> FederationService.GossipLease.renew(config, row.activity_id)
+          end
+
         "catchup" ->
           data = FederationService.Store.call(service.store, :snapshot)
           ids = Enum.map(data.local, fn {_, row} -> row.activity_id end)

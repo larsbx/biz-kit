@@ -127,7 +127,7 @@ are reannounced; there is no cross-node atomic snapshot or global total order.
   five-second deadlines. Partial local commands survive concurrent
   gossip-event cancellation of the input future. Unknown endpoint IDs are
   closed before gossip admission.
-- At most 16 in-flight local broadcast requests, 12 advertisement broadcasts and 4 catch-up control broadcasts/minute per Store,
+- At most 16 in-flight local broadcast requests, 12 advertisement broadcasts and 4 shared catch-up/freshness control broadcasts/minute per Store,
   120 incoming attempts/minute globally and 30 per origin. Rate counters reset
   on restart. Receipt hints are coalesced to one per subscriber, at most 32
   subscribers; the periodic repair pass recovers missed hints and lossy buffers.
@@ -141,8 +141,8 @@ are reannounced; there is no cross-node atomic snapshot or global total order.
   10,000 distinct topic/activity send timestamps. No replay/tombstone eviction.
 
 Repeated same-ID events do not renew freshness. An advertisement becomes
-visibly stale after an hour unless a new accepted revision arrives; this
-adapter does not yet implement signed freshness leases. The HTTP refresh path
+visibly stale after an hour unless a new accepted revision or matching explicit
+publisher freshness lease applies. The HTTP refresh path
 explicitly excludes gossip projections and cannot renew their freshness from
 a metadata URL, even in a host running both transports. Anti-entropy is a
 bounded reannouncement of current snapshots, not a durable cursor protocol.
@@ -172,6 +172,25 @@ budgets bound work without promising a completion deadline.
 
 Exact wire/signature rules, API behavior, authority boundaries and tests:
 [catch-up receipt contract](../../docs/architecture/2026-10-25-gossip-catchup-receipts.md).
+
+## Explicit freshness renewal
+
+A trusted host can explicitly reaffirm a still-permitted current advertisement
+with `FederationService.GossipLease.renew(config, activity_id, ttl_seconds)`.
+TTL is 1–3,600 seconds. A signed absolute expiry, exact content binding and
+durable sequence prevent replays from extending an accepted lease. Repair
+resends an existing assertion and never renews it automatically.
+
+Search shows `freshness_source` (`projection` or `publisher_lease`) and
+`freshness_expires_at`. Matching lease expiry overrides the first-receipt grace;
+new revisions and withdrawals cannot inherit a previous activity's lease.
+The legacy first-receipt grace still exists for advertisements without a
+matching lease, including after complete journal loss. The host must check
+current publication/disclosure permission before renewing.
+
+Lease and catch-up frames share the existing control budget. Exact wire,
+clock, replay and storage rules:
+[freshness lease contract](../../docs/architecture/2026-10-25-gossip-freshness-leases.md).
 
 ## Candidate envelope v1
 
