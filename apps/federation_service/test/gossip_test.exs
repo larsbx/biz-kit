@@ -342,4 +342,83 @@ defmodule FederationService.GossipTest do
     assert id == Store.call(c.store, :snapshot).local[metadata()["id"]].activity_id
     assert length(Gossip.frames(c.sender, 2000)) == 16
   end
+
+  test "HTTP refresh never fetches or renews a signed inline gossip projection", c do
+    Gossip.receive_event(c.receiver, wire(c.sender), 1000)
+    Gossip.drain(c.receiver, 1001)
+    before = Store.call(c.store, :snapshot).remote[metadata()["id"]]
+    {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
+    {:ok, port} = :inet.port(listener)
+    on_exit(fn -> :gen_tcp.close(listener) end)
+
+    accept =
+      Task.async(fn ->
+        case :gen_tcp.accept(listener, 500) do
+          {:ok, socket} ->
+            :gen_tcp.close(socket)
+            :unexpected_connection
+
+          error ->
+            error
+        end
+      end)
+
+    service = %{
+      c.receiver.service
+      | peers: [@alpha],
+        network: [test_routes: %{"alpha.example" => {{127, 0, 0, 1}, port}}]
+    }
+
+    FederationService.refresh(service, 2000)
+    assert Task.await(accept, 1500) == {:error, :timeout}
+    assert Store.call(c.store, :snapshot).remote[metadata()["id"]] == before
+    Store.call(c.store, {:refresh, metadata()["id"], before.metadata, 3000})
+    assert Store.call(c.store, :snapshot).remote[metadata()["id"]] == before
+  end
+
+  test "a changed circle worker cannot reject queued evidence for the original circle", c do
+    Gossip.receive_event(c.receiver, wire(c.sender), 1000)
+    other = %{c.receiver | scope: Map.put(c.receiver.scope, "halaqa_id", "other-circle")}
+    Gossip.drain(other, 1001)
+
+    assert Store.call(c.store, :snapshot).gossip_inbox[@alpha <> "/activities/first"].status ==
+             :pending
+
+    Gossip.drain(c.receiver, 1002)
+    assert [_] = FederationService.search(c.receiver.service)
+  end
+
+  test "a Store permits one gossip worker and releases ownership when that process exits", c do
+    parent = self()
+
+    owner =
+      spawn(fn ->
+        :ok = Store.call(c.store, :claim_gossip_worker)
+        send(parent, :claimed)
+
+        receive do
+          :stop -> :ok
+        end
+      end)
+
+    assert_receive :claimed
+    assert {:error, :gossip_worker_exists} = Store.call(c.store, :claim_gossip_worker)
+    monitor = Process.monitor(owner)
+    send(owner, :stop)
+    assert_receive {:DOWN, ^monitor, :process, ^owner, :normal}
+
+    result =
+      Enum.reduce_while(1..50, nil, fn _, _ ->
+        case Store.call(c.store, :claim_gossip_worker) do
+          :ok ->
+            {:halt, :ok}
+
+          _ ->
+            Process.sleep(10)
+            {:cont, nil}
+        end
+      end)
+
+    assert result == :ok
+  end
 end

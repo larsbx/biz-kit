@@ -116,26 +116,35 @@ forwards a remote projection as a home-owned advertisement. Obsolete revisions
 are skipped. Partitions converge after peers reconnect and current snapshots
 are reannounced; there is no cross-node atomic snapshot or global total order.
 
-- One topic per worker; at most 32 publisher pins and 32 incoming endpoint IDs.
+- One gossip worker and one circle per discovery journal; use separate Stores
+  and directories for separate circles. After an epoch change, old queued
+  evidence remains scoped to its original context; publishers must issue a new
+  accepted source event/revision for current-context discovery. At most 32
+  publisher pins and 32 incoming endpoint IDs.
 - 65,536-byte wire frames, 90,000-byte local command lines, bounded JSON depth
   and duplicate-key rejection at the application admission boundary.
 - Native topic event buffer 32; up to 32 concurrent incoming handshakes with
-  five-second deadlines. Unknown endpoint IDs are closed before gossip admission.
+  five-second deadlines. Partial local commands survive concurrent
+  gossip-event cancellation of the input future. Unknown endpoint IDs are
+  closed before gossip admission.
 - At most 16 in-flight local broadcast requests, 16 broadcasts/minute per Store,
   120 incoming attempts/minute globally and 30 per origin. Rate counters reset
   on restart. Receipt hints are coalesced to one per subscriber, at most 32
   subscribers; the periodic repair pass recovers missed hints and lossy buffers.
 - At most 16 inbox projections per pass; withdrawals run first. Repair chooses
-  least recently announced snapshots, with new withdrawals before new ads. Moderation hides
-  results and stops advertisements. The host rechecks current source/moderation before queueing a broadcast. An
-  already queued transmission can finish after policy changes. A public listing withdrawal bypasses its
+  least recently announced snapshots, with new withdrawals before new ads.
+  Moderation hides results and stops advertisements. The host rechecks current
+  source/moderation before queueing a broadcast. An already queued transmission
+  can finish after policy changes. A public listing withdrawal bypasses its
   local listing block. Publisher/hostname blocks still refuse incoming events.
 - Existing 64 MiB fail-closed journal limit; 10,000 gossip inbox receipts and
   10,000 distinct topic/activity send timestamps. No replay/tombstone eviction.
 
 Repeated same-ID events do not renew freshness. An advertisement becomes
 visibly stale after an hour unless a new accepted revision arrives; this
-adapter does not yet implement signed freshness leases. Anti-entropy is a
+adapter does not yet implement signed freshness leases. The HTTP refresh path
+explicitly excludes gossip projections and cannot renew their freshness from
+a metadata URL, even in a host running both transports. Anti-entropy is a
 bounded reannouncement of current snapshots, not a durable cursor protocol.
 At scale, rate fairness, compaction, replay-evidence backup and explicit catch-up
 receipts require further work. Deleting a journal destroys its replay evidence

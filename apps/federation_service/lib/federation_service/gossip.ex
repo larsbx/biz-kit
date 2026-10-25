@@ -134,7 +134,10 @@ defmodule FederationService.Gossip do
     data = Store.call(config.service.store, :snapshot)
 
     data.gossip_inbox
-    |> Enum.filter(fn {_, item} -> item.status == :pending end)
+    |> Enum.filter(fn {_, item} ->
+      item.status == :pending and
+        Map.take(item.envelope, ~w(halaqa_id charter_hash epoch)) === config.scope
+    end)
     |> Enum.sort_by(fn {id, item} -> {if(item.candidate.kind == :delete, do: 0, else: 1), id} end)
     |> Enum.take(16)
     |> Enum.each(fn {id, item} ->

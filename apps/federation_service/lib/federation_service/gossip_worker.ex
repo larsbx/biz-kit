@@ -8,6 +8,14 @@ defmodule FederationService.GossipWorker do
   def init(opts) do
     config = Keyword.fetch!(opts, :config)
     store = GenServer.whereis(config.service.store)
+
+    case Store.call(store, :claim_gossip_worker) do
+      :ok -> start_port(opts, config, store)
+      {:error, reason} -> {:stop, reason}
+    end
+  end
+
+  defp start_port(opts, config, store) do
     :ok = Store.call(store, :subscribe)
     monitor = Process.monitor(store)
 
@@ -43,6 +51,17 @@ defmodule FederationService.GossipWorker do
        force: false
      }}
   end
+
+  def format_status(%{state: %{config: config} = state} = status) do
+    config =
+      config
+      |> Map.put(:seed, :redacted)
+      |> Map.update!(:service, &Map.put(&1, :private_key, :redacted))
+
+    %{status | state: %{state | config: config}}
+  end
+
+  def format_status(status), do: status
 
   def handle_call(:address, _, state), do: {:reply, state.address, state}
 

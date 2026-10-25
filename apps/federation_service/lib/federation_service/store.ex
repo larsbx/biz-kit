@@ -73,10 +73,14 @@ defmodule FederationService.Store do
   def handle_info({port, {:exit_status, _}}, %{lock: port} = s), do: {:stop, :writer_lock_lost, s}
 
   def handle_info({:DOWN, ref, :process, pid, _}, s) do
-    case s.subscribers[pid] do
-      {^ref, _} -> {:noreply, %{s | subscribers: Map.delete(s.subscribers, pid)}}
-      _ -> {:noreply, s}
-    end
+    subscribers =
+      case s.subscribers[pid] do
+        {^ref, _} -> Map.delete(s.subscribers, pid)
+        _ -> s.subscribers
+      end
+
+    worker = if match?(%{monitor: ^ref}, s.gossip_worker), do: nil, else: s.gossip_worker
+    {:noreply, %{s | subscribers: subscribers, gossip_worker: worker}}
   end
 
   defp restore(log, lock) do
@@ -92,7 +96,16 @@ defmodule FederationService.Store do
     }
 
     base = Map.merge(base, %{gossip_inbox: %{}, gossip_sends: %{}})
-    {:ok, %{log: log, lock: lock, data: replay(log, :start, base), rates: %{}, subscribers: %{}}}
+
+    {:ok,
+     %{
+       log: log,
+       lock: lock,
+       data: replay(log, :start, base),
+       rates: %{},
+       subscribers: %{},
+       gossip_worker: nil
+     }}
   end
 
   defp replay(log, at, state) do
@@ -130,6 +143,14 @@ defmodule FederationService.Store do
   end
 
   def handle_call(:snapshot, _, s), do: {:reply, s.data, s}
+
+  def handle_call(:claim_gossip_worker, {pid, _}, s) do
+    case s.gossip_worker do
+      nil -> {:reply, :ok, %{s | gossip_worker: %{pid: pid, monitor: Process.monitor(pid)}}}
+      %{pid: ^pid} -> {:reply, :ok, s}
+      _ -> {:reply, {:error, :gossip_worker_exists}, s}
+    end
+  end
 
   def handle_call(:subscribe, {pid, _}, s) do
     cond do
@@ -339,7 +360,8 @@ defmodule FederationService.Store do
     row = Map.fetch!(s.data.remote, id)
 
     row =
-      if not row.withdrawn and not blocked?(s.data, row.actor, id) do
+      if not row.withdrawn and Map.get(row, :transport) != "iroh-gossip" and
+           not blocked?(s.data, row.actor, id) do
         row = %{row | checked_at: now}
         if row.metadata == metadata, do: %{row | verified_at: now}, else: row
       else

@@ -114,7 +114,7 @@ defmodule FederationService do
 
     s.remote
     |> Enum.filter(fn {_, r} ->
-      not r.withdrawn and r.actor in config.peers and
+      not r.withdrawn and Map.get(r, :transport) != "iroh-gossip" and r.actor in config.peers and
         not Store.blocked?(s, r.actor, r.listing_id) and now - r.checked_at >= 900
     end)
     |> Enum.take(4)

@@ -44,8 +44,10 @@ fn output(value: serde_json::Value) -> Result<()> {
     out.flush()?;
     Ok(())
 }
-async fn line<R: AsyncBufRead + Unpin>(input: &mut R) -> Result<Option<Vec<u8>>> {
-    let mut result = Vec::new();
+async fn line<R: AsyncBufRead + Unpin>(
+    input: &mut R,
+    result: &mut Vec<u8>,
+) -> Result<Option<Vec<u8>>> {
     loop {
         let bytes = input.fill_buf().await?;
         if bytes.is_empty() {
@@ -58,7 +60,7 @@ async fn line<R: AsyncBufRead + Unpin>(input: &mut R) -> Result<Option<Vec<u8>>>
         result.extend_from_slice(&bytes[..used]);
         input.consume(used);
         if newline.is_some() {
-            return Ok(Some(result));
+            return Ok(Some(std::mem::take(result)));
         }
     }
 }
@@ -66,8 +68,12 @@ async fn line<R: AsyncBufRead + Unpin>(input: &mut R) -> Result<Option<Vec<u8>>>
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
     let mut input = BufReader::new(tokio::io::stdin());
-    let config: Config =
-        serde_json::from_slice(&line(&mut input).await?.context("config required")?)?;
+    let mut partial = Vec::new();
+    let config: Config = serde_json::from_slice(
+        &line(&mut input, &mut partial)
+            .await?
+            .context("config required")?,
+    )?;
     ensure!(
         config.peers.len() <= 32 && config.allowed_endpoints.len() <= 32,
         "peer limit"
@@ -149,7 +155,7 @@ async fn main() -> Result<()> {
 
     loop {
         tokio::select! {
-            command = line(&mut input) => {
+            command = line(&mut input, &mut partial) => {
                 let Some(command) = command? else { break; };
                 match serde_json::from_slice::<Command>(&command)? {
                     Command::Stop => break,
@@ -184,18 +190,33 @@ mod tests {
     #[tokio::test]
     async fn bounded_lines_preserve_separate_commands() {
         let mut reader = BufReader::new(&b"first\nsecond\n"[..]);
-        assert_eq!(line(&mut reader).await.unwrap().unwrap(), b"first\n");
-        assert_eq!(line(&mut reader).await.unwrap().unwrap(), b"second\n");
-        assert!(line(&mut reader).await.unwrap().is_none());
+        let mut partial = Vec::new();
+        assert_eq!(
+            line(&mut reader, &mut partial).await.unwrap().unwrap(),
+            b"first\n"
+        );
+        assert_eq!(
+            line(&mut reader, &mut partial).await.unwrap().unwrap(),
+            b"second\n"
+        );
+        assert!(line(&mut reader, &mut partial).await.unwrap().is_none());
     }
     #[tokio::test]
     async fn oversized_command_is_refused_before_unbounded_allocation() {
         let data = vec![b'x'; MAX_LINE + 1];
-        assert!(line(&mut BufReader::new(data.as_slice())).await.is_err());
+        assert!(
+            line(&mut BufReader::new(data.as_slice()), &mut Vec::new())
+                .await
+                .is_err()
+        );
     }
     #[tokio::test]
     async fn truncated_command_is_refused() {
-        assert!(line(&mut BufReader::new(&b"truncated"[..])).await.is_err());
+        assert!(
+            line(&mut BufReader::new(&b"truncated"[..]), &mut Vec::new())
+                .await
+                .is_err()
+        );
     }
     #[test]
     fn command_rejects_unknown_fields_and_operations() {
@@ -206,5 +227,25 @@ mod tests {
             .is_err()
         );
         assert!(serde_json::from_str::<Command>(r#"{"op":"execute","body":""}"#).is_err());
+    }
+    #[tokio::test]
+    async fn partial_command_survives_cancellation_by_a_concurrent_gossip_event() {
+        use tokio::io::AsyncWriteExt;
+        let (mut writer, reader) = tokio::io::duplex(32);
+        let mut input = BufReader::new(reader);
+        let mut partial = Vec::new();
+        writer.write_all(b"prefix").await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), line(&mut input, &mut partial))
+                .await
+                .is_err()
+        );
+        assert_eq!(partial, b"prefix");
+        writer.write_all(b"-suffix\n").await.unwrap();
+        assert_eq!(
+            line(&mut input, &mut partial).await.unwrap().unwrap(),
+            b"prefix-suffix\n"
+        );
+        assert!(partial.is_empty());
     }
 }
