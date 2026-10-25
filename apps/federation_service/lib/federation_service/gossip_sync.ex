@@ -22,8 +22,12 @@ defmodule FederationService.GossipSync do
       when is_binary(value) or is_integer(value) or is_boolean(value) or is_nil(value),
       do: Jason.encode!(value)
 
-  def content_hash(activity, metadata),
-    do: digest(%{"activity" => activity, "metadata" => metadata})
+  @doc "Content commitment, or nil when an advertisement uses values outside this profile."
+  def content_hash(activity, metadata) do
+    digest(%{"activity" => activity, "metadata" => metadata})
+  rescue
+    FunctionClauseError -> nil
+  end
 
   defp digest(value), do: :crypto.hash(:sha256, canonical(value)) |> Base.encode16(case: :lower)
 
@@ -46,7 +50,8 @@ defmodule FederationService.GossipSync do
              activity = data.publications[activity_id]
              row = data.local[activity["object"]["id"]]
              %{"id" => activity_id, "hash" => content_hash(activity, row.metadata)}
-           end) do
+           end),
+         true <- Enum.all?(entries, &hex?(&1["hash"], 64)) do
       message =
         Map.merge(config.scope, %{
           "schema" => @schema,

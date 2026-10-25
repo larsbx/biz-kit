@@ -329,6 +329,46 @@ defmodule FederationService.GossipSyncTest do
            end) == 1
   end
 
+  test "accepted attachment extensions outside the hash profile cannot crash durable repair", c do
+    id = publish(c.a)
+    {:ok, _round} = GossipSync.start_round(c.a, @beta, [id], 1000)
+    assert :ok = GossipSync.receive_event(c.b, frame(c.a), 1000)
+    data = Store.call(c.a.service.store, :snapshot)
+    original = data.publications[id]
+    [attachment] = original["object"]["attachment"]
+    extended = put_in(original["object"]["attachment"], [Map.put(attachment, "weight", 1.5)])
+
+    assert {:ok, _} =
+             FederationCore.Marketplace.decode_verified(extended, %{verified_actor: @alpha})
+
+    assert is_nil(GossipSync.content_hash(extended, metadata()))
+    assert {:ok, wire} = Gossip.encode(c.a, extended, metadata())
+    assert {:ok, :queued} = Gossip.receive_event(c.b, wire, 1001)
+    Gossip.drain(c.b, 1001)
+    assert Store.call(c.b.service.store, :snapshot).gossip_inbox[id].status == :applied
+    GossipSync.drain(c.b, 1002)
+    assert GossipSync.frames(c.b, 1002, MapSet.new()) == []
+    # The durable offer/activity pair is revisited after a receiver restart.
+    GenServer.stop(c.b.service.store)
+    {:ok, b} = Store.start_link(directory: c.dir <> "/b")
+    on_exit(fn -> stop_store(b) end)
+    bc = %{c.b | service: %{c.b.service | store: b}}
+    GossipSync.drain(bc, 1003)
+    assert GossipSync.frames(bc, 1003, MapSet.new()) == []
+    assert Process.alive?(b)
+    # A host's unsupported publication must also refuse round construction.
+    {:ok, local} = Store.start_link(directory: c.dir <> "/extended")
+    on_exit(fn -> stop_store(local) end)
+    ac = %{c.a | service: %{c.a.service | store: local}}
+
+    assert {:ok, :published} =
+             Store.call(local, {:publish, "extended", extended, metadata(), [], 1000})
+
+    assert {:error, :catchup_refused} = GossipSync.start_round(ac, @beta, [id], 1001)
+    assert GossipSync.frames(ac, 1001, MapSet.new()) == []
+    assert [%{activity_id: ^id}] = FederationService.search(bc.service, "", 1004)
+  end
+
   test "canonical content hashes are insensitive to object order but bind exact values" do
     assert GossipSync.canonical(%{"z" => [1, true, nil], "a" => "x"}) ==
              ~s({"a":"x","z":[1,true,null]})

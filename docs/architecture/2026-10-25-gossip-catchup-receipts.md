@@ -53,7 +53,10 @@ Canonical JSON for this profile recursively sorts object keys by their UTF-8
 bytes, preserves array order, uses decimal integer spelling, and uses Jason
 1.4.5's JSON string escaping without whitespace. The accepted subset contains
 strings, integers, booleans, null, arrays and string-keyed objects; floats are
-not supported. This is a profile-specific format, not a claim of RFC 8785
+not supported. An otherwise valid advertisement can contain attachment extension
+values outside this subset. Such content has no catch-up hash: a local round
+is refused and a remote offer stays nonmatching, including after restart.
+Ordinary advertisement admission and repair continue. This is a profile-specific format, not a claim of RFC 8785
 conformance. `GossipSync.canonical/1` implements it and has a fixed test vector.
 
 The content hash is SHA-256 of that canonical activity/metadata object. The
