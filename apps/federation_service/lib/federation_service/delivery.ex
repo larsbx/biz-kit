@@ -54,7 +54,9 @@ defmodule FederationService.Delivery do
 
     candidates =
       data.local
-      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.sort_by(fn {id, source} ->
+        {if(source.withdrawn, do: 0, else: 1), id}
+      end)
       |> Stream.filter(fn {_, source} -> source.actor == actor end)
       |> Stream.flat_map(fn {_, source} ->
         # Activities come only from the durable accepted source projection.

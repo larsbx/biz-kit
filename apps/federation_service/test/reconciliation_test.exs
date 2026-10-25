@@ -154,6 +154,31 @@ defmodule FederationService.ReconciliationTest do
     assert map_size(full.outbox) == 10_000
   end
 
+  test "withdrawals reserve insertion priority before batch and capacity limits", c do
+    for n <- 1..33 do
+      m = metadata(@actor, 0, %{listing_id: "https://alpha.example/listings/a-live-#{n}"})
+      FederationService.publish(c.config, "live-#{n}", m)
+    end
+
+    gone = metadata(@actor, 0, %{listing_id: "https://alpha.example/listings/zz-withdrawn"})
+    FederationService.publish(c.config, "gone", gone)
+    FederationService.withdraw(c.config, "gone-delete", gone["id"])
+    original = Store.call(c.s, :snapshot)
+    config = %{c.config | peers: [@peer]}
+    assert {:ok, %{inserted: 32, more: true}} = FederationService.reconcile(config, 1000)
+    queued = Store.call(c.s, :snapshot).outbox |> Map.values()
+    assert Enum.count(queued, &(&1.activity["type"] == "Delete")) == 1
+    assert Enum.count(queued, &(&1.activity["type"] == "Create")) == 31
+
+    # Old completed receipts may leave only one slot. A live advertisement
+    # must not consume that slot ahead of the retained terminal withdrawal.
+    row = hd(queued) |> Map.put(:status, :delivered)
+    nearly_full = %{original | outbox: Map.new(1..9999, fn n -> {n, row} end)}
+    {changes, stats} = Delivery.plan(nearly_full, @actor, [@peer], 1001)
+    assert [{:outbox, _, %{activity: %{"type" => "Delete", "object" => %{"id" => id}}}}] = changes
+    assert id == gone["id"] and stats.capacity and stats.more
+  end
+
   test "terminal remote tombstones retire delayed inbox work without contacting unavailable origins",
        c do
     m = metadata()

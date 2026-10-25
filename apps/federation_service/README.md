@@ -153,7 +153,8 @@ The sender checks source identity, current activity and moderation both before
 actor discovery and immediately before starting the POST. An already started
 request may still finish after a policy/source change. Its receipt is recorded
 without changing held or superseded work back into pending work. Withdrawals
-are prioritized over bulk backfill and bypass a local listing block, while
+are prioritized before reconciliation batch/capacity truncation and before
+network transmission and bypass a local listing block, while
 peer/hostname blocks still prevent all contact with that peer. At most 16
 ready activities are sent per delivery pass.
 
