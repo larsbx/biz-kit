@@ -91,7 +91,8 @@ defmodule SpruceGoose.Web.NativeSignInTest do
     assert call(:get, "/auth/me", [{"authorization", "Bearer " <> session}]).status == 401
   end
 
-  test "logout confirms revocation without logging credentials and leaves other sessions live", ctx do
+  test "logout confirms revocation without logging credentials and leaves other sessions live",
+       ctx do
     identity = %{issuer: workos_iss(), subject: "user_A"}
     ended = BizKit.Identity.Sessions.create_native(ctx.person, identity)
     kept = BizKit.Identity.Sessions.create_native(ctx.person, identity)
