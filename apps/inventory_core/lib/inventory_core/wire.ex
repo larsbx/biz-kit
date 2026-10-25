@@ -87,9 +87,10 @@ defmodule InventoryCore.Wire do
   end
 
   defp values(wire) do
-    valid_ids = Enum.all?(@id_keys, fn key ->
-      not Map.has_key?(wire, key) or identifier(Map.get(wire, key))
-    end)
+    valid_ids =
+      Enum.all?(@id_keys, fn key ->
+        not Map.has_key?(wire, key) or identifier(Map.get(wire, key))
+      end)
 
     valid_ints =
       Enum.all?(@int_keys, fn key ->
