@@ -188,8 +188,17 @@ defmodule SpruceGoose.Web.AuthController do
 
   def logout(conn, _params) do
     conn = fetch_cookies(conn)
-    if session = conn.cookies[@session_cookie], do: Identity.logout(session)
-    if session = bearer(conn), do: Identity.logout(session)
+    cookie_session = conn.cookies[@session_cookie]
+    bearer_session = bearer(conn)
+    if cookie_session, do: :ok = Identity.logout(cookie_session)
+    if bearer_session, do: :ok = Identity.logout(bearer_session)
+
+    # Delivery and completed revocation, without a bearer, hash or principal.
+    # Logged only after Identity's synchronous durable deletion returns.
+    Logger.debug(
+      "session logout completed bearer_present=#{not is_nil(bearer_session)} " <>
+        "cookie_present=#{not is_nil(cookie_session)}"
+    )
 
     conn
     |> delete_resp_cookie(@session_cookie, cookie_opts([]))
