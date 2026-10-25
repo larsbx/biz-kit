@@ -91,6 +91,32 @@ defmodule SpruceGoose.Web.NativeSignInTest do
     assert call(:get, "/auth/me", [{"authorization", "Bearer " <> session}]).status == 401
   end
 
+  test "logout confirms revocation without logging credentials and leaves other sessions live", ctx do
+    identity = %{issuer: workos_iss(), subject: "user_A"}
+    ended = BizKit.Identity.Sessions.create_native(ctx.person, identity)
+    kept = BizKit.Identity.Sessions.create_native(ctx.person, identity)
+
+    level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: level) end)
+
+    log =
+      ExUnit.CaptureLog.capture_log([level: :debug, format: "$message\n"], fn ->
+        assert call(:post, "/auth/logout", [{"authorization", "Bearer " <> ended}]).status ==
+                 204
+      end)
+
+    assert log =~ "session logout completed bearer_present=true cookie_present=false"
+    refute log =~ ended
+    refute log =~ kept
+    refute log =~ ctx.person
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> ended}]).status == 401
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> kept}]).status == 200
+    restart_sessions()
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> ended}]).status == 401
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> kept}]).status == 200
+  end
+
   test "a native session outlives a restart, until the app signs out", ctx do
     workos_signs_in("user_A")
     %{"code" => code} = ctx |> browser_round_trip() |> location() |> query()
