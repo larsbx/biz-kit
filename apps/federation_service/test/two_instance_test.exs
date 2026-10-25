@@ -11,7 +11,7 @@ defmodule FederationService.TwoInstanceTest do
     n
   end
 
-  defp node(dir, host, port, other, other_port, certs) do
+  defp node(dir, host, port, other, other_port, certs, peers \\ nil) do
     beams = Path.wildcard(Path.expand("../../../../_build/test/lib/*/ebin", __DIR__))
     # Under isolated staging, __DIR__ may point through a symlink; code paths
     # already loaded in this VM are the authoritative build location.
@@ -28,6 +28,8 @@ defmodule FederationService.TwoInstanceTest do
           to_string(other_port),
           certs
         ]
+
+    args = if peers == nil, do: args, else: args ++ [Jason.encode!(peers)]
 
     p =
       Port.open({:spawn_executable, System.find_executable("elixir")}, [
@@ -248,5 +250,88 @@ defmodule FederationService.TwoInstanceTest do
                body,
                network
              )
+  end
+
+  test "a late peer gets current listings and withdrawals; obsolete retries never bootstrap" do
+    dir = temp()
+    certs(dir)
+    a_port = port()
+    b_port = port()
+    alpha = "https://alpha.example/actors/shop"
+    beta = "https://beta.example/actors/shop"
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir, [])
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    m0 = metadata(alpha)
+    m2 = metadata(alpha, 2, %{title: "Current revision"})
+    gone = metadata(alpha, 0, %{listing_id: "https://alpha.example/listings/gone"})
+    hidden = metadata(alpha, 0, %{listing_id: "https://alpha.example/listings/hidden"})
+    assert command(a, %{op: "publish", event: "initial", metadata: m0, revision: 0})["ok"]
+    assert command(a, %{op: "publish", event: "current", metadata: m2, revision: 2})["ok"]
+    assert command(a, %{op: "publish", event: "gone-create", metadata: gone, revision: 0})["ok"]
+    assert command(a, %{op: "withdraw", event: "gone-delete", id: gone["id"]})["ok"]
+    assert command(a, %{op: "publish", event: "hidden", metadata: hidden, revision: 0})["ok"]
+    command(a, %{op: "block", key: hidden["id"], blocked: true})
+    assert command(a, %{op: "snapshot"})["pending"] == 0
+    stop(a)
+
+    a2 = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir, [beta])
+    on_exit(fn -> stop(a2) end)
+    assert command(a2, %{op: "reconcile"})["stats"]["inserted"] == 2
+    # An identical accepted source event stays a duplicate after peering changes.
+    assert command(a2, %{op: "publish", event: "initial", metadata: m0, revision: 0})["status"] ==
+             "duplicate"
+
+    command(a2, %{op: "deliver"})
+    command(b, %{op: "drain"})
+    s = command(b, %{op: "snapshot"})
+    assert s["inbox_count"] == 2 and s["remote_withdrawn"] == 1
+    assert [%{"metadata" => %{"revision" => 2, "name" => "Current revision"}}] = s["listings"]
+    assert command(a2, %{op: "reconcile"})["stats"]["inserted"] == 0
+    command(a2, %{op: "deliver"})
+    assert command(b, %{op: "snapshot"})["inbox_count"] == 2
+
+    stop(b)
+
+    for revision <- [3, 4] do
+      assert command(a2, %{
+               op: "publish",
+               event: "rev-#{revision}",
+               metadata: metadata(alpha, revision),
+               revision: revision
+             })["ok"]
+    end
+
+    assert command(a2, %{op: "withdraw", event: "final-delete", id: m0["id"]})["ok"]
+    command(a2, %{op: "deliver"})
+    assert command(a2, %{op: "snapshot"})["superseded"] == 2
+    assert command(a2, %{op: "snapshot"})["pending"] == 1
+    stop(a2)
+
+    a3 = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b2 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a3)
+      stop(b2)
+    end)
+
+    eventually(fn ->
+      command(a3, %{op: "deliver"})
+      command(a3, %{op: "snapshot"})["pending"] == 0
+    end)
+
+    command(b2, %{op: "drain"})
+    s = command(b2, %{op: "snapshot"})
+    assert s["inbox_count"] == 3 and s["remote_withdrawn"] == 2 and s["listings"] == []
+    assert s["ledger"] == "locally-owned-signed-history"
   end
 end

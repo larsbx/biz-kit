@@ -184,3 +184,12 @@ This does not establish general ActivityPub or Mastodon compatibility. Local
 ledger/disclosure adapters, subscriptions, production-scale retention and
 cross-node commerce remain separate gates. No foreign activity gains a local
 principal grant or a business-command path.
+
+
+The peer-reconciliation increment makes explicit peering useful for existing
+catalogs: a newly configured peer gets current home-origin snapshots and
+terminal withdrawals, using the already accepted activity/source IDs. Delivery
+work pauses on peer removal or moderation, resumes when locally permitted, and
+retires unsent obsolete revisions. Reconciliation is bounded and journaled;
+remote projections do not become publications or business authority. This does
+not add subscriptions, a remote cache-reset protocol or retention/compaction.

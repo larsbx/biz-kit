@@ -4,7 +4,7 @@ defmodule FederationService do
   journal directory, an RSA private key and configured remote actor URLs.
   There is no public local-publication or business-command HTTP endpoint.
   """
-  alias FederationService.{Store, Network, Signature}
+  alias FederationService.{Store, Network, Signature, Delivery}
   alias FederationCore.Marketplace
 
   def config!(opts) do
@@ -61,20 +61,38 @@ defmodule FederationService do
     end
   end
 
+  @doc "Locally reconcile current public listings/tombstones to configured peers in bounded batches."
+  def reconcile(config, now \\ System.system_time(:second)) do
+    Store.call(config.store, {:reconcile, config.actor, config.peers, now})
+  end
+
   def deliver(config, now \\ System.system_time(:second)) do
+    {:ok, _} = reconcile(config, now)
     snapshot = Store.call(config.store, :snapshot)
 
     snapshot.outbox
-    |> Enum.filter(fn {_, r} -> r.status == :pending and r.next_at <= now end)
+    |> Enum.filter(fn {_, r} ->
+      r.status == :pending and r.next_at <= now and
+        Delivery.disposition(snapshot, config.actor, config.peers, r) == :ready
+    end)
+    |> Enum.sort_by(fn {key, row} ->
+      {if(row.activity["type"] == "Delete", do: 0, else: 1), row.next_at, key}
+    end)
     |> Enum.take(16)
     |> Enum.each(fn {key, row} ->
       success =
         with true <- row.destination in config.peers,
-             true <- delivery_allowed?(snapshot, row),
+             true <- Delivery.disposition(snapshot, config.actor, config.peers, row) == :ready,
              {:ok, remote} <- Signature.discover(row.destination, config.network),
              body <- Jason.encode!(row.activity),
              headers <- Signature.sign(remote.inbox, config.actor, config.private_key, body),
-             true <- delivery_allowed?(Store.call(config.store, :snapshot), row),
+             true <-
+               Delivery.disposition(
+                 Store.call(config.store, :snapshot),
+                 config.actor,
+                 config.peers,
+                 row
+               ) == :ready,
              {:ok, status, _, _} <-
                Network.request(:post, remote.inbox, headers, body, config.network) do
           status in [200, 202]
@@ -84,12 +102,6 @@ defmodule FederationService do
 
       Store.call(config.store, {:delivery, key, success, now})
     end)
-  end
-
-  defp delivery_allowed?(data, row) do
-    not Store.blocked?(data, row.destination, "") and
-      (row.activity["type"] == "Delete" or
-         not Store.blocked?(data, row.activity["actor"], row.activity["object"]["id"]))
   end
 
   def refresh(config, now \\ System.system_time(:second)) do

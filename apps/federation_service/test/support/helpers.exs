@@ -27,6 +27,14 @@ defmodule FederationService.TestHelpers do
     a
   end
 
+  def stop_store(store) do
+    try do
+      GenServer.stop(store)
+    catch
+      :exit, _ -> :ok
+    end
+  end
+
   def temp do
     p = Path.join(System.tmp_dir!(), "federation-#{System.unique_integer([:positive])}")
     File.mkdir_p!(p)

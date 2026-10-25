@@ -3,8 +3,21 @@ defmodule FederationService.TestPeer do
   def init(state), do: state
 
   def call(conn, state) do
-    if conn.method == "POST",
-      do: Agent.update(state, &Map.update(&1, :received, 1, fn n -> n + 1 end))
+    conn =
+      if conn.method == "POST" do
+        {:ok, body, conn} = read_body(conn)
+        activity = Jason.decode!(body)
+
+        Agent.update(state, fn doc ->
+          doc
+          |> Map.update(:received, 1, &(&1 + 1))
+          |> Map.update(:deliveries, [activity], &(&1 ++ [activity]))
+        end)
+
+        conn
+      else
+        conn
+      end
 
     case conn.request_path do
       "/redirect" ->
@@ -31,7 +44,10 @@ defmodule FederationService.TestPeer do
       "/actors/shop" ->
         conn
         |> put_resp_content_type("application/activity+json")
-        |> send_resp(200, Jason.encode!(Agent.get(state, & &1)))
+        |> send_resp(
+          200,
+          Jason.encode!(Agent.get(state, &Map.drop(&1, [:received, :deliveries])))
+        )
 
       _ ->
         conn |> put_resp_content_type("application/json") |> send_resp(200, "{}")
@@ -109,7 +125,7 @@ defmodule FederationService.NetworkTest do
     {:ok, store} = FederationService.Store.start_link(directory: dir)
 
     on_exit(fn ->
-      if Process.alive?(store), do: GenServer.stop(store)
+      stop_store(store)
       File.rm_rf!(dir)
     end)
 
@@ -133,7 +149,41 @@ defmodule FederationService.NetworkTest do
     assert Agent.get(c.state, &Map.get(&1, :received, 0)) == initial + 1
     rows = FederationService.Store.call(store, :snapshot).outbox |> Map.values()
     assert Enum.find(rows, &(&1.activity["type"] == "Delete")).status == :delivered
-    assert Enum.find(rows, &(&1.activity["type"] == "Create")).status == :pending
+    assert Enum.find(rows, &(&1.activity["type"] == "Create")).status == :superseded
+  end
+
+  test "withdrawals are delivered before a bulk late-peer backfill", c do
+    dir = temp()
+    {:ok, store} = FederationService.Store.start_link(directory: dir)
+
+    on_exit(fn ->
+      stop_store(store)
+      File.rm_rf!(dir)
+    end)
+
+    config =
+      FederationService.config!(
+        actor: "https://beta.example/actors/shop",
+        private_key: key(),
+        store: store,
+        peers: [],
+        network: c.network
+      )
+
+    for n <- 1..17 do
+      m = metadata(config.actor, 0, %{listing_id: "https://beta.example/listings/part-#{n}"})
+      FederationService.publish(config, "bulk-#{n}", m)
+    end
+
+    m = metadata(config.actor, 0, %{listing_id: "https://beta.example/listings/withdrawn"})
+    FederationService.publish(config, "obsolete", m)
+    FederationService.withdraw(config, "withdrawal", m["id"])
+    before = Agent.get(c.state, &length(Map.get(&1, :deliveries, [])))
+    FederationService.deliver(%{config | peers: ["https://alpha.example/actors/shop"]})
+    batch = Agent.get(c.state, &Map.get(&1, :deliveries, [])) |> Enum.drop(before)
+    assert length(batch) == 16
+    assert hd(batch)["type"] == "Delete"
+    assert Enum.all?(tl(batch), &(&1["type"] == "Create"))
   end
 
   test "actor identity and exact key ownership come from current HTTPS document", c do
