@@ -15,7 +15,7 @@ import.
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
 | `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task/workflow views, web/MCP endpoint, and the legacy orchestration writer |
-| `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database |
+| `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database. An imported copy: `larsbx/eatsbot` stays the authoritative, independently evolving product, and production deploys from there |
 | `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
 
 Shared apps developed in this umbrella:
