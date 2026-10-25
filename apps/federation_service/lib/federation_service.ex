@@ -149,9 +149,9 @@ defmodule FederationService do
     |> Enum.map(fn r ->
       Map.merge(r, %{
         local: r.actor == config.actor,
-        stale: now - r.verified_at > 3600,
         authority: "advertisement_only"
       })
+      |> Map.merge(FederationService.GossipLease.freshness(config, r, s, now))
     end)
   end
 end

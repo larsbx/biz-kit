@@ -1,7 +1,7 @@
 defmodule FederationService.GossipWorker do
   @moduledoc "Event-driven local port adapter; durable current publications repair lossy gossip."
   use GenServer
-  alias FederationService.{Gossip, GossipSync, Store}
+  alias FederationService.{Gossip, GossipSync, GossipLease, Store}
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def address(worker), do: GenServer.call(worker, :address)
 
@@ -78,7 +78,7 @@ defmodule FederationService.GossipWorker do
       GossipSync.drain(state.config)
 
       frames =
-        GossipSync.frames(state.config, System.system_time(:second), state.pending) ++
+        controls(state.config, System.system_time(:second), state.pending) ++
           Gossip.frames(state.config, System.system_time(:second), state.pending, state.force)
 
       pending =
@@ -86,14 +86,18 @@ defmodule FederationService.GossipWorker do
         |> Enum.take(16 - MapSet.size(state.pending))
         |> Enum.reduce(state.pending, fn {id, wire}, pending ->
           sync = String.starts_with?(id, "sync:")
+          lease = String.starts_with?(id, "lease:")
           now = System.system_time(:second)
 
           current =
-            if sync,
-              do: GossipSync.current?(state.config, id, now),
-              else: Gossip.current?(state.config, id)
+            cond do
+              sync -> GossipSync.current?(state.config, id, now)
+              lease -> GossipLease.current?(state.config, id, now)
+              true -> Gossip.current?(state.config, id)
+            end
 
-          {rate, limit} = if sync, do: {:gossip_sync_outgoing, 4}, else: {:gossip_outgoing, 12}
+          {rate, limit} =
+            if sync or lease, do: {:gossip_sync_outgoing, 4}, else: {:gossip_outgoing, 12}
 
           if current and
                Store.call(state.store, {:rate, rate, limit, now}) ==
@@ -154,9 +158,15 @@ defmodule FederationService.GossipWorker do
 
   defp event(%{"event" => "message", "body" => body}, state) do
     with {:ok, wire} <- Base.decode64(body) do
-      case GossipSync.receive_event(state.config, wire) do
-        :not_sync -> Gossip.receive_event(state.config, wire)
-        _ -> :ok
+      case GossipLease.receive_event(state.config, wire) do
+        :not_lease ->
+          case GossipSync.receive_event(state.config, wire) do
+            :not_sync -> Gossip.receive_event(state.config, wire)
+            _ -> :ok
+          end
+
+        _ ->
+          :ok
       end
     end
 
@@ -166,13 +176,18 @@ defmodule FederationService.GossipWorker do
   defp event(%{"event" => "broadcast_queued", "id" => id}, state) do
     if MapSet.member?(state.pending, id) do
       :ok =
-        if String.starts_with?(id, "sync:") do
-          GossipSync.sent(state.config, id, System.system_time(:second))
-        else
-          Store.call(
-            state.store,
-            {:gossip_sent, Gossip.topic(state.config), id, System.system_time(:second)}
-          )
+        cond do
+          String.starts_with?(id, "sync:") ->
+            GossipSync.sent(state.config, id, System.system_time(:second))
+
+          String.starts_with?(id, "lease:") ->
+            GossipLease.sent(state.config, id, System.system_time(:second))
+
+          true ->
+            Store.call(
+              state.store,
+              {:gossip_sent, Gossip.topic(state.config), id, System.system_time(:second)}
+            )
         end
 
       {:noreply, schedule(%{state | pending: MapSet.delete(state.pending, id)})}
@@ -187,6 +202,26 @@ defmodule FederationService.GossipWorker do
     do: {:noreply, state}
 
   defp event(_, state), do: {:stop, :invalid_sidecar_event, state}
+
+  defp controls(config, now, pending) do
+    data = Store.call(config.service.store, :snapshot)
+
+    sync =
+      Enum.map(GossipSync.frames(config, now, pending), fn {id, wire} ->
+        {id, wire, GossipSync.sent_at(data, id)}
+      end)
+
+    leases =
+      Enum.map(GossipLease.frames(config, now, pending), fn {id, wire} ->
+        {id, wire, GossipLease.sent_at(data, id)}
+      end)
+
+    (sync ++ leases)
+    |> Enum.sort_by(fn {id, _, sent_at} -> {sent_at, id} end)
+    |> Enum.take(4)
+    |> Enum.map(fn {id, wire, _} -> {id, wire} end)
+  end
+
   defp schedule(%{scheduled: true} = state), do: state
 
   defp schedule(state) do

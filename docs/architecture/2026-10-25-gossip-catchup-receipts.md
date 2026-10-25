@@ -104,8 +104,8 @@ compaction or destructive maintenance API. Completion processing handles at
 most 16 ready rounds per pass; unresolved offers do not starve ready ones.
 Control frame selection uses least-recent send time across both directions.
 
-The worker permits at most 12 advertisement broadcasts and 4 catch-up control
-broadcasts per minute, within the existing 16-request in-flight bound. A
+The worker permits at most 12 advertisement broadcasts and 4 shared catch-up/
+freshness control broadcasts per minute, within the existing 16-request in-flight bound. A
 control row is reannounced no more often than every 30 seconds, even across
 restart. Incoming advertisements and controls share the existing global
 120/minute and per-origin 30/minute attempt limits. Counters reset on restart;

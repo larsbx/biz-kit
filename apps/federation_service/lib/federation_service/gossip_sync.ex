@@ -270,6 +270,11 @@ defmodule FederationService.GossipSync do
 
   def sent(config, key, now), do: Store.call(config.service.store, {:sync_sent, key, now})
 
+  def sent_at(data, key) do
+    row = data.sync_outgoing[key] || data.sync_incoming[key]
+    if row, do: row.last_sent || 0, else: 0
+  end
+
   defp due?(config, table, row, data, now) do
     row.message["expires"] > now and (row.last_sent == nil or now - row.last_sent >= 30) and
       current_policy?(config, row, table, data) and
