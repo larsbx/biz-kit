@@ -61,6 +61,7 @@ defmodule CoopSubstrate.Tasks do
       |> Map.merge(state.timing_commands)
       |> Map.merge(state.agent_run_commands)
       |> Map.merge(state.hierarchy_commands)
+      |> Map.merge(state.task_access_commands)
 
     case Map.fetch(commands, env.event_id) do
       :error ->

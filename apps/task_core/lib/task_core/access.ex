@@ -17,7 +17,7 @@ defmodule TaskCore.Access do
   @actions ~w(read execute)
   @request_fields ~w(chapter_id tenant_id project_id task_id principal_id grant_event_id action task_version source_event_id)a
 
-  def init, do: %{task_access_grants: %{}}
+  def init, do: %{task_access_grants: %{}, task_access_commands: %{}}
 
   def event_types do
     %{
@@ -77,13 +77,23 @@ defmodule TaskCore.Access do
       active: true
     }
 
-    put_in(state, [:task_access_grants, Elixir.Access.key(env.event_id)], grant)
+    state
+    |> put_in([:task_access_grants, Elixir.Access.key(env.event_id)], grant)
+    |> command(env)
   end
 
-  def handle_event(%{type: "TaskAccessRevokedV1", payload: p}, state),
-    do: put_in(state, [:task_access_grants, p["grant_event_id"], :active], false)
+  def handle_event(%{type: "TaskAccessRevokedV1", payload: p} = env, state) do
+    state
+    |> put_in([:task_access_grants, p["grant_event_id"], :active], false)
+    |> command(env)
+  end
 
   def handle_event(_env, state), do: state
+
+  # Retain the accepted envelope separately from mutable permission state.
+  # A host can acknowledge an exact retry without granting authority again.
+  defp command(state, env),
+    do: put_in(state, [:task_access_commands, Elixir.Access.key(env.event_id)], env)
 
   @doc "Check one permission against fresh trusted replay. No task body is returned."
   def authorize(%{task_access_grants: grants, tasks: tasks}, request)
