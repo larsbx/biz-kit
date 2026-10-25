@@ -95,7 +95,14 @@ defmodule FederationService.Store do
       redeliveries: %{}
     }
 
-    base = Map.merge(base, %{gossip_inbox: %{}, gossip_sends: %{}})
+    base =
+      Map.merge(base, %{
+        gossip_inbox: %{},
+        gossip_sends: %{},
+        sync_incoming: %{},
+        sync_outgoing: %{},
+        sync_meta: %{}
+      })
 
     {:ok,
      %{
@@ -143,6 +150,78 @@ defmodule FederationService.Store do
   end
 
   def handle_call(:snapshot, _, s), do: {:reply, s.data, s}
+
+  def handle_call({:sync_put, table, key, row}, _, s)
+      when table in [:sync_incoming, :sync_outgoing] do
+    case Map.fetch!(s.data, table)[key] do
+      nil ->
+        if map_size(Map.fetch!(s.data, table)) >= 128 do
+          {:reply, {:error, :capacity}, s}
+        else
+          meta =
+            if s.data.sync_meta == %{},
+              do: [
+                {:sync_meta, :journal, Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)}
+              ],
+              else: []
+
+          commit(s, meta ++ [{table, key, row}], :ok)
+        end
+
+      %{message: message} when message == row.message ->
+        {:reply, :ok, s}
+
+      _ ->
+        {:reply, {:error, :catchup_conflict}, s}
+    end
+  end
+
+  def handle_call({:sync_complete, key}, _, s) do
+    row = Map.fetch!(s.data.sync_incoming, key)
+
+    if row.status == :pending,
+      do: commit(s, [{:sync_incoming, key, %{row | status: :complete}}], :ok),
+      else: {:reply, :ok, s}
+  end
+
+  def handle_call({:sync_sent, key, now}, _, s) do
+    table = if Map.has_key?(s.data.sync_outgoing, key), do: :sync_outgoing, else: :sync_incoming
+    row = Map.fetch!(Map.fetch!(s.data, table), key)
+    commit(s, [{table, key, %{row | last_sent: now}}], :ok)
+  end
+
+  def handle_call({:sync_receipt, m, scope, peer_key, local_key, now}, _, s) do
+    found =
+      Enum.find(s.data.sync_outgoing, fn {_, row} ->
+        offer = row.message
+
+        not blocked?(s.data, m["from"], "") and offer["round"] == m["round"] and
+          offer["batch"] == m["batch"] and
+          offer["from"] == m["to"] and offer["to"] == m["from"] and
+          offer["expires"] == m["expires"] and offer["expires"] > now and
+          offer["publisher"] == local_key and
+          Map.take(offer, ~w(halaqa_id charter_hash epoch)) === scope and row.peer_key == peer_key
+      end)
+
+    core = Map.drop(m, ~w(signature announcement))
+
+    case found do
+      {key, %{status: :pending} = row} ->
+        receipt = %{message: core, signed_message: m, received_at: now}
+
+        commit(
+          s,
+          [{:sync_outgoing, key, Map.merge(row, %{status: :complete, receipt: receipt})}],
+          :ok
+        )
+
+      {_, %{status: :complete, receipt: %{message: ^core}}} ->
+        {:reply, :ok, s}
+
+      _ ->
+        {:reply, {:error, :catchup_refused}, s}
+    end
+  end
 
   def handle_call(:claim_gossip_worker, {pid, _}, s) do
     case s.gossip_worker do
@@ -519,7 +598,7 @@ defmodule FederationService.Store do
       # Notifications are hints after durability, coalesced to one per subscriber.
       subscribers =
         if Enum.any?(changes, fn {table, _, _} ->
-             table in [:local, :blocks, :gossip_inbox]
+             table in [:local, :blocks, :gossip_inbox, :sync_incoming, :sync_outgoing]
            end) do
           Map.new(s.subscribers, fn {pid, {ref, pending}} ->
             unless pending, do: send(pid, {:discovery_committed, self()})

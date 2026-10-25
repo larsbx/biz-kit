@@ -108,7 +108,7 @@ appropriate; arbitrary HTTP fetching is not provided by this sidecar.
 
 Gossip broadcast is best effort. A `broadcast_queued` reply means the local
 sidecar accepted work, **not** that another installation durably received it.
-No delivery receipt or exactly-once guarantee is invented. Current accepted
+Optional signed receiver evidence is available for explicitly requested batches; it does not provide an exactly-once guarantee. Current accepted
 home publications and tombstones remain in the journal and are reannounced
 no more often than every 30 seconds; a new neighbor triggers a bounded early batch.
 A process restart rebuilds work from durable source projections. It never
@@ -127,7 +127,7 @@ are reannounced; there is no cross-node atomic snapshot or global total order.
   five-second deadlines. Partial local commands survive concurrent
   gossip-event cancellation of the input future. Unknown endpoint IDs are
   closed before gossip admission.
-- At most 16 in-flight local broadcast requests, 16 broadcasts/minute per Store,
+- At most 16 in-flight local broadcast requests, 12 advertisement broadcasts and 4 catch-up control broadcasts/minute per Store,
   120 incoming attempts/minute globally and 30 per origin. Rate counters reset
   on restart. Receipt hints are coalesced to one per subscriber, at most 32
   subscribers; the periodic repair pass recovers missed hints and lossy buffers.
@@ -146,10 +146,32 @@ adapter does not yet implement signed freshness leases. The HTTP refresh path
 explicitly excludes gossip projections and cannot renew their freshness from
 a metadata URL, even in a host running both transports. Anti-entropy is a
 bounded reannouncement of current snapshots, not a durable cursor protocol.
-At scale, rate fairness, compaction, replay-evidence backup and explicit catch-up
-receipts require further work. Deleting a journal destroys its replay evidence
+Explicit bounded catch-up receipts are described below. At scale, compaction,
+replay-evidence backup and broader rate-fairness acceptance require further work. Deleting a journal destroys its replay evidence
 and is not routine maintenance. Losing home source history requires restoration
 from the host's own trusted authority.
+
+## Bounded catch-up completion
+
+The host can request `FederationService.GossipSync.start_round(config,
+receiver_actor, activity_ids)` for 1–16 distinct current home advertisements or
+tombstones. `status(config, round)` distinguishes pending, expired,
+superseded and complete, with signed receiver evidence on completion.
+The worker sends the committed offer as an event; the receiver signs only
+after all listed content has been durably projected. A queued local broadcast
+cannot complete the round. Both sides repair lost control frames after
+restart without renewing advertisement freshness.
+
+Completion concerns the exact offered batch and a named receiver journal.
+It does not establish that the entire remote market is current, that a
+receiver is honest, or that it still holds the data after journal loss. New
+journals require new rounds. Periodic advertisement/tombstone repair continues
+regardless of receipts. Each journal retains at most 128 rounds in each
+direction and fails closed at capacity. The one-hour expiry and fixed send
+budgets bound work without promising a completion deadline.
+
+Exact wire/signature rules, API behavior, authority boundaries and tests:
+[catch-up receipt contract](../../docs/architecture/2026-10-25-gossip-catchup-receipts.md).
 
 ## Candidate envelope v1
 

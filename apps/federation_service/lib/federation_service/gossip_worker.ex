@@ -1,7 +1,7 @@
 defmodule FederationService.GossipWorker do
   @moduledoc "Event-driven local port adapter; durable current publications repair lossy gossip."
   use GenServer
-  alias FederationService.{Gossip, Store}
+  alias FederationService.{Gossip, GossipSync, Store}
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def address(worker), do: GenServer.call(worker, :address)
 
@@ -75,16 +75,28 @@ defmodule FederationService.GossipWorker do
 
     if state.address != nil do
       Gossip.drain(state.config)
+      GossipSync.drain(state.config)
 
       frames =
-        Gossip.frames(state.config, System.system_time(:second), state.pending, state.force)
+        GossipSync.frames(state.config, System.system_time(:second), state.pending) ++
+          Gossip.frames(state.config, System.system_time(:second), state.pending, state.force)
 
       pending =
         frames
         |> Enum.take(16 - MapSet.size(state.pending))
         |> Enum.reduce(state.pending, fn {id, wire}, pending ->
-          if Gossip.current?(state.config, id) and
-               Store.call(state.store, {:rate, :gossip_outgoing, 16, System.system_time(:second)}) ==
+          sync = String.starts_with?(id, "sync:")
+          now = System.system_time(:second)
+
+          current =
+            if sync,
+              do: GossipSync.current?(state.config, id, now),
+              else: Gossip.current?(state.config, id)
+
+          {rate, limit} = if sync, do: {:gossip_sync_outgoing, 4}, else: {:gossip_outgoing, 12}
+
+          if current and
+               Store.call(state.store, {:rate, rate, limit, now}) ==
                  :ok do
             true =
               Port.command(
@@ -141,17 +153,27 @@ defmodule FederationService.GossipWorker do
   end
 
   defp event(%{"event" => "message", "body" => body}, state) do
-    with {:ok, wire} <- Base.decode64(body), do: Gossip.receive_event(state.config, wire)
+    with {:ok, wire} <- Base.decode64(body) do
+      case GossipSync.receive_event(state.config, wire) do
+        :not_sync -> Gossip.receive_event(state.config, wire)
+        _ -> :ok
+      end
+    end
+
     {:noreply, schedule(state)}
   end
 
   defp event(%{"event" => "broadcast_queued", "id" => id}, state) do
     if MapSet.member?(state.pending, id) do
       :ok =
-        Store.call(
-          state.store,
-          {:gossip_sent, Gossip.topic(state.config), id, System.system_time(:second)}
-        )
+        if String.starts_with?(id, "sync:") do
+          GossipSync.sent(state.config, id, System.system_time(:second))
+        else
+          Store.call(
+            state.store,
+            {:gossip_sent, Gossip.topic(state.config), id, System.system_time(:second)}
+          )
+        end
 
       {:noreply, schedule(%{state | pending: MapSet.delete(state.pending, id)})}
     else
