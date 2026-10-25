@@ -114,7 +114,7 @@ defmodule FederationService do
 
     s.remote
     |> Enum.filter(fn {_, r} ->
-      not r.withdrawn and r.actor in config.peers and
+      not r.withdrawn and Map.get(r, :transport) != "iroh-gossip" and r.actor in config.peers and
         not Store.blocked?(s, r.actor, r.listing_id) and now - r.checked_at >= 900
     end)
     |> Enum.take(4)
@@ -134,7 +134,10 @@ defmodule FederationService do
     needle = query |> String.slice(0, 160) |> String.downcase()
 
     (Map.values(s.local) ++ Map.values(s.remote))
-    |> Enum.reject(&(&1.withdrawn or Store.blocked?(s, &1.actor, &1.listing_id)))
+    |> Enum.reject(
+      &(&1.withdrawn or Store.blocked?(s, &1.actor, &1.listing_id) or
+          not FederationService.Gossip.visible?(config, &1))
+    )
     |> Enum.filter(fn r ->
       String.contains?(
         String.downcase(r.metadata["name"] <> " " <> r.metadata["summary"]),

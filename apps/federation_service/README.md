@@ -5,6 +5,12 @@
 merged in [PR #114](https://github.com/larsbx/biz-kit/pull/114). It is a bounded,
 explicit-peering pilot, not a general Fediverse server or a commerce authority.
 
+For event-driven P2P delivery over iroh-gossip, see the
+[experimental Halaqa-scoped adapter](../../native/marketplace_gossip/README.md).
+It reuses the accepted activities and metadata, with explicit publisher key
+pins and durable scoped inbox projections. Its topic transport does not use
+HTTP delivery peering or Follow/Accept polling.
+
 ## What runs
 
 - Public Service actors with an RSA public key, inbox and paged outbox.

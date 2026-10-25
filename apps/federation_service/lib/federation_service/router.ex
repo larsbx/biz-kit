@@ -47,6 +47,9 @@ defmodule FederationService.Router do
     actor_path = URI.parse(config.actor).path
 
     cond do
+      path == actor_path and config.private_key == nil ->
+        send_resp(conn, 404, "")
+
       path == actor_path ->
         json(
           conn,
