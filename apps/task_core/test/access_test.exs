@@ -147,4 +147,27 @@ defmodule TaskCore.AccessTest do
     assert {:error, :invalid_task_access_request} = TaskAccess.authorize(%{}, request())
     assert {:error, :invalid_task_access_request} = TaskAccess.authorize(fixture(), nil)
   end
+
+  test "accepted access commands remain immutable when permissions are revoked or offboarded" do
+    read = grant("read")
+    execute = grant("execute")
+    state = Enum.reduce([read, execute], fixture(), &State.handle_event/2)
+    assert state.task_access_commands == %{read.event_id => read, execute.event_id => execute}
+
+    revoke = event("revoke", "TaskAccessRevokedV1", %{"grant_event_id" => read.event_id})
+    state = State.handle_event(revoke, state)
+    offboard = event("offboard", "TaskPrincipalOffboardedV1", %{"principal_id" => "worker"})
+    state = State.handle_event(offboard, state)
+
+    assert state.task_access_commands == %{
+             read.event_id => read,
+             execute.event_id => execute,
+             revoke.event_id => revoke
+           }
+
+    for action <- ~w(read execute) do
+      assert {:error, :task_access_revoked} = TaskAccess.authorize(state, request(action))
+      assert {:error, :task_access_grant_already_recorded} = check(grant(action), state)
+    end
+  end
 end

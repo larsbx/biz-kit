@@ -9,6 +9,7 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
   alias CoopSubstrate.{Log, Tasks}
   alias CoopSubstrate.Harness.Artifacts
   alias CoopSubstrate.Projections.Tasks, as: Projection
+  alias CoopSubstrate.Protocol.Envelope
   alias TaskCore.AgentRuns
 
   @scope %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
@@ -331,9 +332,14 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
   end
 
   test "a suggester cannot sign its own independent execution permission", ctx do
+    # The envelope builder rejects a declared suggester role before signing.
+    # Claim the required role with the real suggester key to reach admission:
+    # a role label does not make this a declared governance key.
+    claimant = put_in(ctx.agent, [:signer, :role], "governance")
+
     forged =
       signed_event(
-        ctx.agent,
+        claimant,
         "TaskAccessGrantedV1",
         Map.merge(@subject, %{
           "principal_id" => "agent-1",
@@ -344,7 +350,95 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
       )
 
     head = Log.head()
-    assert {:error, _} = Log.append(forged)
+    assert :ok = Envelope.verify(forged)
+    assert {:error, {:reject, 0, :task_governance_not_declared}} = Log.append(forged)
     assert Log.head() == head
+  end
+
+  test "access retries require the identical verified envelope and never partly append a batch",
+       ctx do
+    for action <- ~w(read execute) do
+      grant = access_grant(ctx, action)
+      {:ok, [accepted]} = Log.append(grant)
+      head = Log.head()
+      state = current_state()
+
+      # A valid signature over changed content still conflicts with the ID.
+      conflict = %{grant | payload: Map.put(grant.payload, "principal_id", "other"), sigs: %{}}
+      {:ok, conflict} = Envelope.sign(conflict, ctx.gov.signer.key_id, ctx.gov.seed)
+      assert :ok = Envelope.verify(conflict)
+      assert {:error, {:reject, 0, :task_command_id_conflict}} = Log.append(conflict)
+
+      invalid = %{grant | sigs: %{ctx.gov.signer.key_id => <<0::512>>}}
+
+      assert {:error, {:reject, 0, {:invalid_signature, _}}} = Log.append(invalid)
+      fresh = access_grant(ctx, action)
+
+      assert {:error, {:reject, 0, :task_access_grant_already_recorded}} =
+               Log.append([grant, fresh])
+
+      assert Log.head() == head
+      assert current_state() == state
+      assert {:ok, [^accepted]} = Log.append(grant)
+      restart_log()
+      assert {:ok, [^accepted]} = Log.append(grant)
+      assert Log.head() == head
+      assert current_state() == state
+    end
+
+    assert :ok = Log.verify_chains()
+  end
+
+  test "acknowledging access grant and revoke retries never reactivates a revoked permission",
+       ctx do
+    {:ok, _} = Log.append(request(ctx))
+    read = access_grant(ctx, "read")
+    execute = access_grant(ctx, "execute")
+    {:ok, [accepted_read]} = Log.append(read)
+    {:ok, [accepted_execute]} = Log.append(execute)
+
+    revoke =
+      signed_event(
+        ctx.gov,
+        "TaskAccessRevokedV1",
+        Map.put(@subject, "grant_event_id", execute.event_id)
+      )
+
+    {:ok, [accepted_revoke]} = Log.append(revoke)
+    grants = %{read: read.event_id, execute: execute.event_id}
+    head = Log.head()
+    state = current_state()
+
+    for _ <- 1..2 do
+      assert {:ok, [^accepted_read]} = Log.append(read)
+      assert {:ok, [^accepted_execute]} = Log.append(execute)
+      assert {:ok, [^accepted_revoke]} = Log.append(revoke)
+
+      assert {:error, :task_access_revoked} =
+               AgentRuns.authorized?(current_state(), @run_key, grants)
+
+      assert Log.head() == head
+      assert current_state() == state
+      restart_log()
+    end
+
+    assert :ok = Log.verify_chains()
+  end
+
+  test "a suggester-role access envelope is refused by both construction and append", ctx do
+    valid = access_grant(ctx, "execute")
+    attrs = %{Map.from_struct(valid) | signers: [ctx.agent.signer]}
+    expected = {:roles_mismatch, declared: ["suggester"], required: ["governance"]}
+    assert {:error, ^expected} = Envelope.new(attrs)
+
+    # A wire-received struct can bypass construction; the append gate must
+    # independently check its role declaration even with a genuine signature.
+    forged = %{valid | signers: [ctx.agent.signer], sigs: %{}}
+    {:ok, forged} = Envelope.sign(forged, ctx.agent.signer.key_id, ctx.agent.seed)
+    head = Log.head()
+    state = current_state()
+    assert {:error, {:reject, 0, ^expected}} = Log.append(forged)
+    assert Log.head() == head
+    assert current_state() == state
   end
 end
