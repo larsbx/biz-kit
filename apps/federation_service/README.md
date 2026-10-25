@@ -126,7 +126,7 @@ new HTTP administration endpoint:
 
 ```elixir
 {:ok, stats} = FederationService.reconcile(config)
-# inserted, held, resumed, superseded, settled: changes in this batch
+# inserted, held, resumed, superseded, settled, requeued: changes in this batch
 # more: further reconciliation is needed; capacity: outbox capacity prevented insertion
 ```
 
@@ -139,7 +139,8 @@ cannot erase the first acknowledgment. Existing successful delivery receipts
 are not reset when a
 peer is removed/re-added. This is bootstrap for a newly peered installation,
 not automatic repair of a remote installation that has deliberately discarded
-its own acknowledged cache. Such a reset still needs a separate resync protocol.
+its own acknowledged cache. Recovery from that loss requires the explicit local
+redelivery operation described below.
 
 | Current condition | Queue behavior |
 | --- | --- |
@@ -163,6 +164,46 @@ The finite 10,000-row outbox limit still applies. Reconciliation reports
 source events or tombstones. It does not solve journal compaction or large-scale
 retention. Delayed inbox advertisements covered by an existing terminal
 withdrawal are rejected locally without repeatedly fetching unavailable terms.
+
+## Explicit peer cache recovery
+
+After independently confirming that an already configured peer needs its current
+public advertisements again, a **trusted local sender administrator** can request:
+
+```elixir
+{:ok, generation} = FederationService.redeliver(config, "https://beta.example/actors/shop")
+```
+
+This journals a new per-peer delivery generation before returning. Each call is
+an explicit new resend request; it is not an idempotent source event. The worker
+requeues only current home publications and terminal tombstones, at most 32
+journal changes per reconciliation pass and 16 POSTs per delivery pass, with
+withdrawals first. Activity IDs, source-event receipts, public metadata and local
+business history stay unchanged. Other peers' delivery receipts are unaffected.
+The command has no HTTP endpoint and cannot be requested by a foreign activity.
+It refuses unconfigured or blocked peers, respects listing moderation, and
+never forwards remote projections. Existing rows are reused at outbox capacity;
+missing rows still require capacity. No replay evidence is evicted.
+
+The request and partially processed batches survive restarts and temporary
+partitions. Acknowledgments are scoped to the generation sent: an old in-flight
+success or failure cannot finish or reschedule the new generation, even before
+its row has been requeued. The first acknowledgment time is retained alongside
+the latest acknowledged generation/time. Legacy rows without generation fields
+are interpreted as generation zero. Repeated redelivery to a healthy receiver
+uses its normal activity-ID/body deduplication, without renewing freshness.
+At most 10,000 distinct repair destinations can be journaled over a store's
+lifetime; the finite journal size also still applies.
+
+This is an operator-driven recovery tool using the existing signed wire profile,
+not a new remote reset protocol or a consistent cross-node snapshot. Concurrent
+publications continue to replace older work. An administrator must coordinate
+recovery with the peer and inspect the results; no remote completion attestation
+is implied by HTTP receipt. Redelivery does not reconstruct lost inbox history,
+moderation policy or a home publication ledger. Never delete a discovery journal
+as routine maintenance: losing it also loses its replay evidence, tombstones,
+blocks and local publication/delivery receipts. Restore those from trusted
+backups or the host's own authority before admitting traffic after such a loss.
 
 ## Security and recovery profile
 
@@ -249,7 +290,8 @@ Evidence covers two-way discovery, updates, duplicate receipts, ownership/origin
 substitution, body/target/key tampering, certificate/hostname refusal, rotation,
 moderation, bounded/hostile HTTP responses, pagination, markup escaping, restart
 and partition recovery, late-peer bootstrap, bounded reconciliation, withdrawal
-priority, paused/resumed/superseded delivery, terminal withdrawals and negative
+priority, paused/resumed/superseded delivery, explicit cache-loss redelivery,
+generation-scoped acknowledgments, terminal withdrawals and negative
 business endpoints.
 The harness also checks an independent local-ledger sentinel remains unchanged.
 It does not load or prove every biz-kit ledger implementation: authority isolation

@@ -80,7 +80,8 @@ defmodule FederationService.Store do
       outbox: %{},
       blocks: %{},
       events: %{},
-      publications: %{}
+      publications: %{},
+      redeliveries: %{}
     }
 
     {:ok, %{log: log, lock: lock, data: replay(log, :start, base), rates: %{}}}
@@ -269,6 +270,7 @@ defmodule FederationService.Store do
                  %{
                    activity: activity,
                    destination: dest,
+                   generation: Delivery.generation(s.data, activity["actor"], dest),
                    status: :pending,
                    attempts: 0,
                    next_at: now
@@ -312,8 +314,35 @@ defmodule FederationService.Store do
     if changes == [], do: {:reply, {:ok, stats}, s}, else: commit(s, changes, {:ok, stats})
   end
 
-  def handle_call({:delivery, key, success, now}, _, s) do
+  def handle_call({:redeliver, actor, peers, peer, now}, _, s) do
+    old = s.data.redeliveries[peer]
+
+    cond do
+      peer not in peers or peer == actor or blocked?(s.data, peer, "") ->
+        {:reply, {:error, :peer_refused}, s}
+
+      old == nil and map_size(s.data.redeliveries) >= 10_000 ->
+        {:reply, {:error, :capacity}, s}
+
+      true ->
+        generation = if old == nil, do: 1, else: old.generation + 1
+        request = %{actor: actor, generation: generation, requested_at: now}
+        commit(s, [{:redeliveries, peer, request}], {:ok, generation})
+    end
+  end
+
+  def handle_call({:delivery, key, generation, success, now}, _, s) do
     row = Map.fetch!(s.data.outbox, key)
+
+    if generation == Map.get(row, :generation, 0) and
+         generation == Delivery.generation(s.data, row.activity["actor"], row.destination) do
+      record_delivery(s, key, row, generation, success, now)
+    else
+      {:reply, {:error, :stale_delivery}, s}
+    end
+  end
+
+  defp record_delivery(s, key, row, generation, success, now) do
     attempts = row.attempts + 1
 
     row = %{
@@ -328,7 +357,17 @@ defmodule FederationService.Store do
     }
 
     row = Map.put(row, :last_delivery, %{at: now, acknowledged: success})
-    row = if success, do: Map.put_new(row, :acknowledged_at, now), else: row
+
+    row =
+      if success do
+        row
+        |> Map.put_new(:acknowledged_at, now)
+        |> Map.put(:acknowledged_generation, generation)
+        |> Map.put(:last_acknowledged_at, now)
+      else
+        row
+      end
+
     commit(s, [{:outbox, key, row}], :ok)
   end
 
