@@ -24,6 +24,7 @@ defmodule InventoryCore.WireTest do
     input = payload("receive", %{"location" => "van", "quantity" => 4})
 
     assert {:ok, command} = Wire.decode(input, @scope)
+
     assert command == %{
              id: "command-1",
              expected_version: 0,
@@ -50,6 +51,7 @@ defmodule InventoryCore.WireTest do
              Wire.decode(reserve, @scope)
 
     transfer = payload("transfer", %{"from" => "warehouse", "to" => "van", "quantity" => 5})
+
     assert {:ok, %{op: :transfer, from: "warehouse", to: "van"}} =
              Wire.decode(transfer, @scope)
   end

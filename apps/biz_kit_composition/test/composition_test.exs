@@ -63,6 +63,7 @@ defmodule BizKit.CompositionTest do
     assert candidate.stock_reservation_command.expected_version == 1
 
     assert {:ok, 5} = Stock.available(stock, "restaurant", "warehouse")
+
     assert {:ok, original} =
              Fulfillment.new("restaurant", "request-1", "order-1", "restaurant-courier")
 
@@ -107,6 +108,7 @@ defmodule BizKit.CompositionTest do
 
   test "the host must still reject a stale reservation after an intervening stock change" do
     {catalog, stock} = merchant("restaurant", "MEAL", :USD)
+
     {:ok, candidate} =
       Composition.preview(catalog, stock, options("restaurant", :USD, "courier"))
 
