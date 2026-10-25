@@ -351,7 +351,11 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
 
     head = Log.head()
     assert :ok = Envelope.verify(forged)
-    assert {:error, {:reject, 0, :task_governance_not_declared}} = Log.append(forged)
+    key_id = ctx.agent.signer.key_id
+
+    assert {:error, {:reject, 0, {:role_key_not_declared, "governance", ^key_id}}} =
+             Log.append(forged)
+
     assert Log.head() == head
   end
 
