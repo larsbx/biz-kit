@@ -89,6 +89,9 @@ Stream.repeatedly(fn -> IO.gets("") end)
           {:ok, stats} = FederationService.reconcile(config)
           %{ok: true, stats: stats}
 
+        "redeliver" ->
+          FederationService.redeliver(config, req["peer"])
+
         "deliver" ->
           FederationService.deliver(config)
           :ok
