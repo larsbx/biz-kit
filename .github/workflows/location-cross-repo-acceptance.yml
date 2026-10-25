@@ -44,12 +44,13 @@ jobs:
       BIZ_KIT_DIR: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-      # The client at d-patch main (or the ref a manual run names), resolved at
-      # run time; the commit tested is printed by "Start this server revision".
+      # Nightly checks keep tracking d-patch main; PR/push checks pin the known
+      # client for reproducibility. Manual runs may name another explicit ref.
+      # "Start this server revision" prints both resolved commits.
       - uses: actions/checkout@v4
         with:
           repository: larsbx/d-patch
-          ref: ${{ inputs.d_patch_ref || 'bf55414412f29e4d822dd0a558cd10e137fdd4d9' }}
+          ref: ${{ inputs.d_patch_ref || (github.event_name == 'schedule' && 'main') || 'bf55414412f29e4d822dd0a558cd10e137fdd4d9' }}
           path: d-patch
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
