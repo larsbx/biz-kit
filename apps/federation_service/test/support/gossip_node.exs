@@ -65,6 +65,17 @@ Stream.repeatedly(fn -> IO.gets("") end)
         "withdraw" ->
           FederationService.withdraw(service, request["event"], request["id"])
 
+        "catchup" ->
+          data = FederationService.Store.call(service.store, :snapshot)
+          ids = Enum.map(data.local, fn {_, row} -> row.activity_id end)
+          FederationService.GossipSync.start_round(config, request["receiver"], ids)
+
+        "catchup_status" ->
+          case FederationService.GossipSync.status(config, request["round"]) do
+            {:ok, value} -> value
+            error -> error
+          end
+
         "snapshot" ->
           data = FederationService.Store.call(service.store, :snapshot)
 
@@ -72,6 +83,8 @@ Stream.repeatedly(fn -> IO.gets("") end)
             listings: FederationService.search(service),
             withdrawn: Enum.count(data.remote, fn {_, row} -> row.withdrawn end),
             inbox: map_size(data.gossip_inbox),
+            completed_rounds:
+              Enum.count(data.sync_outgoing, fn {_, row} -> row.status == :complete end),
             ledger: File.read!(ledger),
             events: map_size(data.events)
           }

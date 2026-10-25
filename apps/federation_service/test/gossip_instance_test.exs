@@ -131,6 +131,11 @@ defmodule FederationService.GossipInstanceTest do
       assert snapshot["ledger"] == "locally-owned-signed-history" and snapshot["events"] == 1
     end
 
+    round = command(a, %{op: "catchup", receiver: beta})["status"]
+    assert is_binary(round)
+    eventually(fn -> command(a, %{op: "catchup_status", round: round})["state"] == "complete" end)
+    assert command(a, %{op: "catchup_status", round: round})["current"]
+
     assert command(a, %{op: "publish", event: "a1", metadata: metadata(alpha, 1), revision: 1})[
              "ok"
            ]
@@ -172,5 +177,17 @@ defmodule FederationService.GossipInstanceTest do
     assert [%{"actor" => ^beta}] = command(b2, %{op: "snapshot"})["listings"]
     assert command(b2, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
     assert command(a2, %{op: "snapshot"})["events"] == 4
+    assert command(a2, %{op: "snapshot"})["completed_rounds"] == 1
+    assert command(a2, %{op: "catchup_status", round: round})["state"] == "complete"
+    refute command(a2, %{op: "catchup_status", round: round})["current"]
+
+    withdrawal_round = command(a2, %{op: "catchup", receiver: beta})["status"]
+    assert is_binary(withdrawal_round)
+
+    eventually(fn ->
+      command(a2, %{op: "catchup_status", round: withdrawal_round})["state"] == "complete"
+    end)
+
+    assert command(a2, %{op: "snapshot"})["completed_rounds"] == 2
   end
 end
