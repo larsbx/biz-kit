@@ -1,5 +1,12 @@
 # Harness-only control channel on stdin. Never expose these operations over HTTP.
-[dir, host, port, remote, remote_port, cert_dir] = System.argv()
+[dir, host, port, remote, remote_port, cert_dir | extra] = System.argv()
+
+peers =
+  case extra do
+    [] -> ["https://#{remote}/actors/shop"]
+    [value] -> Jason.decode!(value)
+  end
+
 Application.ensure_all_started(:federation_service)
 [ca] = :public_key.pem_decode(File.read!(cert_dir <> "/ca.pem"))
 key_path = dir <> "/signing.key"
@@ -23,7 +30,7 @@ config =
   FederationService.config!(
     actor: "https://#{host}/actors/shop",
     private_key: FederationService.Signature.private!(key_path),
-    peers: ["https://#{remote}/actors/shop"],
+    peers: peers,
     store: store,
     network: [
       test_routes: %{
@@ -78,6 +85,10 @@ Stream.repeatedly(fn -> IO.gets("") end)
           FederationService.Inbox.drain(config)
           :ok
 
+        "reconcile" ->
+          {:ok, stats} = FederationService.reconcile(config)
+          %{ok: true, stats: stats}
+
         "deliver" ->
           FederationService.deliver(config)
           :ok
@@ -88,6 +99,9 @@ Stream.repeatedly(fn -> IO.gets("") end)
           %{
             inbox_count: map_size(s.inbox),
             pending: Enum.count(s.outbox, fn {_, r} -> r.status == :pending end),
+            held: Enum.count(s.outbox, fn {_, r} -> r.status == :held end),
+            superseded: Enum.count(s.outbox, fn {_, r} -> r.status == :superseded end),
+            remote_withdrawn: Enum.count(s.remote, fn {_, r} -> r.withdrawn end),
             listings: FederationService.search(config),
             ledger: File.read!(ledger)
           }

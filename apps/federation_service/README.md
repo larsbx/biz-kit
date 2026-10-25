@@ -104,10 +104,64 @@ and integration interface, not a production adapter for every biz-kit domain's
 ledger/disclosure policy. Never connect untrusted request data directly to it.
 Repeated source events are idempotent; a changed payload under the same event
 ID is refused. The source-event fingerprint excludes peer configuration: changing
-or reordering peers does not invalidate a receipt. Peer changes apply to new
-publications; existing events are not automatically backfilled to new peers.
+or reordering peers does not invalidate a receipt. Before each delivery pass,
+the worker reconciles configured peers against already accepted local public
+projections. A newly configured peer receives each listing's current activity,
+including terminal withdrawals, without creating a new source event or
+replaying obsolete revisions.
 Publication and all peer delivery rows commit together. Network
 failure cannot undo local business history or create another business writer.
+
+## Peer reconciliation and queue recovery
+
+Changing `peers` in the local node configuration and restarting the node is an
+explicit local peering decision. The worker backfills current public listings
+and tombstones to those peers in batches of at most 32 journal changes. It uses
+the original accepted activity IDs and the current publication per listing;
+a peer can receive an Update snapshot before ever seeing its original Create.
+Remote projections are never forwarded as home-owned listings.
+
+Reconciliation is also available through the trusted local host API, with no
+new HTTP administration endpoint:
+
+```elixir
+{:ok, stats} = FederationService.reconcile(config)
+# inserted, held, resumed, superseded, settled: changes in this batch
+# more: further reconciliation is needed; capacity: outbox capacity prevented insertion
+```
+
+The worker repeats batches, including after restart. Repeating a completed
+batch does not write another journal transaction or duplicate delivery rows.
+Late in-flight acknowledgments are retained, including when policy is holding
+the activity. If policy later permits it, that receipt settles the row without
+another POST (`settled` in the batch statistics). Failed duplicate attempts
+cannot erase the first acknowledgment. Existing successful delivery receipts
+are not reset when a
+peer is removed/re-added. This is bootstrap for a newly peered installation,
+not automatic repair of a remote installation that has deliberately discarded
+its own acknowledged cache. Such a reset still needs a separate resync protocol.
+
+| Current condition | Queue behavior |
+| --- | --- |
+| Latest public activity, configured and unblocked peer | Pending delivery |
+| Peer removed or blocked, or local listing moderated | Held without retry churn |
+| Policy permits a held current activity again | Resume immediately |
+| A newer revision or withdrawal replaces unsent work | Superseded; no further transmission |
+| Peer acknowledged an activity | Receipt retained; no automatic resend |
+
+The sender checks source identity, current activity and moderation both before
+actor discovery and immediately before starting the POST. An already started
+request may still finish after a policy/source change. Its receipt is recorded
+without changing held or superseded work back into pending work. Withdrawals
+are prioritized over bulk backfill and bypass a local listing block, while
+peer/hostname blocks still prevent all contact with that peer. At most 16
+ready activities are sent per delivery pass.
+
+The finite 10,000-row outbox limit still applies. Reconciliation reports
+`capacity: true` and retains evidence rather than evicting delivered receipts,
+source events or tombstones. It does not solve journal compaction or large-scale
+retention. Delayed inbox advertisements covered by an existing terminal
+withdrawal are rejected locally without repeatedly fetching unavailable terms.
 
 ## Security and recovery profile
 
@@ -193,7 +247,9 @@ failures precisely between durable receipt, projection and delivery.
 Evidence covers two-way discovery, updates, duplicate receipts, ownership/origin
 substitution, body/target/key tampering, certificate/hostname refusal, rotation,
 moderation, bounded/hostile HTTP responses, pagination, markup escaping, restart
-and partition recovery, terminal withdrawals and negative business endpoints.
+and partition recovery, late-peer bootstrap, bounded reconciliation, withdrawal
+priority, paused/resumed/superseded delivery, terminal withdrawals and negative
+business endpoints.
 The harness also checks an independent local-ledger sentinel remains unchanged.
 It does not load or prove every biz-kit ledger implementation: authority isolation
 also follows from the service's absence of business-app dependencies/callbacks.

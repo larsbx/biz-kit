@@ -40,7 +40,7 @@ defmodule FederationService.Inbox do
           # Recheck current moderation immediately before committing.
           Store.call(config.store, {:reject, id, :blocked})
 
-        c.kind == :delete ->
+        c.kind == :delete or match?(%{withdrawn: true}, snapshot.remote[c.listing_id]) ->
           Store.call(config.store, {:project, id, nil, now})
 
         true ->

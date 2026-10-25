@@ -15,7 +15,7 @@ defmodule FederationService.RouterTest do
       )
 
     on_exit(fn ->
-      if Process.alive?(s), do: GenServer.stop(s)
+      stop_store(s)
       File.rm_rf!(dir)
     end)
 

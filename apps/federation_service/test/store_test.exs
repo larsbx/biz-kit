@@ -9,7 +9,7 @@ defmodule FederationService.StoreTest do
     {:ok, s} = Store.start_link(directory: dir)
 
     on_exit(fn ->
-      if Process.alive?(s), do: GenServer.stop(s)
+      stop_store(s)
       File.rm_rf!(dir)
     end)
 

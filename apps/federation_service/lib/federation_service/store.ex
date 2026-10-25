@@ -7,6 +7,7 @@ defmodule FederationService.Store do
   """
   use GenServer
   alias FederationCore.Marketplace
+  alias FederationService.Delivery
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def call(store, op), do: GenServer.call(store, op, 15_000)
@@ -306,6 +307,11 @@ defmodule FederationService.Store do
     commit(s, [{:remote, id, row}], :ok)
   end
 
+  def handle_call({:reconcile, actor, peers, now}, _, s) do
+    {changes, stats} = Delivery.plan(s.data, actor, peers, now)
+    if changes == [], do: {:reply, {:ok, stats}, s}, else: commit(s, changes, {:ok, stats})
+  end
+
   def handle_call({:delivery, key, success, now}, _, s) do
     row = Map.fetch!(s.data.outbox, key)
     attempts = row.attempts + 1
@@ -313,10 +319,16 @@ defmodule FederationService.Store do
     row = %{
       row
       | attempts: attempts,
-        status: if(success, do: :delivered, else: :pending),
+        status:
+          if(row.status == :pending,
+            do: if(success, do: :delivered, else: :pending),
+            else: row.status
+          ),
         next_at: now + min(3600, Integer.pow(2, min(attempts, 11)))
     }
 
+    row = Map.put(row, :last_delivery, %{at: now, acknowledged: success})
+    row = if success, do: Map.put_new(row, :acknowledged_at, now), else: row
     commit(s, [{:outbox, key, row}], :ok)
   end
 
