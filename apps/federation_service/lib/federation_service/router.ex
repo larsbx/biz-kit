@@ -1,7 +1,7 @@
 defmodule FederationService.Router do
   @moduledoc "Public actor, metadata, read-only combined market and authenticated inbox routes."
   import Plug.Conn
-  alias FederationService.{Signature, Store, Inbox}
+  alias FederationService.{Signature, Store, Inbox, WebFinger}
   def init(config), do: config
 
   def call(conn, config) do
@@ -27,6 +27,16 @@ defmodule FederationService.Router do
 
   defp valid_query?(%{query_string: ""}), do: true
 
+  defp valid_query?(%{method: "GET", request_path: "/.well-known/webfinger", query_string: q})
+       when byte_size(q) <= 512 do
+    case Enum.to_list(URI.query_decoder(q)) do
+      [{"resource", resource}] -> byte_size(resource) <= 256 and String.valid?(resource)
+      _ -> false
+    end
+  rescue
+    _ -> false
+  end
+
   defp valid_query?(%{method: "GET", request_path: path, query_string: q})
        when path in ["/market", "/market.json"] and byte_size(q) <= 512 do
     case URI.decode_query(q) do
@@ -47,6 +57,12 @@ defmodule FederationService.Router do
     actor_path = URI.parse(config.actor).path
 
     cond do
+      path == "/.well-known/webfinger" ->
+        case WebFinger.document(config, URI.decode_query(conn.query_string)["resource"]) do
+          {:ok, document} -> json(conn, 200, document, "application/jrd+json")
+          {:error, _} -> send_resp(conn, 404, "")
+        end
+
       path == actor_path and config.private_key == nil ->
         send_resp(conn, 404, "")
 
@@ -54,7 +70,7 @@ defmodule FederationService.Router do
         json(
           conn,
           200,
-          Signature.actor(config.actor, config.private_key),
+          Signature.actor(config.actor, config.private_key, config.handle),
           "application/activity+json"
         )
 

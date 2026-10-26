@@ -29,6 +29,46 @@ defmodule FederationService.RouterTest do
     |> Router.call(config)
   end
 
+  test "WebFinger is opt-in, exact actor/handle-bound and never creates identity grants", c do
+    config = %{c.config | handle: "shop"}
+    actor = config.actor
+    acct = "acct:shop@alpha.example"
+
+    for resource <- [acct, actor] do
+      response = request(config, :get, "/.well-known/webfinger?resource=" <> URI.encode_www_form(resource))
+      assert response.status == 200
+      assert get_resp_header(response, "content-type") == ["application/jrd+json; charset=utf-8"]
+
+      doc = Jason.decode!(response.resp_body)
+      assert doc == %{
+               "subject" => acct,
+               "aliases" => [actor],
+               "links" => [
+                 %{"rel" => "self", "type" => "application/activity+json", "href" => actor}
+               ]
+             }
+    end
+
+    actor_doc = request(config, :get, "/actors/shop").resp_body |> Jason.decode!()
+    assert actor_doc["preferredUsername"] == "shop"
+
+    refute Map.has_key?(Store.call(c.s, :snapshot), :principal_grants)
+    assert request(c.config, :get, "/.well-known/webfinger?resource=acct%3Ashop%40alpha.example").status == 404
+
+    for query <- [
+          "resource=acct%3Aother%40alpha.example",
+          "resource=acct%3Ashop%40evil.example",
+          "resource=https%3A%2F%2Fevil.example%2Factors%2Fshop",
+          "resource=acct%3Ashop%40alpha.example&resource=acct%3Aother%40alpha.example",
+          "resource=acct%3Ashop%40alpha.example&admin=true",
+          "subject=acct%3Ashop%40alpha.example"
+        ] do
+      refute request(config, :get, "/.well-known/webfinger?" <> query).status == 200
+    end
+
+    assert request(config, :post, "/.well-known/webfinger", "{}").status == 404
+  end
+
   test "actor and bounded outbox pages persist public events even without destinations", c do
     for revision <- 0..20 do
       assert {:ok, :published} =

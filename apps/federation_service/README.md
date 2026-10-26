@@ -14,6 +14,8 @@ HTTP delivery peering or Follow/Accept polling.
 ## What runs
 
 - Public Service actors with an RSA public key, inbox and paged outbox.
+- Optional exact-account WebFinger discovery using a deliberately configured
+  public handle, with no login, following, subscription or grant implications.
 - HTTPS actor discovery, current actor/key ownership validation and RSA-SHA256
   HTTP request signatures covering `(request-target) host date digest content-type`.
 - Authenticated inbox entries journaled and synced before HTTP 202. A worker
@@ -56,6 +58,7 @@ Add this explicit child to an appropriately configured host supervisor:
 ```elixir
 {FederationService.Node,
  actor: "https://alpha.example/actors/shop",
+ handle: "shop",
  peers: ["https://beta.example/actors/shop"],
  signing_keyfile: "/run/keys/marketplace-signing.pem",
  directory: "/var/lib/biz-kit/marketplace-discovery",

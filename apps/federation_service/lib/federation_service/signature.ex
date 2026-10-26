@@ -26,8 +26,8 @@ defmodule FederationService.Signature do
 
   def validate_key(_), do: {:error, :invalid_key}
 
-  def actor(actor, key) do
-    %{
+  def actor(actor, key, handle \\ nil) do
+    document = %{
       "@context" => @context,
       "id" => actor,
       "type" => "Service",
@@ -39,6 +39,8 @@ defmodule FederationService.Signature do
         "publicKeyPem" => pem(public_key(key))
       }
     }
+
+    if handle == nil, do: document, else: Map.put(document, "preferredUsername", handle)
   end
 
   def discover(actor, opts \\ []) do
