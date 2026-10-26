@@ -143,6 +143,7 @@ defmodule BizKit.Composition.GroupBuyTest do
     state = sealed_group()
     stock = stock(5)
     {:ok, preview} = GroupBuy.preview(state, catalog(), stock, opts())
+
     {:ok, held, :accepted} =
       InventoryCore.apply(stock, @seller, preview.stock_reservation_command)
 
@@ -165,16 +166,19 @@ defmodule BizKit.Composition.GroupBuyTest do
 
   test "unsealed or below-threshold demand never receives a reservation preview" do
     {:ok, empty} = Contracted.new(offer(), @now)
+
     assert {:error, :not_currently_sealed} =
              GroupBuy.preview(empty, catalog(), stock(), opts())
 
     partial = admitted(empty, "a", 3)
+
     assert {:error, :not_currently_sealed} =
              GroupBuy.preview(partial, catalog(), stock(), opts())
   end
 
   test "seller, SKU, inventory unit and currency must match local authoritative cores" do
     group = sealed_group()
+
     assert {:error, :seller_or_stock_scope_mismatch} =
              GroupBuy.preview(group, catalog(), stock(), %{opts() | merchant: "another-seller"})
 
@@ -200,6 +204,7 @@ defmodule BizKit.Composition.GroupBuyTest do
 
   test "short stock, expired hold and mismatched buyer fulfillment references refuse" do
     group = sealed_group()
+
     assert {:error, :insufficient_available} =
              GroupBuy.preview(group, catalog(), stock(4), opts())
 

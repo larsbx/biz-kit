@@ -158,12 +158,15 @@ defmodule BizKit.Composition.GroupBuy do
             {:ok, handoff} ->
               {:cont,
                {:ok,
-                [%{
-                   buyer: member.buyer,
-                   quantity: member.quantity,
-                   conditional_group_minor: member.group_minor,
-                   handoff: handoff
-                 } | acc]}}
+                [
+                  %{
+                    buyer: member.buyer,
+                    quantity: member.quantity,
+                    conditional_group_minor: member.group_minor,
+                    handoff: handoff
+                  }
+                  | acc
+                ]}}
 
             error ->
               {:halt, error}
