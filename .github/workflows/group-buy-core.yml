@@ -3,6 +3,9 @@ name: Group buy core
 on:
   pull_request:
     paths:
+      - "apps/coop_substrate/lib/coop_substrate/group_buys*"
+      - "apps/coop_substrate/lib/coop_substrate/group_buys/**"
+      - "apps/coop_substrate/test/group_buy_authority_test.exs"
       - "apps/group_buy_core/**"
       - ".github/workflows/group-buy-core.yml"
       - "docs/architecture/2026-10-26-federated-group-buy.md"
