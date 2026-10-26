@@ -243,7 +243,7 @@ defmodule GroupBuyCore.EscrowProofTest do
       buyer_refund_minor: 0
     }
 
-    proof = report(release_payload, private)
+    proof = report(release_payload, private, %{event_ref: "seller-payment-1"})
     assert {:error, :release_requires_binding_funding_and_verified_delivery} =
              EscrowProof.preview(escrow, bound, proof, grant(public), @now)
 
