@@ -28,6 +28,8 @@ jobs:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - run: mix local.hex --force && mix local.rebar --force
+      - name: Independent wire vectors and negative controls (Python 3.12 / OpenSSL)
+        run: python3 -m unittest discover -s apps/federation_service/test/support -p 'gossip_reference_test.py' -v
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.99.1'

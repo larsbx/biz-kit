@@ -230,6 +230,12 @@ unknown schemas/fields and scope mismatches are refused.
 
 ## Acceptance
 
+Portable signed vectors and a standalone Python/OpenSSL wire conformance oracle
+are in [test/vectors](../../apps/federation_service/test/vectors/README.md).
+CI checks externally generated messages through Elixir admission and live
+Elixir frames through the independent verifier. This covers serialization and
+signature compatibility, not operation of a live third-party peer.
+
 ```sh
 cargo fmt --check --manifest-path native/marketplace_gossip/Cargo.toml
 cargo clippy --locked --all-targets --manifest-path native/marketplace_gossip/Cargo.toml -- -D warnings
