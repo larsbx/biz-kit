@@ -9,7 +9,17 @@ defmodule FederationService.WebFingerTest do
       assert WebFinger.handle!(handle) == handle
     end
 
-    for invalid <- ["", "Shop", ".shop", "shop..other", "shop.", "a/b", "shop@host", String.duplicate("a", 33), 123] do
+    for invalid <- [
+          "",
+          "Shop",
+          ".shop",
+          "shop..other",
+          "shop.",
+          "a/b",
+          "shop@host",
+          String.duplicate("a", 33),
+          123
+        ] do
       assert_raise ArgumentError, fn -> WebFinger.handle!(invalid) end
     end
   end
@@ -22,7 +32,11 @@ defmodule FederationService.WebFingerTest do
     assert doc["subject"] == "acct:shop@alpha.example"
     assert {:ok, ^doc} = WebFinger.document(config, actor)
 
-    for resource <- ["acct:shop@other.example", "acct:admin@alpha.example", "https://evil.example/actors/shop"] do
+    for resource <- [
+          "acct:shop@other.example",
+          "acct:admin@alpha.example",
+          "https://evil.example/actors/shop"
+        ] do
       assert {:error, :unknown_resource} = WebFinger.document(config, resource)
     end
 
