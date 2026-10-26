@@ -52,6 +52,7 @@ defmodule BarterCore.PricedExchangeTest do
     assert quoted.network_option == :seller_discount_and_conditional_member_netting
     assert quoted.payment_status == :not_authorized_or_collected
     assert quoted.choice == :not_elected_requires_explicit_member_consent
+
     assert Enum.all?(quoted.priced_transfers, fn leg ->
              leg.options == [:network_opportunity, :pay_cash] and
                leg.cash_minor > leg.network_minor and

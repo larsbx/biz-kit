@@ -35,6 +35,7 @@ defmodule BarterCore.PricedExchange do
          {:ok, priced} <- price_legs(plan.transfers, offers),
          {:ok, balances} <- balance(priced) do
       canonical_offers = Enum.sort_by(offers, &{&1.seller, &1.code, &1.unit})
+
       expiry =
         case canonical_offers do
           [] -> nil
@@ -71,6 +72,7 @@ defmodule BarterCore.PricedExchange do
 
   defp validate_offers(offers, members, now) do
     offered = Enum.map(offers, &key/1)
+
     required =
       for member <- members, asset <- member.supplies do
         {member.actor, asset.code, asset.unit}
@@ -100,12 +102,14 @@ defmodule BarterCore.PricedExchange do
     with true <- Enum.sort(Map.keys(offer)) == Enum.sort(@offer_keys),
          true <- B.valid_public_id?(offer.seller),
          true <- token?(offer.code) and token?(offer.unit),
-         true <- is_binary(offer.currency) and
-                   String.match?(offer.currency, ~r/\A[A-Z]{3}\z/),
+         true <-
+           is_binary(offer.currency) and
+             String.match?(offer.currency, ~r/\A[A-Z]{3}\z/),
          true <- bounded?(offer.cash_unit_minor) and bounded?(offer.network_discount_unit_minor),
          true <- offer.network_discount_unit_minor <= offer.cash_unit_minor,
-         true <- is_integer(offer.revision) and
-                   Map.get(revisions, offer.seller) == offer.revision,
+         true <-
+           is_integer(offer.revision) and
+             Map.get(revisions, offer.seller) == offer.revision,
          true <- is_integer(offer.valid_until) and offer.valid_until > now do
       true
     else
