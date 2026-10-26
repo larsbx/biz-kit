@@ -77,7 +77,7 @@ defmodule GroupBuyCoreTest do
 
   test "five units unlock a seller-funded tier and show exact per-buyer savings" do
     assert {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
-    assert quote.status == :threshold_reached_requires_consent_and_stock
+    assert quote.status == :indicative_pledge_volume_not_contractually_unlocked
     assert quote.group_unit_minor == 9_000
     assert quote.totals == %{cash_minor: 50_000, group_minor: 45_000, savings_minor: 5_000}
     assert Enum.map(quote.members, &{&1.quantity, &1.savings_minor}) == [{2, 2_000}, {3, 3_000}]
@@ -115,26 +115,23 @@ defmodule GroupBuyCoreTest do
              G.verify_quote(quote, one.expires_at)
   end
 
-  test "member and seller agreement references permit ONLY a conditional preview" do
+  test "pledge references never unlock discounted contracted prices" do
     {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
-    {:ok, provisional} = G.commitment_preview(quote, seller_consent(quote), consents(quote), @now)
-    assert provisional.status == :requires_independent_local_business_admission
-    assert provisional.quote_hash == quote.quote_hash
-    assert length(provisional.commitments) == 2
-    assert Enum.map(provisional.commitments, & &1.conditional_group_minor) == [18_000, 27_000]
-    assert Enum.map(provisional.commitments, & &1.full_cash_option_minor) == [20_000, 30_000]
-    assert Enum.all?(provisional.commitments, &(&1.state == :not_admitted))
-    refute provisional.inventory_reserved
-    refute provisional.payment_authorized
+
+    assert {:error, :requires_contracted_units} =
+             G.commitment_preview(quote, seller_consent(quote), consents(quote), @now)
+
+    assert quote.price_authority == :indicative_only_not_contractual
+    assert quote.contracted_quantity == 0
   end
 
   test "one absent buyer, wrong seller, or altered terms cannot authorize group" do
     {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
 
-    assert {:error, :invalid_consents} =
+    assert {:error, :requires_contracted_units} =
              G.commitment_preview(quote, seller_consent(quote), tl(consents(quote)), @now)
 
-    assert {:error, :invalid_consents} =
+    assert {:error, :requires_contracted_units} =
              G.commitment_preview(
                quote,
                %{seller_consent(quote) | actor: "https://evil.example/actor"},

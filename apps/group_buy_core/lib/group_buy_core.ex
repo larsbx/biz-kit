@@ -80,11 +80,13 @@ defmodule GroupBuyCore do
                expired_pledge_ids: expired,
                status:
                  if(unlocked,
-                   do: :threshold_reached_requires_consent_and_stock,
+                   do: :indicative_pledge_volume_not_contractually_unlocked,
                    else: :collecting_no_group_commitment
                  ),
                cash_unit_minor: offer.solo_unit_minor,
                group_unit_minor: if(unlocked, do: unlocked.unit_minor, else: nil),
+               price_authority: :indicative_only_not_contractual,
+               contracted_quantity: 0,
                next_tier:
                  if(next_tier,
                    do: %{
@@ -110,7 +112,7 @@ defmodule GroupBuyCore do
 
   def quote(_, _, _), do: {:error, :invalid_group_buy}
 
-  @doc "Recheck the entire private quote snapshot, including all source revisions."
+  @doc "Recheck the private *indicative pledge* snapshot, not a contracted tier."
   def verify_quote(%{source_offer: offer, source_pledges: pledges} = candidate, now) do
     case quote(offer, pledges, now) do
       {:ok, ^candidate} -> {:ok, candidate}
@@ -121,10 +123,10 @@ defmodule GroupBuyCore do
   def verify_quote(_, _), do: {:error, :invalid_or_stale_quote}
 
   @doc """
-  Construct a *non-executable* conditional commitment preview only after
-  the threshold. Seller and ALL active buyers supply identical digest-bound
-  evidence references. Hosts must authenticate signatures and authority,
-  reserve inventory, and authorize individual payments independently.
+  Legacy pledge-only commitment preview. A pledge is NOT an admitted contract
+  and cannot unlock group rates. This method now fails closed. Use
+  GroupBuyCore.Contracted to admit individually authorized contracts and
+  evaluate contracted-volume thresholds.
   """
   def commitment_preview(quote, seller_consent, buyer_consents, now)
       when is_list(buyer_consents) do
@@ -162,7 +164,9 @@ defmodule GroupBuyCore do
 
   def commitment_preview(_, _, _, _), do: {:error, :invalid_consents}
 
-  defp ready(%{status: :threshold_reached_requires_consent_and_stock}), do: :ok
+  defp ready(%{status: :indicative_pledge_volume_not_contractually_unlocked}),
+    do: {:error, :requires_contracted_units}
+
   defp ready(_), do: {:error, :threshold_not_met}
 
   defp validate_buyers(consents, quote) do

@@ -12,6 +12,7 @@ defmodule BizKitComposition.MixProject do
       lockfile: "../../mix.lock",
       deps: [
         {:commerce_core, in_umbrella: true},
+        {:group_buy_core, in_umbrella: true},
         {:inventory_core, in_umbrella: true},
         {:fulfillment_core, in_umbrella: true}
       ]

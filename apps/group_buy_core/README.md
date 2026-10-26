@@ -1,5 +1,7 @@
 # GroupBuyCore — collective purchasing without compulsory middlemen
 
+> **Current semantics:** Seller cash prices and group rates are members-only, and only accepted *contracts* (not pledges) unlock discounts. See [CONTRACTED_MEMBER_RATES.md](CONTRACTED_MEMBER_RATES.md).\n\n
+
 Independent sellers can offer a group-buy campaign that attracts many
 buyers across biz-kit's federated marketplace. Each buyer maintains an
 **ordinary cash-payment alternative**. A seller can voluntarily incentivize

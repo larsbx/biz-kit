@@ -5,6 +5,7 @@ on:
     paths:
       - 'apps/biz_kit_composition/**'
       - 'apps/commerce_core/**'
+      - 'apps/group_buy_core/**'
       - 'apps/inventory_core/**'
       - 'apps/fulfillment_core/**'
       - 'mix.exs'
@@ -37,11 +38,10 @@ jobs:
         working-directory: apps/biz_kit_composition
         run: MIX_ENV=test mix compile --warnings-as-errors
       - name: Check composition formatting
-        run: >-
-          MIX_ENV=test mix format --check-formatted
-          apps/biz_kit_composition/mix.exs
-          apps/biz_kit_composition/lib/biz_kit/composition.ex
-          apps/biz_kit_composition/test/composition_test.exs
+        working-directory: apps/biz_kit_composition
+        run: |
+          MIX_ENV=test mix format mix.exs "lib/**/*.ex" "test/**/*.exs"
+          git diff --exit-code -- mix.exs lib/ test/
       - name: Exercise restaurant and freight conformance
         working-directory: apps/biz_kit_composition
         run: mix test --no-start
