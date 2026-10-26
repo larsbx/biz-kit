@@ -368,6 +368,67 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     assert Log.gate().group_buys.rounds[@key].version == 1
   end
 
+  test "a previously admitted offer cannot be used after its deadline", ctx do
+    expires = System.system_time(:second) + 2
+    campaign = @campaign <> "-short"
+    posted = offer(ctx, %{"id" => campaign, "expires_at" => expires})
+
+    posted =
+      signed_event(ctx.seller, posted.type, Map.put(posted.payload, "campaign_id", campaign))
+
+    {:ok, _} = GroupBuys.submit(posted)
+    {:ok, hash} = GroupBuys.terms_hash(posted)
+    original = pledge(ctx, ctx.buyer, @buyer, 5, 0)
+    command = put_in(original.payload["command"], ["pledge", "offer_id"], campaign)
+
+    payload =
+      original.payload
+      |> Map.put("campaign_id", campaign)
+      |> Map.put("terms_hash", {:bytes, hash})
+      |> Map.put("command", command)
+
+    buyer_consent = signed_event(ctx.buyer, original.type, payload)
+    Process.sleep(max(expires * 1000 - System.system_time(:millisecond), 0) + 10)
+    rejected(admission(ctx, buyer_consent), :stale_closed_or_expired_offer)
+    {public, _} = :crypto.generate_key(:ecdh, :x25519)
+    request = read(ctx, ctx.buyer, @buyer, public)
+
+    request =
+      signed_event(
+        ctx.buyer,
+        request.type,
+        request.payload
+        |> Map.put("campaign_id", campaign)
+        |> Map.put("terms_hash", {:bytes, hash})
+      )
+
+    assert {:error, {:reject, 0, :stale_closed_or_expired_offer}} =
+             GroupBuys.deliver(request, :private)
+  end
+
+  @tag :tampers_ledger
+  test "startup refuses corrupted durable group-buy history", ctx do
+    {:ok, _} = GroupBuys.submit(admission(ctx, pledge(ctx, ctx.buyer, @buyer, 5, 0)))
+
+    with_update_bypass(fn conn ->
+      %{rows: [[id, bytes]]} =
+        Postgrex.query!(conn, "SELECT event_id, data FROM events WHERE event_type = $1", [
+          "GroupBuyContractAdmittedV1"
+        ])
+
+      {:ok, term} = Canonical.decode(bytes)
+      corrupt = Map.put(term, "global_seq", term["global_seq"] + 1)
+
+      Postgrex.query!(conn, "UPDATE events SET data = $1 WHERE event_id = $2", [
+        Canonical.encode!(corrupt),
+        id
+      ])
+    end)
+
+    assert {:error, _} = Log.verify_chains()
+    assert {:error, _} = Log.start_link(name: :corrupt_group_buy_recovery_probe)
+  end
+
   test "malformed and foreign consents fail without killing the appender", ctx do
     invalid = consent(ctx, ctx.buyer, @buyer, 5)
     rejected(admission(ctx, invalid), :invalid_signed_group_buy_command)
