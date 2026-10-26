@@ -1,4 +1,11 @@
-# Members-only group offers and contracted-volume discounts
+# Members-only group offers and optional contracted closing
+
+> **Updated semantics:** Contracts are **not** required before displaying a
+> group purchase option. Authenticated member pledges covering the seller's
+> minimum unlock the opportunity to purchase; see
+> [current decision](../../docs/architecture/2026-10-26-group-buy-pledge-purchase-gate.md).
+> The separately sealed contracted aggregate below is an **optional
+> stronger close-out workflow**, not the default volume eligibility gate.
 
 **Private posted rates:** Normal cash prices and all group tier prices are
 seller-owned **members-only offer** terms. The public federation/discovery
@@ -7,8 +14,9 @@ recipient membership and disclosure scope before calling
 `GroupBuyCore.MemberOffers.private_offer/3` and deliver its result through
 a private authenticated channel.
 
-**Volume criterion:** A follower, click or pledge is not a contracted
-unit. `GroupBuyCore.quote/3` retains a clearly *indicative* soft-demand
+**Optional contracted closing:** A follower or click is not a contracted
+unit; a valid member pledge is sufficient for the preceding purchase-option
+volume gate. `GroupBuyCore.quote/3` retains a clearly *indicative* soft-demand
 forecast and can never issue a binding group commitment.
 
 `GroupBuyCore.Contracted` models the authoritative seller-home

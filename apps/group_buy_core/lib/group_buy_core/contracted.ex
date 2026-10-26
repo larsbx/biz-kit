@@ -1,9 +1,10 @@
 defmodule GroupBuyCore.Contracted do
   @moduledoc """
-  Pure replayable *contracted-demand* aggregate for a private members-only
-  group-buy campaign. Unlike an interest/pledge preview, price tiers become
-  eligible only after the trusted seller-home host locally admits individual
-  member purchase commitments.
+  Optional pure replayable *post-election contract closing* aggregate for a
+  private members-only group-buy campaign. Valid member pledges, not signed
+  purchase contracts, are sufficient to display the group purchase option.
+  This stronger flow models a separate seller-sealed contract round before
+  inventory/payment execution.
 
   The host MUST authenticate the member's contractual signature, its
   membership grant, the seller's signed price schedule, authority/expiry and
@@ -41,8 +42,9 @@ defmodule GroupBuyCore.Contracted do
   @doc """
   Apply a HOST-AUTHORIZED command to a pure in-memory projection.
 
-  Only :contract events accepted by this trusted local admission boundary
-  count toward a discount threshold. :withdraw is only a pre-seal proposed
+  In this optional contracted closing flow only accepted :contract events
+  count toward the separate sealed contractual threshold. This is NOT
+  the gating rule for displaying a pledge-volume group purchase option. :withdraw is only a pre-seal proposed
   withdrawal and still requires host verification of lawful withdrawal rights.
   :seal is seller-home admission of an immutable qualifying quote, but not
   payment authorization or proof that all counterparties signed.
@@ -88,8 +90,9 @@ defmodule GroupBuyCore.Contracted do
   def replay(_, _), do: {:error, :invalid_replay}
 
   @doc """
-  Quote the best currently **contracted** tier using seller-home accepted
-  contracts only; projected pledges play no role. If the final tier exceeds
+  Quote the best tier within this OPTIONAL contracted close-out aggregate.
+  This does not determine availability of the earlier pledge-based purchase
+  choice. If the final tier exceeds
   any member's signed maximum, the quote refuses rather than treating their
   conditional interest as an affordable contract.
   """

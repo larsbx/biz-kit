@@ -20,9 +20,12 @@ defmodule GroupBuyCore do
   Return a deterministic quote for a seller-owned group campaign.
 
   Expired pledges are excluded, not silently resurrected or charged.
-  All active buyers see an independent solo-money choice; the discounted
-  alternative is only previewed once the minimum volume is reached.
-  No network participant, relay or seller agent is authorized by this function.
+  A buyer may pledge interest without committing to purchase. Once valid,
+  active pledges cover the seller's posted minimum volume, the group-price
+  PURCHASE OPTION becomes visible for those members. No buyer must sign
+  an advance purchase contract to unlock the option; no purchase or inventory
+  reservation is implied. A seller-authorized host must still validate
+  all pledge evidence, membership, available stock, price and checkout.
   """
   def quote(offer, pledges, now) when is_list(pledges) and is_integer(now) and now >= 0 do
     with :ok <- validate_offer(offer, now),
@@ -80,12 +83,14 @@ defmodule GroupBuyCore do
                expired_pledge_ids: expired,
                status:
                  if(unlocked,
-                   do: :indicative_pledge_volume_not_contractually_unlocked,
+                   do: :pledged_volume_covered_purchase_option_available,
                    else: :collecting_no_group_commitment
                  ),
                cash_unit_minor: offer.solo_unit_minor,
                group_unit_minor: if(unlocked, do: unlocked.unit_minor, else: nil),
-               price_authority: :indicative_only_not_contractual,
+               price_authority: :group_price_offer_requires_checkout_authorization,
+               purchase_option_available: not is_nil(unlocked),
+               coverage_basis: :active_member_pledges,
                contracted_quantity: 0,
                next_tier:
                  if(next_tier,
@@ -112,7 +117,52 @@ defmodule GroupBuyCore do
 
   def quote(_, _, _), do: {:error, :invalid_group_buy}
 
-  @doc "Recheck the private *indicative pledge* snapshot, not a contracted tier."
+  @doc """
+  Display a *buyer-specific* discounted purchase choice only after pledges
+  cover the seller's posted quantity threshold. No advance purchase contract
+  or unanimous member acceptance is necessary to display this option.
+
+  The seller-home must authenticate the pledges and buyer membership before
+  publishing the result privately, and revalidate exact inventory, rate,
+  threshold and cash/payment authority at actual checkout. This function
+  never grants purchasing authority, places a hold or collects money.
+  """
+  def purchase_option(quote, buyer, now) when is_binary(buyer) do
+    with {:ok, verified} <- verify_quote(quote, now),
+         :ok <- ready(verified),
+         %{buyer: ^buyer} = member <- Enum.find(verified.members, &(&1.buyer == buyer)) do
+      {:ok,
+       %{
+         kind: :group_purchase_option_preview,
+         campaign_id: verified.campaign_id,
+         quote_hash: verified.quote_hash,
+         seller: verified.seller,
+         buyer: buyer,
+         pledge_id: member.pledge_id,
+         sku: verified.sku,
+         unit: verified.unit,
+         quantity: member.quantity,
+         currency: verified.currency,
+         group_unit_minor: verified.group_unit_minor,
+         discounted_total_minor: member.group_minor,
+         ordinary_cash_total_minor: member.cash_minor,
+         potential_savings_minor: member.savings_minor,
+         volume_covered_by: :active_member_pledges,
+         valid_until: verified.expires_at,
+         checkout: :requires_fresh_membership_stock_and_payment_admission,
+         paid: false,
+         inventory_reserved: false
+       }}
+    else
+      nil -> {:error, :buyer_not_in_pledges}
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_group_purchase_option}
+    end
+  end
+
+  def purchase_option(_, _, _), do: {:error, :invalid_group_purchase_option}
+
+  @doc "Recheck the private pledge snapshot before displaying or using a purchase option."
   def verify_quote(%{source_offer: offer, source_pledges: pledges} = candidate, now) do
     case quote(offer, pledges, now) do
       {:ok, ^candidate} -> {:ok, candidate}
@@ -123,10 +173,11 @@ defmodule GroupBuyCore do
   def verify_quote(_, _), do: {:error, :invalid_or_stale_quote}
 
   @doc """
-  Legacy pledge-only commitment preview. A pledge is NOT an admitted contract
-  and cannot unlock group rates. This method now fails closed. Use
-  GroupBuyCore.Contracted to admit individually authorized contracts and
-  evaluate contracted-volume thresholds.
+  Optional all-party conditional agreement PREVIEW after pledged-volume
+  eligibility. Matching evidence references here do not constitute verified
+  signatures, seller acceptance, inventory reservation or a purchase.
+  Showing a group purchase option does NOT require all buyers to contract
+  or supply evidence here. Individual checkout is a separate host action.
   """
   def commitment_preview(quote, seller_consent, buyer_consents, now)
       when is_list(buyer_consents) do
@@ -164,8 +215,13 @@ defmodule GroupBuyCore do
 
   def commitment_preview(_, _, _, _), do: {:error, :invalid_consents}
 
-  defp ready(%{status: :indicative_pledge_volume_not_contractually_unlocked}),
-    do: {:error, :requires_contracted_units}
+  defp ready(%{
+         status: :pledged_volume_covered_purchase_option_available,
+         purchase_option_available: true,
+         group_unit_minor: minor
+       })
+       when is_integer(minor) and minor > 0,
+       do: :ok
 
   defp ready(_), do: {:error, :threshold_not_met}
 

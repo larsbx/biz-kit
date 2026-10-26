@@ -1,5 +1,13 @@
 # Federated group buying — seller-priced demand aggregation
 
+> **Superseded interpretation (2026-10-26):** Advance purchase contracts
+> are **not** required to unlock a group purchase option. Active authenticated
+> member pledges can cover the published minimum; only then is the discounted
+> option offered. Seller/member checkout authorization is separate. This
+> historical document describes an optional stronger contractual close.
+> See [the governing updated ADR](2026-10-26-group-buy-pledge-purchase-gate.md).
+>
+
 > **Updated contract semantics:** Prices and rate ladders are posted only in seller-authorized members-only offers. Pledge thresholds are indicative, not actual discount eligibility. Only locally accepted contracted units unlock a tier. See [2026-10-26-group-buy-contracted-member-rates.md](2026-10-26-group-buy-contracted-member-rates.md).\n\n
 
 Date: 2026-10-26. Status: **pure initial preview contract**, not executable

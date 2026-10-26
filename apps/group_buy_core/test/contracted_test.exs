@@ -98,7 +98,7 @@ defmodule GroupBuyCore.ContractedTest do
              )
   end
 
-  test "soft pledges are not contracted units and never unlock the posted group rate" do
+  test "pledges unlock purchase choice but do not create optional sealed contracts" do
     {:ok, pledge_quote} =
       G.quote(
         offer(),
@@ -116,11 +116,15 @@ defmodule GroupBuyCore.ContractedTest do
         @now
       )
 
-    assert pledge_quote.status == :indicative_pledge_volume_not_contractually_unlocked
+    assert pledge_quote.status == :pledged_volume_covered_purchase_option_available
     assert pledge_quote.contracted_quantity == 0
-    assert pledge_quote.price_authority == :indicative_only_not_contractual
+    assert pledge_quote.price_authority == :group_price_offer_requires_checkout_authorization
 
-    assert {:error, :requires_contracted_units} =
+    assert pledge_quote.purchase_option_available
+    assert {:ok, choice} = G.purchase_option(pledge_quote, actor("a"), @now)
+    assert choice.checkout == :requires_fresh_membership_stock_and_payment_admission
+
+    assert {:error, :invalid_consents} =
              G.commitment_preview(pledge_quote, %{}, [], @now)
 
     {:ok, contracted} = Contracted.new(offer(), @now)

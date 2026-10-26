@@ -1,5 +1,13 @@
 # Group-buy members-only rates and contracted-volume price unlocks
 
+> **Superseded interpretation (2026-10-26):** Advance purchase contracts
+> are **not** required to unlock a group purchase option. Active authenticated
+> member pledges can cover the published minimum; only then is the discounted
+> option offered. Seller/member checkout authorization is separate. This
+> historical document describes an optional stronger contractual close.
+> See [the governing updated ADR](2026-10-26-group-buy-pledge-purchase-gate.md).
+>
+
 Date: 2026-10-26. Status: **pure trusted-host domain models + seller-home
 stock/fulfillment preview; not a deployed federation host or payment service**.
 
