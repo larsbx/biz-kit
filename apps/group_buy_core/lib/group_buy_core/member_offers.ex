@@ -31,7 +31,7 @@ defmodule GroupBuyCore.MemberOffers do
          seller: offer.seller,
          offer: offer,
          cash_checkout: :available_independently,
-         group_discount: :conditional_on_host_admitted_contracted_volume,
+         group_discount: :purchase_option_after_verified_pledge_volume_threshold,
          transport: :requires_private_authenticated_delivery
        }}
     end
