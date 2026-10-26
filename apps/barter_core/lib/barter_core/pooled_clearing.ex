@@ -69,7 +69,9 @@ defmodule BarterCore.PooledClearing do
   def optimize(_, _, _), do: {:error, :invalid_members}
 
   @doc "Recompute a proposed clearing plan from its immutable input snapshot."
-  def verify_plan(%{snapshot: snapshot} = candidate, now, opts \\ []) do
+  def verify_plan(candidate, now, opts \\ [])
+
+  def verify_plan(%{snapshot: snapshot} = candidate, now, opts) do
     with {:ok, ^candidate} <- optimize(snapshot, now, opts) do
       {:ok, candidate}
     else
@@ -257,7 +259,7 @@ defmodule BarterCore.PooledClearing do
 
     transfers =
       for {source, _stock} <- providers,
-          {destination, demand} <- recipients,
+          {destination, _demand} <- recipients,
           source != destination,
           used = demand_used(graph, cleared, source, destination),
           used > 0 do

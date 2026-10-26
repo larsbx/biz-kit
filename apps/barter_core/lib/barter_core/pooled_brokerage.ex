@@ -27,18 +27,19 @@ defmodule BarterCore.PooledBrokerage do
 
       expires_at = min(last_snapshot_expiry, charter.expires_at)
 
-      fields = [
-        @schema,
-        plan.terms_hash,
-        charter.company_id,
-        charter.charter_hash,
-        Integer.to_string(charter.version),
-        Integer.to_string(charter.expires_at),
-        Atom.to_string(charter.authority),
-        Atom.to_string(charter.title_policy),
-        Atom.to_string(charter.formation),
-        Integer.to_string(length(plan.participants))
-      ] ++ plan.participants
+      fields =
+        [
+          @schema,
+          plan.terms_hash,
+          charter.company_id,
+          charter.charter_hash,
+          Integer.to_string(charter.version),
+          Integer.to_string(charter.expires_at),
+          Atom.to_string(charter.authority),
+          Atom.to_string(charter.title_policy),
+          Atom.to_string(charter.formation),
+          Integer.to_string(length(plan.participants))
+        ] ++ plan.participants
 
       {:ok,
        %{

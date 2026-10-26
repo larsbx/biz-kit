@@ -50,10 +50,12 @@ defmodule BarterCore.PooledClearingTest do
     assert {:ok, plan} = Clearing.optimize(fixture(), @now)
     assert plan.optimality == :exact_integer_max_flow_per_resource
     assert plan.optimization == :max_units_independently_per_exact_resource
+
     assert plan.fulfilled_by_asset == [
              %{code: "x", unit: "piece", quantity: 12},
              %{code: "y", unit: "piece", quantity: 5}
            ]
+
     assert length(plan.participants) == 4
 
     shipped_x =
@@ -82,6 +84,7 @@ defmodule BarterCore.PooledClearingTest do
 
     assert {:ok, plan} = Clearing.optimize(members, @now)
     assert plan.fulfilled_by_asset == [%{code: "x", unit: "kg", quantity: 8}]
+
     assert Enum.map(plan.transfers, &{&1.from, &1.to}) == [
              {"https://b.example/actors/trader", "https://a.example/actors/trader"},
              {"https://a.example/actors/trader", "https://c.example/actors/trader"}
@@ -108,10 +111,12 @@ defmodule BarterCore.PooledClearingTest do
 
     assert {:ok, plan} = Clearing.optimize(Enum.reverse(providers ++ recipients), @now)
     assert length(plan.participants) == 14
+
     assert plan.fulfilled_by_asset == [
              %{code: "labor", unit: "h", quantity: 7},
              %{code: "metal", unit: "kg", quantity: 70}
            ]
+
     assert {:ok, ^plan} = Clearing.optimize(providers ++ recipients, @now)
   end
 
@@ -120,9 +125,11 @@ defmodule BarterCore.PooledClearingTest do
     assert {:ok, plan} = Clearing.optimize([a], @now)
     assert plan.transfers == []
     assert plan.participants == []
+
     assert plan.unmatched_needs == [
              %{actor: a.actor, asset: asset("x", "piece", 5)}
            ]
+
     assert plan.unallocated_supplies == [
              %{actor: a.actor, asset: asset("x", "piece", 5)}
            ]
@@ -165,7 +172,10 @@ defmodule BarterCore.PooledClearingTest do
              Clearing.optimize([a, put_in(b.supplies, [asset("x", "piece", 3.5)])], @now)
 
     assert {:error, :invalid_members} =
-             Clearing.optimize([a, %{b | supplies: [asset("x", "kg", 1), asset("x", "kg", 2)]}], @now)
+             Clearing.optimize(
+               [a, %{b | supplies: [asset("x", "kg", 1), asset("x", "kg", 2)]}],
+               @now
+             )
 
     max = 9_007_199_254_740_991
 
@@ -176,6 +186,7 @@ defmodule BarterCore.PooledClearingTest do
 
     assert {:error, :quantity_overflow} = Clearing.optimize(overflow, @now)
     assert {:error, :invalid_options} = Clearing.optimize(fixture(), @now, work_budget: -1)
+
     assert {:error, :work_budget_exceeded} =
              Clearing.optimize(fixture(), @now, work_budget: 1)
   end
@@ -199,6 +210,7 @@ defmodule BarterCore.PooledClearingTest do
     assert {:ok, plan} = Clearing.optimize(fixture(), @now)
     assert {:ok, agreement} = Brokerage.draft(plan, charter(), @now)
     witnesses = references(agreement)
+
     assert {:error, :invalid_brokerage_consents} =
              Brokerage.pre_delivery_preview(agreement, tl(witnesses), @now)
 
