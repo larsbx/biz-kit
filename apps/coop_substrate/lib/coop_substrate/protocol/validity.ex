@@ -112,6 +112,11 @@ defmodule CoopSubstrate.Protocol.Validity do
   # the registration keeps a new type from being registered but left unchecked.
   @task_types Map.keys(TaskCore.Admission.event_types())
 
+  @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
+  defp type_check(%Envelope{type: type} = env, gate) when type in @group_buy_types do
+    CoopSubstrate.GroupBuys.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @task_types do
     TaskCore.Admission.check(env, gate)
   end

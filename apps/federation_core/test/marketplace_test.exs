@@ -64,6 +64,30 @@ defmodule FederationCore.MarketplaceTest do
              M.validate_metadata(Map.put(metadata!(), "customer_email", "private"), @seller)
   end
 
+  test "public discovery refuses private group terms, identities and authority envelopes" do
+    for {field, value} <- [
+          {"solo_unit_minor", 10_000},
+          {"tiers", [%{"min_quantity" => 5, "unit_minor" => 9_000}]},
+          {"buyer_id", "https://buyer.example/actors/private"},
+          {"consent", "private-canonical-signed-consent"},
+          {"contracted_quantity", 5}
+        ] do
+      private = Map.put(metadata!(), field, value)
+      assert {:error, :invalid_marketplace_metadata} = M.validate_metadata(private, @seller)
+
+      assert {:error, :invalid_marketplace_activity} =
+               M.publish(:create, private, @activity, @metadata_url)
+    end
+
+    for type <- ~w(GroupBuyOfferPostedV1 GroupBuyContractAdmittedV1 GroupBuyConsentV1) do
+      assert {:error, :invalid_marketplace_activity} =
+               M.decode_verified(
+                 %{"type" => type, "payload" => %{"seller_id" => @seller}},
+                 %{verified_actor: @seller}
+               )
+    end
+  end
+
   test "no remote domain may author listing, activity or metadata URLs" do
     assert {:error, :invalid_marketplace_metadata} =
              M.metadata(attrs(%{listing_id: "https://evil.example/l/1"}))
