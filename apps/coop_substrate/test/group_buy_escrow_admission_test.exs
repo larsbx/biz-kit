@@ -413,6 +413,27 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
 
     assert {:error, :authenticated_provider_pin_required} =
              GroupBuys.live_check(report, historical)
+
+    # Already signed V1 funding and stock remain valid historical facts.
+    historical = %{historical | group_buys: GroupBuys.fold!(report, historical)}
+    receive = stock_event(ctx, stock_command("receive", "legacy-stock", 0))
+    historical = %{historical | group_buys: GroupBuys.fold!(receive, historical)}
+    reserve = stock_event(ctx, stock_command("reserve", "legacy-hold", 1))
+    assert :ok = GroupBuys.check(reserve, historical)
+
+    assert {:error, :stock_hold_requires_bound_funded_campaign} =
+             GroupBuys.live_check(reserve, historical)
+
+    historical = %{historical | group_buys: GroupBuys.fold!(reserve, historical)}
+
+    assert {:error, :escrow_or_stock_not_ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               historical,
+               @chapter,
+               @seller,
+               @campaign,
+               ctx.now
+             )
   end
 
   test "inactive authority and stale provider pin revisions refuse new funding", ctx do

@@ -103,6 +103,23 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
     end
   end
 
+  # Preserve historical stock replay while requiring authenticated funding for
+  # every NEW stock hold. Readiness separately enforces the current policy.
+  def live_grant(
+        %{
+          type: "GroupBuyStockCommandAdmittedV1",
+          chapter_id: chapter,
+          payload: %{"command" => %{"op" => "reserve"}} = p
+        },
+        gate,
+        now
+      ) do
+    case complete_coverage(gate.group_buys, campaign_key(chapter, p), now) do
+      :ok -> :ok
+      _ -> {:error, :stock_hold_requires_bound_funded_campaign}
+    end
+  end
+
   def live_grant(_, _, _), do: :ok
 
   @doc "All bound obligations must have live held reports, never partial funding."
