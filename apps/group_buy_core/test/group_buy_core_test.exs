@@ -77,7 +77,7 @@ defmodule GroupBuyCoreTest do
 
   test "five units unlock a seller-funded tier and show exact per-buyer savings" do
     assert {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
-    assert quote.status == :pledged_volume_covered_purchase_option_available
+    assert quote.status == :pledged_volume_covered_binding_activation_candidate
     assert quote.group_unit_minor == 9_000
     assert quote.totals == %{cash_minor: 50_000, group_minor: 45_000, savings_minor: 5_000}
     assert Enum.map(quote.members, &{&1.quantity, &1.savings_minor}) == [{2, 2_000}, {3, 3_000}]
@@ -100,7 +100,7 @@ defmodule GroupBuyCoreTest do
     assert quote.members == other.members
   end
 
-  test "purchase option stays disabled below threshold and for nonparticipating buyers" do
+  test "conditional binding rate is not offered below threshold or to nonparticipants" do
     {:ok, below} = G.quote(offer(), [pledge("a", 3)], @now)
     refute below.purchase_option_available
     assert {:error, :threshold_not_met} = G.purchase_option(below, pledge("a", 3).buyer, @now)
@@ -147,22 +147,22 @@ defmodule GroupBuyCoreTest do
              G.verify_quote(quote, one.expires_at)
   end
 
-  test "pledges cover volume to unlock the group purchase option without advance contracts" do
+  test "pledged quantities forecast binding activation without second election" do
     {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
 
     assert quote.purchase_option_available
     assert quote.coverage_basis == :active_member_pledges
-    assert quote.price_authority == :group_price_offer_requires_checkout_authorization
+    assert quote.price_authority == :conditional_purchase_pledge_requires_host_admission
     assert quote.contracted_quantity == 0
 
     assert {:ok, option} = G.purchase_option(quote, pledge("a", 2).buyer, @now)
-    assert option.kind == :group_purchase_option_preview
+    assert option.kind == :conditional_purchase_terms_preview
     assert option.group_unit_minor == 9_000
     assert option.quantity == 2
     assert option.discounted_total_minor == 18_000
     assert option.ordinary_cash_total_minor == 20_000
     assert option.potential_savings_minor == 2_000
-    assert option.checkout == :requires_fresh_membership_stock_and_payment_admission
+    assert option.checkout == :fulfill_binding_obligation_after_authoritative_activation
     refute option.paid
     refute option.inventory_reserved
 

@@ -1,5 +1,12 @@
 # Members-only group offers and optional contracted closing
 
+> **SUPERSEDED POLICY:** The current rule is that a member pledge is a
+> conditional purchase commitment that becomes **binding when the seller-home
+> admits enough pledged units to meet the posted minimum**. There is no
+> optional second buy click. See
+> [the governing conditional-binding ADR](2026-10-26-group-buy-conditional-binding.md).
+>
+
 > **Updated semantics:** Contracts are **not** required before displaying a
 > group purchase option. Authenticated member pledges covering the seller's
 > minimum unlock the opportunity to purchase; see

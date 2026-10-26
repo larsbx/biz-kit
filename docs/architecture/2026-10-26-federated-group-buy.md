@@ -1,5 +1,12 @@
 # Federated group buying — seller-priced demand aggregation
 
+> **SUPERSEDED POLICY:** The current rule is that a member pledge is a
+> conditional purchase commitment that becomes **binding when the seller-home
+> admits enough pledged units to meet the posted minimum**. There is no
+> optional second buy click. See
+> [the governing conditional-binding ADR](2026-10-26-group-buy-conditional-binding.md).
+>
+
 > **Superseded interpretation (2026-10-26):** Advance purchase contracts
 > are **not** required to unlock a group purchase option. Active authenticated
 > member pledges can cover the published minimum; only then is the discounted
