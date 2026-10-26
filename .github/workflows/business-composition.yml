@@ -5,6 +5,7 @@ on:
     paths:
       - 'apps/biz_kit_composition/**'
       - 'apps/commerce_core/**'
+      - 'apps/group_buy_core/**'
       - 'apps/inventory_core/**'
       - 'apps/fulfillment_core/**'
       - 'mix.exs'

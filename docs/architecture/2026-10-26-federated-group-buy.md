@@ -1,5 +1,7 @@
 # Federated group buying — seller-priced demand aggregation
 
+> **Updated contract semantics:** Prices and rate ladders are posted only in seller-authorized members-only offers. Pledge thresholds are indicative, not actual discount eligibility. Only locally accepted contracted units unlock a tier. See [2026-10-26-group-buy-contracted-member-rates.md](2026-10-26-group-buy-contracted-member-rates.md).\n\n
+
 Date: 2026-10-26. Status: **pure initial preview contract**, not executable
 group checkout, inventory reservation, bank escrow or registered buying entity.
 Tracking: [biz-kit issue #137](https://github.com/larsbx/biz-kit/issues/137).
