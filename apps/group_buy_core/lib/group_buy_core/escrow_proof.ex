@@ -174,6 +174,7 @@ defmodule GroupBuyCore.EscrowProof do
 
   defp command(escrow, proof, message) do
     source = {:custody_provider, proof.provider_id}
+
     id =
       hex_hash(
         "bizkit.group-buy.provider-event.v1:" <>

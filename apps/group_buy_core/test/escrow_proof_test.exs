@@ -194,10 +194,12 @@ defmodule GroupBuyCore.EscrowProofTest do
     end
 
     signed = report(base, private, %{issued_at: @now - 700})
+
     assert {:error, :provider_proof_out_of_scope_or_stale} =
              EscrowProof.preview(escrow, bound, signed, grant(public), @now)
 
     signed = report(base, private, %{issued_at: @now + 1})
+
     assert {:error, :provider_proof_out_of_scope_or_stale} =
              EscrowProof.preview(escrow, bound, signed, grant(public), @now)
   end
@@ -244,6 +246,7 @@ defmodule GroupBuyCore.EscrowProofTest do
     }
 
     proof = report(release_payload, private, %{event_ref: "seller-payment-1"})
+
     assert {:error, :release_requires_binding_funding_and_verified_delivery} =
              EscrowProof.preview(escrow, bound, proof, grant(public), @now)
 
