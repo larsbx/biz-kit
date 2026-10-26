@@ -87,6 +87,7 @@ defmodule GroupBuyCore.BindingRoundTest do
     assert bound.stock_status == :not_reserved
 
     assert {:ok, ^state, :duplicate} = Round.apply(state, buyer("b"), trigger_cmd, @now)
+
     assert {:ok, ^state} =
              Round.replay(initial, [
                {buyer("a"), first_cmd, @now},
@@ -117,6 +118,7 @@ defmodule GroupBuyCore.BindingRoundTest do
     assert small.status == :conditional_not_yet_binding
 
     {bound, _} = submit(state, "c", 1)
+
     assert {:error, :binding_pledge_cannot_be_withdrawn} =
              Round.apply(
                bound,
@@ -197,6 +199,7 @@ defmodule GroupBuyCore.BindingRoundTest do
 
   test "scope spoofing, old revision and duplicate IDs cannot bind a member" do
     {:ok, state} = Round.new(offer(), @now)
+
     c = %{
       id: "command-a",
       expected_version: 0,
@@ -225,8 +228,12 @@ defmodule GroupBuyCore.BindingRoundTest do
              Round.apply(
                state,
                buyer("b"),
-               %{c | id: "wrong-offer", expected_version: state.version,
-                     pledge: pledge("b", 2, %{offer_revision: 4})},
+               %{
+                 c
+                 | id: "wrong-offer",
+                   expected_version: state.version,
+                   pledge: pledge("b", 2, %{offer_revision: 4})
+               },
                @now
              )
   end
@@ -241,6 +248,7 @@ defmodule GroupBuyCore.BindingRoundTest do
     assert deep.group_unit_minor == 8_000
 
     {:ok, initial} = Round.new(offer(), @now)
+
     final =
       Enum.reduce(1..15, initial, fn i, current ->
         {next, _} = submit(current, "member#{i}", 1)

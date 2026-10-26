@@ -60,9 +60,11 @@ defmodule GroupBuyCore.BindingRound do
           with :ok <- version(state.version, expected),
                {:ok, updated} <- transition(state, actor, command, now) do
             {:ok,
-             %{updated | version: state.version + 1,
-                         seen: Map.put(state.seen, id, {actor, command})},
-             :accepted}
+             %{
+               updated
+               | version: state.version + 1,
+                 seen: Map.put(state.seen, id, {actor, command})
+             }, :accepted}
           end
 
         _ ->
@@ -94,20 +96,21 @@ defmodule GroupBuyCore.BindingRound do
     with :ok <- state_shape(state) do
       if state.activated == nil do
         with {:ok, candidate} <- Group.quote(state.offer, Map.values(state.pledges), now) do
-          {:ok, %{
-            schema: @schema,
-            campaign_id: state.offer.id,
-            revision: state.version,
-            status: :conditional_not_yet_binding,
-            pledged_quantity: candidate.active_quantity,
-            minimum: hd(state.offer.tiers).min_quantity,
-            additional_units_needed:
-              max(hd(state.offer.tiers).min_quantity - candidate.active_quantity, 0),
-            members: Enum.map(candidate.members, & &1.buyer),
-            bound_obligations: [],
-            payment_status: :not_collected,
-            stock_status: :not_reserved
-          }}
+          {:ok,
+           %{
+             schema: @schema,
+             campaign_id: state.offer.id,
+             revision: state.version,
+             status: :conditional_not_yet_binding,
+             pledged_quantity: candidate.active_quantity,
+             minimum: hd(state.offer.tiers).min_quantity,
+             additional_units_needed:
+               max(hd(state.offer.tiers).min_quantity - candidate.active_quantity, 0),
+             members: Enum.map(candidate.members, & &1.buyer),
+             bound_obligations: [],
+             payment_status: :not_collected,
+             stock_status: :not_reserved
+           }}
         end
       else
         bound_snapshot(state, now)
@@ -140,13 +143,17 @@ defmodule GroupBuyCore.BindingRound do
       case validation do
         {:ok, candidate} ->
           pledges = Map.new(new_pledges, &{&1.buyer, &1})
+
           activated =
             if state.activated != nil do
               state.activated
             else
               if candidate.active_quantity >= hd(state.offer.tiers).min_quantity do
-                %{at: now, first_threshold: hd(state.offer.tiers).min_quantity,
-                  initiating_quote_hash: candidate.quote_hash}
+                %{
+                  at: now,
+                  first_threshold: hd(state.offer.tiers).min_quantity,
+                  initiating_quote_hash: candidate.quote_hash
+                }
               else
                 nil
               end
@@ -168,8 +175,12 @@ defmodule GroupBuyCore.BindingRound do
        when not is_nil(activated),
        do: {:error, :binding_pledge_cannot_be_withdrawn}
 
-  defp transition(state, actor,
-         %{op: :withdraw, buyer: buyer, pledge_id: pledge_id, evidence_ref: proof}, _now) do
+  defp transition(
+         state,
+         actor,
+         %{op: :withdraw, buyer: buyer, pledge_id: pledge_id, evidence_ref: proof},
+         _now
+       ) do
     with true <- actor == buyer,
          :ok <- evidence(proof),
          %{id: ^pledge_id} <- Map.get(state.pledges, buyer) do
@@ -255,15 +266,23 @@ defmodule GroupBuyCore.BindingRound do
         {:error, :amount_overflow}
       else
         digest_fields =
-          [@schema, offer.id, Integer.to_string(offer.revision),
-           Integer.to_string(state.activated.at),
-           state.activated.initiating_quote_hash,
-           Integer.to_string(qty), Integer.to_string(tier.unit_minor)] ++
+          [
+            @schema,
+            offer.id,
+            Integer.to_string(offer.revision),
+            Integer.to_string(state.activated.at),
+            state.activated.initiating_quote_hash,
+            Integer.to_string(qty),
+            Integer.to_string(tier.unit_minor)
+          ] ++
             Enum.flat_map(members, fn member ->
-              [member.buyer, member.pledge_id,
-               Integer.to_string(member.quantity),
-               Integer.to_string(member.max_group_unit_minor),
-               Integer.to_string(member.due_minor)]
+              [
+                member.buyer,
+                member.pledge_id,
+                Integer.to_string(member.quantity),
+                Integer.to_string(member.max_group_unit_minor),
+                Integer.to_string(member.due_minor)
+              ]
             end)
 
         {:ok,
@@ -293,15 +312,21 @@ defmodule GroupBuyCore.BindingRound do
   end
 
   defp digest(fields) do
-    encoded = Enum.map_join(fields, "", fn field ->
-      Integer.to_string(byte_size(field)) <> ":" <> field
-    end)
+    encoded =
+      Enum.map_join(fields, "", fn field ->
+        Integer.to_string(byte_size(field)) <> ":" <> field
+      end)
 
     :crypto.hash(:sha256, encoded) |> Base.encode16(case: :lower)
   end
 
-  defp state_shape(%{offer: %{tiers: [_ | _]}, version: version,
-                      pledges: pledges, activated: activated, seen: seen})
+  defp state_shape(%{
+         offer: %{tiers: [_ | _]},
+         version: version,
+         pledges: pledges,
+         activated: activated,
+         seen: seen
+       })
        when is_integer(version) and version >= 0 and is_map(pledges) and is_map(seen) and
               (is_nil(activated) or is_map(activated)),
        do: :ok
