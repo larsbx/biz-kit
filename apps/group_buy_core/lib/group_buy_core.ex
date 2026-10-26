@@ -54,6 +54,7 @@ defmodule GroupBuyCore do
                {:ok, members} <- priced_members(active, offer, unlocked),
                {:ok, totals} <- totals(members, unlocked) do
             next_tier = Enum.find(offer.tiers, &(&1.min_quantity > quantity))
+
             expires_at =
               Enum.min([offer.expires_at | Enum.map(active, & &1.expires_at)])
 
@@ -84,11 +85,15 @@ defmodule GroupBuyCore do
                  ),
                cash_unit_minor: offer.solo_unit_minor,
                group_unit_minor: if(unlocked, do: unlocked.unit_minor, else: nil),
-               next_tier: if(next_tier,
-                 do: %{minimum: next_tier.min_quantity,
-                       more_units_needed: next_tier.min_quantity - quantity,
-                       unit_minor: next_tier.unit_minor},
-                 else: nil),
+               next_tier:
+                 if(next_tier,
+                   do: %{
+                     minimum: next_tier.min_quantity,
+                     more_units_needed: next_tier.min_quantity - quantity,
+                     unit_minor: next_tier.unit_minor
+                   },
+                   else: nil
+                 ),
                totals: totals,
                expires_at: expires_at,
                quote_hash: digest(digest_fields),
@@ -290,8 +295,8 @@ defmodule GroupBuyCore do
          member.cash_minor <= @limit and
            (is_nil(member.group_minor) or member.group_minor <= @limit)
        end),
-      do: {:ok, members},
-      else: {:error, :amount_overflow}
+       do: {:ok, members},
+       else: {:error, :amount_overflow}
   end
 
   defp totals(members, tier) do
@@ -354,6 +359,7 @@ defmodule GroupBuyCore do
   end
 
   defp exact_keys?(map, keys), do: Enum.sort(Map.keys(map)) == Enum.sort(keys)
+
   defp bounded?(value, minimum),
     do: is_integer(value) and value >= minimum and value <= @limit
 
@@ -365,8 +371,15 @@ defmodule GroupBuyCore do
   # Syntactic shape only, never proof of seller/buyer identity or HTTPS safety.
   defp public_id?(value) when is_binary(value) and byte_size(value) <= 2048 do
     case URI.parse(value) do
-      %URI{scheme: "https", host: host, path: path, query: nil,
-           fragment: nil, userinfo: nil, port: port}
+      %URI{
+        scheme: "https",
+        host: host,
+        path: path,
+        query: nil,
+        fragment: nil,
+        userinfo: nil,
+        port: port
+      }
       when is_binary(host) and is_binary(path) and path != "" and port in [nil, 443] ->
         String.contains?(host, ".") and
           Regex.match?(~r/\A[a-z0-9.-]+\z/, String.downcase(host)) and

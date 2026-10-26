@@ -130,6 +130,7 @@ defmodule GroupBuyCoreTest do
 
   test "one absent buyer, wrong seller, or altered terms cannot authorize group" do
     {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
+
     assert {:error, :invalid_consents} =
              G.commitment_preview(quote, seller_consent(quote), tl(consents(quote)), @now)
 
@@ -151,7 +152,11 @@ defmodule GroupBuyCoreTest do
 
   test "buyer ceiling, offer revisions, and seller origin fail closed" do
     assert {:error, :buyer_price_limit_exceeded} =
-             G.quote(offer(), [pledge("a", 2, %{max_group_unit_minor: 8_500}), pledge("b", 3)], @now)
+             G.quote(
+               offer(),
+               [pledge("a", 2, %{max_group_unit_minor: 8_500}), pledge("b", 3)],
+               @now
+             )
 
     assert {:error, :invalid_pledges} =
              G.quote(offer(), [pledge("a", 5, %{offer_revision: 2})], @now)
@@ -186,8 +191,10 @@ defmodule GroupBuyCoreTest do
 
     assert {:error, :amount_overflow} =
              G.quote(
-               offer(%{solo_unit_minor: 9_007_199_254_740_991,
-                       tiers: [%{min_quantity: 5, unit_minor: 8_000}]}),
+               offer(%{
+                 solo_unit_minor: 9_007_199_254_740_991,
+                 tiers: [%{min_quantity: 5, unit_minor: 8_000}]
+               }),
                [pledge("a", 5)],
                @now
              )
@@ -216,6 +223,7 @@ defmodule GroupBuyCoreTest do
     assert q.members == []
     assert q.totals == %{cash_minor: 0, group_minor: nil, savings_minor: nil}
     assert q.status == :collecting_no_group_commitment
+
     assert {:error, :threshold_not_met} =
              G.commitment_preview(q, seller_consent(q), [], @now)
   end
@@ -223,6 +231,7 @@ defmodule GroupBuyCoreTest do
   test "no arbitrary four-buyer limit; one hundred independently priced pledges" do
     n = 100
     many = for i <- 1..n, do: pledge("buyer" <> Integer.to_string(i), 1)
+
     campaign =
       offer(%{
         capacity: 120,
