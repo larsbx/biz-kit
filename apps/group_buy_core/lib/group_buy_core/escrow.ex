@@ -179,8 +179,9 @@ defmodule GroupBuyCore.Escrow do
          :ok <- unique_custody_ref(state, c.custody_ref),
          true <- c.currency == state.offer.currency,
          true <- money?(c.amount_minor),
-         true <- c.amount_minor ==
-                   pledge_quantity(round, c.buyer) * hd(state.offer.tiers).unit_minor,
+         true <-
+           c.amount_minor ==
+             pledge_quantity(round, c.buyer) * hd(state.offer.tiers).unit_minor,
          true <- is_integer(c.expires_at) and c.expires_at > state.offer.expires_at,
          false <- Map.has_key?(state.positions, c.buyer) do
       position = %{
@@ -345,8 +346,10 @@ defmodule GroupBuyCore.Escrow do
       else: :ok
   end
 
-  defp state_scope(%{schema: @schema, offer: offer, positions: positions, seen: seen,
-                     version: version}, %{offer: other, pledges: pledges})
+  defp state_scope(
+         %{schema: @schema, offer: offer, positions: positions, seen: seen, version: version},
+         %{offer: other, pledges: pledges}
+       )
        when offer == other and is_map(positions) and is_map(seen) and
               is_map(pledges) and is_integer(version) and version >= 0,
        do: :ok

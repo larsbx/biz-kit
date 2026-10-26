@@ -134,11 +134,13 @@ defmodule GroupBuyCore.EscrowTest do
     assert preview.company_custody == false
 
     cmd = release(escrow, "a", 3)
+
     assert {:ok, changed, :accepted} =
              Escrow.apply(escrow, round, @provider_actor, cmd, @now)
 
     assert changed.positions[actor("a")].status == :released
     assert changed.positions[actor("a")].disposition.seller_minor == 27_000
+
     assert {:ok, ^changed, :duplicate} =
              Escrow.apply(changed, round, @provider_actor, cmd, @now)
 
@@ -209,6 +211,7 @@ defmodule GroupBuyCore.EscrowTest do
 
     assert {:ok, changed, :accepted} =
              Escrow.apply(escrow, round, @provider_actor, refund, @now + 1_000)
+
     assert changed.positions[actor("a")].status == :refunded
     assert changed.positions[actor("a")].disposition.buyer_refund_minor == 36_000
 
@@ -224,6 +227,7 @@ defmodule GroupBuyCore.EscrowTest do
 
   test "postthreshold dispute freezes release until independently verified lawful resolution" do
     {round, escrow} = funded_round()
+
     dispute = %{
       id: "dispute-a",
       expected_version: escrow.version,
@@ -234,6 +238,7 @@ defmodule GroupBuyCore.EscrowTest do
 
     assert {:ok, held, :accepted} =
              Escrow.apply(escrow, round, actor("a"), dispute, @now)
+
     assert held.positions[actor("a")].status == :disputed
 
     assert {:error, :release_requires_binding_funding_and_verified_delivery} =
@@ -255,6 +260,7 @@ defmodule GroupBuyCore.EscrowTest do
 
     assert {:ok, changed, :accepted} =
              Escrow.apply(held, round, @provider_actor, refund, @now)
+
     assert changed.positions[actor("a")].status == :refunded
     assert {:error, :escrow_coverage_incomplete} = Escrow.coverage(changed, round, @now)
   end
@@ -272,19 +278,23 @@ defmodule GroupBuyCore.EscrowTest do
     ]
 
     for attrs <- [duplicate_ref, wrong_total, wrong_currency, wrong_pledge] do
-      cmd = Map.merge(%{
-        id: "new-b",
-        expected_version: escrow.version,
-        op: :hold_confirmed,
-        buyer: actor("b"),
-        pledge_id: pledge("b", 2).id,
-        provider_id: @provider,
-        custody_ref: "custody-unique-b",
-        currency: "USD",
-        amount_minor: 18_000,
-        expires_at: @now + 2_000,
-        evidence_ref: "provider-confirmed"
-      }, attrs)
+      cmd =
+        Map.merge(
+          %{
+            id: "new-b",
+            expected_version: escrow.version,
+            op: :hold_confirmed,
+            buyer: actor("b"),
+            pledge_id: pledge("b", 2).id,
+            provider_id: @provider,
+            custody_ref: "custody-unique-b",
+            currency: "USD",
+            amount_minor: 18_000,
+            expires_at: @now + 2_000,
+            evidence_ref: "provider-confirmed"
+          },
+          attrs
+        )
 
       assert {:error, :invalid_or_duplicate_external_hold} =
                Escrow.apply(escrow, round, @provider_actor, cmd, @now)
@@ -333,8 +343,10 @@ defmodule GroupBuyCore.EscrowTest do
              Escrow.apply(escrow, round, @provider_actor, cmd, @now + 200)
 
     {round, _} = {admit(round, "b", 1), nil}
+
     assert {:ok, %{status: :binding_threshold_activated}} =
              BindingRound.snapshot(round, @now)
+
     assert {:error, :escrow_coverage_incomplete} =
              Escrow.coverage(escrow, round, @now)
   end
