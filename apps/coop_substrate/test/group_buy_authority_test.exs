@@ -481,14 +481,9 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     end)
 
     assert {:error, _} = Log.verify_chains()
-    old = Process.flag(:trap_exit, true)
-
-    try do
-      assert {:error, _} = Log.start_link(name: :corrupt_group_buy_recovery_probe)
-      assert_receive {:EXIT, _, _}
-    after
-      Process.flag(:trap_exit, old)
-    end
+    # Probe the real GenServer init without linking its deliberate failure to
+    # the ExUnit process. Startup must refuse the corrupt durable chain.
+    assert {:error, _} = GenServer.start(Log, [], name: :corrupt_group_buy_recovery_probe)
   end
 
   test "malformed and foreign consents fail without killing the appender", ctx do
