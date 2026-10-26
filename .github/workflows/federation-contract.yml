@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "apps/federation_core/**"
+      - "apps/coop_substrate/lib/coop_substrate/group_buys*"
+      - "apps/coop_substrate/lib/coop_substrate/group_buys/**"
       - ".github/workflows/federation-contract.yml"
   push:
     branches: [main]

@@ -14,4 +14,4 @@ mix deps.get --check-locked
 MIX_ENV=test mix compile --warnings-as-errors
 mix format --check-formatted apps/coop_substrate/lib/coop_substrate/group_buys.ex apps/coop_substrate/lib/coop_substrate/group_buys/cipher.ex apps/coop_substrate/lib/coop_substrate/group_buys/escrow_admission.ex apps/coop_substrate/lib/coop_substrate/group_buys/stock.ex apps/coop_substrate/test/group_buy_authority_test.exs apps/coop_substrate/test/group_buy_escrow_admission_test.exs
 cd apps/coop_substrate
-mix test test/group_buy_authority_test.exs test/group_buy_escrow_admission_test.exs --warnings-as-errors
+mix test test/log_test.exs test/envelope_test.exs test/coop_substrate/log/serializer_test.exs test/group_buy_authority_test.exs test/group_buy_escrow_admission_test.exs --warnings-as-errors

@@ -29,6 +29,9 @@ defmodule CoopSubstrate.GroupBuys do
   @escrow_provider "GroupBuyEscrowProviderPinnedV1"
   @escrow_evidence "GroupBuyEscrowEvidenceAdmittedV1"
   @stock "GroupBuyStockCommandAdmittedV1"
+  @provider_authority "GroupBuyEscrowProviderAuthorizedV1"
+  @provider_pin "GroupBuyEscrowProviderPinnedV2"
+  @funded_accept "GroupBuyFundedContractAdmittedV1"
   @offer_keys ~w(id seller sku unit currency revision expires_at capacity solo_unit_minor tiers)a
   @pledge_keys ~w(id buyer offer_id offer_revision quantity max_group_unit_minor expires_at)a
 
@@ -45,6 +48,7 @@ defmodule CoopSubstrate.GroupBuys do
       pledge_credentials: %{},
       # All external custody observations use this SAME canonical Log.
       # These maps are rebuilt from signed append history at startup.
+      escrow_authorities: %{},
       escrow_grants: %{},
       escrow_states: %{},
       escrow_provider_events: %{},
@@ -124,6 +128,34 @@ defmodule CoopSubstrate.GroupBuys do
           "proof" => :bytes,
           "expected_version" => :int
         }),
+      @provider_authority =>
+        provider_spec(%{
+          "provider_id" => :string,
+          "key_id" => :string,
+          "pubkey" => :pubkey,
+          "active" => :bool,
+          "expires_at" => :int,
+          "expected_version" => :int,
+          "provenance_ref" => :string,
+          "provenance_hash" => :hash
+        }),
+      @provider_pin =>
+        spec("group_seller", %{
+          "seller_id" => :string,
+          "campaign_id" => :string,
+          "provider_id" => :string,
+          "authority_event_id" => :string,
+          "expires_at" => :int,
+          "expected_version" => :int
+        }),
+      @funded_accept =>
+        spec("group_seller", %{
+          "seller_id" => :string,
+          "campaign_id" => :string,
+          "consent" => :bytes,
+          "proof" => :bytes,
+          "expected_version" => :int
+        }),
       @stock =>
         spec("group_seller", %{
           "seller_id" => :string,
@@ -132,6 +164,11 @@ defmodule CoopSubstrate.GroupBuys do
           "source_ref" => :string
         })
     }
+  end
+
+  defp provider_spec(fields) do
+    spec("governance", fields)
+    |> Map.put(:stream, {:payload_field, "private-group-buy-providers", "provider_id"})
   end
 
   defp spec(role, fields) do
@@ -175,6 +212,28 @@ defmodule CoopSubstrate.GroupBuys do
     end
   end
 
+  @doc """
+  Build an atomic funded contract proposal from signed buyer consent and raw
+  canonical provider-report bytes. The seller must sign the returned envelope;
+  submit/2 verifies both authorities and full held coverage before committing.
+  """
+  def funded_acceptance(consent, proof_bytes, expected_version, seller_signer)
+      when is_binary(proof_bytes) and is_integer(expected_version) and expected_version >= 0 do
+    with {:ok, admitted} <- acceptance(consent, seller_signer) do
+      Envelope.new(
+        type: @funded_accept,
+        chapter_id: admitted.chapter_id,
+        timestamp_ms: admitted.timestamp_ms,
+        signers: admitted.signers,
+        payload:
+          Map.merge(admitted.payload, %{
+            "proof" => {:bytes, proof_bytes},
+            "expected_version" => expected_version
+          })
+      )
+    end
+  end
+
   @doc "Commit a signed authority event. A receipt asserts ledger admission only."
   def submit(%Envelope{} = env, server \\ Log.server()) do
     if env.type in [
@@ -185,7 +244,10 @@ defmodule CoopSubstrate.GroupBuys do
          @accept,
          @escrow_provider,
          @escrow_evidence,
-         @stock
+         @stock,
+         @provider_authority,
+         @provider_pin,
+         @funded_accept
        ] do
       with {:ok, [accepted]} <- Log.append(env, server) do
         {:ok,
@@ -240,9 +302,20 @@ defmodule CoopSubstrate.GroupBuys do
       # The host signs admissions in the current seller-home second. This
       # makes the deterministic replay instant exactly the expiry/threshold
       # instant checked by the appender, rather than a buyer's old timestamp.
-      if type in [@accept, @escrow_evidence, @stock] and div(env.timestamp_ms, 1000) != now,
-        do: {:error, :stale_admission_time},
-        else: check_at(env, gate, now)
+      if type in [
+           @accept,
+           @escrow_evidence,
+           @stock,
+           @funded_accept,
+           @provider_pin,
+           @provider_authority
+         ] and div(env.timestamp_ms, 1000) != now,
+         do: {:error, :stale_admission_time},
+         else:
+           with(
+             :ok <- EscrowAdmission.live_grant(env, gate, now),
+             do: check_at(env, gate, now)
+           )
     else
       :ok
     end
@@ -272,10 +345,21 @@ defmodule CoopSubstrate.GroupBuys do
   end
 
   @doc false
-  def duplicate([%Envelope{} = env], state) do
+  def duplicate(envelopes, state) do
+    results = Enum.map(envelopes, &duplicate_one(&1, state))
+
+    cond do
+      Enum.all?(results, &(&1 == :new)) -> :new
+      error = Enum.find(results, &match?({:error, _}, &1)) -> error
+      Enum.any?(results, &(&1 == :new)) -> {:error, :partial_group_buy_batch_replay}
+      true -> {:ok, Enum.map(results, fn {:ok, accepted} -> accepted end)}
+    end
+  end
+
+  defp duplicate_one(%Envelope{} = env, state) do
     case state.events[env.event_id] do
       nil ->
-        :new
+        EscrowAdmission.duplicate(env, state)
 
       accepted ->
         cond do
@@ -284,15 +368,13 @@ defmodule CoopSubstrate.GroupBuys do
 
           Envelope.signed_core_term(env) == Envelope.signed_core_term(accepted) and
               env.sigs == accepted.sigs ->
-            {:ok, [accepted]}
+            {:ok, accepted}
 
           true ->
             {:error, :group_buy_event_id_conflict}
         end
     end
   end
-
-  def duplicate(_, _), do: :new
 
   defp transition(%Envelope{type: @seller, chapter_id: ch, payload: p} = env, gate, now) do
     old = gate.group_buys.sellers[{ch, p["seller_id"]}]
@@ -434,6 +516,26 @@ defmodule CoopSubstrate.GroupBuys do
       {:error, _} = error -> error
     end
   end
+
+  # ONE event contains the buyer consent and provider proof. No intermediate
+  # binding state is visible if funding validation or coverage fails.
+  defp transition(%Envelope{type: @funded_accept} = env, gate, now) do
+    consent_env = %{env | type: @accept}
+
+    with {:ok, contracts} <- transition(consent_env, gate, now),
+         {:ok, funded} <- EscrowAdmission.admit(env, %{gate | group_buys: contracts}, now),
+         :ok <- EscrowAdmission.complete_coverage(funded, key(env), now) do
+      {:ok, funded}
+    end
+  end
+
+  defp transition(%Envelope{type: @provider_authority} = env, gate, now) do
+    with :ok <- governance(env, gate),
+         do: EscrowAdmission.authorize(env, gate, now)
+  end
+
+  defp transition(%Envelope{type: @provider_pin} = env, gate, now),
+    do: EscrowAdmission.pin_authorized(env, gate, now)
 
   defp transition(%Envelope{type: @escrow_provider} = env, gate, now),
     do: EscrowAdmission.pin(env, gate, now)
