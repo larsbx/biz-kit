@@ -85,6 +85,7 @@ defmodule BarterCoreTest do
     assert preview.company_takes_title == false
     assert preview.vehicle_status == :unformed_pending_external_legal_confirmation
     assert Enum.all?(preview.obligations, &(&1.status == :not_admitted))
+
     assert Enum.map(preview.obligations, &{&1.provider, &1.recipient}) == [
              {"https://a.example/actors/shop", "https://b.example/actors/shop"},
              {"https://b.example/actors/shop", "https://c.example/actors/shop"},
@@ -134,6 +135,7 @@ defmodule BarterCoreTest do
 
     assert {:ok, plan} = B.optimize(candidates, @now)
     all = Enum.sort_by(candidates, & &1.id)
+
     optimum =
       all
       |> permutations()
@@ -166,11 +168,15 @@ defmodule BarterCoreTest do
   test "duplicate claims, malformed fields and non-integer assets are rejected" do
     [a, b] = pair()
     assert {:error, :duplicate_intent} = B.optimize([a, a], @now)
+
     assert {:error, :invalid_intents} =
              B.optimize([a, %{b | owner: "https://evil.example/actors/shop"}], @now)
+
     assert {:error, :invalid_intents} = B.optimize([a, Map.put(b, :email, "secret")], @now)
+
     assert {:error, :invalid_intents} =
              B.optimize([a, put_in(b.provides.quantity, 1.5)], @now)
+
     assert {:error, :invalid_options} = B.optimize(pair(), @now, unexpected: true)
   end
 
@@ -186,10 +192,16 @@ defmodule BarterCoreTest do
              Brokerage.pre_delivery_preview(draft, [hd(witnesses) | tl(tl(witnesses))], @now)
 
     assert {:error, :invalid_brokerage_consents} =
-             Brokerage.pre_delivery_preview(draft,
-               [hd(witnesses) | Enum.map(tl(witnesses), fn witness ->
-                 %{witness | evidence_ref: hd(witnesses).evidence_ref}
-               end)], @now)
+             Brokerage.pre_delivery_preview(
+               draft,
+               [
+                 hd(witnesses)
+                 | Enum.map(tl(witnesses), fn witness ->
+                     %{witness | evidence_ref: hd(witnesses).evidence_ref}
+                   end)
+               ],
+               @now
+             )
 
     assert {:error, :invalid_brokerage_consents} =
              Brokerage.pre_delivery_preview(draft, witnesses, @now + 500)
@@ -219,6 +231,7 @@ defmodule BarterCoreTest do
 
   test "old per-route conditional previews remain explicitly unadmitted" do
     assert {:ok, [route]} = B.routes(pair(), @now)
+
     witnesses =
       Enum.map(route.participants, fn actor ->
         %{actor: actor, terms_hash: route.terms_hash, evidence_ref: actor}

@@ -33,18 +33,19 @@ defmodule BarterCore.Brokerage do
       expires_at =
         min(charter.expires_at, Enum.min(Enum.map(plan.cycles, & &1.valid_until)))
 
-      fields = [
-        @schema,
-        plan.terms_hash,
-        charter.company_id,
-        charter.charter_hash,
-        Integer.to_string(charter.version),
-        Integer.to_string(charter.expires_at),
-        Atom.to_string(charter.authority),
-        Atom.to_string(charter.title_policy),
-        Atom.to_string(charter.formation),
-        Integer.to_string(length(members))
-      ] ++ members
+      fields =
+        [
+          @schema,
+          plan.terms_hash,
+          charter.company_id,
+          charter.charter_hash,
+          Integer.to_string(charter.version),
+          Integer.to_string(charter.expires_at),
+          Atom.to_string(charter.authority),
+          Atom.to_string(charter.title_policy),
+          Atom.to_string(charter.formation),
+          Integer.to_string(length(members))
+        ] ++ members
 
       {:ok,
        %{

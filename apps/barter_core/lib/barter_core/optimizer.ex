@@ -167,12 +167,13 @@ defmodule BarterCore.Optimizer do
 
     {best, via, delta, next_col} =
       Enum.reduce(1..n, {best, via, (n + 1) * (n + 1) + 1, 0}, fn col,
-                                                                   {best, via, delta, next_col} ->
+                                                                  {best, via, delta, next_col} ->
         if MapSet.member?(used, col) do
           {best, via, delta, next_col}
         else
-          price = elem(elem(matrix, row - 1), col - 1) -
-            Map.fetch!(u, row) - Map.fetch!(v, col)
+          price =
+            elem(elem(matrix, row - 1), col - 1) -
+              Map.fetch!(u, row) - Map.fetch!(v, col)
 
           {best, via} =
             if price < Map.fetch!(best, col) do
@@ -194,8 +195,7 @@ defmodule BarterCore.Optimizer do
         if MapSet.member?(used, col) do
           matched_row = Map.fetch!(p, col)
 
-          {Map.update!(u, matched_row, &(&1 + delta)),
-           Map.update!(v, col, &(&1 - delta)), best}
+          {Map.update!(u, matched_row, &(&1 + delta)), Map.update!(v, col, &(&1 - delta)), best}
         else
           updated = if col == 0, do: best, else: Map.update!(best, col, &(&1 - delta))
           {u, v, updated}

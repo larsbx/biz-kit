@@ -138,10 +138,11 @@ defmodule BarterCore do
       participants: Enum.uniq(Enum.map(intents, & &1.owner)),
       legs: legs,
       valid_until: Enum.min(Enum.map(intents, & &1.valid_until)),
-      terms_hash: digest(
-        ["bizkit.barter.route.v2", Integer.to_string(length(intents))] ++
-          Enum.flat_map(intents, &intent_fields/1) ++ Enum.flat_map(legs, &leg_fields/1)
-      )
+      terms_hash:
+        digest(
+          ["bizkit.barter.route.v2", Integer.to_string(length(intents))] ++
+            Enum.flat_map(intents, &intent_fields/1) ++ Enum.flat_map(legs, &leg_fields/1)
+        )
     }
   end
 
