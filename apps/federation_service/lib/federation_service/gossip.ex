@@ -28,7 +28,16 @@ defmodule FederationService.Gossip do
 
     publisher = Base.encode16(public, case: :lower)
     true = keys[service.actor] == publisher
-    service = Map.put(service, :gossip_policy, %{scope: scope, publisher_keys: keys})
+    require_lease = Keyword.get(opts, :require_freshness_lease, false)
+    true = is_boolean(require_lease)
+
+    service =
+      Map.put(service, :gossip_policy, %{
+        scope: scope,
+        publisher_keys: keys,
+        require_freshness_lease: require_lease
+      })
+
     %{service: service, scope: scope, seed: seed, publisher: publisher, publisher_keys: keys}
   end
 

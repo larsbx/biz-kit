@@ -95,6 +95,7 @@ defmodule FederationService.GossipInstanceTest do
     settings = %{
       scope: %{halaqa_id: "public-market", charter_hash: String.duplicate("a", 64), epoch: 1},
       publisher_keys: keys,
+      require_freshness_lease: true,
       bind: "127.0.0.1:0",
       peers: []
     }
@@ -129,6 +130,9 @@ defmodule FederationService.GossipInstanceTest do
              ]
 
       assert snapshot["ledger"] == "locally-owned-signed-history" and snapshot["events"] == 1
+
+      assert [%{"stale" => true, "freshness_source" => "none"}] =
+               Enum.reject(snapshot["listings"], & &1["local"])
     end
 
     round = command(a, %{op: "catchup", receiver: beta})["status"]
@@ -140,7 +144,8 @@ defmodule FederationService.GossipInstanceTest do
 
     eventually(fn ->
       Enum.any?(command(a, %{op: "snapshot"})["listings"], fn row ->
-        row["actor"] == beta and row["freshness_source"] == "publisher_lease"
+        row["actor"] == beta and row["freshness_source"] == "publisher_lease" and
+          row["stale"] == false
       end)
     end)
 
@@ -156,6 +161,9 @@ defmodule FederationService.GossipInstanceTest do
         &(&1["actor"] == alpha and &1["metadata"]["revision"] == 1)
       )
     end)
+
+    assert [%{"stale" => true, "freshness_source" => "none"}] =
+             command(b, %{op: "snapshot"})["listings"] |> Enum.reject(& &1["local"])
 
     stop(b)
 

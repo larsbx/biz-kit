@@ -52,6 +52,121 @@ defmodule FederationService.GossipLeaseTest do
     wire
   end
 
+  defp strict(config) do
+    Gossip.config!(config.service,
+      seed: config.seed,
+      publisher_keys: config.publisher_keys,
+      scope: config.scope,
+      require_freshness_lease: true
+    )
+  end
+
+  test "lease policy is explicit, validated and independent of topic identity", c do
+    refute c.b.service.gossip_policy.require_freshness_lease
+    assert strict(c.b).service.gossip_policy.require_freshness_lease
+    assert Gossip.topic(strict(c.b)) == Gossip.topic(c.b)
+
+    for invalid <- [nil, "true", 1, :required] do
+      assert_raise MatchError, fn ->
+        Gossip.config!(c.b.service,
+          seed: c.b.seed,
+          publisher_keys: c.b.publisher_keys,
+          scope: c.b.scope,
+          require_freshness_lease: invalid
+        )
+      end
+    end
+  end
+
+  test "a cold strict receiver never grants freshness to a replayed advertisement", c do
+    {:ok, _} = GossipLease.renew(c.a, c.id, 60, 1000)
+    expired = wire(c.a, 1000)
+    c = %{c | b: strict(c.b)}
+    project(c, 5000)
+
+    assert [%{stale: true, freshness_source: "none", freshness_expires_at: nil}] =
+             FederationService.search(c.b.service, "", 5000)
+
+    assert {:error, :lease_refused} = GossipLease.receive_event(c.b, expired, 5000)
+    [{_, replay}] = Gossip.frames(c.a, 5001)
+    assert {:ok, :duplicate} = Gossip.receive_event(c.b, replay, 5001)
+    Gossip.drain(c.b, 5001)
+    Store.call(c.b.service.store, {:refresh, metadata()["id"], metadata(), 5001})
+    assert [%{stale: true, verified_at: 5000}] = FederationService.search(c.b.service, "", 5001)
+
+    # Compatibility is a local choice over the same durable projection.
+    compatibility = %{
+      c.b.service
+      | gossip_policy: %{c.b.service.gossip_policy | require_freshness_lease: false}
+    }
+
+    assert [%{stale: false, freshness_source: "projection"}] =
+             FederationService.search(compatibility, "", 5001)
+
+    before = Store.call(c.b.service.store, :snapshot)
+    assert {:ok, _} = GossipLease.renew(c.a, c.id, 60, 5002)
+    assert {:ok, :accepted} = GossipLease.receive_event(c.b, wire(c.a, 5002), 5002)
+
+    assert [%{stale: false, freshness_source: "publisher_lease", verified_at: 5000}] =
+             FederationService.search(c.b.service, "", 5002)
+
+    assert [%{stale: true, freshness_expires_at: 5062}] =
+             FederationService.search(c.b.service, "", 5062)
+
+    assert Store.call(c.b.service.store, :snapshot).remote == before.remote
+  end
+
+  test "strict policy survives receiver restart and requires a lease for each new revision", c do
+    c = %{c | b: strict(c.b)}
+    project(c)
+    GenServer.stop(c.b.service.store)
+    {:ok, b} = Store.start_link(directory: c.dir <> "/b")
+    on_exit(fn -> stop_store(b) end)
+    c = %{c | b: %{c.b | service: %{c.b.service | store: b}}}
+
+    assert [%{stale: true, freshness_source: "none"}] =
+             FederationService.search(c.b.service, "", 1001)
+
+    assert {:ok, _} = GossipLease.renew(c.a, c.id, 300, 1001)
+    old = wire(c.a, 1001)
+    assert {:ok, :accepted} = GossipLease.receive_event(c.b, old, 1001)
+
+    assert {:ok, :published} =
+             FederationService.publish(c.a.service, "source-1", metadata(@alpha, 1), :update)
+
+    project(c, 1002)
+
+    assert [%{stale: true, freshness_source: "none", metadata: %{"revision" => 1}}] =
+             FederationService.search(c.b.service, "", 1002)
+
+    assert {:error, :lease_refused} = GossipLease.receive_event(c.b, old, 1002)
+    id = Store.call(c.a.service.store, :snapshot).local[metadata()["id"]].activity_id
+    assert {:ok, %{"sequence" => 2}} = GossipLease.renew(c.a, id, 60, 1003)
+    assert {:ok, :accepted} = GossipLease.receive_event(c.b, wire(c.a, 1003), 1003)
+
+    assert [%{stale: false, freshness_source: "publisher_lease"}] =
+             FederationService.search(c.b.service, "", 1003)
+  end
+
+  test "requiring gossip leases preserves local and HTTP projection freshness", c do
+    assert [%{local: true, stale: false, freshness_source: "projection"}] =
+             FederationService.search(strict(c.a).service)
+
+    activity = Store.call(c.a.service.store, :snapshot).publications[c.id]
+    assert {:ok, :queued} = enqueue(c.b.service.store, activity, 1000)
+    assert :ok = Store.call(c.b.service.store, {:project, c.id, metadata(), 1000})
+    service = strict(c.b).service
+
+    assert [%{stale: false, freshness_source: "projection"}] =
+             FederationService.search(service, "", 1001)
+
+    assert [%{stale: true}] = FederationService.search(service, "", 5000)
+    assert :ok = Store.call(service.store, {:refresh, metadata()["id"], metadata(), 5000})
+
+    assert [%{stale: false, freshness_source: "projection", verified_at: 5000}] =
+             FederationService.search(service, "", 5001)
+  end
+
   defp sign(config, m) do
     m = Map.delete(m, "signature")
 

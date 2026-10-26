@@ -224,11 +224,17 @@ defmodule FederationService.GossipLease do
   defp token(base, row), do: base <> ":" <> Integer.to_string(row.message["sequence"])
 
   def freshness(service, row, data, now) do
-    fallback = %{
-      stale: now - row.verified_at > 3600,
-      freshness_source: "projection",
-      freshness_expires_at: row.verified_at + 3600
-    }
+    fallback =
+      if Map.get(row, :transport) == "iroh-gossip" and
+           get_in(service, [:gossip_policy, :require_freshness_lease]) == true do
+        %{stale: true, freshness_source: "none", freshness_expires_at: nil}
+      else
+        %{
+          stale: now - row.verified_at > 3600,
+          freshness_source: "projection",
+          freshness_expires_at: row.verified_at + 3600
+        }
+      end
 
     case Map.get(service, :gossip_policy) do
       %{scope: scope, publisher_keys: keys} ->
