@@ -335,6 +335,7 @@ defmodule CoopSubstrate.GroupBuys do
          true <- consent.payload["policy"] == @policy,
          :ok <- deadline(consent.payload["valid_until"], now),
          {:ok, command} <- command(consent),
+         :ok <- pledge_deadline(command, now),
          {:ok, _} <-
            current_offer(
              consent,
@@ -505,6 +506,13 @@ defmodule CoopSubstrate.GroupBuys do
         {:error, :invalid_signed_group_buy_command}
     end
   end
+
+  defp pledge_deadline(%{op: :withdraw}, _), do: :ok
+
+  defp pledge_deadline(%{op: :pledge, pledge: %{expires_at: expiry}}, now)
+       when is_integer(expiry) and expiry > now, do: :ok
+
+  defp pledge_deadline(_, _), do: {:error, :expired_pledge}
 
   defp offer(raw) do
     with {:ok, converted} <- fields(raw, @offer_keys),

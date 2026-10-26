@@ -368,6 +368,22 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     assert Log.gate().group_buys.rounds[@key].version == 1
   end
 
+  test "expired new pledge cannot join an active group although consent admission deadline is current",
+       ctx do
+    {:ok, _} = GroupBuys.submit(admission(ctx, pledge(ctx, ctx.buyer, @buyer, 5, 0)))
+    original = pledge(ctx, ctx.other, @other, 1, 1)
+    command = put_in(original.payload["command"], ["pledge", "expires_at"], ctx.now)
+
+    expired =
+      signed_event(ctx.other, original.type, Map.put(original.payload, "command", command))
+
+    rejected(admission(ctx, expired), :expired_pledge)
+    state = Log.gate().group_buys.rounds[@key]
+    assert {:ok, view} = Round.snapshot(state, ctx.now + 101)
+    assert view.contracted_quantity == 5
+    assert state.version == 1
+  end
+
   test "a previously admitted offer cannot be used after its deadline", ctx do
     expires = System.system_time(:second) + 2
     campaign = @campaign <> "-short"
@@ -426,7 +442,14 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     end)
 
     assert {:error, _} = Log.verify_chains()
-    assert {:error, _} = Log.start_link(name: :corrupt_group_buy_recovery_probe)
+    old = Process.flag(:trap_exit, true)
+
+    try do
+      assert {:error, _} = Log.start_link(name: :corrupt_group_buy_recovery_probe)
+      assert_receive {:EXIT, _, _}
+    after
+      Process.flag(:trap_exit, old)
+    end
   end
 
   test "malformed and foreign consents fail without killing the appender", ctx do

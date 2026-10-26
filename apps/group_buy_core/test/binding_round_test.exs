@@ -160,6 +160,26 @@ defmodule GroupBuyCore.BindingRoundTest do
     assert after_campaign.total_due_minor == before.total_due_minor
   end
 
+  test "late active joins require a fresh pledge without extending the new buyer's expired opt-in" do
+    {:ok, initial} = Round.new(offer(), @now)
+    {state, _} = submit(initial, "a", 5)
+
+    command = %{
+      id: "late-b",
+      expected_version: 1,
+      op: :pledge,
+      pledge: pledge("b", 1),
+      evidence_ref: "host-verified"
+    }
+
+    assert {:error, :expired_pledge} = Round.apply(state, buyer("b"), command, @now + 101)
+    renewed = %{command | pledge: pledge("b", 1, %{expires_at: @now + 500})}
+    assert {:ok, joined, :accepted} = Round.apply(state, buyer("b"), renewed, @now + 101)
+    assert joined.pledges[buyer("a")].expires_at == @now + 100
+    assert {:ok, snapshot} = Round.snapshot(joined, @now + 101)
+    assert snapshot.contracted_quantity == 6
+  end
+
   test "untriggered expired pledges are excluded and can be renewed by the same buyer" do
     {:ok, initial} = Round.new(offer(), @now)
     {state, _} = submit(initial, "a", 4)

@@ -125,6 +125,7 @@ defmodule GroupBuyCore.BindingRound do
          true <- is_map(pledge) and Map.get(pledge, :buyer) == actor,
          true <- is_nil(state.activated) or now < state.offer.expires_at,
          :ok <- validate_pledge_price(pledge, state.offer),
+         :ok <- unexpired_pledge(pledge, now),
          :ok <- check_new_member(state, actor, now) do
       current =
         if state.activated == nil,
@@ -191,6 +192,13 @@ defmodule GroupBuyCore.BindingRound do
   end
 
   defp transition(_, _, _, _), do: {:error, :invalid_binding_command}
+
+  # Existing bound participants survive their old opt-in deadline, but a NEW
+  # pledge must still be current when admitted, including late active joins.
+  defp unexpired_pledge(%{expires_at: expiry}, now) when is_integer(expiry) and expiry > now,
+    do: :ok
+
+  defp unexpired_pledge(_, _), do: {:error, :expired_pledge}
 
   defp validate_pledge_price(pledge, offer) do
     # Every accepted pledge must be satisfiable if the **first** tier
