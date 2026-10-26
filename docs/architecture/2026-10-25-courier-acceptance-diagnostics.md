@@ -42,3 +42,22 @@ PR/push acceptance now pins client `187dcc2f08e42e5c8c684ef62fd954fb22829c92`
 for three fresh courier jobs, three driver jobs and browser acceptance. Nightly
 moving-main and explicit manual refs remain available. Server behavior is unchanged;
 both resolved revisions are printed. Historical #125 remains open.
+
+
+## Overlapping status synchronization follow-up
+
+D-patch#34 records a deterministic client cache race relevant to manual/background
+synchronization: a delayed response could overwrite newer server truth already
+observed by another pass. The corrected gated baseline failed with ComparisonFailure
+in [40281812181](https://github.com/larsbx/d-patch/actions/runs/40281812181);
+the earlier virtual-clock timeout is excluded as causal evidence. Database-scoped
+pass ownership now requires waiting callers to reread due rows after acquiring the
+mutex, with cancellation and immutable retry tests and scoped Lean/Quint checks.
+
+Pin repeated PR/push acceptance to client `1a7740c25b3b98fd93dbb67e75f228a8ea215e8d`.
+Three independent jobs per mobile role retain zero offline effects, exactly two
+effects after signed delivery plus replay, and previous-token 401 after confirmed
+logout. Nightly moving-main and manual explicit refs remain available. This is a
+reproducible client concurrency defect, not proof that the historical failures in
+#125 exercised it; keep #125 open. Details and abstraction limits are in the client's
+`spec/status_sync/README.md` and `docs/courier-acceptance-diagnostics.md`.
