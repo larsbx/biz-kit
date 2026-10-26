@@ -30,5 +30,6 @@ jobs:
         working-directory: apps/group_buy_core
       - name: Enforce Elixir formatting
         run: |
-          mix format --check-formatted mix.exs "lib/**/*.ex" "test/**/*.exs"
+          mix format mix.exs "lib/**/*.ex" "test/**/*.exs"
+          git diff --exit-code -- mix.exs lib/ test/
         working-directory: apps/group_buy_core
