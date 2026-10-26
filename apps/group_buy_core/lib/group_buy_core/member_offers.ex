@@ -63,8 +63,7 @@ defmodule GroupBuyCore.MemberOffers do
 
   defp member_id?(value) when is_binary(value) and byte_size(value) <= 2048 do
     case URI.parse(value) do
-      %URI{scheme: "https", host: host, path: path, userinfo: nil,
-           query: nil, fragment: nil}
+      %URI{scheme: "https", host: host, path: path, userinfo: nil, query: nil, fragment: nil}
       when is_binary(host) and is_binary(path) and path != "" ->
         String.contains?(host, ".") and not String.contains?(host, "..")
 

@@ -115,6 +115,7 @@ defmodule GroupBuyCore.Contracted do
         with :ok <- check_ceiling(active, tier),
              {:ok, rows} <- member_rows(state.offer, active, tier) do
           next_tier = Enum.find(state.offer.tiers, &(&1.min_quantity > amount))
+
           expires_at =
             Enum.min([state.offer.expires_at | Enum.map(active, & &1.expires_at)])
 
@@ -141,10 +142,13 @@ defmodule GroupBuyCore.Contracted do
              unlocked_tier_minimum: if(tier, do: tier.min_quantity, else: nil),
              next_tier:
                if(next_tier,
-                 do: %{minimum: next_tier.min_quantity,
-                       more_units_needed: next_tier.min_quantity - amount,
-                       unit_minor: next_tier.unit_minor},
-                 else: nil),
+                 do: %{
+                   minimum: next_tier.min_quantity,
+                   more_units_needed: next_tier.min_quantity - amount,
+                   unit_minor: next_tier.unit_minor
+                 },
+                 else: nil
+               ),
              members: rows,
              expires_at: expires_at,
              status:
@@ -224,11 +228,14 @@ defmodule GroupBuyCore.Contracted do
          :ok <- identifier(c.contract_id),
          :ok <- evidence(c.evidence_ref),
          true <- positive(c.quantity) and positive(c.max_group_unit_minor),
-         true <- is_integer(c.expires_at) and c.expires_at > now and
-                   c.expires_at <= state.offer.expires_at,
+         true <-
+           is_integer(c.expires_at) and c.expires_at > now and
+             c.expires_at <= state.offer.expires_at,
          false <- Map.has_key?(state.contracts, actor),
-         true <- Enum.sum(Enum.map(Map.values(state.contracts), & &1.quantity)) +
-                   c.quantity <= state.offer.capacity do
+         false <- Enum.any?(Map.values(state.contracts), &(&1.contract_id == c.contract_id)),
+         true <-
+           Enum.sum(Enum.map(Map.values(state.contracts), & &1.quantity)) +
+             c.quantity <= state.offer.capacity do
       record = %{
         contract_id: c.contract_id,
         buyer: actor,
@@ -309,7 +316,8 @@ defmodule GroupBuyCore.Contracted do
          row.cash_minor <= @max and
            (is_nil(row.group_minor) or row.group_minor <= @max)
        end) and Enum.sum(Enum.map(rows, & &1.cash_minor)) <= @max and
-         Enum.sum(Enum.map(rows, &(if(is_nil(&1.group_minor), do: 0, else: &1.group_minor)))) <= @max do
+         Enum.sum(Enum.map(rows, &if(is_nil(&1.group_minor), do: 0, else: &1.group_minor))) <=
+           @max do
       {:ok, rows}
     else
       {:error, :amount_overflow}

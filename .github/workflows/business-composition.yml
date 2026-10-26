@@ -38,11 +38,13 @@ jobs:
         working-directory: apps/biz_kit_composition
         run: MIX_ENV=test mix compile --warnings-as-errors
       - name: Check composition formatting
-        run: >-
-          MIX_ENV=test mix format --check-formatted
-          apps/biz_kit_composition/mix.exs
-          apps/biz_kit_composition/lib/biz_kit/composition.ex
-          apps/biz_kit_composition/test/composition_test.exs
+        run: |
+          MIX_ENV=test mix format apps/biz_kit_composition/mix.exs \
+            apps/biz_kit_composition/lib/biz_kit/composition.ex \
+            apps/biz_kit_composition/lib/biz_kit/composition/group_buy.ex \
+            apps/biz_kit_composition/test/composition_test.exs \
+            apps/biz_kit_composition/test/group_buy_test.exs
+          git diff --exit-code -- apps/biz_kit_composition/
       - name: Exercise restaurant and freight conformance
         working-directory: apps/biz_kit_composition
         run: mix test --no-start

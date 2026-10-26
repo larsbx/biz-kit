@@ -166,6 +166,7 @@ defmodule GroupBuyCore do
 
   defp ready(%{status: :indicative_pledge_volume_not_contractually_unlocked}),
     do: {:error, :requires_contracted_units}
+
   defp ready(_), do: {:error, :threshold_not_met}
 
   defp validate_buyers(consents, quote) do

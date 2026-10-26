@@ -117,8 +117,10 @@ defmodule GroupBuyCoreTest do
 
   test "pledge references never unlock discounted contracted prices" do
     {:ok, quote} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
+
     assert {:error, :requires_contracted_units} =
              G.commitment_preview(quote, seller_consent(quote), consents(quote), @now)
+
     assert quote.price_authority == :indicative_only_not_contractual
     assert quote.contracted_quantity == 0
   end

@@ -68,6 +68,7 @@ defmodule GroupBuyCore.ContractedTest do
     assert envelope.offer.solo_unit_minor == 10_000
     assert hd(envelope.offer.tiers).unit_minor == 9_000
     assert envelope.transport == :requires_private_authenticated_delivery
+
     assert {:error, :members_only_no_public_projection} =
              MemberOffers.public_projection(offer())
 
@@ -81,8 +82,11 @@ defmodule GroupBuyCore.ContractedTest do
     assert {:error, :unauthorized_member_offer} =
              MemberOffers.private_offer(
                offer(),
-               %{context | recipient: "https://outsider.example/actors/not-member",
-                          authorization: :unverified},
+               %{
+                 context
+                 | recipient: "https://outsider.example/actors/not-member",
+                   authorization: :unverified
+               },
                @now
              )
 
@@ -99,9 +103,15 @@ defmodule GroupBuyCore.ContractedTest do
       G.quote(
         offer(),
         [
-          %{id: "https://a.example/pledge/1", buyer: actor("a"),
-            offer_id: offer().id, offer_revision: 7, quantity: 10,
-            max_group_unit_minor: 8_000, expires_at: @now + 100}
+          %{
+            id: "https://a.example/pledge/1",
+            buyer: actor("a"),
+            offer_id: offer().id,
+            offer_revision: 7,
+            quantity: 10,
+            max_group_unit_minor: 8_000,
+            expires_at: @now + 100
+          }
         ],
         @now
       )
@@ -109,6 +119,7 @@ defmodule GroupBuyCore.ContractedTest do
     assert pledge_quote.status == :indicative_pledge_volume_not_contractually_unlocked
     assert pledge_quote.contracted_quantity == 0
     assert pledge_quote.price_authority == :indicative_only_not_contractual
+
     assert {:error, :requires_contracted_units} =
              G.commitment_preview(pledge_quote, %{}, [], @now)
 
@@ -207,12 +218,18 @@ defmodule GroupBuyCore.ContractedTest do
     assert lower.contracted_quantity == 3
     assert lower.unlocked_group_unit_minor == nil
     refute lower.quote_hash == ready.quote_hash
+
     assert {:error, :not_ready_to_seal} =
              Contracted.apply(
                s,
                s.offer.seller,
-               %{id: "seal", expected_version: s.version, op: :seal,
-                 expected_quote_hash: ready.quote_hash, evidence_ref: "seller"},
+               %{
+                 id: "seal",
+                 expected_version: s.version,
+                 op: :seal,
+                 expected_quote_hash: ready.quote_hash,
+                 evidence_ref: "seller"
+               },
                @now
              )
   end
@@ -226,6 +243,14 @@ defmodule GroupBuyCore.ContractedTest do
 
     assert {:error, :idempotency_conflict} =
              Contracted.apply(s, actor("a"), %{c | quantity: 5}, @now)
+
+    assert {:error, :invalid_or_duplicate_contract} =
+             Contracted.apply(
+               s,
+               actor("b"),
+               contract(s, "b", 1, %{contract_id: "binding-a-1"}),
+               @now
+             )
 
     assert {:error, :stale_contract_version} =
              Contracted.apply(s, actor("b"), contract(s, "b", 1, %{expected_version: 0}), @now)
