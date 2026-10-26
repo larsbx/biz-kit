@@ -15,7 +15,7 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
   """
 
   alias CoopSubstrate.Canonical
-  alias GroupBuyCore.{Escrow, EscrowProof}
+  alias GroupBuyCore.EscrowProof
 
   @proof_keys ~w(schema provider_id key_id campaign_id seller offer_revision issued_at
                  expires_at event_ref payload signature)
@@ -25,8 +25,7 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
   @refund_keys ~w(op buyer custody_ref refund_ref refund_minor reason resolution_ref)
 
   @doc "Validate and project a seller-home pin or replacement of a provider key."
-  def pin(%{chapter_id: chapter, payload: p, signers: signers, event_id: event_id},
-          gate, now) do
+  def pin(%{chapter_id: chapter, payload: p, signers: signers, event_id: event_id}, gate, now) do
     key = campaign_key(chapter, p)
     id = {key, p["provider_id"]}
     previous = gate.group_buys.escrow_grants[id]
@@ -36,8 +35,9 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
          :ok <- expected_version(previous, p["expected_version"]),
          true <- valid_id?(p["provider_id"]) and valid_id?(p["key_id"]),
          {:bytes, <<_::256>> = pubkey} <- p["pubkey"],
-         true <- is_boolean(p["active"]) and
-                   is_integer(p["expires_at"]) and p["expires_at"] > now do
+         true <-
+           is_boolean(p["active"]) and
+             is_integer(p["expires_at"]) and p["expires_at"] > now do
       pinned = %{
         provider_id: p["provider_id"],
         key_id: p["key_id"],
@@ -64,8 +64,7 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
   Called from Log's verify-on-append gate. The *entire* transition is a pure
   candidate until the canonical append completes. No second ledger exists.
   """
-  def admit(%{chapter_id: chapter, payload: p, signers: signers, event_id: event_id},
-            gate, now) do
+  def admit(%{chapter_id: chapter, payload: p, signers: signers, event_id: event_id}, gate, now) do
     key = campaign_key(chapter, p)
 
     with :ok <- seller_authority(chapter, p["seller_id"], signers, gate, now),
@@ -86,10 +85,12 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
         state
         |> put_in([:escrow_states, Access.key(key)], candidate.escrow_projection)
         |> put_in(
-          [:escrow_provider_events,
-           Access.key({proof.provider_id, proof.event_ref})],
-          %{campaign_key: key, ledger_event_id: event_id,
-            provider_proof_hash: candidate.provider_proof_hash}
+          [:escrow_provider_events, Access.key({proof.provider_id, proof.event_ref})],
+          %{
+            campaign_key: key,
+            ledger_event_id: event_id,
+            provider_proof_hash: candidate.provider_proof_hash
+          }
         )
         |> add_custody_claim(key, proof)
 
@@ -149,40 +150,57 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
   end
 
   defp provider_global_event(gate, proof) do
-    if Map.has_key?(gate.group_buys.escrow_provider_events,
-         {proof.provider_id, proof.event_ref}),
-      do: {:error, :provider_event_already_admitted},
-      else: :ok
+    if Map.has_key?(
+         gate.group_buys.escrow_provider_events,
+         {proof.provider_id, proof.event_ref}
+       ),
+       do: {:error, :provider_event_already_admitted},
+       else: :ok
   end
 
   defp provider_custody(gate, key, proof) do
     ident = {proof.provider_id, proof.payload.custody_ref}
     claim = gate.group_buys.escrow_custody_claims[ident]
+
     case {proof.payload.op, claim} do
-      {:hold_confirmed, nil} -> :ok
-      {:hold_confirmed, _} -> {:error, :cross_campaign_custody_reused}
+      {:hold_confirmed, nil} ->
+        :ok
+
+      {:hold_confirmed, _} ->
+        {:error, :cross_campaign_custody_reused}
+
       {_, %{campaign_key: ^key, buyer: buyer}}
-      when buyer == proof.payload.buyer -> :ok
-      _ -> {:error, :unowned_or_cross_campaign_custody}
+      when buyer == proof.payload.buyer ->
+        :ok
+
+      _ ->
+        {:error, :unowned_or_cross_campaign_custody}
     end
   end
 
-  defp add_custody_claim(state, key, %{provider_id: provider_id,
-                                         payload: %{op: :hold_confirmed} = body}) do
-    put_in(state, [:escrow_custody_claims,
-                   Access.key({provider_id, body.custody_ref})],
-      %{campaign_key: key, buyer: body.buyer})
+  defp add_custody_claim(state, key, %{
+         provider_id: provider_id,
+         payload: %{op: :hold_confirmed} = body
+       }) do
+    put_in(state, [:escrow_custody_claims, Access.key({provider_id, body.custody_ref})], %{
+      campaign_key: key,
+      buyer: body.buyer
+    })
   end
 
   defp add_custody_claim(state, _, _), do: state
 
   defp seller_authority(chapter, seller_id, signers, gate, now) do
     credential = gate.group_buys.sellers[{chapter, seller_id}]
+
     case {credential, signers} do
       {%{key_id: id, pubkey: pubkey, expires_at: expiry},
        [%{role: "group_seller", key_id: signer_id, pubkey: signer_pubkey}]}
-      when expiry > now and id == signer_id and pubkey == signer_pubkey -> :ok
-      _ -> {:error, :invalid_escrow_seller_authority}
+      when expiry > now and id == signer_id and pubkey == signer_pubkey ->
+        :ok
+
+      _ ->
+        {:error, :invalid_escrow_seller_authority}
     end
   end
 
@@ -200,8 +218,11 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
 
   defp exact?(map, keys) when is_map(map), do: Enum.sort(Map.keys(map)) == Enum.sort(keys)
   defp exact?(_, _), do: false
-  defp valid_id?(value), do: is_binary(value) and byte_size(value) in 1..256 and
-    String.trim(value) != ""
+
+  defp valid_id?(value),
+    do:
+      is_binary(value) and byte_size(value) in 1..256 and
+        String.trim(value) != ""
 
   defp campaign_key(chapter, p), do: {chapter, p["seller_id"], p["campaign_id"]}
 end

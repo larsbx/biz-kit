@@ -166,8 +166,7 @@ defmodule CoopSubstrate.GroupBuys do
 
   @doc "Commit a signed authority event. A receipt asserts ledger admission only."
   def submit(%Envelope{} = env, server \\ Log.server()) do
-    if env.type in [@seller, @member, @offer, @close, @accept,
-                    @escrow_provider, @escrow_evidence] do
+    if env.type in [@seller, @member, @offer, @close, @accept, @escrow_provider, @escrow_evidence] do
       with {:ok, [accepted]} <- Log.append(env, server) do
         {:ok,
          %{

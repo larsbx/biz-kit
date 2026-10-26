@@ -66,8 +66,15 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     {:ok, _} = GroupBuys.submit(offer)
     {:ok, offer_hash} = GroupBuys.terms_hash(offer)
 
-    ctx = %{seller: seller, buyer: buyer, now: now,
-            provider_public: pub, provider_private: priv, offer_hash: offer_hash}
+    ctx = %{
+      seller: seller,
+      buyer: buyer,
+      now: now,
+      provider_public: pub,
+      provider_private: priv,
+      offer_hash: offer_hash
+    }
+
     {:ok, ctx}
   end
 
@@ -119,8 +126,12 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
       })
 
     {:ok, admitted} = GroupBuys.acceptance(buyer_consent, ctx.seller.signer)
-    {:ok, admitted} = CoopSubstrate.Protocol.Envelope.sign(
-      admitted, ctx.seller.signer.key_id, ctx.seller.seed)
+    {:ok, admitted} =
+      CoopSubstrate.Protocol.Envelope.sign(
+        admitted,
+        ctx.seller.signer.key_id,
+        ctx.seller.seed
+      )
 
     assert {:ok, _} = GroupBuys.submit(admitted)
   end
