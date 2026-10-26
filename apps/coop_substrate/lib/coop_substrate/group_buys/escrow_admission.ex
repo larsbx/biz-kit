@@ -77,7 +77,21 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
          :ok <- provider_global_event(gate, proof),
          :ok <- provider_custody(gate, key, proof),
          {:ok, candidate} <-
-           EscrowProof.preview(escrow, gate.group_buys.rounds[key], proof, grant, now),
+           EscrowProof.preview(
+             escrow,
+             gate.group_buys.rounds[key],
+             proof,
+             Map.take(grant, [
+               :provider_id,
+               :key_id,
+               :public_key,
+               :active,
+               :grant_expires_at,
+               :campaign_id,
+               :seller
+             ]),
+             now
+           ),
          true <- candidate.disposition == :accepted do
       state = gate.group_buys
 
