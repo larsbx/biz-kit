@@ -37,7 +37,7 @@ defmodule FederationService.RouterTest do
     for resource <- [acct, actor] do
       response = request(config, :get, "/.well-known/webfinger?resource=" <> URI.encode_www_form(resource))
       assert response.status == 200
-      assert get_resp_header(response, "content-type") == ["application/jrd+json; charset=utf-8"]
+      assert Plug.Conn.get_resp_header(response, "content-type") == ["application/jrd+json; charset=utf-8"]
 
       doc = Jason.decode!(response.resp_body)
       assert doc == %{
