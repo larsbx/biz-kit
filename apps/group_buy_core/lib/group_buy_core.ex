@@ -215,8 +215,11 @@ defmodule GroupBuyCore do
 
   def commitment_preview(_, _, _, _), do: {:error, :invalid_consents}
 
-  defp ready(%{status: :pledged_volume_covered_purchase_option_available,
-               purchase_option_available: true, group_unit_minor: minor})
+  defp ready(%{
+         status: :pledged_volume_covered_purchase_option_available,
+         purchase_option_available: true,
+         group_unit_minor: minor
+       })
        when is_integer(minor) and minor > 0,
        do: :ok
 

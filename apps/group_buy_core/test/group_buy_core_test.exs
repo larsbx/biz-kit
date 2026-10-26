@@ -106,6 +106,7 @@ defmodule GroupBuyCoreTest do
     assert {:error, :threshold_not_met} = G.purchase_option(below, pledge("a", 3).buyer, @now)
 
     {:ok, covered} = G.quote(offer(), [pledge("a", 2), pledge("b", 3)], @now)
+
     assert {:error, :buyer_not_in_pledges} =
              G.purchase_option(covered, "https://outsider.example/actors/buyer", @now)
 
@@ -123,6 +124,7 @@ defmodule GroupBuyCoreTest do
     {:ok, below} = G.quote(offer(), [a, b], @now + 30)
     refute below.purchase_option_available
     assert below.active_quantity == 2
+
     assert {:error, :invalid_or_stale_quote} =
              G.purchase_option(covered, a.buyer, @now + 30)
 
