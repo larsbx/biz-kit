@@ -35,6 +35,7 @@ defmodule CoopSubstrate.MixProject do
       # The task lifecycle the ledger admits, shared with any other host.
       {:task_core, in_umbrella: true},
       {:group_buy_core, in_umbrella: true},
+      {:inventory_core, in_umbrella: true},
       {:rustler, "~> 0.36"},
       {:cbor, "~> 1.0"},
       # Canonical log per the AshEvents spike decision (SUBSTRATE.md §3):
