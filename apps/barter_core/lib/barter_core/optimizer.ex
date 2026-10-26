@@ -79,7 +79,7 @@ defmodule BarterCore.Optimizer do
 
           true ->
             indices = walk(assigned, row, row, [])
-            seen = Enum.reduce(indices, seen, &MapSet.put(&1, &2))
+            seen = Enum.reduce(indices, seen, fn index, visited -> MapSet.put(visited, index) end)
             first = Enum.min(indices)
             {prefix, suffix} = Enum.split_while(indices, &(&1 != first))
 
