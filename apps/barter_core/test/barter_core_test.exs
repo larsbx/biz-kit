@@ -29,12 +29,14 @@ defmodule BarterCoreTest do
 
   test "exact bilateral route: both owners deliver directly and unused stock stays with owner" do
     assert {:ok, [route]} = BarterCore.routes(Enum.reverse(pair()), @now)
+
     assert route.participants == [
              "https://alpha.example/actors/shop",
              "https://beta.example/actors/shop"
            ]
 
     assert Enum.map(route.legs, & &1.asset.quantity) == [8, 4]
+
     assert Enum.map(route.legs, &{&1.from, &1.to}) == [
              {"https://alpha.example/actors/shop", "https://beta.example/actors/shop"},
              {"https://beta.example/actors/shop", "https://alpha.example/actors/shop"}
@@ -53,11 +55,13 @@ defmodule BarterCoreTest do
 
     assert {:ok, [route]} = BarterCore.routes(intents, @now)
     assert length(route.legs) == 3
+
     assert Enum.map(route.legs, &{&1.from, &1.to}) == [
              {"https://a.example/actors/shop", "https://b.example/actors/shop"},
              {"https://b.example/actors/shop", "https://c.example/actors/shop"},
              {"https://c.example/actors/shop", "https://a.example/actors/shop"}
            ]
+
     assert Enum.map(route.legs, & &1.asset.quantity) == [2, 1, 5]
   end
 
@@ -79,18 +83,26 @@ defmodule BarterCoreTest do
     assert {:ok, []} = BarterCore.routes([a, put_in(b.needs.unit, "g")], @now)
     assert {:ok, []} = BarterCore.routes([a, put_in(b.needs.quantity, 11)], @now)
     assert {:ok, []} = BarterCore.routes([a, %{b | valid_until: @now}], @now)
+
     assert {:ok, []} =
-             BarterCore.routes([a, %{b | owner: a.owner, id: "https://alpha.example/barter/2"}], @now)
+             BarterCore.routes(
+               [a, %{b | owner: a.owner, id: "https://alpha.example/barter/2"}],
+               @now
+             )
   end
 
   test "spoofed origins, duplicate IDs, extra private fields and non-integers refuse" do
     [a, b] = pair()
     assert {:error, :duplicate_intent} = BarterCore.routes([a, a], @now)
+
     assert {:error, :invalid_intents} =
              BarterCore.routes([a, %{b | owner: "https://evil.example/actors/forged"}], @now)
+
     assert {:error, :invalid_intents} = BarterCore.routes([a, Map.put(b, :email, "secret")], @now)
+
     assert {:error, :invalid_intents} =
              BarterCore.routes([a, put_in(b.provides.quantity, 2.5)], @now)
+
     assert {:error, :too_many_intents} = BarterCore.routes(List.duplicate(a, 17), @now)
     assert {:error, :invalid_intents} = BarterCore.routes([a, b], @now, 5)
   end
@@ -101,17 +113,25 @@ defmodule BarterCoreTest do
 
     assert {:ok, [changed]} = BarterCore.routes([%{a | revision: 2}, b], @now)
     refute changed.terms_hash == route.terms_hash
+
     assert {:error, :invalid_route} =
-             BarterCore.verify_route(put_in(route, [:legs, Access.at(0), :asset, :quantity], 9), @now)
+             BarterCore.verify_route(
+               put_in(route, [:legs, Access.at(0), :asset, :quantity], 9),
+               @now
+             )
   end
 
   test "conditional accounting is only a preview, never posted delivery or settlement" do
     assert {:ok, [route]} = BarterCore.routes(pair(), @now)
 
-    consents = Enum.map(route.participants, fn participant ->
-      %{actor: participant, terms_hash: route.terms_hash,
-        evidence_ref: "host-verification-required-" <> participant}
-    end)
+    consents =
+      Enum.map(route.participants, fn participant ->
+        %{
+          actor: participant,
+          terms_hash: route.terms_hash,
+          evidence_ref: "host-verification-required-" <> participant
+        }
+      end)
 
     assert {:ok, preview} = Agreement.pre_delivery_preview(route, consents, @now)
     assert preview.status == :requires_independent_local_admission
@@ -120,11 +140,18 @@ defmodule BarterCoreTest do
 
     assert {:error, :invalid_consents} =
              Agreement.pre_delivery_preview(route, tl(consents), @now)
+
     assert {:error, :invalid_consents} =
              Agreement.pre_delivery_preview(route, [hd(consents), hd(consents)], @now)
+
     assert {:error, :invalid_consents} =
-             Agreement.pre_delivery_preview(route,
-               [hd(consents), %{List.last(consents) | terms_hash: String.duplicate("0", 64)}], @now)
-    assert {:error, :invalid_route} = Agreement.pre_delivery_preview(route, consents, @now + 1_000)
+             Agreement.pre_delivery_preview(
+               route,
+               [hd(consents), %{List.last(consents) | terms_hash: String.duplicate("0", 64)}],
+               @now
+             )
+
+    assert {:error, :invalid_route} =
+             Agreement.pre_delivery_preview(route, consents, @now + 1_000)
   end
 end

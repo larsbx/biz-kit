@@ -48,9 +48,10 @@ defmodule BarterCore.Agreement do
   def pre_delivery_preview(_, _, _), do: {:error, :invalid_consents}
 
   defp check_consents(route, consents) do
-    actors = Enum.map(consents, fn consent ->
-      if is_map(consent), do: Map.get(consent, :actor), else: nil
-    end)
+    actors =
+      Enum.map(consents, fn consent ->
+        if is_map(consent), do: Map.get(consent, :actor), else: nil
+      end)
 
     valid? =
       length(consents) == length(route.participants) and

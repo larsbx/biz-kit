@@ -86,8 +86,14 @@ defmodule BarterCore do
 
   defp valid_intent?(%{} = intent) do
     with true <- exact_keys?(intent, @intent_keys),
-         %{id: id, owner: owner, revision: revision, valid_until: expires,
-           provides: provides, needs: needs} <- intent,
+         %{
+           id: id,
+           owner: owner,
+           revision: revision,
+           valid_until: expires,
+           provides: provides,
+           needs: needs
+         } <- intent,
          true <- valid_url?(id) and valid_url?(owner),
          true <- String.downcase(URI.parse(id).host) == String.downcase(URI.parse(owner).host),
          true <- bounded?(revision, 0) and bounded?(expires, 1),
@@ -123,8 +129,15 @@ defmodule BarterCore do
   # authorize publication, enforce SSRF-safe fetches and bind actor/key origin.
   defp valid_url?(value) when is_binary(value) and byte_size(value) <= 2048 do
     case URI.parse(value) do
-      %URI{scheme: "https", host: host, path: path, query: nil,
-           fragment: nil, userinfo: nil, port: port}
+      %URI{
+        scheme: "https",
+        host: host,
+        path: path,
+        query: nil,
+        fragment: nil,
+        userinfo: nil,
+        port: port
+      }
       when is_binary(host) and is_binary(path) and path != "" and port in [nil, 443] ->
         name = String.downcase(host)
 
@@ -186,8 +199,11 @@ defmodule BarterCore do
           to: to.owner,
           from_intent: from.id,
           to_intent: to.id,
-          asset: %{code: from.provides.code, unit: from.provides.unit,
-                   quantity: to.needs.quantity}
+          asset: %{
+            code: from.provides.code,
+            unit: from.provides.unit,
+            quantity: to.needs.quantity
+          }
         }
       end)
 
@@ -208,14 +224,29 @@ defmodule BarterCore do
     fields =
       ["bizkit.barter.route.v1", Integer.to_string(length(intents))] ++
         Enum.flat_map(intents, fn i ->
-          [i.id, i.owner, Integer.to_string(i.revision),
-           Integer.to_string(i.valid_until), i.provides.code, i.provides.unit,
-           Integer.to_string(i.provides.quantity), i.needs.code, i.needs.unit,
-           Integer.to_string(i.needs.quantity)]
+          [
+            i.id,
+            i.owner,
+            Integer.to_string(i.revision),
+            Integer.to_string(i.valid_until),
+            i.provides.code,
+            i.provides.unit,
+            Integer.to_string(i.provides.quantity),
+            i.needs.code,
+            i.needs.unit,
+            Integer.to_string(i.needs.quantity)
+          ]
         end) ++
         Enum.flat_map(legs, fn l ->
-          [l.from, l.to, l.from_intent, l.to_intent, l.asset.code,
-           l.asset.unit, Integer.to_string(l.asset.quantity)]
+          [
+            l.from,
+            l.to,
+            l.from_intent,
+            l.to_intent,
+            l.asset.code,
+            l.asset.unit,
+            Integer.to_string(l.asset.quantity)
+          ]
         end)
 
     encoded = Enum.map_join(fields, "", fn field -> "#{byte_size(field)}:#{field}" end)
