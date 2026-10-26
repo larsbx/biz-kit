@@ -141,6 +141,16 @@ defmodule GroupBuyCore.EscrowTest do
     assert changed.positions[actor("a")].status == :released
     assert changed.positions[actor("a")].disposition.seller_minor == 27_000
 
+    # The same independently verified provider receipt cannot fund a
+    # different buyer's payout, even with a different command ID.
+    reused_receipt = %{
+      release(changed, "b", 2)
+      | settlement_ref: cmd.settlement_ref
+    }
+
+    assert {:error, :release_requires_binding_funding_and_verified_delivery} =
+             Escrow.apply(changed, round, @provider_actor, reused_receipt, @now)
+
     assert {:ok, ^changed, :duplicate} =
              Escrow.apply(changed, round, @provider_actor, cmd, @now)
 
@@ -263,6 +273,18 @@ defmodule GroupBuyCore.EscrowTest do
 
     assert changed.positions[actor("a")].status == :refunded
     assert {:error, :escrow_coverage_incomplete} = Escrow.coverage(changed, round, @now)
+
+    reused_refund = %{
+      refund
+      | id: "adjudicated-refund-b",
+        expected_version: changed.version,
+        buyer: actor("b"),
+        custody_ref: "custody-unique-b",
+        refund_minor: 18_000
+    }
+
+    assert {:error, :refund_requires_failed_threshold_or_lawful_resolution} =
+             Escrow.apply(changed, round, @provider_actor, reused_refund, @now)
   end
 
   test "reused custody reference, wrong provider, unpledged buyer and mismatched money refuse" do

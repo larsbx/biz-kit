@@ -207,6 +207,7 @@ defmodule GroupBuyCore.Escrow do
     with {:ok, position} <- held(state, c.buyer),
          :ok <- provider_matches(actor, c, position),
          :ok <- reference(c.settlement_ref),
+         :ok <- unique_disposition_ref(state, c.settlement_ref),
          :ok <- reference(c.delivery_proof_ref),
          :ok <- reference(c.evidence_ref),
          true <- now < position.expires_at,
@@ -237,6 +238,7 @@ defmodule GroupBuyCore.Escrow do
     with {:ok, position} <- held_or_disputed(state, c.buyer),
          :ok <- provider_matches(actor, c, position),
          :ok <- reference(c.refund_ref),
+         :ok <- unique_disposition_ref(state, c.refund_ref),
          :ok <- reference(c.evidence_ref),
          true <- c.refund_minor == position.amount_minor,
          :ok <- refund_permitted(round, c, now) do
@@ -344,6 +346,24 @@ defmodule GroupBuyCore.Escrow do
     if Enum.any?(Map.values(state.positions), &(&1.custody_ref == custody_ref)),
       do: {:error, :reused_custody_ref},
       else: :ok
+  end
+
+  # Do not count a provider's payout/refund receipt for two buyers.
+  # Global uniqueness across campaigns remains the provider's responsibility.
+  defp unique_disposition_ref(state, reference_id) do
+    reused =
+      Enum.any?(Map.values(state.positions), fn position ->
+        case position.disposition do
+          %{} = disposition ->
+            Map.get(disposition, :settlement_ref) == reference_id or
+              Map.get(disposition, :refund_ref) == reference_id
+
+          _ ->
+            false
+        end
+      end)
+
+    if reused, do: {:error, :reused_provider_receipt}, else: :ok
   end
 
   defp state_scope(
