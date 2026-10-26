@@ -135,6 +135,17 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     env
   end
 
+  # Retry only the outer host admission if signing straddles a second boundary.
+  defp submit_consent(ctx, signed_consent, attempts \\ 3) do
+    case GroupBuys.submit(admission(ctx, signed_consent)) do
+      {:error, {:reject, 0, :stale_admission_time}} when attempts > 0 ->
+        submit_consent(ctx, signed_consent, attempts - 1)
+
+      result ->
+        result
+    end
+  end
+
   defp read(ctx, actor, buyer, public) do
     signed_event(actor, "GroupBuyPrivateReadV1", %{
       "seller_id" => @seller,
@@ -331,8 +342,10 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
         "pledge_id" => first.payload["command"]["pledge"]["id"]
       })
 
-    events = [admission(ctx, withdrawal), admission(ctx, pledge(ctx, ctx.other, @other, 3, 1))]
-    results = events |> Task.async_stream(&GroupBuys.submit/1) |> Enum.map(fn {:ok, x} -> x end)
+    consents = [withdrawal, pledge(ctx, ctx.other, @other, 3, 1)]
+
+    results =
+      consents |> Task.async_stream(&submit_consent(ctx, &1)) |> Enum.map(fn {:ok, x} -> x end)
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
     assert Enum.count(results, &match?({:error, {:reject, 0, :stale_binding_version}}, &1)) == 1
     state = Log.gate().group_buys.rounds[@key]
