@@ -12,6 +12,6 @@ printf '[inputs: []]\n' > "$stage/.formatter.exs"
 cd "$stage"
 mix deps.get --check-locked
 MIX_ENV=test mix compile --warnings-as-errors
-mix format --check-formatted apps/coop_substrate/lib/coop_substrate/group_buys.ex apps/coop_substrate/lib/coop_substrate/group_buys/cipher.ex apps/coop_substrate/test/group_buy_authority_test.exs
+mix format --check-formatted apps/coop_substrate/lib/coop_substrate/group_buys.ex apps/coop_substrate/lib/coop_substrate/group_buys/cipher.ex apps/coop_substrate/lib/coop_substrate/group_buys/escrow_admission.ex apps/coop_substrate/test/group_buy_authority_test.exs apps/coop_substrate/test/group_buy_escrow_admission_test.exs
 cd apps/coop_substrate
-mix test test/group_buy_authority_test.exs --warnings-as-errors
+mix test test/group_buy_authority_test.exs test/group_buy_escrow_admission_test.exs --warnings-as-errors

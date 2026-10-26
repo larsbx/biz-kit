@@ -13,6 +13,8 @@ defmodule CoopSubstrate.GroupBuys do
   """
   alias CoopSubstrate.{Canonical, Log}
   alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.GroupBuys.EscrowAdmission
+  alias GroupBuyCore.Escrow
   alias GroupBuyCore.BindingRound, as: Round
 
   @policy "binding-at-minimum;free-withdrawal-before-activation;expiry-before-activation;cash-independent.v1"
@@ -23,6 +25,8 @@ defmodule CoopSubstrate.GroupBuys do
   @consent "GroupBuyConsentV1"
   @accept "GroupBuyContractAdmittedV1"
   @read "GroupBuyPrivateReadV1"
+  @escrow_provider "GroupBuyEscrowProviderPinnedV1"
+  @escrow_evidence "GroupBuyEscrowEvidenceAdmittedV1"
   @offer_keys ~w(id seller sku unit currency revision expires_at capacity solo_unit_minor tiers)a
   @pledge_keys ~w(id buyer offer_id offer_revision quantity max_group_unit_minor expires_at)a
 
@@ -36,7 +40,13 @@ defmodule CoopSubstrate.GroupBuys do
       rounds: %{},
       events: %{},
       consents: %{},
-      pledge_credentials: %{}
+      pledge_credentials: %{},
+      # All external custody observations use this SAME canonical Log.
+      # These maps are rebuilt from signed append history at startup.
+      escrow_grants: %{},
+      escrow_states: %{},
+      escrow_provider_events: %{},
+      escrow_custody_claims: %{}
     }
 
   def event_types do
@@ -91,6 +101,24 @@ defmodule CoopSubstrate.GroupBuys do
           "terms_hash" => :hash,
           "encryption_key" => :pubkey,
           "valid_until" => :int
+        }),
+      @escrow_provider =>
+        spec("group_seller", %{
+          "seller_id" => :string,
+          "campaign_id" => :string,
+          "provider_id" => :string,
+          "key_id" => :string,
+          "pubkey" => :pubkey,
+          "active" => :bool,
+          "expires_at" => :int,
+          "expected_version" => :int
+        }),
+      @escrow_evidence =>
+        spec("group_seller", %{
+          "seller_id" => :string,
+          "campaign_id" => :string,
+          "proof" => :bytes,
+          "expected_version" => :int
         })
     }
   end
@@ -138,7 +166,7 @@ defmodule CoopSubstrate.GroupBuys do
 
   @doc "Commit a signed authority event. A receipt asserts ledger admission only."
   def submit(%Envelope{} = env, server \\ Log.server()) do
-    if env.type in [@seller, @member, @offer, @close, @accept] do
+    if env.type in [@seller, @member, @offer, @close, @accept, @escrow_provider, @escrow_evidence] do
       with {:ok, [accepted]} <- Log.append(env, server) do
         {:ok,
          %{
@@ -181,7 +209,7 @@ defmodule CoopSubstrate.GroupBuys do
       # The host signs admissions in the current seller-home second. This
       # makes the deterministic replay instant exactly the expiry/threshold
       # instant checked by the appender, rather than a buyer's old timestamp.
-      if type == @accept and div(env.timestamp_ms, 1000) != now,
+      if type in [@accept, @escrow_evidence] and div(env.timestamp_ms, 1000) != now,
         do: {:error, :stale_admission_time},
         else: check_at(env, gate, now)
     else
@@ -290,6 +318,7 @@ defmodule CoopSubstrate.GroupBuys do
          {:ok, offer} <- offer(p["offer"]),
          true <- offer.id == p["campaign_id"] and offer.seller == p["seller_id"],
          {:ok, round} <- Round.new(offer, now),
+         {:ok, escrow} <- Escrow.new(offer, now),
          {:ok, hash} <- terms_hash(env) do
       row = %{
         envelope: env,
@@ -301,7 +330,8 @@ defmodule CoopSubstrate.GroupBuys do
       {:ok,
        gate.group_buys
        |> put_in([:offers, Access.key(key(env))], row)
-       |> put_in([:rounds, Access.key(key(env))], round)}
+       |> put_in([:rounds, Access.key(key(env))], round)
+       |> put_in([:escrow_states, Access.key(key(env))], escrow)}
     else
       false -> {:error, :immutable_or_mismatched_offer}
       error -> error
@@ -373,6 +403,12 @@ defmodule CoopSubstrate.GroupBuys do
       {:error, _} = error -> error
     end
   end
+
+  defp transition(%Envelope{type: @escrow_provider} = env, gate, now),
+    do: EscrowAdmission.pin(env, gate, now)
+
+  defp transition(%Envelope{type: @escrow_evidence} = env, gate, now),
+    do: EscrowAdmission.admit(env, gate, now)
 
   defp transition(_, _, _), do: {:error, :consent_is_not_ledger_admission}
 
