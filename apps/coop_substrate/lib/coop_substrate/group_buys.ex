@@ -14,6 +14,7 @@ defmodule CoopSubstrate.GroupBuys do
   alias CoopSubstrate.{Canonical, Log}
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.GroupBuys.EscrowAdmission
+  alias CoopSubstrate.GroupBuys.Stock
   alias GroupBuyCore.Escrow
   alias GroupBuyCore.BindingRound, as: Round
 
@@ -27,6 +28,7 @@ defmodule CoopSubstrate.GroupBuys do
   @read "GroupBuyPrivateReadV1"
   @escrow_provider "GroupBuyEscrowProviderPinnedV1"
   @escrow_evidence "GroupBuyEscrowEvidenceAdmittedV1"
+  @stock "GroupBuyStockCommandAdmittedV1"
   @offer_keys ~w(id seller sku unit currency revision expires_at capacity solo_unit_minor tiers)a
   @pledge_keys ~w(id buyer offer_id offer_revision quantity max_group_unit_minor expires_at)a
 
@@ -46,7 +48,9 @@ defmodule CoopSubstrate.GroupBuys do
       escrow_grants: %{},
       escrow_states: %{},
       escrow_provider_events: %{},
-      escrow_custody_claims: %{}
+      escrow_custody_claims: %{},
+      stock_aggregates: %{},
+      stock_claims: %{}
     }
 
   def event_types do
@@ -119,6 +123,13 @@ defmodule CoopSubstrate.GroupBuys do
           "campaign_id" => :string,
           "proof" => :bytes,
           "expected_version" => :int
+        }),
+      @stock =>
+        spec("group_seller", %{
+          "seller_id" => :string,
+          "campaign_id" => :string,
+          "command" => :any,
+          "source_ref" => :string
         })
     }
   end
@@ -166,7 +177,7 @@ defmodule CoopSubstrate.GroupBuys do
 
   @doc "Commit a signed authority event. A receipt asserts ledger admission only."
   def submit(%Envelope{} = env, server \\ Log.server()) do
-    if env.type in [@seller, @member, @offer, @close, @accept, @escrow_provider, @escrow_evidence] do
+    if env.type in [@seller, @member, @offer, @close, @accept, @escrow_provider, @escrow_evidence, @stock] do
       with {:ok, [accepted]} <- Log.append(env, server) do
         {:ok,
          %{
@@ -209,7 +220,7 @@ defmodule CoopSubstrate.GroupBuys do
       # The host signs admissions in the current seller-home second. This
       # makes the deterministic replay instant exactly the expiry/threshold
       # instant checked by the appender, rather than a buyer's old timestamp.
-      if type in [@accept, @escrow_evidence] and div(env.timestamp_ms, 1000) != now,
+      if type in [@accept, @escrow_evidence, @stock] and div(env.timestamp_ms, 1000) != now,
         do: {:error, :stale_admission_time},
         else: check_at(env, gate, now)
     else
@@ -409,6 +420,9 @@ defmodule CoopSubstrate.GroupBuys do
 
   defp transition(%Envelope{type: @escrow_evidence} = env, gate, now),
     do: EscrowAdmission.admit(env, gate, now)
+
+  defp transition(%Envelope{type: @stock} = env, gate, now),
+    do: Stock.apply_event(env, gate, now)
 
   defp transition(_, _, _), do: {:error, :consent_is_not_ledger_admission}
 

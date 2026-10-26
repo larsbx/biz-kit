@@ -289,4 +289,178 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
 
     rejected(evidence(ctx, reused, campaign2), :cross_campaign_custody_reused)
   end
+
+  defp stock_event(ctx, command, campaign \\ @campaign) do
+    signed_event(ctx.seller, "GroupBuyStockCommandAdmittedV1", %{
+      "seller_id" => @seller,
+      "campaign_id" => campaign,
+      "command" => command,
+      "source_ref" => "seller-attested-warehouse-source-needs-physical-proof"
+    })
+  end
+
+  defp stock_command(op, id, revision, count \\ 5, overrides \\ %{}) do
+    body =
+      %{
+        "schema" => "bizkit.inventory.command.v1",
+        "merchant" => @seller,
+        "item" => "parts",
+        "unit" => "piece",
+        "op" => op,
+        "id" => id,
+        "expected_version" => revision,
+        "location" => "warehouse",
+        "quantity" => count
+      }
+
+    body =
+      if op == "reserve" do
+        Map.merge(body, %{
+          "reservation_id" => "group-reservation-" <> id,
+          "expires_at_ms" => (System.system_time(:second) + 1200) * 1_000
+        })
+      else
+        body
+      end
+
+    Map.merge(body, overrides)
+  end
+
+  test "ready only with seller-ledger admitted stock AND signed escrow coverage; recover both",
+       ctx do
+    key = {@chapter, @seller, @campaign}
+    bind(ctx)
+    assert {:error, :escrow_or_stock_not_ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               Log.gate(), @chapter, @seller, @campaign, ctx.now
+             )
+
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+    assert {:error, :escrow_or_stock_not_ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               Log.gate(), @chapter, @seller, @campaign, ctx.now
+             )
+
+    assert {:ok, _} = GroupBuys.submit(
+             stock_event(ctx, stock_command("receive", "stock-received-1", 0))
+           )
+
+    assert {:error, :escrow_or_stock_not_ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               Log.gate(), @chapter, @seller, @campaign, ctx.now
+             )
+
+    assert {:ok, _} = GroupBuys.submit(
+             stock_event(ctx, stock_command("reserve", "hold-1", 1))
+           )
+
+    {:ok, ready} =
+      CoopSubstrate.GroupBuys.Stock.readiness(
+        Log.gate(), @chapter, @seller, @campaign, System.system_time(:second)
+      )
+
+    assert ready.contracted_quantity == 5
+    assert ready.verified_provider_funding_minor == 45_000
+    assert ready.current_due_minor == 45_000
+    assert ready.assurance == :seller_home_committed_stock_and_provider_evidence
+    assert ready.physical_stock == :not_independently_verified
+    assert ready.settlement == :not_authorized
+
+    stock_key = {@chapter, @seller, "parts", "piece"}
+    before = Log.gate().group_buys.stock_aggregates[stock_key]
+    assert before.version == 2
+    assert Log.gate().group_buys.stock_claims[key].quantity == 5
+    assert {:ok, 0} = InventoryCore.available(before, @seller, "warehouse")
+
+    assert :ok = Log.verify_chains()
+    restart_log()
+    assert Log.gate().group_buys.stock_aggregates[stock_key] == before
+    assert {:ok, _} = CoopSubstrate.GroupBuys.Stock.readiness(
+             Log.gate(), @chapter, @seller, @campaign, System.system_time(:second)
+           )
+    assert {:ok, replayed} = Log.replay(Membership)
+    assert replayed.group_buys == Log.gate().group_buys
+  end
+
+  test "unfunded binding cannot reserve stock, and rejected holds never change canonical head",
+       ctx do
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(
+             stock_event(ctx, stock_command("receive", "stock-received", 0))
+           )
+    rejected(stock_event(ctx, stock_command("reserve", "unfunded", 1)),
+             :stock_hold_requires_bound_funded_campaign)
+
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+    rejected(stock_event(ctx, stock_command("reserve", "wrong-scope", 1, 5, %{
+               "item" => "someone-elses-stock"
+             })), :wrong_inventory_scope)
+
+    rejected(stock_event(ctx, stock_command("reserve", "too-many", 1, 6)),
+             :stock_hold_requires_bound_funded_campaign)
+
+    assert {:ok, _} = GroupBuys.submit(
+             stock_event(ctx, stock_command("reserve", "valid", 1))
+           )
+
+    rejected(stock_event(ctx, stock_command("reserve", "duplicate-campaign", 2)),
+             :stock_hold_requires_bound_funded_campaign)
+
+    rejected(stock_event(ctx, stock_command("receive", "stale-version", 1)),
+             :stale_stock_version)
+
+    release = %{
+      "schema" => "bizkit.inventory.command.v1",
+      "merchant" => @seller,
+      "item" => "parts",
+      "unit" => "piece",
+      "op" => "release",
+      "id" => "release-not-authorized",
+      "expected_version" => 2,
+      "reservation_id" => "group-reservation-valid"
+    }
+
+    rejected(stock_event(ctx, release), :stock_command_not_allowed)
+  end
+
+  test "distinct campaigns share seller's one stock pool and cannot both hold same units",
+       ctx do
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+    assert {:ok, _} = GroupBuys.submit(stock_event(ctx, stock_command("receive", "receive", 0)))
+    assert {:ok, _} = GroupBuys.submit(stock_event(ctx, stock_command("reserve", "hold-a", 1)))
+
+    second = @campaign <> "-stock-second"
+    signed_offer = posted_offer(ctx.seller, second, ctx.now)
+    assert {:ok, _} = GroupBuys.submit(signed_offer)
+    {:ok, hash} = GroupBuys.terms_hash(signed_offer)
+    bind(ctx, second, hash)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx, second))
+    second_provider =
+      provider_report(ctx, second, %{
+        event_ref: "second-custodian-event",
+        payload: %{
+          op: :hold_confirmed,
+          buyer: @buyer,
+          pledge_id: @buyer <> "/pledge/escrow",
+          custody_ref: "independent-funding-allocation-b",
+          currency: "USD",
+          amount_minor: 45_000,
+          expires_at: ctx.now + 3000
+        }
+      })
+
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, second_provider, second))
+    rejected(stock_event(ctx, stock_command("reserve", "hold-b", 2), second),
+             :insufficient_available)
+
+    stock_key = {@chapter, @seller, "parts", "piece"}
+    assert {:ok, 0} = InventoryCore.available(
+             Log.gate().group_buys.stock_aggregates[stock_key], @seller, "warehouse"
+           )
+  end
+
 end
