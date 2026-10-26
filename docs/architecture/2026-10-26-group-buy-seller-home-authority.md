@@ -11,11 +11,15 @@ interpretation in the older contracted-volume preview.
    pinning an exact seller actor, Ed25519 key and expiry. There is no self-appointed
    seller or bootstrap bypass. Governance genesis still has the substrate's
    existing out-of-band trust/pinning requirement.
-2. That seller signs `GroupBuyMemberAuthorizedV1` credentials for specific buyer
-   actors, keys, expiry and active status. They are marketplace credentials, not
-   a claim of cooperative membership. Updates use expected credential versions;
+2. Buyers independently establish their current identity key through the existing
+   self-signed `MemberRegistered` / old-key-authorized `KeyRotated` registry.
+   That seller signs `GroupBuyMemberAuthorizedV1` eligibility credentials for
+   those exact registered buyer actors/keys, expiry and active status. A seller
+   cannot replace a registered buyer key or manufacture consent with another key.
+   These are marketplace access credentials, not cooperative membership. Updates use expected credential versions;
    seller authorization replacement invalidates credentials and offers under the
-   previous authorization. External identity/KYC enrollment is not implemented.
+   previous authorization. Initial identity registration retains the substrate's first-use trust model;
+   external actor ownership/KYC enrollment is not implemented.
 3. The seller signs `GroupBuyOfferPostedV1`: exact integer minor-unit cash price,
    all tiers, SKU, unit, currency, capacity, deadline, revision and fixed binding
    policy. The campaign is immutable. A changed schedule requires a new campaign

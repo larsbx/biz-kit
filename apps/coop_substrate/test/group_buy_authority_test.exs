@@ -42,6 +42,17 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     ctx = %{gov: gov, seller: seller, buyer: buyer, other: other, now: now, grant: grant}
 
     for {id, actor} <- [{@buyer, buyer}, {@other, other}] do
+      registrant = %{actor | signer: %{actor.signer | role: "member"}}
+
+      {:ok, _} =
+        Log.append(
+          signed_event(registrant, "MemberRegistered", %{
+            "member_id" => id,
+            "pubkey" => {:bytes, actor.signer.pubkey},
+            "key_id" => actor.signer.key_id
+          })
+        )
+
       {:ok, _} = GroupBuys.submit(member(ctx, id, actor))
     end
 
@@ -189,6 +200,34 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     {:ok, env} = GroupBuys.acceptance(pledge(ctx, ctx.buyer, @buyer, 5, 0), bad_seller.signer)
     {:ok, env} = Envelope.sign(env, bad_seller.signer.key_id, bad_seller.seed)
     rejected(env, :invalid_or_expired_group_buy_credential)
+  end
+
+  test "seller eligibility grants cannot replace an independently registered buyer key", ctx do
+    attacker = new_member("group_buyer")
+    rejected(member(ctx, @buyer, attacker, 1), :unverified_group_buy_identity)
+
+    rejected(
+      member(ctx, "https://unregistered.example/buyer", attacker),
+      :unverified_group_buy_identity
+    )
+
+    original = pledge(ctx, ctx.buyer, @buyer, 5, 0)
+    rotator = %{ctx.buyer | signer: %{ctx.buyer.signer | role: "author"}}
+    replacement = new_member("group_buyer")
+
+    {:ok, _} =
+      Log.append(
+        signed_event(rotator, "KeyRotated", %{
+          "member_id" => @buyer,
+          "old_key_id" => ctx.buyer.signer.key_id,
+          "new_key_id" => replacement.signer.key_id,
+          "new_pubkey" => {:bytes, replacement.signer.pubkey}
+        })
+      )
+
+    rejected(admission(ctx, original), :unverified_group_buy_identity)
+    {:ok, _} = GroupBuys.submit(member(ctx, @buyer, replacement, 1))
+    assert {:ok, _} = GroupBuys.submit(admission(ctx, pledge(ctx, replacement, @buyer, 5, 0)))
   end
 
   test "tampered consent signatures and altered signed terms never reach the ledger", ctx do

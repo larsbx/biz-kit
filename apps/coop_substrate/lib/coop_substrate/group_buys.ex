@@ -2,7 +2,7 @@ defmodule CoopSubstrate.GroupBuys do
   @moduledoc """
   Seller-home group-buy authority over the ONE canonical business ledger.
 
-  Governance pins seller keys. Sellers grant scoped, expiring member keys and
+  Governance pins seller keys. Sellers grant scoped, expiring access to independently registered member keys and
   sign immutable offers. Buyers sign upfront conditional consent; the seller
   countersigns its admission. Only the serialized Log can commit that event.
   BindingRound is reconstructed from those events, never federation input.
@@ -262,6 +262,7 @@ defmodule CoopSubstrate.GroupBuys do
     old = gate.group_buys.members[scope]
 
     with {:ok, seller} <- seller(env, gate, now),
+         :ok <- identity(gate, ch, p["buyer_id"], p["key_id"], bytes(p["pubkey"])),
          :ok <- revision(old, p["expected_version"]),
          :ok <- deadline(p["expires_at"], now),
          true <- id?(p["buyer_id"]) and id?(p["key_id"]) and p["buyer_id"] != p["seller_id"] do
@@ -396,7 +397,8 @@ defmodule CoopSubstrate.GroupBuys do
           member = gate.group_buys.members[{env.chapter_id, env.payload["seller_id"], buyer}]
 
           member != nil and member.active and member.expires_at > now and
-            credentials[{key(env), buyer, pledge.id}] == member.authorization_id
+            credentials[{key(env), buyer, pledge.id}] == member.authorization_id and
+            identity(gate, env.chapter_id, buyer, member.key_id, member.pubkey) == :ok
         end)
 
       if eligible, do: :ok, else: {:error, :pending_member_ineligible}
@@ -431,11 +433,21 @@ defmodule CoopSubstrate.GroupBuys do
          true <-
            member != nil and member.active and
              member.seller_authorization == seller.authorization_id,
-         :ok <- credential(member, env.signers, "group_buyer", now) do
+         :ok <- credential(member, env.signers, "group_buyer", now),
+         :ok <- identity(gate, env.chapter_id, p["buyer_id"], member.key_id, member.pubkey) do
       {:ok, member}
     else
       false -> {:error, :ineligible_group_buy_member}
       error -> error
+    end
+  end
+
+  # The interested seller grants market eligibility, never buyer identity.
+  # Identity keys come from MemberRegistered / old-key-authorized KeyRotated.
+  defp identity(gate, chapter, buyer, key_id, pubkey) do
+    case gate.members[{chapter, buyer}] do
+      %{key_id: ^key_id, pubkey: ^pubkey} -> :ok
+      _ -> {:error, :unverified_group_buy_identity}
     end
   end
 
