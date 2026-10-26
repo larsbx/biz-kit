@@ -262,7 +262,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     assert row.positions[@buyer].status == :held
 
     assert gate.group_buys.escrow_custody_claims[{@provider, "escrow-allocation-1"}] ==
-             %{campaign_key: key, buyer: @buyer}
+             %{campaign_key: key, buyer: @buyer, authority_event_id: ctx.authority_id}
 
     assert {:ok, cover} = Escrow.coverage(row, gate.group_buys.rounds[key], ctx.now)
     assert cover.secured_minor == 45_000
@@ -387,6 +387,34 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     assert authority.event_id == renewed.event_id
   end
 
+  test "seller cannot fabricate governance provenance, and V1 histories still fold", ctx do
+    attacker = new_member("governance")
+    event = provider_authority(ctx, %{"expected_version" => 1})
+    forged = signed_event(attacker, event.type, event.payload)
+    rejected(forged, :group_buy_governance_required)
+    bind(ctx)
+
+    legacy =
+      signed_event(ctx.seller, "GroupBuyEscrowProviderPinnedV1", %{
+        "seller_id" => @seller,
+        "campaign_id" => @campaign,
+        "provider_id" => @provider,
+        "key_id" => "provider-signing-1",
+        "pubkey" => {:bytes, ctx.provider_public},
+        "active" => true,
+        "expires_at" => ctx.now + 2400,
+        "expected_version" => 0
+      })
+
+    gate = Log.gate()
+    historical = %{gate | group_buys: GroupBuys.fold!(legacy, gate)}
+    report = evidence(ctx, provider_report(ctx))
+    assert :ok = GroupBuys.check(report, historical)
+
+    assert {:error, :authenticated_provider_pin_required} =
+             GroupBuys.live_check(report, historical)
+  end
+
   test "inactive authority and stale provider pin revisions refuse new funding", ctx do
     assert {:ok, _} = GroupBuys.submit(pin(ctx))
     rejected(pin(ctx), :untrusted_or_stale_provider_authority)
@@ -440,6 +468,50 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     assert Log.head().global_seq == before + 1
     assert {:ok, replayed} = Log.replay(Membership)
     assert replayed.group_buys == state
+  end
+
+  test "funded coverage refuses expired, deactivated or historically unauthenticated funding sources",
+       ctx do
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(funded_contract(ctx))
+    key = {@chapter, @seller, @campaign}
+    state = Log.gate().group_buys
+    claim_key = {@provider, "escrow-allocation-1"}
+
+    historical =
+      update_in(state.escrow_custody_claims[claim_key], &Map.delete(&1, :authority_event_id))
+
+    assert {:error, :funded_contract_requires_complete_held_evidence} =
+             CoopSubstrate.GroupBuys.EscrowAdmission.complete_coverage(historical, key, ctx.now)
+
+    expired = put_in(state.escrow_grants[{key, @provider}].grant_expires_at, ctx.now)
+
+    assert {:error, :funded_contract_requires_complete_held_evidence} =
+             CoopSubstrate.GroupBuys.EscrowAdmission.complete_coverage(expired, key, ctx.now)
+
+    assert {:ok, _} =
+             GroupBuys.submit(
+               provider_authority(ctx, %{
+                 "active" => false,
+                 "expected_version" => 1
+               })
+             )
+
+    assert {:error, :funded_contract_requires_complete_held_evidence} =
+             CoopSubstrate.GroupBuys.EscrowAdmission.complete_coverage(
+               Log.gate().group_buys,
+               key,
+               ctx.now
+             )
+
+    restart_log()
+
+    assert {:error, :funded_contract_requires_complete_held_evidence} =
+             CoopSubstrate.GroupBuys.EscrowAdmission.complete_coverage(
+               Log.gate().group_buys,
+               key,
+               ctx.now
+             )
   end
 
   test "callback lost-ack retries return original receipt after restart and authority rotation",
@@ -554,7 +626,6 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
   test "a journal transaction failure leaves neither contract nor funding; restart can retry",
        ctx do
     assert {:ok, _} = GroupBuys.submit(pin(ctx))
-    event = funded_contract(ctx)
     before = Log.head()
     state = Log.gate().group_buys
     {:ok, conn} = raw_conn()
@@ -575,7 +646,8 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     )
 
     try do
-      assert {:error, {:store_append_failed, _}} = GroupBuys.submit(event)
+      # Sign immediately before dispatch, after installing the failure trigger.
+      assert {:error, {:store_append_failed, _}} = GroupBuys.submit(funded_contract(ctx))
       assert Log.head() == before
       assert Log.gate().group_buys == state
     after

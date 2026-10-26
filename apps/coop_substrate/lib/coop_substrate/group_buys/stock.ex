@@ -15,6 +15,7 @@ defmodule CoopSubstrate.GroupBuys.Stock do
   """
 
   alias GroupBuyCore.{BindingRound, Escrow}
+  alias CoopSubstrate.GroupBuys.EscrowAdmission
   alias InventoryCore
   alias InventoryCore.Wire
 
@@ -89,7 +90,7 @@ defmodule CoopSubstrate.GroupBuys.Stock do
          true <-
            coverage.binding_terms_hash == terms_hash and
              coverage.committed_units == count,
-         :ok <- all_funds_held(escrow, round, now),
+         :ok <- EscrowAdmission.complete_coverage(gate.group_buys, key, now),
          %{reservations: reservations} <- gate.group_buys.stock_aggregates[aggregate],
          %{status: :active, remaining: ^count, expires_at_ms: expiry} <-
            reservations[reservation_id],
@@ -130,7 +131,7 @@ defmodule CoopSubstrate.GroupBuys.Stock do
          true <- cmd.quantity == bound.contracted_quantity and cmd.quantity > 0,
          {:ok, coverage} <- Escrow.coverage(escrow, round, now),
          true <- coverage.binding_terms_hash == bound.terms_hash,
-         :ok <- all_funds_held(escrow, round, now),
+         :ok <- EscrowAdmission.complete_coverage(gate.group_buys, key, now),
          true <-
            is_integer(cmd.expires_at_ms) and
              cmd.expires_at_ms > now * 1_000,
@@ -146,21 +147,6 @@ defmodule CoopSubstrate.GroupBuys.Stock do
   end
 
   defp admissible(_, _, _, _, _, _, _), do: {:error, :stock_command_not_allowed}
-
-  defp all_funds_held(escrow, round, now) do
-    if Enum.all?(round.pledges, fn {buyer, pledge} ->
-         case escrow.positions[buyer] do
-           %{status: :held, pledge_id: id, expires_at: expiry}
-           when id == pledge.id and expiry > now ->
-             true
-
-           _ ->
-             false
-         end
-       end),
-       do: :ok,
-       else: {:error, :funding_not_live_and_held}
-  end
 
   defp claim(state, key, stock_key, round, %{op: :reserve} = command, event_id, now) do
     {:ok, bound} = BindingRound.snapshot(round, now)

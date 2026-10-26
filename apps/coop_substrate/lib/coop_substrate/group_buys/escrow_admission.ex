@@ -11,7 +11,8 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
 
   Historical seller-only V1 pins remain replayable but cannot admit new
   evidence. A governance provenance commitment still is NOT proof of provider
-  licensing or real funds. Operational hosts must validate those externally. These events observe outside custody;
+  licensing or real funds. Operational hosts must validate those externally.
+  These events observe outside custody;
   they never request, move or hold money.
   """
 
@@ -112,11 +113,30 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
     with {:ok, _} <- Escrow.coverage(escrow, round, now),
          true <-
            Enum.all?(round.pledges, fn {buyer, _} ->
-             match?(%{status: :held}, escrow.positions[buyer])
+             case escrow.positions[buyer] do
+               %{status: :held, provider_id: provider, custody_ref: custody} ->
+                 current_funding_source?(state, key, provider, custody, buyer, now)
+
+               _ ->
+                 false
+             end
            end) do
       :ok
     else
       _ -> {:error, :funded_contract_requires_complete_held_evidence}
+    end
+  end
+
+  defp current_funding_source?(state, {chapter, _, _} = key, provider, custody, buyer, now) do
+    with %{campaign_key: ^key, buyer: ^buyer, authority_event_id: id} when not is_nil(id) <-
+           state.escrow_custody_claims[{provider, custody}],
+         %{event_id: ^id, active: true, expires_at: expiry} <-
+           state.escrow_authorities[{chapter, provider}],
+         %{authority_event_id: ^id, active: true, grant_expires_at: grant_expiry} <-
+           state.escrow_grants[{key, provider}] do
+      expiry > now and grant_expiry > now
+    else
+      _ -> false
     end
   end
 
@@ -227,7 +247,7 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
             provider_proof_hash: candidate.provider_proof_hash
           }
         )
-        |> add_custody_claim(key, proof)
+        |> add_custody_claim(key, proof, grant)
 
       {:ok, next}
     else
@@ -313,17 +333,23 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
     end
   end
 
-  defp add_custody_claim(state, key, %{
-         provider_id: provider_id,
-         payload: %{op: :hold_confirmed} = body
-       }) do
+  defp add_custody_claim(
+         state,
+         key,
+         %{
+           provider_id: provider_id,
+           payload: %{op: :hold_confirmed} = body
+         },
+         grant
+       ) do
     put_in(state, [:escrow_custody_claims, Access.key({provider_id, body.custody_ref})], %{
       campaign_key: key,
-      buyer: body.buyer
+      buyer: body.buyer,
+      authority_event_id: Map.get(grant, :authority_event_id)
     })
   end
 
-  defp add_custody_claim(state, _, _), do: state
+  defp add_custody_claim(state, _, _, _), do: state
 
   defp seller_authority(chapter, seller_id, signers, gate, now) do
     credential = gate.group_buys.sellers[{chapter, seller_id}]

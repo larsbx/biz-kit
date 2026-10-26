@@ -41,6 +41,12 @@ seller signs it and submits it through `GroupBuys.submit/2` / `Log.append/2`.
 One pure transition authenticates the contract using the existing consent
 reducer, verifies and applies the provider proof, checks global nullifiers and
 requires complete unexpired **held** evidence for every bound obligation.
+Every counted position must also trace through its custody claim to the same
+current governance authorization and unexpired campaign pin. Historical
+seller-only funding cannot be promoted into a new funded assurance. Authority
+rotation/deactivation or pin expiry blocks new funded coverage and stock
+readiness; historical reports still replay. Reconciliation/re-attestation of
+such old positions is a separate provider workflow, not an automatic bypass.
 The existing EventStore transaction then commits ONE signed event. An invalid
 signature, underfunded position, stale grant/version, missing prior buyer's
 funding or any transaction failure commits neither the proposed contract nor
