@@ -346,6 +346,7 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
 
     results =
       consents |> Task.async_stream(&submit_consent(ctx, &1)) |> Enum.map(fn {:ok, x} -> x end)
+
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
     assert Enum.count(results, &match?({:error, {:reject, 0, :stale_binding_version}}, &1)) == 1
     state = Log.gate().group_buys.rounds[@key]
