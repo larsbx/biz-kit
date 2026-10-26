@@ -160,8 +160,22 @@ defmodule BizKit.Composition.GroupBuyTest do
                expires_at_ms: (@now + 900) * 1_000
              })
 
-    assert {:error, :stale_stock_version} =
+    assert {:ok, ^held, :duplicate} =
              InventoryCore.apply(held, @seller, preview.stock_reservation_command)
+
+    assert {:error, :idempotency_conflict} =
+             InventoryCore.apply(
+               held,
+               @seller,
+               %{preview.stock_reservation_command | quantity: 4}
+             )
+
+    assert {:error, :stale_stock_version} =
+             InventoryCore.apply(
+               held,
+               @seller,
+               %{preview.stock_reservation_command | id: "another-command"}
+             )
   end
 
   test "unsealed or below-threshold demand never receives a reservation preview" do
