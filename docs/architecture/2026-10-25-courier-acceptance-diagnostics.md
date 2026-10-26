@@ -54,7 +54,7 @@ the earlier virtual-clock timeout is excluded as causal evidence. Database-scope
 pass ownership now requires waiting callers to reread due rows after acquiring the
 mutex, with cancellation and immutable retry tests and scoped Lean/Quint checks.
 
-Pin repeated PR/push acceptance to client `45198fe9c8fca664266c6e6891ddd7e80a48540d`.
+Pin repeated PR/push acceptance to client `abcca4c98c13725e809aa94bd418e633a8666700`.
 Three independent jobs per mobile role retain zero offline effects, exactly two
 effects after signed delivery plus replay, and previous-token 401 after confirmed
 logout. Nightly moving-main and manual explicit refs remain available. This is a
