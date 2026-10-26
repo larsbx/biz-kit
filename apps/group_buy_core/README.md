@@ -1,12 +1,19 @@
 # GroupBuyCore — collective purchasing without compulsory middlemen
 
+> **CURRENT GROUP BUY RULE:** Pledges are conditional PURCHASE COMMITMENTS and
+> become **binding automatically when admitted volume reaches the seller's
+> minimum**, without a second purchase election. See
+> [binding-pledge semantics](BINDING_PLEDGES.md). Neither signing a pledge
+> nor threshold activation automatically charges a card or reserves stock.
+>
+
 **Current rule:** [Member pledges cover volume; only then is the discounted
 purchase option displayed](../../docs/architecture/2026-10-26-group-buy-pledge-purchase-gate.md).
-A pledge is allowed and counts toward a posted minimum. **Advance purchase
-contracts are not required** merely to unlock that purchase choice.
+A pledge is allowed and counts toward a posted minimum. **Conditional assent is already given in the pledge.** Reaching
+its minimum automatically activates a binding order obligation.
 All prices and rate ladders remain **members-only**, and ordinary cash
-checkout is independent of the group-volume gate. Neither a pledge nor an
-available option is payment, reserved stock or a binding sale.
+checkout is independent of the group-volume gate. A pledge becomes binding when the admitted threshold is reached; it
+is never, by itself, collected payment or reserved inventory.
 
 Independent sellers can offer a group-buy campaign that attracts many
 buyers across biz-kit's federated marketplace. Each buyer maintains an

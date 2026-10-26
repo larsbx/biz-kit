@@ -1,5 +1,12 @@
 # Decision: member pledges cover volume; only then offer group-price purchase
 
+> **SUPERSEDED POLICY:** The current rule is that a member pledge is a
+> conditional purchase commitment that becomes **binding when the seller-home
+> admits enough pledged units to meet the posted minimum**. There is no
+> optional second buy click. See
+> [the governing conditional-binding ADR](2026-10-26-group-buy-conditional-binding.md).
+>
+
 Date: 2026-10-26. Status: **current group-buy purchase-option semantics**.
 Revises the overstrict "advance contracts unlock rates" interpretation in
 [the contracted-rates ADR](2026-10-26-group-buy-contracted-member-rates.md).

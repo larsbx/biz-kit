@@ -98,7 +98,7 @@ defmodule GroupBuyCore.ContractedTest do
              )
   end
 
-  test "pledges unlock purchase choice but do not create optional sealed contracts" do
+  test "pledges forecast automatic binding but do not create optional seller sealed close" do
     {:ok, pledge_quote} =
       G.quote(
         offer(),
@@ -116,13 +116,13 @@ defmodule GroupBuyCore.ContractedTest do
         @now
       )
 
-    assert pledge_quote.status == :pledged_volume_covered_purchase_option_available
+    assert pledge_quote.status == :pledged_volume_covered_binding_activation_candidate
     assert pledge_quote.contracted_quantity == 0
-    assert pledge_quote.price_authority == :group_price_offer_requires_checkout_authorization
+    assert pledge_quote.price_authority == :conditional_purchase_pledge_requires_host_admission
 
     assert pledge_quote.purchase_option_available
     assert {:ok, choice} = G.purchase_option(pledge_quote, actor("a"), @now)
-    assert choice.checkout == :requires_fresh_membership_stock_and_payment_admission
+    assert choice.checkout == :fulfill_binding_obligation_after_authoritative_activation
 
     assert {:error, :invalid_consents} =
              G.commitment_preview(pledge_quote, %{}, [], @now)

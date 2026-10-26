@@ -2,10 +2,12 @@ defmodule GroupBuyCore do
   @moduledoc """
   Portable pure group-buy quotation and conditional commitment previews.
 
-  A seller publishes a monetary cash price and explicitly funded volume
-  discounts. Distinct buyers opt into a *possible* discounted purchase.
-  Reaching a threshold is not sale acceptance, stock reservation, payment,
-  company formation, escrow, or proof of shipment. All inputs require
+  A seller posts members-only cash prices and volume discounts. Each member
+  can submit a conditional purchase pledge: if the seller's advertised
+  minimum is attained in the admitted seller-home pledge round, that pledge
+  becomes BINDING without a second buy-button election.
+  A stateless quote or public threshold observation cannot itself create
+  obligations, reserve inventory, collect payment or prove host admission. All inputs require
   separate authenticated host checks before use.
   """
 
@@ -20,12 +22,13 @@ defmodule GroupBuyCore do
   Return a deterministic quote for a seller-owned group campaign.
 
   Expired pledges are excluded, not silently resurrected or charged.
-  A buyer may pledge interest without committing to purchase. Once valid,
-  active pledges cover the seller's posted minimum volume, the group-price
-  PURCHASE OPTION becomes visible for those members. No buyer must sign
-  an advance purchase contract to unlock the option; no purchase or inventory
-  reservation is implied. A seller-authorized host must still validate
-  all pledge evidence, membership, available stock, price and checkout.
+  A buyer conditionally commits when pledging. When the seller home's
+  authorized accepted pledges reach the advertised minimum, the agreed
+  conditional purchase becomes binding automatically. This stateless quote
+  only forecasts a possible threshold crossing; GroupBuyCore.BindingRound
+  models the accepted event and binding transition. No second buyer click
+  is required. The host must authenticate the seller, member and pledge
+  terms and durably admit the triggering event before asserting binding.
   """
   def quote(offer, pledges, now) when is_list(pledges) and is_integer(now) and now >= 0 do
     with :ok <- validate_offer(offer, now),
@@ -83,13 +86,15 @@ defmodule GroupBuyCore do
                expired_pledge_ids: expired,
                status:
                  if(unlocked,
-                   do: :pledged_volume_covered_purchase_option_available,
+                   do: :pledged_volume_covered_binding_activation_candidate,
                    else: :collecting_no_group_commitment
                  ),
                cash_unit_minor: offer.solo_unit_minor,
                group_unit_minor: if(unlocked, do: unlocked.unit_minor, else: nil),
-               price_authority: :group_price_offer_requires_checkout_authorization,
+               price_authority: :conditional_purchase_pledge_requires_host_admission,
                purchase_option_available: not is_nil(unlocked),
+               pledge_terms: :binding_when_seller_home_admits_threshold,
+               binding_status: :requires_authoritative_binding_round_activation,
                coverage_basis: :active_member_pledges,
                contracted_quantity: 0,
                next_tier:
@@ -118,14 +123,12 @@ defmodule GroupBuyCore do
   def quote(_, _, _), do: {:error, :invalid_group_buy}
 
   @doc """
-  Display a *buyer-specific* discounted purchase choice only after pledges
-  cover the seller's posted quantity threshold. No advance purchase contract
-  or unanimous member acceptance is necessary to display this option.
-
-  The seller-home must authenticate the pledges and buyer membership before
-  publishing the result privately, and revalidate exact inventory, rate,
-  threshold and cash/payment authority at actual checkout. This function
-  never grants purchasing authority, places a hold or collects money.
+  Display buyer-specific conditional purchase terms once projected pledged
+  volume covers the minimum. This is a price illustration, NOT an election
+  or binding-activation certificate. The buyer's pledge is already the
+  conditional purchase assent, so there is no second buy-button choice.
+  Only the seller home's durably admitted BindingRound can establish that
+  the threshold activated binding obligations. No payment or hold occurs.
   """
   def purchase_option(quote, buyer, now) when is_binary(buyer) do
     with {:ok, verified} <- verify_quote(quote, now),
@@ -133,7 +136,7 @@ defmodule GroupBuyCore do
          %{buyer: ^buyer} = member <- Enum.find(verified.members, &(&1.buyer == buyer)) do
       {:ok,
        %{
-         kind: :group_purchase_option_preview,
+         kind: :conditional_purchase_terms_preview,
          campaign_id: verified.campaign_id,
          quote_hash: verified.quote_hash,
          seller: verified.seller,
@@ -149,7 +152,9 @@ defmodule GroupBuyCore do
          potential_savings_minor: member.savings_minor,
          volume_covered_by: :active_member_pledges,
          valid_until: verified.expires_at,
-         checkout: :requires_fresh_membership_stock_and_payment_admission,
+         checkout: :fulfill_binding_obligation_after_authoritative_activation,
+         pledge_effect: :binding_at_seller_home_admitted_threshold,
+         binding_status: :unverified_stateless_preview,
          paid: false,
          inventory_reserved: false
        }}
@@ -173,11 +178,11 @@ defmodule GroupBuyCore do
   def verify_quote(_, _), do: {:error, :invalid_or_stale_quote}
 
   @doc """
-  Optional all-party conditional agreement PREVIEW after pledged-volume
-  eligibility. Matching evidence references here do not constitute verified
-  signatures, seller acceptance, inventory reservation or a purchase.
-  Showing a group purchase option does NOT require all buyers to contract
-  or supply evidence here. Individual checkout is a separate host action.
+  Optional legacy all-party evidence-reference PREVIEW, not an additional
+  consent gate. Under the binding pledge policy buyers already gave
+  conditional assent when joining, and their pledges activate automatically
+  upon seller-home admitted threshold crossing. This cannot verify
+  signatures, reserve inventory or authorize monetary collection.
   """
   def commitment_preview(quote, seller_consent, buyer_consents, now)
       when is_list(buyer_consents) do
@@ -216,7 +221,7 @@ defmodule GroupBuyCore do
   def commitment_preview(_, _, _, _), do: {:error, :invalid_consents}
 
   defp ready(%{
-         status: :pledged_volume_covered_purchase_option_available,
+         status: :pledged_volume_covered_binding_activation_candidate,
          purchase_option_available: true,
          group_unit_minor: minor
        })
