@@ -1,115 +1,139 @@
-# ADR: network-mediated, participant-direct barter
+# ADR: optimized participant-governed brokerage clearing for federated barter
 
-Date: 2026-10-26. Status: **first pure matching/conditional-accounting preview,
-not an operational or financially authoritative exchange**.
+Date: 2026-10-26. Status: **pure optimized matching + contractual previews, not
+an incorporated company, contract-signing service or executing exchange**.
 Tracking: [#131](https://github.com/larsbx/biz-kit/issues/131).
 
-## Decision and relationship to Hawala
+## Revised direction
 
-Biz-kit federation publishes *supplier needs as well as supplies*. The
-application indexes authenticated opt-in projections, filters compatible
-terms, and computes possible two-party swaps and bounded N-party cycles.
-Participants independently negotiate and enter the same explicit agreement
-**before delivery**. A network node may route messages and compute options,
-but must never become an undisclosed principal, merchant of record, stock
-holder, payment intermediary or obligor. For a three-party cycle A→B→C→A,
-each supplier transfers **directly** to its own named recipient; no party
-resells inventory merely to facilitate routing.
+No arbitrary four-party exchange limit. Suppliers publish what they provide
+and require; independently operated biz-kit installations discover the public,
+opted-in and origin-authenticated projections. Participants may enter a
+**temporary, participant-governed brokerage vehicle by explicit contract**.
+That brokerage can optimize and coordinate a collection of many-party
+exchanges, including disjoint cycles, rather than requiring a buyer/seller
+pair or an artificially small chain.
 
-Reuse patterns from Hawala—peer identity binding, signed intents, durable
-receipts, idempotency, reconciliation and explicit admission—**not** its
-balances, exchange rates, credit, deposits, custody or transfer permissions.
-Barter is exchange of identified goods/services on mutually consented terms,
-not a Hawala monetary claim or fungible platform credit. If a transaction
-introduces money, payment, transferable debt, merchant credits or regulated
-custody, a separate approved financial domain and legal review are required.
+The brokerage is *not* a platform-owned merchant, global ledger or financial
+intermediary. Its authority is granted by its members under a scope-limited,
+expiring contract. The first contract profile is coordinating-only:
+matching/reconciliation, no automatic title transfer, balance custody,
+credit creation, unilateral admission or implied commission. Future charter
+variants need explicit consent, jurisdiction-specific legal review and
+additional domain contracts if the entity is to become principal, take title,
+charge fees, insure performance or clear monetary claims.
 
-## Canonical matching input (local pure v1)
+A signed software charter **does not itself create or register a corporation**,
+establish limited liability, satisfy broker licensing/tax requirements, or
+provide a valid agency relationship under every jurisdiction. A genuine
+company requires independently verified legal formation and organizational
+authority. A contractual consortium is not silently labeled a corporation.
 
-- Each intent is `%{id, owner, revision, valid_until, provides, needs}`. The
-  two HTTPS identifiers must have the same home origin and must have passed
-  a separate authenticated publisher and disclosure check.
-- `provides` and `needs` each contain an exact canonical `code`, `unit`
-  and positive integer `quantity`. Different item codes or units do not
-  silently match or convert. No floating point, division or FX is used.
-- Expired notices are excluded; revision and expiry are included in the
-  immutable, length-prefixed SHA-256 terms fingerprint. Two distinct intents
-  may belong to the same business but **cannot appear together** in a route.
-- For successive intents `i→j`, `i.provides` must match `j.needs` by code
-  and unit and cover the latter's quantity. The leg is a direct conditional
-  transfer from `i.owner` to `j.owner`. A route must close back to its
-  first participant. Different legs have different quantities and assets.
-- Search considers at most 16 intents, cycles of length 2–4 and at most 100
-  results. This bounded deterministic first slice is neither a globally
-  optimal matching engine nor a fair allocation or scarce-stock lock.
-  Cycle enumeration prevents duplicate rotations but does not resolve
-  competing overlapping routes. Hosts must serialize stock reservation.
-- The pure kernel accepts only in-memory typed maps, **not** untrusted
-  ActivityPub, Iroh messages or private direct messages. A dedicated
-  versioned federation schema and transport adapters are still required.
+## Optimization model, first exact slice
 
-## Consent, accounting and fulfillment protocol
+`BarterCore.optimize/3` solves a **maximum-cardinality directed cycle
+packing**, via minimum-cost bipartite assignment (Hungarian algorithm):
 
-1. **Discover:** advertise owner-authorized needs/supplies with provenance,
-   revision and freshness, filtered by time/location, jurisdiction, quantity,
-   service constraints, trading policy and counterparty eligibility. Public
-   publication is not availability, authority or contract acceptance.
-2. **Route:** return a fully explained set of direct `from→to` legs and
-   immutable digest. Present the entire cycle, quantities and deadlines to
-   *every* participant; a proposed cycle must never be silently repriced.
-3. **Agree:** each party explicitly signs acceptance to the same exact digest
-   and its own conditional performance, identity, jurisdiction, warranties,
-   remedies and deadline. Messages use private authenticated exchange,
-   replay protection, scoped approvals, and a durable inbox/outbox. A
-   public ActivityPub Offer or gossip announcement cannot consent.
-4. **Pre-delivery accounting:** on receipt of verified and fresh consents,
-   each independently administered host admits *local* contingent
-   receivable/payable-in-kind obligations, optionally inventory holds with
-   explicit versions and expiry, and a durable receipt containing the common
-   digest. An unadmitted preview is neither a ledger entry nor proof of
-   accepted consideration. Local admission must check current grants and
-   prevent double allocations. Only a contractually agreed all-party
-   readiness rule can authorize proceeding.
-5. **Handoff:** original supplier directly transfers to its intended recipient.
-   FulfillmentCore/Dispatch or a service-specific adapter collects independent
-   proof. Receiver evidence is distinguished from courier assertions.
-6. **Close/recover:** reconcile each participant's separately signed history
-   against digest and per-leg receipts. Missing acceptance, partition,
-   withdrawal, disputed performance, short delivery or an expired hold
-   transitions through explicit cancellation, compensation/dispute paths,
-   not fictitious globally atomic rollback.
+- Each advertised intent is one indivisible provider/recipient slot, with
+  exact asset code, exact unit, positive integer quantity, owner origin,
+  revision and expiry. An owner may publish several slots.
+- A valid direct leg `i → j` transfers enough of `i.provides` to satisfy
+  all of `j.needs`; source and destination must be distinct owners. No
+  unit, currency, risk, utility or market-value conversion is inferred.
+- An assignment maps each supply slot to one recipient slot, or its own
+  inert, unmatched self-loop. The assignment is a permutation, so all active
+  non-self edges form disjoint directed cycles, including cycles longer than
+  four. Every active intent is used at most once per plan.
+- A compatible non-self edge costs 0, a self-loop 1, an incompatible edge
+  `n+1` for n active intents. All-self costs n; therefore no optimal solution
+  includes an incompatible edge, and minimum cost is **exactly** equivalent
+  to maximizing fulfilled intent slots. This does not maximize value, total
+  physical units across different goods, fairness, or long-term welfare.
+- The solver runs in polynomial O(n³) time. A configurable integer
+  `work_budget` rejects expensive snapshots before matrix construction.
+  This is computational admission control, not a four-entity/topology cap;
+  the per-route/matched-participant count has **no hard cap**. Future
+  implementations can decompose sparse graphs or use specialized solvers.
+- Sort inputs by stable intent ID and choose deterministic tie outcomes.
+  Each output includes exact legs, unfilled slot IDs, matching objective,
+  an optimality label scoped to this indivisible-slot model, and a
+  length-prefixed SHA-256 fingerprint of the **entire active input snapshot**
+  and the selected cycles. Independent nodes may optimize different
+  snapshots unless discovery freshness and snapshot identity are reconciled.
 
-## Non-negotiable trust boundaries
+The model does NOT yet split heterogeneous stock across destinations, accept
+bundled multi-item needs, enforce global inventory caps across an owner's
+distinct intents, express substitutions/constraints/preferences, or optimize
+network transport, time, negotiated valuations or service quality. The
+general resource-allocation formulation is an integer/hypergraph optimization
+problem; global optimality claims must stay scoped to the implemented model.
+These capabilities require separately reviewed richer offers and optimization
+policy, with compute budgets and exact certificates where feasible.
 
-- Existing `FederationService` discovery and gossip are read-only public
-  advertisement planes, not contract execution interfaces. Keep existing
-  `bizkit.marketplace.listing.v1` unchanged and design a new versioned,
-  owner-consented offer/need projection. Only home-origin signed, moderation-
-  approved and freshness-qualified projections enter route discovery.
-- Keep CommerceCore, InventoryCore and FulfillmentCore portable. Admissions,
-  evidence validation, stock holds and debt/receivable accounting are the
-  responsibility of independently governed installations' existing local
-  signed ledgers. Foreign data must never execute a local command.
-- Never publish private counterparties' details, buyer demands not opted into
-  disclosure, legal addresses, phone numbers, financial or school records.
-  Advertisements cannot establish verified reputation or delivery.
-- Hashes do not prove signatures. A reference in a purported consent is not
-  actual authenticated consent, and unanimous evidence references do not
-  prove all independent ledgers committed. No naive two-phase commit
-  guarantee through lossy networks.
-- Protect against stale listings, compromised keys, double allocation,
-  conflicting route proposals, cycles made of controlled aliases, valuation
-  manipulation, sanctions/regulatory limits, nonperformance and disputes.
+## Temporary brokerage contract and accounting
 
-## Demonstrable acceptance and next integration gates
+`BarterCore.Brokerage.draft/3` pins the optimal clearing plan to:
 
-First pure kernel acceptance tests cover two/three/four-party cycles, exact
-unit/quantity checks, expirations, duplicate input, owner impersonation,
-private-field rejection, bounded search, digest pinning, and absence of
-automatic delivery/settlement.
+- A proposed HTTPS brokerage-company identifier and externally published,
+  separately authenticated charter digest/version.
+- A short lifetime, restricted matching-and-reconciliation authority,
+  participant governance and supplier-retained title.
+- A complete, deduplicated member set derived from every matched cycle.
+- An immutable all-party `agreement_hash` binding the charter, plan and
+  membership.
 
-Follow-on PRs must ship consented federation wire, signed agreement transport
-and receipts, local event/InventoryCore adapters, two-node failure-recovery
-tests and physical-delivery evidence. Existing federated marketplace
-[#115](https://github.com/larsbx/biz-kit/issues/115) remains the discovery
-parent; this proposal is independent of any payment authorization.
+`pre_delivery_preview/3` requires exactly one **purported** matching consent
+reference for each member and produces only unadmitted conditional delivery
+entries. These references are not signatures and the draft is not legal
+formation, membership acceptance, approval or a posting to accounts.
+
+Operational host acceptance requires:
+
+1. Authenticated, current, owner-consented discovery with explicit market
+   snapshot provenance, opt-in needs publication and privacy filtering;
+   gossip/public ActivityPub posts remain unauthoritative for commerce.
+2. Every proposed member reads and individually **signs the same combined
+   charter + optimized exchange terms**. Verify identity, authority,
+   membership and evidence under applicable law; specify duties, liability,
+   taxes, timing, compensation/disputes, governance and exit/wind-down.
+3. Confirm lawful vehicle formation and separate broker-agent authority if
+   a real incorporated company or licensed broker is required. Absent that
+   gate, label it a proposed consortium, not an active company.
+4. Each installation revalidates grants, product/capacity, reservations,
+   stock revisions, overlapping intents, disclosure, regulatory constraints
+   and signed all-party acceptance, then commits its **own** conditional
+   entries and holds to its local signed ledger. No foreign actor has a
+   local business-command privilege.
+5. Exchange only after agreed readiness conditions are met. Direct physical
+   handoffs run from original supplier to designated recipient, with
+   FulfillmentCore/Dispatch evidence. The brokerage may route paperwork
+   and reconcile obligations but does not automatically take possession.
+6. Reconcile independent ledgers and durable receipts after partitions,
+   partial performance, withdrawals and disputes. An optimizer result and
+   unanimity of consent references cannot prove distributed atomic commit,
+   physical delivery or settled consideration. Explicit compensation,
+   insurance/security and dispute paths are future acceptance gates.
+
+## Boundaries and follow-up implementation
+
+`federation_service` and the existing `bizkit.marketplace.listing.v1`
+remain unchanged; they publish discovery candidates only. Add versioned
+need/supply projections, local disclosure adapters, broker-charter lifecycle
+and authenticated negotiation over separate domain channels.
+
+Reuse CommerceCore/InventoryCore/FulfillmentCore/SalesCore at their existing
+authority boundaries. Reuse Hawala's high-level patterns for identity,
+signed intent, receipts and reconciliation, NOT its money, balances, deposits,
+credit, exchange rates or financial custody. A brokerage promising monetary
+clearing, transferable credits or financial guarantees must pass independent
+financial-domain and legal acceptance.
+
+Regression acceptance must establish an exchange with >4 participants,
+multiple disjoint cycles, maximum matched intent count against exhaustive
+small-input reference, stable canonical terms under input permutations,
+consent and charter tampering refusal, bounded compute, no stock execution,
+and no implicit company formation or settlement.
+
+Next P0 integration: **legally explicit charter schema → private signed
+all-member agreement → local conditional-accounting/InventoryCore adapter →
+two independent instances with failure/recovery and delivery evidence**.
