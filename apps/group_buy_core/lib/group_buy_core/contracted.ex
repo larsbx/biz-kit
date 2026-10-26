@@ -169,7 +169,7 @@ defmodule GroupBuyCore.Contracted do
   def sealed_quote(state, now) do
     with :ok <- state_shape(state),
          true <- state.sealed != nil,
-         {:ok, quote} <- quote(state, now),
+         {:ok, quote} <- __MODULE__.quote(state, now),
          true <- quote.quote_hash == state.sealed.quote_hash,
          true <- quote.status == :contracted_threshold_reached_pending_stock_and_payment do
       {:ok, quote}
@@ -261,7 +261,7 @@ defmodule GroupBuyCore.Contracted do
     with true <- actor == state.offer.seller,
          :ok <- evidence(c.evidence_ref),
          true <- is_binary(c.expected_quote_hash),
-         {:ok, quotation} <- quote(state, now),
+         {:ok, quotation} <- __MODULE__.quote(state, now),
          true <- quotation.status == :contracted_threshold_reached_pending_stock_and_payment,
          true <- quotation.quote_hash == c.expected_quote_hash do
       {:ok,
