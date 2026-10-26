@@ -126,6 +126,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
       })
 
     {:ok, admitted} = GroupBuys.acceptance(buyer_consent, ctx.seller.signer)
+
     {:ok, admitted} =
       CoopSubstrate.Protocol.Envelope.sign(
         admitted,
