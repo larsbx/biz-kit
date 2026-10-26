@@ -181,12 +181,16 @@ TTL is 1–3,600 seconds. A signed absolute expiry, exact content binding and
 durable sequence prevent replays from extending an accepted lease. Repair
 resends an existing assertion and never renews it automatically.
 
-Search shows `freshness_source` (`projection` or `publisher_lease`) and
+Search shows `freshness_source` (`projection`, `publisher_lease` or `none`) and
 `freshness_expires_at`. Matching lease expiry overrides the first-receipt grace;
 new revisions and withdrawals cannot inherit a previous activity's lease.
-The legacy first-receipt grace still exists for advertisements without a
-matching lease, including after complete journal loss. The host must check
-current publication/disclosure permission before renewing.
+The default legacy first-receipt grace still exists for advertisements without
+a matching lease, including after complete journal loss. Set
+`require_freshness_lease: true` in `Gossip.config!/2` to keep remote gossip
+listings stale until a matching valid lease arrives. Such unleased results have
+source `none` and a null expiry; replaying an old advertisement cannot grant
+freshness on first contact. Local and HTTP projections retain their policy.
+The host must check current publication/disclosure permission before renewing.
 
 Lease and catch-up frames share the existing control budget. Exact wire,
 clock, replay and storage rules:

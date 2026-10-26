@@ -75,13 +75,45 @@ HTTP metadata fetch. The underlying `verified_at`, metadata, revision, source
 events and projections remain unchanged. A newer listing revision starts with
 its own projection freshness and cannot inherit an old activity's lease.
 
-Legacy advertisements without a matching lease retain the existing one-hour
-first-projection/HTTP-refresh policy. This profile does **not** eliminate the
-legacy first-receipt grace after complete receiver-journal loss or first
-contact with an old advertisement. Eliminating that ambiguity requires a
-separately adopted timestamped advertisement profile/acceptance policy. A
-lease establishes the publisher's bounded freshness assertion, not physical
-stock, current custody, honesty or permission to transact.
+By default, advertisements without a matching lease retain the existing
+one-hour first-projection/HTTP-refresh policy, including on first contact with
+an old advertisement or after complete receiver-journal loss. The opt-in
+acceptance policy below removes that grace for remote gossip results. A lease
+establishes the publisher's bounded freshness assertion, not physical stock,
+current custody, honesty or permission to transact.
+
+### Require a lease on remote gossip results
+
+A receiver can remove that first-receipt grace locally without changing the
+wire profile or requiring every peer to upgrade:
+
+```elixir
+config = FederationService.Gossip.config!(service,
+  scope: scope,
+  seed: endpoint_seed,
+  publisher_keys: pinned_keys,
+  require_freshness_lease: true)
+```
+
+The option is a validated boolean and defaults to `false` for compatibility.
+It must be supplied again when configuring a restarted host. It does not change
+topic identity, signed messages, journal data or admission of advertisements.
+Under this policy a remote gossip projection without a matching lease is
+visible with `stale: true`, `freshness_source: "none"` and
+`freshness_expires_at: nil`, even on first contact or after complete cache loss.
+A captured expired lease refuses; a new announcement, catch-up receipt or
+restart cannot make the advertisement fresh. Every new revision needs its own
+matching lease. Once a lease is known, its signed interval governs freshness as
+above. A captured, still-valid signed lease can establish freshness only until
+its original expiry; freshness does not establish when it was received.
+
+This policy applies only to remote gossip projections. Local publications and
+HTTP projections keep their existing freshness policy. Peers that never issue
+leases remain discoverable but stale. Unsupported canonical content cannot be
+leased and therefore remains stale under this policy. All nodes still need
+trusted clocks, current key pins and retained tombstone/replay history; lease
+requirements do not recover a lost withdrawal or prevent an old revision from
+being displayed as a stale advertisement after complete journal loss.
 
 Local sequence and issue-time history also survive restart. Backward local
 clocks refuse renewal. Restoring an older publisher journal can lose sequence
@@ -110,10 +142,12 @@ policy change, as with the existing adapter.
 
 ## Acceptance
 
-Focused regressions cover exact-content renewal, fixed expiry, shortened
+Focused regressions cover opt-in cold-receiver/revision freshness, policy
+validation, HTTP/local isolation, exact-content renewal, fixed expiry, shortened
 leases, replay/conflict/tampering, durable sender/receiver sequence recovery,
 revision/withdrawal isolation, moderation/key/scope/transport refusal, bad TTL,
 clock rollback and stale local queue acknowledgments. The real two-process
-QUIC test renews an unchanged listing, observes the publisher lease remotely,
+QUIC test requires leases, observes initial and updated remote projections as
+stale, renews an unchanged listing, observes the publisher lease remotely,
 restarts both nodes through a partition and confirms lease persistence without
 new source events. Business-ledger sentinels remain unchanged.

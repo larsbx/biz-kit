@@ -12,7 +12,8 @@ config =
   FederationService.Gossip.config!(service,
     scope: settings["scope"],
     seed: File.read!(key_file),
-    publisher_keys: settings["publisher_keys"]
+    publisher_keys: settings["publisher_keys"],
+    require_freshness_lease: settings["require_freshness_lease"] || false
   )
 
 service = config.service
