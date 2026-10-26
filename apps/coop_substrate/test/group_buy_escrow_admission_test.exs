@@ -330,15 +330,26 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
 
   defp funded_contract(ctx, proof \\ nil) do
     admitted = contract(ctx)
+    {:bytes, consent_bytes} = admitted.payload["consent"]
+    {:ok, term} = Canonical.decode(consent_bytes)
+    {:ok, consent} = CoopSubstrate.Protocol.Envelope.from_full_record_term(term)
 
-    signed_event(
-      ctx.seller,
-      "GroupBuyFundedContractAdmittedV1",
-      Map.merge(admitted.payload, %{
-        "proof" => {:bytes, encode_report(proof || provider_report(ctx))},
-        "expected_version" => Map.get(ctx, :escrow_version, 0)
-      })
-    )
+    {:ok, proposal} =
+      GroupBuys.funded_acceptance(
+        consent,
+        encode_report(proof || provider_report(ctx)),
+        Map.get(ctx, :escrow_version, 0),
+        ctx.seller.signer
+      )
+
+    {:ok, signed} =
+      CoopSubstrate.Protocol.Envelope.sign(
+        proposal,
+        ctx.seller.signer.key_id,
+        ctx.seller.seed
+      )
+
+    signed
   end
 
   test "seller self-pin is historical only; governance provenance and current authority required",
@@ -632,6 +643,43 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     assert {:ok, _} = GroupBuys.submit(event)
     assert Log.head() == before_retry
     assert :ok = Log.verify_chains()
+  end
+
+  test "provider event identity is global even when second campaign has independent custody",
+       ctx do
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    first = provider_report(ctx)
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, first))
+    second = @campaign <> "-event-reuse"
+    offer = posted_offer(ctx.seller, second, ctx.now)
+    assert {:ok, _} = GroupBuys.submit(offer)
+    {:ok, hash} = GroupBuys.terms_hash(offer)
+    bind(ctx, second, hash)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx, second))
+
+    proof =
+      provider_report(ctx, second, %{payload: %{first.payload | custody_ref: "different-custody"}})
+
+    before = Log.head()
+    assert {:error, :provider_event_conflict} = GroupBuys.submit(evidence(ctx, proof, second))
+    assert Log.head() == before
+    assert Log.gate().group_buys.escrow_states[{@chapter, @seller, second}].positions == %{}
+  end
+
+  test "exact atomic batch retries are idempotent while mixed old/new batches refuse", ctx do
+    bind(ctx)
+    provider_pin = pin(ctx)
+    report = evidence(ctx, provider_report(ctx))
+    assert {:ok, first} = Log.append([provider_pin, report])
+    head = Log.head()
+    restart_log()
+    assert {:ok, ^first} = Log.append([provider_pin, report])
+
+    assert {:error, :partial_group_buy_batch_replay} =
+             Log.append([provider_pin, pin(ctx, @campaign, 1)])
+
+    assert Log.head() == head
   end
 
   defp stock_event(ctx, command, campaign \\ @campaign) do
