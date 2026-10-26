@@ -177,14 +177,23 @@ defmodule CoopSubstrate.GroupBuys do
 
   @doc "Commit a signed authority event. A receipt asserts ledger admission only."
   def submit(%Envelope{} = env, server \\ Log.server()) do
-    if env.type in [@seller, @member, @offer, @close, @accept, @escrow_provider, @escrow_evidence, @stock] do
+    if env.type in [
+         @seller,
+         @member,
+         @offer,
+         @close,
+         @accept,
+         @escrow_provider,
+         @escrow_evidence,
+         @stock
+       ] do
       with {:ok, [accepted]} <- Log.append(env, server) do
         {:ok,
          %{
            event_id: accepted.event_id,
            global_seq: accepted.global_seq,
            payment: :not_collected,
-           inventory: :not_reserved,
+           inventory: inventory_receipt(env),
            fulfillment: :not_authorized
          }}
       end
@@ -192,6 +201,17 @@ defmodule CoopSubstrate.GroupBuys do
       {:error, :not_a_group_buy_authority_event}
     end
   end
+
+  defp inventory_receipt(%Envelope{
+         type: @stock,
+         payload: %{"command" => %{"op" => "reserve"}}
+       }),
+       do: :seller_home_stock_reserved_in_canonical_ledger
+
+  defp inventory_receipt(%Envelope{type: @stock}),
+    do: :seller_reported_stock_recorded_in_canonical_ledger
+
+  defp inventory_receipt(_), do: :not_reserved
 
   @doc """
   Admit a signed single-recipient read, then return only an encrypted packet.

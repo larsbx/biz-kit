@@ -24,8 +24,11 @@ defmodule CoopSubstrate.GroupBuys.Stock do
   def event_type, do: @event_type
 
   @doc "Typed command proposal; never executes or appends an event by itself."
-  def apply_event(%{chapter_id: chapter, payload: p, signers: signers, event_id: event_id},
-                  gate, now) do
+  def apply_event(
+        %{chapter_id: chapter, payload: p, signers: signers, event_id: event_id},
+        gate,
+        now
+      ) do
     key = {chapter, p["seller_id"], p["campaign_id"]}
     row = gate.group_buys.offers[key]
     round = gate.group_buys.rounds[key]
@@ -34,16 +37,17 @@ defmodule CoopSubstrate.GroupBuys.Stock do
          %{closed: closed} <- row,
          %{offer: offer} <- round,
          :ok <- reference(p["source_ref"]),
-         {:ok, command} <- Wire.decode(p["command"], %{
-           "merchant" => offer.seller,
-           "item" => offer.sku,
-           "unit" => offer.unit
-         }),
-         true <- command.op in [:receive, :reserve],
+         {:ok, command} <-
+           Wire.decode(p["command"], %{
+             "merchant" => offer.seller,
+             "item" => offer.sku,
+             "unit" => offer.unit
+           }),
          {:ok, stock} <- stock_for(gate, chapter, offer),
          :ok <- admissible(command, gate, key, round, stock, closed, now),
          {:ok, updated, :accepted} <- InventoryCore.apply(stock, offer.seller, command) do
       aggregate = stock_key(chapter, offer)
+
       next =
         gate.group_buys
         |> put_in([:stock_aggregates, Access.key(aggregate)], updated)
@@ -70,35 +74,42 @@ defmodule CoopSubstrate.GroupBuys.Stock do
     claim = gate.group_buys.stock_claims[key]
 
     with %{offer: _offer} <- round,
-         %{reservation_id: reservation_id, terms_hash: terms_hash,
-           quantity: count, stock_key: aggregate} <- claim,
+         %{
+           reservation_id: reservation_id,
+           terms_hash: terms_hash,
+           quantity: count,
+           stock_key: aggregate
+         } <- claim,
          {:ok, %{status: :binding_threshold_activated} = bound} <-
            BindingRound.snapshot(round, now),
-         true <- bound.terms_hash == terms_hash and
-                   count == bound.contracted_quantity,
+         true <-
+           bound.terms_hash == terms_hash and
+             count == bound.contracted_quantity,
          {:ok, coverage} <- Escrow.coverage(escrow, round, now),
-         true <- coverage.binding_terms_hash == terms_hash and
-                   coverage.committed_units == count,
+         true <-
+           coverage.binding_terms_hash == terms_hash and
+             coverage.committed_units == count,
          :ok <- all_funds_held(escrow, round, now),
          %{reservations: reservations} <- gate.group_buys.stock_aggregates[aggregate],
          %{status: :active, remaining: ^count, expires_at_ms: expiry} <-
            reservations[reservation_id],
          true <- expiry > now * 1_000 do
-      {:ok, %{
-        campaign_id: campaign,
-        binding_terms_hash: terms_hash,
-        contracted_quantity: count,
-        currency: bound.currency,
-        verified_provider_funding_minor: coverage.secured_minor,
-        current_due_minor: coverage.current_group_due_minor,
-        stock_reservation_id: reservation_id,
-        stock_expires_at_ms: expiry,
-        assurance: :seller_home_committed_stock_and_provider_evidence,
-        settlement: :not_authorized,
-        physical_stock: :not_independently_verified,
-        provider_custody: :requires_fresh_provider_reconciliation,
-        fulfillment: :requires_external_delivery_checks
-      }}
+      {:ok,
+       %{
+         campaign_id: campaign,
+         binding_terms_hash: terms_hash,
+         contracted_quantity: count,
+         currency: bound.currency,
+         verified_provider_funding_minor: coverage.secured_minor,
+         current_due_minor: coverage.current_group_due_minor,
+         stock_reservation_id: reservation_id,
+         stock_expires_at_ms: expiry,
+         assurance: :seller_home_committed_stock_and_provider_evidence,
+         settlement: :not_authorized,
+         physical_stock: :not_independently_verified,
+         provider_custody: :requires_fresh_provider_reconciliation,
+         fulfillment: :requires_external_delivery_checks
+       }}
     else
       _ -> {:error, :escrow_or_stock_not_ready}
     end
@@ -120,11 +131,13 @@ defmodule CoopSubstrate.GroupBuys.Stock do
          {:ok, coverage} <- Escrow.coverage(escrow, round, now),
          true <- coverage.binding_terms_hash == bound.terms_hash,
          :ok <- all_funds_held(escrow, round, now),
-         true <- is_integer(cmd.expires_at_ms) and
-                   cmd.expires_at_ms > now * 1_000,
-         true <- Enum.all?(Map.values(escrow.positions), fn position ->
-                   position.expires_at * 1_000 >= cmd.expires_at_ms
-                 end),
+         true <-
+           is_integer(cmd.expires_at_ms) and
+             cmd.expires_at_ms > now * 1_000,
+         true <-
+           Enum.all?(Map.values(escrow.positions), fn position ->
+             position.expires_at * 1_000 >= cmd.expires_at_ms
+           end),
          true <- not Map.has_key?(stock.reservations, cmd.reservation_id) do
       :ok
     else
@@ -138,8 +151,11 @@ defmodule CoopSubstrate.GroupBuys.Stock do
     if Enum.all?(round.pledges, fn {buyer, pledge} ->
          case escrow.positions[buyer] do
            %{status: :held, pledge_id: id, expires_at: expiry}
-             when id == pledge.id and expiry > now -> true
-           _ -> false
+           when id == pledge.id and expiry > now ->
+             true
+
+           _ ->
+             false
          end
        end),
        do: :ok,
