@@ -5,32 +5,32 @@
 module cursor_first_bug {
   pure val MAX = 2
 
-  var head: int
+  var ledgerHead: int
   var cursor: int
   var effects: Set[int]
 
   action init = all {
-    head' = 0,
+    ledgerHead' = 0,
     cursor' = 0,
     effects' = Set(),
   }
 
-  action append = all {
-    head < MAX,
-    head' = head + 1,
+  action persistLedger = all {
+    ledgerHead < MAX,
+    ledgerHead' = ledgerHead + 1,
     cursor' = cursor,
     effects' = effects,
   }
 
   action unsafeCheckpoint = all {
-    cursor < head,
+    cursor < ledgerHead,
     cursor' = cursor + 1,
-    head' = head,
+    ledgerHead' = ledgerHead,
     effects' = effects,
   }
 
-  action step = any { append, unsafeCheckpoint }
+  action step = any { persistLedger, unsafeCheckpoint }
 
-  val safety = cursor <= head and
+  val safety = cursor <= ledgerHead and
     range(1, MAX + 1).forall(i => (i <= cursor) implies effects.contains(i))
 }
