@@ -34,6 +34,7 @@ defmodule CoopSubstrate.MixProject do
       {:biz_kit_cluster, in_umbrella: true},
       # The task lifecycle the ledger admits, shared with any other host.
       {:task_core, in_umbrella: true},
+      {:agent_ops_store, in_umbrella: true, only: :test},
       {:group_buy_core, in_umbrella: true},
       {:inventory_core, in_umbrella: true},
       {:rustler, "~> 0.36"},
