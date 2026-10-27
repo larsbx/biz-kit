@@ -30,6 +30,19 @@ defmodule Dispatch.DependencyTenantSecurityTest do
   test "a primary-key upsert cannot read, overwrite or take over another tenant's row", c do
     original = row(c.a, "private")
 
+    # Positive control: this action really accepts the supplied primary key
+    # and performs a legitimate same-tenant upsert before probing takeover.
+    updated =
+      Ash.create!(Row, %{id: original.id, name: "private-updated"},
+        tenant: c.a,
+        authorize?: false,
+        upsert?: true,
+        upsert_fields: [:name]
+      )
+
+    assert updated.id == original.id and updated.tenant_id == c.a
+    assert updated.name == "private-updated"
+
     assert {:error, _} =
              Ash.create(Row, %{id: original.id, name: "hijacked"},
                tenant: c.b,
@@ -38,7 +51,7 @@ defmodule Dispatch.DependencyTenantSecurityTest do
                upsert_fields: [:name]
              )
 
-    assert %{id: id, tenant_id: tenant, name: "private"} =
+    assert %{id: id, tenant_id: tenant, name: "private-updated"} =
              Ash.get!(Row, original.id, tenant: c.a, authorize?: false)
 
     assert id == original.id and tenant == c.a
