@@ -29,9 +29,10 @@ jobs:
           build: "true"
           axiom-audit: "true"
           axiom-audit-root: BizKitEventProofs
-      - name: Independently replay exported declarations through the Lean kernel
-        working-directory: formal/lean
-        run: lake check
+          # leanchecker runs the independently checked kernel export using
+          # the installed Lean toolchain. Unlike lake check, it does not
+          # require Lake's sandbox/manifest setup on GitHub runners.
+          leanchecker: "true"
 
   quint-bounded-model:
     runs-on: ubuntu-24.04
