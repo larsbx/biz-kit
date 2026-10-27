@@ -25,6 +25,9 @@ The new real-PostgreSQL tests at
 - Actual PostgreSQL `agent_ops` registration/lease CAS. The first delivery
   commits its lease before executing the adapter. A repeated delivery
   returns already dispatched, never a second launch.
+- Two independent PostgreSQL connections concurrently claim the same
+  pending execution. Only one can advance the durable `row_version` and
+  lease epoch; the loser must receive refusal and cannot initiate a launch.
 - Revocation *between preflight and durable-claim recheck* to demonstrate
   that a run is fenced before backend launch, with no agent tool or write
   capabilities inherited from a suggester grant.
