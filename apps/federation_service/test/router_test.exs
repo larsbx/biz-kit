@@ -35,7 +35,6 @@ defmodule FederationService.RouterTest do
     acct = "acct:shop@alpha.example"
 
     for resource <- [acct, actor] do
-
       response =
         request(config, :get, "/.well-known/webfinger?resource=" <> URI.encode_www_form(resource))
 
