@@ -347,3 +347,18 @@ business events. A future host adapter must implement authentication,
 authority rechecks, bounded queued deliveries and restoration tests before
 claiming working ActivityPub following. Current inbox still handles only
 public listing events.
+
+## Authenticated inbound subscription admission
+
+The signed HTTPS inbox can now record narrow Follow/Accept/Reject/Undo messages
+from **explicitly configured peers only**. Each message must pass current
+remote-actor signature validation, the peer allowlist, exact wire shape and
+local moderation before a durable subscription-journal transition. No remote
+message grants local business authority; Follow stays pending until a trusted
+local host explicitly approves it. Retransmission and restart safety are
+covered by the two-node TLS harness.
+
+There is no dynamic peer admission, public approval API, follower collection,
+locally authorized reply delivery, private offer exposure or cross-node
+commercial write. Keep this pilot behind existing explicit peering and do not
+claim general Mastodon interoperability or production deployment.

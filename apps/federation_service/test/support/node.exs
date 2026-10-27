@@ -101,6 +101,8 @@ Stream.repeatedly(fn -> IO.gets("") end)
 
           %{
             inbox_count: map_size(s.inbox),
+            subscription_count: map_size(s.subscriptions),
+            subscriptions: Map.new(s.subscriptions, fn {id, row} -> {id, row.status} end),
             pending: Enum.count(s.outbox, fn {_, r} -> r.status == :pending end),
             held: Enum.count(s.outbox, fn {_, r} -> r.status == :held end),
             superseded: Enum.count(s.outbox, fn {_, r} -> r.status == :superseded end),
