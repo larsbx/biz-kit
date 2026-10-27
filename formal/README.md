@@ -106,6 +106,37 @@ runs the Lean kernel/axiom audit and the Quint typecheck, simulation,
 bounded model check and all three negative controls. **Do not merge a runtime consumer
 before its proof obligations and refinement tests are green.**
 
+## Index convention and refinement boundary
+
+The Lean modules use **zero-based indices**: committed entries are
+`0 .. head - 1`, and `cursor` is the exclusive end of a processed prefix.
+The Quint specifications use event positions **1 through head**, where
+`cursor` is the greatest acknowledged sequence or zero. EventStore's
+`global_seq` is also one-based. Thus:
+
+```text
+Lean index n         = EventStore.global_seq - 1
+Quint event position = EventStore.global_seq
+All cursor values    = number of consecutively completed ledger events
+```
+
+An operational consumer stores `cursor` as a **one-based ledger watermark**
+(0 before any event); a pure Lean transition for index `n` corresponds to
+SQL accepting `global_seq = n + 1`.
+
+This mapping is essential: a SQL cursor advanced by one without an
+atomic **complete effect bundle + processed receipt** contradicts both the
+Lean invariant and Quint safety. The model assumes one independently
+administered home; every cursor/receipt/effect identifier must also be
+scoped to that home to prevent cross-installation collisions.
+
+**Proof scope and authority contract:** these models assume the appender
+has *already* verified the canonical envelope, signatures and chain.
+No event notification, foreign federation payload or model output may
+supply authoritative `global_seq` to the consumer. The host must retrieve
+accepted events through the trusted EventStore read API, not accept
+indices from a message body.
+
 ## Proof-to-implementation refinement ledger
 
 **Phase 0 — proofs (this PR).** Establish a stable mathematical vocabulary:
