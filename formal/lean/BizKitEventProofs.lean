@@ -1,4 +1,5 @@
 import Init
+import BizKitLeases
 
 /-!
 # EventStore consumer safety kernel
@@ -108,12 +109,33 @@ theorem register_idempotent (s : Consumer) (n k : Nat) :
     (register (register s n) n).effects k ↔ (register s n).effects k := by
   simp [register, or_assoc]
 
-/-- Unsafe design: acknowledge without registration of the first event. -/
+/--
+Atomic abstract event processing: first make the effect durable, then
+acknowledge its position. SQL refinement must make these ONE transaction.
+-/
+def commitNext (s : Consumer) : Consumer :=
+  acknowledge (register s s.cursor)
+
+theorem commitNext_preserves (s : Consumer) (hs : Safe s)
+    (within : s.cursor < s.head) : Safe (commitNext s) := by
+  unfold commitNext
+  apply acknowledge_preserves
+  · exact register_preserves s s.cursor hs
+  · simpa [register] using within
+  · simp [register]
+
+/-- Unsafe design: acknowledge without registering the first committed event. -/
 def cursorFirst (s : Consumer) : Consumer := { s with cursor := s.cursor + 1 }
 
-theorem cursor_first_counterexample : ¬ Safe (cursorFirst initial) := by
+/--
+Genuine counterexample: an event IS committed, so the cursor is not beyond
+the head, but the required derived effect is absent. The failure is a missing
+effect, not simply an out-of-range cursor.
+-/
+theorem cursor_first_counterexample :
+    ¬ Safe (cursorFirst (append initial)) := by
   intro hs
-  have impossible : (1 : Nat) ≤ 0 := hs.1
-  exact (by decide : ¬ ((1 : Nat) ≤ 0)) impossible
+  have missing : (append initial).effects 0 := hs.2 0 (by decide)
+  exact missing
 
 end BizKitEventProofs
