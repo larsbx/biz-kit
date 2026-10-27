@@ -8,6 +8,7 @@ defmodule FederationService.Store do
   use GenServer
   alias FederationCore.Marketplace
   alias FederationService.Delivery
+  alias FederationService.SubscriptionState
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def call(store, op), do: GenServer.call(store, op, 15_000)
@@ -92,7 +93,9 @@ defmodule FederationService.Store do
       blocks: %{},
       events: %{},
       publications: %{},
-      redeliveries: %{}
+      redeliveries: %{},
+      subscriptions: %{},
+      subscription_events: %{}
     }
 
     base =
@@ -152,6 +155,14 @@ defmodule FederationService.Store do
   end
 
   def handle_call(:snapshot, _, s), do: {:reply, s.data, s}
+
+  def handle_call({:subscription, intent}, _, s) do
+    case SubscriptionState.plan(s.data, intent) do
+      {:ok, changes, result} -> commit(s, changes, result)
+      {:duplicate, result} -> {:reply, result, s}
+      {:error, reason} -> {:reply, {:error, reason}, s}
+    end
+  end
 
   def handle_call({:lease_issue, ctx, activity_id, ttl, now}, _, s) do
     case FederationService.GossipLease.issue(s.data, ctx, activity_id, ttl, now) do
