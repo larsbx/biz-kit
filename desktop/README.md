@@ -1,7 +1,7 @@
 # biz-kit desktop
 
 A desktop console for the systemd services, scripts, config files and health of
-a small set of Linux hosts. Built with Tauri 2, React and TypeScript; runs on
+a small set of Linux hosts. Built with Tauri 2, SvelteKit (a static SPA) and TypeScript; runs on
 Linux, macOS and Windows.
 
 Remote hosts are reached through your own `ssh` configuration, so an alias from
@@ -81,14 +81,20 @@ The backend enforces the part that matters rather than trusting the UI:
 
 ## Extending
 
-`src/App.tsx` holds the panel registry. Write a component taking
-`{ info }: { info: AppInfo }` and add one row:
+`src/lib/panels.ts` holds the panel registry. Write a Svelte component in
+`src/lib/panels/` taking `let { info }: { info: AppInfo } = $props();` and add
+one row:
 
 ```ts
-const PANELS: Panel[] = [
-  { id: "logs", label: "Logs", component: LogsPanel },
+export const PANELS: Panel[] = [
+  { id: "logs", label: "Logs", component: Logs },
 ];
 ```
+
+The frontend is SvelteKit 3 with `@sveltejs/adapter-static` and `ssr = false`
+(`src/routes/+layout.ts`): Tauri serves files, so there is no server to render
+on. SvelteKit is configured in `vite.config.ts`, and `src/lib` is imported as
+`#lib/...` (the `imports` map in `package.json`).
 
 Backend commands live in `src-tauri/src/`, one module per concern, registered
 in `lib.rs`. `exec::run(host, script)` is the primitive everything builds on:
@@ -96,11 +102,12 @@ it picks a local login `bash` or `ssh`, so a panel doesn't care where it runs.
 
 ## Develop / build
 
-Prerequisites: Node 20+, stable Rust, and the
+Prerequisites: Node 22.17+ (SvelteKit 3), stable Rust, and the
 [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
 
 ```sh
 npm ci
+npm run check                  # svelte-check
 npm run tauri dev                  # hot-reload dev window
 npm run tauri build                # installers for the current OS
 (cd src-tauri && cargo test)
