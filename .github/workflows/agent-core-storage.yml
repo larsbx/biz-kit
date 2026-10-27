@@ -66,6 +66,12 @@ jobs:
             < deploy/agent-core/sql/003_recovery_custody.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/004_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_storage_contract.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
@@ -116,6 +122,15 @@ jobs:
                 FROM agent_ops.execution_attempts
                 WHERE effect_id='agent-run:signed-ci';")"
           test "$attempt" = "leased:2"
+
+          cursor="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -Aqt \
+            -c "SELECT c.global_seq::text || ':' || count(r.global_seq)::text
+                  FROM agent_ops.event_cursors c JOIN agent_ops.event_registrations r
+                    USING (home_id, subscriber)
+                 WHERE c.home_id='cursor-volume-ci'
+                 GROUP BY c.global_seq;")"
+          test "$cursor" = "1:1"
 
       - name: Stop service but retain volume
         if: always()

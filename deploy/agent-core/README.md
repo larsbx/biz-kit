@@ -69,6 +69,10 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
   < deploy/agent-core/sql/003_recovery_custody.sql
 
+docker compose -f deploy/agent-core/compose.yaml exec -T db \
+  psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+  < deploy/agent-core/sql/004_event_cursor.sql
+
 # Or replace 'docker' with 'podman'.
 ```
 
@@ -208,3 +212,20 @@ See [execution recovery architecture](../../docs/architecture/2026-10-24-executi
 for trusted host callbacks, versioned adapter requirements, authentication,
 proof finality, opt-in supervision and remaining acceptance gates. No
 production startup or external execution target is enabled by this change.
+
+
+## Staging discovery cursor (migration 004)
+
+`CoopSubstrate.AgentEventCursor.catch_up/5` is an explicit, bounded staging
+operation, not a production service. It audits the observed signed ledger
+prefix, reads a bounded page, derives non-authoritative scope reconciliation
+registrations, and commits each registration/no-op receipt with its contiguous
+`global_seq` checkpoint. It does not start backends or replace periodic grant
+reconciliation. See
+[the refinement and acceptance note](../../docs/architecture/2026-10-27-agentcore-cursor-recovery.md).
+
+The cursor commit is **SECURITY DEFINER** with a fixed search path. Its protected
+migration owner must be distinct from the host runtime role. The latter gets
+schema USAGE, table SELECT and EXECUTE on `commit_event_registration` only;
+never grant it direct INSERT/UPDATE/DELETE on cursor/registration tables. No
+production role grants or activation are installed by this increment.
