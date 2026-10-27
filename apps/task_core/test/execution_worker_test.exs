@@ -58,6 +58,7 @@ defmodule TaskCore.ExecutionWorkerTest do
     assert Process.alive?(worker)
     assert :sys.get_state(worker).last in [:never, :error]
   end
+
   test "coalesced event wakeups produce one follow-up while a tick is active" do
     parent = self()
 
@@ -96,9 +97,7 @@ defmodule TaskCore.ExecutionWorkerTest do
     worker =
       start_supervised!(
         {ExecutionWorker,
-         tick: fn -> send(parent, :tick_observed) end,
-         interval_ms: 60_000,
-         timeout_ms: 10_000}
+         tick: fn -> send(parent, :tick_observed) end, interval_ms: 60_000, timeout_ms: 10_000}
       )
 
     assert_receive :tick_observed, 1000
@@ -116,9 +115,12 @@ defmodule TaskCore.ExecutionWorkerTest do
 
   defp wait_for_idle(worker, retries) do
     case GenServer.call(worker, :status) do
-      %{running: false, last: :ok} -> :ok
-      _ -> Process.sleep(10); wait_for_idle(worker, retries - 1)
+      %{running: false, last: :ok} ->
+        :ok
+
+      _ ->
+        Process.sleep(10)
+        wait_for_idle(worker, retries - 1)
     end
   end
-
 end

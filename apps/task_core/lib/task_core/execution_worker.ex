@@ -91,8 +91,12 @@ defmodule TaskCore.ExecutionWorker do
     timer = Process.send_after(self(), {:tick_timeout, job}, state.timeout)
 
     {:noreply,
-     %{state | active: %{pid: pid, monitor: monitor, timer: timer, job: job},
-       scheduled: nil, pending: false}}
+     %{
+       state
+       | active: %{pid: pid, monitor: monitor, timer: timer, job: job},
+         scheduled: nil,
+         pending: false
+     }}
   end
 
   def handle_info(:tick, state), do: {:noreply, %{state | dirty: true}}

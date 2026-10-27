@@ -49,7 +49,12 @@ defmodule AgentOpsStore.EventWakeupTest do
   end
 
   test "the notifier exits when the monitored worker stops" do
-    target = spawn(fn -> receive do :stop -> :ok end end)
+    target =
+      spawn(fn ->
+        receive do
+          :stop -> :ok
+        end
+      end)
 
     {:ok, notifier} =
       EventWakeup.start_link(
@@ -65,6 +70,8 @@ defmodule AgentOpsStore.EventWakeupTest do
   end
 
   test "an unavailable group or a dead worker is not silently authorized" do
+    # Failed linked GenServer startup may also deliver an EXIT signal.
+    Process.flag(:trap_exit, true)
     target = spawn(fn -> :ok end)
     ref = Process.monitor(target)
     assert_receive {:DOWN, ^ref, :process, ^target, :normal}, 1000
