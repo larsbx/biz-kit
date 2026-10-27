@@ -23,11 +23,17 @@ defmodule AgentOpsStore.EventEffects do
   @spec derive(map(), keyword()) :: {:ok, [map()]} | {:error, atom()}
   def derive(%{type: type, event_id: id, global_seq: seq, chapter_id: chapter}, opts)
       when is_list(opts) do
-    with true <- is_binary(type) and segment?(id) and segment?(chapter) or
-                   {:error, :invalid_committed_event},
-         true <- is_integer(seq) and seq > 0 or {:error, :invalid_committed_event},
-         {:ok, ignored} <- ignored_types(opts) do
-      classify(type, id, ignored)
+    cond do
+      not (is_binary(type) and segment?(id) and segment?(chapter)) ->
+        {:error, :invalid_committed_event}
+
+      not (is_integer(seq) and seq > 0) ->
+        {:error, :invalid_committed_event}
+
+      true ->
+        with {:ok, ignored} <- ignored_types(opts) do
+          classify(type, id, ignored)
+        end
     end
   end
 
