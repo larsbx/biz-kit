@@ -17,13 +17,13 @@ defmodule Eatsbot.Extensions.Kafka.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :ssl]
     ]
   end
 
   defp deps do
     [
-      # Keep producer behavior on the existing line until the separate client spike.
+      # The extension owns its explicit producer client; no default KafkaEx worker.
       {:kafka_ex, "~> 1.1.2", runtime: false},
       {:eatsbot_core, in_umbrella: true}
     ]
