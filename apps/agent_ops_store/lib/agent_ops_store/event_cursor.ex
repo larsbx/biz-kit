@@ -39,13 +39,13 @@ defmodule AgentOpsStore.EventCursor do
          {:ok, %Postgrex.Result{rows: [[cursor, disposition]]}} <-
            Postgrex.query(
              conn,
-             "SELECT ack_seq, disposition FROM agent_ops.commit_event_bundle($1,$2,$3,$4,$5,$6::jsonb)",
+             "SELECT ack_seq, disposition FROM agent_ops.commit_event_bundle($1,$2,$3,$4,$5,$6::text::jsonb)",
              params
            ) do
       {:ok, %{cursor: cursor, disposition: disposition(disposition)}}
     else
-      {:error, %Postgrex.Error{}} -> {:error, :event_cursor_transaction_refused}
-      {:error, _} = error -> error
+      {:error, :invalid_event_bundle} = invalid -> invalid
+      {:error, _} -> {:error, :event_cursor_transaction_refused}
       _ -> {:error, :event_cursor_transaction_refused}
     end
   rescue
