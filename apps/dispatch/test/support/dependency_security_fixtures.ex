@@ -16,6 +16,7 @@ defmodule Dispatch.DependencySecurityFixtures.Row do
 
   postgres do
     repo(Dispatch.Repo)
+    schema("pg_temp")
     table("dependency_security_rows")
   end
 
@@ -59,6 +60,7 @@ defmodule Dispatch.DependencySecurityFixtures.Link do
 
   postgres do
     repo(Dispatch.Repo)
+    schema("pg_temp")
     table("dependency_security_links")
   end
 
