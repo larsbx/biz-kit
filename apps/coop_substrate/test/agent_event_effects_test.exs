@@ -56,25 +56,4 @@ defmodule CoopSubstrate.AgentEventEffectsTest do
 
     assert byte_size(hash) == 32
   end
-
-  test "page derivation rejects missing, duplicate, reordered or broken-chain events" do
-    actor = new_member("author")
-
-    one =
-      signed_event(actor, "TestProjectionEvent", %{"note" => "one", "amount_minor" => 0})
-      |> assigned(1, nil)
-
-    {:ok, hash} = Envelope.event_hash(one)
-
-    two =
-      signed_event(actor, "TestProjectionEvent", %{"note" => "two", "amount_minor" => 0})
-      |> assigned(2, hash)
-
-    checkpoint = %{seq: 0, hash: nil}
-    assert {:ok, [_, _], %{seq: 2}} = Effects.page([one, two], checkpoint, TypeRegistry.types())
-
-    for page <- [[two], [one, one], [two, one], [one, %{two | prev_global_hash: <<0::256>>}]] do
-      assert {:error, :event_prefix_gap} = Effects.page(page, checkpoint, TypeRegistry.types())
-    end
-  end
 end

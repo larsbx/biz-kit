@@ -63,6 +63,8 @@ secret confinement, scoped tool authority, candidate custody and controlled
 rollback. No business write tools are enabled. The approved-profile and generic
 ExecutionPort/RecoveryPort boundaries remain unchanged. The SQL and Compose
 fixture remain compatible with Docker and Podman; this change does not claim
-Podman runtime acceptance. Durable cursor discovery is a separate increment,
-following the abstract Lean/Quint protocol in #162, and requires its own SQL
-refinement/fault acceptance before activation.
+Podman runtime acceptance. The delivery follow-up reuses EventStore's existing
+persistent subscriptions and checkpoints, with idempotent effects committed
+before native acknowledgment. It does not need a separate application cursor.
+The abstract Lean/Quint protocol in #162 still requires implementation/fault
+acceptance before activation.

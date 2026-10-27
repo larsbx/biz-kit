@@ -1,90 +1,94 @@
-# Staging global_seq discovery recovery
+# AgentCore delivery: reuse EventStore persistent subscriptions
 
-Status: **independently testable draft; no production activation or backend
-cutover.** Merge after exact-head acceptance of #159, #160, #165 and the
-Lean/Quint protocol in #162, then rerun the combined exact-head checks. The
-formal protocol is abstract; this code is not a machine-checked refinement.
+Corrected after review: **EventStore already owns durable subscription delivery,
+catch-up and checkpoints.** The earlier #166 draft duplicated that mechanism.
+Its application cursor tables, cursor SQL functions and custom paging loop have
+been removed before merge. No database objects are dropped by this correction;
+the superseded migration was draft-only and must not be deployed.
 
-## Contract and authority
+## Existing machinery, verified in locked source
 
-`CoopSubstrate.AgentEventCursor.catch_up/5` takes a trusted staging host, stable
-configured business-home/subscriber identities and a page size from 1 to 1000.
-It accepts no notification or external event payload. It reads the existing
-Log head, anchors a resumed cursor to the canonical prefix hash, audits the
-observed prefix against the appender head, and uses bounded
-`Log.read_all(from:, as_of:)` pages. Appends after the observed head wait for
-another invocation. A partial pass resumes at its durable checkpoint.
+`mix.lock` pins `eventstore` 1.4.8. `CoopSubstrate.EventStore` already uses that
+library. Its public `subscribe_to_stream/4` creates a persistent named
+subscription by default, emits `{:events, recorded_events}`, and resumes its
+stored checkpoint on reconnect. `ack/2` acknowledges successful processing;
+`buffer_size` and `max_size` bound in-flight delivery and catch-up reads.
+The library's subscription state machine serializes contiguous acknowledged
+progress, stores it in its existing `subscriptions` table and handles replay
+when notifications are missed. Its PostgreSQL advisory lock coordinates a
+persistent subscription across consumers. No parallel event bus or cursor
+manager is needed in `agent_ops`.
 
-`AgentEventEffects` verifies each envelope's signature/schema and derives one
-conservative reconciliation discovery ID per known event, scoped to its
-project when present and otherwise to its chapter. This over-approximation
-also catches chapter-wide authority changes. The inert `TestProjectionEvent`
-produces a durable zero-effect processed receipt. Unknown types/versions,
-gaps, reordering and broken hash links stop progress. No task data, arbitrary
-payload, prompt, adapter handle or credential is stored in these rows.
+Subscribe to the canonical physical `"ledger"` stream, not `$all` or the
+per-domain link streams. Its stream event number equals Log `global_seq` and
+does not reconsume derived links as independent business facts. Each business
+home's existing EventStore instance/database defines the authority boundary.
 
-Migration 004 creates only `agent_ops.event_cursors` and
-`event_registrations` in the existing database. Each registration is the whole
-discovery bundle for one event. It is not an execution-attempt row and confers
-no authorization. The existing Coordinator still performs fresh signed state,
-read/execute grants, profile/consent checks, lease CAS and post-claim authority
-recheck before launch. No second business ledger is introduced.
+## Thin staging adapter
 
-## Correspondence with the #162 abstract protocol
+`CoopSubstrate.AgentEventSubscriber` is explicitly opt-in and staging-only; it
+is not installed in any supervisor. It subscribes with a stable host-configured
+name, `start_from: :origin`, `transient: false`, `buffer_size: 1`,
+`concurrency_limit: 1`, `max_size: 100`, and `checkpoint_threshold: 1`.
 
-| Abstract transition/obligation | Implementation | Acceptance |
-| --- | --- | --- |
-| `append` leaves cursor unchanged | Existing Log; explicit catch-up only | Producer append between pages; lost notification case |
-| `register` is idempotent | `commit_event_registration` compares immutable event/hash/scope identity | Duplicate and conflicting duplicate SQL tests; independent connection race |
-| `acknowledge` requires registered bundle | SQL inserts registration/no-op receipt before cursor UPDATE in one transaction | Prefix trigger rejects direct cursor-first UPDATE |
-| Gapless safe prefix | Cursor starts at zero; row lock, expected sequence/hash, next sequence only | Gap rejection and history-mismatch tests |
-| Crash/wakeup is a durable-state stutter | Nothing authoritative in process memory; no notification argument | Outer rollback, forced database connection termination, resumed bounded replay |
-| Failed commit preserves both sides | SQL statement/outer transaction rollback | Trigger abort after insert/before checkpoint, no residual registration/cursor |
-| No-op still processed | Null discovery ID with strict all-null scope shape | Durable hash-bound no-op receipt; malformed partial no-op refused |
+One in-flight event prevents cumulative acknowledgment of an unregistered
+item hidden earlier in a batch. Mailbox contents remain untrusted hints: the
+adapter ignores supplied data, reads canonical bytes from Log, audits the
+observed prefix against the appender head, verifies signature/schema and
+registers the deterministic reconciliation effect or no-op receipt. Only after
+the database call has committed does it call the EXISTING `EventStore.ack/2`.
+Unexpected acknowledgments cannot advance the native subscription's in-flight
+state. Unknown/uncommitted event numbers cannot create business authority.
 
-The SQL commit function is SECURITY DEFINER with a fixed catalog/temp search
-path and schema-qualified objects. Its protected migration owner must differ
-from the runtime host role. PUBLIC gets no table/function access; a reviewed
-host role gets SELECT and function EXECUTE, without cursor/registration DML.
-The SQL contract tests both allowed EXECUTE and denied direct mutation. Database
-superusers and migration owners remain trusted; their compromise is outside
-this invariant. There is no production role provisioning in this change.
+`AgentEventDelivery` expresses this small application obligation with trusted
+read/register/ack ports. It is not a subscription implementation. Migration 004
+now creates only `agent_ops.event_effect_registrations`, containing immutable
+effect identities/scope/hash or zero-effect processed receipts. It stores no
+subscription resume position. The host registration role needs SELECT/INSERT,
+not UPDATE/DELETE. Registration must use an ordinary dedicated host connection,
+never an enclosing caller-owned transaction whose commit has not completed.
 
-## Evidence and gates
+## Crash ordering and proof correspondence
 
-Locally passed: three pure derivation/chain tests; the six operational unit
-tests; the 105-test TaskCore suite (including the previously failing lease gate); warnings-as-errors compilation; formatting and diff checks. All four
-migrations and all four SQL contract scripts passed PostgreSQL-in-WASM using
-PGlite 0.5.12. That local SQL check is NOT native PostgreSQL 16 concurrency,
-connection-crash, Docker-volume or Podman acceptance.
+| Boundary | Recovery |
+| --- | --- |
+| Crash before registration commits | No ack; native subscription redelivers |
+| Registration commits, crash before ack | Native subscription redelivers; identical registration is idempotent |
+| Ack/checkpoint fails or response is lost | A replay is safe because registration already committed |
+| Ack/checkpoint succeeds | The effect receipt already exists |
+| Duplicate or forged notification | Re-read canonical Log; native ack accepts only its own in-flight event; no launch authority comes from a message |
 
-The existing volume CI now applies migration 004, runs the SQL fault/privilege
-contract, exercises native independent-connection cursor races and connection
-termination, and checks both cursor and registration after container recreation.
-The signed-ledger workflow additionally exercises bounded actual committed
-replay, restart, lost notification recovery, producer appends, no-op receipts,
-production refusal and wrong-history refusal. Hosted exact-head jobs must pass
-before these draft increments can merge. Queued jobs are not passing checks.
+A separate effect-and-checkpoint SQL transaction is unnecessary for this
+ordering: effects commit FIRST and the library checkpoint follows. A crash in
+between causes duplicates, handled by stable effect identity. Do not directly
+update the library's subscription tables. The cursor in the #162 abstract
+protocol corresponds to the native EventStore checkpoint; `acknowledge` maps
+to native `ack` after registration. This is an implementation correspondence,
+not a machine-checked proof of the dependency or actual Elixir/SQL code.
 
-## Remaining limitations
+## Acceptance and remaining limits
 
-Discovery registrations are persisted but NOT automatically drained into the
-execution coordinator. The existing periodic full-state scan remains the
-execution and revocation fallback. A later accepted increment must claim/drain
-these discovery scopes and handle acknowledgment without losing current-state
-reconciliation. No production subscriber is started by this code.
+Local checks: two pure derivation tests and five delivery-order/crash-boundary
+tests pass. The application compiles with warnings as errors. SQL migration and
+receipt/privilege contracts are checked in PostgreSQL-in-WASM, which is not
+native PostgreSQL concurrency or EventStore integration acceptance.
 
-The complete observed prefix is audited on each call. Page allocations are
-bounded, but audit CPU/I/O is not proportional to page size; this is deliberately
-an unoptimized staging safety boundary. Event registration is conservative and
-may request more reconciliation than necessary. Pruning, audit/checkpoint
-optimization, stable deployed home identity, protected runtime grants and
-operational scheduling remain release work.
+The dedicated signed-ledger CI now includes actual native subscription tests:
+catch-up with no `:pg` subscriber, offline append and reconnect at the stored
+checkpoint, subscription process death after registration/before ack, replay
+without duplicate registration, next-event delivery after checkpointed ack,
+failed registration without ack, forged hints and production refusal. Storage
+CI retains independent PostgreSQL connection races for effect registration and
+checks receipt persistence after Docker container recreation. Exact-head hosted
+checks and the #162 proof gate remain required before merge; queued is not green.
 
-Real adapter idempotency, independent signed backend finality/absence receipts,
-runtime credential confinement, typed business-tool authority, evidence custody,
-real distinct backend conformance, rollback and production release remain in
-#92. No container or agent framework is chosen here; Docker/Podman Compose and
-the approved ExecutionPort/RecoveryPort contracts are preserved. Rootless Podman
-execution still requires its own host acceptance. General agent business writes
-remain disabled.
+These are discovery receipts, not execution leases or business facts. Fresh
+signed task/grant state, approved profile, consent and PostgreSQL launch lease
+checks remain in the existing Coordinator/Dispatcher. Backend idempotency,
+external execution fencing, verified finality/absence receipts, secret isolation,
+typed business-tool authority, automatic discovery draining and real distinct
+backend acceptance remain in #92. The expensive prefix audit is staging-only
+and needs optimization before high-volume release. No production activation,
+agent framework choice, business writer or container dependency is added.
+Docker/Podman-compatible storage remains; actual rootless Podman acceptance is
+still a separate host check.

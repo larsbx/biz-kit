@@ -37,21 +37,4 @@ defmodule CoopSubstrate.AgentEventEffects do
   end
 
   def derive(_, _), do: {:error, :invalid_event}
-
-  def page(envelopes, checkpoint, known_types) when is_list(envelopes) do
-    Enum.reduce_while(envelopes, {:ok, [], checkpoint}, fn env, {:ok, acc, previous} ->
-      with {:ok, bundle} <- derive(env, known_types),
-           true <-
-             (bundle.seq == previous.seq + 1 and bundle.prev_hash == previous.hash) or
-               {:error, :event_prefix_gap} do
-        {:cont, {:ok, [bundle | acc], %{seq: bundle.seq, hash: bundle.hash}}}
-      else
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, bundles, last} -> {:ok, Enum.reverse(bundles), last}
-      error -> error
-    end
-  end
 end

@@ -71,7 +71,7 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
 
 docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
-  < deploy/agent-core/sql/004_event_cursor.sql
+  < deploy/agent-core/sql/004_event_registrations.sql
 
 # Or replace 'docker' with 'podman'.
 ```
@@ -214,18 +214,17 @@ proof finality, opt-in supervision and remaining acceptance gates. No
 production startup or external execution target is enabled by this change.
 
 
-## Staging discovery cursor (migration 004)
+## EventStore-backed staging delivery (migration 004)
 
-`CoopSubstrate.AgentEventCursor.catch_up/5` is an explicit, bounded staging
-operation, not a production service. It audits the observed signed ledger
-prefix, reads a bounded page, derives non-authoritative scope reconciliation
-registrations, and commits each registration/no-op receipt with its contiguous
-`global_seq` checkpoint. It does not start backends or replace periodic grant
-reconciliation. See
-[the refinement and acceptance note](../../docs/architecture/2026-10-27-agentcore-cursor-recovery.md).
+EventStore already supplies persistent named subscriptions, bounded catch-up,
+acknowledgments and stored checkpoints. `CoopSubstrate.AgentEventSubscriber`
+reuses that mechanism on the canonical `ledger` stream. It commits a stable
+reconciliation effect/no-op receipt, THEN calls `EventStore.ack/2`. A crash in
+between replays the event and idempotent registration handles the duplicate.
+There is no application cursor table or second checkpoint manager.
 
-The cursor commit is **SECURITY DEFINER** with a fixed search path. Its protected
-migration owner must be distinct from the host runtime role. The latter gets
-schema USAGE, table SELECT and EXECUTE on `commit_event_registration` only;
-never grant it direct INSERT/UPDATE/DELETE on cursor/registration tables. No
-production role grants or activation are installed by this increment.
+Migration 004 adds only `event_effect_registrations`. Grant the trusted host
+SELECT/INSERT, never UPDATE/DELETE, and use a dedicated host connection outside
+any caller-owned transaction. This is discovery only; all launch/grant/profile
+and lease checks remain required. No production subscriber is started. See
+[the corrected architecture and acceptance note](../../docs/architecture/2026-10-27-agentcore-cursor-recovery.md).

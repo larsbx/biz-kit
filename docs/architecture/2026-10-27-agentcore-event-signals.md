@@ -58,14 +58,14 @@ that periodic replay resumes work without inventing event facts.
 marks an active tick dirty and schedules at most one follow-up, rather
 than multiplying polling timers for every `:pg` message.
 
-This is an incremental stage, **not** a high-volume event-log consumer.
-A future scalable consumer should record a durable global sequence cursor
-*only after* its corresponding effect IDs are committed, use bounded
-`Log.read_all(from: ..., as_of: ...)` replay to fill gaps, and use
-`:pg` only as a trigger. Cursor advancing before successful effect
-registration would lose work; storing it in a second authoritative
-business ledger is forbidden. On startup it must drain from its committed
-cursor to the ledger head before accepting notifications as sufficient.
+This is an incremental latency optimization. Durable event delivery already
+exists in EventStore: reuse a persistent named subscription to the canonical
+`ledger` stream, with bounded buffering and the library's stored checkpoint.
+Commit idempotent effect registrations BEFORE calling `EventStore.ack/2`.
+If the process crashes between commit and ack, the library replays the event
+and stable effect identities deduplicate it. Do not add an application cursor
+or reimplement subscription catch-up. The staging adapter and acceptance are
+described in [the corrected delivery note](2026-10-27-agentcore-cursor-recovery.md).
 
 ## Activation
 
