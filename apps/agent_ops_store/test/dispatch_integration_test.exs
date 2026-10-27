@@ -261,21 +261,26 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
   end
 
   test "two unrelated adapters share durable signed-intent delivery, without duplicate launch", %{conn: conn} do
-    assert {:ok, %{disposition: :dispatched, backend_ref: "local-" <> run_id("run1"), lease: lease}} =
+    local_reference = "local-" <> run_id("run1")
+    remote_reference = "remote-" <> run_id("run2")
+
+    assert {:ok, %{disposition: :dispatched, backend_ref: ^local_reference, lease: lease}} =
              Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
     assert lease.epoch == 1
 
     assert {:ok, %{disposition: :already_dispatched}} =
              Coordinator.deliver(conn, run_key("run1"), Host, "worker2")
 
-    assert {:ok, %{disposition: :dispatched, backend_ref: "remote-" <> run_id("run2")}} =
+    assert {:ok, %{disposition: :dispatched, backend_ref: ^remote_reference}} =
              Coordinator.deliver(conn, run_key("run2"), Host, "worker2")
 
     assert Enum.count(Process.get(:launches)) == 2
     assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
-    assert row.phase == "leased" and row.backend_ref == "local-" <> run_id("run1")
+    assert row.phase == "leased"
+    assert row.backend_ref == local_reference
     assert {:ok, row} = Postgres.snapshot(conn, effect("run2"))
-    assert row.phase == "leased" and row.backend_ref == "remote-" <> run_id("run2")
+    assert row.phase == "leased"
+    assert row.backend_ref == remote_reference
     assert row.epoch == 1
   end
 
@@ -297,7 +302,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert {:error, :launch_requires_reconciliation} =
              Coordinator.deliver(conn, key, Host, "worker1")
 
-    assert [{:reference_failure, "run3", effect("run3")}] = Process.get(:launches)
+    expected_effect = effect("run3")
+    expected_run = run_id("run3")
+    assert [{:reference_failure, ^expected_run, ^expected_effect}] = Process.get(:launches)
 
     assert {:ok, row} = Postgres.snapshot(conn, effect("run3"))
     assert row.phase == "leased"
@@ -327,7 +334,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
 
     assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
     assert row.phase == "cancel_requested"
-    assert [{effect("run1"), "local-" <> run_id("run1")}] = Process.get(:terminations)
+    expected_effect = effect("run1")
+    expected_reference = "local-" <> run_id("run1")
+    assert [{^expected_effect, ^expected_reference}] = Process.get(:terminations)
 
     assert {:error, _} = Coordinator.prepare(run_key("run1"), Host)
   end
