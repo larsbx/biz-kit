@@ -310,6 +310,37 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert Process.get(:launches) == []
   end
 
+  test "revoked read grant before dispatch never registers or launches an operational effect", %{conn: conn} do
+    current = Process.get(:fixture_state)
+    revoked =
+      State.handle_event(
+        event("revoked-read-before", "TaskAccessRevokedV1", %{
+          "task_id" => "task1", "grant_event_id" => "read1"
+        }),
+        current
+      )
+
+    Process.put(:fixture_state, revoked)
+
+    assert {:error, :task_access_revoked} =
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
+
+    assert Process.get(:launches) == []
+    assert {:error, :unknown_agent_effect} = Postgres.snapshot(conn, effect("run1"))
+  end
+
+  test "unapproved profile changes cannot enter the operational outbox", %{conn: conn} do
+    profiles = Process.get(:registry)
+    disabled = put_in(profiles, ["local", :approved], false)
+    Process.put(:registry, disabled)
+
+    assert {:error, :execution_profile_not_approved} =
+             Coordinator.enqueue(conn, run_key("run1"), Host)
+
+    assert {:error, :unknown_agent_effect} = Postgres.snapshot(conn, effect("run1"))
+    assert Process.get(:launches) == []
+  end
+
   test "grant revoked after claim fences execution without invoking the adapter", %{conn: conn} do
     # First stage is prepare, second stage is after durable CAS claim.
     Process.put(:revoke_on_read, 2)
