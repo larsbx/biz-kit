@@ -91,6 +91,73 @@ defmodule FederationService.TwoInstanceTest do
          end)
   end
 
+  test "signed Follow and Undo are durably admitted without business or peer authority" do
+    dir = temp()
+    ca = certs(dir)
+    a_port = port()
+    b_port = port()
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    net = [
+      test_routes: %{
+        "alpha.example" => {{127, 0, 0, 1}, a_port},
+        "beta.example" => {{127, 0, 0, 1}, b_port}
+      },
+      test_cacerts: [ca]
+    ]
+
+    alpha = "https://alpha.example/actors/shop"
+    beta = "https://beta.example/actors/shop"
+    url = beta <> "/inbox"
+    key = Signature.private!(a_dir <> "/signing.key")
+
+    {:ok, follow} =
+      FederationCore.Subscriptions.follow(alpha, beta, alpha <> "/activities/follow-1")
+
+    send_signed = fn message ->
+      body = Jason.encode!(message)
+      Network.request(:post, url, Signature.sign(url, alpha, key, body), body, net)
+    end
+
+    assert {:ok, 202, _, _} = send_signed.(follow)
+    assert {:ok, 202, _, _} = send_signed.(follow)
+    assert command(b, %{op: "snapshot"})["subscription_count"] == 1
+    assert command(b, %{op: "snapshot"})["subscriptions"][follow["id"]] == "pending"
+
+    for bad <- [
+          Map.put(follow, "grant", "merchant-admin"),
+          Map.put(follow, "actor", beta)
+        ] do
+      assert {:ok, 401, _, _} = send_signed.(bad)
+    end
+
+    assert command(b, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+
+    {:ok, undo} =
+      FederationCore.Subscriptions.undo(alpha, follow, alpha <> "/activities/undo-1")
+
+    assert {:ok, 202, _, _} = send_signed.(undo)
+    assert command(b, %{op: "snapshot"})["subscriptions"][follow["id"]] == "withdrawn"
+    stop(b)
+    b2 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+    on_exit(fn -> stop(b2) end)
+    assert command(b2, %{op: "snapshot"})["subscriptions"][follow["id"]] == "withdrawn"
+    assert command(b2, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+    assert {:ok, 202, _, _} = send_signed.(follow)
+    assert command(b2, %{op: "snapshot"})["subscriptions"][follow["id"]] == "withdrawn"
+    command(b2, %{op: "block", key: "alpha.example", blocked: true})
+    assert {:ok, 401, _, _} = send_signed.(follow)
+  end
+
   test "independent HTTPS nodes exchange, retry, restart, reject attacks, revise and withdraw" do
     dir = temp()
     ca = certs(dir)
