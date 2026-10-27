@@ -40,6 +40,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     @behaviour AgentCore.RecoveryPort
     def launch(execution, _profile, effect_id) do
       Process.put(:launches, [{:remote, execution.run_id, effect_id} | Process.get(:launches, [])])
+
       {:ok, %{id: "remote-" <> execution.run_id}}
     end
 
@@ -52,7 +53,10 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     @behaviour AgentCore.ExecutionPort
     @behaviour AgentCore.RecoveryPort
     def launch(execution, _profile, effect_id) do
-      Process.put(:launches, [{:reference_failure, execution.run_id, effect_id} | Process.get(:launches, [])])
+      Process.put(:launches, [
+        {:reference_failure, execution.run_id, effect_id} | Process.get(:launches, [])
+      ])
+
       {:ok, %{id: "bad-reference-" <> execution.run_id}}
     end
 
@@ -67,12 +71,15 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
 
     def context(key) do
       current = Process.get(:fixture_state)
+
       if is_nil(current) or not Map.has_key?(current.agent_runs, key) do
         {:error, :unknown_agent_run}
       else
         ticks = Process.get(:context_reads, 0) + 1
         Process.put(:context_reads, ticks)
-        if Process.get(:revoke_on_read) == ticks, do: Process.put(:fixture_state, revoke_read(current))
+
+        if Process.get(:revoke_on_read) == ticks,
+          do: Process.put(:fixture_state, revoke_read(current))
 
         {:ok,
          %{
@@ -81,8 +88,13 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
            registry: Process.get(:registry),
            hash_manifest: &AgentOpsStore.DispatchIntegrationTest.FixtureHost.hash/1,
            requirements: %{
-             "features" => ["text", "idempotent_launch_v1", "effect_lookup_v1",
-                            "cancellation_v1", "bounded_results_v1"],
+             "features" => [
+               "text",
+               "idempotent_launch_v1",
+               "effect_lookup_v1",
+               "cancellation_v1",
+               "bounded_results_v1"
+             ],
              "data_classes" => ["internal"],
              "region" => "local",
              "max_duration_ms" => 30_000,
@@ -99,7 +111,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
           type: "TaskAccessRevokedV1",
           chapter_id: "chapter1",
           payload: %{
-            "tenant_id" => "tenant1", "project_id" => "project1", "task_id" => "task1",
+            "tenant_id" => "tenant1",
+            "project_id" => "project1",
+            "task_id" => "task1",
             "grant_event_id" => "read1"
           }
         },
@@ -133,7 +147,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
 
   defp event(id, type, attrs) do
     %{
-      event_id: id, type: type, chapter_id: "chapter1",
+      event_id: id,
+      type: type,
+      chapter_id: "chapter1",
       payload: Map.merge(%{"tenant_id" => "tenant1", "project_id" => "project1"}, attrs)
     }
   end
@@ -144,7 +160,8 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     state =
       State.handle_event(
         event("operator1", "TaskOperatorGrantedV1", %{
-          "principal_id" => "operator1", "key_id" => "operator-key",
+          "principal_id" => "operator1",
+          "key_id" => "operator-key",
           "pubkey" => {:bytes, @opkey}
         }),
         state
@@ -153,7 +170,8 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     state =
       State.handle_event(
         event("suggester1", "TaskSuggesterGrantedV1", %{
-          "principal_id" => "agent1", "key_id" => "agent-key",
+          "principal_id" => "agent1",
+          "key_id" => "agent-key",
           "pubkey" => {:bytes, <<3::256>>}
         }),
         state
@@ -162,7 +180,8 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     state =
       State.handle_event(
         event("created1", "TaskCreatedV1", %{
-          "task_id" => "task1", "title" => "Reviewed candidate",
+          "task_id" => "task1",
+          "title" => "Reviewed candidate",
           "timing" => %{"schedule" => nil, "due_ms" => nil}
         }),
         state
@@ -171,7 +190,8 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     state =
       State.handle_event(
         event("definition1", "TaskDoDDefinedV1", %{
-          "task_id" => "task1", "criteria" => @criteria
+          "task_id" => "task1",
+          "criteria" => @criteria
         }),
         state
       )
@@ -182,9 +202,11 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
       Enum.reduce(["read", "execute"], state, fn action, current ->
         State.handle_event(
           event(action <> "1", "TaskAccessGrantedV1", %{
-            "task_id" => "task1", "action" => action,
+            "task_id" => "task1",
+            "action" => action,
             "principal_id" => "agent1",
-            "expected_task_version" => 2, "source_event_id" => "definition1"
+            "expected_task_version" => 2,
+            "source_event_id" => "definition1"
           }),
           current
         )
@@ -201,8 +223,11 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
       "parameters" => %{
         "capabilities" => %{
           "features" => [
-            "text", "idempotent_launch_v1", "effect_lookup_v1",
-            "cancellation_v1", "bounded_results_v1"
+            "text",
+            "idempotent_launch_v1",
+            "effect_lookup_v1",
+            "cancellation_v1",
+            "bounded_results_v1"
           ],
           "data_classes" => ["internal"],
           "regions" => ["local"],
@@ -221,14 +246,19 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
 
     State.handle_event(
       event(intent_id(id), "TaskAgentRunRequestedV1", %{
-        "run_id" => run_id(id), "task_id" => "task1",
-        "principal_id" => "operator1", "authorization_event_id" => "operator1",
-        "agent_principal_id" => "agent1", "suggester_grant_event_id" => "suggester1",
-        "expected_task_version" => 2, "source_event_id" => "definition1",
+        "run_id" => run_id(id),
+        "task_id" => "task1",
+        "principal_id" => "operator1",
+        "authorization_event_id" => "operator1",
+        "agent_principal_id" => "agent1",
+        "suggester_grant_event_id" => "suggester1",
+        "expected_task_version" => 2,
+        "source_event_id" => "definition1",
         "definition_digest" => {:bytes, FixtureHost.hash(@criteria)},
         "execution_profile_id" => name,
         "execution_profile_digest" => {:bytes, FixtureHost.hash(p.manifest)},
-        "max_duration_ms" => 30_000, "max_output_bytes" => 4096,
+        "max_duration_ms" => 30_000,
+        "max_output_bytes" => 4096,
         "lifecycle_version" => 1
       }),
       state
@@ -260,12 +290,15 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     %{conn: conn}
   end
 
-  test "two unrelated adapters share durable signed-intent delivery, without duplicate launch", %{conn: conn} do
+  test "two unrelated adapters share durable signed-intent delivery, without duplicate launch", %{
+    conn: conn
+  } do
     local_reference = "local-" <> run_id("run1")
     remote_reference = "remote-" <> run_id("run2")
 
     assert {:ok, %{disposition: :dispatched, backend_ref: ^local_reference, lease: lease}} =
              Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
+
     assert lease.epoch == 1
 
     assert {:ok, %{disposition: :already_dispatched}} =
@@ -284,7 +317,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert row.epoch == 1
   end
 
-  test "two PostgreSQL connections competing for one effect produce exactly one lease", %{conn: conn} do
+  test "two PostgreSQL connections competing for one effect produce exactly one lease", %{
+    conn: conn
+  } do
     key = run_key("run1")
     eid = effect("run1")
     assert {:ok, %{disposition: :new}} = Coordinator.enqueue(conn, key, Host)
@@ -310,12 +345,16 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert Process.get(:launches) == []
   end
 
-  test "revoked read grant before dispatch never registers or launches an operational effect", %{conn: conn} do
+  test "revoked read grant before dispatch never registers or launches an operational effect", %{
+    conn: conn
+  } do
     current = Process.get(:fixture_state)
+
     revoked =
       State.handle_event(
         event("revoked-read-before", "TaskAccessRevokedV1", %{
-          "task_id" => "task1", "grant_event_id" => "read1"
+          "task_id" => "task1",
+          "grant_event_id" => "read1"
         }),
         current
       )
@@ -344,6 +383,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
   test "grant revoked after claim fences execution without invoking the adapter", %{conn: conn} do
     # First stage is prepare, second stage is after durable CAS claim.
     Process.put(:revoke_on_read, 2)
+
     assert {:error, :authority_changed_after_claim} =
              Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
 
@@ -352,7 +392,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert row.phase == "cancel_requested"
   end
 
-  test "ambiguous launch acknowledgment remains leased, never automatically retried", %{conn: conn} do
+  test "ambiguous launch acknowledgment remains leased, never automatically retried", %{
+    conn: conn
+  } do
     Process.put(:reject_reference, true)
     key = run_key("run3")
 
@@ -373,15 +415,19 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert length(Process.get(:launches)) == 1
   end
 
-  test "revoked execution grant fences an existing backend and requests termination", %{conn: conn} do
+  test "revoked execution grant fences an existing backend and requests termination", %{
+    conn: conn
+  } do
     assert {:ok, %{disposition: :dispatched}} =
              Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
 
     current = Process.get(:fixture_state)
+
     revoked =
       State.handle_event(
         event("revoked-execute", "TaskAccessRevokedV1", %{
-          "task_id" => "task1", "grant_event_id" => "execute1"
+          "task_id" => "task1",
+          "grant_event_id" => "execute1"
         }),
         current
       )
