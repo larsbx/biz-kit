@@ -4,6 +4,7 @@ import Health from "./panels/Health.svelte";
 import Services from "./panels/Services.svelte";
 import Scripts from "./panels/Scripts.svelte";
 import Configs from "./panels/Configs.svelte";
+import Dispatch from "./panels/Dispatch.svelte";
 
 /**
  * Panel registry. Adding a tool later means writing one component and adding one
@@ -20,4 +21,5 @@ export const PANELS: Panel[] = [
   { id: "services", label: "Services", component: Services },
   { id: "scripts", label: "Scripts", component: Scripts },
   { id: "configs", label: "Configs", component: Configs },
+  { id: "dispatch", label: "Dispatch", component: Dispatch },
 ];
