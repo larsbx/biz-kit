@@ -122,6 +122,10 @@ defmodule FederationService.SubscriptionDeliveryTest do
 
     assert :ok = Store.call(c.store, {:block, "beta.example", true})
     refute SubscriptionDelivery.ready?(Store.call(c.store, :snapshot), c.config, undo_row)
+
+    before = Store.call(c.store, :snapshot).subscription_outbox
+    FederationService.deliver_subscriptions(c.config, 1003)
+    assert Store.call(c.store, :snapshot).subscription_outbox == before
   end
 
   test "host API rejects unconfigured targets and cannot forge approval for outgoing rows", c do
