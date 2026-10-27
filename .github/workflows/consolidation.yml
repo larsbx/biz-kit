@@ -67,6 +67,7 @@ jobs:
           apps/agent_ops_store/mix.exs
           apps/agent_ops_store/lib/agent_ops_store/postgres.ex
           apps/agent_ops_store/test/postgres_test.exs
+          apps/agent_ops_store/test/dispatch_integration_test.exs
           apps/agent_ops_store/lib/agent_ops_store/coordinator.ex
           apps/agent_ops_store/lib/agent_ops_store/host.ex
           apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex
