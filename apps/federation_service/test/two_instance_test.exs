@@ -158,6 +158,164 @@ defmodule FederationService.TwoInstanceTest do
     assert {:ok, 401, _, _} = send_signed.(follow)
   end
 
+  # Raw HTTP/1.1 over authenticated TLS: no client library normalizes malformed
+  # framing before it reaches the production Node/Bandit configuration.
+  defp raw_tls(port, ca, request) do
+    {:ok, socket} =
+      :ssl.connect(
+        ~c"localhost",
+        port,
+        [
+          :binary,
+          active: false,
+          verify: :verify_peer,
+          cacerts: [ca],
+          server_name_indication: ~c"beta.example",
+          customize_hostname_check: [
+            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+          ],
+          alpn_advertised_protocols: ["http/1.1"]
+        ],
+        5000
+      )
+
+    try do
+      :ok = :ssl.send(socket, request)
+      raw_response(socket, "", System.monotonic_time(:millisecond) + 6000)
+    after
+      :ssl.close(socket)
+    end
+  end
+
+  defp raw_response(socket, response, deadline) do
+    assert byte_size(response) < 1_000_000
+    remaining = deadline - System.monotonic_time(:millisecond)
+    assert remaining > 0, "HTTP parser did not finish within six seconds"
+
+    case :ssl.recv(socket, 0, remaining) do
+      {:ok, bytes} -> raw_response(socket, response <> bytes, deadline)
+      {:error, :closed} -> response
+      other -> flunk("HTTP parser did not close bounded request: #{inspect(other)}")
+    end
+  end
+
+  defp wire(headers, body) do
+    "POST /actors/shop/inbox HTTP/1.1\r\nHost: beta.example\r\nConnection: close\r\n" <>
+      Enum.map_join(headers, "", fn {k, v} -> "#{k}: #{v}\r\n" end) <> "\r\n" <> body
+  end
+
+  test "bounded HTTP/1.1 parser rejects ambiguous framing and preserves signed admission" do
+    dir = temp()
+    ca = certs(dir)
+    a_port = port()
+    b_port = port()
+    a = node(dir <> "/alpha", "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(dir <> "/beta", "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    # The bignum probes fit *inside* max_header_length; ordinary header limits
+    # alone did not remediate GHSA-29cr-8477-rg6r.
+    malformed = [
+      wire([{"Content-Length", "-1"}], ""),
+      wire([{"Content-Length", String.duplicate("9", 4000)}], ""),
+      "GET /market HTTP/1.1\r\nHost: beta.example:" <>
+        String.duplicate("9", 4000) <>
+        "\r\nConnection: close\r\n\r\n",
+      wire([{"Content-Length", "1"}, {"Content-Length", "2"}], "{}"),
+      wire([{"Transfer-Encoding", "chunked"}, {"Content-Length", "2"}], "0\r\n\r\n"),
+      wire([{"Transfer-Encoding", "chunked"}], "z\r\nx\r\n0\r\n\r\n"),
+      wire([{"Transfer-Encoding", "chunked"}], "1\r\nx!\r\n0\r\n\r\n"),
+      wire([{"Transfer-Encoding", "chunked"}], "1;x=\n\r\nx\r\n0\r\n\r\n"),
+      wire([{"Transfer-Encoding", "chunked"}], "1;x=\r\r\nx\r\n0\r\n\r\n")
+    ]
+
+    for request <- malformed do
+      # An invalid first request must close the connection without parsing the
+      # appended request, even when the client asks for keep-alive.
+      probe =
+        String.replace(request, "Connection: close", "Connection: keep-alive") <>
+          "GET /market HTTP/1.1\r\nHost: beta.example\r\nConnection: close\r\n\r\n"
+
+      response = raw_tls(b_port, ca, probe)
+      refute response =~ "200 OK"
+
+      assert response =~ ~r/HTTP\/1\.[01] 400/,
+             "unexpected malformed response: #{inspect(response)}"
+
+      refute response =~ "HTTP/1.1 202"
+      assert command(b, %{op: "snapshot"})["inbox_count"] == 0
+    end
+
+    for body <- [
+          String.duplicate("x", 65_537),
+          String.duplicate("1\r\nx\r\n", 65_537) <> "0\r\n\r\n"
+        ] do
+      headers =
+        if String.starts_with?(body, "1\r\n"),
+          do: [{"Transfer-Encoding", "chunked"}],
+          else: [{"Content-Length", "65537"}]
+
+      assert raw_tls(b_port, ca, wire(headers, body)) =~ "HTTP/1.1 413"
+    end
+
+    multipart =
+      "--boundary\r\nContent-Disposition: form-data; name=\"activity\"\r\n\r\n{}\r\n--boundary--\r\n"
+
+    assert raw_tls(
+             b_port,
+             ca,
+             wire(
+               [
+                 {"Content-Type", "multipart/form-data; boundary=boundary"},
+                 {"Content-Length", to_string(byte_size(multipart))}
+               ],
+               multipart
+             )
+           ) =~ "HTTP/1.1 401"
+
+    assert command(b, %{op: "snapshot"})["inbox_count"] == 0
+
+    alpha = "https://alpha.example/actors/shop"
+    url = "https://beta.example/actors/shop/inbox"
+    body = Jason.encode!(activity(metadata(alpha), "raw-chunked"))
+    key = Signature.private!(dir <> "/alpha/signing.key")
+    signed = Signature.sign(url, alpha, key, body) |> Enum.reject(fn {k, _} -> k == "host" end)
+    # One-byte chunks exercise the amplification fix and must preserve the
+    # exact signed bytes. Replaying the exact same signature is idempotent.
+    chunked = for <<byte <- body>>, into: "", do: "1\r\n" <> <<byte>> <> "\r\n"
+    request = wire(signed ++ [{"Transfer-Encoding", "chunked"}], chunked <> "0\r\n\r\n")
+
+    for _ <- 1..2 do
+      assert raw_tls(b_port, ca, request) =~ "HTTP/1.1 202"
+      assert command(b, %{op: "snapshot"})["inbox_count"] == 1
+    end
+
+    assert raw_tls(
+             b_port,
+             ca,
+             wire(signed ++ [{"Content-Length", to_string(byte_size(body) + 1)}], body <> " ")
+           ) =~ "HTTP/1.1 401"
+
+    assert command(b, %{op: "snapshot"})["inbox_count"] == 1
+    assert command(b, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+
+    for path <- ["/actors/shop", "/actors/shop/outbox", "/market", "/market.json"] do
+      assert raw_tls(
+               b_port,
+               ca,
+               "GET #{path} HTTP/1.1\r\nHost: beta.example\r\nConnection: close\r\n\r\n"
+             ) =~ "HTTP/1.1 200"
+    end
+
+    # HTTP/2 remains disabled even after installing the fixed dependency.
+    refute raw_tls(b_port, ca, "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") =~ "HTTP/2"
+  end
+
   test "independent HTTPS nodes exchange, retry, restart, reject attacks, revise and withdraw" do
     dir = temp()
     ca = certs(dir)
