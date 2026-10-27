@@ -14,8 +14,8 @@ defmodule FederationService.WebFinger do
          Regex.match?(~r/\A[a-z][a-z0-9_.-]*\z/, handle) and
          not String.contains?(handle, "..") and
          not String.ends_with?(handle, "."),
-      do: handle,
-      else: raise(ArgumentError, "invalid public WebFinger handle")
+       do: handle,
+       else: raise(ArgumentError, "invalid public WebFinger handle")
   end
 
   def handle!(_), do: raise(ArgumentError, "invalid public WebFinger handle")
