@@ -112,10 +112,13 @@ module cursor_transaction {
       (effects.contains("A") and effects.contains("B") and receipts.contains(1)))
     and (cursor < 2 or receipts.contains(2))
 
-  val uncommittedInvisible = not(inTx) or
-    (staged.contains("A") or staged.contains("B") or staged.isEmpty())
+  // Volatile staging may contain only part of the bundle; committed state
+  // can NEVER expose just one effect, even if the process dies mid-stage.
+  val noLeakedPartialEffects =
+    (effects.contains("A") == effects.contains("B"))
+    and (effects.contains("A") implies cursor >= 1)
   val receiptsFromLedger = receipts.forall(i => i >= 1 and i <= head)
-  val safety = prefixSafe and uncommittedInvisible and receiptsFromLedger
+  val safety = prefixSafe and noLeakedPartialEffects and receiptsFromLedger
 
   // Observe an uncommitted, partial registration that must be rolled back.
   val noPartialTxWitness = not(inTx and staged.contains("A")
