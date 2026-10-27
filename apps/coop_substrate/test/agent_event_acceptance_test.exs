@@ -232,8 +232,15 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
 
   test "two independent connections racing signed delivery produce one backend launch", ctx do
     assert {:ok, _} = Log.append(ctx.request)
-    {:ok, second} = raw_conn()
-    on_exit(fn -> if Process.alive?(second), do: GenServer.stop(second) end)
+
+    second =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Postgrex, Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)},
+          id: :second_signed_delivery_connection
+        )
+      )
+
     first = Task.async(fn -> Coordinator.deliver(ctx.conn, @key, Host, "one") end)
     other = Task.async(fn -> Coordinator.deliver(second, @key, Host, "two") end)
     results = [Task.await(first), Task.await(other)]
