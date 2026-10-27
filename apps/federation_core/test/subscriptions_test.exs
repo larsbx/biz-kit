@@ -91,6 +91,36 @@ defmodule FederationCore.SubscriptionsTest do
              )
   end
 
+  test "incoming outer and embedded Follow activity IDs must have canonical safe HTTPS URI shape" do
+    f = follow!()
+    {:ok, reply} = S.respond(:accept, @seller, f, @accept_id)
+
+    for invalid_id <- [
+          "http://buyer.example/activities/follow-1",
+          "https://buyer.example:8443/activities/follow-1",
+          "//buyer.example/activities/follow-1",
+          "https://buyer.example/activities/follow-1?role=admin"
+        ] do
+      assert {:error, :invalid_subscription_activity} =
+               S.decode_verified(
+                 Map.put(f, "id", invalid_id),
+                 context(@buyer, @seller)
+               )
+
+      assert {:error, :invalid_subscription_activity} =
+               S.decode_verified(
+                 put_in(reply, ["object", "id"], invalid_id),
+                 context(@seller, @buyer)
+               )
+    end
+
+    assert {:error, :invalid_subscription_activity} =
+             S.decode_verified(
+               Map.put(reply, "id", "http://seller.example/activities/accept-1"),
+               context(@seller, @buyer)
+             )
+  end
+
   test "no activity can embed business permissions or accept an unrelated object" do
     f = follow!()
     {:ok, reply} = S.respond(:accept, @seller, f, @accept_id)

@@ -65,6 +65,7 @@ defmodule FederationCore.Subscriptions do
          true <- actor != local_actor,
          :ok <- shape(event),
          true <- event["actor"] == actor,
+         :ok <- actor_uri(event["id"]),
          :ok <- owner(event["id"], actor),
          true <- event["to"] == [local_actor] do
       case event["type"] do
@@ -120,6 +121,7 @@ defmodule FederationCore.Subscriptions do
          :ok <- actor_uri(follower),
          :ok <- actor_uri(target),
          true <- follower != target,
+         :ok <- actor_uri(event["id"]),
          :ok <- owner(event["id"], follower),
          true <- event["to"] == [target] do
       {:ok, follower, target, event["id"]}
