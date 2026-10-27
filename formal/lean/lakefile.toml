@@ -1,0 +1,6 @@
+name = "BizKitEventProofs"
+version = "0.1.0"
+defaultTargets = ["BizKitEventProofs"]
+
+[[lean_lib]]
+name = "BizKitEventProofs"
