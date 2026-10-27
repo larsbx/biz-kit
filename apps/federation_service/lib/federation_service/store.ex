@@ -95,7 +95,8 @@ defmodule FederationService.Store do
       publications: %{},
       redeliveries: %{},
       subscriptions: %{},
-      subscription_events: %{}
+      subscription_events: %{},
+      subscription_outbox: %{}
     }
 
     base =
@@ -165,6 +166,35 @@ defmodule FederationService.Store do
   end
 
   def handle_call({:subscription, intent}, _, s), do: subscription_plan(s, intent)
+
+  def handle_call({:subscription_host, actor, peers, intent}, _, s) do
+    case host_subscribe_allowed?(s.data, actor, peers, intent) do
+      :ok -> subscription_plan(s, intent)
+      error -> {:reply, error, s}
+    end
+  end
+
+  def handle_call({:subscription_delivery, id, success, now}, _, s)
+      when is_binary(id) and is_boolean(success) and is_integer(now) do
+    case s.data.subscription_outbox[id] do
+      %{status: :pending} = row ->
+        n = row.attempts + 1
+
+        updated =
+          row
+          |> Map.merge(%{
+            status: if(success, do: :delivered, else: :pending),
+            attempts: n,
+            next_at: now + min(3600, Integer.pow(2, min(n, 11))),
+            last_delivery: %{at: now, acknowledged: success}
+          })
+
+        commit(s, [{:subscription_outbox, id, updated}], :ok)
+
+      _ ->
+        {:reply, {:error, :unknown_or_settled_subscription_delivery}, s}
+    end
+  end
 
   def handle_call({:lease_issue, ctx, activity_id, ttl, now}, _, s) do
     case FederationService.GossipLease.issue(s.data, ctx, activity_id, ttl, now) do
@@ -517,6 +547,34 @@ defmodule FederationService.Store do
     else
       {:reply, {:error, :stale_delivery}, s}
     end
+  end
+
+  # This is a trusted in-process host boundary, never an HTTP operation.
+  # The caller still MUST authenticate local grant authority behind receipts.
+  defp host_subscribe_allowed?(data, actor, peers, intent) do
+    {owner, remote} =
+      case intent do
+        {:begin, %{"actor" => origin, "object" => target}, _} -> {origin, target}
+        {:decide, id, _, _, _, _} ->
+          case data.subscriptions[id] do
+            %{direction: :incoming} = row -> {row.target, row.follower}
+            _ -> {nil, nil}
+          end
+
+        {:cancel, id, _, _, _} ->
+          case data.subscriptions[id] do
+            %{direction: :outgoing} = row -> {row.follower, row.target}
+            _ -> {nil, nil}
+          end
+
+        _ ->
+          {nil, nil}
+      end
+
+    if is_binary(actor) and owner == actor and remote in peers and
+         not blocked?(data, remote, ""),
+      do: :ok,
+      else: {:error, :subscription_host_refused}
   end
 
   defp subscription_plan(s, intent) do

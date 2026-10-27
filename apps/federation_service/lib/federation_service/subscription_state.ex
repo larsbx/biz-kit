@@ -35,7 +35,7 @@ defmodule FederationService.SubscriptionState do
         authority: nil
       }
 
-      record(data, follow, id, row, :begun)
+      record(data, follow, id, row, :begun, now)
     else
       {:duplicate, result} -> {:duplicate, result}
       %{direction: _} -> {:error, :follow_id_exists}
@@ -72,7 +72,8 @@ defmodule FederationService.SubscriptionState do
         activity,
         follow_id,
         %{row | status: decision_status(decision), authority: receipt},
-        decision_status(decision)
+        decision_status(decision),
+        now
       )
     else
       _ -> {:error, :subscription_decision_refused}
@@ -90,7 +91,8 @@ defmodule FederationService.SubscriptionState do
         activity,
         follow_id,
         %{row | status: :withdrawn, authority: receipt},
-        :withdrawn
+        :withdrawn,
+        now
       )
     else
       _ -> {:error, :subscription_cancel_refused}
@@ -151,7 +153,7 @@ defmodule FederationService.SubscriptionState do
     end
   end
 
-  defp record(data, activity, follow_id, row, outcome) do
+  defp record(data, activity, follow_id, row, outcome, emit_at \\ nil) do
     id = activity["id"]
     hash = :crypto.hash(:sha256, :erlang.term_to_binary(activity))
 
@@ -165,15 +167,51 @@ defmodule FederationService.SubscriptionState do
              map_size(data.subscription_events) >= @event_max do
           {:error, :subscription_capacity}
         else
-          {:ok,
-           [
-             {:subscriptions, follow_id, row},
-             {:subscription_events, id, %{hash: hash, follow_id: follow_id}}
-           ], {:ok, outcome}}
+          changes = [
+            {:subscriptions, follow_id, row},
+            {:subscription_events, id, %{hash: hash, follow_id: follow_id}}
+          ]
+
+          case outbound(data, activity, follow_id, emit_at) do
+            {:ok, effect} ->
+              changes = if effect == nil, do: changes, else: changes ++ [effect]
+              {:ok, changes, {:ok, outcome}}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
         end
 
       _ ->
         {:error, :subscription_activity_conflict}
+    end
+  end
+
+  defp outbound(_, _, _, nil), do: {:ok, nil}
+
+  defp outbound(data, activity, follow_id, now) do
+    id = activity["id"]
+    destination = List.first(activity["to"])
+
+    cond do
+      map_size(data.subscription_outbox) >= @max ->
+        {:error, :subscription_outbox_capacity}
+
+      data.subscription_outbox[id] != nil ->
+        {:error, :subscription_outbox_conflict}
+
+      true ->
+        {:ok,
+         {:subscription_outbox, id,
+          %{
+            activity: activity,
+            follow_id: follow_id,
+            destination: destination,
+            status: :pending,
+            attempts: 0,
+            next_at: now,
+            queued_at: now
+          }}}
     end
   end
 

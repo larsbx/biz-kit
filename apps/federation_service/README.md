@@ -362,3 +362,26 @@ There is no dynamic peer admission, public approval API, follower collection,
 locally authorized reply delivery, private offer exposure or cross-node
 commercial write. Keep this pilot behind existing explicit peering and do not
 claim general Mastodon interoperability or production deployment.
+
+## Signed outbound subscription-control pilot (October 2026)
+
+The trusted in-process `FederationService.follow/3`,
+`respond_follow/5`, and `undo_follow/4` functions now stage
+a signed `Follow`, `Accept`/`Reject`, or `Undo` activity into
+`subscription_outbox` **in the same durable journal transaction**
+as its corresponding request/decision/replay receipt. No external
+admin HTTP route is created. `deliver_subscriptions/1` signs each
+bounded outgoing delivery with the node's existing RSA key, checks
+explicit peer policy immediately before posting, and retries after
+crashes or partitions. Confirmed HTTP 200/202 responses durably
+settle effects, while unsuccessful attempts are backed off.
+
+The journal only checks that an opaque, nonempty local authority
+reference was supplied. It does **not** verify a ledger grant or
+signature. Integration callers MUST independently authenticate the
+instruction and validate the approval's signed ledger authorization
+before calling these host-only functions. The standalone integration
+harness uses a synthetic receipt, which has no production authority.
+This does not enable arbitrary remote peer discovery or private
+business data distribution; only the configured public control
+activities flow. It is not generic Fediverse conformance.

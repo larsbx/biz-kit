@@ -94,7 +94,28 @@ Stream.repeatedly(fn -> IO.gets("") end)
 
         "deliver" ->
           FederationService.deliver(config)
+          FederationService.deliver_subscriptions(config)
           :ok
+
+        "follow" ->
+          FederationService.follow(config, req["peer"], req["source_id"])
+
+        "approve_follow" ->
+          FederationService.respond_follow(
+            config,
+            req["follow_id"],
+            if(req["decision"] == "accept", do: :accept, else: :reject),
+            req["source_id"],
+            "harness-authorized-grant-receipt"
+          )
+
+        "undo_follow" ->
+          FederationService.undo_follow(
+            config,
+            req["follow_id"],
+            req["source_id"],
+            "harness-authorized-grant-receipt"
+          )
 
         "snapshot" ->
           s = FederationService.Store.call(store, :snapshot)
@@ -102,6 +123,9 @@ Stream.repeatedly(fn -> IO.gets("") end)
           %{
             inbox_count: map_size(s.inbox),
             subscription_count: map_size(s.subscriptions),
+            subscription_outbox: Map.new(s.subscription_outbox, fn {id, row} ->
+              {id, to_string(row.status)}
+            end),
             subscriptions: Map.new(s.subscriptions, fn {id, row} -> {id, row.status} end),
             pending: Enum.count(s.outbox, fn {_, r} -> r.status == :pending end),
             held: Enum.count(s.outbox, fn {_, r} -> r.status == :held end),
