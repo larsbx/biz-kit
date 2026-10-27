@@ -1,0 +1,48 @@
+name: EventStore consumer proofs (Lean + Quint)
+
+on:
+  pull_request:
+    paths:
+      - "formal/**"
+      - ".github/workflows/event-consumer-proofs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "formal/**"
+      - ".github/workflows/event-consumer-proofs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean-kernel-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lean kernel proof check and axiom audit
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: formal/lean
+          auto-config: "false"
+          build: "true"
+          axiom-audit: "true"
+          axiom-audit-root: BizKitEventProofs
+          # leanchecker runs the independently checked kernel export using
+          # the installed Lean toolchain. Unlike lake check, it does not
+          # require Lake's sandbox/manifest setup on GitHub runners.
+          leanchecker: "true"
+
+  quint-bounded-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install version-pinned Quint
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+      - name: Typecheck, simulate, model check and refute cursor-first bug
+        run: bash formal/quint/check.sh
