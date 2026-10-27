@@ -52,6 +52,24 @@ forgets the backend launch during restart and must expose a duplicate
 external launch. Neither model assumes a particular agent framework,
 backend, volume manager, nor vendor.
 
+The strengthened Lean `atomicBundleCommit_preserves` theorem models
+**one indivisible commit** of every required effect, the processed receipt,
+and the cursor watermark. `formal/quint/cursor_transaction.qnt` provides a
+second, more operational refinement model with separate volatile staging,
+a commit action and crash/rollback. Its safety conditions prohibit any
+**committed partial effect bundle**. A staged partial bundle is allowed,
+but rollback must leave both the durable cursor and effects unchanged.
+The bounded verifier explores ten steps for this model so it can reach a
+two-event history containing a no-op receipt.
+
+This strengthens the formal **target contract**, not the existing runtime:
+the actual `Postgrex` implementation must implement these three writes in
+one transaction under a current row-version predicate. Committing
+`agent_ops` state through independent SQL statements and advancing the
+cursor afterward without transactional rollback would not establish the
+proved atomic-refinement property. Cross-instance home scope and real
+signed-envelope provenance are extra authorization assumptions.
+
 The **negative controls must be observed as violations** in CI; writing
 them alone is not evidence of successful model checking.
 
@@ -66,7 +84,7 @@ This proof quantifies mathematically over event indices; it never
 computes an infinite stream. **It proves properties of an abstract
 transition relation, not properties of arbitrary Elixir/PostgreSQL code.**
 No `sorry`, `admit`, untrusted axioms or `native_decide` are permitted.
-CI pins Lean 4.35.0, runs an axiom audit, and reruns the built library through `lake check`.
+CI pins Lean 4.35.0, runs an axiom audit and an independent `leanchecker` pass over compiled proofs.
 
 ### Quint — finite adversarial histories
 
