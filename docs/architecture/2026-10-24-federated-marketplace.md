@@ -203,6 +203,20 @@ reset a local ledger. This does not recover lost replay/moderation evidence or
 provide a cross-node consistent snapshot; coordinated backup recovery remains
 an administrator responsibility.
 
+## Discovery update — 2026-10-26
+
+Optional WebFinger actor resolution is the next bounded HTTP interoperability
+step. A node configured with an explicit public handle publishes one exact
+`acct:handle@host` mapping at `/.well-known/webfinger` using
+`application/jrd+json` and an ActivityPub actor link. It accepts its own
+canonical HTTPS actor URI as an alternate query. Unknown accounts and
+ambiguous query parameters are refused; node operators must opt in to
+a handle. The corresponding public actor declares `preferredUsername`.
+This does not enable remote sign-in, Follow/Accept/Undo subscriptions, arbitrary
+server discovery, Mastodon compatibility, or authority over commercial
+actions. The existing explicit peer allowlist still governs authenticated
+marketplace activity ingestion and delivery.
+
 ## Event-driven P2P discovery experiment
 
 The optional `FederationService.GossipWorker` publishes committed current

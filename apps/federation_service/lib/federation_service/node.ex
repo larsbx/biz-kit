@@ -9,6 +9,7 @@ defmodule FederationService.Node do
     config =
       FederationService.config!(
         actor: Keyword.fetch!(opts, :actor),
+        handle: Keyword.get(opts, :handle),
         peers: Keyword.get(opts, :peers, []),
         store: store,
         private_key: FederationService.Signature.private!(Keyword.fetch!(opts, :signing_keyfile)),
