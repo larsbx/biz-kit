@@ -284,6 +284,32 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert row.epoch == 1
   end
 
+  test "two PostgreSQL connections competing for one effect produce exactly one lease", %{conn: conn} do
+    key = run_key("run1")
+    eid = effect("run1")
+    assert {:ok, %{disposition: :new}} = Coordinator.enqueue(conn, key, Host)
+
+    second_connection =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Postgrex, AgentOpsStore.TestConnection.options()},
+          id: :second_claim_connection
+        )
+      )
+
+    first = Task.async(fn -> Postgres.claim(conn, eid, 1, "worker1", 60_000, 2) end)
+    second = Task.async(fn -> Postgres.claim(second_connection, eid, 1, "worker2", 60_000, 2) end)
+    results = [Task.await(first, 30_000), Task.await(second, 30_000)]
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+    assert Enum.count(results, &(&1 == {:error, :claim_refused})) == 1
+    assert {:ok, row} = Postgres.snapshot(conn, eid)
+    assert row.phase == "leased"
+    assert row.epoch == 1
+    assert row.attempts == 1
+    assert Process.get(:launches) == []
+  end
+
   test "grant revoked after claim fences execution without invoking the adapter", %{conn: conn} do
     # First stage is prepare, second stage is after durable CAS claim.
     Process.put(:revoke_on_read, 2)
