@@ -16,7 +16,6 @@ defmodule Eatsbot.Extensions.Kafka do
   def start_link(_init_arg) do
     Application.put_env(:eatsbot, :kafka_driver, Eatsbot.Extensions.Kafka.Driver)
     Supervisor.start_link(__MODULE__, nil, name: __MODULE__)
-    KafkaEx.create_worker(:kafka_ex)
   end
 
   @impl true
