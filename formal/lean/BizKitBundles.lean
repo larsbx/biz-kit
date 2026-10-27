@@ -91,6 +91,40 @@ theorem advanceBundle_preserves (s : BundleConsumer)
     · exact hs.2 k hlt
     · simpa [heq] using ready
 
+/--
+Idealized **single transaction**: insert EVERY required effect for the next
+ledger position, write an explicit processed receipt (even for a no-op), then
+advance the consumer cursor. All three state updates are one mathematical
+transition; the SQL implementation must satisfy this atomic refinement.
+-/
+def atomicBundleCommit (s : BundleConsumer) : BundleConsumer :=
+  { s with
+    registered := fun i e =>
+      (i = s.cursor ∧ s.required i e) ∨ s.registered i e
+    receipts := fun i => i = s.cursor ∨ s.receipts i
+    cursor := s.cursor + 1 }
+
+theorem atomicBundleCommit_preserves (s : BundleConsumer)
+    (hs : BundleSafe s) (within : s.cursor < s.head) :
+    BundleSafe (atomicBundleCommit s) := by
+  constructor
+  · exact Nat.succ_le_of_lt within
+  · intro k hk
+    change (k = s.cursor ∨ s.receipts k) ∧
+      (∀ effect, s.required k effect →
+        (k = s.cursor ∧ s.required k effect) ∨ s.registered k effect)
+    have hle : k ≤ s.cursor := Nat.le_of_lt_succ hk
+    rcases Nat.lt_or_eq_of_le hle with hlt | heq
+    · obtain ⟨receipt, stored⟩ := hs.2 k hlt
+      constructor
+      · exact Or.inr receipt
+      · intro effect needed
+        exact Or.inr (stored effect needed)
+    · constructor
+      · exact Or.inl heq
+      · intro effect needed
+        exact Or.inl ⟨heq, needed⟩
+
 /-- Vacuous zero-effect completeness does NOT substitute for a receipt. -/
 theorem no_effect_position_requires_receipt (s : BundleConsumer) (n : Nat)
     (missing : ¬ s.receipts n) : ¬ BundleReady s n := by
