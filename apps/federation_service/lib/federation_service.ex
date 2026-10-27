@@ -96,6 +96,8 @@ defmodule FederationService do
         receipt,
         now \\ System.system_time(:second)
       )
+
+  def respond_follow(config, follow_id, decision, source_id, receipt, now)
       when decision in [:accept, :reject] do
     with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
          :ok <- approve_local(config, follow_id, decision, receipt, now) do
@@ -106,6 +108,7 @@ defmodule FederationService do
           subscription_event_id(config.actor, to_string(decision), source_id), receipt, now}}
       )
     else
+      {:error, :unverified_local_authority} = error -> error
       _ -> {:error, :subscription_decision_refused}
     end
   end
@@ -119,9 +122,11 @@ defmodule FederationService do
       Store.call(
         config.store,
         {:subscription_host, config.actor, config.peers,
-         {:cancel, follow_id, subscription_event_id(config.actor, "undo", source_id), receipt, now}}
+         {:cancel, follow_id, subscription_event_id(config.actor, "undo", source_id), receipt,
+          now}}
       )
     else
+      {:error, :unverified_local_authority} = error -> error
       _ -> {:error, :subscription_cancel_refused}
     end
   end
@@ -144,7 +149,10 @@ defmodule FederationService do
   end
 
   defp subscription_event_id(actor, kind, source_id) do
-    actor <> "/activities/subscription-" <> kind <> "-" <>
+    actor <>
+      "/activities/subscription-" <>
+      kind <>
+      "-" <>
       Base.encode16(:crypto.hash(:sha256, source_id), case: :lower)
   end
 

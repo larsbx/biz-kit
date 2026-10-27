@@ -32,8 +32,155 @@ defmodule FederationService.SubscriptionDeliveryTest do
     %{store: store, config: config, dir: dir}
   end
 
+  test "pre-outbox Follow fixture recovers without inventing an acknowledgment", c do
+    GenServer.stop(c.store)
+    {:ok, follow} = Wire.follow(@alpha, @beta, @alpha <> "/activities/legacy")
+    legacy_follow_journal(c.dir, follow)
+    {:ok, upgraded} = Store.start_link(directory: c.dir)
+    config = %{c.config | store: upgraded}
+    on_exit(fn -> stop_store(upgraded) end)
+    id = follow["id"]
+
+    assert {:ok, :duplicate} = Store.call(upgraded, {:subscription, {:begin, follow, 1000}})
+
+    before_cancel = Store.call(upgraded, :snapshot)
+
+    assert {:error, :unverified_local_authority} =
+             FederationService.undo_follow(
+               %{config | approval_verifier: nil},
+               id,
+               "no-grant",
+               @receipt,
+               1001
+             )
+
+    assert Store.call(upgraded, :snapshot) == before_cancel
+
+    assert {:ok, :withdrawn} =
+             FederationService.undo_follow(config, id, "legacy-undo", @receipt, 1001)
+
+    data = Store.call(upgraded, :snapshot)
+    recovered = data.subscription_outbox[id]
+    assert recovered.activity == follow
+    assert recovered.status == :pending and recovered.attempts == 0
+    refute Map.has_key?(recovered, :last_delivery)
+    [{undo_id, undo}] = Enum.reject(data.subscription_outbox, fn {key, _} -> key == id end)
+    assert SubscriptionDelivery.ready?(data, config, recovered)
+    refute SubscriptionDelivery.ready?(data, config, undo)
+
+    # A failed attempt and restart cannot manufacture Follow-before-Undo progress.
+    assert :ok = Store.call(upgraded, {:subscription_delivery, id, false, 1002})
+    failed = Store.call(upgraded, :snapshot)
+    refute SubscriptionDelivery.ready?(failed, config, undo)
+    GenServer.stop(upgraded)
+    {:ok, restarted} = Store.start_link(directory: c.dir)
+    on_exit(fn -> stop_store(restarted) end)
+    assert Store.call(restarted, :snapshot) == failed
+    config = %{config | store: restarted}
+
+    assert :ok = Store.call(restarted, {:subscription_delivery, id, true, 1004})
+    assert SubscriptionDelivery.ready?(Store.call(restarted, :snapshot), config, undo)
+    assert :ok = Store.call(restarted, {:subscription_delivery, undo_id, true, 1005})
+    assert {:ok, :duplicate} = Store.call(restarted, {:subscription, {:begin, follow, 1006}})
+    final = Store.call(restarted, :snapshot)
+    assert final.subscriptions[id].status == :withdrawn
+    GenServer.stop(restarted)
+    bytes = File.stat!(c.dir <> "/discovery.log").size
+    {:ok, settled} = Store.start_link(directory: c.dir)
+    on_exit(fn -> stop_store(settled) end)
+    assert Store.call(settled, :snapshot) == final
+    assert File.stat!(c.dir <> "/discovery.log").size == bytes
+  end
+
+  test "upgrade preserves terminal rows and only recovers retained pending withdrawal work", c do
+    GenServer.stop(c.store)
+
+    for {status, suffix} <- [{:accepted, "active"}, {:rejected, "no"}, {:withdrawn, "gone"}] do
+      {:ok, follow} =
+        Wire.follow(@alpha, @beta <> "/" <> suffix, @alpha <> "/activities/" <> suffix)
+
+      legacy_follow_journal(c.dir, follow, status)
+    end
+
+    # Reproduce the already-upgraded failure: legacy Follow + new pending Undo,
+    # but no Follow effect. This is a real cancellation transaction from #164.
+    {:ok, stranded} = Wire.follow(@alpha, @beta, @alpha <> "/activities/stranded")
+    legacy_follow_journal(c.dir, stranded)
+    id = stranded["id"]
+    receipt = %{hash: :crypto.hash(:sha256, :erlang.term_to_binary(stranded)), follow_id: id}
+
+    row = %{
+      direction: :outgoing,
+      follower: @alpha,
+      target: @beta,
+      follow: stranded,
+      status: :pending,
+      started_at: 1000,
+      authority: nil
+    }
+
+    before = %{
+      subscriptions: %{id => row},
+      subscription_events: %{id => receipt},
+      subscription_outbox: %{}
+    }
+
+    {:ok, changes, {:ok, :withdrawn}} =
+      FederationService.SubscriptionState.plan(
+        before,
+        {:cancel, id, id <> "-undo", @receipt, 1001}
+      )
+
+    append_journal(c.dir, [{:transaction, changes}])
+
+    {:ok, upgraded} = Store.start_link(directory: c.dir)
+    on_exit(fn -> stop_store(upgraded) end)
+    data = Store.call(upgraded, :snapshot)
+    assert map_size(data.subscription_outbox) == 3
+    assert data.subscription_outbox[@alpha <> "/activities/active"].status == :pending
+    refute Map.has_key?(data.subscription_outbox, @alpha <> "/activities/no")
+    refute Map.has_key?(data.subscription_outbox, @alpha <> "/activities/gone")
+    assert data.subscriptions[@alpha <> "/activities/no"].status == :rejected
+    assert data.subscriptions[@alpha <> "/activities/gone"].status == :withdrawn
+    assert data.subscriptions[id].status == :withdrawn
+    assert data.subscription_outbox[id].status == :pending
+    config = %{c.config | store: upgraded}
+    refute SubscriptionDelivery.ready?(data, config, data.subscription_outbox[id <> "-undo"])
+    assert :ok = Store.call(upgraded, {:subscription_delivery, id, true, 1002})
+    data = Store.call(upgraded, :snapshot)
+    assert SubscriptionDelivery.ready?(data, config, data.subscription_outbox[id <> "-undo"])
+    assert {:ok, []} = FederationService.SubscriptionState.recover_outbox(data)
+  end
+
+  test "recovery requires exact original receipts and fails closed at capacity", c do
+    {:ok, follow} = Wire.follow(@alpha, @beta, @alpha <> "/activities/proof")
+    assert {:ok, :begun} = Store.call(c.store, {:subscription, {:begin, follow, 1000}})
+    modern = Store.call(c.store, :snapshot)
+    assert {:ok, []} = FederationService.SubscriptionState.recover_outbox(modern)
+    legacy = %{modern | subscription_outbox: %{}}
+    assert {:ok, [_]} = FederationService.SubscriptionState.recover_outbox(legacy)
+
+    assert {:ok, []} =
+             FederationService.SubscriptionState.recover_outbox(%{
+               legacy
+               | subscription_events: %{}
+             })
+
+    forged = put_in(legacy, [:subscription_events, follow["id"], :hash], <<0>>)
+    assert {:ok, []} = FederationService.SubscriptionState.recover_outbox(forged)
+    incoming = put_in(legacy, [:subscriptions, follow["id"], :direction], :incoming)
+    assert {:ok, []} = FederationService.SubscriptionState.recover_outbox(incoming)
+    full = %{legacy | subscription_outbox: Map.new(1..10_000, &{to_string(&1), %{}})}
+
+    assert {:error, :subscription_outbox_capacity} =
+             FederationService.SubscriptionState.recover_outbox(full)
+
+    assert Store.call(c.store, :snapshot) == modern
+  end
+
   test "local approval refuses absent or failing verifier before committing a reply", c do
     {:ok, follow} = Wire.follow(@beta, @alpha, @beta <> "/activities/no-approval")
+
     assert {:ok, :pending} =
              Store.call(c.store, {:subscription, {:receive, follow, @beta, @alpha, 1000}})
 
@@ -49,7 +196,8 @@ defmodule FederationService.SubscriptionDeliveryTest do
     assert Store.call(c.store, :snapshot).subscriptions[follow["id"]].status == :pending
   end
 
-  test "approved inbound Follow atomically journals its exact response, without an HTTP command", c do
+  test "approved inbound Follow atomically journals its exact response, without an HTTP command",
+       c do
     {:ok, follow} = Wire.follow(@beta, @alpha, @beta <> "/activities/one")
 
     assert {:ok, :pending} =
@@ -74,6 +222,7 @@ defmodule FederationService.SubscriptionDeliveryTest do
     assert row.destination == @beta
     assert row.status == :pending
     assert SubscriptionDelivery.ready?(data, c.config, row)
+
     assert {:error, :subscription_decision_refused} =
              FederationService.respond_follow(
                c.config,
@@ -94,6 +243,7 @@ defmodule FederationService.SubscriptionDeliveryTest do
 
     assert :ok = Store.call(restarted, {:subscription_delivery, id, true, 1004})
     assert Store.call(restarted, :snapshot).subscription_outbox[id].status == :delivered
+
     assert {:error, :unknown_or_settled_subscription_delivery} =
              Store.call(restarted, {:subscription_delivery, id, true, 1005})
 
@@ -111,6 +261,7 @@ defmodule FederationService.SubscriptionDeliveryTest do
              FederationService.undo_follow(c.config, id, "undo-source-1", @receipt, 1001)
 
     after_cancel = Store.call(c.store, :snapshot)
+
     [{_undo_id, undo_row}] =
       Enum.reject(after_cancel.subscription_outbox, fn {row_id, _} -> row_id == id end)
 
@@ -151,7 +302,13 @@ defmodule FederationService.SubscriptionDeliveryTest do
     Store.call(c.store, {:block, @beta, true})
 
     assert {:error, :subscription_host_refused} =
-             FederationService.respond_follow(c.config, follow["id"], :accept, "blocked", @receipt)
+             FederationService.respond_follow(
+               c.config,
+               follow["id"],
+               :accept,
+               "blocked",
+               @receipt
+             )
 
     assert Store.call(c.store, :snapshot).subscription_outbox == %{}
   end

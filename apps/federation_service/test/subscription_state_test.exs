@@ -158,11 +158,13 @@ defmodule FederationService.SubscriptionStateTest do
   test "planning remains pure and exposes exact journal changes", _c do
     data = %{subscriptions: %{}, subscription_events: %{}, subscription_outbox: %{}}
     {:ok, changes, {:ok, :begun}} = SubscriptionState.plan(data, {:begin, follow!(), 1000})
+
     assert Enum.map(changes, &elem(&1, 0)) == [
              :subscriptions,
              :subscription_events,
              :subscription_outbox
            ]
+
     assert data == %{subscriptions: %{}, subscription_events: %{}, subscription_outbox: %{}}
   end
 end

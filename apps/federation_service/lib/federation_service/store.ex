@@ -110,15 +110,33 @@ defmodule FederationService.Store do
         lease_remote: %{}
       })
 
-    {:ok,
-     %{
-       log: log,
-       lock: lock,
-       data: replay(log, :start, base),
-       rates: %{},
-       subscribers: %{},
-       gossip_worker: nil
-     }}
+    data = replay(log, :start, base)
+
+    # Upgrade before exposing a writer or allowing network work. Recovery only
+    # stages pending bytes; it cannot manufacture a delivery acknowledgment.
+    with {:ok, changes} <- SubscriptionState.recover_outbox(data),
+         :ok <- persist_recovery(log, changes) do
+      {:ok,
+       %{
+         log: log,
+         lock: lock,
+         data: apply_changes({:transaction, changes}, data),
+         rates: %{},
+         subscribers: %{},
+         gossip_worker: nil
+       }}
+    else
+      error ->
+        :disk_log.close(log)
+        Port.close(lock)
+        {:stop, {:subscription_outbox_recovery_failed, error}}
+    end
+  end
+
+  defp persist_recovery(_, []), do: :ok
+
+  defp persist_recovery(log, changes) do
+    with :ok <- :disk_log.log(log, {:transaction, changes}), do: :disk_log.sync(log)
   end
 
   defp replay(log, at, state) do
@@ -554,7 +572,9 @@ defmodule FederationService.Store do
   defp host_subscribe_allowed?(data, actor, peers, intent) do
     {owner, remote} =
       case intent do
-        {:begin, %{"actor" => origin, "object" => target}, _} -> {origin, target}
+        {:begin, %{"actor" => origin, "object" => target}, _} ->
+          {origin, target}
+
         {:decide, id, _, _, _, _} ->
           case data.subscriptions[id] do
             %{direction: :incoming} = row -> {row.target, row.follower}
@@ -573,8 +593,8 @@ defmodule FederationService.Store do
 
     if is_binary(actor) and owner == actor and remote in peers and
          not blocked?(data, remote, ""),
-      do: :ok,
-      else: {:error, :subscription_host_refused}
+       do: :ok,
+       else: {:error, :subscription_host_refused}
   end
 
   defp subscription_plan(s, intent) do

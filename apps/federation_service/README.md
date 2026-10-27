@@ -397,3 +397,41 @@ It is invoked before journal admission, so revocations racing the external
 ledger's admission fence still require an integration-level atomicity/fencing
 contract. The test harness intentionally uses a synthetic hardcoded receipt,
 not a production credential or proof of business authorization.
+
+
+### Upgrade from the pre-outbox journal (#154/#155)
+
+Startup replays the existing journal, validates each retained outgoing Follow
+against its exact original replay receipt, and atomically appends and syncs
+missing **pending** Follow delivery intents before exposing the Store. Active
+pending/accepted subscriptions are eligible; existing outbox rows (including
+backoff and acknowledgments) are never overwritten. Duplicate Follow calls
+remain duplicates and do not create new activity IDs or relationships.
+
+A withdrawn relationship is eligible only when an exact, receipted Undo is
+already pending in the outbox (including a cancellation stranded by an earlier
+#164 build). Its status stays withdrawn while its original Follow is replayed
+before Undo. Rejected records, incoming requests and old withdrawals without
+retained Undo bytes are not requeued. Hash-only receipts cannot reconstruct an
+old Undo's ID or body; recovery never fabricates those bytes or an HTTP receipt.
+The bounded outbox limit is enforced before any recovery write; capacity or
+storage failure refuses startup rather than exposing partial recovery.
+
+A recovered Follow starts with zero attempts and no acknowledgment. The ordinary
+sender still verifies current explicit peers, moderation, actor discovery and
+signed HTTPS; only a real 200/202 acknowledgment releases its pending Undo.
+Restart repeats neither migration writes nor settled effects. An unavailable or
+refusing peer can still delay withdrawal; at-least-once delivery is not a
+network-wide exactly-once or business authorization guarantee.
+
+### Remaining production gates (#153)
+
+- Native verification of independently authenticated, signed CoopSubstrate local
+  governance grants and an atomic current-authority/revocation fence remains
+  unimplemented. The callback is fail closed but is not that verifier.
+- Accepted-subscription public listing routing and bounded followers/following
+  collections still require acceptance; private offers and commercial commands
+  stay behind signed seller-home ledger admission.
+- Dynamic peering policy, retention/compaction and external ActivityPub/Mastodon
+  conformance remain separate work. Passing this transport pilot does not close
+  #153 or establish production federation.
