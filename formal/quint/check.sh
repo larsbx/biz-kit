@@ -8,7 +8,13 @@ for spec in event_cursor.qnt lease_fencing.qnt effect_bundles.qnt cursor_transac
   echo "Checking safety: $spec"
   quint typecheck "$spec"
   quint run "$spec" --invariant=safety --max-samples=3000 --max-steps=25 --seed=1
-  quint verify "$spec" --invariant=safety --max-steps=6
+  # No-op event 2 and its processed receipt need a longer trace than the
+  # simple one-event cursor/lease cases. Keep the search finite and explicit.
+  depth=6
+  if [[ "$spec" == "effect_bundles.qnt" || "$spec" == "cursor_transaction.qnt" ]]; then
+    depth=10
+  fi
+  quint verify "$spec" --invariant=safety --max-steps="$depth"
 done
 
 # Explicit nonvacuity: safe models must reach meaningful intermediate states.
