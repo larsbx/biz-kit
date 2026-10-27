@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 # Version-pinned Quint 0.32.0 is installed by GitHub Actions. The safe
 # models must typecheck, pass sampled safety, and pass bounded Apalache.
-for spec in event_cursor.qnt lease_fencing.qnt effect_bundles.qnt; do
+for spec in event_cursor.qnt lease_fencing.qnt effect_bundles.qnt cursor_transaction.qnt; do
   echo "Checking safety: $spec"
   quint typecheck "$spec"
   quint run "$spec" --invariant=safety --max-samples=3000 --max-steps=25 --seed=1
@@ -38,6 +38,17 @@ for witness in noPartialBundle noNoopReceipt; do
   out=$(quint run effect_bundles.qnt --invariant="$witness" --max-samples=10000 --max-steps=25 --seed=1 2>&1 || true)
   if grep -q '\[violation\]' <<<"$out"; then
     echo "effect_bundles: $witness reachable"
+  else
+    echo "$out" >&2
+    echo "ERROR: expected reachable $witness witness" >&2
+    exit 1
+  fi
+done
+
+for witness in noPartialTxWitness noFullCommitWitness noNoopCommitWitness; do
+  out=$(quint run cursor_transaction.qnt --invariant="$witness" --max-samples=10000 --max-steps=25 --seed=1 2>&1 || true)
+  if grep -q '\\[violation\\]' <<<"$out"; then
+    echo "cursor_transaction: $witness reachable"
   else
     echo "$out" >&2
     echo "ERROR: expected reachable $witness witness" >&2
