@@ -11,9 +11,6 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
   alias AgentOpsStore.{Coordinator, Postgres}
   alias TaskCore.State
 
-  @scope {"chapter1", "tenant1", "project1"}
-  @key1 {"chapter1", "tenant1", "project1", "run1"}
-  @key2 {"chapter1", "tenant1", "project1", "run2"}
   @task_key {"chapter1", "tenant1", "project1", "task1"}
   @criteria [%{"id" => "review", "description" => "Review the output independently"}]
   @opkey <<2::256>>
@@ -129,6 +126,11 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     def authenticate_execution(_), do: {:error, :no_external_credentials_in_fixture}
   end
 
+  defp run_id(name), do: name <> "-" <> Process.get(:run_suffix)
+  defp intent_id(name), do: "intent-" <> run_id(name)
+  defp run_key(name), do: {"chapter1", "tenant1", "project1", run_id(name)}
+  defp effect(name), do: "agent-run:" <> intent_id(name)
+
   defp event(id, type, attrs) do
     %{
       event_id: id, type: type, chapter_id: "chapter1",
@@ -218,8 +220,8 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     p = Process.get(:registry)[name]
 
     State.handle_event(
-      event("intent-" <> id, "TaskAgentRunRequestedV1", %{
-        "run_id" => id, "task_id" => "task1",
+      event(intent_id(id), "TaskAgentRunRequestedV1", %{
+        "run_id" => run_id(id), "task_id" => "task1",
         "principal_id" => "operator1", "authorization_event_id" => "operator1",
         "agent_principal_id" => "agent1", "suggester_grant_event_id" => "suggester1",
         "expected_task_version" => 2, "source_event_id" => "definition1",
@@ -234,6 +236,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
   end
 
   setup do
+    Process.put(:run_suffix, Base.encode16(:crypto.strong_rand_bytes(5), case: :lower))
     Process.put(:launches, [])
     Process.put(:terminations, [])
     Process.put(:context_reads, 0)
@@ -258,21 +261,21 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
   end
 
   test "two unrelated adapters share durable signed-intent delivery, without duplicate launch", %{conn: conn} do
-    assert {:ok, %{disposition: :dispatched, backend_ref: "local-run1", lease: lease}} =
-             Coordinator.deliver(conn, @key1, Host, "worker1")
+    assert {:ok, %{disposition: :dispatched, backend_ref: "local-" <> run_id("run1"), lease: lease}} =
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
     assert lease.epoch == 1
 
     assert {:ok, %{disposition: :already_dispatched}} =
-             Coordinator.deliver(conn, @key1, Host, "worker2")
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker2")
 
-    assert {:ok, %{disposition: :dispatched, backend_ref: "remote-run2"}} =
-             Coordinator.deliver(conn, @key2, Host, "worker2")
+    assert {:ok, %{disposition: :dispatched, backend_ref: "remote-" <> run_id("run2")}} =
+             Coordinator.deliver(conn, run_key("run2"), Host, "worker2")
 
     assert Enum.count(Process.get(:launches)) == 2
-    assert {:ok, row} = Postgres.snapshot(conn, "agent-run:intent-run1")
-    assert row.phase == "leased" and row.backend_ref == "local-run1"
-    assert {:ok, row} = Postgres.snapshot(conn, "agent-run:intent-run2")
-    assert row.phase == "leased" and row.backend_ref == "remote-run2"
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
+    assert row.phase == "leased" and row.backend_ref == "local-" <> run_id("run1")
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run2"))
+    assert row.phase == "leased" and row.backend_ref == "remote-" <> run_id("run2")
     assert row.epoch == 1
   end
 
@@ -280,23 +283,23 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     # First stage is prepare, second stage is after durable CAS claim.
     Process.put(:revoke_on_read, 2)
     assert {:error, :authority_changed_after_claim} =
-             Coordinator.deliver(conn, @key1, Host, "worker1")
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
 
     assert Process.get(:launches) == []
-    assert {:ok, row} = Postgres.snapshot(conn, "agent-run:intent-run1")
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
     assert row.phase == "cancel_requested"
   end
 
   test "ambiguous launch acknowledgment remains leased, never automatically retried", %{conn: conn} do
     Process.put(:reject_reference, true)
-    key = {"chapter1", "tenant1", "project1", "run3"}
+    key = run_key("run3")
 
     assert {:error, :launch_requires_reconciliation} =
              Coordinator.deliver(conn, key, Host, "worker1")
 
-    assert [{:reference_failure, "run3", "agent-run:intent-run3"}] = Process.get(:launches)
+    assert [{:reference_failure, "run3", effect("run3")}] = Process.get(:launches)
 
-    assert {:ok, row} = Postgres.snapshot(conn, "agent-run:intent-run3")
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run3"))
     assert row.phase == "leased"
     assert row.backend_ref == nil
 
@@ -308,7 +311,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
 
   test "revoked execution grant fences an existing backend and requests termination", %{conn: conn} do
     assert {:ok, %{disposition: :dispatched}} =
-             Coordinator.deliver(conn, @key1, Host, "worker1")
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
 
     current = Process.get(:fixture_state)
     revoked =
@@ -320,12 +323,12 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
       )
 
     Process.put(:fixture_state, revoked)
-    assert {:ok, :cancel_requested} = Coordinator.withdraw(conn, @key1, Host)
+    assert {:ok, :cancel_requested} = Coordinator.withdraw(conn, run_key("run1"), Host)
 
-    assert {:ok, row} = Postgres.snapshot(conn, "agent-run:intent-run1")
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
     assert row.phase == "cancel_requested"
-    assert [{"agent-run:intent-run1", "local-run1"}] = Process.get(:terminations)
+    assert [{effect("run1"), "local-" <> run_id("run1")}] = Process.get(:terminations)
 
-    assert {:error, _} = Coordinator.prepare(@key1, Host)
+    assert {:error, _} = Coordinator.prepare(run_key("run1"), Host)
   end
 end
