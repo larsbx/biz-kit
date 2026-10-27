@@ -73,7 +73,7 @@ defmodule FederationService do
   def follow(config, peer, source_id, now \\ System.system_time(:second)) do
     with true <- peer in config.peers,
          true <- is_binary(source_id) and byte_size(source_id) in 1..256,
-         id <- event_id(config.actor, source_id),
+         id <- subscription_event_id(config.actor, "follow", source_id),
          {:ok, activity} <- FederationCore.Subscriptions.follow(config.actor, peer, id) do
       Store.call(
         config.store,
@@ -102,7 +102,8 @@ defmodule FederationService do
       Store.call(
         config.store,
         {:subscription_host, config.actor, config.peers,
-         {:decide, follow_id, decision, event_id(config.actor, source_id), receipt, now}}
+         {:decide, follow_id, decision,
+          subscription_event_id(config.actor, to_string(decision), source_id), receipt, now}}
       )
     else
       _ -> {:error, :subscription_decision_refused}
@@ -118,7 +119,7 @@ defmodule FederationService do
       Store.call(
         config.store,
         {:subscription_host, config.actor, config.peers,
-         {:cancel, follow_id, event_id(config.actor, source_id), receipt, now}}
+         {:cancel, follow_id, subscription_event_id(config.actor, "undo", source_id), receipt, now}}
       )
     else
       _ -> {:error, :subscription_cancel_refused}
@@ -142,8 +143,8 @@ defmodule FederationService do
     end
   end
 
-  defp event_id(actor, source_id) do
-    actor <> "/activities/" <>
+  defp subscription_event_id(actor, kind, source_id) do
+    actor <> "/activities/subscription-" <> kind <> "-" <>
       Base.encode16(:crypto.hash(:sha256, source_id), case: :lower)
   end
 
