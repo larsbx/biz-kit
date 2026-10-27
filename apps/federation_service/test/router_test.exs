@@ -35,14 +35,18 @@ defmodule FederationService.RouterTest do
     acct = "acct:shop@alpha.example"
 
     for resource <- [acct, actor] do
+
       response =
         request(config, :get, "/.well-known/webfinger?resource=" <> URI.encode_www_form(resource))
+
       assert response.status == 200
+
       assert Plug.Conn.get_resp_header(response, "content-type") == [
                "application/jrd+json; charset=utf-8"
              ]
 
       doc = Jason.decode!(response.resp_body)
+
       assert doc == %{
                "subject" => acct,
                "aliases" => [actor],
@@ -56,6 +60,7 @@ defmodule FederationService.RouterTest do
     assert actor_doc["preferredUsername"] == "shop"
 
     refute Map.has_key?(Store.call(c.s, :snapshot), :principal_grants)
+
     assert request(
              c.config,
              :get,
