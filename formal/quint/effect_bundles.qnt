@@ -74,7 +74,7 @@ module effect_bundles {
   action step = any { persistLedger, effect, durableReceipt, checkpoint, crashRestart }
 
   val prefixSafe = cursor <= ledgerHead and
-    range(1, MAX + 1).forall(i =>
+    1.to(MAX).forall(i =>
       (i <= cursor) implies (receipts.contains(i) and bundleComplete(i)))
 
   val effectsFromAccepted =
