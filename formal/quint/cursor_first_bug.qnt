@@ -32,5 +32,5 @@ module cursor_first_bug {
   action step = any { persistLedger, unsafeCheckpoint }
 
   val safety = cursor <= ledgerHead and
-    range(1, MAX + 1).forall(i => (i <= cursor) implies effects.contains(i))
+    1.to(MAX).forall(i => (i <= cursor) implies effects.contains(i))
 }
