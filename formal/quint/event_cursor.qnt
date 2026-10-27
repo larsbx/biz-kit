@@ -92,7 +92,7 @@ module event_cursor {
 
   // Every prefix position has been committed, no gap and no skip.
   val noPrematureCheckpoint =
-    range(1, MAX + 1).forall(i => (i <= cursor) implies effects.contains(i))
+    1.to(MAX).forall(i => (i <= cursor) implies effects.contains(i))
 
   val cursorNeverBacktracks = cursor >= previousCursor
   val safety =
