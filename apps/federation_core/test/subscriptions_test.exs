@@ -108,8 +108,10 @@ defmodule FederationCore.SubscriptionsTest do
   test "rejects self-follow, non-HTTPS, private destinations and cross-host IDs" do
     assert {:error, :invalid_follow} = S.follow(@seller, @seller, @accept_id)
     assert {:error, :invalid_follow} = S.follow(@buyer, @seller, @accept_id)
+
     assert {:error, :invalid_follow} =
              S.follow("http://buyer.example/actors/x", @seller, @follow_id)
+
     assert {:error, :invalid_follow} = S.follow(@buyer, "https://127.0.0.1/actor", @follow_id)
     assert {:error, :invalid_follow} = S.follow(@buyer, "https://seller.local/actor", @follow_id)
   end

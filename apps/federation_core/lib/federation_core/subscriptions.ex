@@ -137,8 +137,8 @@ defmodule FederationCore.Subscriptions do
          is_binary(activity["actor"]) and
          is_binary(activity["id"]) and
          is_list(activity["to"]),
-      do: :ok,
-      else: {:error, :invalid_shape}
+       do: :ok,
+       else: {:error, :invalid_shape}
   end
 
   defp envelope(type, id, actor, target, object) do
