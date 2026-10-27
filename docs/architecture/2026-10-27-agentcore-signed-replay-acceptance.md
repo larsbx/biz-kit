@@ -5,7 +5,7 @@ worker. The only business authority is the existing signed CoopSubstrate
 ledger. `:pg` payloads are discarded; the worker reads committed replay and
 uses the same current-grant/profile checks and PostgreSQL lease CAS as before.
 
-`apps/coop_substrate/test/agent_event_acceptance_test.exs` adds six combined
+`apps/coop_substrate/test/agent_event_acceptance_test.exs` adds seven combined
 regressions using actual `Log.append`, `Log.replay`, Log restart and the SAME
 disposable PostgreSQL database for signed events and `agent_ops`:
 
@@ -27,9 +27,24 @@ real backend idempotency nor external receipt authenticity. The test deliberatel
 moves only the disposable lease expiry to exercise recovery without sleeping.
 It does not alter the execution budget. Credentials and tokens remain host-only.
 
+## Demonstrated lease-boundary defect
+
+A new pure regression failed against the prior Dispatcher: an invalid lease
+could still launch after the post-claim authorization wait. Dispatcher now
+requires a trusted `validate_lease` port immediately before the adapter call.
+The PostgreSQL implementation checks phase, row version, epoch, secret token
+digest, expiry, execution deadline and absence of an attached backend. Failure
+retains the leased attempt for reconciliation and launches nothing. The new
+native integration regression expires a lease during signed authority recheck;
+storage tests also reject wrong token/version/epoch and cancelled claims.
+
+This check is not an atomic transaction with an external API. Backend fencing,
+real idempotency and race-aware cancellation are still production obligations;
+no finite local preflight can make a remote launch and revocation indivisible.
+
 ## Acceptance status
 
-Local TaskCore: 104 tests passed. Operational nonintegration tests: 6 passed.
+Local TaskCore: 105 tests passed. Operational nonintegration tests: 6 passed.
 The new signed tests compile; the supporting CoopSubstrate application compiles
 with warnings as errors. PostgreSQL end-to-end execution and hosted exact-head
 Consolidation/volume checks remain mandatory before merge. A queued job is not

@@ -54,6 +54,19 @@ defmodule TaskCore.Dispatcher do
   defp launch(plan, lease, ports) do
     # A backend error, exception or lost response cannot establish absence.
     # In all such cases the durable leased row blocks another launch.
+    # Current-state replay may itself wait long enough to expire or fence the
+    # lease. Check the durable version/epoch/token again immediately before
+    # invoking the external adapter; failed validation must not launch it.
+    with :ok <- ports.validate_lease.(plan.effect_id, lease) do
+      launch_validated(plan, lease, ports)
+    end
+  rescue
+    _ -> {:error, :launch_requires_reconciliation}
+  catch
+    :exit, _ -> {:error, :launch_requires_reconciliation}
+  end
+
+  defp launch_validated(plan, lease, ports) do
     case ports.launch.(plan) do
       {:ok, reference} when is_binary(reference) ->
         case ports.attach.(plan.effect_id, lease, reference) do
@@ -73,9 +86,5 @@ defmodule TaskCore.Dispatcher do
       _ ->
         {:error, :launch_requires_reconciliation}
     end
-  rescue
-    _ -> {:error, :launch_requires_reconciliation}
-  catch
-    :exit, _ -> {:error, :launch_requires_reconciliation}
   end
 end

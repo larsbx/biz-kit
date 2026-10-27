@@ -60,6 +60,14 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
         end
       end
 
+      if cfg.expire_claim and cfg.prepares == 1 do
+        Postgrex.query!(
+          cfg.conn,
+          "UPDATE agent_ops.execution_attempts SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE phase='leased'",
+          []
+        )
+      end
+
       :ok
     end
 
@@ -148,7 +156,9 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
                backend: nil,
                block_launch: false,
                block_claim: false,
-               prepares: 0
+               prepares: 0,
+               expire_claim: false,
+               conn: nil
              }
            end,
            [name: @fixture]
@@ -161,6 +171,8 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
       start_supervised!(
         {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])}
       )
+
+    Agent.update(@fixture, &%{&1 | conn: conn})
 
     request =
       AgentStagingFixture.request(ctx, %{
@@ -327,6 +339,16 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
     assert Agent.get(@fixture, & &1.launches) == []
 
     assert {:ok, %{epoch: 1, backend_ref: nil, phase: "leased"}} =
+             Postgres.snapshot(ctx.conn, ctx.effect)
+  end
+
+  test "lease expiry while checking current signed authority refuses backend launch", ctx do
+    assert {:ok, _} = Log.append(ctx.request)
+    Agent.update(@fixture, &%{&1 | expire_claim: true})
+    assert {:error, :launch_lease_invalid} = Coordinator.deliver(ctx.conn, @key, Host, "one")
+    assert Agent.get(@fixture, & &1.launches) == []
+
+    assert {:ok, %{phase: "leased", expired: true, epoch: 1}} =
              Postgres.snapshot(ctx.conn, ctx.effect)
   end
 end
