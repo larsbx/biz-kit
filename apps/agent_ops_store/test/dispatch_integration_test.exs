@@ -79,7 +79,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
            state: Process.get(:fixture_state),
            grants: %{read: "read1", execute: "execute1"},
            registry: Process.get(:registry),
-           hash_manifest: &FixtureHost.hash/1,
+           hash_manifest: &AgentOpsStore.DispatchIntegrationTest.FixtureHost.hash/1,
            requirements: %{
              "features" => ["text", "idempotent_launch_v1", "effect_lookup_v1",
                             "cancellation_v1", "bounded_results_v1"],
@@ -93,7 +93,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     end
 
     defp revoke_read(state) do
-      State.handle_event(
+      TaskCore.State.handle_event(
         %{
           event_id: "revoked-read",
           type: "TaskAccessRevokedV1",
