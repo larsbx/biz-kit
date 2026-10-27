@@ -56,7 +56,14 @@ defmodule FederationService.SubscriptionDeliveryTest do
              Store.call(c.store, {:subscription, {:receive, follow, @beta, @alpha, 1000}})
 
     assert {:ok, :accepted} =
-             FederationService.respond_follow(c.config, follow["id"], :accept, "accept-one", @receipt, 1001)
+             FederationService.respond_follow(
+               c.config,
+               follow["id"],
+               :accept,
+               "accept-one",
+               @receipt,
+               1001
+             )
 
     data = Store.call(c.store, :snapshot)
     assert data.subscriptions[follow["id"]].status == :accepted
@@ -68,7 +75,14 @@ defmodule FederationService.SubscriptionDeliveryTest do
     assert row.status == :pending
     assert SubscriptionDelivery.ready?(data, c.config, row)
     assert {:error, :subscription_decision_refused} =
-             FederationService.respond_follow(c.config, follow["id"], :accept, "other", @receipt, 1002)
+             FederationService.respond_follow(
+               c.config,
+               follow["id"],
+               :accept,
+               "other",
+               @receipt,
+               1002
+             )
 
     assert :ok = Store.call(c.store, {:subscription_delivery, id, false, 1001})
     failed = Store.call(c.store, :snapshot).subscription_outbox[id]

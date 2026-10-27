@@ -38,7 +38,11 @@ defmodule FederationService.SubscriptionDelivery do
   end
 
   @doc "A live policy and correlation check; never licenses an unrelated activity."
-  def ready?(data, config, %{activity: activity, destination: destination, follow_id: follow_id} = row) do
+  def ready?(
+        data,
+        config,
+        %{activity: activity, destination: destination, follow_id: follow_id} = row
+      ) do
     relation = data.subscriptions[follow_id]
 
     cond do

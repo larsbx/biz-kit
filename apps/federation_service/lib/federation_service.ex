@@ -88,7 +88,14 @@ defmodule FederationService do
   Host-only approval/rejection of a pending inbound Follow. The receipt
   MUST originate from independently verified local authority, not a user form.
   """
-  def respond_follow(config, follow_id, decision, source_id, receipt, now \\ System.system_time(:second))
+  def respond_follow(
+        config,
+        follow_id,
+        decision,
+        source_id,
+        receipt,
+        now \\ System.system_time(:second)
+      )
       when decision in [:accept, :reject] do
     with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
          :ok <- approve_local(config, follow_id, decision, receipt, now) do
