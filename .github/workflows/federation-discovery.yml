@@ -2,6 +2,7 @@ name: Federation discovery
 on:
   pull_request:
     paths:
+      - 'mix.lock'
       - 'apps/federation_core/**'
       - 'apps/federation_service/**'
       - 'native/marketplace_gossip/**'
@@ -10,6 +11,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'mix.lock'
       - 'apps/federation_core/**'
       - 'apps/federation_service/**'
       - 'native/marketplace_gossip/**'
@@ -41,3 +43,35 @@ jobs:
       - run: scripts/test-federation-service.sh
         env:
           BIZKIT_GOSSIP_EXECUTABLE: ${{ github.workspace }}/native/marketplace_gossip/target/debug/bizkit-marketplace-gossip
+
+  full-lock-audit:
+    # Inventory the entire umbrella, including dependencies absent from the
+    # federation listener. Existing unrelated findings are documented in the receipt;
+    # the reachable federation graph has a separate blocking audit above.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix local.hex --force
+      - name: Inventory full shared lock (including known unrelated findings)
+        id: audit
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/bizkit-full-lock-audit
+          cp mix.lock /tmp/bizkit-full-lock-audit/
+          cd /tmp/bizkit-full-lock-audit
+          printf '%s\n' 'defmodule Audit.MixProject do' ' use Mix.Project' ' def project, do: [app: :audit, version: "0.0.0", deps: []]' 'end' > mix.exs
+          mix hex.audit --format sarif --output "$GITHUB_WORKSPACE/full-lock-audit.sarif"
+      - name: Record audit outcome
+        if: always()
+        run: echo 'Full-lock audit outcome = ${{ steps.audit.outcome }}; see SARIF and docs/security/bandit-2026-10.md' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-lock-audit
+          path: full-lock-audit.sarif
+          if-no-files-found: error

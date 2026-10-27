@@ -15,7 +15,7 @@ defmodule FederationService.MixProject do
         {:federation_core, in_umbrella: true},
         {:jason, "~> 1.4"},
         {:plug, "~> 1.18"},
-        {:bandit, "~> 1.13"}
+        {:bandit, "~> 1.14.0"}
       ]
     ]
   end

@@ -11,6 +11,15 @@ printf 'import Config\n' > "$stage/config/config.exs"
 cp "$root/mix.lock" "$stage/mix.lock"
 cd "$stage"
 mix deps.get --check-locked
+# Audit the reachable federation graph; unused umbrella entries (e.g. JOSE)
+# are inventoried separately by the full-lock audit job. Versions are unchanged.
+mix deps.unlock --unused
+mix hex.audit
 MIX_ENV=test mix compile --warnings-as-errors
 mix format --check-formatted 'apps/federation_service/mix.exs' 'apps/federation_service/lib/**/*.ex' 'apps/federation_service/test/**/*.exs'
 mix test
+# Exercise the real standalone listener with production-compiled modules too.
+# Test-only stdin controls and ephemeral CA/key material remain in staging.
+MIX_ENV=prod mix deps.get --check-locked
+MIX_ENV=prod mix compile --warnings-as-errors
+MIX_ENV=prod mix run -e 'ExUnit.start(exclude: [:test], include: [:production_listener]); Code.require_file("apps/federation_service/test/support/helpers.exs"); Code.require_file("apps/federation_service/test/two_instance_test.exs")'

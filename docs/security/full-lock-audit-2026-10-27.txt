@@ -1,0 +1,67 @@
+Advisories:
+  ash_postgres 2.15.1 - EEF-CVE-2026-115627 (MEDIUM)
+    aka: CVE-2026-115627, GHSA-gr2r-f49c-9gm2
+    AshPostgres ignores attribute multitenancy on the join resource when loading many_to_many and through relationships, returning records related through other tenants' rows
+    https://osv.dev/vulnerability/EEF-CVE-2026-115627
+
+  ash_postgres 2.15.1 - EEF-CVE-2026-115635 (MEDIUM)
+    aka: CVE-2026-115635, GHSA-36hg-wwp2-fg8w
+    AshPostgres returns another tenant's record for a skipped upsert when return_skipped_upsert? is set
+    https://osv.dev/vulnerability/EEF-CVE-2026-115635
+
+  req_llm 1.17.1 - EEF-CVE-2026-107685 (CRITICAL)
+    aka: CVE-2026-107685, GHSA-6vww-5m28-f26v
+    WebSocket sessions do not verify TLS certificates, exposing API keys and OAuth tokens to on-path attackers
+    https://osv.dev/vulnerability/EEF-CVE-2026-107685
+
+  jose 1.11.12 - EEF-CVE-2026-65625 (MEDIUM)
+    aka: CVE-2026-65625, GHSA-6gxw-6f7r-cjr6
+    Attacker-controlled AES-GCM authentication tag length allows tag forgery in jose
+    https://osv.dev/vulnerability/EEF-CVE-2026-65625
+
+  jose 1.11.12 - EEF-CVE-2026-65626 (MEDIUM)
+    aka: CVE-2026-65626, GHSA-vwvr-f994-6j9j
+    Bleichenbacher padding oracle in RSAES-PKCS1-v1_5 decryption in jose
+    https://osv.dev/vulnerability/EEF-CVE-2026-65626
+
+  jose 1.11.12 - EEF-CVE-2026-65627 (MEDIUM)
+    aka: CVE-2026-65627, GHSA-wfpv-qxp8-x5gm
+    Decompression bomb via unbounded zlib:inflate in jose_jwe_zip:uncompress/2
+    https://osv.dev/vulnerability/EEF-CVE-2026-65627
+
+  jose 1.11.12 - EEF-CVE-2026-65628 (MEDIUM)
+    aka: CVE-2026-65628, GHSA-fpj2-9h59-32pp
+    Infinite recursion (CPU denial-of-service) in JOSE.JWK.shared_secret/2 on mismatched key types
+    https://osv.dev/vulnerability/EEF-CVE-2026-65628
+
+  jose 1.11.12 - EEF-CVE-2026-65629 (HIGH)
+    aka: CVE-2026-65629, GHSA-h4gx-8jq2-mfhc
+    Weak PBKDF2 parameters for password-encrypted private-key export in jose
+    https://osv.dev/vulnerability/EEF-CVE-2026-65629
+
+  jose 1.11.12 - EEF-CVE-2026-65630 (MEDIUM)
+    aka: CVE-2026-65630, GHSA-xvr2-gggj-h2pp
+    Timing side-channel in pure-Erlang X25519 scalar multiplication leaks the private key in jose
+    https://osv.dev/vulnerability/EEF-CVE-2026-65630
+
+  jose 1.11.12 - EEF-CVE-2026-65631 (MEDIUM)
+    aka: CVE-2026-65631, GHSA-3m45-vrpj-xmrq
+    erlang-jose RSA JWK parsing attempts to factor an attacker-controlled modulus, enabling CPU-exhaustion denial of service
+    https://osv.dev/vulnerability/EEF-CVE-2026-65631
+
+  jose 1.11.12 - EEF-CVE-2026-65632 (MEDIUM)
+    aka: CVE-2026-65632, GHSA-44hw-rpw9-mwg4
+    ECDSA signature length is not validated in jose, allowing signature malleability
+    https://osv.dev/vulnerability/EEF-CVE-2026-65632
+
+  ash 3.35.0 - EEF-CVE-2026-114214 (MEDIUM)
+    aka: CVE-2026-114214, GHSA-g2h4-xp57-q863
+    Loading a through relationship with a limit of 1 in Ash ignores the through path and returns unrelated destination records
+    https://osv.dev/vulnerability/EEF-CVE-2026-114214
+
+  ash 3.35.0 - EEF-CVE-2026-96581 (HIGH)
+    aka: CVE-2026-96581, GHSA-vw7c-67pf-gh96
+    An upsert on the primary key in Ash ignores attribute multitenancy, so one tenant can read, overwrite and take over another tenant's records
+    https://osv.dev/vulnerability/EEF-CVE-2026-96581
+
+Found packages with security advisories

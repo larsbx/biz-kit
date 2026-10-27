@@ -14,6 +14,8 @@ HTTP delivery peering or Follow/Accept polling.
 ## What runs
 
 - Public Service actors with an RSA public key, inbox and paged outbox.
+- Optional exact-account WebFinger discovery using a deliberately configured
+  public handle, with no login, following, subscription or grant implications.
 - HTTPS actor discovery, current actor/key ownership validation and RSA-SHA256
   HTTP request signatures covering `(request-target) host date digest content-type`.
 - Authenticated inbox entries journaled and synced before HTTP 202. A worker
@@ -56,6 +58,7 @@ Add this explicit child to an appropriately configured host supervisor:
 ```elixir
 {FederationService.Node,
  actor: "https://alpha.example/actors/shop",
+ handle: "shop",
  peers: ["https://beta.example/actors/shop"],
  signing_keyfile: "/run/keys/marketplace-signing.pem",
  directory: "/var/lib/biz-kit/marketplace-discovery",
@@ -322,3 +325,40 @@ Payment, settlement, stock holds, inventory reservations, contract acceptance,
 verified reputation and private learner/employee/buyer data remain outside this
 milestone. Issue [#115](https://github.com/larsbx/biz-kit/issues/115) stays open for
 its broader subscription, disclosure-adapter, scale and interoperability gates.
+
+
+## Durable subscription-correlation pilot
+
+`FederationService.SubscriptionState` provides deterministic, replay-safe
+journal planning for *trusted host* Follow initiation, authenticated inbound
+Follow/Accept/Reject/Undo candidates, explicit local approvals/rejections,
+and subscriber-origin withdrawals. Accepted plans commit atomically through
+the existing discovery journal; duplicates and invalid transitions do not
+write and terminal requests never reactivate. Authority receipts are opaque
+references **supplied by a trusted host**: this library does NOT validate
+that an operator actually holds a grant or verify an HTTP signature.
+
+Use `FederationService.Store.call(store, {:subscription, intent})` only from
+an adapter that has already checked signer identity, peer policy and local
+authority. There is no public subscription HTTP route, signed subscription
+delivery worker, dynamic peers, follower collection, or merchant permission
+derivable from these rows. They are operational correlation state, never
+business events. A future host adapter must implement authentication,
+authority rechecks, bounded queued deliveries and restoration tests before
+claiming working ActivityPub following. Current inbox still handles only
+public listing events.
+
+## Authenticated inbound subscription admission
+
+The signed HTTPS inbox can now record narrow Follow/Accept/Reject/Undo messages
+from **explicitly configured peers only**. Each message must pass current
+remote-actor signature validation, the peer allowlist, exact wire shape and
+local moderation before a durable subscription-journal transition. No remote
+message grants local business authority; Follow stays pending until a trusted
+local host explicitly approves it. Retransmission and restart safety are
+covered by the two-node TLS harness.
+
+There is no dynamic peer admission, public approval API, follower collection,
+locally authorized reply delivery, private offer exposure or cross-node
+commercial write. Keep this pilot behind existing explicit peering and do not
+claim general Mastodon interoperability or production deployment.

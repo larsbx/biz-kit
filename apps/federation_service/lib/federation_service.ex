@@ -4,12 +4,13 @@ defmodule FederationService do
   journal directory, an RSA private key and configured remote actor URLs.
   There is no public local-publication or business-command HTTP endpoint.
   """
-  alias FederationService.{Store, Network, Signature, Delivery}
+  alias FederationService.{Store, Network, Signature, Delivery, WebFinger}
   alias FederationCore.Marketplace
 
   def config!(opts) do
     actor = Keyword.fetch!(opts, :actor)
     {:ok, _} = Network.uri(actor)
+    handle = WebFinger.handle!(Keyword.get(opts, :handle))
     peers = Keyword.get(opts, :peers, [])
     true = length(peers) <= 32 and length(Enum.uniq(peers)) == length(peers)
 
@@ -20,6 +21,7 @@ defmodule FederationService do
 
     %{
       actor: actor,
+      handle: handle,
       private_key: Keyword.fetch!(opts, :private_key),
       peers: peers,
       store: Keyword.fetch!(opts, :store),

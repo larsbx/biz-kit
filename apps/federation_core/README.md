@@ -23,3 +23,19 @@ The optional host app [`federation_service`](../federation_service/README.md)
 provides the explicitly peered read-only discovery pilot around this unchanged
 wire contract. It owns transport authentication and a separate discovery cache;
 this pure module still does not authenticate requests or authorize business work.
+
+
+## ActivityPub subscription wire
+
+`FederationCore.Subscriptions` builds and validates the strict, non-public
+Follow / Accept / Reject / Undo profile for a single pair of remote actors.
+An authenticated remote Follow becomes only a **pending candidate**. A reply
+needs authorized owner action, and an inbound Accept/Reject must be correlated
+against the exact outstanding local Follow. An Undo must match an accepted or
+pending original Follow. This app deliberately does not persist or execute
+these transitions, discover a remote actor, send a message, create a follower
+collection, or update the existing peer allowlist.
+
+The standalone federation service remains explicit-peer only. The next host
+slice must implement durable follow state, opt-in approval, signed delivery
+and replay-safe association before enabling dynamic subscriptions.
