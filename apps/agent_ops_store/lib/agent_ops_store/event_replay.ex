@@ -76,9 +76,10 @@ defmodule AgentOpsStore.EventReplay do
       not valid_id.(home) or not valid_id.(consumer) ->
         {:error, :invalid_event_cursor_scope}
 
-      not is_atom(source) or
-          not Enum.all?([verified_head: 0, read_page: 2, event_digest: 1],
-            fn {f, a} -> function_exported?(source, f, a) end) ->
+      not is_atom(source) or not Code.ensure_loaded?(source) or
+          not Enum.all?([verified_head: 0, read_page: 2, event_digest: 1], fn {f, a} ->
+            function_exported?(source, f, a)
+          end) ->
         {:error, :unapproved_event_source}
 
       not is_list(ignored) or not Enum.all?(ignored, valid_id) ->
