@@ -385,3 +385,15 @@ harness uses a synthetic receipt, which has no production authority.
 This does not enable arbitrary remote peer discovery or private
 business data distribution; only the configured public control
 activities flow. It is not generic Fediverse conformance.
+
+### Local authority verifier boundary
+
+`config!(approval_verifier: fn local_actor, follow_id, operation, receipt, now ->
+  ... end)` is **mandatory** for `respond_follow` and `undo_follow`.
+No verifier means *fail closed*. The verifier must validate an independently
+admitted local governance grant, signing key, time validity and operation
+scope against the current authoritative ledger; only literal `:ok` is accepted.
+It is invoked before journal admission, so revocations racing the external
+ledger's admission fence still require an integration-level atomicity/fencing
+contract. The test harness intentionally uses a synthetic hardcoded receipt,
+not a production credential or proof of business authorization.

@@ -18,7 +18,10 @@ defmodule FederationService.SubscriptionDeliveryTest do
         actor: @alpha,
         peers: [@beta],
         store: store,
-        private_key: key()
+        private_key: key(),
+        approval_verifier: fn _local, _follow, _decision, receipt, _now ->
+          if receipt == @receipt, do: :ok, else: {:error, :untrusted_receipt}
+        end
       )
 
     on_exit(fn ->
@@ -27,6 +30,23 @@ defmodule FederationService.SubscriptionDeliveryTest do
     end)
 
     %{store: store, config: config, dir: dir}
+  end
+
+  test "local approval refuses absent or failing verifier before committing a reply", c do
+    {:ok, follow} = Wire.follow(@beta, @alpha, @beta <> "/activities/no-approval")
+    assert {:ok, :pending} =
+             Store.call(c.store, {:subscription, {:receive, follow, @beta, @alpha, 1000}})
+
+    unconfigured = %{c.config | approval_verifier: nil}
+
+    assert {:error, :unverified_local_authority} =
+             FederationService.respond_follow(unconfigured, follow["id"], :accept, "no", @receipt)
+
+    assert {:error, :unverified_local_authority} =
+             FederationService.respond_follow(c.config, follow["id"], :accept, "bad", "forged")
+
+    assert Store.call(c.store, :snapshot).subscription_outbox == %{}
+    assert Store.call(c.store, :snapshot).subscriptions[follow["id"]].status == :pending
   end
 
   test "approved inbound Follow atomically journals its exact response, without an HTTP command", c do

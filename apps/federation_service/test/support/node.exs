@@ -29,6 +29,10 @@ store = FederationService.Store
 config =
   FederationService.config!(
     actor: "https://#{host}/actors/shop",
+    # Harness-only authorizer; a real host must validate a signed local grant.
+    approval_verifier: fn _, _, _, receipt, _ ->
+      if receipt == "harness-authorized-grant-receipt", do: :ok, else: {:error, :refused}
+    end,
     private_key: FederationService.Signature.private!(key_path),
     peers: peers,
     store: store,

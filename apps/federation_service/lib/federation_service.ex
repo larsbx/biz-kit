@@ -11,6 +11,8 @@ defmodule FederationService do
     actor = Keyword.fetch!(opts, :actor)
     {:ok, _} = Network.uri(actor)
     handle = WebFinger.handle!(Keyword.get(opts, :handle))
+    approval_verifier = Keyword.get(opts, :approval_verifier)
+    true = is_nil(approval_verifier) or is_function(approval_verifier, 5)
     peers = Keyword.get(opts, :peers, [])
     true = length(peers) <= 32 and length(Enum.uniq(peers)) == length(peers)
 
@@ -22,6 +24,7 @@ defmodule FederationService do
     %{
       actor: actor,
       handle: handle,
+      approval_verifier: approval_verifier,
       private_key: Keyword.fetch!(opts, :private_key),
       peers: peers,
       store: Keyword.fetch!(opts, :store),
@@ -87,7 +90,8 @@ defmodule FederationService do
   """
   def respond_follow(config, follow_id, decision, source_id, receipt, now \\ System.system_time(:second))
       when decision in [:accept, :reject] do
-    with true <- is_binary(source_id) and byte_size(source_id) in 1..256 do
+    with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
+         :ok <- approve_local(config, follow_id, decision, receipt, now) do
       Store.call(
         config.store,
         {:subscription_host, config.actor, config.peers,
@@ -102,7 +106,8 @@ defmodule FederationService do
 
   @doc "Host-only withdrawal of a locally initiated Follow."
   def undo_follow(config, follow_id, source_id, receipt, now \\ System.system_time(:second)) do
-    with true <- is_binary(source_id) and byte_size(source_id) in 1..256 do
+    with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
+         :ok <- approve_local(config, follow_id, :undo, receipt, now) do
       Store.call(
         config.store,
         {:subscription_host, config.actor, config.peers,
@@ -110,6 +115,23 @@ defmodule FederationService do
       )
     else
       _ -> {:error, :subscription_cancel_refused}
+    end
+  end
+
+  defp approve_local(config, follow_id, operation, receipt, now) do
+    case config.approval_verifier do
+      verifier when is_function(verifier, 5) ->
+        try do
+          case verifier.(config.actor, follow_id, operation, receipt, now) do
+            :ok -> :ok
+            _ -> {:error, :unverified_local_authority}
+          end
+        rescue
+          _ -> {:error, :unverified_local_authority}
+        end
+
+      _ ->
+        {:error, :unverified_local_authority}
     end
   end
 
