@@ -51,7 +51,8 @@ if [ "${1:-}" = "--prepare" ]; then exit 0; fi
 export TOKEN_VERIFIER_ADAPTER=Dispatch.Identity.Tokens.BizKitSession
 export BIZKIT_DEVELOPMENT_SIGN_IN="$(field development_sign_in)"
 export BIZKIT_IDENTITY_BINDINGS="$(field bindings)"
-export BIZKIT_NATIVE_REDIRECT_URIS="com.dispatch.driver:/oauth2redirect"
+# The field app, and the desktop app's loopback listener (desktop/src-tauri/src/dispatch.rs).
+export BIZKIT_NATIVE_REDIRECT_URIS="com.dispatch.driver:/oauth2redirect,http://127.0.0.1:47811/callback"
 export SPRUCE_GOOSE_MCP_ENABLED=true
 # Every person signs in from 127.0.0.1 within a minute (config/runtime.exs).
 export SPRUCE_GOOSE_SIGN_IN_LIMIT="${SPRUCE_GOOSE_SIGN_IN_LIMIT:-600}"

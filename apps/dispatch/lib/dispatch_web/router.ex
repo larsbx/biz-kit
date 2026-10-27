@@ -200,6 +200,16 @@ defmodule DispatchWeb.Router do
     post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent
     post "/me/location-samples:batch", LocationController, :ingest
     post "/driver/location-samples:batch", LocationController, :ingest_driver
+
+    # The carrier's dispatch board (`Dispatch.Operations.Board`).
+    get "/operations/loads", OperationsController, :index
+    post "/operations/loads", OperationsController, :create
+    get "/operations/loads/:load_id", OperationsController, :show
+    patch "/operations/loads/:load_id", OperationsController, :update
+    post "/operations/loads/:load_id/stops", OperationsController, :add_stop
+    post "/operations/loads/:load_id/trips", OperationsController, :plan
+    post "/operations/trips/:assignment_id/transitions", OperationsController, :transition
+    get "/operations/fleet", OperationsController, :fleet
   end
 
   scope "/v1", DispatchWeb do

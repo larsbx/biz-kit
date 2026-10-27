@@ -2,6 +2,184 @@
   "components": {
     "responses": {},
     "schemas": {
+      "BoardLoad": {
+        "additionalProperties": false,
+        "properties": {
+          "commodity_text": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "external_reference": {
+            "nullable": true,
+            "type": "string"
+          },
+          "load_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "DRAFT",
+              "TENDERED",
+              "BOOKED",
+              "IN_TRANSIT",
+              "DELIVERED",
+              "CANCELLED"
+            ],
+            "type": "string"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/BoardStop"
+            },
+            "type": "array"
+          },
+          "trips": {
+            "items": {
+              "$ref": "#/components/schemas/BoardTrip"
+            },
+            "type": "array"
+          },
+          "version": {
+            "description": "Send back as expected_version.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "load_id",
+          "status",
+          "created_at",
+          "version",
+          "stops",
+          "trips"
+        ],
+        "title": "BoardLoad",
+        "type": "object"
+      },
+      "BoardLoadList": {
+        "additionalProperties": false,
+        "properties": {
+          "loads": {
+            "items": {
+              "$ref": "#/components/schemas/BoardLoad"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "loads"
+        ],
+        "title": "BoardLoadList",
+        "type": "object"
+      },
+      "BoardStop": {
+        "additionalProperties": false,
+        "properties": {
+          "address_text": {
+            "type": "string"
+          },
+          "contact_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "contact_phone_e164": {
+            "nullable": true,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "PICKUP",
+              "DELIVERY",
+              "OTHER"
+            ],
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "stop_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "stop_id",
+          "sequence",
+          "kind",
+          "address_text"
+        ],
+        "title": "BoardStop",
+        "type": "object"
+      },
+      "BoardTrip": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "operator_participant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PLANNED",
+              "ACTIVE",
+              "COMPLETED",
+              "CANCELLED"
+            ],
+            "type": "string"
+          },
+          "trailer_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "vehicle_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "version": {
+            "description": "Send back as expected_version.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "operator_participant_id",
+          "status",
+          "starts_at",
+          "version"
+        ],
+        "title": "BoardTrip",
+        "type": "object"
+      },
       "CapabilityDocumentResponse": {
         "additionalProperties": false,
         "properties": {
@@ -158,6 +336,86 @@
         "title": "DeviceRegistrationRequest",
         "type": "object"
       },
+      "Fleet": {
+        "additionalProperties": false,
+        "properties": {
+          "drivers": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "participant_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "public_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "participant_id",
+                "public_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "trailers": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "plate": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "unit_number": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "unit_number"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "vehicles": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "plate": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "unit_number": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "unit_number"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "drivers",
+          "vehicles",
+          "trailers"
+        ],
+        "title": "Fleet",
+        "type": "object"
+      },
       "HealthCheck": {
         "additionalProperties": false,
         "properties": {
@@ -204,6 +462,25 @@
           "checked_at"
         ],
         "title": "LivenessResponse",
+        "type": "object"
+      },
+      "LoadInput": {
+        "additionalProperties": false,
+        "properties": {
+          "commodity_text": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expected_version": {
+            "description": "Required when changing a load.",
+            "type": "integer"
+          },
+          "external_reference": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "title": "LoadInput",
         "type": "object"
       },
       "LocationConsent": {
@@ -718,6 +995,46 @@
         "title": "StatusEventResponse",
         "type": "object"
       },
+      "StopInput": {
+        "additionalProperties": false,
+        "properties": {
+          "address_text": {
+            "type": "string"
+          },
+          "contact_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "contact_phone_e164": {
+            "nullable": true,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "PICKUP",
+              "DELIVERY",
+              "OTHER"
+            ],
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "address_text"
+        ],
+        "title": "StopInput",
+        "type": "object"
+      },
       "Trip": {
         "additionalProperties": false,
         "properties": {
@@ -766,6 +1083,40 @@
         "title": "Trip",
         "type": "object"
       },
+      "TripInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ends_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "operator_participant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "trailer_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "vehicle_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operator_participant_id"
+        ],
+        "title": "TripInput",
+        "type": "object"
+      },
       "TripList": {
         "additionalProperties": false,
         "properties": {
@@ -780,6 +1131,28 @@
           "assignments"
         ],
         "title": "TripList",
+        "type": "object"
+      },
+      "TripTransition": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "activate",
+              "complete",
+              "cancel"
+            ],
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "action",
+          "expected_version"
+        ],
+        "title": "TripTransition",
         "type": "object"
       }
     },
@@ -1698,6 +2071,691 @@
         "summary": "Declare a participant status",
         "tags": [
           "status"
+        ]
+      }
+    },
+    "/v1/operations/fleet": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.fleet",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fleet"
+                }
+              }
+            },
+            "description": "Fleet"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The drivers, vehicles and trailers a trip can be planned with",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/loads": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.index",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoadList"
+                }
+              }
+            },
+            "description": "Loads"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The organization's loads with their stops and trips",
+        "tags": [
+          "operations"
+        ]
+      },
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.create",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Replays the first response for a retried request (Section 24).",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadInput"
+              }
+            }
+          },
+          "description": "Load",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoad"
+                }
+              }
+            },
+            "description": "Load"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a DRAFT load with this organization as the carrier",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/loads/{load_id}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.show",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "load_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoad"
+                }
+              }
+            },
+            "description": "Load"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "One of the organization's loads",
+        "tags": [
+          "operations"
+        ]
+      },
+      "patch": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.update",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Replays the first response for a retried request (Section 24).",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "load_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadInput"
+              }
+            }
+          },
+          "description": "Load",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoad"
+                }
+              }
+            },
+            "description": "Load"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Change a load's commodity text and reference",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/loads/{load_id}/stops": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.add_stop",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Replays the first response for a retried request (Section 24).",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "load_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopInput"
+              }
+            }
+          },
+          "description": "Stop",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoad"
+                }
+              }
+            },
+            "description": "Load"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Append a stop to a load",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/loads/{load_id}/trips": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.plan",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Replays the first response for a retried request (Section 24).",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "load_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripInput"
+              }
+            }
+          },
+          "description": "Trip",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoad"
+                }
+              }
+            },
+            "description": "Load"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Plan a trip for a load",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/operations/trips/{assignment_id}/transitions": {
+      "post": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.OperationsController.transition",
+        "parameters": [
+          {
+            "description": "Selects which held role assignment the request acts under.",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Replays the first response for a retried request (Section 24).",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripTransition"
+              }
+            }
+          },
+          "description": "Transition",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardLoad"
+                }
+              }
+            },
+            "description": "Load"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Activate, complete or cancel a trip",
+        "tags": [
+          "operations"
         ]
       }
     },
