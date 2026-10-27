@@ -11,7 +11,10 @@ exactly-once delivery.
 The extension now owns a named produce-only client under its supervisor. Its
 `start_link/1` returns the extension supervisor PID, rather than the worker PID.
 The optional dependency remains `runtime: false`; the extension starts the
-client only when enabled. SSL is an explicit application dependency for TLS
+client only when enabled. `included_applications: [:kafka_ex]` includes KafkaEx
+and its dependencies in releases without automatically starting its application
+callback/default worker; the extension owns the explicit producer. A regression
+checks this application metadata and inactive default supervisor. SSL is an explicit application dependency for TLS
 broker configurations. Broker/security defaults still come from KafkaEx config.
 
 ## Upstream contracts inspected before implementation

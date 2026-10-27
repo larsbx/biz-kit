@@ -17,7 +17,8 @@ defmodule Eatsbot.Extensions.Kafka.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :ssl]
+      extra_applications: [:logger, :ssl],
+      included_applications: [:kafka_ex]
     ]
   end
 
