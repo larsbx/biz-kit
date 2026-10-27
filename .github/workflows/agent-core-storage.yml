@@ -66,6 +66,12 @@ jobs:
             < deploy/agent-core/sql/003_recovery_custody.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/004_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_storage_contract.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \

@@ -13,7 +13,8 @@ defmodule AgentOpsStore.MixProject do
       deps: [
         {:agent_core, in_umbrella: true},
         {:task_core, in_umbrella: true},
-        {:postgrex, "~> 0.22"}
+        {:postgrex, "~> 0.22"},
+        {:jason, "~> 1.4"}
       ]
     ]
   end
