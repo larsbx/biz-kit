@@ -28,6 +28,22 @@ defmodule Eatsbot.Extensions.Kafka.DriverTest do
     )
   end
 
+  test "release metadata includes KafkaEx without automatically starting a default worker" do
+    assert :kafka_ex in Application.spec(:eatsbot_extension_kafka, :included_applications)
+    refute List.keymember?(Application.started_applications(), :kafka_ex, 0)
+    assert Process.whereis(KafkaEx.Supervisor) == nil
+
+    release_config =
+      Keyword.put(Mix.Project.config(), :releases,
+        kafka_probe: [applications: [eatsbot_extension_kafka: :load]]
+      )
+
+    release = Mix.Release.from_config!(:kafka_probe, release_config, [])
+    assert release.applications.kafka_ex[:mode] == :included
+    assert Map.has_key?(release.applications, :kayrock)
+    assert Map.has_key?(release.applications, :crc32cer)
+  end
+
   test "publishes the exact binary and maps a leader acknowledgment to :ok" do
     client({:ok, acknowledgment()})
     payload = <<0, 255, 1>>
