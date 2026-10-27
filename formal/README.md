@@ -21,18 +21,52 @@ notifications do not license writes at the receiving home.
 | Notification non-authority | `wakeOrCrash_preserves` | lost/bursty wakeups and restart preserve durable facts | Fair eventual catch-up and scheduler availability |
 | Arbitrary transition safety | `step_preserves` for declared safe transitions | Bounded safety through Quint/Apalache | Absent real software refinement proof |
 
+### Additional proof obligations — lease fencing and complete effect bundles
+
+The EventStore consumer must handle **zero, one or multiple** derived effects
+per accepted event. A single `effect registered` flag can hide a partial
+write. The stronger `BizKitBundles.lean` proof defines:
+
+```text
+BundleReady(s, position) =
+  DurableProcessedReceipt(s, position)
+  ∧ ∀ effect, Required(s, position, effect) → Registered(s, position, effect)
+```
+
+A cursor advance is permissible only after the *entire* required bundle and
+its processed receipt have committed. For a zero-effect event the receipt
+remains mandatory. This is a proof of an abstract condition, **not** proof
+that the SQL effects and cursor actually share a transaction.
+
+`effect_bundles.qnt` checks a three-event scenario with two effects at
+position 1, **zero** at position 2 and one at position 3. Its
+`bundle_partial_bug.qnt` negative control loses the second effect when the
+cursor is advanced after inserting only the first.
+
+Separately, `BizKitLeases.lean` proves the CAS generation and cancellation
+boundary for one operational effect. A stale competing claimant cannot
+reuse the claimed row version, and cancellation invalidates the old holder.
+`lease_fencing.qnt` explores two independent workers and crash-stutter
+without silently freeing a lease. `lease_crash_bug.qnt` deliberately
+forgets the backend launch during restart and must expose a duplicate
+external launch. Neither model assumes a particular agent framework,
+backend, volume manager, nor vendor.
+
+The **negative controls must be observed as violations** in CI; writing
+them alone is not evidence of successful model checking.
+
 ### Lean 4 — general mathematical safety
 
 `formal/lean/BizKitEventProofs.lean` contains kernel-checked proofs for
 the prefix invariant, registration idempotence and preservation under
 appending, registering, acknowledging, wakeups and crashes. A theorem
-provides a concrete counterexample for *cursor-first* acknowledgment.
+provides a genuine counterexample for *cursor-first* acknowledgment after one event has already been committed.
 
 This proof quantifies mathematically over event indices; it never
 computes an infinite stream. **It proves properties of an abstract
 transition relation, not properties of arbitrary Elixir/PostgreSQL code.**
 No `sorry`, `admit`, untrusted axioms or `native_decide` are permitted.
-CI pins Lean 4.35.0 and enables an axiom audit.
+CI pins Lean 4.35.0, runs an axiom audit, and reruns the built library through `lake check`.
 
 ### Quint — finite adversarial histories
 
@@ -69,7 +103,7 @@ bash check.sh
 The dedicated GitHub workflow
 [EventStore consumer proofs](../.github/workflows/event-consumer-proofs.yml)
 runs the Lean kernel/axiom audit and the Quint typecheck, simulation,
-bounded model check and negative control. **Do not merge a runtime consumer
+bounded model check and all three negative controls. **Do not merge a runtime consumer
 before its proof obligations and refinement tests are green.**
 
 ## Proof-to-implementation refinement ledger
@@ -79,7 +113,8 @@ committed `head`, acknowledged `cursor`, effect bundle per ledger event,
 duplicate registration and crash/restart stuttering. Produce exact-head CI
 evidence and review the negative control.
 
-**Phase 1 — specify real event derivation.** Define a pure mapping from one
+**Phase 1 — specify real event derivation.** The complete-bundle and
+processed-no-op rules above must be reflected in every derived event type. Define a pure mapping from one
 accepted signed `CoopSubstrate.Protocol.Envelope` at `global_seq` to zero
 or more tenant-scoped operational effect IDs. A zero-effect event still
 needs a durable *processed* receipt. Reject unknown event types/versions
