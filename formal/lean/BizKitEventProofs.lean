@@ -1,5 +1,6 @@
 import Init
 import BizKitLeases
+import BizKitBundles
 
 /-!
 # EventStore consumer safety kernel
