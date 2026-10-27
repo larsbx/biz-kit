@@ -20,20 +20,24 @@ defmodule FederationService.SubscriptionDelivery do
     |> Enum.sort_by(fn {id, row} -> {row.queued_at, priority(row.activity), id} end)
     |> Enum.take(@batch)
     |> Enum.each(fn {id, row} ->
-      success =
-        with true <- ready?(Store.call(config.store, :snapshot), config, row),
-             {:ok, remote} <- Signature.discover(row.destination, config.network),
-             body <- Jason.encode!(row.activity),
-             headers <- Signature.sign(remote.inbox, config.actor, config.private_key, body),
-             true <- ready?(Store.call(config.store, :snapshot), config, row),
-             {:ok, status, _, _} <-
-               Network.request(:post, remote.inbox, headers, body, config.network) do
-          status in [200, 202]
-        else
-          _ -> false
-        end
+      if ready?(Store.call(config.store, :snapshot), config, row) do
+        result =
+          with {:ok, remote} <- Signature.discover(row.destination, config.network),
+               body <- Jason.encode!(row.activity),
+               headers <- Signature.sign(remote.inbox, config.actor, config.private_key, body),
+               true <- ready?(Store.call(config.store, :snapshot), config, row),
+               {:ok, status, _, _} <-
+                 Network.request(:post, remote.inbox, headers, body, config.network) do
+            status in [200, 202]
+          else
+            false -> :held
+            _ -> false
+          end
 
-      Store.call(config.store, {:subscription_delivery, id, success, now})
+        if is_boolean(result) do
+          Store.call(config.store, {:subscription_delivery, id, result, now})
+        end
+      end
     end)
   end
 
@@ -46,7 +50,7 @@ defmodule FederationService.SubscriptionDelivery do
     relation = data.subscriptions[follow_id]
 
     cond do
-      row.status != :pending ->
+      row.status != :pending or data.subscription_outbox[activity["id"]] != row ->
         false
 
       activity["actor"] != config.actor or destination not in config.peers ->
