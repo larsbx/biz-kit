@@ -12,10 +12,9 @@ defmodule FederationService.TwoInstanceTest do
   end
 
   defp node(dir, host, port, other, other_port, certs, peers \\ nil) do
-    beams = Path.wildcard(Path.expand("../../../../_build/test/lib/*/ebin", __DIR__))
-    # Under isolated staging, __DIR__ may point through a symlink; code paths
-    # already loaded in this VM are the authoritative build location.
-    beams = Enum.uniq(beams ++ Enum.map(:code.get_path(), &to_string/1))
+    # Use only the parent VM's loaded environment. A production smoke must
+    # never pick up the earlier test build (which permits loopback fixtures).
+    beams = Enum.map(:code.get_path(), &to_string/1)
 
     args =
       Enum.flat_map(beams, fn p -> ["-pa", p] end) ++
@@ -202,6 +201,51 @@ defmodule FederationService.TwoInstanceTest do
   defp wire(headers, body) do
     "POST /actors/shop/inbox HTTP/1.1\r\nHost: beta.example\r\nConnection: close\r\n" <>
       Enum.map_join(headers, "", fn {k, v} -> "#{k}: #{v}\r\n" end) <> "\r\n" <> body
+  end
+
+  @tag :production_listener
+  @tag skip: Mix.env() != :prod
+  test "production listener serves public routes, bounds input and has no loopback override" do
+    dir = temp()
+    ca = certs(dir)
+    a_port = port()
+    b_port = port()
+    b = node(dir <> "/beta", "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    assert Application.spec(:bandit, :vsn) == ~c"1.14.0"
+
+    assert {:error, :test_transport_disabled} =
+             Network.request(:get, "https://beta.example/actors/shop", [], "",
+               test_routes: %{"beta.example" => {{127, 0, 0, 1}, b_port}},
+               test_cacerts: [ca]
+             )
+
+    for path <- ["/actors/shop", "/actors/shop/outbox", "/market", "/market.json"] do
+      assert raw_tls(
+               b_port,
+               ca,
+               "GET #{path} HTTP/1.1\r\nHost: beta.example\r\nConnection: close\r\n\r\n"
+             ) =~ "HTTP/1.1 200"
+    end
+
+    assert raw_tls(b_port, ca, wire([{"Content-Length", "2"}], "{}")) =~ "HTTP/1.1 401"
+
+    assert raw_tls(b_port, ca, wire([{"Content-Length", "65537"}], String.duplicate("x", 65_537))) =~
+             "HTTP/1.1 413"
+
+    assert raw_tls(
+             b_port,
+             ca,
+             wire([{"Transfer-Encoding", "chunked"}], "1;x=\n\r\nx\r\n0\r\n\r\n")
+           ) =~ ~r/HTTP\/1\.[01] 400/
+
+    assert command(b, %{op: "snapshot"})["inbox_count"] == 0
+    assert command(b, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
   end
 
   test "bounded HTTP/1.1 parser rejects ambiguous framing and preserves signed admission" do
