@@ -1,5 +1,5 @@
 defmodule AgentOpsStore.EventWakeupTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias AgentOpsStore.EventWakeup
 
