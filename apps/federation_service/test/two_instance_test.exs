@@ -90,6 +90,63 @@ defmodule FederationService.TwoInstanceTest do
          end)
   end
 
+  test "signed outbound Follow and locally approved Accept recover across independent node restart" do
+    dir = temp()
+    certs(dir)
+    a_port = port()
+    b_port = port()
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    beta = "https://beta.example/actors/shop"
+    assert command(a, %{op: "follow", peer: beta, source_id: "signed-follow"})["ok"]
+    a_before = command(a, %{op: "snapshot"})
+    [follow_id] = Map.keys(a_before["subscriptions"])
+    assert a_before["subscriptions"][follow_id] == "pending"
+
+    assert command(a, %{op: "deliver"})["ok"]
+    assert command(b, %{op: "snapshot"})["subscriptions"][follow_id] == "pending"
+
+    assert command(b, %{
+             op: "approve_follow",
+             follow_id: follow_id,
+             decision: "accept",
+             source_id: "operator-accept"
+           })["ok"]
+
+    pending = command(b, %{op: "snapshot"})["subscription_outbox"]
+    assert Enum.any?(Map.values(pending), &(&1 == "pending"))
+    stop(b)
+
+    b2 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+    on_exit(fn -> stop(b2) end)
+
+    assert command(b2, %{op: "snapshot"})["subscriptions"][follow_id] == "accepted"
+    assert command(b2, %{op: "deliver"})["ok"]
+    assert command(a, %{op: "snapshot"})["subscriptions"][follow_id] == "accepted"
+    assert Enum.all?(
+             Map.values(command(b2, %{op: "snapshot"})["subscription_outbox"]),
+             &(&1 == "delivered")
+           )
+
+    assert command(a, %{op: "undo_follow", follow_id: follow_id, source_id: "operator-undo"})[
+             "ok"
+           ]
+
+    assert command(a, %{op: "deliver"})["ok"]
+    assert command(b2, %{op: "snapshot"})["subscriptions"][follow_id] == "withdrawn"
+    assert command(a, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+    assert command(b2, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+  end
+
   test "signed Follow and Undo are durably admitted without business or peer authority" do
     dir = temp()
     ca = certs(dir)

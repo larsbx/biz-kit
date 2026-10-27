@@ -194,10 +194,10 @@ defmodule FederationService.SubscriptionState do
     destination = List.first(activity["to"])
 
     cond do
-      map_size(data.subscription_outbox) >= @max ->
+      map_size(Map.get(data, :subscription_outbox, %{})) >= @max ->
         {:error, :subscription_outbox_capacity}
 
-      data.subscription_outbox[id] != nil ->
+      Map.get(data, :subscription_outbox, %{})[id] != nil ->
         {:error, :subscription_outbox_conflict}
 
       true ->

@@ -51,8 +51,11 @@ defmodule FederationService.SubscriptionDelivery do
       Store.blocked?(data, destination, "") ->
         false
 
-      relation == nil or relation.follower != List.first(activity["to"]) and
-          activity["type"] in ["Accept", "Reject"] ->
+      relation == nil ->
+        false
+
+      activity["type"] in ["Accept", "Reject"] and
+          relation.follower != List.first(activity["to"]) ->
         false
 
       activity["type"] == "Follow" ->
