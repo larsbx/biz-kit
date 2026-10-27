@@ -325,3 +325,25 @@ Payment, settlement, stock holds, inventory reservations, contract acceptance,
 verified reputation and private learner/employee/buyer data remain outside this
 milestone. Issue [#115](https://github.com/larsbx/biz-kit/issues/115) stays open for
 its broader subscription, disclosure-adapter, scale and interoperability gates.
+
+
+## Durable subscription-correlation pilot
+
+`FederationService.SubscriptionState` provides deterministic, replay-safe
+journal planning for *trusted host* Follow initiation, authenticated inbound
+Follow/Accept/Reject/Undo candidates, explicit local approvals/rejections,
+and subscriber-origin withdrawals. Accepted plans commit atomically through
+the existing discovery journal; duplicates and invalid transitions do not
+write and terminal requests never reactivate. Authority receipts are opaque
+references **supplied by a trusted host**: this library does NOT validate
+that an operator actually holds a grant or verify an HTTP signature.
+
+Use `FederationService.Store.call(store, {:subscription, intent})` only from
+an adapter that has already checked signer identity, peer policy and local
+authority. There is no public subscription HTTP route, signed subscription
+delivery worker, dynamic peers, follower collection, or merchant permission
+derivable from these rows. They are operational correlation state, never
+business events. A future host adapter must implement authentication,
+authority rechecks, bounded queued deliveries and restoration tests before
+claiming working ActivityPub following. Current inbox still handles only
+public listing events.
