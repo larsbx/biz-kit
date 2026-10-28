@@ -4,7 +4,12 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
-cp -R "$root/apps/coop_substrate" "$root/apps/biz_kit_cluster" "$root/apps/task_core" "$root/apps/agent_core" "$root/apps/agent_ops_store" "$root/apps/group_buy_core" "$root/apps/inventory_core" "$stage/apps/"
+# Include the ledger's full test dependency closure, including federation
+# authority/replay adapters; otherwise Mix fails before any escrow test runs.
+for app in coop_substrate biz_kit_cluster task_core agent_core agent_ops_store \
+  group_buy_core inventory_core federation_core federation_service; do
+  cp -R "$root/apps/$app" "$stage/apps/"
+done
 cp "$root/config/config.exs" "$stage/config/config.exs"
 cp "$root/mix.lock" "$stage/mix.lock"
 printf 'defmodule GroupBuyAuthorityHarness.MixProject do\n use Mix.Project\n def project, do: [apps_path: "apps", deps: []]\nend\n' > "$stage/mix.exs"
