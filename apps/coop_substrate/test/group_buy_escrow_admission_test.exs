@@ -435,6 +435,14 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
                ctx.now
              )
 
+    legacy_position =
+      historical.group_buys.escrow_states[{@chapter, @seller, @campaign}].positions[@buyer]
+
+    legacy_recheck = reconfirmation(ctx, legacy_position, %{key_id: "provider-signing-1"})
+
+    assert {:error, :authenticated_provider_pin_required} =
+             GroupBuys.check(evidence(ctx, legacy_recheck, @campaign, 1), historical)
+
     # Repinning alone is insufficient: the current provider must explicitly
     # sign the exact legacy allocation and its prior evidence hash.
     historical = %{historical | group_buys: GroupBuys.fold!(pin(ctx, @campaign, 1), historical)}

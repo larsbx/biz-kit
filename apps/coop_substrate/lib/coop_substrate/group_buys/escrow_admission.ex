@@ -233,6 +233,7 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
          true <- p["expected_version"] == version,
          grant when not is_nil(grant) <-
            gate.group_buys.escrow_grants[{key, proof.provider_id}],
+         :ok <- reconfirmation_authority(proof, grant, gate, key, now),
          :ok <- provider_global_event(gate, proof),
          :ok <- provider_custody(gate, key, proof),
          {:ok, candidate} <-
@@ -273,6 +274,28 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
       _ -> {:error, :invalid_escrow_evidence_admission}
     end
   end
+
+  # This operation did not exist in V1 history. Validate current ancestry
+  # during both append and deterministic replay; a seller-only pin is never
+  # sufficient even for callers of the pure check/fold API.
+  defp reconfirmation_authority(
+         %{payload: %{op: :hold_reconfirmed}},
+         grant,
+         gate,
+         {chapter, _, _},
+         now
+       ) do
+    with %{authority_event_id: id} when is_binary(id) <- grant,
+         %{event_id: ^id, active: true, expires_at: expiry} <-
+           gate.group_buys.escrow_authorities[{chapter, grant.provider_id}],
+         true <- expiry > now do
+      :ok
+    else
+      _ -> {:error, :authenticated_provider_pin_required}
+    end
+  end
+
+  defp reconfirmation_authority(_, _, _, _, _), do: :ok
 
   @doc "Strict canonical proof decoding: incoming CBOR maps have string keys."
   def decode_proof({:bytes, bytes}) when is_binary(bytes) do
