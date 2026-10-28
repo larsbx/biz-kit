@@ -57,8 +57,8 @@ defmodule BizKit.LastMileBridge do
         {:error, :unverified_transport_source}
 
       Map.get(fulfillment, :merchant) !== merchant or
-          Map.get(last_mile, :merchant) !== merchant or
-          Map.get(fulfillment, :transport_ref) !== ref or
+        Map.get(last_mile, :merchant) !== merchant or
+        Map.get(fulfillment, :transport_ref) !== ref or
           Map.get(last_mile, :delivery_id) !== ref ->
         {:error, :wrong_transport_scope}
 
