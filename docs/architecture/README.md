@@ -10,6 +10,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
   baseline implementation evidence and tradeoffs. Its recommendation to retain
   independent authorities is superseded by the consolidation target.
+- [Cross-repository extension and Hawala capability — 2026-10-28](2026-10-28-cross-repository-extension-and-hawala-capability.md):
+  proposed common application-extension and source-ownership contract across biz-kit,
+  hawala-core, Eatsbot, d-patch and school-ops; authority and live-money gates remain separate.
 - [Hawala: shared identity and scoped authority — 2026-10-28](2026-10-28-hawala-shared-identity-and-scoped-authority.md):
   proposed, paired with hawala-core ADR 0004. Keys and attestations are shared as
   evidence; one instance may order Hawala settlement only for an explicit scope.
