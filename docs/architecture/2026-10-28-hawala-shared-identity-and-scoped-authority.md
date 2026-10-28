@@ -40,8 +40,8 @@ any authority, whether in Hawala or in biz-kit.
 **D3. One key may sign in both systems only under disjoint signing inputs.**
 `Envelope.signed_core_term/1` is a map, so its canonical encoding starts with
 a CBOR map head (`0xA0..=0xBB`). Every Hawala identity-core signing input
-starts with `hawala-identity-core/v1\0`, whose first byte `0x68` is a
-text-string head. The input sets are disjoint. That holds only while a key
+starts with `hawala-identity-core/v1\0`, whose first byte `0x68` is the
+raw ASCII `h` byte, not a CBOR header. The input sets are disjoint. That holds only while a key
 bound under D1 signs nothing in biz-kit except envelope cores (or other
 inputs proven disjoint). Device statements, capability documents and other
 ad hoc signing inputs must use separate keys, or carry a proof of their own.
@@ -96,6 +96,10 @@ cross-ledger bridges" true.
 
 ## Next steps
 
-1. Verify Hawala's published identity-core test vectors in Elixir (D1, D2).
-2. Add the D3 disjointness test in `coop_substrate`.
+1. Maintain the byte-for-byte identity fixtures in
+   `apps/coop_substrate/test/vectors/hawala_identity_v1.json`, with tests in
+   `apps/coop_substrate/test/hawala_interop_test.exs`; align them with
+   hawala-core's `crates/identity-core/test-vectors/bizkit_identity_v1.json`.
+2. Implement explicit proof-of-possession key bindings and signed-evidence
+   ingestion as nonauthoritative domain adapters (D1–D2).
 3. Only then consider a scoped authority adapter (D5).
