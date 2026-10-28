@@ -142,6 +142,20 @@ defmodule BizKit.Identity do
     end
   end
 
+  @doc "Validate a non-bearer reference held in a trusted application session."
+  def session_from_reference(reference, now_ms \\ System.system_time(:millisecond)) do
+    with {:ok, session} <- Sessions.fetch_reference(reference, now_ms) do
+      case Resolver.resolve(session.identity) do
+        {:ok, principal} when principal == session.principal ->
+          {:ok, session}
+
+        _ ->
+          Sessions.revoke_reference(reference)
+          {:error, :unbound}
+      end
+    end
+  end
+
   defdelegate logout(id), to: Sessions, as: :revoke
   defdelegate revoke_principal(principal), to: Sessions
   defdelegate session_ttl_ms(), to: Sessions, as: :ttl_ms

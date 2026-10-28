@@ -4,6 +4,12 @@ defmodule BizKit.Identity.SessionStore do
   (docs/architecture/2026-10-21-native-sign-in.md). Configured as
   `:biz_kit_identity, :session_store`; SpruceGoose provides the Postgres one.
 
+  All nodes must use the same durable backend. Reads run in the fetching
+  process; put/delete/delete_principal run in the cluster session singleton.
+  Callbacks must not call Sessions (that would deadlock). A successful delete
+  must be durable and visible to subsequent reads on every node. A backend
+  error must raise or fail the callback rather than acknowledge revocation.
+
   Keyed by the SHA-256 of the token: the store never holds a usable session.
   Unconfigured (`None`), native sessions live in memory only, and a restart
   ends them as it ends web sessions.

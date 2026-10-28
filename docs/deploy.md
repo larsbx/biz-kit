@@ -2,12 +2,31 @@
 
 Date: 2026-10-20. The shortest path to a running deployment.
 
-## Two releases
+## Releases
 
 | Release | Applications | Boots in production when |
 | --- | --- | --- |
 | `orchestration` | the ledger (`coop_substrate`), identity, cluster, SpruceGoose (web view, API, CLI service) | the settings below are set |
 | `biz_kit` | all of the above, plus `dispatch` and `keel` | dispatch's integrations are configured too |
+| `eatsbot` | `eatsbot` and its `eatsbot_*` siblings | `DATABASE_URL`, `SECRET_KEY_BASE`, `GEOCODING_TOKEN`, `TOKEN_SIGNING_SECRET` are set |
+
+`eatsbot` is built from its own directory, so it compiles only eatsbot and its
+siblings: `docker build -f apps/eatsbot/Dockerfile .` from the repository root.
+It has a database of its own. Its production section of `runtime.exs` runs
+only for this release (or an unset `RELEASE_NAME`), and the dispatch and
+SpruceGoose sections skip it.
+
+Production eatsbot is not deployed from here: Fly deploys it from
+`larsbx/eatsbot`, which remains the source of truth (see the
+[modular platform decision](architecture/2026-10-24-modular-business-platform.md)).
+Moving production to this release is a separate, tested cutover; until then
+this release exists for building and testing, and must not run as a second
+writer against eatsbot's production database.
+
+The Telegram bot reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK` (the full
+`https://…/telegram` URL) at boot. Setting `TELEGRAM_WEBHOOK` also requires
+`TELEGRAM_WEBHOOK_SECRET` (1–256 of `A-Z a-z 0-9 _ -`): the bot registers it
+with Telegram, and `POST /telegram` answers 401 to any update without it.
 
 Nothing depends on dispatch, so `orchestration` leaves it out. In
 production, dispatch refuses to start until it has these:

@@ -1,0 +1,20 @@
+# Dependency updates as reviewable pull requests: weekly, one grouped pull
+# request per ecosystem and directory, and security updates as they land.
+version: 2
+updates:
+  - package-ecosystem: mix
+    directory: /
+    schedule: { interval: weekly }
+    groups: { mix: { patterns: ['*'] } }
+  - package-ecosystem: cargo
+    directories: [/apps/coop_substrate/native/canonical_v1, /desktop/src-tauri]
+    schedule: { interval: weekly }
+    groups: { cargo: { patterns: ['*'] } }
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule: { interval: weekly }
+    groups: { npm: { patterns: ['*'] } }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups: { actions: { patterns: ['*'] } }

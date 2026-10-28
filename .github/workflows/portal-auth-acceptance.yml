@@ -1,0 +1,74 @@
+name: Portal authentication acceptance
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+jobs:
+  portal-auth-postgis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      ERL_FLAGS: '+S 4:4'
+      DATABASE_URL: ecto://postgres:postgres@localhost:5432/dispatch_test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - run: mix compile --warnings-as-errors
+      - name: Format portal correction
+        run: >-
+          mix format --check-formatted
+          apps/biz_kit_identity/lib/biz_kit/identity.ex
+          apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex
+          apps/biz_kit_identity/test/session_reference_test.exs
+          apps/dispatch/lib/dispatch/identity/tokens/biz_kit_session.ex
+          apps/dispatch/lib/dispatch/identity/tokens/verifier.ex
+          apps/dispatch/lib/dispatch_web/controllers/session_controller.ex
+          apps/dispatch/lib/dispatch_web/controllers/stream_controller.ex
+          apps/dispatch/lib/dispatch_web/plugs/portal_session.ex
+          apps/dispatch/lib/dispatch_web/plugs/require_subject.ex
+          apps/dispatch/test/dispatch_web/portal_revocation_test.exs
+          apps/dispatch/test/support/portal_identity.ex
+          apps/spruce_goose/test/native_session_revocation_test.exs
+      - name: Identity and cross-node regressions
+        working-directory: apps/biz_kit_identity
+        run: mix test
+      - name: Migrate Dispatch PostgreSQL/PostGIS
+        working-directory: apps/dispatch
+        run: mix ecto.create && mix ecto.migrate
+      - name: Dispatch including portal, stream and role integration
+        working-directory: apps/dispatch
+        run: mix test --include integration
+      - name: Format location integration corrections
+        run: >-
+          mix format --check-formatted
+          apps/dispatch/lib/dispatch/operations/locations.ex
+          apps/dispatch/lib/dispatch_web/controllers/location_controller.ex
+          apps/dispatch/lib/dispatch_web/endpoint.ex
+          apps/dispatch/lib/dispatch_web/plugs/location_batch_parser.ex
+          apps/dispatch/test/dispatch/operations/location_concurrency_test.exs
+          apps/dispatch/test/dispatch_web/location_batch_parser_test.exs
+          apps/dispatch/test/dispatch_web/location_controller_test.exs

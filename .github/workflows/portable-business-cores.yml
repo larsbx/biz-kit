@@ -1,0 +1,83 @@
+name: Portable cores — independent consumers
+
+on:
+  pull_request:
+    paths:
+      - 'apps/task_core/**'
+      - 'apps/commerce_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/fulfillment_core/**'
+      - 'apps/sales_core/**'
+      - '.github/workflows/portable-business-cores.yml'
+      - 'mix.lock'
+      - 'mix.exs'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  standalone-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [task_core, commerce_core, inventory_core, fulfillment_core, sales_core]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Copy package outside the umbrella
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/business-core-vendor"
+          cp -R "apps/${{ matrix.app }}" "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
+      - name: Resolve the package's own dependencies and compile
+        shell: bash
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
+          mix deps.get
+          MIX_ENV=test mix compile --warnings-as-errors
+      - name: Consume the copied package from an unrelated Mix project
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/business-core-consumer"
+          cat > "$RUNNER_TEMP/business-core-consumer/mix.exs" <<'EOF'
+          defmodule IndependentConsumer.MixProject do
+            use Mix.Project
+
+            def project do
+              [
+                app: :independent_consumer,
+                version: "0.1.0",
+                elixir: "~> 1.19",
+                deps: [
+                  {:MODULE_PLACEHOLDER, path: "../business-core-vendor/MODULE_PLACEHOLDER"}
+                ]
+              ]
+            end
+
+            def application, do: [extra_applications: []]
+          end
+          EOF
+          sed -i "s/MODULE_PLACEHOLDER/${{ matrix.app }}/g" "$RUNNER_TEMP/business-core-consumer/mix.exs"
+          cd "$RUNNER_TEMP/business-core-consumer"
+          mix deps.get
+          MIX_ENV=test mix compile --warnings-as-errors
+      - name: Execute independent package tests
+        shell: bash
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
+          MIX_ENV=test mix test --no-start

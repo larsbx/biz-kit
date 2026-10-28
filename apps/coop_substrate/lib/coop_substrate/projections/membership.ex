@@ -29,6 +29,7 @@ defmodule CoopSubstrate.Projections.Membership do
   def init do
     %{
       orchestration: CoopSubstrate.Projections.Tasks.init(),
+      group_buys: CoopSubstrate.GroupBuys.init(),
       entities: %{},
       members: %{},
       memberships: %{},
@@ -88,6 +89,13 @@ defmodule CoopSubstrate.Projections.Membership do
   # Derived from the registration, as in Validity: a task type that is admitted
   # but not folded here would leave every later check reading stale state.
   @task_types Map.keys(TaskCore.Admission.event_types())
+
+  @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
+
+  @impl true
+  def handle_event(%Envelope{type: type} = env, state) when type in @group_buy_types do
+    update_in(state, [:group_buys], fn _ -> CoopSubstrate.GroupBuys.fold!(env, state) end)
+  end
 
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @task_types do

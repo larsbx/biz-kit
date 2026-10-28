@@ -1,0 +1,36 @@
+name: Barter core
+
+on:
+  pull_request:
+    paths:
+      - "apps/barter_core/**"
+      - "docs/architecture/2026-10-26-direct-barter.md"
+      - ".github/workflows/barter-core.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/barter_core/**"
+      - "docs/architecture/2026-10-26-direct-barter.md"
+      - ".github/workflows/barter-core.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pure-route-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Pure barter matching and pre-delivery preview tests
+        run: mix test
+        working-directory: apps/barter_core
+      - name: Check formatting
+        run: |
+          mix format mix.exs "lib/**/*.ex" "test/**/*.exs"
+          git diff --exit-code -- mix.exs lib/ test/
+        working-directory: apps/barter_core

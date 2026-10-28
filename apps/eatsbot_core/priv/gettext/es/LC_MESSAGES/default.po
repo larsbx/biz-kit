@@ -1,0 +1,142 @@
+## "msgid"s in this file come from POT (.pot) files.
+###
+### Do not add, change, or remove "msgid"s manually here as
+### they're tied to the ones in the corresponding POT file
+### (with the same domain).
+###
+### Use "mix gettext.extract --merge" or "mix gettext.merge"
+### to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: lib/deliveries/transitions.ex:14
+#, elixir-autogen, elixir-format
+msgid "The order is processing"
+msgstr "La orden está en preparación"
+
+#: lib/deliveries/transitions.ex:41
+#, elixir-autogen, elixir-format
+msgid "Delivery issue resolved"
+msgstr "El problema de entrega se resolvió"
+
+#: lib/deliveries/update_history.ex:35
+#, elixir-autogen, elixir-format
+msgid "Invalid delivery state transition"
+msgstr "Transición de estado del delivery inválida"
+
+#: lib/deliveries/transitions.ex:46
+#, elixir-autogen, elixir-format
+msgid "The completed delivery is now stale"
+msgstr "La entrega completada ahora está obsoleta"
+
+#: lib/deliveries/transitions.ex:36
+#, elixir-autogen, elixir-format
+msgid "The delivery has been completed"
+msgstr "La entrega ha sido completada"
+
+#: lib/deliveries/transitions.ex:38
+#, elixir-autogen, elixir-format
+msgid "The delivery has issues and was not resolved in time"
+msgstr "La entrega tiene problemas y no se resolvió a tiempo"
+
+#: lib/deliveries/transitions.ex:35
+#, elixir-autogen, elixir-format
+msgid "The delivery has issues, such as address or details mismatch"
+msgstr "La entrega tiene problemas, como dirección incorrecta o datos erróneos"
+
+#: lib/deliveries/transitions.ex:43
+#, elixir-autogen, elixir-format
+msgid "The delivery issue was not resolved in time and is now stale"
+msgstr "El problema de la entrega no se resolvió a tiempo y ahora está obsoleto"
+
+#: lib/deliveries/transitions.ex:15
+#, elixir-autogen, elixir-format
+msgid "The order cannot be fulfilled or expired"
+msgstr "La orden no se puede completar o ha expirado"
+
+#: lib/deliveries/transitions.ex:31
+#, elixir-autogen, elixir-format
+msgid "The order was canceled and is now stale"
+msgstr "La orden fue cancelada y ahora está obsoleta"
+
+#: lib/deliveries/transitions.ex:20
+#, elixir-autogen, elixir-format
+msgid "The order was canceled during preparation"
+msgstr "La orden fue cancelada durante la preparación"
+
+#: lib/deliveries/transitions.ex:24
+#, elixir-autogen, elixir-format
+msgid "The order has been picked up and is on the way"
+msgstr "La orden ha sido recogida y está en camino"
+
+#: lib/deliveries/transitions.ex:18
+#, elixir-autogen, elixir-format
+msgid "The order is ready for pickup"
+msgstr "La orden está lista para ser recogida"
+
+#: lib/deliveries/delivery.ex:206
+#, elixir-autogen, elixir-format
+msgid "the state must be in delivery to update the current location"
+msgstr "el delivery debe estar en camino para poder actualizar su ubicación actual"
+
+#: lib/deliveries/transitions.ex:55
+#, elixir-autogen, elixir-format
+msgid "Delivery_Aborted"
+msgstr "Delivery abortado"
+
+#: lib/deliveries/transitions.ex:60
+#, elixir-autogen, elixir-format
+msgid "Delivery_Done"
+msgstr "Delivery completado"
+
+#: lib/deliveries/transitions.ex:59
+#, elixir-autogen, elixir-format
+msgid "Delivery_With_Problems"
+msgstr "Delivery con problemas"
+
+#: lib/deliveries/transitions.ex:57
+#, elixir-autogen, elixir-format
+msgid "In_Delivery"
+msgstr "Delivery en entrega"
+
+#: lib/deliveries/transitions.ex:54
+#, elixir-autogen, elixir-format
+msgid "In_Preparation"
+msgstr "Delivery en preparación"
+
+#: lib/deliveries/transitions.ex:53
+#, elixir-autogen, elixir-format
+msgid "Init"
+msgstr "Delivery inicializado"
+
+#: lib/deliveries/transitions.ex:66
+#, elixir-autogen, elixir-format
+msgid "Invalid_State"
+msgstr "Estado inválido"
+
+#: lib/deliveries/transitions.ex:56
+#, elixir-autogen, elixir-format
+msgid "Ready_To_Pickup"
+msgstr "Delivery listo para recoger"
+
+#: lib/deliveries/transitions.ex:58
+#, elixir-autogen, elixir-format
+msgid "Stale_Delivery_Aborted"
+msgstr "Delivery abortado (stale)"
+
+#: lib/deliveries/transitions.ex:65
+#, elixir-autogen, elixir-format
+msgid "Stale_Delivery_Done"
+msgstr "Delivery completado (stale)"
+
+#: lib/deliveries/transitions.ex:63
+#, elixir-autogen, elixir-format
+msgid "Stale_Delivery_With_Problems"
+msgstr "Delivery con problemas (stale)"
+
+#: lib/deliveries/transitions.ex:27
+#, elixir-autogen, elixir-format, fuzzy
+msgid "The order was canceled before pick up."
+msgstr "La orden fue cancelada antes de ser recogida."

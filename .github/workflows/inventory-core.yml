@@ -1,0 +1,46 @@
+name: InventoryCore rules
+
+on:
+  pull_request:
+    paths:
+      - 'apps/inventory_core/**'
+      - 'apps/biz_kit_composition/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/inventory-core.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  inventory-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile inventory rules
+        working-directory: apps/inventory_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check formatting
+        run: >-
+          MIX_ENV=test mix format --check-formatted
+          apps/inventory_core/mix.exs
+          apps/inventory_core/lib/inventory_core.ex
+          apps/inventory_core/lib/inventory_core/wire.ex
+          apps/inventory_core/test/inventory_core_test.exs
+          apps/inventory_core/test/wire_test.exs
+      - name: Test replay and reservation rules
+        working-directory: apps/inventory_core
+        run: mix test --no-start

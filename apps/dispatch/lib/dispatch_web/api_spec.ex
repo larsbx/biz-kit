@@ -27,7 +27,7 @@ defmodule DispatchWeb.ApiSpec do
         """
       },
       servers: [%Server{url: "/"}],
-      paths: Paths.from_router(DispatchWeb.Router),
+      paths: DispatchWeb.Router |> Paths.from_router() |> custom_methods(),
       components: %Components{
         securitySchemes: %{
           # Section 23.1: short-lived OIDC access tokens.
@@ -36,5 +36,14 @@ defmodule DispatchWeb.ApiSpec do
       }
     }
     |> OpenApiSpex.resolve_schema_modules()
+  end
+
+  # A custom method (`/location-samples:batch`, Section 24.2) is a route whose
+  # last segment ends in `:verb`, which Phoenix matches as a parameter and
+  # OpenApiSpex therefore writes as `{verb}`. The contract states the path.
+  defp custom_methods(paths) do
+    Map.new(paths, fn {path, item} ->
+      {Regex.replace(~r/([^\/])\{(\w+)\}$/, path, "\\1:\\2"), item}
+    end)
   end
 end

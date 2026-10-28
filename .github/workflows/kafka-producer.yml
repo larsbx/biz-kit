@@ -1,0 +1,60 @@
+name: Eatsbot Kafka producer
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  kafka-producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      kafka:
+        image: apache/kafka:3.8.1
+        ports: [19092:19092]
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:19092,CONTROLLER://:19093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:19092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:19093
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+          KAFKA_NUM_PARTITIONS: 1
+          KAFKA_MESSAGE_MAX_BYTES: 1048588
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 10
+    env:
+      MIX_ENV: test
+      KAFKA_PORT: '19092'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies without mutation
+        run: |
+          sha256sum mix.lock > /tmp/kafka-lock.sha256
+          mix deps.get --check-locked
+          sha256sum -c /tmp/kafka-lock.sha256
+      - name: Strict umbrella compilation
+        run: mix compile --warnings-as-errors
+      - name: Check Kafka formatting
+        working-directory: apps/eatsbot_extension_kafka
+        run: mix format --check-formatted
+      - name: Adapter, TCP fault-injection, real-broker and supervision acceptance
+        working-directory: apps/eatsbot_extension_kafka
+        run: mix test --no-start --include kafka_integration

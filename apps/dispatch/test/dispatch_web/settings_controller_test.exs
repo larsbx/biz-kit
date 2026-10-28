@@ -15,7 +15,7 @@ defmodule DispatchWeb.SettingsControllerTest do
 
   alias Dispatch.Accounts.RoleAssignment
   alias Dispatch.Support.Fixtures
-  alias Dispatch.Support.Tokens.StaticVerifier
+  alias Dispatch.Support.PortalIdentity, as: StaticVerifier
 
   @moduletag :integration
 
@@ -30,6 +30,7 @@ defmodule DispatchWeb.SettingsControllerTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
+    :ok = Dispatch.Support.PortalIdentity.setup()
 
     carrier = Fixtures.carrier()
     tenant = carrier.id

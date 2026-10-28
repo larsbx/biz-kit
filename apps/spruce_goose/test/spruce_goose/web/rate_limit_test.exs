@@ -59,13 +59,69 @@ defmodule SpruceGoose.Web.RateLimitTest do
     assert get("/auth/me", client).status == 401
   end
 
+  # An environment that is not the limiter's test (the end-to-end stack)
+  # raises one bucket without restating the others.
+  test "an override replaces only the bucket it names" do
+    Application.put_env(:spruce_goose, RateLimit,
+      limits: %{sign_in: {1, 60_000}, capability: {1, 60_000}, api: {100, 60_000}},
+      overrides: %{sign_in: {3, 60_000}},
+      trusted_proxies: []
+    )
+
+    client = ip()
+    assert for(_ <- 1..3, do: get("/auth/me", client).status) == [401, 401, 401]
+    assert get("/auth/me", client).status == 429
+    assert get(@enrolment, client).status == 404
+    assert get(@enrolment, client).status == 429
+  end
+
+  test "the e2e sign-in environment variable does not configure production overrides" do
+    env = %{
+      "RELEASE_NAME" => "orchestration",
+      "SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR" => "00000000-0000-0000-0000-000000000001",
+      "DATABASE_URL" => "ecto://test:test@localhost/test",
+      "DATABASE_SSL" => "false",
+      "TOKEN_SIGNING_SECRET" => "test-only-runtime-config",
+      "SPRUCE_GOOSE_MCP_ENABLED" => "false",
+      "OUTBOX_DISPATCHER_ENABLED" => "false",
+      "SPRUCE_GOOSE_SIGN_IN_LIMIT" => "600"
+    }
+
+    previous = Map.new(env, fn {key, _} -> {key, System.get_env(key)} end)
+    System.put_env(env)
+
+    try do
+      runtime = Path.expand("../../../../../config/runtime.exs", __DIR__)
+      dev = Config.Reader.read!(runtime, env: :dev, target: :host)
+      prod = Config.Reader.read!(runtime, env: :prod, target: :host)
+      assert get_in(dev, [:spruce_goose, RateLimit, :overrides]) == %{sign_in: {600, 60_000}}
+      refute get_in(prod, [:spruce_goose, RateLimit, :overrides])
+    after
+      Enum.each(previous, fn
+        {key, nil} -> System.delete_env(key)
+        {key, value} -> System.put_env(key, value)
+      end)
+    end
+  end
+
   test "a new window starts afresh" do
-    limits!(%{capability: {1, 100}})
+    period_ms = 500
+    offset_ms = rem(System.system_time(:millisecond), period_ms)
+
+    # The limiter uses epoch-aligned fixed windows, not 100 ms starting at the
+    # first request. Place both assertions safely inside the same window to
+    # avoid nondeterministic 404s when CI happens to cross a boundary.
+    if offset_ms > 100, do: Process.sleep(period_ms - offset_ms + 10)
+
+    limits!(%{capability: {1, period_ms}})
     client = ip()
 
     assert get(@enrolment, client).status == 404
     assert get(@enrolment, client).status == 429
-    Process.sleep(110)
+
+    remaining_ms = period_ms - rem(System.system_time(:millisecond), period_ms)
+    Process.sleep(remaining_ms + 20)
+
     assert get(@enrolment, client).status == 404
   end
 

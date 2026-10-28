@@ -28,7 +28,8 @@ defmodule CoopSubstrate.Offboarding do
     grants: "operator",
     suggester_grants: "suggester",
     dod_grants: "reviewer",
-    delegations: "delegation"
+    delegations: "delegation",
+    task_access_grants: "task access"
   }
 
   @doc """
@@ -198,7 +199,7 @@ defmodule CoopSubstrate.Offboarding do
     %{
       event_id: id,
       kind: @kinds[kind],
-      key_id: a.key_id,
+      key_id: a[:key_id],
       label: a[:device_label],
       direction: if(kind == :delegations, do: direction(a, principal))
     }

@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -43,9 +47,57 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/crypto.ex
+          apps/coop_substrate/test/signing_domain_test.exs
+          apps/coop_substrate/test/hawala_interop_test.exs
+          apps/keel/test/conformance_test.exs
+          apps/keel/lib/keel/ownership.ex
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
           apps/coop_substrate/lib/coop_substrate/harness/artifacts.ex
           apps/task_core/lib/task_core/readiness.ex
+          apps/task_core/lib/task_core/agent_candidates.ex
+          apps/task_core/lib/task_core/agent_runs.ex
+          apps/agent_core/mix.exs
+          apps/agent_core/lib/agent_core/execution_port.ex
+          apps/agent_core/lib/agent_core/profiles.ex
+          apps/agent_core/lib/agent_core/capabilities.ex
+          apps/agent_core/lib/agent_core/preflight.ex
+          apps/agent_core/lib/agent_core/attempts.ex
+          apps/agent_core/test/profiles_test.exs
+          apps/agent_core/test/capabilities_test.exs
+          apps/agent_core/test/preflight_test.exs
+          apps/agent_core/test/attempts_test.exs
+          apps/agent_ops_store/mix.exs
+          apps/agent_ops_store/lib/agent_ops_store/postgres.ex
+          apps/agent_ops_store/lib/agent_ops_store/event_cursor.ex
+          apps/agent_ops_store/lib/agent_ops_store/event_replay.ex
+          apps/agent_ops_store/test/event_replay_test.exs
+          apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex
+          apps/coop_substrate/test/signed_consumer_source_test.exs
+          apps/coop_substrate/test/signed_event_replay_test.exs
+          apps/agent_ops_store/lib/agent_ops_store/event_effects.ex
+          apps/agent_ops_store/test/event_cursor_test.exs
+          apps/agent_ops_store/test/event_effects_test.exs
+          apps/agent_ops_store/test/postgres_test.exs
+          apps/agent_ops_store/test/dispatch_integration_test.exs
+          apps/agent_ops_store/lib/agent_ops_store/coordinator.ex
+          apps/agent_ops_store/lib/agent_ops_store/host.ex
+          apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex
+          apps/agent_ops_store/lib/agent_ops_store/worker.ex
+          apps/agent_ops_store/test/coordinator_test.exs
+          apps/agent_ops_store/test/recovery_postgres_test.exs
+          apps/agent_ops_store/test/test_helper.exs
+          apps/agent_core/lib/agent_core/recovery_port.ex
+          apps/agent_core/test/recovery_port_test.exs
+          apps/task_core/lib/task_core/execution_recovery.ex
+          apps/task_core/lib/task_core/execution_tools.ex
+          apps/task_core/lib/task_core/execution_worker.ex
+          apps/task_core/test/execution_recovery_test.exs
+          apps/task_core/test/execution_tools_test.exs
+          apps/task_core/test/execution_worker_test.exs
+          apps/task_core/test/agent_candidates_test.exs
+          apps/task_core/test/agent_runs_test.exs
+          apps/coop_substrate/test/task_agent_run_intents_test.exs
           apps/task_core/lib/task_core/todos.ex
           apps/task_core/lib/task_core/steps.ex
           apps/task_core/test/salvage_test.exs
@@ -240,6 +292,10 @@ jobs:
           apps/biz_kit_identity/test/development_provider_test.exs
           apps/dispatch/priv/repo/e2e.exs
           apps/biz_kit_identity/test/durable_sessions_test.exs
+          apps/biz_kit_identity/mix.exs
+          apps/biz_kit_identity/test/session_revocation_race_test.exs
+          apps/biz_kit_identity/test/support/paused_session_store.ex
+          apps/spruce_goose/test/native_session_revocation_test.exs
           apps/spruce_goose/lib/spruce_goose/web/native_session_store.ex
           apps/spruce_goose/priv/repo/migrations/20261021120000_create_identity_native_sessions.exs
           apps/dispatch/lib/dispatch/accounts/device_keys.ex
@@ -252,6 +308,26 @@ jobs:
           apps/dispatch/lib/dispatch_web/components/settings.ex
           apps/dispatch/test/dispatch/accounts/administration_test.exs
           apps/dispatch/test/dispatch_web/settings_controller_test.exs
+          apps/dispatch/lib/dispatch/operations/consent_grant.ex
+          apps/dispatch/lib/dispatch/operations/location_sample.ex
+          apps/dispatch/lib/dispatch/operations/locations.ex
+          apps/dispatch/lib/dispatch/operations/stream_refresh.ex
+          apps/dispatch/lib/dispatch_web/controllers/location_controller.ex
+          apps/dispatch/lib/dispatch_web/schemas/locations.ex
+          apps/dispatch/test/dispatch/operations/locations_test.exs
+          apps/dispatch/test/dispatch_web/location_controller_test.exs
+          apps/dispatch/lib/dispatch/operations/location_demand.ex
+          apps/dispatch/lib/dispatch_web/streams/transport.ex
+          apps/dispatch/lib/dispatch_web/streams/location_demand.ex
+          apps/dispatch/test/dispatch/operations/location_demand_test.exs
+          apps/dispatch/test/dispatch_web/streams/location_demand_stream_test.exs
+          apps/dispatch/lib/dispatch/operations/trips.ex
+          apps/dispatch/lib/dispatch/fleet/changes/close_location_consents.ex
+          apps/dispatch/lib/dispatch_web/controllers/assignment_controller.ex
+          apps/dispatch/lib/dispatch_web/controllers/location_json.ex
+          apps/dispatch/lib/dispatch_web/schemas/trips.ex
+          apps/dispatch/test/dispatch/operations/trips_test.exs
+          apps/dispatch/test/dispatch_web/assignment_controller_test.exs
           apps/spruce_goose/lib/spruce_goose/actors/grant.ex
           apps/spruce_goose/lib/spruce_goose/actors/registry.ex
           apps/spruce_goose/lib/spruce_goose/cli/command.ex
@@ -269,9 +345,21 @@ jobs:
       - name: Test dispatch (unit tier) and its contract
         working-directory: apps/dispatch
         run: mix test && mix openapi.check
+      - name: Test Keel normative conformance
+        working-directory: apps/keel
+        run: mix test
       - name: Test the task core
         working-directory: apps/task_core
         run: mix test
+      - name: Test the agent-neutral execution contracts
+        working-directory: apps/agent_core
+        run: mix test
+      - name: Ensure PostgreSQL client for signed replay fixture migration
+        run: |
+          if ! command -v psql; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client-16
+          fi
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test
@@ -289,6 +377,19 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
+      - name: Prepare eatsbot's locale data and database
+        working-directory: apps/eatsbot
+        run: mix localize.download_locales && mix ash.setup --quiet
+      - name: Test eatsbot (orders, deliveries, storefront API)
+        working-directory: apps/eatsbot
+        env:
+          ADMIN_API_KEY: test
+        run: mix test && mix ash.codegen --check
+      - name: Verify eatsbot formatting
+        run: >-
+          for app in eatsbot eatsbot_core eatsbot_extension_kafka
+          eatsbot_extension_prometheus eatsbot_extension_telegram_bot;
+          do (cd apps/$app && mix format --check-formatted) || exit 1; done
       - name: Test registry revocation across separate database sessions
         working-directory: apps/spruce_goose
         run: SPRUCE_GOOSE_TEST_DOGFOOD=true mix test test/actors_separate_sessions_test.exs --include separate_sessions

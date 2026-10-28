@@ -1,0 +1,48 @@
+name: Group buy seller-home authority
+on:
+  pull_request:
+    paths:
+      - 'apps/coop_substrate/**'
+      - 'apps/group_buy_core/**'
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'scripts/test-group-buy-authority.sh'
+      - '.github/workflows/group-buy-authority.yml'
+      - 'mix.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/coop_substrate/**'
+      - 'apps/group_buy_core/**'
+      - 'scripts/test-group-buy-authority.sh'
+      - '.github/workflows/group-buy-authority.yml'
+permissions:
+  contents: read
+jobs:
+  authority-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Signed authority, private delivery, races and durable recovery
+        run: scripts/test-group-buy-authority.sh

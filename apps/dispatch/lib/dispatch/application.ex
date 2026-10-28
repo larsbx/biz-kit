@@ -19,7 +19,9 @@ defmodule Dispatch.Application do
       [
         Dispatch.Telemetry,
         Dispatch.Repo,
-        {Phoenix.PubSub, name: Dispatch.PubSub}
+        {Phoenix.PubSub, name: Dispatch.PubSub},
+        # Who is watching whose position, cluster-wide (LocationDemand).
+        Dispatch.Operations.LocationDemand
       ] ++
         outbox_children() ++
         [

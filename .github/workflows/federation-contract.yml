@@ -1,0 +1,36 @@
+name: Federation contract
+
+on:
+  pull_request:
+    paths:
+      - "apps/federation_core/**"
+      - "apps/coop_substrate/lib/coop_substrate/group_buys*"
+      - "apps/coop_substrate/lib/coop_substrate/group_buys/**"
+      - ".github/workflows/federation-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/federation_core/**"
+      - ".github/workflows/federation-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  wire-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Pure federation contract tests
+        run: mix test
+        working-directory: apps/federation_core
+      - name: Check Elixir formatting
+        run: |
+          mix format mix.exs "lib/**/*.ex" "test/**/*.exs"
+          git diff --exit-code -- mix.exs lib/ test/
+        working-directory: apps/federation_core

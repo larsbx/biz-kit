@@ -21,6 +21,7 @@ defmodule DispatchWeb.Streams.ParticipantTest do
 
   use ExUnit.Case, async: false
 
+  alias Dispatch.Operations.{LocationDemand, Locations}
   alias Dispatch.Support.Fixtures
   alias DispatchWeb.Streams.Participant
 
@@ -165,6 +166,65 @@ defmodule DispatchWeb.Streams.ParticipantTest do
       # Last-Event-ID from an authorized stream must not use it to resume one.
       assert Participant.open(ctx.actor, ctx.driver.id, last_event_id: "anything") ==
                {:error, :not_found}
+    end
+  end
+
+  describe "demand: a precise reader watching is what makes a device share live" do
+    setup ctx do
+      %{participant: desk} = Fixtures.person(ctx.tenant, ctx.carrier)
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
+
+      %{
+        tracker: Fixtures.tracker(ctx.tenant, ctx.carrier, desk),
+        driver_actor: Fixtures.actor(ctx.tenant, ctx.carrier, ctx.driver, "DRIVER"),
+        trip: Fixtures.assignment_record(ctx.tenant, ctx.carrier, ctx.driver),
+        device: device,
+        seed: seed
+      }
+    end
+
+    defp sharing(ctx) do
+      {:ok, grant} = Locations.begin_consent(ctx.driver_actor, ctx.trip.id)
+      {:ok, _} = Locations.ingest(ctx.driver_actor, [Fixtures.location_sample(ctx, grant)])
+      grant
+    end
+
+    test "a precise reader watches and sees where; the stream ending ends the watch", ctx do
+      sharing(ctx)
+
+      {:ok, session, chunk} = Participant.open(ctx.tracker, ctx.driver.id)
+      assert session.watching
+      assert LocationDemand.watched?(ctx.driver.id)
+      assert IO.iodata_to_binary(chunk) =~ ~r/participant-live-position.*51\.50740, -0\.12780/s
+
+      LocationDemand.unwatch(ctx.driver.id)
+      refute LocationDemand.watched?(ctx.driver.id)
+    end
+
+    test "a plain dispatcher neither watches nor sees where", ctx do
+      sharing(ctx)
+
+      {:ok, session, chunk} = Participant.open(ctx.actor, ctx.driver.id)
+      refute session.watching
+      refute LocationDemand.watched?(ctx.driver.id)
+      body = IO.iodata_to_binary(chunk)
+      assert body =~ "Last reported"
+      refute body =~ "participant-live-position"
+      refute body =~ "51.507"
+    end
+
+    test "consent ending stops the watch at the next tick", ctx do
+      grant = sharing(ctx)
+      {:ok, session, _chunk} = Participant.open(ctx.tracker, ctx.driver.id)
+
+      {:ok, _} = Locations.revoke_consent(ctx.driver_actor, grant.id)
+      {:emit, _beat, session} = Participant.tick(session, :heartbeat)
+
+      refute session.watching
+      refute LocationDemand.watched?(ctx.driver.id)
+
+      {:emit, chunk, _session} = Participant.tick(session, :refresh)
+      refute IO.iodata_to_binary(chunk) =~ "participant-live-position"
     end
   end
 end

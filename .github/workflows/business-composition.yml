@@ -1,0 +1,50 @@
+name: Business capability composition
+
+on:
+  pull_request:
+    paths:
+      - "apps/coop_substrate/lib/coop_substrate/group_buys*"
+      - "apps/coop_substrate/lib/coop_substrate/group_buys/**"
+      - "apps/coop_substrate/test/group_buy_authority_test.exs"
+      - 'apps/biz_kit_composition/**'
+      - 'apps/commerce_core/**'
+      - 'apps/group_buy_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/fulfillment_core/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/business-composition.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  composition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile composition with existing business cores
+        working-directory: apps/biz_kit_composition
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check composition formatting
+        working-directory: apps/biz_kit_composition
+        run: |
+          MIX_ENV=test mix format mix.exs "lib/**/*.ex" "test/**/*.exs"
+          git diff --exit-code -- mix.exs lib/ test/
+      - name: Exercise restaurant and freight conformance
+        working-directory: apps/biz_kit_composition
+        run: mix test --no-start

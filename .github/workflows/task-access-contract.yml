@@ -1,0 +1,38 @@
+name: TaskCore independent access contract
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  task-access:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Test TaskCore outside the umbrella
+        run: |
+          cp -R apps/task_core "$RUNNER_TEMP/task_core"
+          cd "$RUNNER_TEMP/task_core"
+          MIX_ENV=test mix compile --warnings-as-errors
+          mix test
+      - name: Test AgentCore outside the umbrella
+        run: |
+          cp -R apps/agent_core "$RUNNER_TEMP/agent_core"
+          cd "$RUNNER_TEMP/agent_core"
+          MIX_ENV=test mix compile --warnings-as-errors
+          mix test
+      - name: Check portable execution source formatting
+        run: |
+          cd "$RUNNER_TEMP/task_core"
+          mix format --check-formatted lib/task_core/access.ex test/access_test.exs lib/task_core/agent_runs.ex lib/task_core/dispatcher.ex test/dispatcher_test.exs lib/task_core/execution_recovery.ex lib/task_core/execution_tools.ex lib/task_core/execution_worker.ex test/execution_recovery_test.exs test/execution_tools_test.exs test/execution_worker_test.exs
+      - name: Check recovery adapter formatting
+        run: |
+          cd "$RUNNER_TEMP/agent_core"
+          mix format --check-formatted lib/agent_core/recovery_port.ex test/recovery_port_test.exs
