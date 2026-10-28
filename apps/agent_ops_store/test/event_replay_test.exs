@@ -83,27 +83,37 @@ defmodule AgentOpsStore.EventReplayTest do
     assert {:ok, %{from: 3, to: 3, processed: 0, has_more: false}} =
              EventReplay.drain(ctx.conn, StagingHost)
 
-    assert {:ok, 3} = EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
+    assert {:ok, 3} =
+             EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
 
     {:ok, %Postgrex.Result{rows: [[candidate_count]]}} =
-      Postgrex.query(ctx.conn, """
-      SELECT count(*) FROM agent_ops.consumer_effects
-      WHERE home_id=$1 AND consumer_id=$2
-      """, [ctx.context.home_id, ctx.context.consumer_id])
+      Postgrex.query(
+        ctx.conn,
+        """
+        SELECT count(*) FROM agent_ops.consumer_effects
+        WHERE home_id=$1 AND consumer_id=$2
+        """,
+        [ctx.context.home_id, ctx.context.consumer_id]
+      )
 
     assert candidate_count == 2
 
     {:ok, %Postgrex.Result{rows: [[empty_bundle]]}} =
-      Postgrex.query(ctx.conn, """
-      SELECT effect_bundle FROM agent_ops.consumer_processed
-      WHERE home_id=$1 AND consumer_id=$2 AND global_seq=2
-      """, [ctx.context.home_id, ctx.context.consumer_id])
+      Postgrex.query(
+        ctx.conn,
+        """
+        SELECT effect_bundle FROM agent_ops.consumer_processed
+        WHERE home_id=$1 AND consumer_id=$2 AND global_seq=2
+        """,
+        [ctx.context.home_id, ctx.context.consumer_id]
+      )
 
     assert empty_bundle == []
   end
 
   test "a missing or reordered read page is rejected before the first SQL commit", ctx do
     Process.put(:fixture_head, 3)
+
     Process.put(:fixture_events, [
       event(1, "TaskAgentRunRequestedV1"),
       event(3, "TaskAgentRunCancelledV1")
@@ -112,11 +122,14 @@ defmodule AgentOpsStore.EventReplayTest do
     assert {:error, :ledger_read_gap_or_reorder} =
              EventReplay.drain(ctx.conn, StagingHost)
 
-    assert {:ok, 0} = EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
+    assert {:ok, 0} =
+             EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
   end
 
-  test "unknown event type halts after a durable earlier position, resuming when policy is reviewed", ctx do
+  test "unknown event type halts after a durable earlier position, resuming when policy is reviewed",
+       ctx do
     Process.put(:fixture_head, 2)
+
     Process.put(:fixture_events, [
       event(1, "TaskAgentRunRequestedV1"),
       event(2, "NewUnknownDomainV2")
@@ -125,14 +138,16 @@ defmodule AgentOpsStore.EventReplayTest do
     assert {:error, :event_type_not_reviewed} =
              EventReplay.drain(ctx.conn, StagingHost)
 
-    assert {:ok, 1} = EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
+    assert {:ok, 1} =
+             EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
 
     Process.put(:consumer_context, %{ctx.context | ignored_types: ["NewUnknownDomainV2"]})
 
     assert {:ok, %{from: 1, to: 2, processed: 1, has_more: false}} =
              EventReplay.drain(ctx.conn, StagingHost)
 
-    assert {:ok, 2} = EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
+    assert {:ok, 2} =
+             EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
   end
 
   test "a failed signed prefix audit prevents any SQL effect registration", ctx do
@@ -142,7 +157,8 @@ defmodule AgentOpsStore.EventReplayTest do
 
     assert {:error, :unverified_ledger_prefix} = EventReplay.drain(ctx.conn, StagingHost)
 
-    assert {:ok, 0} = EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
+    assert {:ok, 0} =
+             EventCursor.watermark(ctx.conn, ctx.context.home_id, ctx.context.consumer_id)
   end
 
   test "production host, malformed page limits, and unchecked home scopes fail closed", ctx do
