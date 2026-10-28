@@ -47,6 +47,9 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/crypto.ex
+          apps/coop_substrate/test/signing_domain_test.exs
+          apps/coop_substrate/test/hawala_interop_test.exs
           apps/keel/test/conformance_test.exs
           apps/keel/lib/keel/ownership.ex
           apps/coop_substrate/lib/coop_substrate/artifact_custody.ex
