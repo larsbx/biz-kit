@@ -42,18 +42,19 @@ defmodule BizKit.LastMileBridgeTest do
       event_id: id,
       verified_pickup_ref: "pickup-proof",
       verified_delivery_proof_ref: "delivery-proof",
-      verified_source_state: Map.take(last_mile, [
-        :merchant,
-        :delivery_id,
-        :phase,
-        :pickup_ref,
-        :delivery_proof_ref,
-        :exception_ref,
-        :cancel_requested?,
-        :held?,
-        :version,
-        :seen
-      ])
+      verified_source_state:
+        Map.take(last_mile, [
+          :merchant,
+          :delivery_id,
+          :phase,
+          :pickup_ref,
+          :delivery_proof_ref,
+          :exception_ref,
+          :cancel_requested?,
+          :held?,
+          :version,
+          :seen
+        ])
     }
   end
 
