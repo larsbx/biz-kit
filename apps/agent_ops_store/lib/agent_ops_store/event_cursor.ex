@@ -99,10 +99,11 @@ defmodule AgentOpsStore.EventCursor do
   defp parameters(_), do: {:error, :invalid_event_bundle}
 
   defp valid_effects?(effects) when is_list(effects) and length(effects) <= @max_effects do
-    ids = Enum.map(effects, fn
-      %{effect_id: id} -> id
-      _ -> nil
-    end)
+    ids =
+      Enum.map(effects, fn
+        %{effect_id: id} -> id
+        _ -> nil
+      end)
 
     Enum.all?(effects, fn
       %{effect_id: id, kind: kind} = item ->
@@ -114,6 +115,7 @@ defmodule AgentOpsStore.EventCursor do
   end
 
   defp valid_effects?(_), do: false
+
   defp encode_effect(%{effect_id: id, kind: kind}),
     do: %{"effect_id" => id, "kind" => kind}
 
