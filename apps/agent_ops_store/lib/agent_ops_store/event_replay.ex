@@ -22,7 +22,13 @@ defmodule AgentOpsStore.EventReplay do
 
   @doc "Consume at most one bounded page, preserving cursor+bundle atomicity."
   @spec drain(pid() | atom(), module(), keyword()) ::
-          {:ok, %{from: non_neg_integer(), to: non_neg_integer(), processed: non_neg_integer(), has_more: boolean()}}
+          {:ok,
+           %{
+             from: non_neg_integer(),
+             to: non_neg_integer(),
+             processed: non_neg_integer(),
+             has_more: boolean()
+           }}
           | {:error, atom()}
   def drain(conn, host, opts \\ []) when is_list(opts) do
     with :ok <- staging(host),
@@ -64,13 +70,16 @@ defmodule AgentOpsStore.EventReplay do
 
   defp max_events(opts) do
     limit = Keyword.get(opts, :max_events, @default_page)
+
     if is_integer(limit) and limit in 1..100,
       do: {:ok, limit},
       else: {:error, :invalid_replay_page_limit}
   end
 
   defp validate_context(home, consumer, source, ignored) do
-    valid_id = fn x -> is_binary(x) and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\z/, x) end
+    valid_id = fn x ->
+      is_binary(x) and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\z/, x)
+    end
 
     cond do
       not valid_id.(home) or not valid_id.(consumer) ->
