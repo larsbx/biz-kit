@@ -1,0 +1,27 @@
+{
+  "profile": "hawala-cross-authority/v1, proposed proof increment",
+  "source_repository": "larsbx/hawala-core",
+  "source_commit": "8e36c1255d05f243f44d20a7c78d213c4ec87e91",
+  "source_pr": "https://github.com/larsbx/hawala-core/pull/46",
+  "normative_sha256": "e7462b510bd5d6578cc6f619e1e9f08ac426511aeb8fdd1d7f8932880ca066f3",
+  "gaps_sha256": "e577bdaf5063e5962e1d2caade36548d0eab4f1df8c66e2c2ed08dbbad75c543",
+  "files": {
+    ".github/workflows/formal.yml": "9e6d39f5ea9ae6579a0e78d09ef1ffcf1f0e5b22911da9b1494d1f996b82744a",
+    "docs/CROSS_AUTHORITY_V1.md": "3d2e3fd9cda6274eef40ff89ffed5cb9cb95d4ae06356c264cca65ba8c5f55cd",
+    "docs/decisions/0005-biz-kit-federated-hawala-integration.md": "c967809bd2f9cdde5530874d95bcd385d070baac16b18837c2b53a471391155d",
+    "formal/evidence/cross-authority-v1.json": "097e7bd1186f03c647f2a2b6723fc5e1b40d31910ce4ff9262243507362f1aeb",
+    "formal/evidence/cross-authority.mjs": "8586f0f3252a33fbe0a3e544f42070e65a767e1056603357e0a8eac82e0bb7c0",
+    "formal/lean/CrossAuthority.lean": "41c5c5ba4e7228c6e9029b94f74fdc1e21cd2438b11ce50d23559fd135cc2188",
+    "formal/lean/ExportCrossAuthority.lean": "42508e71ed37666a17daa77fbf5dc5b100c4a08a663c53cfcbb9b6bcc0f9d1f1",
+    "formal/lean/FinancialEvidence.lean": "54d53568d1d8b1c56efa2c5e5f1feadc3950f401e8713a401d7341e7273f4e15",
+    "formal/lean/lakefile.toml": "82c990281ffcab3e4f2d6ffb8d89ec014ff2c52dc61422aa6d19d385c24e4120",
+    "formal/quint/crossAuthority.qnt": "a7b3e065981956465ac064716ea68c3421d80ce0188db4e02f7481c405064a64",
+    "formal/quint/crossAuthorityConformance.qnt": "173124f18db1e36ac4d97bd414e57b0ac158c540074d4d273268eaf455f04417",
+    "formal/traces/crossAuthority-negative.json": "37c1da3d72e1255de37d46dc35f75cc1e02d910992a4a4cd36e4de863221484d",
+    "formal/traces/crossAuthority.json": "ce349b6099f2c7d9141e440337a229c2b0f8d169a519db4cc7e4b7172d88d33d",
+    "tools/check_cross_authority.sh": "69f1877b9b9bb91b69cf91545011bc2a4f2e6fa12b01b2473927e5d00c313efd",
+    "tools/check_cross_authority_counterexamples.py": "291065dbd04e6f2fd497aab492f52b8c6f606a29f975696a36b582c1bc759e9a",
+    "tools/check_cross_authority_evidence.mjs": "a8bcd004e458af84dbb54a4078449942e6b61ab1dd880296db0888b3025c3a6f",
+    "tools/check_trace_artifacts.sh": "7f80da0bb93161cab02fa387845ae69da6035743c7b93d91bcb0f17156eaae90"
+  }
+}

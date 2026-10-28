@@ -1,0 +1,29 @@
+name: Hawala canonical architecture pin
+on:
+  pull_request:
+    paths:
+      - 'docs/architecture/**hawala**'
+      - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
+      - 'tools/*hawala*'
+      - '.github/workflows/hawala-architecture.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/architecture/**hawala**'
+      - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
+      - 'tools/*hawala*'
+      - '.github/workflows/hawala-architecture.yml'
+permissions:
+  contents: read
+jobs:
+  canonical-pairing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify immutable Hawala proof/profile source and identical paired decisions
+        run: python3 tools/check_hawala_architecture_pin.py
+      - name: Require drift negative controls
+        run: python3 tools/test_hawala_architecture_pin.py
