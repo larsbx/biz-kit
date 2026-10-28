@@ -45,7 +45,9 @@ jobs:
           apps/commerce_core/lib/commerce_core/pricing.ex
           apps/commerce_core/test/pricing_test.exs
           apps/commerce_core/lib/commerce_core/catalog.ex
+          apps/commerce_core/lib/commerce_core/catalog_wire.ex
           apps/commerce_core/test/catalog_test.exs
+          apps/commerce_core/test/catalog_wire_test.exs
           apps/eatsbot_core/lib/orders/pricing.ex
           apps/eatsbot_core/lib/products/catalog_bridge.ex
           apps/eatsbot/test/eatsbot/products/catalog_bridge_test.exs
