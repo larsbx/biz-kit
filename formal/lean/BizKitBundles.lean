@@ -49,7 +49,7 @@ def advanceBundle (s : BundleConsumer) : BundleConsumer :=
 
 theorem emptyBundles_safe : BundleSafe emptyBundles := by
   constructor
-  · rfl
+  · exact Nat.le_refl _
   · intro n h
     exact False.elim (Nat.not_lt_zero n h)
 
@@ -89,7 +89,7 @@ theorem advanceBundle_preserves (s : BundleConsumer)
     have hle : k ≤ s.cursor := Nat.le_of_lt_succ hk
     rcases Nat.lt_or_eq_of_le hle with hlt | heq
     · exact hs.2 k hlt
-    · simpa [heq] using ready
+    · simpa [BundleReady, advanceBundle, heq] using ready
 
 /--
 Idealized **single transaction**: insert EVERY required effect for the next
