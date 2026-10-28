@@ -41,7 +41,19 @@ defmodule BizKit.LastMileBridgeTest do
       last_mile_version: last_mile.version,
       event_id: id,
       verified_pickup_ref: "pickup-proof",
-      verified_delivery_proof_ref: "delivery-proof"
+      verified_delivery_proof_ref: "delivery-proof",
+      verified_source_state: Map.take(last_mile, [
+        :merchant,
+        :delivery_id,
+        :phase,
+        :pickup_ref,
+        :delivery_proof_ref,
+        :exception_ref,
+        :cancel_requested?,
+        :held?,
+        :version,
+        :seen
+      ])
     }
   end
 
@@ -141,18 +153,23 @@ defmodule BizKit.LastMileBridgeTest do
   test "no early delivered event or missing transport proof can be promoted" do
     {fulfillment, picked} = base()
 
-    assert {:error, :no_corresponding_fulfillment_transition} =
+    assert {:error, :unverified_transport_snapshot} =
              LastMileBridge.preview(
                fulfillment,
                %{picked | phase: :ready_for_pickup},
                trusted(picked, "early")
              )
 
+    no_proof = %{picked | pickup_ref: nil}
+
     assert {:error, :unverified_pickup_proof} =
+             LastMileBridge.preview(fulfillment, no_proof, trusted(no_proof, "no-proof"))
+
+    assert {:error, :unverified_transport_snapshot} =
              LastMileBridge.preview(
                fulfillment,
-               %{picked | pickup_ref: nil},
-               trusted(picked, "no-proof")
+               %{picked | cancel_requested?: true},
+               trusted(picked, "forged-cancel")
              )
   end
 end
