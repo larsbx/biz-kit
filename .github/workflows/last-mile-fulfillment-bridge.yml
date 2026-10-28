@@ -1,0 +1,40 @@
+name: Last-mile to FulfillmentCore composition
+
+on:
+  pull_request:
+    paths:
+      - 'apps/biz_kit_composition/**'
+      - 'apps/dispatch_core/**'
+      - 'apps/fulfillment_core/**'
+      - '.github/workflows/last-mile-fulfillment-bridge.yml'
+      - 'mix.exs'
+      - 'mix.lock'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  last-mile-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile composition
+        working-directory: apps/biz_kit_composition
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check formatting
+        run: >-
+          MIX_ENV=test mix format --check-formatted
+          apps/biz_kit_composition/lib/biz_kit/last_mile_bridge.ex
+          apps/biz_kit_composition/test/last_mile_bridge_test.exs
+          apps/biz_kit_composition/mix.exs
+      - name: Run cross-domain composition regressions
+        working-directory: apps/biz_kit_composition
+        run: MIX_ENV=test mix test --no-start

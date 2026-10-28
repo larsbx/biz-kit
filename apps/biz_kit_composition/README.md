@@ -24,3 +24,13 @@ financial checkout, or route-assignment endpoint. No tenant or merchant
 credential is accepted by the preview function; host authorization is essential.
 
 Run `cd apps/biz_kit_composition && mix test --no-start`.
+
+## DispatchCore to FulfillmentCore bridge (staged)
+
+`BizKit.LastMileBridge.preview/3` converts a host-verified, source-bound
+last-mile pickup or delivery projection into a **pure candidate** for the
+existing FulfillmentCore handoff protocol. It refuses incorrect transport
+ownership, source, revisions and missing evidence references, and leaves a
+delivery observed during pending cancellation explicitly unresolved.
+No actual Dispatch writer, customer PII, authorization, signed proof
+verification or business-event append is introduced.
