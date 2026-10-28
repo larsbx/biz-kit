@@ -38,4 +38,4 @@ jobs:
       - run: mix deps.get --check-locked
       - name: Signed append, replay, notifications, leases, revocation and crash recovery
         working-directory: apps/coop_substrate
-        run: mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs
+        run: mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs test/agent_event_effects_test.exs test/agent_event_subscriber_test.exs test/agent_event_delivery_test.exs

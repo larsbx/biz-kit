@@ -66,6 +66,12 @@ jobs:
             < deploy/agent-core/sql/003_recovery_custody.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/004_event_registrations.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_event_registrations.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_storage_contract.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
@@ -116,6 +122,12 @@ jobs:
                 FROM agent_ops.execution_attempts
                 WHERE effect_id='agent-run:signed-ci';")"
           test "$attempt" = "leased:2"
+
+          registration="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -Aqt \
+            -c "SELECT count(*) FROM agent_ops.event_effect_registrations
+                 WHERE subscription_name='volume-ci' AND event_id='volume-event';")"
+          test "$registration" = "1"
 
       - name: Stop service but retain volume
         if: always()

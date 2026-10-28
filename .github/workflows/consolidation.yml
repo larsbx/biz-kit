@@ -65,6 +65,17 @@ jobs:
           apps/agent_core/test/preflight_test.exs
           apps/agent_core/test/attempts_test.exs
           apps/agent_ops_store/mix.exs
+          apps/agent_ops_store/lib/agent_ops_store/event_registrations.ex
+          apps/agent_ops_store/test/event_registrations_postgres_test.exs
+          apps/coop_substrate/lib/coop_substrate/agent_event_effects.ex
+          apps/coop_substrate/lib/coop_substrate/agent_event_delivery.ex
+          apps/coop_substrate/test/agent_event_delivery_test.exs
+          apps/coop_substrate/lib/coop_substrate/agent_event_subscriber.ex
+          apps/coop_substrate/test/agent_event_effects_test.exs
+          apps/coop_substrate/test/agent_event_subscriber_test.exs
+          apps/coop_substrate/test/agent_event_acceptance_test.exs
+          apps/coop_substrate/test/support/agent_staging_fixture.ex
+          apps/coop_substrate/test/support/agent_staging_sql.ex
           apps/agent_ops_store/lib/agent_ops_store/postgres.ex
           apps/agent_ops_store/test/postgres_test.exs
           apps/agent_ops_store/test/dispatch_integration_test.exs

@@ -69,6 +69,10 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
   < deploy/agent-core/sql/003_recovery_custody.sql
 
+docker compose -f deploy/agent-core/compose.yaml exec -T db \
+  psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+  < deploy/agent-core/sql/004_event_registrations.sql
+
 # Or replace 'docker' with 'podman'.
 ```
 
@@ -208,3 +212,19 @@ See [execution recovery architecture](../../docs/architecture/2026-10-24-executi
 for trusted host callbacks, versioned adapter requirements, authentication,
 proof finality, opt-in supervision and remaining acceptance gates. No
 production startup or external execution target is enabled by this change.
+
+
+## EventStore-backed staging delivery (migration 004)
+
+EventStore already supplies persistent named subscriptions, bounded catch-up,
+acknowledgments and stored checkpoints. `CoopSubstrate.AgentEventSubscriber`
+reuses that mechanism on the canonical `ledger` stream. It commits a stable
+reconciliation effect/no-op receipt, THEN calls `EventStore.ack/2`. A crash in
+between replays the event and idempotent registration handles the duplicate.
+There is no application cursor table or second checkpoint manager.
+
+Migration 004 adds only `event_effect_registrations`. Grant the trusted host
+SELECT/INSERT, never UPDATE/DELETE, and use a dedicated host connection outside
+any caller-owned transaction. This is discovery only; all launch/grant/profile
+and lease checks remain required. No production subscriber is started. See
+[the corrected architecture and acceptance note](../../docs/architecture/2026-10-27-agentcore-cursor-recovery.md).
