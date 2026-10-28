@@ -24,6 +24,7 @@ defmodule FulfillmentCore do
        phase: :requested,
        transport_ref: nil,
        proof_ref: nil,
+       transport_started: false,
        version: 0,
        seen: %{}
      }}
@@ -87,6 +88,7 @@ defmodule FulfillmentCore do
 
   defp transition(state, :dispatch, %{op: :accept, transport_ref: reference}) do
     with :ok <- phase(state, [:requested, :cancel_requested]),
+         :ok <- no_transport_ref(state),
          :ok <- identifier(reference) do
       next = if state.phase == :cancel_requested, do: :cancel_requested, else: :accepted
       {:ok, %{state | phase: next, transport_ref: reference}}
@@ -94,7 +96,9 @@ defmodule FulfillmentCore do
   end
 
   defp transition(state, :dispatch, %{op: :reject, reason: reason}) do
-    with :ok <- phase(state, [:requested]), :ok <- identifier(reason) do
+    with :ok <- phase(state, [:requested, :cancel_requested]),
+         :ok <- no_transport_ref(state),
+         :ok <- identifier(reason) do
       {:ok, %{state | phase: :rejected}}
     end
   end
@@ -112,25 +116,39 @@ defmodule FulfillmentCore do
   end
 
   defp transition(state, :dispatch, %{op: :in_transit}) do
-    with :ok <- phase(state, [:accepted]) do
-      {:ok, %{state | phase: :in_transit}}
+    with :ok <- phase(state, [:accepted, :cancel_requested]),
+         :ok <- has_transport_ref(state) do
+      next = if state.phase == :cancel_requested, do: :cancel_requested, else: :in_transit
+      {:ok, %{state | phase: next, transport_started: true}}
     end
   end
 
   defp transition(state, :dispatch, %{op: :delivered, proof_ref: proof}) do
-    with :ok <- phase(state, [:in_transit]), :ok <- identifier(proof) do
+    with :ok <- phase(state, [:in_transit, :cancel_requested]),
+         :ok <- has_started_transport(state),
+         :ok <- identifier(proof) do
       {:ok, %{state | phase: :delivered, proof_ref: proof}}
     end
   end
 
   defp transition(state, :dispatch, %{op: :failed, reason: reason}) do
-    with :ok <- phase(state, [:accepted, :in_transit]),
+    with :ok <- phase(state, [:accepted, :in_transit, :cancel_requested]),
+         :ok <- has_transport_ref(state),
          :ok <- identifier(reason) do
       {:ok, %{state | phase: :failed}}
     end
   end
 
   defp transition(_, _, _), do: {:error, :wrong_event_authority}
+
+  defp no_transport_ref(%{transport_ref: nil}), do: :ok
+  defp no_transport_ref(_), do: {:error, :transport_already_accepted}
+
+  defp has_transport_ref(%{transport_ref: ref}) when is_binary(ref), do: :ok
+  defp has_transport_ref(_), do: {:error, :transport_not_accepted}
+
+  defp has_started_transport(%{transport_started: true}), do: :ok
+  defp has_started_transport(_), do: {:error, :delivery_without_transport_start}
 
   defp phase(state, allowed) do
     cond do
