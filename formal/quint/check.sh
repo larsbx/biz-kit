@@ -53,7 +53,7 @@ done
 
 for witness in noPartialTxWitness noFullCommitWitness noNoopCommitWitness; do
   out=$(quint run cursor_transaction.qnt --invariant="$witness" --max-samples=10000 --max-steps=25 --seed=1 2>&1 || true)
-  if grep -q '\\[violation\\]' <<<"$out"; then
+  if grep -q '\[violation\]' <<<"$out"; then
     echo "cursor_transaction: $witness reachable"
   else
     echo "$out" >&2

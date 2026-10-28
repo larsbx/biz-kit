@@ -53,7 +53,7 @@ def wakeOrCrash (s : Consumer) : Consumer := s
 
 theorem initial_safe : Safe initial := by
   constructor
-  · rfl
+  · exact Nat.le_refl _
   · intro n h
     exact False.elim (Nat.not_lt_zero n h)
 
@@ -80,7 +80,7 @@ theorem acknowledge_preserves (s : Consumer)
     have hle : k ≤ s.cursor := Nat.le_of_lt_succ hk
     rcases Nat.lt_or_eq_of_le hle with hlt | heq
     · exact hs.2 k hlt
-    · simpa [heq] using stored
+    · simpa [acknowledge, heq] using stored
 
 theorem wakeOrCrash_preserves (s : Consumer) (hs : Safe s) :
     Safe (wakeOrCrash s) := hs
@@ -99,16 +99,16 @@ inductive Step : Consumer → Consumer → Prop
 theorem step_preserves {s t : Consumer} (step : Step s t) (hs : Safe s) :
     Safe t := by
   cases step with
-  | append s => exact append_preserves s hs
-  | register s n _ => exact register_preserves s n hs
-  | acknowledge s within stored =>
-      exact acknowledge_preserves s hs within stored
-  | wake s => exact hs
-  | crash s => exact hs
+  | append => exact append_preserves _ hs
+  | register n _ => exact register_preserves _ n hs
+  | acknowledge within stored =>
+      exact acknowledge_preserves _ hs within stored
+  | wake => exact hs
+  | crash => exact hs
 
 theorem register_idempotent (s : Consumer) (n k : Nat) :
     (register (register s n) n).effects k ↔ (register s n).effects k := by
-  simp [register, or_assoc]
+  simp [register]
 
 /--
 Atomic abstract event processing: first make the effect durable, then

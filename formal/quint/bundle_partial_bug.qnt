@@ -2,44 +2,44 @@
 // TWO required operational effects loses the second effect on restart.
 
 module bundle_partial_bug {
-  var head: int
+  var ledgerHead: int
   var cursor: int
   var effects: Set[str]
   var receipts: bool
 
   action init = all {
-    head' = 0,
+    ledgerHead' = 0,
     cursor' = 0,
     effects' = Set(),
     receipts' = false,
   }
 
-  action append = all {
-    head == 0,
-    head' = 1,
+  action persistLedger = all {
+    ledgerHead == 0,
+    ledgerHead' = 1,
     cursor' = cursor,
     effects' = effects,
     receipts' = receipts,
   }
 
   action registerFirstOnly = all {
-    head == 1,
+    ledgerHead == 1,
     effects' = effects.union(Set("A")),
     receipts' = receipts,
-    head' = head,
+    ledgerHead' = ledgerHead,
     cursor' = cursor,
   }
 
   action unsafeCheckpoint = all {
-    head == 1,
+    ledgerHead == 1,
     effects.contains("A"),
     cursor' = 1,
     receipts' = true,
-    head' = head,
+    ledgerHead' = ledgerHead,
     effects' = effects,
   }
 
-  action step = any { append, registerFirstOnly, unsafeCheckpoint }
+  action step = any { persistLedger, registerFirstOnly, unsafeCheckpoint }
   val safety = cursor == 0 or
     (receipts and effects.contains("A") and effects.contains("B"))
 }

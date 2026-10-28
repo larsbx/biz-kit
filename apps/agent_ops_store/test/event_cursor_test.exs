@@ -34,12 +34,12 @@ defmodule AgentOpsStore.EventCursorTest do
 
   test "complete multi-effect registration, duplicate replay and explicit no-op receipt", ctx do
     one = accepted(ctx, 1, [effect("a-1"), effect("b-1")])
-    assert {:ok, %{cursor: 0}} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
+    assert {:ok, 0} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
 
     assert {:ok, %{cursor: 1, disposition: :new}} = EventCursor.commit(ctx.conn, one)
     assert {:ok, %{cursor: 1, disposition: :existing}} = EventCursor.commit(ctx.conn, one)
 
-    assert {:ok, %{cursor: 1}} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
+    assert {:ok, 1} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
 
     assert {:ok, %{cursor: 2, disposition: :new}} =
              EventCursor.commit(ctx.conn, accepted(ctx, 2, []))

@@ -10,7 +10,7 @@
 module cursor_transaction {
   pure val MAX = 2
 
-  var head: int
+  var ledgerHead: int
   var cursor: int
   var effects: Set[str]
   var receipts: Set[int]
@@ -20,7 +20,7 @@ module cursor_transaction {
   var notifications: int
 
   action init = all {
-    head' = 0,
+    ledgerHead' = 0,
     cursor' = 0,
     effects' = Set(),
     receipts' = Set(),
@@ -29,10 +29,10 @@ module cursor_transaction {
     notifications' = 0,
   }
 
-  // Canonical ledger append. Never modifies the consumer's durable state.
-  action append = all {
-    head < MAX,
-    head' = head + 1,
+  // Canonical ledger persistLedger. Never modifies the consumer's durable state.
+  action persistLedger = all {
+    ledgerHead < MAX,
+    ledgerHead' = ledgerHead + 1,
     cursor' = cursor,
     effects' = effects,
     receipts' = receipts,
@@ -42,11 +42,11 @@ module cursor_transaction {
   }
 
   action begin = all {
-    cursor < head,
+    cursor < ledgerHead,
     not(inTx),
     inTx' = true,
     staged' = Set(),
-    head' = head,
+    ledgerHead' = ledgerHead,
     cursor' = cursor,
     effects' = effects,
     receipts' = receipts,
@@ -59,7 +59,7 @@ module cursor_transaction {
       inTx,
       cursor == 0,
       staged' = staged.union(Set(effect)),
-      head' = head,
+      ledgerHead' = ledgerHead,
       cursor' = cursor,
       effects' = effects,
       receipts' = receipts,
@@ -72,7 +72,7 @@ module cursor_transaction {
   // cannot advance; event 2 advances on its processed-no-op receipt alone.
   action commit = all {
     inTx,
-    cursor < head,
+    cursor < ledgerHead,
     if (cursor == 0) staged.contains("A") and staged.contains("B")
     else true,
     cursor' = cursor + 1,
@@ -80,7 +80,7 @@ module cursor_transaction {
     receipts' = receipts.union(Set(cursor + 1)),
     inTx' = false,
     staged' = Set(),
-    head' = head,
+    ledgerHead' = ledgerHead,
     notifications' = notifications,
   }
 
@@ -90,14 +90,14 @@ module cursor_transaction {
     cursor' = cursor,
     effects' = effects,
     receipts' = receipts,
-    head' = head,
+    ledgerHead' = ledgerHead,
     notifications' = 0,
   }
 
   action notify = all {
     notifications < MAX,
     notifications' = notifications + 1,
-    head' = head,
+    ledgerHead' = ledgerHead,
     cursor' = cursor,
     effects' = effects,
     receipts' = receipts,
@@ -105,9 +105,9 @@ module cursor_transaction {
     staged' = staged,
   }
 
-  action step = any { append, begin, stageEffect, commit, crashRollback, notify }
+  action step = any { persistLedger, begin, stageEffect, commit, crashRollback, notify }
 
-  val prefixSafe = cursor >= 0 and cursor <= head
+  val prefixSafe = cursor >= 0 and cursor <= ledgerHead
     and (cursor < 1 or
       (effects.contains("A") and effects.contains("B") and receipts.contains(1)))
     and (cursor < 2 or receipts.contains(2))
@@ -117,7 +117,7 @@ module cursor_transaction {
   val noLeakedPartialEffects =
     (effects.contains("A") == effects.contains("B"))
     and (effects.contains("A") implies cursor >= 1)
-  val receiptsFromLedger = receipts.forall(i => i >= 1 and i <= head)
+  val receiptsFromLedger = receipts.forall(i => i >= 1 and i <= ledgerHead)
   val safety = prefixSafe and noLeakedPartialEffects and receiptsFromLedger
 
   // Observe an uncommitted, partial registration that must be rolled back.
