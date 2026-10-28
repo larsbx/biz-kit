@@ -157,13 +157,13 @@ to locate Hawala in biz-kit's Elixir umbrella: network integration is a
 
 ## Node-owned books storage profile
 
-The supplemental [PostgreSQL/TigerBeetle host contract](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
-integrates hawala-core #45's pinned node-books specification: one canonical
-PostgreSQL financial commit, followed by mandatory verification of the same
-source prefix in the fenced TigerBeetle accounting copy before execution.
-This is proposed implementation work, not a second financial writer or
-accepted storage refinement. The paired decisions, gaps and proof source pin
-below retain their existing meanings and review requirements.
+The supplemental [TigerBeetle-first host contract](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
+selects one native financial commit, then independent recoverable persistence
+to signed EventStore history, PostgreSQL projections and other destinations.
+It supersedes the PostgreSQL-first node-books proposal and independently pins
+the Hawala-owned specification and tested port core. Native adapters are not
+yet accepted or activated. The paired decisions, gaps and cross-authority proof
+source pin below retain their existing meanings and review requirements.
 
 ## Acceptance sequence
 

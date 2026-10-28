@@ -1,0 +1,18 @@
+{
+  "profile": "hawala-tigerbeetle-first/v1",
+  "source_repository": "larsbx/hawala-core",
+  "source_commit": "0a39d4e6c851b45e49a366f8028bccd9beec5469",
+  "source_pr": "https://github.com/larsbx/hawala-core/pull/54",
+  "files": {
+    ".github/workflows/rust.yml": "b32874d1ebef4939051e21b54cdb42e7dbcc6c3cc35f9fe9ad372a3fc9dcd9e5",
+    "Cargo.lock": "34d6dd75e46f32fdbb190ed1a8e1fd1e4850ae69b7f10a4eb3006eb0fdd1e82c",
+    "Cargo.toml": "79ab46411bda2195d5dbb3b4a2b1a3d8efc6e1cba9eb607196aaacd15863a773",
+    "crates/hawala-tigerbeetle-flow/Cargo.toml": "207a4a5a25f2d30aabeaf7cb20511844933d080ec625e0794ec94272e5afdb34",
+    "crates/hawala-tigerbeetle-flow/README.md": "314d466ccfcfca88ecd49694dc246a46dae13321367228cd685f6ef5d4d768d9",
+    "crates/hawala-tigerbeetle-flow/src/lib.rs": "50dec1e49a13b0307c414cbe25d923266e54551d52bd790992dcbdc81d99f91c",
+    "crates/hawala-tigerbeetle-flow/tests/flow.rs": "f1d1ab613f75ef3289bf8f17c90dd22596a9d70f7a0d2802608ee239103e9d1f",
+    "docs/NODE_BOOKS_POSTGRES_FIRST_ARCHIVED.md": "5b9dc2b16f2a6f36282b420e500e590521e4e45457706d19bee19077fbe2914c",
+    "docs/NODE_BOOKS_TIGERBEETLE_SPEC.md": "5032c899326d0f40ce3a85384a59392a97d5d96dc09387e3f2df5ef0418b6a40",
+    "tools/check_tb_first_mutations.py": "7469d8a24340dfdb58cbcbc6bdcaac860a5e7bca465511cabdbc8c76473369c7"
+  }
+}

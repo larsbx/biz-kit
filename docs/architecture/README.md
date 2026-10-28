@@ -26,9 +26,9 @@ domain views. The imported histories and existing identifiers remain intact.
   proposed, paired with hawala-core ADR 0005; every participating installation
   can host a Hawala peer/capability plane, while financial authority remains
   strictly scoped and cross-authority settlement stays Hawala-owned.
-- [Hawala node-owned books: PostgreSQL and TigerBeetle — 2026-10-28](2026-10-28-hawala-node-books-postgres-tigerbeetle.md):
-  pinned canonical profile and proposed host integration: one PostgreSQL financial
-  commit, mandatory accounting verification before execution, scoped HOLD and recovery gates.
+- [Hawala node-owned books: TigerBeetle first — 2026-10-28](2026-10-28-hawala-node-books-postgres-tigerbeetle.md):
+  native financial commit, then recoverable independent persistence to signed
+  EventStore history, PostgreSQL projections and other destinations; adapters remain pending.
 
 - [First common-ledger task command](2026-10-11-first-ledger-task-command.md): notes
   retirement, signed baseline and scoped grant, append-time proposal admission,
