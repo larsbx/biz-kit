@@ -8,9 +8,12 @@ defmodule AgentOpsStore.EventCursorTest do
   setup do
     id = Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
     conn = start_supervised!({Postgrex, AgentOpsStore.TestConnection.options()})
+
     other =
       start_supervised!(
-        Supervisor.child_spec({Postgrex, AgentOpsStore.TestConnection.options()}, id: :second_cursor_connection)
+        Supervisor.child_spec({Postgrex, AgentOpsStore.TestConnection.options()},
+          id: :second_cursor_connection
+        )
       )
 
     %{conn: conn, other: other, home: "home-" <> id, consumer: "consumer-" <> id}
@@ -31,29 +34,37 @@ defmodule AgentOpsStore.EventCursorTest do
 
   test "complete multi-effect registration, duplicate replay and explicit no-op receipt", ctx do
     one = accepted(ctx, 1, [effect("a-1"), effect("b-1")])
-    assert {:ok, %{cursor: 0}} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
+    assert {:ok, 0} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
 
     assert {:ok, %{cursor: 1, disposition: :new}} = EventCursor.commit(ctx.conn, one)
     assert {:ok, %{cursor: 1, disposition: :existing}} = EventCursor.commit(ctx.conn, one)
 
-    assert {:ok, %{cursor: 1}} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
+    assert {:ok, 1} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
 
     assert {:ok, %{cursor: 2, disposition: :new}} =
              EventCursor.commit(ctx.conn, accepted(ctx, 2, []))
 
     {:ok, %Postgrex.Result{rows: [[count]]}} =
-      Postgrex.query(ctx.conn, """
-      SELECT count(*) FROM agent_ops.consumer_effects
-      WHERE home_id=$1 AND consumer_id=$2
-      """, [ctx.home, ctx.consumer])
+      Postgrex.query(
+        ctx.conn,
+        """
+        SELECT count(*) FROM agent_ops.consumer_effects
+        WHERE home_id=$1 AND consumer_id=$2
+        """,
+        [ctx.home, ctx.consumer]
+      )
 
     assert count == 2
 
     {:ok, %Postgrex.Result{rows: [[receipt]]}} =
-      Postgrex.query(ctx.conn, """
-      SELECT effect_bundle FROM agent_ops.consumer_processed
-      WHERE home_id=$1 AND consumer_id=$2 AND global_seq=2
-      """, [ctx.home, ctx.consumer])
+      Postgrex.query(
+        ctx.conn,
+        """
+        SELECT effect_bundle FROM agent_ops.consumer_processed
+        WHERE home_id=$1 AND consumer_id=$2 AND global_seq=2
+        """,
+        [ctx.home, ctx.consumer]
+      )
 
     assert receipt == []
   end
@@ -77,10 +88,15 @@ defmodule AgentOpsStore.EventCursorTest do
     assert {:ok, 1} = EventCursor.watermark(ctx.conn, ctx.home, ctx.consumer)
 
     {:ok, %Postgrex.Result{rows: [[count]]}} =
-      Postgrex.query(ctx.conn, """
-      SELECT count(*) FROM agent_ops.consumer_processed
-      WHERE home_id=$1 AND consumer_id=$2
-      """, [ctx.home, ctx.consumer])
+      Postgrex.query(
+        ctx.conn,
+        """
+        SELECT count(*) FROM agent_ops.consumer_processed
+        WHERE home_id=$1 AND consumer_id=$2
+        """,
+        [ctx.home, ctx.consumer]
+      )
+
     assert count == 1
 
     assert {:ok, %{cursor: 2, disposition: :new}} =
@@ -99,10 +115,15 @@ defmodule AgentOpsStore.EventCursorTest do
     assert {:ok, 1} = EventCursor.watermark(ctx.other, ctx.home, ctx.consumer)
 
     {:ok, %Postgrex.Result{rows: [[count]]}} =
-      Postgrex.query(ctx.conn, """
-      SELECT count(*) FROM agent_ops.consumer_effects
-      WHERE home_id=$1 AND consumer_id=$2
-      """, [ctx.home, ctx.consumer])
+      Postgrex.query(
+        ctx.conn,
+        """
+        SELECT count(*) FROM agent_ops.consumer_effects
+        WHERE home_id=$1 AND consumer_id=$2
+        """,
+        [ctx.home, ctx.consumer]
+      )
+
     assert count == 1
   end
 
@@ -123,6 +144,7 @@ defmodule AgentOpsStore.EventCursorTest do
 
     assert {:ok, %{cursor: 1, disposition: :new}} =
              EventCursor.commit(ctx.conn, accepted(ctx, 1))
+
     assert {:ok, %{cursor: 1, disposition: :new}} =
              EventCursor.commit(ctx.conn, %{accepted(ctx, 1) | home_id: ctx.home <> "-other"})
 
