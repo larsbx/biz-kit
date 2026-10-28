@@ -5,6 +5,7 @@ on:
       - 'docs/architecture/**hawala**'
       - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
       - 'tools/*hawala*'
+      - 'apps/hawala_capability/**'
       - '.github/workflows/hawala-architecture.yml'
   push:
     branches: [main]
@@ -12,6 +13,7 @@ on:
       - 'docs/architecture/**hawala**'
       - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
       - 'tools/*hawala*'
+      - 'apps/hawala_capability/**'
       - '.github/workflows/hawala-architecture.yml'
 permissions:
   contents: read
@@ -27,3 +29,30 @@ jobs:
         run: python3 tools/check_hawala_architecture_pin.py
       - name: Require drift negative controls
         run: python3 tools/test_hawala_architecture_pin.py
+
+  elixir-test-host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Verify pinned source and exact canonical fixture copies
+        run: python3 tools/check_hawala_architecture_pin.py
+      - name: Replay durable TEST hosts and all workflow gates
+        working-directory: apps/hawala_capability
+        env:
+          MIX_ENV: test
+        run: |
+          mix compile --warnings-as-errors
+          mix format --check-formatted
+          mix test --no-start
+      - name: Production build excludes both test adapter modules
+        working-directory: apps/hawala_capability
+        env:
+          MIX_ENV: prod
+        run: |
+          mix compile --warnings-as-errors
+          test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestHost.beam
+          test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestJournal.beam

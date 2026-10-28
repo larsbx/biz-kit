@@ -22,6 +22,16 @@ REQUIRED = {
     'formal/evidence/cross-authority-v1.json', 'formal/evidence/cross-authority.mjs',
     'tools/check_cross_authority.sh', 'tools/check_cross_authority_evidence.mjs',
     'tools/check_cross_authority_counterexamples.py',
+    'formal/lean/ExportFinancialGates.lean', 'formal/traces/crossAuthority.tsv',
+    'formal/traces/financialGates.tsv', 'docs/CROSS_AUTHORITY_HOST_CONFORMANCE.md',
+    'crates/hawala-cross-authority-test/Cargo.toml',
+    'crates/hawala-cross-authority-test/src/lib.rs',
+    'crates/hawala-cross-authority-test/tests/host.rs',
+}
+
+COPIES = {
+    'formal/traces/crossAuthority.tsv': 'apps/hawala_capability/test/fixtures/crossAuthority.tsv',
+    'formal/traces/financialGates.tsv': 'apps/hawala_capability/test/fixtures/financialGates.tsv',
 }
 
 
@@ -43,12 +53,14 @@ def gaps(text):
     return text.split(heading)[1].split('\n## ')[0].strip().encode()
 
 
-def check(pin_path=PIN, source=None, record_path=RECORD):
+def check(pin_path=PIN, source=None, record_path=RECORD, copy_root=ROOT):
     pin = json.loads(Path(pin_path).read_text())
     if pin['source_repository'] != 'larsbx/hawala-core' or not re.fullmatch(r'[0-9a-f]{40}', pin['source_commit']):
         raise ValueError('invalid immutable source repository/commit')
     if not REQUIRED <= pin['files'].keys():
         raise ValueError('missing canonical proof/profile pins')
+    if pin.get('copies') != COPIES:
+        raise ValueError('exact canonical host fixture copies required')
     fetched = {}
     for name, expected in pin['files'].items():
         path = PurePosixPath(name)
@@ -63,6 +75,9 @@ def check(pin_path=PIN, source=None, record_path=RECORD):
         if len(data) > 2_000_000 or sha(data) != expected:
             raise ValueError(f'canonical source drift: {name}')
         fetched[name] = data
+    for canonical_path, local_path in COPIES.items():
+        if (Path(copy_root) / local_path).read_bytes() != fetched[canonical_path]:
+            raise ValueError(f'host fixture drift: {local_path}')
     canonical = fetched[ADR].decode()
     local = Path(record_path).read_text()
     if normative(local) != normative(canonical) or sha(normative(local)) != pin['normative_sha256']:
