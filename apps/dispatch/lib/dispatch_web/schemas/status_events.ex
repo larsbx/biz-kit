@@ -42,7 +42,7 @@ defmodule DispatchWeb.Schemas.StatusEventRequest do
       device_signature: %Schema{
         type: :string,
         description:
-          "Base64url Ed25519 over DispatchStatusV1 canonical bytes; required for native device submissions."
+          "Base64url Ed25519: DispatchStatusV1 canonical bytes for native sessions, or DispatchStatusEventV1 for bearer submissions. Required when device_id is supplied."
       },
       subject: %Schema{
         type: :string,

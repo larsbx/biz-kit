@@ -34,6 +34,10 @@ defmodule CoopSubstrate.MixProject do
       {:biz_kit_cluster, in_umbrella: true},
       # The task lifecycle the ledger admits, shared with any other host.
       {:task_core, in_umbrella: true},
+      # Cross-boundary signed replay acceptance; no production dependency.
+      {:agent_ops_store, in_umbrella: true, only: :test},
+      {:group_buy_core, in_umbrella: true},
+      {:inventory_core, in_umbrella: true},
       {:rustler, "~> 0.36"},
       {:cbor, "~> 1.0"},
       # Canonical log per the AshEvents spike decision (SUBSTRATE.md §3):

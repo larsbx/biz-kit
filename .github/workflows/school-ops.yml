@@ -1,0 +1,49 @@
+name: SchoolOps domain
+
+on:
+  pull_request:
+    paths:
+      - 'apps/school_ops/**'
+      - 'apps/task_core/**'
+      - 'apps/coop_substrate/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/school-ops.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  school-ops:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Resolve locked umbrella dependencies
+        run: mix deps.get --check-locked
+      - name: Compile SchoolOps with shared TaskCore
+        working-directory: apps/school_ops
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Verify formatting
+        run: >-
+          mix format --check-formatted
+          apps/school_ops/mix.exs
+          apps/school_ops/lib/school_ops.ex
+          apps/school_ops/lib/school_ops/catalog.ex
+          apps/school_ops/lib/school_ops/workflows.ex
+          apps/school_ops/test/school_ops_test.exs
+          apps/school_ops/test/domain_test.exs
+      - name: Test SchoolOps shared-domain integration
+        working-directory: apps/school_ops
+        run: mix test

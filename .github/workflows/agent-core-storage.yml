@@ -1,0 +1,141 @@
+name: AgentCore volume-backed PostgreSQL contract
+
+on:
+  pull_request:
+    paths:
+      - "deploy/agent-core/**"
+      - "apps/agent_core/**"
+      - "apps/task_core/**"
+      - "apps/agent_ops_store/**"
+      - "formal/**"
+      - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
+      - "apps/coop_substrate/test/signed_consumer_source_test.exs"
+      - "apps/coop_substrate/test/signed_event_replay_test.exs"
+      - ".github/workflows/signed-event-replay-acceptance.yml"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/lib/coop_substrate/protocol/**"
+      - ".github/workflows/event-consumer-proofs.yml"
+      - ".github/workflows/agent-core-storage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-named-volume:
+    # One Compose fixture is portable to Docker and Podman. This CI lane
+    # verifies Docker storage persistence; it does not claim Podman was tested.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record exact source revision
+        run: git rev-parse HEAD
+
+      - name: Provision disposable test password outside the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 0700 -d "$RUNNER_TEMP/agent-ops-secrets"
+          umask 077
+          password_path="$RUNNER_TEMP/agent-ops-secrets/db_password"
+          openssl rand -base64 36 > "$password_path"
+          printf 'BIZKIT_PG_PASSWORD_FILE=%s\n' "$password_path" >> "$GITHUB_ENV"
+
+      - name: Validate portable Compose specification
+        shell: bash
+        run: docker compose -f deploy/agent-core/compose.yaml config --quiet
+
+      - name: Start PostgreSQL with a named volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/agent-core/compose.yaml up -d
+          for i in $(seq 1 60); do
+            if docker compose -f deploy/agent-core/compose.yaml exec -T db \
+              pg_isready -U bizkit -d bizkit_agent_dev; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready" >&2
+          exit 1
+
+      - name: Validate operational schema and CAS contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/001_agent_attempts.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/002_attempt_cas.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/003_recovery_custody.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/004_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_storage_contract.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_cas_contract.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_recovery_custody.sql
+
+      - name: Install Elixir and Erlang for PostgreSQL adapter acceptance
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+
+      - name: Test real PostgreSQL host adapter against volume-backed database
+        shell: bash
+        env:
+          MIX_ENV: test
+        run: |
+          set -euo pipefail
+          mix deps.get --check-locked
+          (cd apps/agent_ops_store && mix test --include integration)
+
+      - name: Recreate database container without deleting its volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/agent-core/compose.yaml stop db
+          docker compose -f deploy/agent-core/compose.yaml rm -f db
+          docker compose -f deploy/agent-core/compose.yaml up -d db
+
+          for i in $(seq 1 60); do
+            if docker compose -f deploy/agent-core/compose.yaml exec -T db \
+              pg_isready -U bizkit -d bizkit_agent_dev; then
+              break
+            fi
+            sleep 2
+          done
+
+          marker="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -Aqt \
+            -c "SELECT id FROM agent_ops.volume_probe WHERE id='volume-ok';")"
+          test "$marker" = "volume-ok"
+
+          attempt="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -Aqt \
+            -c "SELECT phase || ':' || row_version::text
+                FROM agent_ops.execution_attempts
+                WHERE effect_id='agent-run:signed-ci';")"
+          test "$attempt" = "leased:2"
+
+      - name: Stop service but retain volume
+        if: always()
+        shell: bash
+        run: docker compose -f deploy/agent-core/compose.yaml down || true

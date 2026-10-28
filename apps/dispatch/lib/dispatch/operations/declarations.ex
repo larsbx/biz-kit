@@ -27,10 +27,18 @@ defmodule Dispatch.Operations.Declarations do
   after a lost response may legitimately resend with a different correlation ID
   or header set, and that is the same declaration; changing the status under a
   sequence number already used is not, whatever else matches.
+
+  ## Device signatures
+
+  A declaration naming the participant's own active device must be signed by
+  that device's key over the fields it was sent with (`:signed`), and is then
+  recorded `verification: :DEVICE_AUTHENTICATED`. Without a device it is
+  `:NONE`. The verification is decided here, never taken from the caller.
   """
 
   alias Dispatch.Access.Actor
-  alias Dispatch.Operations.ParticipantStatusEvent
+  alias Dispatch.Accounts.DeviceKeys
+  alias Dispatch.Operations.{ParticipantStatusEvent, StreamRefresh}
 
   require Ash.Query
 
@@ -43,10 +51,11 @@ defmodule Dispatch.Operations.Declarations do
           | {:ok, :duplicate, ParticipantStatusEvent.t()}
           | {:error, :device_sequence_conflict}
           | {:error, :event_id_conflict}
+          | {:error, :device_signature_required | :device_signature_invalid}
           | {:error, Ash.Error.t()}
 
   @accepted ~w(id status occurred_at note assignment_id location_sample_id
-               supersedes_event_id device_id device_sequence correlation_id)a
+               supersedes_event_id device_id device_sequence correlation_id verification)a
 
   # What makes two declarations the same declaration. Deliberately excludes
   # `correlation_id` and every server-assigned field: a retry is a retry even
@@ -60,10 +69,34 @@ defmodule Dispatch.Operations.Declarations do
   Returns `{:ok, :duplicate, event}` when this device sequence already carries
   the same declaration, so a caller that lost the first response gets the first
   event back rather than a second one.
+
+  `attrs[:signed]` is `%{fields: body_fields, signature: device_signature}`:
+  what the device signed, as received.
   """
   @spec declare(Actor.t(), attrs()) :: result()
   @spec declare(Actor.t(), attrs(), keyword()) :: result()
   def declare(%Actor{} = actor, attrs, opts \\ []) do
+    with {:ok, verification} <- verification(actor, attrs, Keyword.get(opts, :proof)) do
+      record(actor, Map.put(attrs, :verification, verification), opts)
+    end
+  end
+
+  # The native transport has already checked its governance-approved key and
+  # DispatchStatusV1 signature before entering the idempotency transaction.
+  # Bearer submissions retain DeviceKeys' distinct DispatchStatusEventV1 proof.
+  defp verification(_actor, _attrs, proof) when is_map(proof),
+    do: {:ok, :DEVICE_AUTHENTICATED}
+
+  defp verification(actor, attrs, nil) do
+    %{fields: fields, signature: signature} =
+      Map.get(attrs, :signed, %{fields: %{"device_id" => attrs[:device_id]}, signature: nil})
+
+    if fields["device_id"] == attrs[:device_id],
+      do: DeviceKeys.verify_event(actor, fields, signature),
+      else: {:error, :device_signature_invalid}
+  end
+
+  defp record(actor, attrs, opts) do
     input =
       attrs
       |> Map.take(@accepted)
@@ -76,9 +109,6 @@ defmodule Dispatch.Operations.Declarations do
         participant_id: actor.principal_id,
         role_assignment_id: actor.role_assignment.id
       })
-      |> then(fn input ->
-        if Keyword.get(opts, :proof), do: Map.put(input, :verification, :DEVICE_AUTHENTICATED), else: input
-      end)
 
     case existing(actor, input) do
       nil -> create(actor, input, opts)
@@ -113,7 +143,11 @@ defmodule Dispatch.Operations.Declarations do
       case create_event(actor, input) do
         {:ok, event} ->
           record_audit!(actor, event, Keyword.get(opts, :proof))
-          enqueue_stream_refreshes!(actor, event)
+
+          StreamRefresh.enqueue!(actor, event.participant_id, "status.declared", %{
+            "event_id" => event.id
+          })
+
           event
 
         {:error, error} ->
@@ -123,6 +157,12 @@ defmodule Dispatch.Operations.Declarations do
     |> case do
       {:ok, event} ->
         {:ok, :created, event}
+
+      # A refusal is not a lost race, and there is nothing to re-read: inside an
+      # enclosing transaction (the Idempotency-Key ledger's) the rollback above
+      # has already doomed it, and any further query would fail.
+      {:error, %Ash.Error.Forbidden{} = refused} ->
+        {:error, refused}
 
       {:error, error} ->
         # Another copy of the same request won the unique index between the read
@@ -170,27 +210,6 @@ defmodule Dispatch.Operations.Declarations do
       |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
 
     :ok
-  end
-
-  defp enqueue_stream_refreshes!(actor, event) do
-    now = DateTime.utc_now()
-
-    [
-      {"participant:#{event.participant_id}", %{"event_id" => event.id}},
-      {"operations:#{actor.role_assignment.organization_id}", %{"event_id" => event.id}}
-    ]
-    |> Enum.each(fn {topic, payload} ->
-      _outbox =
-        %Dispatch.Outbox.Event{
-          id: Ash.UUID.generate(),
-          tenant_id: actor.tenant_id,
-          topic: topic,
-          event_type: "status.declared",
-          payload: payload,
-          occurred_at: now
-        }
-        |> Dispatch.Repo.insert!()
-    end)
   end
 
   # The ID is taken, and the lookup above — scoped to this participant's own

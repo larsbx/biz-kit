@@ -21,12 +21,15 @@ defmodule DispatchWeb.Plugs.RequireSubject do
 
   @impl Plug
   def call(conn, _opts) do
-    case get_session(conn, DispatchWeb.Plugs.PortalSession.subject_key()) do
-      subject when is_binary(subject) ->
-        assign(conn, :oidc_subject, subject)
+    case DispatchWeb.Plugs.PortalSession.authenticate(conn) do
+      {:ok, subject, at} ->
+        conn
+        |> DispatchWeb.Plugs.PortalSession.put_authenticated_at(at)
+        |> assign(:oidc_subject, subject)
 
       _signed_out ->
         conn
+        |> clear_session()
         |> put_resp_header("location", "/login")
         |> put_resp_content_type("text/html")
         |> send_resp(302, "<!DOCTYPE html><html lang=\"en\"><body><p>Sign in</p></body></html>")

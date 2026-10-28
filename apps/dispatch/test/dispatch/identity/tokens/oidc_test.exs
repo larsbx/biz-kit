@@ -77,6 +77,15 @@ defmodule Dispatch.Identity.Tokens.OidcTest do
     assert @audience in verified.audience
   end
 
+  test "carries auth_time as when the person signed in, and nothing when absent", ctx do
+    signed_in = DateTime.utc_now() |> DateTime.add(-90, :second) |> DateTime.truncate(:second)
+
+    assert {:ok, %{authenticated_at: ^signed_in}} =
+             Oidc.verify(sign(ctx.private, claims(%{"auth_time" => DateTime.to_unix(signed_in)})))
+
+    assert {:ok, %{authenticated_at: nil}} = Oidc.verify(sign(ctx.private, claims()))
+  end
+
   test "refuses a token from another issuer", ctx do
     assert {:error, :untrusted_issuer} =
              Oidc.verify(sign(ctx.private, claims(%{"iss" => "https://elsewhere.invalid"})))

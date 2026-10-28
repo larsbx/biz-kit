@@ -40,6 +40,9 @@ defmodule Dispatch.MixProject do
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  # The test role profile, so the end-to-end stack can seed a second field role
+  # (Section 33.4 scenario 14). Never in a release, which compiles `lib` alone.
+  defp elixirc_paths(:dev), do: ["lib", "test/support/roles"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
@@ -74,6 +77,7 @@ defmodule Dispatch.MixProject do
       # bearer token (`Dispatch.Identity.Tokens.BizKitSession`). Started, since
       # sessions live in its process.
       {:biz_kit_identity, in_umbrella: true},
+      {:fulfillment_core, in_umbrella: true},
 
       # Outbound HTTP, used directly for OIDC key discovery (Section 23.1).
       # Declared here rather than relied on transitively: the TLS trust store

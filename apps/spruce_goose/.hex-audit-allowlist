@@ -11,4 +11,6 @@
 #
 # Anything not listed here fails immediately. Prefer upgrading.
 
-EEF-CVE-2026-32686 2026-10-08 lars decimal 3.1.1 unbounded exponent DoS. No fixed release exists (3.1.1 is current) and decimal is transitive via ash/ecto/postgrex. SpruceGoose declares no decimal attributes and parses no caller-supplied decimals on any surface, so there is no path from an untrusted input to Decimal parsing. Re-check when decimal publishes a fix.
+
+# No accepted advisories. Decimal 3.2.0 in the shared lock is outside the
+# former exponent and rounding advisory ranges; the expired exception is removed.

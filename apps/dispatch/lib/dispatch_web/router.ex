@@ -83,6 +83,14 @@ defmodule DispatchWeb.Router do
     post("/token", MobileSessionController, :exchange)
   end
 
+  # `:api` without content negotiation, for `/v1`'s event streams: `accepts`
+  # cannot name `text/event-stream`, as with the portal's (below).
+  pipeline :api_stream do
+    plug :put_no_store
+    plug DispatchWeb.Plugs.Authenticate
+    plug DispatchWeb.Plugs.ResolveActor
+  end
+
   scope "/health", DispatchWeb do
     pipe_through(:health)
 
@@ -96,12 +104,20 @@ defmodule DispatchWeb.Router do
   # will widen it, and Section 26.1 requires that widening to be a CSP change
   # with a test rather than an edit to a page template.
   pipeline :portal do
-    plug(:accepts, ["html"])
-    plug(:fetch_session)
-    plug(:protect_from_forgery)
-    plug(:put_secure_browser_headers, @portal_headers)
-    plug(:put_no_store)
-    plug(DispatchWeb.Plugs.PortalSession)
+    plug :accepts, ["html"]
+    plug :portal_session
+  end
+
+  # Section 24.5's streams: the portal's pipeline without content negotiation.
+  # They answer `text/event-stream` and nothing else, and `accepts` cannot name
+  # it (MIME has no extension for it), so every real EventSource would be
+  # refused with a 406 before reaching its authorization.
+  pipeline :portal_session do
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers, @portal_headers
+    plug :put_no_store
+    plug DispatchWeb.Plugs.PortalSession
   end
 
   # Sign-in and role selection cannot require a resolved actor: they are how one
@@ -144,19 +160,29 @@ defmodule DispatchWeb.Router do
   end
 
   scope "/", DispatchWeb do
-    pipe_through(:portal)
+    pipe_through :portal_session
 
-    # Section 24.5's live endpoints. Same pipeline as the pages they patch,
-    # because a stream is not a lesser surface: it carries the same fragments to
-    # the same viewer and must be authorized the same way.
-    get("/ui/operations/stream", StreamController, :operations)
-    get("/ui/participants/:participant_id/stream", StreamController, :participant)
+    # Section 24.5's live endpoints. Same session, headers and authorization as
+    # the pages they patch, because a stream is not a lesser surface: it carries
+    # the same fragments to the same viewer.
+    get "/ui/operations/stream", StreamController, :operations
+    get "/ui/participants/:participant_id/stream", StreamController, :participant
+  end
+
+  scope "/", DispatchWeb do
+    pipe_through :portal
 
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
-    get("/operations", PortalController, :operations)
-    get("/partner/stops/:stop_id", PortalController, :partner_stop)
-    get("/operations/participants/:participant_id", PortalController, :operations_participant)
-    get("/operations/drivers/:driver_id", PortalController, :operations_driver)
+    get "/operations", PortalController, :operations
+    get "/partner/stops/:stop_id", PortalController, :partner_stop
+    get "/operations/participants/:participant_id", PortalController, :operations_participant
+    get "/operations/drivers/:driver_id", PortalController, :operations_driver
+
+    # Section 4.3: ADMIN's primary route, and Section 26.2's /settings/users.
+    get "/settings", SettingsController, :index
+    get "/settings/users", SettingsController, :users
+    post "/settings/users/assignments", SettingsController, :grant
+    post "/settings/users/assignments/:assignment_id/revoke", SettingsController, :revoke
   end
 
   scope "/v1", DispatchWeb do
@@ -172,12 +198,31 @@ defmodule DispatchWeb.Router do
     get("/role-capabilities", RoleCapabilityController, :capabilities)
     post("/me/device-enrolment", MobileDeviceController, :request)
     post("/me/device-enrolment/:id/proof", MobileDeviceController, :prove)
-    post("/me/devices", MobileDeviceController, :register)
+
+    # Section 23.1: the app registers its installation key after sign-in.
+    post "/me/devices", DeviceController, :create
 
     # Section 24.1: the canonical self-service route and the DRIVER
     # compatibility projection. Both reach the same controller function.
-    post("/me/status-events", StatusEventController, :create)
-    post("/driver/status-events", StatusEventController, :create_driver)
+    post "/me/status-events", StatusEventController, :create
+    post "/driver/status-events", StatusEventController, :create_driver
+
+    # The caller's own trips, and the consent covering each (Section 25.3).
+    get "/me/assignments", AssignmentController, :mine
+    get "/driver/assignments", AssignmentController, :driver
+
+    # Section 24.2 and Section 25.3: consented location sharing.
+    post "/me/location-consents", LocationController, :begin_consent
+    post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent
+    post "/me/location-samples:batch", LocationController, :ingest
+    post "/driver/location-samples:batch", LocationController, :ingest_driver
+  end
+
+  scope "/v1", DispatchWeb do
+    pipe_through :api_stream
+
+    # The device hears when someone watches its position (Section 25.3).
+    get "/me/location-demand", LocationController, :demand
   end
 
   scope "/health", DispatchWeb do

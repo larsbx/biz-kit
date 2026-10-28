@@ -185,10 +185,6 @@ roadmaps:
 ./sprucegoose revise approve rev-... --task tsk-... --digest <sha256> --as lars
 ```
 
-Inbox captures are content-addressed and idempotent. They remain pending and
-non-executable; typed project/roadmap/workflow membership and a DoD are still
-required before creating a task.
-
 SpruceGoose/Ash has been authoritative since
 `2026-07-27 12:00:27.831082 UTC`. The database cutover is irreversible:
 PostgreSQL rejects authority reversal and cutover-timestamp mutation. Tuxedo,
@@ -267,7 +263,7 @@ no delivery project lives in the standing `ops` project, defined by
 `maintenance`, `support`) each carry one `*-routine` workflow of independent,
 reusable TaskDefinitions; a definition may be instantiated any number of times.
 Each workflow has a generic `adhoc` definition: its title is fixed, so link the
-originating request (for example the inbox capture) as evidence before starting.
+originating request as evidence before starting.
 
 ```sh
 ./sprucegoose blueprint apply ops root/sprucegoose \

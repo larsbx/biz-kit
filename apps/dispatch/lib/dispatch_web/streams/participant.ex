@@ -31,8 +31,9 @@ defmodule DispatchWeb.Streams.Participant do
   ## A struct and two functions, not a process
 
   The transport loop — receiving outbox notifications, writing chunks, noticing
-  a disconnect — lives in the controller. What lives here is the decision: given
-  a session and something that happened, emit what, or stop.
+  a disconnect — lives in `DispatchWeb.Streams.Transport`. What lives here is
+  the decision: given a session and something that happened, emit what, or
+  stop.
 
   That split is what makes "immediately" testable. A test can drive tick after
   tick with a revocation in between and assert the very next one closes, rather
@@ -48,8 +49,11 @@ defmodule DispatchWeb.Streams.Participant do
   for the same reason.
   """
 
+  @behaviour DispatchWeb.Streams.Transport
+
   alias Dispatch.Access.Actor
   alias Dispatch.Identity.PrincipalResolution
+  alias Dispatch.Operations.LocationDemand
   alias DispatchWeb.Components.Operations
   alias DispatchWeb.Datastar
   alias DispatchWeb.ViewModels.OperationsParticipantView
@@ -57,9 +61,14 @@ defmodule DispatchWeb.Streams.Participant do
   @retry_ms 3_000
 
   @enforce_keys [:actor, :participant_id]
-  defstruct [:actor, :participant_id]
+  defstruct [:actor, :participant_id, watching: false]
 
-  @type t :: %__MODULE__{actor: Actor.t(), participant_id: Ash.UUID.t()}
+  @typedoc """
+  `watching`: whether this stream counts as someone watching the participant's
+  position (`Dispatch.Operations.LocationDemand`), which asks their device to
+  share in real time. Re-decided on every tick, like everything else here.
+  """
+  @type t :: %__MODULE__{actor: Actor.t(), participant_id: Ash.UUID.t(), watching: boolean()}
 
   @typedoc "Why a tick happened: the heartbeat fired, or something changed."
   @type reason :: :heartbeat | :refresh
@@ -82,7 +91,7 @@ defmodule DispatchWeb.Streams.Participant do
   def open(%Actor{} = actor, participant_id, _opts \\ []) do
     with {:ok, actor} <- revalidate(actor),
          {:ok, view} <- OperationsParticipantView.build(actor, participant_id) do
-      session = %__MODULE__{actor: actor, participant_id: participant_id}
+      session = watch(%__MODULE__{actor: actor, participant_id: participant_id})
       {:ok, session, [Datastar.retry(@retry_ms), patch(view)]}
     else
       _nothing_to_stream -> {:error, :not_found}
@@ -97,6 +106,7 @@ defmodule DispatchWeb.Streams.Participant do
   authority means an idle stream cannot outlive the grant behind it, which is
   the case a stream-closing-on-the-next-event design quietly misses.
   """
+  @impl DispatchWeb.Streams.Transport
   @spec tick(t(), reason()) :: {:emit, iodata(), t()} | {:close, :unauthorized}
   def tick(%__MODULE__{} = session, :heartbeat) do
     # The cheap tick, and the one that matters most for "immediately". A
@@ -106,14 +116,14 @@ defmodule DispatchWeb.Streams.Participant do
     # requires a beat every twenty seconds; making that beat the revalidation is
     # what bounds how long a revoked viewer can keep a socket open.
     case revalidate(session.actor) do
-      {:ok, actor} -> {:emit, Datastar.heartbeat(), %{session | actor: actor}}
+      {:ok, actor} -> {:emit, Datastar.heartbeat(), watch(%{session | actor: actor})}
       {:error, _gone} -> {:close, :unauthorized}
     end
   end
 
   def tick(%__MODULE__{} = session, :refresh) do
     case rebuild(session) do
-      {:ok, session, view} -> {:emit, patch(view), session}
+      {:ok, session, view} -> {:emit, patch(view), watch(session)}
       :error -> {:close, :unauthorized}
     end
   end
@@ -130,7 +140,29 @@ defmodule DispatchWeb.Streams.Participant do
     end
   end
 
+  @doc "Ends this stream's watch, if it had one."
+  @impl DispatchWeb.Streams.Transport
+  @spec release(t()) :: :ok
+  def release(%__MODULE__{participant_id: participant}), do: LocationDemand.unwatch(participant)
+
   defp revalidate(actor), do: PrincipalResolution.revalidate(actor)
+
+  # A precise-location reader watching while the participant consents is
+  # demand; anyone else, or the same reader once consent ends, is not.
+  defp watch(%__MODULE__{actor: actor, participant_id: participant} = session) do
+    case {LocationDemand.precise?(actor, participant), session.watching} do
+      {true, false} ->
+        :ok = LocationDemand.watch(participant)
+        %{session | watching: true}
+
+      {false, true} ->
+        :ok = LocationDemand.unwatch(participant)
+        %{session | watching: false}
+
+      _unchanged ->
+        session
+    end
+  end
 
   defp patch(view) do
     %{view: view}

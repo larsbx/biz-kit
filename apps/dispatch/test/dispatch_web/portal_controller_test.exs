@@ -14,7 +14,7 @@ defmodule DispatchWeb.PortalControllerTest do
   import Plug.Test
 
   alias Dispatch.Support.Fixtures
-  alias Dispatch.Support.Tokens.StaticVerifier
+  alias Dispatch.Support.PortalIdentity, as: StaticVerifier
   alias DispatchWeb.Plugs.PortalSession
 
   @moduletag :integration
@@ -30,6 +30,7 @@ defmodule DispatchWeb.PortalControllerTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
+    :ok = Dispatch.Support.PortalIdentity.setup()
 
     carrier = Fixtures.carrier()
     tenant = carrier.id
@@ -76,8 +77,13 @@ defmodule DispatchWeb.PortalControllerTest do
     |> fetch_session()
     |> then(fn conn ->
       case Keyword.get(opts, :session) do
-        nil -> conn
-        entries -> Enum.reduce(entries, conn, fn {k, v}, acc -> put_session(acc, k, v) end)
+        nil ->
+          conn
+
+        entries ->
+          Enum.reduce(Dispatch.Support.PortalIdentity.bind(entries), conn, fn {k, v}, acc ->
+            put_session(acc, k, v)
+          end)
       end
     end)
     |> DispatchWeb.Router.call(@opts)
@@ -330,6 +336,30 @@ defmodule DispatchWeb.PortalControllerTest do
       # One function body, so the projection cannot drift from the canonical
       # route — Section 24.3 asks for exactly that of the compatibility routes.
       assert canonical.resp_body == compatibility.resp_body
+    end
+  end
+
+  describe "Section 24.5: a live page opens its own stream" do
+    test "without Datastar expressions, which the CSP's script-src forbids", ctx do
+      %{user: dispatcher_user, participant: dispatcher} = Fixtures.person(ctx.tenant, ctx.carrier)
+      dispatch_assignment = Fixtures.assignment(ctx.tenant, ctx.carrier, dispatcher, "DISPATCHER")
+      %{participant: driver} = Fixtures.person(ctx.tenant, ctx.carrier)
+
+      session = [
+        session: [
+          {PortalSession.subject_key(), dispatcher_user.oidc_subject},
+          {PortalSession.assignment_key(), dispatch_assignment.id}
+        ]
+      ]
+
+      for {page, stream} <- [
+            {"/operations", "/ui/operations/stream"},
+            {"/operations/participants/#{driver.id}", "/ui/participants/#{driver.id}/stream"}
+          ] do
+        body = get(page, session).resp_body
+        assert body =~ ~s(data-dispatch-stream="#{stream}"), page
+        assert body =~ ~s(src="/static/js/streams.js"), page
+      end
     end
   end
 

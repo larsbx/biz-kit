@@ -1,0 +1,78 @@
+name: EventStore signed replay acceptance
+
+on:
+  pull_request:
+    paths:
+      - "apps/agent_ops_store/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - "formal/**"
+      - "mix.exs"
+      - "mix.lock"
+      - ".github/workflows/signed-event-replay-acceptance.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/agent_ops_store/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - "formal/**"
+      - "mix.exs"
+      - "mix.lock"
+      - ".github/workflows/signed-event-replay-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-replay-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record exact source revision
+        run: git rev-parse HEAD
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Ensure PostgreSQL migration client
+        run: |
+          if ! command -v psql; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client-16
+          fi
+          psql --version
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile signed replay boundary with warnings as errors
+        working-directory: apps/coop_substrate
+        run: mix compile --warnings-as-errors
+      - name: Check test and dependency formatting
+        working-directory: apps/coop_substrate
+        run: mix format --check-formatted mix.exs test/signed_event_replay_test.exs
+      - name: Test real signed replay and caller death with independent order seeds
+        working-directory: apps/coop_substrate
+        run: |
+          for seed in 1 9173; do
+            mix test test/signed_consumer_source_test.exs test/signed_event_replay_test.exs --trace --seed "$seed" || exit 1
+          done

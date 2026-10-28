@@ -5,7 +5,7 @@ defmodule SpruceGoose.Web.NativeSignInTest do
   HTTP, and the refusals that keep a code from working for anyone but the app
   that asked for it.
   """
-  use ExUnit.Case, async: false
+  use SpruceGoose.DataCase, async: false
 
   import SpruceGoose.{IdentityFixtures, LedgerFixtures}
 
@@ -77,10 +77,11 @@ defmodule SpruceGoose.Web.NativeSignInTest do
     assert granted.status == 200
     assert Plug.Conn.get_resp_header(granted, "cache-control") == ["no-store"]
 
-    assert %{"access_token" => session, "token_type" => "Bearer", "expires_in" => ttl} =
-             Jason.decode!(granted.resp_body)
+    # No expires_in: the session lasts until signed out.
+    assert %{"access_token" => session, "token_type" => "Bearer"} =
+             granted_body = Jason.decode!(granted.resp_body)
 
-    assert ttl > 0
+    refute Map.has_key?(granted_body, "expires_in")
 
     me = call(:get, "/auth/me", [{"authorization", "Bearer " <> session}])
     assert me.status == 200
@@ -88,6 +89,71 @@ defmodule SpruceGoose.Web.NativeSignInTest do
 
     assert call(:post, "/auth/logout", [{"authorization", "Bearer " <> session}]).status == 204
     assert call(:get, "/auth/me", [{"authorization", "Bearer " <> session}]).status == 401
+  end
+
+  test "logout confirms revocation without logging credentials and leaves other sessions live",
+       ctx do
+    identity = %{issuer: workos_iss(), subject: "user_A"}
+    ended = BizKit.Identity.Sessions.create_native(ctx.person, identity)
+    kept = BizKit.Identity.Sessions.create_native(ctx.person, identity)
+
+    level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: level) end)
+
+    log =
+      ExUnit.CaptureLog.capture_log([level: :debug, format: "$message\n"], fn ->
+        assert call(:post, "/auth/logout", [{"authorization", "Bearer " <> ended}]).status ==
+                 204
+      end)
+
+    assert log =~ "session logout completed bearer_present=true cookie_present=false"
+    refute log =~ ended
+    refute log =~ kept
+    refute log =~ ctx.person
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> ended}]).status == 401
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> kept}]).status == 200
+    restart_sessions()
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> ended}]).status == 401
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> kept}]).status == 200
+  end
+
+  test "a native session outlives a restart, until the app signs out", ctx do
+    workos_signs_in("user_A")
+    %{"code" => code} = ctx |> browser_round_trip() |> location() |> query()
+
+    %{"access_token" => session} =
+      token(%{"code" => code, "code_verifier" => ctx.verifier, "redirect_uri" => @app}).resp_body
+      |> Jason.decode!()
+
+    {:ok, %{authenticated_at: signed_in}} = BizKit.Identity.session(session)
+    restart_sessions()
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> session}]).status == 200
+    # When it was earned comes back from Postgres too, to the millisecond.
+    assert {:ok, %{authenticated_at: ^signed_in}} = BizKit.Identity.session(session)
+
+    assert call(:post, "/auth/logout", [{"authorization", "Bearer " <> session}]).status == 204
+    restart_sessions()
+    assert call(:get, "/auth/me", [{"authorization", "Bearer " <> session}]).status == 401
+    assert SpruceGoose.Repo.query!("SELECT count(*) FROM identity_native_sessions").rows == [[0]]
+  end
+
+  # What a restart does to the sessions held in memory.
+  defp restart_sessions do
+    name = BizKit.Cluster.Singleton.name(BizKit.Identity.Sessions)
+    pid = GenServer.whereis(name)
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, _pid, _reason}
+    wait_until(fn -> GenServer.whereis(name) not in [nil, pid] end)
+  end
+
+  defp wait_until(check, tries \\ 100) do
+    cond do
+      check.() -> :ok
+      tries == 0 -> flunk("the session process did not come back")
+      true -> Process.sleep(10) && wait_until(check, tries - 1)
+    end
   end
 
   test "a code is refused without the app's verifier, and is spent by the attempt", ctx do

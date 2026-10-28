@@ -5,8 +5,9 @@ defmodule DispatchWeb.SessionController do
   Section 23.1 makes this service a resource server: it validates tokens, it
   does not run the Authorization Code flow. The portal therefore exchanges a
   token the client already obtained for an encrypted server session, and the
-  session holds the *subject* — never the token, which Section 32 forbids
-  logging or storing and which would be a bearer credential sitting in a cookie.
+  session holds the subject and a non-bearer Identity reference, never the token.
+  Identity state and binding are checked on each use. Section 32 forbids
+  logging or retaining the bearer credential.
 
   Role selection is the browser half of Section 24.6. A chosen assignment is
   written to the session and revalidated on every subsequent request by
@@ -34,8 +35,8 @@ defmodule DispatchWeb.SessionController do
   """
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"token" => token}) when is_binary(token) do
-    case Verifier.verify(token) do
-      {:ok, %{subject: subject}} ->
+    case portal_claims(token) do
+      {:ok, %{subject: subject, session_reference: reference} = claims} ->
         # `renew: true` renews the session id and *keeps* its contents, so a
         # previous user's selection would survive into this one. It would then
         # be presented on the next request, fail to resolve, and sign the new
@@ -44,9 +45,11 @@ defmodule DispatchWeb.SessionController do
         |> configure_session(renew: true)
         |> clear_session()
         |> put_session(PortalSession.subject_key(), subject)
+        |> put_session(PortalSession.reference_key(), reference)
+        |> PortalSession.put_authenticated_at(claims[:authenticated_at])
         |> redirect_to("/select-role")
 
-      {:error, _reason} ->
+      _refused_or_no_revocable_source ->
         # One message for every reason, as Section 24.7 requires of reason
         # codes: which part of the token failed is more use to an attacker.
         conn |> put_status(:unauthorized) |> render(:login, message: "Sign-in failed.")
@@ -59,7 +62,28 @@ defmodule DispatchWeb.SessionController do
 
   @doc "Ends the session."
   @spec delete(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def delete(conn, _params), do: conn |> clear_session() |> redirect_to("/login")
+  def delete(conn, _params) do
+    result = revoke_source(get_session(conn, PortalSession.reference_key()))
+    conn = clear_session(conn)
+
+    case result do
+      :ok ->
+        redirect_to(conn, "/login")
+
+      {:error, :unavailable} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> render(:login,
+          message: "Signed out of this browser. Account sign-out is temporarily unavailable."
+        )
+    end
+  end
+
+  defp revoke_source(reference) do
+    BizKit.Identity.Sessions.revoke_reference(reference)
+  catch
+    :exit, _ -> {:error, :unavailable}
+  end
 
   @doc """
   The role/scope switcher of Section 4.3.
@@ -98,10 +122,31 @@ defmodule DispatchWeb.SessionController do
 
   # Section 4.3's primary route per profile. A profile with no page of its own
   # yet lands on role selection rather than a route that does not exist.
+  # A signature-only/OIDC verifier cannot promise source-session revocation.
+  # Refuse portal exchange unless it supplies a live Identity reference.
+  defp portal_claims(token) do
+    with {:ok, %{subject: subject, session_reference: reference} = claims} <-
+           Verifier.verify(token),
+         {:ok, %{principal: ^subject, authenticated_at: at}} <-
+           BizKit.Identity.session_from_reference(reference) do
+      {:ok, Map.put(claims, :authenticated_at, DateTime.from_unix!(at, :millisecond))}
+    else
+      _ -> {:error, :invalid_token}
+    end
+  catch
+    :exit, _ -> {:error, :unavailable}
+  end
+
   defp landing_for(actor) do
-    case actor.role_assignment.scope_type do
-      :STOP -> "/partner/stops/#{actor.role_assignment.scope_id}"
-      _otherwise -> "/select-role"
+    cond do
+      actor.role_assignment.scope_type == :STOP ->
+        "/partner/stops/#{actor.role_assignment.scope_id}"
+
+      Dispatch.Access.operations_projection(actor.role_assignment) == :settings ->
+        "/settings/users"
+
+      true ->
+        "/select-role"
     end
   end
 

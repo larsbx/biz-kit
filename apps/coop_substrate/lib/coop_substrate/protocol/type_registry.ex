@@ -1086,6 +1086,7 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
   defp all_types do
     @builtin_types
     |> Map.merge(TaskCore.Admission.event_types())
+    |> Map.merge(CoopSubstrate.GroupBuys.event_types())
     |> Map.merge(Application.get_env(:coop_substrate, :extra_event_types, %{}))
   end
 end

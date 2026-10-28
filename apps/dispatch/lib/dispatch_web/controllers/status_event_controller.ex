@@ -80,18 +80,27 @@ defmodule DispatchWeb.StatusEventController do
 
   @doc "Canonical self-service declaration route."
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def create(conn, params), do: declare(conn, params)
+  def create(conn, _params), do: declare(conn)
 
   @doc "The DRIVER compatibility projection of `create/2`. Same behaviour, same events."
   @spec create_driver(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def create_driver(conn, params), do: declare(conn, params)
+  def create_driver(conn, _params), do: declare(conn)
 
-  defp declare(conn, params) do
-    case parse(params) do
-      {:ok, attrs} -> respond(conn, run(conn, params, attrs))
+  # The declaration is the body and nothing else. `params` would also carry the
+  # query string, which no device signs: a field slipped in there must not be
+  # stored on an event recorded as signed.
+  defp declare(conn) do
+    body = conn.body_params
+
+    case parse(body) do
+      {:ok, attrs} -> respond(conn, run(conn, body, Map.put(attrs, :signed, signed(body))))
       {:error, field} -> respond(conn, {:error, {:malformed, field}})
     end
   end
+
+  # What a device signed: the body as sent, less the signature itself.
+  defp signed(body),
+    do: %{fields: Map.delete(body, "device_signature"), signature: body["device_signature"]}
 
   # Section 21.1 keeps this layer to transport, and that is what makes the
   # transaction below possible: the mutation reports a status and a body rather
@@ -114,7 +123,7 @@ defmodule DispatchWeb.StatusEventController do
 
     case conn.assigns[:bizkit_session] do
       nil ->
-        if is_nil(params["device_id"]), do: run.(nil), else: {:error, :device_rejected}
+        run.(nil)
 
       session ->
         if Dispatch.Access.can?(actor.role_assignment, "status.declare.self", actor.at) do
@@ -171,6 +180,24 @@ defmodule DispatchWeb.StatusEventController do
         409,
         "DEVICE_SEQUENCE_CONFLICT",
         "This device sequence already carries a different declaration."
+      )
+
+  defp respond(conn, {:error, :device_signature_required}),
+    do:
+      Problem.send(
+        conn,
+        422,
+        "DEVICE_SIGNATURE_REQUIRED",
+        "A declaration naming a registered device must be signed by it."
+      )
+
+  defp respond(conn, {:error, :device_signature_invalid}),
+    do:
+      Problem.send(
+        conn,
+        422,
+        "DEVICE_SIGNATURE_INVALID",
+        "The device signature does not verify over this declaration."
       )
 
   defp respond(conn, {:error, :key_reused}),

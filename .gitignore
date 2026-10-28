@@ -5,3 +5,7 @@
 erl_crash.dump
 *.ez
 /tmp/
+/.e2e/
+/native/marketplace_gossip/target/
+/apps/federation_service/test/support/__pycache__/
+/tools/__pycache__/

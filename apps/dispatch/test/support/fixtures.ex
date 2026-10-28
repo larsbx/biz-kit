@@ -74,7 +74,7 @@ defmodule Dispatch.Support.Fixtures do
   defp register(opts, name) do
     User
     |> Ash.Changeset.for_create(:register, %{
-      oidc_subject: Keyword.get(opts, :oidc_subject, unique("sub")),
+      oidc_subject: Keyword.get(opts, :oidc_subject, BizKit.Identity.Principal.new_id()),
       display_name: name
     })
     |> Ash.create!(authorize?: false)
@@ -141,15 +141,93 @@ defmodule Dispatch.Support.Fixtures do
 
   @doc "An active device registered to `participant`."
   @spec device(Ash.UUID.t(), Participant.t()) :: Device.t()
-  def device(tenant, participant) do
-    Device
-    |> Ash.Changeset.for_create(:register, %{
-      tenant_id: tenant,
-      participant_id: participant.id,
-      installation_id: unique("installation"),
-      public_key: Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
-    })
-    |> Ash.create!(authorize?: false, tenant: tenant)
+  def device(tenant, participant), do: tenant |> keyed_device(participant) |> elem(0)
+
+  @doc "A registered device with a real Ed25519 key, and its seed for signing."
+  @spec keyed_device(Ash.UUID.t(), struct()) :: {struct(), binary()}
+  def keyed_device(tenant, participant) do
+    {public_key, seed} = CoopSubstrate.Crypto.generate_keypair()
+
+    device =
+      Device
+      |> Ash.Changeset.for_create(:register, %{
+        tenant_id: tenant,
+        participant_id: participant.id,
+        installation_id: unique("installation"),
+        public_key: Base.url_encode64(public_key, padding: false)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    {device, seed}
+  end
+
+  @doc "`body` as the device holding `seed` sends it: signed over its own fields."
+  @spec signed(map(), binary()) :: map()
+  def signed(body, seed) do
+    {:ok, statement} = Dispatch.Accounts.DeviceKeys.event_statement(body)
+
+    Map.put(
+      body,
+      "device_signature",
+      Base.url_encode64(CoopSubstrate.Crypto.sign(statement, seed), padding: false)
+    )
+  end
+
+  @doc "A location sample as the device holding `seed` sends it: signed over its own fields."
+  @spec signed_sample(map(), binary()) :: map()
+  def signed_sample(body, seed) do
+    {:ok, statement} = Dispatch.Accounts.DeviceKeys.sample_statement(body)
+
+    Map.put(
+      body,
+      "device_signature",
+      Base.url_encode64(CoopSubstrate.Crypto.sign(statement, seed), padding: false)
+    )
+  end
+
+  @doc """
+  A sample from `ctx.device` (signed with `ctx.seed`) on `ctx.trip` under
+  `grant`: London, 12 m, acquired now.
+  """
+  @spec location_sample(map(), struct(), map()) :: map()
+  def location_sample(%{trip: trip, device: device, seed: seed}, grant, overrides \\ %{}) do
+    %{
+      "sample_id" => Ash.UUID.generate(),
+      "assignment_id" => trip.id,
+      "lat_e7" => 515_074_000,
+      "lng_e7" => -1_278_000,
+      "accuracy_cm" => 1_200,
+      "provider" => "fused",
+      "is_mock" => false,
+      "occurred_at" => DateTime.to_iso8601(DateTime.utc_now()),
+      "device_id" => device.id,
+      "device_sequence" => System.unique_integer([:positive]),
+      "consent_grant_id" => grant.id
+    }
+    |> Map.merge(overrides)
+    |> signed_sample(seed)
+  end
+
+  @doc """
+  A dispatcher explicitly given precise location (Section 23.2): DISPATCHER's
+  capabilities plus `operations.location.precise.read`, over the organization.
+  """
+  @spec tracker(Ash.UUID.t(), Organization.t(), Participant.t()) :: Actor.t()
+  def tracker(tenant, org, subject) do
+    {:ok, manifest} = Dispatch.Access.SeedManifest.fetch("DISPATCHER")
+
+    definition =
+      Dispatch.Accounts.RoleDefinition
+      |> Ash.Changeset.for_create(:seed, %{
+        tenant_id: tenant,
+        key: "TRACKER",
+        label: "Dispatcher (live location)",
+        capabilities_json: ["operations.location.precise.read" | manifest.capabilities],
+        profile_module: inspect(manifest.profile_module)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    actor(tenant, org, subject, "TRACKER", definition: definition, scope_type: :ORGANIZATION)
   end
 
   @doc """
@@ -178,7 +256,8 @@ defmodule Dispatch.Support.Fixtures do
       tenant_id: tenant,
       load_id: load.id,
       operator_participant_id: operator.id,
-      starts_at: Keyword.get(opts, :starts_at, DateTime.utc_now())
+      starts_at: Keyword.get(opts, :starts_at, DateTime.utc_now()),
+      ends_at: Keyword.get(opts, :ends_at)
     })
     |> Ash.create!(authorize?: false, tenant: tenant)
   end

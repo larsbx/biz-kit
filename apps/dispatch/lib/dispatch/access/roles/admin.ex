@@ -13,5 +13,7 @@ defmodule Dispatch.Access.Roles.Admin do
   surface (`/settings`) and no field application.
   """
 
-  use Dispatch.Access.Roles.Base, projection: :settings
+  use Dispatch.Access.Roles.Base,
+    projection: :settings,
+    scope: :ORGANIZATION
 end

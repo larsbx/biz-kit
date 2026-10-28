@@ -9,5 +9,7 @@ defmodule Dispatch.Access.Roles.Dispatcher do
   terminates REST, page, and SSE access immediately.
   """
 
-  use Dispatch.Access.Roles.Base, projection: :operations
+  use Dispatch.Access.Roles.Base,
+    projection: :operations,
+    scope: :ORGANIZATION
 end

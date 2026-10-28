@@ -41,6 +41,13 @@ defmodule Dispatch.Access.RoleProfile do
   """
   @callback android_features(RoleAssignment.t()) :: [String.t()]
 
+  @doc """
+  What an assignment of this profile is scoped to (Section 23.2's scope
+  column): `:SELF` and `:ORGANIZATION` are bounded by the organization alone;
+  `:LOAD` and `:STOP` also name the load or stop, and need its party row.
+  """
+  @callback scope_type() :: :SELF | :ORGANIZATION | :LOAD | :STOP
+
   @doc "The operations projection this assignment renders (Section 4.3)."
   @callback operations_projection(RoleAssignment.t()) :: atom()
 

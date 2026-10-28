@@ -1,6 +1,9 @@
 # :browser needs Node, Playwright and Chromium (test/browser).
 ExUnit.start(exclude: [:separate_sessions, :browser])
 
+# Native sessions are kept in this app's Postgres, as in the releases.
+Application.put_env(:biz_kit_identity, :session_store, SpruceGoose.Web.NativeSessionStore)
+
 defmodule SpruceGoose.UmbrellaRuntime do
   @moduledoc """
   The biz-kit umbrella has one runtime configuration for the whole release,
@@ -19,7 +22,9 @@ defmodule SpruceGoose.UmbrellaRuntime do
       {"OIDC_CLIENT_ID_API", "dispatch-api"},
       {"OIDC_AUDIENCE", "dispatch-api"},
       {"APPLICATION_ENCRYPTION_KEY_ID", "test-key"},
-      {"DIAGNOSTICS_TOKEN", "test-token"}
+      {"DIAGNOSTICS_TOKEN", "test-token"},
+      # eatsbot's; its SECRET_KEY_BASE and DATABASE_URL are shared with the above.
+      {"GEOCODING_TOKEN", "test-geocoding-token"}
     ]
   end
 end

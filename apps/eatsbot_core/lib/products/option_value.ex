@@ -1,0 +1,95 @@
+defmodule EatsbotCore.Products.OptionValue do
+  @moduledoc """
+  Represents a specific value for a product option.
+
+  OptionValues are the individual choices available for an option. For example,
+  if "Size" is an option, then "Small", "Medium", and "Large" would be option values.
+  These values are combined in different ways to create product variants.
+
+  ## Key Features
+  - Unique value per option (enforced by identity)
+  - Belongs to a specific Option
+  - Many-to-many relationship with Variants
+  - Used in variant generation to create option combinations
+
+  ## Example
+  For an Option "Color":
+  - OptionValue: "Red"
+  - OptionValue: "Blue"
+  - OptionValue: "Green"
+
+  These values combine with other option values to form unique product variants.
+  """
+  use Ash.Resource,
+    otp_app: :eatsbot,
+    domain: EatsbotCore.Products,
+    extensions: [AshGraphql.Resource, AshAdmin.Resource],
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
+    notifiers: [EatsbotCore.Kafka.AshNotifier]
+
+  graphql do
+    type :option_value
+  end
+
+  postgres do
+    table "option_values"
+    repo Eatsbot.Repo
+
+    references do
+      reference :variant, on_delete: :delete
+      reference :option, on_delete: :delete
+    end
+  end
+
+  policies do
+    bypass always() do
+      description "admin has access to every action"
+      authorize_if actor_attribute_equals(:access_level, :admin)
+    end
+
+    policy action_type(:read) do
+      description "read access is always allowed"
+      authorize_if always()
+    end
+  end
+
+  field_policies do
+    field_policy :* do
+      description "the rest of the fields don't require any special policies"
+      authorize_if always()
+    end
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+
+    attribute :value, :string do
+      allow_nil? false
+      public? true
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :option, EatsbotCore.Products.Option do
+      public? true
+    end
+
+    belongs_to :variant, EatsbotCore.Products.Variant do
+      public? true
+    end
+
+    identities do
+      identity :unique_value, [:value, :option_id]
+    end
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  code_interface do
+  end
+end

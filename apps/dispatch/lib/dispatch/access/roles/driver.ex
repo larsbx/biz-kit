@@ -10,6 +10,7 @@ defmodule Dispatch.Access.Roles.Driver do
 
   use Dispatch.Access.Roles.Base,
     projection: :participant,
+    scope: :SELF,
     android_features: ~w(
       home
       status

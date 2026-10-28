@@ -3,8 +3,10 @@
 Date: 2026-10-11 (America/Chicago).
 Direction: consolidate business-state authority. Status: **target architecture;
 full runtime consolidation remains to implement**.
-The [first implementation stage](2026-10-11-first-ledger-task-command.md) retires
-the notes spike and adds an isolated common-ledger task proposal.
+The [first implementation stage](2026-10-11-first-ledger-task-command.md) retired
+the notes spike and introduced an isolated common-ledger task proposal.
+Later delivered stages and remaining production boundaries are separated below;
+the [roadmap](../roadmap.md) owns the current work order.
 
 This replaces the October 9 recommendation to retain independent authorities
 behind adapters. The selected direction is one source of truth. The proposed
@@ -29,21 +31,36 @@ dashboard, or Ash resource cannot independently establish a competing fact.
 | Writes | Domain commands validate against a committed ledger version; the serialized append gate rechecks authority and preconditions before accepting events. Acknowledge only after the append is durable. |
 | Reads | Ash/PostgreSQL tables provide queryable projections. They can be rebuilt or replaced without changing business history. |
 | Database/configuration | One database connection target and one deployment/migration contract. Isolate EventStore-owned tables from projection/job tables inside that database; consolidate projection Repos. |
-| Identity | One platform principal registry and scoped grant model, derived from the ledger. Prefer the existing external OIDC entry point for authentication; retain separate token audiences and domain permission meanings. |
+| Identity | One platform principal registry and scoped grant model, derived from the ledger. External authentication providers connect through `BizKit.Identity`; retain separate token audiences and domain permission meanings. |
 
 The existing ledger already has verify-on-append, atomic batches, exact-byte
 storage, pure replay, and independent export. It uses the `eventstore` library
 directly, without the full Commanded aggregate framework. That makes it the
 strongest delivered starting point for consolidation ([substrate], [log],
 [event-store]). This is a design choice based on that implementation, not a
-claim that task or dispatch writes already use it.
+claim that every task or dispatch write already uses it.
+
+## Delivered work and remaining boundaries
+
+Thread-audit reconciliation, 2026-10-23. This status distinguishes the selected
+destination from delivered stages; it does not certify a running deployment.
+
+| Concern | Delivered | Remaining boundary |
+| --- | --- | --- |
+| Event engines | The [first stage](2026-10-11-first-ledger-task-command.md) removed the unused AshEvents notes code and dependency while retaining historical migrations and snapshots. | Inventory and preserve any stored notes before physical data retirement. The separate certified shadow ledger and live row writers remain distinct cutover obligations. |
+| Task commands | [Execution/completion](2026-10-19-execution.md), [workflow blueprints](2026-10-20-hierarchy-and-blueprints.md), [run readiness](2026-10-20-run-readiness.md) and [retained task guarantees](2026-10-20-sprucegoose-salvage.md) extend the common-ledger path beyond the initial proposal. | The roadmap places step 3 in an isolated instance. Finish the retained orchestration surface and fence its old writer before production cutover. |
+| Principals and authentication | [BizKit.Identity](2026-10-18-identity.md) provides stable principals, provider adapters and revocable sessions; WorkOS is the first provider. | Principal bindings are administrator-controlled configuration pending ledger-governed links. Migrate remaining registries/clients and verify revocation before retiring duplicate issuers. |
+| Database and ownership | The umbrella shares a build and lock; Keel remains a pure rules kernel. | Reconcile schemas, migration ownership and command admission. Existing shared environment variables do not implement safe database consolidation or persisted ownership transitions. |
+
+The October 9 comparison is historical evidence, not a standing instruction to
+retain separate databases, receipt bridges or business authorities indefinitely.
 
 ## Remove competing authority and unused machinery
 
 | Existing component | Consolidation action | Condition before removal |
 | --- | --- | --- |
-| AshEvents notes spike: `Notes`, `Events`, replay clearing, `ash_events` dependency | Retire the spike and its second event/replay mechanism. | Inventory any stored notes, preserve needed bytes/history, and verify no supported consumer depends on it. Source search finds the extension only on `Notes.Note`. |
-| SpruceGoose PostgreSQL certified-event writer and `ShadowEvents` snapshot writes | Replace new business-event writes with typed events on the common ledger; stop the separate certified-event stream. | Migrate task, deployment, derivation outcome, grant, and other covered write paths. Preserve old ETF bytes and identities as historical evidence. |
+| AshEvents notes spike: `Notes`, `Events`, replay clearing, `ash_events` dependency | Code and dependency retired in the first stage; not the task ledger. | Retain historical migrations/snapshots. Inventory any stored notes and preserve needed bytes/history before physical table retirement. At the imported baseline the extension was used only by `Notes.Note`. |
+| SpruceGoose PostgreSQL certified-event writer and `ShadowEvents` snapshot writes | Move retained business writes to typed common-ledger events; stop the separate certified-event stream. | Cover retained task, hierarchy, grant and approval paths. Features excluded by the later salvage decision retire with their writer; preserve old ETF bytes and identities as historical evidence. |
 | SpruceGoose live task-row authority and Dispatch direct domain writes | Convert mutations to commands and rows to projections. | A covered command cannot succeed via a row write or an old writer; ledger append failure changes no business state. |
 | Per-app business outboxes and audit bridges | Derive delivery work from the accepted common ledger, with consumer cursors and stable effect IDs. | Durable delivery/retry replaces each current transport before its code is removed. Delivery accounting is operational state, not a second business log. |
 | Duplicate principal/user/grant registries and local OAuth issuer | Introduce one governed principal-link/grant model and one authentication entry point. Retire redundant issuer/token machinery once clients migrate. | Preserve identity mappings, active grants, revocations, service/agent scopes, and MCP client authorization. Never merge users merely because names/emails match. |
@@ -99,7 +116,35 @@ External effects use stable IDs, retry/reconciliation, and explicit result
 events. A durable dispatch/task intent is not proof that an external provider
 performed its effect. Delivery must not turn replay into repeated execution.
 
+### Keel ownership admission
+
+Keel calculates structure and ownership; it does not persist a licensed change.
+A future ownership command must bind the entity, affected parties/assets,
+effective time, applicable rule version and expected aggregate version. Admission
+must recheck signer authority, required decisions/mandates, class eligibility,
+pre-emption, temporal intervals and partition/dissolution constraints against
+committed state. A valid structure snapshot or service-signed audit receipt alone
+does not establish authorization.
+
+Define reviewed event types and a pure ownership fold, with stale-command,
+unauthorized-signer and invariant-preservation regressions, before enabling that
+writer. Preserve existing cooperative bilateral-signature semantics and historical
+bytes. This remains consolidation step 4, not an implemented Keel adapter.
+
 ### Signatures, identifiers, and identity
+
+Authors sign the canonical event **core** and its signer declarations. The log
+assigns sequence and predecessor fields after signing; `event_hash` commits the
+full record, including signatures and chain placement. These are distinct claims:
+an author signature attests the content, not a sequence position unknown at signing.
+
+Independently retained, trusted signed checkpoints anchor verification of the
+recorded history. Database append restrictions and an internally recomputed hash
+chain alone do not exclude a privileged rewrite of an unanchored history.
+Verification must use the relevant historical signer registry; key custody and
+external checkpoint retention remain deployment requirements. A checkpoint does
+not prove that every submitted request was admitted, or establish freshness beyond
+its anchored position ([substrate], [log]).
 
 Keep original cooperative bytes and signatures valid. A platform service
 signing an authenticated request attests its admission/observation; it must
@@ -121,7 +166,9 @@ Replace the CLI's declared `--as` attribution with an authenticated principal
 boundary before treating it as proof of caller identity ([oidc], [principal],
 [authorization]).
 
-The proposed authentication direction reuses Dispatch's external OIDC model.
+The implemented [identity boundary](2026-10-18-identity.md) separates provider
+authentication, stable platform principals and ledger grants; its current bindings
+are configuration, not completed ledger-governed principal-link migration.
 Before retiring SpruceGoose's local OAuth server, verify that the chosen
 provider supports the actual MCP client flows, resource/audience checks,
 scopes, client bindings, and revocation contract. The existing local OAuth
@@ -143,9 +190,12 @@ ledger.
    authorization schema, extend the existing append gate, add a pure fold, and
    make a fresh isolated instance execute the command and rebuild its view from
    the ledger alone. Do not begin by creating another live audit ledger.
-3. **Migrate the complete orchestration write surface.** Cover hierarchy,
-   definitions, tasks/TODOs, grants, approvals, deployment authorization, and
-   outcome receipts. Use isolated dual-read comparison to establish parity;
+3. **Migrate the retained orchestration write surface.** Cover hierarchy,
+   definitions, tasks/TODOs, grants and approvals. Follow the later
+   [salvage decision](2026-10-20-sprucegoose-salvage.md): deployment-domain,
+   derivation, runtime-shadow, board and inbox features are not migration
+   requirements. Preserve referenced historical evidence before retiring their
+   code. Use isolated comparison to establish parity for retained behavior;
    keep the existing operational authority until its writer is fenced.
 4. **Move dispatch, Keel ownership, and shared principal facts onto the same
    path.** Preserve tenant/assignment semantics, temporal ownership, pre-emption,
@@ -193,8 +243,9 @@ Consolidation is complete when:
 - task, dispatch, ownership, identity/grant, and economic recovery uses one
   event/version contract, with preserved signatures and scoped access.
 
-The production write paths remain at the imported architecture. The first
-implementation stage is based on architecture merge
+Production writer cutover remains incomplete; the expanded common-ledger path
+does not establish migration of every imported writer. The first implementation
+stage is based on architecture merge
 `303a6e3ab75027cb70a73e4e2c8deff09434f691`. The [October 9 comparison](2026-10-09-integration-decisions.md)
 retains the source evidence and costs. Its multi-authority recommendation and
 staged receipt-bridge path are superseded by this consolidation target.
@@ -206,8 +257,8 @@ staged receipt-bridge path are superseded by this consolidation target.
 [shadow]: ../../apps/spruce_goose/lib/spruce_goose/kernel/shadow_events.ex
 [pg-ledger]: ../../apps/spruce_goose/lib/spruce_goose/kernel/postgres/event_ledger.ex
 [task-projector]: ../../apps/spruce_goose/lib/spruce_goose/kernel/task_projector.ex
-[deployment-ledger]: ../../apps/spruce_goose/lib/spruce_goose/deployment/ledger.ex
-[derivation-executor]: ../../apps/spruce_goose/lib/spruce_goose/derivations/executor.ex
+[deployment-ledger]: https://github.com/larsbx/biz-kit/blob/343175fc580590311fbe184b7cb550076c2738a7/apps/spruce_goose/lib/spruce_goose/deployment/ledger.ex
+[derivation-executor]: https://github.com/larsbx/biz-kit/blob/343175fc580590311fbe184b7cb550076c2738a7/apps/spruce_goose/lib/spruce_goose/derivations/executor.ex
 [dispatch-outbox]: ../../apps/dispatch/lib/dispatch/outbox/publisher.ex
 [authorization]: ../../apps/spruce_goose/docs/authorization.md
 [constitution]: ../../apps/spruce_goose/lib/spruce_goose/kernel/constitution.ex

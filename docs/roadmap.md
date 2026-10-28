@@ -1,6 +1,6 @@
 # biz-kit roadmap
 
-Updated 2026-10-20 (dispatch field app added). The direction is
+Updated 2026-10-22 (security audit priorities and Slice 1 status). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
 registry and one PostgreSQL database. Task, dispatch, ownership and economic
@@ -78,10 +78,70 @@ has not been switched.
 - [Native sign-in](architecture/2026-10-21-native-sign-in.md): an app signs in
   through the system browser (RFC 8252, PKCE) and gets a biz-kit session as a
   bearer token; dispatch's `/v1` accepts it (`BizKitSession` verifier).
+- [Device keys](architecture/2026-10-21-device-keys.md): `POST /v1/me/devices`
+  registers an installation's Ed25519 key by proof of possession; a status
+  declaration naming the device must carry its signature and is stored
+  `DEVICE_AUTHENTICATED`.
+- [Role administration](architecture/2026-10-22-role-administration.md):
+  Courier capabilities and the administrator grant/revoke surface are merged
+  ([biz-kit #61](https://github.com/larsbx/biz-kit/pull/61),
+  [d-patch #18](https://github.com/larsbx/d-patch/pull/18)). Scenario 15 has
+  end-to-end coverage; the audit obligations below still apply.
+
+## Security and validation gate (2026-10-22 audit)
+
+These source-review findings were checked at main
+[`40cb89a`](https://github.com/larsbx/biz-kit/commit/40cb89ad0020b040f2fbaffe3812e5d154b98319).
+They are open obligations, not implemented fixes or demonstrated production
+incidents. Resolve them before extending affected session or administrative
+authority or claiming production cutover readiness.
+
+| Priority | Obligation | Required evidence for closure |
+| --- | --- | --- |
+| P1 | Make native-session restoration atomic with logout and principal revocation. `Sessions.fetch/2` reads the persistent store outside the singleton, while revocation clears memory and storage separately; an overlapping restore can repopulate a revoked session. | Deterministically pause a store read/restore, revoke the token or principal, then resume it. The token must remain refused after both operations finish, after restart, and on another node. Preserve durable sessions that have not been revoked. |
+| P1 | Bind Dispatch portal authentication to revocable server-side session state. The token exchange keeps a subject and authentication time; subsequent portal requests resolve assignments without checking the originating Identity session. | With assignments unchanged, prove that logout, principal-session revocation, identity unbinding, and source-session expiry refuse subsequent protected portal requests. Apply the same authentication rule to streams and reconnects. Keep bearer tokens out of cookies and logs. |
+| P1 | Revalidate administrative authority inside the mutation transaction after acquiring its organization lock. `Administration` currently checks the actor's preloaded assignment, which can have been revoked while the request waited. | With separate database sessions, resolve an actor, block its mutation, revoke its authority, then release it. No grant, revocation, or audit record may commit under the stale authority. Cover participant/user suspension and role-definition changes with the appropriate shared locks or serialization. |
+| P2 | Require PostgreSQL/PostGIS-backed Dispatch integration checks in hosted CI. The current Consolidation job runs its unit tier and excludes integration-tagged authorization tests. | A required job creates and migrates the PostGIS database and runs `mix test --include integration`, including administrative and portal regressions. Record the exact tested PR head; a green unit-only run does not close this obligation. |
+
+Native-session correction: the focused implementation and validation are described
+in [atomic native-session revocation](architecture/2026-10-22-atomic-native-session-revocation.md).
+Its local deterministic races reproduce the original defect and pass with the
+correction, including PostgreSQL and singleton migration checks. This is PR
+implementation evidence; the gate still requires review and hosted validation.
+The portal-authentication, administrative-transaction and required Dispatch CI
+obligations above remain open and are not resolved by this correction.
+
+Implementation anchors:
+[`Sessions`](../apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex),
+[`SessionController`](../apps/dispatch/lib/dispatch_web/controllers/session_controller.ex),
+[`PortalSession`](../apps/dispatch/lib/dispatch_web/plugs/portal_session.ex),
+[`Administration`](../apps/dispatch/lib/dispatch/accounts/administration.ex), and
+[Consolidation](../.github/workflows/consolidation.yml).
+
+The original task singleton-signer rejection remains implemented in
+[`TaskCore.Admission`](../apps/task_core/lib/task_core/admission.ex); preserve it,
+the existing cooperative-event signature semantics, and canonical encoding.
+
+Audit baseline: [main CI run 39753381007](https://github.com/larsbx/biz-kit/actions/runs/39753381007)
+passed ledger/orchestration, release smoke, and model checks at `a85aea3`.
+Its Dispatch tier reported 217 excluded tests. The audit also ran 25 browser
+module tests successfully; it did not run local Elixir/PostgreSQL reproductions
+of the findings. CI success is evidence for the checks actually run, not for
+absence of these races.
 
 ## Next
 
-Ordered by what blocks real use first.
+1. **Close the security and validation gate above.** Land focused corrections
+   with the specified regressions and fresh validation before expanding the
+   affected authority surfaces.
+2. **Finish Slice 1 partner actions.** Review and validate
+   [biz-kit PR #62](https://github.com/larsbx/biz-kit/pull/62) with its paired
+   [d-patch PR #19](https://github.com/larsbx/d-patch/pull/19). Scenarios 17–19
+   remain pending integration; do not count an open PR as delivered.
+
+## Next: workflow usability
+
+After the security gate, retain the existing workflow usability work:
 
 1. **Workflows for administrators.** The chapter's feed and its projects card
    carry each project's workflows and runs, so an administrator sees which
@@ -102,20 +162,23 @@ Ordered by what blocks real use first.
 
 Dispatch's server work happens here; d-patch keeps the Android, web and e2e
 clients (d-patch ADR-0010). The Android app's offline status flow is built,
-and biz-kit now serves [native sign-in](architecture/2026-10-21-native-sign-in.md).
+the app signs in through biz-kit's [native sign-in](architecture/2026-10-21-native-sign-in.md)
+(d-patch `core:auth`, ADR-0011), and biz-kit checks [device keys](architecture/2026-10-21-device-keys.md).
+The native-session and device-signing client integration is merged
+([d-patch #17](https://github.com/larsbx/d-patch/pull/17)); it is no longer
+a missing implementation step. Deployment still exposes SpruceGoose's `/auth`,
+sets `BIZKIT_NATIVE_REDIRECT_URIS`, and selects Dispatch's `BizKitSession`
+verifier.
+
 What remains, in order:
 
-1. **The app's half of sign-in** (in d-patch): `core:auth` runs the RFC 8252
-   flow against `/auth/:provider/native/login` and `/auth/token`, keeps the
-   session, and learns its principal from `/auth/me`. Deployment sets
-   `BIZKIT_NATIVE_REDIRECT_URIS` and selects dispatch's `BizKitSession` verifier.
-2. **Device keys.** Enrol each installation's Ed25519 key through
-   `CoopSubstrate.Enrolments`, so offline status events are signed by a
-   governance-granted device key rather than dispatch's own `devices` table.
-3. **End-to-end runs.** d-patch's Slice 1 exit tests (1, 13–19, online and
-   after an offline interval) against this server rather than d-patch's frozen
-   `central/`.
-4. **Grants instead of the document.** When dispatch's roles become ledger
+1. **Security and required CI.** Close the session, administrative-admission,
+   and integration-gate obligations above.
+2. **Partner actions and end-to-end acceptance.** Complete scenarios 17–19
+   through biz-kit #62 and d-patch #19. Record real-server browser and Android
+   emulator/handset evidence separately; merged code alone does not establish
+   deployed provider or device acceptance.
+3. **Grants instead of the document.** When Dispatch's roles become ledger
    grants (consolidation step 4), the app reads them from the change feed and
    the capability document retires.
 
@@ -141,3 +204,61 @@ What remains, in order:
 - **Single-project offboarding.** Should it, like chapter offboarding,
   cancel the person's pending requests only once the offboarding is
   admitted?
+
+Portal correction in progress: see [revocation-aware portal authentication](architecture/2026-10-23-revocation-aware-portal.md). This implementation is not yet acceptance evidence and does not close the administrative P1 or required hosted-integration P2.
+
+## Modular business platform (2026-10-24)
+
+[Architecture decision](architecture/2026-10-24-modular-business-platform.md):
+keep Eatsbot, d-patch and SchoolOps independently evolvable. Extract reusable
+capabilities from real domain implementations into narrowly scoped biz-kit
+modules and contract/SDK surfaces; do not freeze domain product development.
+This is additive to the existing signed-ledger consolidation and **does not
+satisfy** any pre-existing security or writer cutover gate above.
+
+1. **Commerce arithmetic — first slice:** extract Eatsbot I₂ line and total
+   pricing to `commerce_core`; keep `EatsbotCore.Orders.Pricing.price/3` as
+   a compatibility facade; prove exact parity in tests. No database changes.
+2. **Catalog/price model:** inventory Eatsbot Product, Variant, Price, option
+   and discount constraints, resolve tenant/merchant boundaries and public
+   API ownership, and identify contract-compatible extractions. Do not
+   automatically move its Ash resources or tables.
+3. **Inventory:** design a dedicated stock ledger (locations, adjustments,
+   reservations, committed movements, reconciliation). There is no delivered
+   generic inventory subsystem in Eatsbot to move wholesale. Protect stock
+   against concurrent reservations and avoid representing sale orders as
+   stock movements.
+4. **Commerce order vs restaurant order:** isolate generic line snapshots,
+   idempotency, pricing, order commitments, refunds/returns, and commercial
+   state from Eatsbot's kitchen and dine-in lifecycle. Preserve current order
+   IDs, checkout concurrency and transaction semantics through parity tests.
+5. **Dispatch contract:** define order fulfillment requests/results across
+   domains. Eatsbot retains commercial order state; Dispatch owns routing,
+   assignment, driver/device declarations and transportation state. Do not
+   blindly fuse their present delivery state machines or databases.
+6. **Cross-domain sales/marketing:** design contact/party relationships,
+   consent, account scopes, leads, opportunities, campaigns and event
+   provenance. Do not infer promotional consent from customer accounts.
+7. **Later HR and financial operations:** adopt reviewed domain models
+   for employment and accounting; do not mistake the existing signed
+   business-event ledger for double-entry accounting.
+
+Each follow-on slice requires one consuming domain, one non-Eatsbot
+portability/conformance test, explicit authority, and a proved source/target
+contract. Independent deployments may consume version-pinned code or
+authenticated APIs; a single logical fact has one active writer.
+
+## Delivered rule kernels and remaining production gates (2026-10-24)
+
+| Scope | First slice merged | Remaining obligation |
+| --- | --- | --- |
+| Merchant catalog | [PR #85](https://github.com/larsbx/biz-kit/pull/85): pure product/variant/price rules and read-only Eatsbot adapter | #81: merchant-authorized persistent API, discount precedence, tenant price revisions, schema/event parity |
+| Inventory | [PR #86](https://github.com/larsbx/biz-kit/pull/86): exact units, holds, movements, idempotency, replay | #82: ledger admission, real concurrency/custody, durable expiry/reconciliation, consumer integration |
+| Fulfillment | [PR #87](https://github.com/larsbx/biz-kit/pull/87): request/ack/proof/cancel protocol, domain adapters | #83: authenticated Dispatch transport admission, outbox/inbox retry, cancellation race and legacy parity |
+| Sales/marketing | [PR #88](https://github.com/larsbx/biz-kit/pull/88): lead/quote state, evidence-based consent, suppression and candidate campaigns | #84: encrypted contacts, authenticated consent, privacy/regulatory policy, cross-channel suppression and delivery |
+
+All four are **code merged**, not a claim that their associated production
+milestones are complete. The original issues remain open for their explicit
+end-to-end obligations; new usage must not bypass identity, signed admission,
+or existing payment/transport authority. HR and actual financial accounting
+remain future capabilities.

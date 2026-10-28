@@ -10,6 +10,25 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
   baseline implementation evidence and tradeoffs. Its recommendation to retain
   independent authorities is superseded by the consolidation target.
+- [Eatsbot pinned source code audit — 2026-10-28](2026-10-28-eatsbot-source-revision-audit.md):
+  exact standalone/imported blob comparisons at fixed commits; 7 matching,
+  6 different and 2 imported-only checked sources, not live deployment evidence.
+- [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
+  proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
+  with R0–R6 source inventory, migration, authorization, cutover and archive gates.
+- [Cross-repository extension and Hawala capability — 2026-10-28](2026-10-28-cross-repository-extension-and-hawala-capability.md):
+  proposed common application-extension and source-ownership contract across biz-kit,
+  hawala-core, Eatsbot, d-patch and school-ops; authority and live-money gates remain separate.
+- [Hawala: shared identity and scoped authority — 2026-10-28](2026-10-28-hawala-shared-identity-and-scoped-authority.md):
+  proposed, paired with hawala-core ADR 0004. Keys and attestations are shared as
+  evidence; one instance may order Hawala settlement only for an explicit scope.
+- [Network-native Hawala across federated biz-kit instances — 2026-10-28](2026-10-28-federated-hawala-native-capability.md):
+  proposed, paired with hawala-core ADR 0005; every participating installation
+  can host a Hawala peer/capability plane, while financial authority remains
+  strictly scoped and cross-authority settlement stays Hawala-owned.
+- [Hawala node-owned books: PostgreSQL and TigerBeetle — 2026-10-28](2026-10-28-hawala-node-books-postgres-tigerbeetle.md):
+  pinned canonical profile and proposed host integration: one PostgreSQL financial
+  commit, mandatory accounting verification before execution, scoped HOLD and recovery gates.
 
 - [First common-ledger task command](2026-10-11-first-ledger-task-command.md): notes
   retirement, signed baseline and scoped grant, append-time proposal admission,
@@ -30,6 +49,19 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Native sign-in](2026-10-21-native-sign-in.md): apps sign in through the
   system browser (RFC 8252, PKCE) and get the same biz-kit session as a bearer
   token, which dispatch's `/v1` accepts.
+- [End-to-end stack](2026-10-21-end-to-end-stack.md): one command serves
+  dispatch and `/auth` with seeded people who sign in through a development-only
+  provider, for d-patch's end-to-end tests.
+- [Device keys](2026-10-21-device-keys.md): the field app registers its
+  installation's Ed25519 key itself, and its status declarations carry that
+  key's signature over canonical statements (`DEVICE_AUTHENTICATED`).
+- [Location sharing](2026-10-22-location-sharing.md): consent per trip,
+  signed fixed-point samples judged one by one, the revocation race, and
+  freshness without position on the operations page.
+- [Role administration](2026-10-22-role-administration.md): an administrator
+  grants and revokes role assignments at `/settings/users`, after a sign-in in
+  the last five minutes, never to themselves and never removing the last
+  administrator.
 - [Deciding on suggestions](2026-10-18-decide.md): the first end-to-end
   workflow. A person accepts or declines an agent's suggestion in the web
   view; the command is signed by a key held in their browser.

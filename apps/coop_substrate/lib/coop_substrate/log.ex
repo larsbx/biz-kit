@@ -430,13 +430,20 @@ defmodule CoopSubstrate.Log do
   def handle_call({:append, envelopes, guard}, _from, %{head: head, gate: gate} = state) do
     with :ok <- verify_batch(envelopes),
          :ok <- guard(guard, gate) do
-      case CoopSubstrate.Tasks.duplicate(envelopes, gate.orchestration) do
+      case duplicate(envelopes, gate) do
         {:ok, accepted} -> {:reply, {:ok, accepted}, state}
         {:error, reason} -> {:reply, {:error, reason}, state}
         :new -> append_verified(envelopes, head, gate, state)
       end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp duplicate(envelopes, gate) do
+    case CoopSubstrate.GroupBuys.duplicate(envelopes, gate.group_buys) do
+      :new -> CoopSubstrate.Tasks.duplicate(envelopes, gate.orchestration)
+      result -> result
     end
   end
 
@@ -512,7 +519,11 @@ defmodule CoopSubstrate.Log do
     envelopes
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, gate}, fn {env, index}, {:ok, gate} ->
-      case TypeRegistry.validity_check(env, gate) do
+      result =
+        with :ok <- CoopSubstrate.GroupBuys.live_check(env, gate),
+             do: TypeRegistry.validity_check(env, gate)
+
+      case result do
         :ok -> {:cont, {:ok, Gate.handle_event(env, gate)}}
         {:error, reason} -> {:halt, {:error, {:reject, index, reason}}}
       end
@@ -622,6 +633,8 @@ defmodule CoopSubstrate.Log do
   # and collect per-stream event uuids so missing links (crash between append
   # and link) can be repaired.
   defp recover do
+    # Admission projections must not rebuild from a reordered or broken chain.
+    :ok = verify_chains()
     initial = {%Head{}, Gate.init(), %{}}
 
     {:ok, {head, gate, links}} =

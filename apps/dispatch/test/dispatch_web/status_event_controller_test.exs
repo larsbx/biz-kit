@@ -310,7 +310,7 @@ defmodule DispatchWeb.StatusEventControllerTest do
           token: ctx.token
         )
 
-      assert conn.status == 403
+      assert conn.status == 422
       assert [] = read_events(ctx)
     end
 
@@ -330,7 +330,7 @@ defmodule DispatchWeb.StatusEventControllerTest do
 
       # Section 13 makes revocation lost-device handling. A revoked handset
       # must not keep consuming sequence numbers.
-      assert conn.status == 403
+      assert conn.status == 422
       assert [] = read_events(ctx)
     end
 
@@ -349,23 +349,108 @@ defmodule DispatchWeb.StatusEventControllerTest do
           token: ctx.token
         )
 
-      assert conn.status == 403
+      assert conn.status == 422
       assert [] = read_events(ctx)
     end
 
-    test "even the caller's own device requires a signed native session", ctx do
-      device = Fixtures.device(ctx.tenant, ctx.driver)
+    test "a declaration naming the caller's own active device is accepted, signed by it", ctx do
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
 
       conn =
         post(
           "/v1/me/status-events",
-          declaration(%{"device_id" => device.id, "device_sequence" => 1}),
+          Fixtures.signed(declaration(%{"device_id" => device.id, "device_sequence" => 1}), seed),
           token: ctx.token
         )
 
-      assert conn.status == 403
-      assert Jason.decode!(conn.resp_body)["code"] == "DEVICE_REJECTED"
+      assert conn.status == 201
+      event = Jason.decode!(conn.resp_body)["event"]
+      assert event["device_id"] == device.id
+      assert event["verification"] == "DEVICE_AUTHENTICATED"
+    end
+  end
+
+  describe "Section 23.1: a device's declarations carry its signature" do
+    setup ctx do
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
+
+      %{
+        device: device,
+        seed: seed,
+        body:
+          declaration(%{"device_id" => device.id, "device_sequence" => 1, "note" => "on my way"})
+      }
+    end
+
+    test "unsigned, it is refused", ctx do
+      conn = post("/v1/me/status-events", ctx.body, token: ctx.token)
+
+      assert conn.status == 422
+      assert problem(conn) == "DEVICE_SIGNATURE_REQUIRED"
       assert [] = read_events(ctx)
+    end
+
+    test "a field changed after signing, or another key's signature, is refused", ctx do
+      altered = %{Fixtures.signed(ctx.body, ctx.seed) | "note" => "somewhere else"}
+      {_public_key, stranger} = CoopSubstrate.Crypto.generate_keypair()
+
+      for body <- [
+            altered,
+            Fixtures.signed(ctx.body, stranger),
+            # The sequence changed after signing.
+            Map.put(Fixtures.signed(ctx.body, ctx.seed), "device_sequence", 2),
+            Map.put(ctx.body, "device_signature", "not base64!")
+          ] do
+        conn = post("/v1/me/status-events", body, token: ctx.token)
+        assert conn.status == 422
+        assert problem(conn) == "DEVICE_SIGNATURE_INVALID"
+      end
+
+      assert [] = read_events(ctx)
+    end
+
+    test "only the signed body is stored: a field slipped into the query string is not", ctx do
+      body = Fixtures.signed(Map.delete(ctx.body, "note"), ctx.seed)
+
+      conn =
+        post("/v1/me/status-events?note=forged&assignment_id=#{Ash.UUID.generate()}", body,
+          token: ctx.token
+        )
+
+      assert conn.status == 201
+      event = Jason.decode!(conn.resp_body)["event"]
+      assert event["verification"] == "DEVICE_AUTHENTICATED"
+      assert event["note"] == nil
+      assert event["assignment_id"] == nil
+    end
+
+    test "a retry of a signed declaration is the original event", ctx do
+      body = Fixtures.signed(ctx.body, ctx.seed)
+
+      first = post("/v1/me/status-events", body, token: ctx.token)
+      again = post("/v1/me/status-events", body, token: ctx.token)
+
+      assert {first.status, again.status} == {201, 201}
+
+      assert Jason.decode!(again.resp_body)["event"]["id"] ==
+               Jason.decode!(first.resp_body)["event"]["id"]
+    end
+
+    test "a declaration without a device is not device-authenticated", ctx do
+      conn = post("/v1/me/status-events", declaration(), token: ctx.token)
+
+      assert conn.status == 201
+      assert Jason.decode!(conn.resp_body)["event"]["verification"] == "NONE"
+    end
+
+    test "the verification is the server's to decide, not the client's", ctx do
+      conn =
+        post("/v1/me/status-events", declaration(%{"verification" => "DEVICE_AUTHENTICATED"}),
+          token: ctx.token
+        )
+
+      assert conn.status == 201
+      assert Jason.decode!(conn.resp_body)["event"]["verification"] == "NONE"
     end
   end
 
@@ -450,10 +535,91 @@ defmodule DispatchWeb.StatusEventControllerTest do
     end
   end
 
-  # Signed device sequence acceptance and replay are exercised end-to-end in
-  # MobileAcceptanceTest against Identity and the governance enrolment ledger.
+  describe "device sequences (Sections 22.3, 24.1)" do
+    test "a retry with the same content returns the original event", ctx do
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
+
+      body =
+        Fixtures.signed(declaration(%{"device_id" => device.id, "device_sequence" => 412}), seed)
+
+      first = post("/v1/me/status-events", body, token: ctx.token)
+      second = post("/v1/me/status-events", body, token: ctx.token)
+
+      assert first.status == 201
+      assert second.status == 201
+
+      # The *original* 201 body, not a second event that looks like it.
+      assert Jason.decode!(first.resp_body)["event"]["id"] ==
+               Jason.decode!(second.resp_body)["event"]["id"]
+
+      assert length(read_events(ctx)) == 1
+    end
+
+    test "the same sequence with different content is a conflict", ctx do
+      {device, seed} = Fixtures.keyed_device(ctx.tenant, ctx.driver)
+      at = DateTime.utc_now() |> DateTime.to_iso8601()
+
+      first =
+        post(
+          "/v1/me/status-events",
+          Fixtures.signed(
+            declaration(%{"device_id" => device.id, "device_sequence" => 7, "occurred_at" => at}),
+            seed
+          ),
+          token: ctx.token
+        )
+
+      second =
+        post(
+          "/v1/me/status-events",
+          Fixtures.signed(
+            declaration(%{
+              "device_id" => device.id,
+              "device_sequence" => 7,
+              "occurred_at" => at,
+              "status" => "AT_PICKUP"
+            }),
+            seed
+          ),
+          token: ctx.token
+        )
+
+      assert first.status == 201
+      assert second.status == 409
+      assert Jason.decode!(second.resp_body)["code"] == "DEVICE_SEQUENCE_CONFLICT"
+      assert length(read_events(ctx)) == 1
+    end
+  end
 
   describe "idempotency keys (Section 24)" do
+    test "a declaration the selected role may not make is refused under a key too, not a 500",
+         ctx do
+      dispatcher = Fixtures.assignment(ctx.tenant, ctx.org, ctx.driver, "DISPATCHER")
+      key = {"idempotency-key", "key-" <> Ash.UUID.generate()}
+
+      # The app's body: its own event ID and a device sequence. Ash refuses
+      # inside the ledger's transaction and rolls it back itself.
+      body = declaration(%{"event_id" => Ash.UUID.generate(), "device_sequence" => 1})
+
+      conn =
+        post("/v1/me/status-events", body,
+          token: ctx.token,
+          headers: [{"x-role-assignment-id", dispatcher.id}, key]
+        )
+
+      assert conn.status == 403
+      assert Jason.decode!(conn.resp_body)["code"] == "FORBIDDEN"
+
+      # The refusal released the key: the same key under the right role works.
+      conn =
+        post("/v1/me/status-events", body,
+          token: ctx.token,
+          headers: [{"x-role-assignment-id", ctx.assignment.id}, key]
+        )
+
+      assert conn.status == 201
+    end
+
     test "a replayed key returns the stored response without a second event", ctx do
       body = declaration()
       headers = [{"idempotency-key", "key-" <> Ash.UUID.generate()}]
@@ -534,6 +700,8 @@ defmodule DispatchWeb.StatusEventControllerTest do
                Jason.decode!(theirs.resp_body)["event"]["id"]
     end
   end
+
+  defp problem(conn), do: Jason.decode!(conn.resp_body)["code"]
 
   defp read_events(ctx) do
     ParticipantStatusEvent

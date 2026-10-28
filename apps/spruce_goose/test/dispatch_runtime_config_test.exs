@@ -14,6 +14,7 @@ defmodule SpruceGoose.DispatchRuntimeConfigTest do
     dispatch = Keyword.fetch!(config, :dispatch)
     IO.puts("verifier=\#{inspect(dispatch[:identity][:token_verifier])}")
     IO.puts("oidc_issuer=\#{inspect(dispatch[:oidc_issuer])}")
+    IO.puts("session_store=\#{inspect(config[:biz_kit_identity][:session_store])}")
     """
 
     peer_env =
@@ -40,6 +41,8 @@ defmodule SpruceGoose.DispatchRuntimeConfigTest do
     assert status == 0, output
     assert output =~ "verifier=Dispatch.Identity.Tokens.BizKitSession"
     assert output =~ "oidc_issuer=nil"
+    # Native sessions last until signed out, across restarts.
+    assert output =~ "session_store=SpruceGoose.Web.NativeSessionStore"
   end
 
   test "the OIDC verifier still refuses to start without its issuer" do

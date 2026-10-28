@@ -14,15 +14,19 @@ the hashed name.
 
 ## Updating
 
-1. Download the new bundle from the pinned upstream tag.
-2. Record its version and SHA-256 above.
-3. Run the `web-unit` gate: the golden Datastar wire-format tests in
-   `central/test/dispatch_web/datastar_test.exs` and the map custom-element
-   tests must both still pass.
-4. Open a dependency-review change; do not update in a feature branch.
+`Vendored dependency refresh` (`.github/workflows/vendor-refresh.yml`) checks
+upstream weekly and, on a new release, opens that dependency-review change
+itself. By hand, the same steps:
+
+1. `scripts/vendor-datastar.sh apps/dispatch/priv/static/vendor [TAG]`
+   downloads the release's bundle, replaces both files, and records its
+   version and SHA-256 above.
+2. The golden Datastar wire-format tests in
+   `apps/dispatch/test/dispatch_web/datastar_test.exs` must still pass.
+3. Open a dependency-review change; do not update in a feature branch.
 
 Verify a checked-out copy with:
 
 ```sh
-sha256sum central/priv/static/vendor/datastar-v1.0.0.e7d6ad0e8398.js
+sha256sum apps/dispatch/priv/static/vendor/datastar-v1.0.0.e7d6ad0e8398.js
 ```

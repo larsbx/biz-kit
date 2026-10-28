@@ -4,9 +4,9 @@ defmodule Keel.Ownership do
   their own share, may leave a revocable (*jāʾiz*) partnership, and — where the
   class grants it — co-owners may pre-empt a sale to an outsider (*shufʿa*).
 
-  Every operation is a pure function `Org → Org` effective from instant `t`:
+  State-changing operations return tagged success/error results, effective from instant `t`:
   current stakes are closed at `t` and successors opened, so history before
-  `t` is unchanged. Stakes opened here are open-ended.
+  `t` is unchanged. Successor stakes retain their source stake's end date.
   """
   alias Keel.{Asset, Body, Class, Decision, Interval, Invariants, Org, Stake}
 

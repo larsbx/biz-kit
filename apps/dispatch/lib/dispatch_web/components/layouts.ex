@@ -32,6 +32,9 @@ defmodule DispatchWeb.Components.Layouts do
         <!-- Section 26.1: self-hosted, never a CDN. -->
         <script type="module" src="/static/vendor/datastar.js">
         </script>
+        <!-- Opens each page's live stream; see the module for why not Datastar's attributes. -->
+        <script type="module" src="/static/js/streams.js">
+        </script>
         <link rel="stylesheet" href="/static/css/app.css" />
       </head>
       <body>

@@ -1,0 +1,10 @@
+# Local learner records and class-specific assignment links
+/private/
+/learner-records/
+/student-records/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*.swp
+*~

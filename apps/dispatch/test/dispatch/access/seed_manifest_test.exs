@@ -56,6 +56,14 @@ defmodule Dispatch.Access.SeedManifestTest do
     end
   end
 
+  test "each profile module declares the scope its manifest transcribes" do
+    # The manifest is Section 23.2's table; the module is what code asks
+    # (`Dispatch.Accounts.Administration` grants by it). They must not drift.
+    for manifest <- SeedManifest.all() do
+      assert manifest.profile_module.scope_type() == manifest.scope_type, manifest.key
+    end
+  end
+
   test "every seeded capability is canonical" do
     assert SeedManifest.unknown_capabilities() == []
   end

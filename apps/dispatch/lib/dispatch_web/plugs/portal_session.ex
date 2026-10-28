@@ -25,8 +25,13 @@ defmodule DispatchWeb.Plugs.PortalSession do
 
   alias Dispatch.Identity.PrincipalResolution
 
+  @session_reference "identity_session_reference"
+
+  def reference_key, do: @session_reference
+
   @session_subject "oidc_subject"
   @session_assignment "role_assignment_id"
+  @session_authenticated_at "authenticated_at"
 
   @doc "The session key holding the authenticated subject."
   @spec subject_key() :: String.t()
@@ -36,15 +41,49 @@ defmodule DispatchWeb.Plugs.PortalSession do
   @spec assignment_key() :: String.t()
   def assignment_key, do: @session_assignment
 
+  @doc """
+  Records when the person signed in, as the token said (Section 23.3's
+  step-up). Unknown is left unset, and reads as not recent.
+  """
+  @spec put_authenticated_at(Plug.Conn.t(), DateTime.t() | nil) :: Plug.Conn.t()
+  def put_authenticated_at(conn, %DateTime{} = at),
+    do: put_session(conn, @session_authenticated_at, DateTime.to_unix(at))
+
+  def put_authenticated_at(conn, _unknown), do: conn
+
+  @doc "When this session's person signed in, if the token said."
+  @spec authenticated_at(Plug.Conn.t()) :: DateTime.t() | nil
+  def authenticated_at(conn) do
+    case get_session(conn, @session_authenticated_at) do
+      seconds when is_integer(seconds) -> DateTime.from_unix!(seconds)
+      _unknown -> nil
+    end
+  end
+
   @impl Plug
   def init(opts), do: opts
 
   @impl Plug
   def call(conn, _opts) do
-    case get_session(conn, @session_subject) do
-      subject when is_binary(subject) -> resolve(conn, subject)
-      _signed_out -> redirect_to_login(conn)
+    case authenticate(conn) do
+      {:ok, subject, at} -> conn |> put_authenticated_at(at) |> resolve(subject)
+      _ -> conn |> clear_session() |> redirect_to_login()
     end
+  end
+
+  @doc "Check the originating Identity session and binding, including during SSE."
+  def authenticate(conn) do
+    subject = get_session(conn, @session_subject)
+
+    with true <- is_binary(subject),
+         {:ok, %{principal: ^subject, authenticated_at: at}} <-
+           BizKit.Identity.session_from_reference(get_session(conn, @session_reference)) do
+      {:ok, subject, DateTime.from_unix!(at, :millisecond)}
+    else
+      _ -> {:error, :unauthenticated}
+    end
+  catch
+    :exit, _ -> {:error, :unavailable}
   end
 
   defp resolve(conn, subject) do

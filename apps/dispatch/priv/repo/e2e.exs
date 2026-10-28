@@ -1,0 +1,199 @@
+# The end-to-end stack's fixtures (scripts/e2e-stack.sh; d-patch's e2e/).
+# Development only: Section 21.1 permits `authorize?: false` in a seed script,
+# and nothing here runs in production.
+#
+#   mix run priv/repo/e2e.exs seed <stack.json>     a carrier, its roles, a
+#       driver with a planned trip, a dispatcher, a dispatcher who may see live
+#       positions, a courier, two administrators and a broker of an unrelated
+#       load, bound to biz-kit principals; writes
+#       what the tests need (and the identity bindings the server boots with)
+#   mix run priv/repo/e2e.exs revoke <tenant> <role_assignment_id>
+#       ends an assignment, as an administrator would (scenario 16)
+
+alias BizKit.Identity.Principal
+alias Dispatch.Access.SeedManifest
+alias Dispatch.Accounts.{Organization, Participant, RoleAssignment, RoleDefinition, User}
+alias Dispatch.Fleet.{Assignment, Load}
+
+defmodule Dispatch.E2E do
+  @moduledoc false
+
+  # The development provider's issuer (BizKit.Identity.Providers.Development).
+  @issuer "biz-kit-development"
+
+  # Scenario 14's second field role: the test profile (compiled in dev for this),
+  # with the driver's self-service capabilities it has features for. Nothing
+  # else is new: the same participant, device, assignment and status resources.
+  @courier %{
+    key: "COURIER",
+    label: "Courier",
+    profile_module: Dispatch.Support.Roles.Courier,
+    scope_type: :SELF,
+    capabilities:
+      ~w(profile.read.self assignment.read.self status.declare.self communications.read.self),
+    constraints: %{
+      "status.declare.self" => ["self_only"],
+      "assignment.read.self" => ["self_only", "active_assignment_only"],
+      "communications.read.self" => ["self_only"]
+    }
+  }
+
+  # A dispatcher explicitly given precise location (Section 23.2): whose
+  # watching makes a sharing device report in real time.
+  defp tracker do
+    {:ok, dispatcher} = SeedManifest.fetch("DISPATCHER")
+
+    %{
+      dispatcher
+      | key: "TRACKER",
+        label: "Dispatcher (live location)",
+        capabilities: ["operations.location.precise.read" | dispatcher.capabilities]
+    }
+  end
+
+  def seed(path) do
+    carrier = organization("E2E Freight", :CARRIER)
+
+    tenant = carrier.id
+
+    definitions =
+      Map.new([@courier, tracker() | SeedManifest.all()], &{&1.key, {&1, definition(tenant, &1)}})
+
+    # Scenario 2: a broker, but of a load the driver's trip is not on.
+    broker_org = organization("E2E Brokerage", :BROKER)
+    unrelated = load(tenant, carrier)
+
+    people =
+      for {name, key, org, scope_id} <- [
+            {"driver", "DRIVER", carrier, nil},
+            {"dispatcher", "DISPATCHER", carrier, nil},
+            {"tracker", "TRACKER", carrier, nil},
+            {"courier", "COURIER", carrier, nil},
+            # Scenario 15: two, because no one may grant themselves a role.
+            {"admin", "ADMIN", carrier, nil},
+            {"admin2", "ADMIN", carrier, nil},
+            {"broker", "BROKER", broker_org, unrelated.id}
+          ],
+          into: %{} do
+        {name, person(tenant, org, name, definitions[key], scope_id)}
+      end
+
+    # Scenario 2: the driver's planned trip, which location consent covers.
+    people = put_in(people, ["driver", :trip_id], trip(tenant, carrier, people["driver"]).id)
+
+    stack = %{
+      tenant_id: tenant,
+      people: people,
+      bindings:
+        for(
+          {_name, p} <- people,
+          do: %{issuer: @issuer, subject: p.subject, principal: p.principal}
+        ),
+      development_sign_in: Enum.map_join(people, ",", fn {name, p} -> "#{name}=#{p.subject}" end)
+    }
+
+    File.write!(path, JSON.encode!(stack))
+    IO.puts("Seeded #{map_size(people)} people in #{tenant}; wrote #{path}")
+  end
+
+  def revoke(tenant, assignment_id) do
+    RoleAssignment
+    |> Ash.get!(assignment_id, authorize?: false, tenant: tenant)
+    |> Ash.Changeset.for_update(:revoke, %{})
+    |> Ash.update!(authorize?: false, tenant: tenant)
+
+    IO.puts("Revoked #{assignment_id}")
+  end
+
+  defp definition(tenant, manifest) do
+    RoleDefinition
+    |> Ash.Changeset.for_create(:seed, %{
+      tenant_id: tenant,
+      key: manifest.key,
+      label: manifest.label,
+      capability_schema_version: 1,
+      capabilities_json: manifest.capabilities,
+      constraints_json: manifest.constraints,
+      profile_module: inspect(manifest.profile_module),
+      status: :ACTIVE
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  # A person signs in as a biz-kit principal; dispatch knows them by it.
+  defp organization(name, kind) do
+    Organization
+    |> Ash.Changeset.for_create(:register, %{name: name, kind: kind, status: :ACTIVE})
+    |> Ash.create!(authorize?: false)
+  end
+
+  defp load(tenant, carrier) do
+    Load
+    |> Ash.Changeset.for_create(:create_load, %{
+      tenant_id: tenant,
+      carrier_organization_id: carrier.id,
+      external_reference: "E2E-#{System.unique_integer([:positive])}"
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  defp trip(tenant, carrier, driver) do
+    Assignment
+    |> Ash.Changeset.for_create(:plan, %{
+      tenant_id: tenant,
+      load_id: load(tenant, carrier).id,
+      operator_participant_id: driver.participant_id,
+      starts_at: DateTime.utc_now()
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  defp person(tenant, org, name, {manifest, definition}, scope_id) do
+    principal = Principal.new_id()
+    subject = "e2e-#{name}-#{System.unique_integer([:positive])}"
+
+    user =
+      User
+      |> Ash.Changeset.for_create(:register, %{oidc_subject: principal, display_name: name})
+      |> Ash.create!(authorize?: false)
+
+    participant =
+      Participant
+      |> Ash.Changeset.for_create(:enroll, %{
+        tenant_id: tenant,
+        user_id: user.id,
+        home_organization_id: org.id,
+        public_name: String.capitalize(name)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    assignment =
+      RoleAssignment
+      |> Ash.Changeset.for_create(:grant, %{
+        tenant_id: tenant,
+        principal_type: :PARTICIPANT,
+        principal_id: participant.id,
+        organization_id: org.id,
+        role_definition_id: definition.id,
+        scope_type: manifest.scope_type,
+        scope_id: scope_id,
+        starts_at: DateTime.add(DateTime.utc_now(), -3600, :second)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+
+    %{
+      provider: name,
+      subject: subject,
+      principal: principal,
+      participant_id: participant.id,
+      role_key: manifest.key,
+      role_assignment_id: assignment.id
+    }
+  end
+end
+
+case System.argv() do
+  ["seed", path] -> Dispatch.E2E.seed(path)
+  ["revoke", tenant, assignment_id] -> Dispatch.E2E.revoke(tenant, assignment_id)
+  _ -> raise "usage: mix run priv/repo/e2e.exs seed <stack.json> | revoke <tenant> <assignment>"
+end

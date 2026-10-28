@@ -80,7 +80,7 @@ challenge bytes and displays the resulting code. The existing administrator
 approval (`mix coop.enrol CODE`) signs and admits the existing operator grant.
 No Android endpoint approves its own request or issues another kind of grant.
 
-`POST /v1/me/devices` registers the existing Dispatch installation resource only
+For a native session, `POST /v1/me/devices` registers the existing Dispatch installation resource only
 after that exact full public key has an active operator grant for the principal
 and configured scope. Retries return the caller's same active registration;
 revoked Dispatch registrations are never revived. `key_id` is only a display
@@ -150,3 +150,17 @@ the statement must have the closed enrolment schema, its complete key, the
 authenticated platform principal and the requested operator role. A command or
 reviewer/governance request is never signed through the enrolment flow. The
 shared `native-enrolment-vector.json` exercises that boundary in Kotlin.
+
+## Integration with the bearer resource server
+
+The shared `/v1/me/devices` route dispatches by authenticated session type.
+Native sessions keep the governed registration above. Existing bearer clients
+retain the self-service `DispatchDeviceRegistrationV1` proof described in the
+device-key architecture note. A native session cannot fall back to bearer
+registration when approval or the ledger is unavailable.
+
+Status declarations likewise retain two distinct signing domains: native
+sessions use `DispatchStatusV1` with the selected role and governed watermark;
+bearer clients use `DispatchStatusEventV1`. Both store only body fields, derive
+verification on the server, and enqueue the common stream refresh. Native
+revocation is checked before idempotency lookup on every delivery.
