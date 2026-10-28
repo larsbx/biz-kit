@@ -111,6 +111,21 @@ defmodule AgentOpsStore.Postgres do
     end
   end
 
+  @doc "Refuse an expired or fenced claim immediately before calling a backend."
+  def validate_launch_lease(conn, effect, lease) do
+    sql = """
+    SELECT 1 FROM agent_ops.execution_attempts
+     WHERE effect_id=$1 AND row_version=$2 AND attempt_epoch=$3
+       AND lease_token_sha256=$4 AND phase='leased' AND backend_ref IS NULL
+       AND lease_expires_at>clock_timestamp() AND execution_deadline>clock_timestamp()
+    """
+
+    case query(conn, sql, [effect, lease.version, lease.epoch, hash_token(lease.token)]) do
+      {:ok, [[1]]} -> :ok
+      _ -> {:error, :launch_lease_invalid}
+    end
+  end
+
   @doc "Lease renewal is refused for wrong token, epoch, version or expiry."
   def renew(conn, effect_id, version, epoch, token, lease_ms) do
     invoke(conn, "renew_attempt", [effect_id, version, epoch, hash_token(token), lease_ms], 5)

@@ -39,6 +39,7 @@ defmodule TaskCore.DispatcherTest do
         Process.put(:row, %{phase: "cancel_requested", version: version + 1})
         {:ok, version + 1}
       end,
+      validate_lease: fn _, _ -> :ok end,
       launch: fn ^plan ->
         Process.put(:launches, Process.get(:launches) + 1)
         if Process.get(:launch_error), do: raise("lost response"), else: {:ok, "backend-1"}
@@ -101,5 +102,12 @@ defmodule TaskCore.DispatcherTest do
     Process.put(:attach_error, false)
     assert {:ok, %{disposition: :already_dispatched}} = Dispatcher.deliver(:key, p)
     assert Process.get(:launches) == 1
+  end
+
+  test "a lease invalidated during post-claim authorization cannot launch" do
+    p = Map.put(ports(), :validate_lease, fn _, _ -> {:error, :launch_lease_invalid} end)
+    assert {:error, :launch_lease_invalid} = Dispatcher.deliver(:key, p)
+    assert Process.get(:launches) == 0
+    assert Process.get(:row).phase == "leased"
   end
 end

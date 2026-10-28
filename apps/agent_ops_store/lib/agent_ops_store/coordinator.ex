@@ -106,6 +106,7 @@ defmodule AgentOpsStore.Coordinator do
       register: &Postgres.register(conn, &1),
       snapshot: &Postgres.snapshot(conn, &1),
       claim: &Postgres.claim(conn, &1, &2, owner, 5_000, 2),
+      validate_lease: &Postgres.validate_launch_lease(conn, &1, &2),
       request_cancel: &Postgres.request_cancel(conn, &1, &2),
       attach: fn effect, lease, reference ->
         Postgres.attach_backend(conn, effect, lease.version, lease.epoch, lease.token, reference)

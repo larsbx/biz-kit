@@ -1,0 +1,41 @@
+name: AgentCore signed-ledger event acceptance
+on:
+  pull_request:
+    paths:
+      - "apps/agent_core/**"
+      - "apps/agent_ops_store/**"
+      - "apps/task_core/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - ".github/workflows/agent-event-acceptance.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signed-replay-and-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Signed append, replay, notifications, leases, revocation and crash recovery
+        working-directory: apps/coop_substrate
+        run: mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs test/agent_event_effects_test.exs test/agent_event_subscriber_test.exs test/agent_event_delivery_test.exs

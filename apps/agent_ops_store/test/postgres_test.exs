@@ -41,6 +41,36 @@ defmodule AgentOpsStore.PostgresTest do
     }
   end
 
+  test "launch validation rejects stale, expired and cancelled leases", %{conn: conn} do
+    p = plan()
+    assert {:ok, :new} = Postgres.register(conn, p)
+    assert {:ok, lease} = Postgres.claim(conn, p.effect_id, 1, "worker", 60_000, 2)
+    assert :ok = Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+    for stale <- [
+          %{lease | version: lease.version + 1},
+          %{lease | epoch: lease.epoch + 1},
+          %{lease | token: :crypto.strong_rand_bytes(32)}
+        ] do
+      assert {:error, :launch_lease_invalid} =
+               Postgres.validate_launch_lease(conn, p.effect_id, stale)
+    end
+
+    Postgrex.query!(
+      conn,
+      "UPDATE agent_ops.execution_attempts SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE effect_id=$1",
+      [p.effect_id]
+    )
+
+    assert {:error, :launch_lease_invalid} =
+             Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+    assert {:ok, _} = Postgres.request_cancel(conn, p.effect_id, lease.version)
+
+    assert {:error, :launch_lease_invalid} =
+             Postgres.validate_launch_lease(conn, p.effect_id, lease)
+  end
+
   test "durable registration, CAS claim, backend binding, and candidate", %{conn: conn} do
     p = plan()
     assert {:ok, :new} = Postgres.register(conn, p)
