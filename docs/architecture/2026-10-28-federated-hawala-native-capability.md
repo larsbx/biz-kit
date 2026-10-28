@@ -182,14 +182,14 @@ to locate Hawala in biz-kit's Elixir umbrella: network integration is a
 
 ## Proof increment and source pin
 
-The paired [Hawala TEST-host PR #48](https://github.com/larsbx/hawala-core/pull/48)
-provides the proposed [canonical evidence/commit profile](https://github.com/larsbx/hawala-core/blob/4223addee7b3f94e9cfe5bd1cfdcacb168ea6c85/docs/CROSS_AUTHORITY_V1.md),
+The paired [Hawala TEST endpoint PR #49](https://github.com/larsbx/hawala-core/pull/49)
+provides the proposed [canonical evidence/commit profile](https://github.com/larsbx/hawala-core/blob/5f76a1234841b0ea57f036d8de3cf5d9988ba976/docs/CROSS_AUTHORITY_V1.md),
 Lean agreement/consumer-gate proofs, the finite Quint model, generated prefix
 witnesses, actual counterexamples and signed TEST vectors. It does not
 implement a financial append or a settlement provider in biz-kit.
 
 `fixtures/hawala-cross-authority-v1-pin.json` pins that exact reviewed source
-candidate and 28 source-file digests. The pairing gate checks it and compares
+candidate and 42 source-file digests. The pairing gate checks it and compares
 N1–N7 and G1–G11 verbatim. Source fetch failures and digest/text drift fail the
 gate. CI never follows an unpinned default branch or copies financial logic
 into this repository. Pin updates require reviewing the matching Hawala change.
@@ -201,12 +201,18 @@ python3 tools/check_hawala_architecture_pin.py --source ../hawala-core
 python3 tools/test_hawala_architecture_pin.py
 ```
 
-The new **test-only** Elixir adapter replays all 232 protocol prefixes and 72
-workflow gates through separate local actor journals. Its sources compile only
-in `MIX_ENV=test`; production builds contain no adapter modules. These tests do
-not implement an actual financial writer, signed-wire verifier, custody adapter
-or Iroh service. Those G3/D5 refinements and independent acceptance remain open.
-No synthetic checkout orchestration or live-money mutation surface is added.
+The **test-only** Elixir adapter replays all 232 protocol prefixes and 72
+workflow gates through separate local actor journals. The next restricted TEST
+endpoint/outbox increment adds exact signed local RPC and a persist-before-send
+business journal. Pairing CI runs the actual pinned Rust service, loses a durable
+commit reply, restarts the outbox and recovers only through a fresh signed status
+query. Its final `test_reserved` view always has `paid=false` and no financial
+authority. All helpers compile only in `MIX_ENV=test`; production excludes them.
+The canonical endpoint model supplies Lean safety proofs, 77 TLC states, 1,155
+generated edge checks and four required counterexamples. These are synthetic
+reservation semantics, not financial-writer, custody, finality or Iroh refinement.
+G3/D5, G4–G8 and independent acceptance remain open for financial checkout.
+No domain workflow or live-money mutation surface is added.
 
 ## Open gaps (must close before Accepted)
 
@@ -251,8 +257,10 @@ M6-C6 and M6-C7 alone model only one local journal. The new
 `CrossAuthority.lean` / `crossAuthority.qnt` increment models independent
 participants and blocking recovery. Persistent Rust/Elixir TEST adapters now
 replay the selected formal corpus through separate local journals. Actual
-financial-writer, signed-wire and custody-boundary refinement remains open;
-no synthetic checkout orchestration is supplied.
+financial-writer and custody-boundary refinement remains open. A restricted
+signed TEST RPC/outbox profile now checks lost replies and query-only recovery;
+its `test_reserved` state never permits payment, fulfillment or escrow release.
+Actual cross-instance financial checkout orchestration remains gated by G1–G8.
 *Closes when:* a Quint/Lean model of the cross-authority commit is merged.
 It covers coordinator and participant messages, crashes and restarts,
 timeouts, partitions, duplicate and replayed messages, and abort fencing.
@@ -289,9 +297,11 @@ participant signature itself and never accepts the host's assertion of
 consent.
 
 *Status:* host-signed, pinned, versioned, grant- and body-bound admission
-and service-signed responses were merged in hawala-core #43. The socket
-transport, durable replay storage and the mapping from biz-kit grants to
-`GrantPolicy` remain open.
+and service-signed responses were merged in hawala-core #43. The restricted
+TEST endpoint increment adds exact mutually signed local RPC, pinned TEST grants,
+durable replay storage and a query-only business outbox. It carries no participant
+consent or financial evidence. Actual capability negotiation, participant-signature
+verification and mapping biz-kit grants to production `GrantPolicy` remain open.
 
 **G7. Disclosure model (N6). Blocks step 2.** N6 binds "permitted
 disclosure" into the correlation record, but no model defines it.
