@@ -39,6 +39,13 @@ The table is a **code audit candidate map**, not a declaration that every item p
 - Keep marketing QR/NFC touchpoints **separate** from Hawala's exclusive QR participant-identity presentation and signed financial consent. Neither attribution nor an order `Committed(intent)` constitutes payment finality.
 - Do not migrate legacy bearer tokens, implicit admin bypass, subscriber `:subscribed` flags, location floats, or PubSub send-before-confirm patterns as platform security or evidence authority.
 
+## Pinned first-source audit
+
+[The read-only revision comparison](2026-10-28-eatsbot-source-revision-audit.md)
+records exact biz-kit and standalone Eatsbot source commits and 15 checked modules.
+The differing blobs must be reconciled against source tests before an authority
+migration. This is **not** a production database or active-obligation inventory.
+
 ## First implementation slices (proposed, not production admission)
 
 - [MarketingCore extraction PR #177](https://github.com/larsbx/biz-kit/pull/177): no-dependency portable attribution/engagement-code and one-use redemption candidates. Strengthens attribution to confirmed message delivery; historical Money rounding parity remains unproven.
