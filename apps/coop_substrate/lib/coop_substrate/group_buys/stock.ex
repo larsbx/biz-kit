@@ -15,6 +15,7 @@ defmodule CoopSubstrate.GroupBuys.Stock do
   """
 
   alias GroupBuyCore.{BindingRound, Escrow}
+  alias CoopSubstrate.GroupBuys.EscrowAdmission
   alias InventoryCore
   alias InventoryCore.Wire
 
@@ -89,7 +90,7 @@ defmodule CoopSubstrate.GroupBuys.Stock do
          true <-
            coverage.binding_terms_hash == terms_hash and
              coverage.committed_units == count,
-         :ok <- all_funds_held(escrow, round, now),
+         :ok <- EscrowAdmission.complete_coverage(gate.group_buys, key, now),
          %{reservations: reservations} <- gate.group_buys.stock_aggregates[aggregate],
          %{status: :active, remaining: ^count, expires_at_ms: expiry} <-
            reservations[reservation_id],

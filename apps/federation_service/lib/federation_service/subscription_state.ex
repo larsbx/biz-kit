@@ -13,6 +13,58 @@ defmodule FederationService.SubscriptionState do
   @max_time 9_007_199_254_740_991
 
   @doc """
+  Recover pre-outbox Follow intents after journal replay, without acknowledging them.
+
+  Active outgoing records retain their exact original Follow. A withdrawn record
+  is eligible only to unblock an already journaled, pending Undo; old terminal
+  records without retained delivery bytes never generate new effects. Receipts
+  must bind the exact payload. Existing effects and relationship rows are untouched.
+  The Store must sync all returned changes before exposing the recovered state.
+  """
+  def recover_outbox(data) do
+    data.subscriptions
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.reduce_while({:ok, [], data}, fn {id, row}, {:ok, changes, current} ->
+      if recover_follow?(current, id, row) do
+        case outbound(current, row.follow, id, row.started_at) do
+          {:ok, {:subscription_outbox, ^id, effect} = change} ->
+            current = put_in(current, [:subscription_outbox, id], effect)
+            {:cont, {:ok, [change | changes], current}}
+
+          {:error, reason} ->
+            {:halt, {:error, reason}}
+        end
+      else
+        {:cont, {:ok, changes, current}}
+      end
+    end)
+    |> case do
+      {:ok, changes, _} -> {:ok, Enum.reverse(changes)}
+      error -> error
+    end
+  end
+
+  defp recover_follow?(data, id, %{direction: :outgoing} = row) do
+    data.subscription_outbox[id] == nil and time(row.started_at) == :ok and
+      Wire.follow(row.follower, row.target, id) == {:ok, row.follow} and
+      seen(data, row.follow, id) == {:duplicate, {:ok, :duplicate}} and
+      (row.status in [:pending, :accepted] or pending_withdrawal?(data, id, row))
+  end
+
+  defp recover_follow?(_, _, _), do: false
+
+  defp pending_withdrawal?(data, id, %{status: :withdrawn} = row) do
+    Enum.any?(data.subscription_outbox, fn {activity_id, effect} ->
+      effect.status == :pending and effect.follow_id == id and
+        effect.destination == row.target and
+        Wire.undo(row.follower, row.follow, activity_id) == {:ok, effect.activity} and
+        seen(data, effect.activity, id) == {:duplicate, {:ok, :duplicate}}
+    end)
+  end
+
+  defp pending_withdrawal?(_, _, _), do: false
+
+  @doc """
   Plan a finite journal transaction. Never persist rejected or duplicate work.
 
   :begin and :decide/:cancel are host-only actions. :receive is trusted
@@ -35,7 +87,7 @@ defmodule FederationService.SubscriptionState do
         authority: nil
       }
 
-      record(data, follow, id, row, :begun)
+      record(data, follow, id, row, :begun, now)
     else
       {:duplicate, result} -> {:duplicate, result}
       %{direction: _} -> {:error, :follow_id_exists}
@@ -72,7 +124,8 @@ defmodule FederationService.SubscriptionState do
         activity,
         follow_id,
         %{row | status: decision_status(decision), authority: receipt},
-        decision_status(decision)
+        decision_status(decision),
+        now
       )
     else
       _ -> {:error, :subscription_decision_refused}
@@ -90,7 +143,8 @@ defmodule FederationService.SubscriptionState do
         activity,
         follow_id,
         %{row | status: :withdrawn, authority: receipt},
-        :withdrawn
+        :withdrawn,
+        now
       )
     else
       _ -> {:error, :subscription_cancel_refused}
@@ -151,7 +205,7 @@ defmodule FederationService.SubscriptionState do
     end
   end
 
-  defp record(data, activity, follow_id, row, outcome) do
+  defp record(data, activity, follow_id, row, outcome, emit_at \\ nil) do
     id = activity["id"]
     hash = :crypto.hash(:sha256, :erlang.term_to_binary(activity))
 
@@ -165,15 +219,51 @@ defmodule FederationService.SubscriptionState do
              map_size(data.subscription_events) >= @event_max do
           {:error, :subscription_capacity}
         else
-          {:ok,
-           [
-             {:subscriptions, follow_id, row},
-             {:subscription_events, id, %{hash: hash, follow_id: follow_id}}
-           ], {:ok, outcome}}
+          changes = [
+            {:subscriptions, follow_id, row},
+            {:subscription_events, id, %{hash: hash, follow_id: follow_id}}
+          ]
+
+          case outbound(data, activity, follow_id, emit_at) do
+            {:ok, effect} ->
+              changes = if effect == nil, do: changes, else: changes ++ [effect]
+              {:ok, changes, {:ok, outcome}}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
         end
 
       _ ->
         {:error, :subscription_activity_conflict}
+    end
+  end
+
+  defp outbound(_, _, _, nil), do: {:ok, nil}
+
+  defp outbound(data, activity, follow_id, now) do
+    id = activity["id"]
+    destination = List.first(activity["to"])
+
+    cond do
+      map_size(Map.get(data, :subscription_outbox, %{})) >= @max ->
+        {:error, :subscription_outbox_capacity}
+
+      Map.get(Map.get(data, :subscription_outbox, %{}), id) != nil ->
+        {:error, :subscription_outbox_conflict}
+
+      true ->
+        {:ok,
+         {:subscription_outbox, id,
+          %{
+            activity: activity,
+            follow_id: follow_id,
+            destination: destination,
+            status: :pending,
+            attempts: 0,
+            next_at: now,
+            queued_at: now
+          }}}
     end
   end
 

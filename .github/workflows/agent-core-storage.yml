@@ -7,6 +7,14 @@ on:
       - "apps/agent_core/**"
       - "apps/task_core/**"
       - "apps/agent_ops_store/**"
+      - "formal/**"
+      - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
+      - "apps/coop_substrate/test/signed_consumer_source_test.exs"
+      - "apps/coop_substrate/test/signed_event_replay_test.exs"
+      - ".github/workflows/signed-event-replay-acceptance.yml"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/lib/coop_substrate/protocol/**"
+      - ".github/workflows/event-consumer-proofs.yml"
       - ".github/workflows/agent-core-storage.yml"
   workflow_dispatch:
 
@@ -21,6 +29,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record exact source revision
+        run: git rev-parse HEAD
 
       - name: Provision disposable test password outside the checkout
         shell: bash
@@ -66,10 +78,16 @@ jobs:
             < deploy/agent-core/sql/003_recovery_custody.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
-            < deploy/agent-core/sql/004_event_registrations.sql
+            < deploy/agent-core/sql/005_event_registrations.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_event_registrations.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/004_event_cursor.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/ci_event_cursor.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_storage_contract.sql

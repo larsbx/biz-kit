@@ -5,7 +5,7 @@ defmodule InventoryCore.MixProject do
     [
       app: :inventory_core,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.18",
       deps: []
     ] ++ umbrella_paths()
   end

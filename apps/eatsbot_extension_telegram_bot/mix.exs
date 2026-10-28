@@ -25,7 +25,7 @@ defmodule Eatsbot.Extensions.TelegramBot.MixProject do
     [
       {:telegex, path: "../../vendor/telegex"},
       {:finch, "~> 0.13"},
-      {:multipart, "~> 0.4.0"},
+      {:multipart, "~> 0.6.1"},
       {:remote_ip, "~> 1.2"},
       {:ash_authentication, "~> 5.0-rc"},
       {:ash_authentication_phoenix, "~> 3.0-rc"},

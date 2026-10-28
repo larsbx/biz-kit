@@ -4,7 +4,9 @@ Corrected after review: **EventStore already owns durable subscription delivery,
 catch-up and checkpoints.** The earlier #166 draft duplicated that mechanism.
 Its application cursor tables, cursor SQL functions and custom paging loop have
 been removed before merge. No database objects are dropped by this correction;
-the superseded migration was draft-only and must not be deployed.
+the superseded migration was draft-only and must not be deployed. The separate
+proof-refined cursor fixture retained on main is migration 004; this adapter
+uses migration 005 and does not use those cursor tables.
 
 ## Existing machinery, verified in locked source
 
@@ -41,8 +43,8 @@ Unexpected acknowledgments cannot advance the native subscription's in-flight
 state. Unknown/uncommitted event numbers cannot create business authority.
 
 `AgentEventDelivery` expresses this small application obligation with trusted
-read/register/ack ports. It is not a subscription implementation. Migration 004
-now creates only `agent_ops.event_effect_registrations`, containing immutable
+read/register/ack ports. It is not a subscription implementation. Migration 005
+creates only `agent_ops.event_effect_registrations`, containing immutable
 effect identities/scope/hash or zero-effect processed receipts. It stores no
 subscription resume position. The host registration role needs SELECT/INSERT,
 not UPDATE/DELETE. Registration must use an ordinary dedicated host connection,

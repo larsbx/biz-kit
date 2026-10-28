@@ -24,3 +24,15 @@ financial checkout, or route-assignment endpoint. No tenant or merchant
 credential is accepted by the preview function; host authorization is essential.
 
 Run `cd apps/biz_kit_composition && mix test --no-start`.
+
+## MarketingCore and SalesCore salvage bridge (staged)
+
+`BizKit.MarketingBridge.preview/5` composes the portable MarketingCore
+attribution rule with **current** SalesCore consent and a host-verified
+notification delivery receipt ID/digest. It refuses stale consent revisions,
+wrong merchant/party/campaign, queued messages and out-of-window scans.
+It only returns an **unsigned candidate**. A trusted host must verify the
+original signed delivery receipt, consent evidence and current grants,
+then repeat all checks at the actual serialized business-event admission.
+No sender, subscriber import, PII, subscription grant or attribution writer
+is introduced by this bridge.

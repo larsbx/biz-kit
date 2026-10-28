@@ -1,17 +1,21 @@
 defmodule Eatsbot.Extensions.Kafka.Supervisor do
   @moduledoc """
-  Wrapper needed to manually pass the KafkaEx supervisor to the main app's supervision tree.
+  Owns the extension's named, produce-only KafkaEx client.
   """
+  use Supervisor
+
   def start_link(opts) do
-    KafkaEx.Supervisor.start_link(opts[:max_restarts], opts[:max_seconds])
+    Supervisor.start_link(__MODULE__, opts)
   end
 
-  def child_spec(opts) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, [opts]},
-      type: :supervisor,
-      restart: :permanent
-    }
+  @impl true
+  def init(opts) do
+    children = [{KafkaEx.API, name: :kafka_ex, consumer_group: :no_consumer_group}]
+
+    Supervisor.init(children,
+      strategy: :one_for_one,
+      max_restarts: Keyword.get(opts, :max_restarts, 10),
+      max_seconds: Keyword.get(opts, :max_seconds, 60)
+    )
   end
 end

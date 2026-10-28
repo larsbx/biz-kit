@@ -1,0 +1,31 @@
+name: Eatsbot salvage candidate safety — Quint
+
+on:
+  pull_request:
+    paths:
+      - 'formal/quint/eatsbot_*.qnt'
+      - 'formal/quint/eatsbot_salvage_check.sh'
+      - '.github/workflows/eatsbot-salvage-models.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'formal/quint/eatsbot_*.qnt'
+      - 'formal/quint/eatsbot_salvage_check.sh'
+      - '.github/workflows/eatsbot-salvage-models.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  salvage-quint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Quint
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+      - name: Typecheck, bounded verify, reach witnesses and refute unsafe credit
+        run: bash formal/quint/eatsbot_salvage_check.sh

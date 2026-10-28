@@ -1,0 +1,80 @@
+name: Hawala canonical architecture pin
+on:
+  pull_request:
+    paths:
+      - 'docs/architecture/**hawala**'
+      - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
+      - 'tools/*hawala*'
+      - 'apps/hawala_capability/**'
+      - '.github/workflows/hawala-architecture.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/architecture/**hawala**'
+      - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
+      - 'tools/*hawala*'
+      - 'apps/hawala_capability/**'
+      - '.github/workflows/hawala-architecture.yml'
+permissions:
+  contents: read
+jobs:
+  canonical-pairing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify immutable Hawala proof/profile source and identical paired decisions
+        run: python3 tools/check_hawala_architecture_pin.py
+      - name: Require drift negative controls
+        run: python3 tools/test_hawala_architecture_pin.py
+
+  elixir-test-host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Verify pinned source and exact canonical fixture copies
+        run: python3 tools/check_hawala_architecture_pin.py
+      - name: Read immutable canonical service revision
+        id: service-pin
+        run: |
+          python3 - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          pin = json.loads(Path('docs/architecture/fixtures/hawala-cross-authority-v1-pin.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('sha=' + pin['source_commit'] + '\n')
+          PYCODE
+      - uses: actions/checkout@v4
+        with:
+          repository: larsbx/hawala-core
+          ref: ${{ steps.service-pin.outputs.sha }}
+          path: .hawala-test-source
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the opt-in signed TEST service
+        run: cargo build --locked --manifest-path .hawala-test-source/Cargo.toml -p hawala-cross-authority-test --features conformance --bin hawala-test-service
+      - name: Replay durable TEST hosts and all workflow gates
+        working-directory: apps/hawala_capability
+        env:
+          MIX_ENV: test
+          HAWALA_TEST_SERVICE_BIN: ${{ github.workspace }}/.hawala-test-source/target/debug/hawala-test-service
+        run: |
+          mix compile --warnings-as-errors
+          mix format --check-formatted
+          test -x "$HAWALA_TEST_SERVICE_BIN"
+          mix test --no-start
+      - name: Production build excludes all TEST adapter and endpoint modules
+        working-directory: apps/hawala_capability
+        env:
+          MIX_ENV: prod
+        run: |
+          mix compile --warnings-as-errors
+          test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestHost.beam
+          test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestJournal.beam
+          test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.SignedTestPort.beam
+          test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestCheckoutOutbox.beam

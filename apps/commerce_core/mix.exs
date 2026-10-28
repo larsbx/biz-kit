@@ -5,7 +5,7 @@ defmodule CommerceCore.MixProject do
     [
       app: :commerce_core,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.18",
       deps: [{:ex_money, "~> 6.2"}]
     ] ++ umbrella_paths()
   end
