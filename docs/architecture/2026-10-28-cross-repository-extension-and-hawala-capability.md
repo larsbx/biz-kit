@@ -9,7 +9,7 @@ A link to a proposed ADR is not evidence it has merged.
 
 The [modular business platform](2026-10-24-modular-business-platform.md) already distinguishes portable capabilities from domain products. [SchoolOps](2026-10-23-school-ops.md) has a platform-hosted backend with pinned upstream curriculum; Dispatch's server is developed here while d-patch retains clients; the imported Eatsbot backend coexists with a separately evolved and currently production-authoritative Eatsbot repository. **The chosen target is now to retire Eatsbot as a product and salvage its reusable parts, not to retain two Eatsbot implementations.** Their application and release contracts are not uniform.
 
-The merged [Hawala shared identity/scoped authority ADR](2026-10-28-hawala-shared-identity-and-scoped-authority.md) and hawala-core ADR 0004 establish D1–D6. The *open* native Hawala proposals [biz-kit #173](https://github.com/larsbx/biz-kit/pull/173) and [hawala-core #42](https://github.com/larsbx/hawala-core/pull/42) propose N1–N7. This ADR aligns the wider application ecosystem without accepting those pending financial decisions, duplicating Hawala's protocols, or opening a production settlement path.
+The merged [Hawala shared identity/scoped authority ADR](2026-10-28-hawala-shared-identity-and-scoped-authority.md) and hawala-core ADR 0004 establish D1–D6. The **merged, still-Proposed** native Hawala architecture records [biz-kit #173](https://github.com/larsbx/biz-kit/pull/173) and [hawala-core #42](https://github.com/larsbx/hawala-core/pull/42) describe N1–N7; implementation and G1–G11 acceptance remain open. This ADR aligns the wider application ecosystem without accepting those pending financial decisions, duplicating Hawala's protocols, or opening a production settlement path.
 
 ## Decision
 
@@ -88,11 +88,11 @@ Maintain distinct statuses for **specification**, **pure proof**, **synthetic ac
 
 ## Rollout and non-goals
 
-1. Review this ADR with the four companion proposals and reconcile the open N1–N7 pairs' documented G1–G11 gaps. Do not silently make their different wording normative.
+1. Review this ADR with the four companion proposals and reconcile the merged N1–N7 records' documented G1–G11 gaps. Do not silently make their different wording normative.
 2. Publish a typed extension manifest/wire schema and make SchoolOps and Dispatch reference implementations; keep integrations initially nonmutating or behind current authorized admission.
 3. Complete cross-repo identity vectors, authenticated Hawala service port, durable replay and biz-kit grant mapping. Use two independently administered biz-kit processes, two Iroh peers and a noncustodial router in test.
 4. Execute Eatsbot decommission phases R0–R6 from the [salvage/retirement plan](2026-10-28-eatsbot-salvage-and-retirement-plan.md). The *decision* to retire is recorded here, but do not switch, destroy, or archive production assets before independently verified reconciliation, business continuity and approved cutover.
-5. Permit any Hawala scoped financial writer only after all D5 and pending N1–N7 financial proof/operational gates are satisfied.
+5. Permit any Hawala scoped financial writer only after all D5 and N1–N7 financial proof/operational gates still pending implementation are satisfied.
 
 No application migrations, production authority cutovers, network-wide ledger, new custody system, live payment rail or financial endpoints are authorized here.
 
