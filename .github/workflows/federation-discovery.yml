@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -45,21 +47,21 @@ jobs:
           BIZKIT_GOSSIP_EXECUTABLE: ${{ github.workspace }}/native/marketplace_gossip/target/debug/bizkit-marketplace-gossip
 
   full-lock-audit:
-    # Inventory the entire umbrella, including dependencies absent from the
-    # federation listener. Existing unrelated findings are documented in the receipt;
-    # the reachable federation graph has a separate blocking audit above.
+    # Audit every shared-lock entry, including optional and unused packages.
+    # No ignored advisories or informational failure allowance.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - run: mix local.hex --force
-      - name: Inventory full shared lock (including known unrelated findings)
+      - name: Audit full shared lock
         id: audit
-        continue-on-error: true
         run: |
           mkdir -p /tmp/bizkit-full-lock-audit
           cp mix.lock /tmp/bizkit-full-lock-audit/
@@ -68,7 +70,7 @@ jobs:
           mix hex.audit --format sarif --output "$GITHUB_WORKSPACE/full-lock-audit.sarif"
       - name: Record audit outcome
         if: always()
-        run: echo 'Full-lock audit outcome = ${{ steps.audit.outcome }}; see SARIF and docs/security/bandit-2026-10.md' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'Full-lock audit outcome = ${{ steps.audit.outcome }}; see SARIF and docs/security/remaining-dependencies-2026-10.md' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

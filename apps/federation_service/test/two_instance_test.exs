@@ -90,6 +90,147 @@ defmodule FederationService.TwoInstanceTest do
          end)
   end
 
+  test "legacy Follow withdrawal survives failed HTTPS, restart and delayed replay" do
+    dir = temp()
+    ca = certs(dir)
+    a_port = port()
+    b_port = port()
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    alpha = "https://alpha.example/actors/shop"
+    beta = "https://beta.example/actors/shop"
+
+    {:ok, follow} =
+      FederationCore.Subscriptions.follow(alpha, beta, alpha <> "/activities/legacy")
+
+    legacy_follow_journal(a_dir, follow)
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      File.rm_rf!(dir)
+    end)
+
+    id = follow["id"]
+    assert command(a, %{op: "snapshot"})["subscription_outbox"] == %{id => "pending"}
+    assert command(a, %{op: "undo_follow", follow_id: id, source_id: "legacy-cancel"})["ok"]
+    # No receiver: discovery/request failure must leave both effects pending.
+    command(a, %{op: "deliver"})
+    pending = command(a, %{op: "snapshot"})["subscription_outbox"]
+    assert map_size(pending) == 2
+    assert Enum.all?(Map.values(pending), &(&1 == "pending"))
+    stop(a)
+    a2 = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a2)
+      stop(b)
+    end)
+
+    assert command(a2, %{op: "snapshot"})["subscription_outbox"] == pending
+    assert command(a2, %{op: "snapshot"})["subscriptions"][id] == "withdrawn"
+
+    eventually(fn ->
+      command(a2, %{op: "deliver"})
+      command(b, %{op: "snapshot"})["subscriptions"][id] == "pending"
+    end)
+
+    # Undo was ineligible at the start of the successful Follow batch.
+    after_follow = command(a2, %{op: "snapshot"})["subscription_outbox"]
+    assert after_follow[id] == "delivered"
+    assert Enum.count(Map.values(after_follow), &(&1 == "pending")) == 1
+    command(a2, %{op: "deliver"})
+    assert command(b, %{op: "snapshot"})["subscriptions"][id] == "withdrawn"
+
+    net = [
+      test_routes: %{
+        "alpha.example" => {{127, 0, 0, 1}, a_port},
+        "beta.example" => {{127, 0, 0, 1}, b_port}
+      },
+      test_cacerts: [ca]
+    ]
+
+    key = Signature.private!(a_dir <> "/signing.key")
+    url = beta <> "/inbox"
+
+    send_signed = fn message ->
+      body = Jason.encode!(message)
+      Network.request(:post, url, Signature.sign(url, alpha, key, body), body, net)
+    end
+
+    assert {:ok, 202, _, _} = send_signed.(follow)
+
+    {:ok, undo} =
+      FederationCore.Subscriptions.undo(alpha, follow, Enum.find(Map.keys(pending), &(&1 != id)))
+
+    assert {:ok, 202, _, _} = send_signed.(undo)
+    assert {:ok, 401, _, _} = send_signed.(Map.put(follow, "actor", beta))
+    assert {:ok, 401, _, _} = send_signed.(Map.put(follow, "grant", "owner"))
+    assert command(b, %{op: "snapshot"})["subscriptions"][id] == "withdrawn"
+
+    for p <- [a2, b],
+        do: assert(command(p, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history")
+  end
+
+  test "signed outbound Follow and locally approved Accept recover across independent node restart" do
+    dir = temp()
+    certs(dir)
+    a_port = port()
+    b_port = port()
+    a_dir = dir <> "/alpha"
+    b_dir = dir <> "/beta"
+    a = node(a_dir, "alpha.example", a_port, "beta.example", b_port, dir)
+    b = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+
+    on_exit(fn ->
+      stop(a)
+      stop(b)
+      File.rm_rf!(dir)
+    end)
+
+    beta = "https://beta.example/actors/shop"
+    assert command(a, %{op: "follow", peer: beta, source_id: "signed-follow"})["ok"]
+    a_before = command(a, %{op: "snapshot"})
+    [follow_id] = Map.keys(a_before["subscriptions"])
+    assert a_before["subscriptions"][follow_id] == "pending"
+
+    assert command(a, %{op: "deliver"})["ok"]
+    assert command(b, %{op: "snapshot"})["subscriptions"][follow_id] == "pending"
+
+    assert command(b, %{
+             op: "approve_follow",
+             follow_id: follow_id,
+             decision: "accept",
+             source_id: "operator-accept"
+           })["ok"]
+
+    pending = command(b, %{op: "snapshot"})["subscription_outbox"]
+    assert Enum.any?(Map.values(pending), &(&1 == "pending"))
+    stop(b)
+
+    b2 = node(b_dir, "beta.example", b_port, "alpha.example", a_port, dir)
+    on_exit(fn -> stop(b2) end)
+
+    assert command(b2, %{op: "snapshot"})["subscriptions"][follow_id] == "accepted"
+    assert command(b2, %{op: "deliver"})["ok"]
+    assert command(a, %{op: "snapshot"})["subscriptions"][follow_id] == "accepted"
+
+    assert Enum.all?(
+             Map.values(command(b2, %{op: "snapshot"})["subscription_outbox"]),
+             &(&1 == "delivered")
+           )
+
+    assert command(a, %{op: "undo_follow", follow_id: follow_id, source_id: "operator-undo"})[
+             "ok"
+           ]
+
+    assert command(a, %{op: "deliver"})["ok"]
+    assert command(b2, %{op: "snapshot"})["subscriptions"][follow_id] == "withdrawn"
+    assert command(a, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+    assert command(b2, %{op: "snapshot"})["ledger"] == "locally-owned-signed-history"
+  end
+
   test "signed Follow and Undo are durably admitted without business or peer authority" do
     dir = temp()
     ca = certs(dir)

@@ -4,13 +4,15 @@ defmodule FederationService do
   journal directory, an RSA private key and configured remote actor URLs.
   There is no public local-publication or business-command HTTP endpoint.
   """
-  alias FederationService.{Store, Network, Signature, Delivery, WebFinger}
+  alias FederationService.{Store, Network, Signature, Delivery, WebFinger, SubscriptionDelivery}
   alias FederationCore.Marketplace
 
   def config!(opts) do
     actor = Keyword.fetch!(opts, :actor)
     {:ok, _} = Network.uri(actor)
     handle = WebFinger.handle!(Keyword.get(opts, :handle))
+    approval_verifier = Keyword.get(opts, :approval_verifier)
+    true = is_nil(approval_verifier) or is_function(approval_verifier, 5)
     peers = Keyword.get(opts, :peers, [])
     true = length(peers) <= 32 and length(Enum.uniq(peers)) == length(peers)
 
@@ -22,6 +24,7 @@ defmodule FederationService do
     %{
       actor: actor,
       handle: handle,
+      approval_verifier: approval_verifier,
       private_key: Keyword.fetch!(opts, :private_key),
       peers: peers,
       store: Keyword.fetch!(opts, :store),
@@ -62,6 +65,100 @@ defmodule FederationService do
       _ -> {:error, :publication_refused}
     end
   end
+
+  @doc """
+  Host-only initiation of a public subscription to an explicitly configured peer.
+  The host must independently authorize this local instruction before calling.
+  """
+  def follow(config, peer, source_id, now \\ System.system_time(:second)) do
+    with true <- peer in config.peers,
+         true <- is_binary(source_id) and byte_size(source_id) in 1..256,
+         id <- subscription_event_id(config.actor, "follow", source_id),
+         {:ok, activity} <- FederationCore.Subscriptions.follow(config.actor, peer, id) do
+      Store.call(
+        config.store,
+        {:subscription_host, config.actor, config.peers, {:begin, activity, now}}
+      )
+    else
+      _ -> {:error, :subscription_follow_refused}
+    end
+  end
+
+  @doc """
+  Host-only approval/rejection of a pending inbound Follow. The receipt
+  MUST originate from independently verified local authority, not a user form.
+  """
+  def respond_follow(
+        config,
+        follow_id,
+        decision,
+        source_id,
+        receipt,
+        now \\ System.system_time(:second)
+      )
+
+  def respond_follow(config, follow_id, decision, source_id, receipt, now)
+      when decision in [:accept, :reject] do
+    with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
+         :ok <- approve_local(config, follow_id, decision, receipt, now) do
+      Store.call(
+        config.store,
+        {:subscription_host, config.actor, config.peers,
+         {:decide, follow_id, decision,
+          subscription_event_id(config.actor, to_string(decision), source_id), receipt, now}}
+      )
+    else
+      {:error, :unverified_local_authority} = error -> error
+      _ -> {:error, :subscription_decision_refused}
+    end
+  end
+
+  def respond_follow(_, _, _, _, _, _), do: {:error, :subscription_decision_refused}
+
+  @doc "Host-only withdrawal of a locally initiated Follow."
+  def undo_follow(config, follow_id, source_id, receipt, now \\ System.system_time(:second)) do
+    with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
+         :ok <- approve_local(config, follow_id, :undo, receipt, now) do
+      Store.call(
+        config.store,
+        {:subscription_host, config.actor, config.peers,
+         {:cancel, follow_id, subscription_event_id(config.actor, "undo", source_id), receipt,
+          now}}
+      )
+    else
+      {:error, :unverified_local_authority} = error -> error
+      _ -> {:error, :subscription_cancel_refused}
+    end
+  end
+
+  defp approve_local(config, follow_id, operation, receipt, now) do
+    case config.approval_verifier do
+      verifier when is_function(verifier, 5) ->
+        try do
+          case verifier.(config.actor, follow_id, operation, receipt, now) do
+            :ok -> :ok
+            _ -> {:error, :unverified_local_authority}
+          end
+        rescue
+          _ -> {:error, :unverified_local_authority}
+        end
+
+      _ ->
+        {:error, :unverified_local_authority}
+    end
+  end
+
+  defp subscription_event_id(actor, kind, source_id) do
+    actor <>
+      "/activities/subscription-" <>
+      kind <>
+      "-" <>
+      Base.encode16(:crypto.hash(:sha256, source_id), case: :lower)
+  end
+
+  @doc "Deliver bounded, signed control activities from the same durable discovery journal."
+  def deliver_subscriptions(config, now \\ System.system_time(:second)),
+    do: SubscriptionDelivery.deliver(config, now)
 
   @doc "Locally reconcile current public listings/tombstones to configured peers in bounded batches."
   def reconcile(config, now \\ System.system_time(:second)) do

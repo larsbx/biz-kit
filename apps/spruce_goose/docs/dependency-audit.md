@@ -43,10 +43,17 @@ empty uses the repository file. The result prints the exact lockfile and
 allowlist SHA-256 values, audit date, Hex version, raw audit output and status,
 and accepted/blocking IDs. Capture stdout/stderr as the gate log.
 
-The current Decimal acceptance is unchanged: owner `lars`, expiry 2026-10-08.
-This fix does not reassess its reachability or assert that no patched release
-is now available. Review it separately before expiry. Do not extend its date
-automatically.
+The allowlist is empty. The former Decimal exception expired on 2026-10-08
+and is removed: the shared lock already uses Decimal 3.2.0, outside both
+published affected ranges. No exception date is extended. The current complete
+lock audit and dependency-security acceptance are recorded in
+[`docs/security/remaining-dependencies-2026-10.md`](../../../docs/security/remaining-dependencies-2026-10.md).
+
+From the umbrella repository root, select the app's reviewed policy explicitly:
+
+~~~sh
+HEX_AUDIT_ALLOWLIST=apps/spruce_goose/.hex-audit-allowlist apps/spruce_goose/scripts/audit-dependencies
+~~~
 
 The gate validates Hex's report, not the freshness of its registry cache.
 Runner/network and registry freshness evidence remain part of release review.
@@ -54,27 +61,16 @@ Bare `mix hex.audit` is useful diagnostic output, but does not implement this
 repository's time-bounded acceptance policy. Never add `|| true` to continue
 past a failed wrapper.
 
-## Isolated checks
+## Validation in the umbrella
 
-Run without application boot or a database:
+The explicit-policy command above runs the real audit and policy checks without
+booting application supervisors or connecting to a database. Install locked
+dependencies first. Capture its exit code, exact lock/policy hashes and full
+report; a parser-only or compile-only result is not an audit pass.
 
-~~~sh
-python3 test/release_gate_scripts_test.py
-elixir test/test_database_config_test.exs
-elixir test/release_ci_pipeline_test.exs
-~~~
-
-The Python suite uses disposable Git checkouts and a stub Mix executable. It
-checks parser refusals, literal allowlist matching, command ordering, optional
-environment propagation, generated database naming and failure cleanup.
-The configuration suite reads test config in separate Elixir processes;
-it never connects to a database. Both suites also run under `mix test` through
-their ExUnit files.
-
-The full test suite and mandatory `separate_sessions` lane still need an
-independent disposable database. SCRAM correct/missing/wrong-password and
-trust-auth integration results must be recorded for the actual candidate;
-passing a stub test is not evidence of a successful database connection.
+The PostgreSQL-backed test suite and mandatory `separate_sessions` lane still
+need an independent disposable database. Record results on the actual candidate;
+passing an audit is not evidence of a successful database connection.
 
 ## Release boundary
 

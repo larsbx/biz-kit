@@ -1,0 +1,45 @@
+name: DispatchCore salvage — portable last-mile policy
+
+on:
+  pull_request:
+    paths:
+      - 'apps/dispatch_core/**'
+      - '.github/workflows/dispatch-core-salvage.yml'
+      - 'mix.exs'
+      - 'mix.lock'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile pure kernel with warnings as errors
+        working-directory: apps/dispatch_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check package formatting
+        working-directory: apps/dispatch_core
+        run: MIX_ENV=test mix format --check-formatted
+      - name: Run legacy parity and authority/uncertainty regressions
+        working-directory: apps/dispatch_core
+        run: MIX_ENV=test mix test --no-start
+      - name: Copy package out of umbrella and test standalone
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/dispatch-core-vendor"
+          cp -R apps/dispatch_core "$RUNNER_TEMP/dispatch-core-vendor/dispatch_core"
+          cd "$RUNNER_TEMP/dispatch-core-vendor/dispatch_core"
+          mix deps.get
+          MIX_ENV=test mix compile --warnings-as-errors
+          MIX_ENV=test mix test --no-start

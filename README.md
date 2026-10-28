@@ -18,6 +18,15 @@ import.
 | `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database. An imported copy: `larsbx/eatsbot` stays the authoritative, independently evolving product, and production deploys from there |
 | `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
 
+> **Proposed future disposition (not yet implemented):** Eatsbot is being
+> retired as an independent product and the imported Eatsbot runtime is to be
+> dismantled after verified cutover. Salvage its marketing/attribution policies
+> into MarketingCore, last-mile delivery policies into DispatchCore, and
+> reusable checkout/consent/handoff behavior into existing platform cores.
+> See [the Eatsbot salvage and retirement plan](docs/architecture/2026-10-28-eatsbot-salvage-and-retirement-plan.md).
+> The source/deployment ownership stated above remains current until the
+> documented migration and single-writer cutover gates have passed.
+
 Shared apps developed in this umbrella:
 
 | App | Path | Role |

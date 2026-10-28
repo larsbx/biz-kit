@@ -1,0 +1,45 @@
+name: MarketingCore salvage — portable pure rules
+
+on:
+  pull_request:
+    paths:
+      - 'apps/marketing_core/**'
+      - '.github/workflows/marketing-core-salvage.yml'
+      - 'mix.exs'
+      - 'mix.lock'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  marketing-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile pure kernel with warnings as errors
+        working-directory: apps/marketing_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Check package formatting
+        working-directory: apps/marketing_core
+        run: MIX_ENV=test mix format --check-formatted
+      - name: Run source-characterization and negative tests
+        working-directory: apps/marketing_core
+        run: MIX_ENV=test mix test --no-start
+      - name: Copy package out of umbrella and run standalone
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/marketing-core-vendor"
+          cp -R apps/marketing_core "$RUNNER_TEMP/marketing-core-vendor/marketing_core"
+          cd "$RUNNER_TEMP/marketing-core-vendor/marketing_core"
+          mix deps.get
+          MIX_ENV=test mix compile --warnings-as-errors
+          MIX_ENV=test mix test --no-start

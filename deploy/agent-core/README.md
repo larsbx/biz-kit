@@ -69,6 +69,10 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
   < deploy/agent-core/sql/003_recovery_custody.sql
 
+docker compose -f deploy/agent-core/compose.yaml exec -T db \
+  psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+  < deploy/agent-core/sql/004_event_cursor.sql
+
 # Or replace 'docker' with 'podman'.
 ```
 
@@ -208,3 +212,19 @@ See [execution recovery architecture](../../docs/architecture/2026-10-24-executi
 for trusted host callbacks, versioned adapter requirements, authentication,
 proof finality, opt-in supervision and remaining acceptance gates. No
 production startup or external execution target is enabled by this change.
+
+## Proof-refined EventStore cursor (staging-only migration 004)
+
+Migration 004 adds home-scoped operational consumer cursors, immutable
+per-event **processed receipts** (including events deriving zero effects),
+and unique candidate effect IDs. One PostgreSQL function registers the
+complete bounded effect bundle before atomically advancing the cursor.
+
+Only the existing `CoopSubstrate.Log` may establish a signed business
+event. The cursor function trusts an independently authorized host which
+must read accepted events from that log. It cannot authenticate input or
+turn an operational effect ID into execution permission.
+
+[Proof-to-SQL refinement notes](../../docs/architecture/2026-10-27-eventstore-cursor-refinement.md)
+trace the migration to Lean/Quint obligations and current acceptance gaps.
+**This migration is not enabled for production agent dispatch.**
