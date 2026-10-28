@@ -71,6 +71,7 @@ jobs:
           apps/agent_ops_store/test/event_replay_test.exs
           apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex
           apps/coop_substrate/test/signed_consumer_source_test.exs
+          apps/coop_substrate/test/signed_event_replay_test.exs
           apps/agent_ops_store/lib/agent_ops_store/event_effects.ex
           apps/agent_ops_store/test/event_cursor_test.exs
           apps/agent_ops_store/test/event_effects_test.exs
@@ -349,6 +350,12 @@ jobs:
       - name: Test the agent-neutral execution contracts
         working-directory: apps/agent_core
         run: mix test
+      - name: Ensure PostgreSQL client for signed replay fixture migration
+        run: |
+          if ! command -v psql; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client-16
+          fi
       - name: Test the common ledger
         working-directory: apps/coop_substrate
         run: mix test
