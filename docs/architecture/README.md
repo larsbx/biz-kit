@@ -13,6 +13,10 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Hawala: shared identity and scoped authority — 2026-10-28](2026-10-28-hawala-shared-identity-and-scoped-authority.md):
   proposed, paired with hawala-core ADR 0004. Keys and attestations are shared as
   evidence; one instance may order Hawala settlement only for an explicit scope.
+- [Network-native Hawala across federated biz-kit instances — 2026-10-28](2026-10-28-federated-hawala-native-capability.md):
+  proposed, paired with hawala-core ADR 0005; every participating installation
+  can host a Hawala peer/capability plane, while financial authority remains
+  strictly scoped and cross-authority settlement stays Hawala-owned.
 
 - [First common-ledger task command](2026-10-11-first-ledger-task-command.md): notes
   retirement, signed baseline and scoped grant, append-time proposal admission,
