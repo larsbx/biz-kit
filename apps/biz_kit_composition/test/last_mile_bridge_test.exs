@@ -111,6 +111,7 @@ defmodule BizKit.LastMileBridgeTest do
 
   test "cancelled fulfillment does not discard late transport delivery evidence" do
     {fulfillment, picked} = base()
+
     {:ok, moving, :accepted} =
       FulfillmentCore.apply(fulfillment, "merchant", :dispatch, %{
         id: "move",
@@ -125,9 +126,10 @@ defmodule BizKit.LastMileBridgeTest do
         op: :cancel
       })
 
-    delivered = move(picked, :dispatch, "delivery", :delivered, %{
-      delivery_proof_ref: "delivery-proof"
-    })
+    delivered =
+      move(picked, :dispatch, "delivery", :delivered, %{
+        delivery_proof_ref: "delivery-proof"
+      })
 
     assert {:error, :pending_cancellation_reconciliation} =
              LastMileBridge.preview(cancelled, delivered, trusted(delivered, "late-proof"))
