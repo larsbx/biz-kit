@@ -39,13 +39,22 @@ any authority, whether in Hawala or in biz-kit.
 
 **D3. One key may sign in both systems only under disjoint signing inputs.**
 `Envelope.signed_core_term/1` is a map, so its canonical encoding starts with
-a CBOR map head (`0xA0..=0xBB`). Every Hawala identity-core signing input
-starts with `hawala-identity-core/v1\0`, whose first byte `0x68` is the
-raw ASCII `h` byte, not a CBOR header. The input sets are disjoint. That holds only while a key
-bound under D1 signs nothing in biz-kit except envelope cores (or other
-inputs proven disjoint). Device statements, capability documents and other
-ad hoc signing inputs must use separate keys, or carry a proof of their own.
-A test pins this on both sides.
+a CBOR map head (`0xA0..=0xBB`). Every Hawala signing input begins with the
+bytes `hawala`. For identity-core the prefix is `hawala-identity-core/v1\0`.
+Its first byte, `0x68`, is ASCII `h`. Hawala's encoding is not CBOR, but read
+as a CBOR initial byte `0x68` would be a text-string head (major type 3),
+never a map head. The input sets are disjoint, and the guarantee is
+enforced at the byte level for every key, bound or not:
+
+- `CoopSubstrate.Crypto` refuses to sign, and refuses to verify, any input
+  beginning with `hawala`.
+- `CoopSubstrate.SigningDomainTest` pins every other direct Ed25519 call site
+  (federation gossip, gossip sync and leases, group-buy escrow proofs) to its
+  non-`hawala` prefix. A new call site fails the test until it is reviewed.
+- Both repositories pin the shared interoperability fixture by SHA-256.
+
+Verifying Hawala evidence (D2) belongs to a dedicated verifier, never to the
+ledger's `Crypto`.
 
 **D4. This ledger is never the network-wide Hawala ledger.** Gossip,
 federation, marketplace, barter and group-buy surfaces hold no Hawala

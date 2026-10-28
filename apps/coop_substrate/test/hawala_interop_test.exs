@@ -8,9 +8,27 @@ defmodule CoopSubstrate.HawalaInteropTest do
   @vectors_path Path.expand("vectors/hawala_identity_v1.json", __DIR__)
   @prefix <<"hawala-identity-core/v1", 0>>
 
+  # hawala-core pins the same digest for its copy
+  # (`crates/identity-core/test-vectors/bizkit_identity_v1.json`).
+  # Change both copies and both pins together.
+  @fixture_sha256 "5b1b9406b7d40d45d14756c5e058af13908a54d481d2c7675faed38ead44a990"
+
+  test "the fixture matches the digest pinned in both repositories" do
+    digest = :crypto.hash(:sha256, File.read!(@vectors_path))
+    assert Base.encode16(digest, case: :lower) == @fixture_sha256
+  end
+
+  # Hawala's own signer and verifier. The ledger's `Crypto` refuses Hawala's
+  # signing domain by design (see `CoopSubstrate.SigningDomainTest`).
+  defp hawala_sign(message, seed), do: :crypto.sign(:eddsa, :none, message, [seed, :ed25519])
+
+  defp hawala_verify(message, signature, pubkey),
+    do: :crypto.verify(:eddsa, :none, message, signature, [pubkey, :ed25519])
+
   defp fixture(name) do
     document = @vectors_path |> File.read!() |> Jason.decode!()
     assert document["schema"] == "hawala-identity-core-interoperability-v1"
+
     Enum.find(document["vectors"], &(&1["name"] == name)) ||
       raise("missing Hawala identity interoperability vector: #{name}")
   end
@@ -30,6 +48,7 @@ defmodule CoopSubstrate.HawalaInteropTest do
 
   defp vector_input(%{"name" => "possession-challenge"} = v) do
     expiry = v["expires_at"]
+
     signing_input(v["domain"], [
       bytes(v, "public_key_hex"),
       bytes(v, "verifier_key_hex"),
@@ -42,6 +61,7 @@ defmodule CoopSubstrate.HawalaInteropTest do
   defp vector_input(%{"name" => "merchant-credential"} = v) do
     issued = v["issued_at"]
     expiry = v["expires_at"]
+
     signing_input(v["domain"], [
       bytes(v, "credential_id_hex"),
       bytes(v, "public_key_hex"),
@@ -63,11 +83,13 @@ defmodule CoopSubstrate.HawalaInteropTest do
 
       assert Crypto.pubkey_from_seed(seed) == pubkey
       assert vector_input(vector) == message
-      assert Crypto.sign(message, seed) == signature
-      assert Crypto.verify(message, signature, pubkey)
-      refute Crypto.verify(message <> <<0>>, signature, pubkey)
+      assert hawala_sign(message, seed) == signature
+      assert hawala_verify(message, signature, pubkey)
+      refute hawala_verify(message <> <<0>>, signature, pubkey)
+      refute Crypto.verify(message, signature, pubkey)
 
-      # This is the literal ASCII 'h', not a CBOR string header.
+      # ASCII `h` (0x68). Hawala's encoding is not CBOR, but read as a CBOR
+      # initial byte this is a text-string head, never a map head (0xA0..0xBB).
       assert <<0x68, _::binary>> = message
       assert String.starts_with?(message, @prefix)
       refute :binary.first(message) in 0xA0..0xBB
@@ -103,7 +125,7 @@ defmodule CoopSubstrate.HawalaInteropTest do
     hawala_signature = bytes(hawala, "signature_hex")
 
     refute signed_bytes == hawala_message
-    refute Crypto.verify(hawala_message, signed.sigs["shared"], pubkey)
+    refute hawala_verify(hawala_message, signed.sigs["shared"], pubkey)
     refute Crypto.verify(signed_bytes, hawala_signature, pubkey)
   end
 end
