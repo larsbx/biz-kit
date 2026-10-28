@@ -10,6 +10,9 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
   baseline implementation evidence and tradeoffs. Its recommendation to retain
   independent authorities is superseded by the consolidation target.
+- [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
+  proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
+  with R0–R6 source inventory, migration, authorization, cutover and archive gates.
 - [Cross-repository extension and Hawala capability — 2026-10-28](2026-10-28-cross-repository-extension-and-hawala-capability.md):
   proposed common application-extension and source-ownership contract across biz-kit,
   hawala-core, Eatsbot, d-patch and school-ops; authority and live-money gates remain separate.
