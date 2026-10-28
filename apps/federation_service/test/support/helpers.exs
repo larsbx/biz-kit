@@ -50,6 +50,70 @@ defmodule FederationService.TestHelpers do
     )
   end
 
+  # Literal transaction format written by #154/#155 (before subscription_outbox).
+  # Do not use the current planner to create this upgrade fixture.
+  def legacy_follow_journal(dir, follow, status \\ :pending) do
+    id = follow["id"]
+
+    row = %{
+      direction: :outgoing,
+      follower: follow["actor"],
+      target: follow["object"],
+      follow: follow,
+      status: :pending,
+      started_at: 1000,
+      authority: nil
+    }
+
+    receipt = fn activity ->
+      {:subscription_events, activity["id"],
+       %{hash: :crypto.hash(:sha256, :erlang.term_to_binary(activity)), follow_id: id}}
+    end
+
+    first = {:transaction, [{:subscriptions, id, row}, receipt.(follow)]}
+
+    entries =
+      if status == :pending do
+        [first]
+      else
+        {:ok, activity} =
+          case status do
+            :withdrawn ->
+              FederationCore.Subscriptions.undo(row.follower, follow, id <> "-undo")
+
+            decision when decision in [:accepted, :rejected] ->
+              FederationCore.Subscriptions.respond(
+                if(decision == :accepted, do: :accept, else: :reject),
+                row.target,
+                follow,
+                row.target <>
+                  "/activities/legacy-reply-" <>
+                  Base.encode16(:crypto.hash(:sha256, id), case: :lower)
+              )
+          end
+
+        row = %{
+          row
+          | status: status,
+            authority: if(status == :withdrawn, do: "legacy-host-receipt", else: nil)
+        }
+
+        [first, {:transaction, [{:subscriptions, id, row}, receipt.(activity)]}]
+      end
+
+    append_journal(dir, entries)
+    follow
+  end
+
+  def append_journal(dir, entries) do
+    File.mkdir_p!(dir)
+    log = {:legacy_fixture, dir}
+    {:ok, ^log} = :disk_log.open(name: log, file: String.to_charlist(dir <> "/discovery.log"))
+    :ok = :disk_log.log_terms(log, entries)
+    :ok = :disk_log.sync(log)
+    :ok = :disk_log.close(log)
+  end
+
   def certs(dir) do
     # Ephemeral test CA/leaf only. No fixture private key enters the repository.
     {_, 0} =
