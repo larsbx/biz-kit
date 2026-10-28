@@ -84,7 +84,10 @@ This proof quantifies mathematically over event indices; it never
 computes an infinite stream. **It proves properties of an abstract
 transition relation, not properties of arbitrary Elixir/PostgreSQL code.**
 No `sorry`, `admit`, untrusted axioms or `native_decide` are permitted.
-CI pins Lean 4.35.0, runs an axiom audit and an independent `leanchecker` pass over compiled proofs.
+CI installs the SHA-256-pinned Lean 4.35.0 release archive, rebuilds from
+source, replays the entire imported environment with `leanchecker --fresh`,
+and audits declarations defined in **each** of the three library modules.
+`leanchecker` uses Lean's kernel; it is not a different kernel implementation.
 
 ### Quint — finite adversarial histories
 
@@ -111,6 +114,29 @@ From `formal/lean`:
 ```sh
 lake build
 ```
+
+For the full CI checks on Linux x86_64, starting at the repository root:
+
+```sh
+bash formal/lean/install-toolchain.sh /tmp/bizkit-lean
+export PATH="/tmp/bizkit-lean/bin:$PATH"
+bash formal/lean/check.sh
+```
+
+The installation directory must be new. The installer downloads directly
+from the official GitHub release (bypassing the failed release redirect),
+retries transient download failures with TLS verification enabled, and
+checks the committed SHA-256 **before extraction**. `BIZKIT_LEAN_ARCHIVE_CACHE`
+can name an offline archive cache; cached bytes undergo the same check on
+every installation. CI caches only that archive, never compiled project
+proofs. A corrupt cache or unavailable download fails the installation gate;
+neither is a proof result. The full audit also needs access to the pinned
+`axiom-audit` source commit. Quint needs its evaluator and Apalache/Java.
+
+Formal and PostgreSQL workflows check out the literal PR head and log its
+SHA. Formal, cursor, signed-source and storage changes run both acceptance
+lanes; Consolidation continues to run the real signed-source tests. Compare
+all three runs on the same head before integrating a future change.
 
 From `formal/quint` with a pinned `quint` CLI:
 
