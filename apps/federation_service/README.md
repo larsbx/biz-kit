@@ -388,9 +388,12 @@ activities flow. It is not generic Fediverse conformance.
 
 ### Local authority verifier boundary
 
+A `subscription_authority` port or
 `config!(approval_verifier: fn local_actor, follow_id, operation, receipt, now ->
   ... end)` is **mandatory** for `respond_follow` and `undo_follow`.
-No verifier means *fail closed*. The verifier must validate an independently
+No authority adapter means *fail closed*. The native port takes precedence and
+never falls back to the callback after a refusal. The callback is also checked
+again before control delivery, but it does not itself provide a revocation fence. The verifier must validate an independently
 admitted local governance grant, signing key, time validity and operation
 scope against the current authoritative ledger; only literal `:ok` is accepted.
 It is invoked before journal admission, so revocations racing the external
@@ -426,9 +429,12 @@ network-wide exactly-once or business authorization guarantee.
 
 ### Remaining production gates (#153)
 
-- Native verification of independently authenticated, signed CoopSubstrate local
-  governance grants and an atomic current-authority/revocation fence remains
-  unimplemented. The callback is fail closed but is not that verifier.
+- The opt-in [native CoopSubstrate authority adapter](../../docs/architecture/2026-10-28-federation-native-authority.md)
+  binds signed governance grants to one actor, Follow, operation and exact control
+  activity. It fences journal admission and delivery against the canonical ledger
+  row and current revocation state. Native PostgreSQL/TLS and exact-head hosted
+  acceptance are required before this gate is accepted. The legacy callback
+  remains a pilot-only compatibility path and does not supply that fence.
 - Accepted-subscription public listing routing and bounded followers/following
   collections still require acceptance; private offers and commercial commands
   stay behind signed seller-home ledger admission.

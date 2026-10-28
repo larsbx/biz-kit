@@ -6,6 +6,7 @@ defmodule FederationService do
   """
   alias FederationService.{Store, Network, Signature, Delivery, WebFinger, SubscriptionDelivery}
   alias FederationCore.Marketplace
+  alias FederationService.SubscriptionAuthority
 
   def config!(opts) do
     actor = Keyword.fetch!(opts, :actor)
@@ -13,6 +14,8 @@ defmodule FederationService do
     handle = WebFinger.handle!(Keyword.get(opts, :handle))
     approval_verifier = Keyword.get(opts, :approval_verifier)
     true = is_nil(approval_verifier) or is_function(approval_verifier, 5)
+    subscription_authority = Keyword.get(opts, :subscription_authority)
+    true = is_nil(subscription_authority) or is_function(subscription_authority, 2)
     peers = Keyword.get(opts, :peers, [])
     true = length(peers) <= 32 and length(Enum.uniq(peers)) == length(peers)
 
@@ -25,6 +28,7 @@ defmodule FederationService do
       actor: actor,
       handle: handle,
       approval_verifier: approval_verifier,
+      subscription_authority: subscription_authority,
       private_key: Keyword.fetch!(opts, :private_key),
       peers: peers,
       store: Keyword.fetch!(opts, :store),
@@ -100,13 +104,17 @@ defmodule FederationService do
   def respond_follow(config, follow_id, decision, source_id, receipt, now)
       when decision in [:accept, :reject] do
     with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
-         :ok <- approve_local(config, follow_id, decision, receipt, now) do
-      Store.call(
-        config.store,
-        {:subscription_host, config.actor, config.peers,
-         {:decide, follow_id, decision,
-          subscription_event_id(config.actor, to_string(decision), source_id), receipt, now}}
-      )
+         activity_id <- subscription_event_id(config.actor, to_string(decision), source_id),
+         {:ok, result} <-
+           SubscriptionAuthority.run(config, follow_id, decision, receipt, activity_id, fn ->
+             Store.call(
+               config.store,
+               {:subscription_host, config.actor, config.peers,
+                {:decide, follow_id, decision, activity_id, receipt, now}},
+               :infinity
+             )
+           end) do
+      result
     else
       {:error, :unverified_local_authority} = error -> error
       _ -> {:error, :subscription_decision_refused}
@@ -118,33 +126,20 @@ defmodule FederationService do
   @doc "Host-only withdrawal of a locally initiated Follow."
   def undo_follow(config, follow_id, source_id, receipt, now \\ System.system_time(:second)) do
     with true <- is_binary(source_id) and byte_size(source_id) in 1..256,
-         :ok <- approve_local(config, follow_id, :undo, receipt, now) do
-      Store.call(
-        config.store,
-        {:subscription_host, config.actor, config.peers,
-         {:cancel, follow_id, subscription_event_id(config.actor, "undo", source_id), receipt,
-          now}}
-      )
+         activity_id <- subscription_event_id(config.actor, "undo", source_id),
+         {:ok, result} <-
+           SubscriptionAuthority.run(config, follow_id, :undo, receipt, activity_id, fn ->
+             Store.call(
+               config.store,
+               {:subscription_host, config.actor, config.peers,
+                {:cancel, follow_id, activity_id, receipt, now}},
+               :infinity
+             )
+           end) do
+      result
     else
       {:error, :unverified_local_authority} = error -> error
       _ -> {:error, :subscription_cancel_refused}
-    end
-  end
-
-  defp approve_local(config, follow_id, operation, receipt, now) do
-    case config.approval_verifier do
-      verifier when is_function(verifier, 5) ->
-        try do
-          case verifier.(config.actor, follow_id, operation, receipt, now) do
-            :ok -> :ok
-            _ -> {:error, :unverified_local_authority}
-          end
-        rescue
-          _ -> {:error, :unverified_local_authority}
-        end
-
-      _ ->
-        {:error, :unverified_local_authority}
     end
   end
 
@@ -155,6 +150,14 @@ defmodule FederationService do
       "-" <>
       Base.encode16(:crypto.hash(:sha256, source_id), case: :lower)
   end
+
+  @doc "The exact control activity ID to bind into a signed local grant before admission."
+  def subscription_activity_id(config, operation, source_id)
+      when operation in [:follow, :accept, :reject, :undo] and is_binary(source_id) and
+             byte_size(source_id) in 1..256,
+      do: {:ok, subscription_event_id(config.actor, to_string(operation), source_id)}
+
+  def subscription_activity_id(_, _, _), do: {:error, :invalid_subscription_source}
 
   @doc "Deliver bounded, signed control activities from the same durable discovery journal."
   def deliver_subscriptions(config, now \\ System.system_time(:second)),
