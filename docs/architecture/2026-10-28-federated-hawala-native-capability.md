@@ -182,14 +182,14 @@ to locate Hawala in biz-kit's Elixir umbrella: network integration is a
 
 ## Proof increment and source pin
 
-The paired [Hawala proof PR #46](https://github.com/larsbx/hawala-core/pull/46)
-provides the proposed [canonical evidence/commit profile](https://github.com/larsbx/hawala-core/blob/8e36c1255d05f243f44d20a7c78d213c4ec87e91/docs/CROSS_AUTHORITY_V1.md),
+The paired [Hawala TEST-host PR #48](https://github.com/larsbx/hawala-core/pull/48)
+provides the proposed [canonical evidence/commit profile](https://github.com/larsbx/hawala-core/blob/4223addee7b3f94e9cfe5bd1cfdcacb168ea6c85/docs/CROSS_AUTHORITY_V1.md),
 Lean agreement/consumer-gate proofs, the finite Quint model, generated prefix
 witnesses, actual counterexamples and signed TEST vectors. It does not
 implement a financial append or a settlement provider in biz-kit.
 
 `fixtures/hawala-cross-authority-v1-pin.json` pins that exact reviewed source
-candidate and 17 source-file digests. The pairing gate checks it and compares
+candidate and 28 source-file digests. The pairing gate checks it and compares
 N1–N7 and G1–G11 verbatim. Source fetch failures and digest/text drift fail the
 gate. CI never follows an unpinned default branch or copies financial logic
 into this repository. Pin updates require reviewing the matching Hawala change.
@@ -201,9 +201,11 @@ python3 tools/check_hawala_architecture_pin.py --source ../hawala-core
 python3 tools/test_hawala_architecture_pin.py
 ```
 
-The existing Elixir host has **not** replayed the cross-authority trace corpus.
-That remains a G3/D5 refinement prerequisite, along with durable replay,
-financial append/custody/finality verification and independent acceptance.
+The new **test-only** Elixir adapter replays all 232 protocol prefixes and 72
+workflow gates through separate local actor journals. Its sources compile only
+in `MIX_ENV=test`; production builds contain no adapter modules. These tests do
+not implement an actual financial writer, signed-wire verifier, custody adapter
+or Iroh service. Those G3/D5 refinements and independent acceptance remain open.
 No synthetic checkout orchestration or live-money mutation surface is added.
 
 ## Open gaps (must close before Accepted)
@@ -247,8 +249,10 @@ mandate, keys and epoch fencing. Its liveness rules are stated:
 **G3. Distributed commit model before orchestration (N7). Blocks step 3.**
 M6-C6 and M6-C7 alone model only one local journal. The new
 `CrossAuthority.lean` / `crossAuthority.qnt` increment models independent
-participants and blocking recovery. Its review and Rust/Elixir host
-conformance remain prerequisites; no synthetic orchestration is supplied.
+participants and blocking recovery. Persistent Rust/Elixir TEST adapters now
+replay the selected formal corpus through separate local journals. Actual
+financial-writer, signed-wire and custody-boundary refinement remains open;
+no synthetic checkout orchestration is supplied.
 *Closes when:* a Quint/Lean model of the cross-authority commit is merged.
 It covers coordinator and participant messages, crashes and restarts,
 timeouts, partitions, duplicate and replayed messages, and abort fencing.

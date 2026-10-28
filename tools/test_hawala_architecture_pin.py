@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from check_hawala_architecture_pin import ADR, REQUIRED, check, gaps, normative, sha
+from check_hawala_architecture_pin import ADR, COPIES, REQUIRED, check, gaps, normative, sha
 
 
 class PairingGate(unittest.TestCase):
@@ -25,24 +25,34 @@ class PairingGate(unittest.TestCase):
                 p.write_text(text if name == ADR else f'fixture: {name}')
             pin = {'source_repository': 'larsbx/hawala-core', 'source_commit': 'a' * 40,
                    'files': {name: sha((source / name).read_bytes()) for name in REQUIRED},
-                   'normative_sha256': sha(normative(text)), 'gaps_sha256': sha(gaps(text))}
+                   'normative_sha256': sha(normative(text)), 'gaps_sha256': sha(gaps(text)), 'copies': COPIES}
+            for src, dest in COPIES.items():
+                target = root / dest
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((source / src).read_bytes())
             pin_path.write_text(json.dumps(pin))
-            check(pin_path, source, record)
+            check(pin_path, source, record, root)
             for before, after in [('N1 through N7', 'changed decision'),
                                   ('G1 through G11', 'unreviewed gap closure')]:
                 record.write_text(text.replace(before, after))
                 with self.assertRaises(ValueError):
-                    check(pin_path, source, record)
+                    check(pin_path, source, record, root)
                 record.write_text(text)
+            for src, dest in COPIES.items():
+                target = root / dest
+                target.write_bytes(target.read_bytes() + b'corrupt host expectation')
+                with self.assertRaisesRegex(ValueError, 'host fixture drift'):
+                    check(pin_path, source, record, root)
+                target.write_bytes((source / src).read_bytes())
             canonical = source / 'formal/lean/CrossAuthority.lean'
             canonical.write_text('changed proof')
             with self.assertRaisesRegex(ValueError, 'source drift'):
-                check(pin_path, source, record)
+                check(pin_path, source, record, root)
             bad = copy.deepcopy(pin)
             bad['source_commit'] = 'main'
             pin_path.write_text(json.dumps(bad))
             with self.assertRaisesRegex(ValueError, 'immutable'):
-                check(pin_path, source, record)
+                check(pin_path, source, record, root)
 
 
 if __name__ == '__main__':
