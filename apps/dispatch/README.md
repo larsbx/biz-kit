@@ -68,3 +68,7 @@ priv/repo/migrations/  reviewed SQL (§22); production never auto-migrates
 priv/static/vendor/    the pinned Datastar bundle (§26.1); see VENDOR.md
 priv/static/js/maps/   the only first-party portal JavaScript (§26.1)
 ```
+
+## Android Slice 1 integration
+
+See [the native identity and device integration contract](../../docs/architecture/2026-10-21-android-dispatch-identity.md) for the existing identity/provider handoff, explicit account links, governance device approval, signed event admission and acceptance lanes.

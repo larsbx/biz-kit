@@ -51,6 +51,8 @@ config :ash, default_string_length_count: :codepoints
 config :dispatch, :http_connect_timeout_ms, 3_000
 
 config :phoenix, :json_library, Jason
+# Never emit native handoff codes, verifiers or session credentials in request logs.
+config :phoenix, :filter_parameters, ["password", "token", "secret", "code", "signature"]
 
 # Section 21.3: one queue, FIFO by insertion. Section 27.6 forbids priority
 # queues, so a single queue is the structural guarantee rather than a
