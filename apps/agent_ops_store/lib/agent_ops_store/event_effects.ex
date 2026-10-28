@@ -59,12 +59,15 @@ defmodule AgentOpsStore.EventEffects do
     ignored = Keyword.get(opts, :ignored_types, [])
 
     if is_list(ignored) and Enum.all?(ignored, &segment?/1) and
-         Enum.all?(ignored, &(&1 not in [
-           "TaskAgentRunRequestedV1",
-           "TaskAgentRunCancelledV1",
-           "TaskAccessRevokedV1",
-           "TaskPrincipalOffboardedV1"
-         ])) do
+         Enum.all?(
+           ignored,
+           &(&1 not in [
+               "TaskAgentRunRequestedV1",
+               "TaskAgentRunCancelledV1",
+               "TaskAccessRevokedV1",
+               "TaskPrincipalOffboardedV1"
+             ])
+         ) do
       {:ok, MapSet.new(ignored)}
     else
       {:error, :invalid_ignored_event_types}
