@@ -7,7 +7,7 @@ A link to a proposed ADR is not evidence it has merged.
 
 ## Context
 
-The [modular business platform](2026-10-24-modular-business-platform.md) already distinguishes portable capabilities from domain products. [SchoolOps](2026-10-23-school-ops.md) has a platform-hosted backend with pinned upstream curriculum; Dispatch's server is developed here while d-patch retains clients; the imported Eatsbot backend coexists with a separately evolved and currently production-authoritative Eatsbot repository. Their application and release contracts are not uniform.
+The [modular business platform](2026-10-24-modular-business-platform.md) already distinguishes portable capabilities from domain products. [SchoolOps](2026-10-23-school-ops.md) has a platform-hosted backend with pinned upstream curriculum; Dispatch's server is developed here while d-patch retains clients; the imported Eatsbot backend coexists with a separately evolved and currently production-authoritative Eatsbot repository. **The chosen target is now to retire Eatsbot as a product and salvage its reusable parts, not to retain two Eatsbot implementations.** Their application and release contracts are not uniform.
 
 The merged [Hawala shared identity/scoped authority ADR](2026-10-28-hawala-shared-identity-and-scoped-authority.md) and hawala-core ADR 0004 establish D1–D6. The *open* native Hawala proposals [biz-kit #173](https://github.com/larsbx/biz-kit/pull/173) and [hawala-core #42](https://github.com/larsbx/hawala-core/pull/42) propose N1–N7. This ADR aligns the wider application ecosystem without accepting those pending financial decisions, duplicating Hawala's protocols, or opening a production settlement path.
 
@@ -43,11 +43,17 @@ Reject an extension that imports a reusable foundation package back into its pro
 | Dispatch Android and client conformance | `larsbx/d-patch` |
 | SchoolOps platform domain and workflow logic | `biz-kit/apps/school_ops` |
 | Curriculum, assessment text, pedagogical source revisions | `larsbx/school-ops`; biz-kit consumes immutable pinned content revisions |
-| Eatsbot standalone product, independent deployment and current production writer | `larsbx/eatsbot` until an explicit reconciled cutover; the imported biz-kit copy is not an independent competing production authority |
+| Legacy Eatsbot product and active production writer (**scheduled for retirement**) | `larsbx/eatsbot` remains authoritative **temporarily** pending proven replacement/cutover; `apps/eatsbot*` is extraction/compatibility source, never a second independent production authority |
 | Hawala Iroh protocol, identity evidence, obligations, credit, financial custody/clearing and authority contract | `larsbx/hawala-core` |
 | Hawala host lifecycle, local biz-kit grants, correlation, source-attributed read models | A **new** biz-kit Hawala integration extension; **no** second financial kernel |
 
-A future Eatsbot source-ownership migration requires explicit code lineage, tests, release acceptance, and state/replay parity. This ADR does **not** choose or perform that migration.
+The **terminal decision** is to decommission the standalone Eatsbot application and retire its imported runtime, after extracting valuable generalized capabilities. [Eatsbot salvage and verified retirement](2026-10-28-eatsbot-salvage-and-retirement-plan.md) allocates source modules, current authority and staged gates R0–R6. The present production writer must remain authoritative until an explicit safe cutover: documentation approval is not a shutdown instruction.
+
+### P3a. Salvage Eatsbot for parts, not for permanent independent operation
+
+Create portable, general-purpose **MarketingCore** for touchpoints, promotions, visit/conversion attribution, redemption and commission *policy*. Keep marketing consent and withdrawal in **SalesCore**, and promotion pricing in **CommerceCore**. Create a portable **DispatchCore** for last-mile delivery state, exceptions and evidence policy, but keep `apps/dispatch` as the sole live transport authority and **FulfillmentCore** as the cross-domain handoff owner. Extract checkout idempotency, catalog/discount logic and tests into existing CommerceCore where they add value. Do not relocate Eatsbot's Ash tables, legacy bearer-token permissions, Telegram-only assumptions or private subscriber data wholesale. Treat kitchen-specific code as optional domain behavior or discard it if no consumer exists.
+
+The retirement is staged: inventory/freeze, characterization tests, pure extraction, authoritative adapters, read-only reconciliation, approved writer/traffic switch, drain, package removal and archive. Never run two competing production writers. Preserve unresolved orders, customer data rights, privacy/retention obligations, pending payouts/refunds/commissions, audit history and rollback until independently verified. See [the detailed disposition table](2026-10-28-eatsbot-salvage-and-retirement-plan.md).
 
 ### P4. Hawala is a native capability plane, not a generic platform writer
 
@@ -74,7 +80,7 @@ The platform owns a versioned conformance matrix and pins exact tested revisions
 1. Application-contract version negotiation, dependencies, permission refusal, replay and event/schema backward compatibility.
 2. SchoolOps pinned content IDs, source hashes, editorial readiness and scoped task admission (never infer learner attainment from completed staff tasks).
 3. Dispatch server-first generated OpenAPI synchronization, device/session/revocation behavior, offline outbox and acceptance against the actual biz-kit backend.
-4. Eatsbot portable build, release boot, pricing/order/fulfillment compatibility, idempotency, production-owner protection and explicit cutover criteria.
+4. Eatsbot **salvage and retirement**: legacy characterization, MarketingCore and DispatchCore portable conformance, compatibility delegates, source ownership, release/migration parity, opt-out/replay checks, no double writer, explicit replacement launch and safe drain/archive exit gates.
 5. Hawala Rust/Elixir signed-byte golden vectors and signing-domain isolation (paired open [#41](https://github.com/larsbx/hawala-core/pull/41)/[#172](https://github.com/larsbx/biz-kit/pull/172)); fail-closed authenticated port, no host-signed consent, stale epochs and duplicate requests.
 6. Lean/Quint-generated traces for financial scope, common terminal decision, fencing, crash/restart, partitions and reconciliation before any financial mutation or real-custody operation.
 
@@ -85,7 +91,7 @@ Maintain distinct statuses for **specification**, **pure proof**, **synthetic ac
 1. Review this ADR with the four companion proposals and reconcile the open N1–N7 pairs' documented G1–G11 gaps. Do not silently make their different wording normative.
 2. Publish a typed extension manifest/wire schema and make SchoolOps and Dispatch reference implementations; keep integrations initially nonmutating or behind current authorized admission.
 3. Complete cross-repo identity vectors, authenticated Hawala service port, durable replay and biz-kit grant mapping. Use two independently administered biz-kit processes, two Iroh peers and a noncustodial router in test.
-4. Resolve Eatsbot's long-term source ownership only after regression and production parity; do not cut over from this document.
+4. Execute Eatsbot decommission phases R0–R6 from the [salvage/retirement plan](2026-10-28-eatsbot-salvage-and-retirement-plan.md). The *decision* to retire is recorded here, but do not switch, destroy, or archive production assets before independently verified reconciliation, business continuity and approved cutover.
 5. Permit any Hawala scoped financial writer only after all D5 and pending N1–N7 financial proof/operational gates are satisfied.
 
 No application migrations, production authority cutovers, network-wide ledger, new custody system, live payment rail or financial endpoints are authorized here.
