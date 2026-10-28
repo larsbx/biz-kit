@@ -10,6 +10,15 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
   baseline implementation evidence and tradeoffs. Its recommendation to retain
   independent authorities is superseded by the consolidation target.
+- [Eatsbot pinned source code audit — 2026-10-28](2026-10-28-eatsbot-source-revision-audit.md):
+  exact standalone/imported blob comparisons at fixed commits; 7 matching,
+  6 different and 2 imported-only checked sources, not live deployment evidence.
+- [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
+  proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
+  with R0–R6 source inventory, migration, authorization, cutover and archive gates.
+- [Cross-repository extension and Hawala capability — 2026-10-28](2026-10-28-cross-repository-extension-and-hawala-capability.md):
+  proposed common application-extension and source-ownership contract across biz-kit,
+  hawala-core, Eatsbot, d-patch and school-ops; authority and live-money gates remain separate.
 - [Hawala: shared identity and scoped authority — 2026-10-28](2026-10-28-hawala-shared-identity-and-scoped-authority.md):
   proposed, paired with hawala-core ADR 0004. Keys and attestations are shared as
   evidence; one instance may order Hawala settlement only for an explicit scope.
