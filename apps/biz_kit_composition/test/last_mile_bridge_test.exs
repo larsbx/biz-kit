@@ -61,6 +61,7 @@ defmodule BizKit.LastMileBridgeTest do
 
   test "delivery proof is source-bound and FulfillmentCore validates it" do
     {fulfillment, picked} = base()
+
     {:ok, moving, :accepted} =
       FulfillmentCore.apply(fulfillment, "merchant", :dispatch, %{
         id: "move-1",
@@ -68,9 +69,10 @@ defmodule BizKit.LastMileBridgeTest do
         op: :in_transit
       })
 
-    delivered = move(picked, :dispatch, "delivery", :delivered, %{
-      delivery_proof_ref: "delivery-proof"
-    })
+    delivered =
+      move(picked, :dispatch, "delivery", :delivered, %{
+        delivery_proof_ref: "delivery-proof"
+      })
 
     assert {:ok, proposal} =
              LastMileBridge.preview(moving, delivered, trusted(delivered, "delivery-1"))
@@ -89,7 +91,10 @@ defmodule BizKit.LastMileBridgeTest do
              LastMileBridge.preview(fulfillment, picked, %{verified | merchant: "other"})
 
     assert {:error, :wrong_transport_scope} =
-             LastMileBridge.preview(fulfillment, picked, %{verified | verified_transport_ref: "other"})
+             LastMileBridge.preview(fulfillment, picked, %{
+               verified
+               | verified_transport_ref: "other"
+             })
 
     assert {:error, :unverified_transport_source} =
              LastMileBridge.preview(fulfillment, picked, %{verified | verified_source: :commerce})
@@ -98,7 +103,10 @@ defmodule BizKit.LastMileBridgeTest do
              LastMileBridge.preview(fulfillment, picked, %{verified | last_mile_version: 0})
 
     assert {:error, :unverified_pickup_proof} =
-             LastMileBridge.preview(fulfillment, picked, %{verified | verified_pickup_ref: "forged"})
+             LastMileBridge.preview(fulfillment, picked, %{
+               verified
+               | verified_pickup_ref: "forged"
+             })
   end
 
   test "cancelled fulfillment does not discard late transport delivery evidence" do
