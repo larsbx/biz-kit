@@ -39,6 +39,13 @@ The table is a **code audit candidate map**, not a declaration that every item p
 - Keep marketing QR/NFC touchpoints **separate** from Hawala's exclusive QR participant-identity presentation and signed financial consent. Neither attribution nor an order `Committed(intent)` constitutes payment finality.
 - Do not migrate legacy bearer tokens, implicit admin bypass, subscriber `:subscribed` flags, location floats, or PubSub send-before-confirm patterns as platform security or evidence authority.
 
+## First implementation slices (proposed, not production admission)
+
+- [MarketingCore extraction PR #177](https://github.com/larsbx/biz-kit/pull/177): no-dependency portable attribution/engagement-code and one-use redemption candidates. Strengthens attribution to confirmed message delivery; historical Money rounding parity remains unproven.
+- [DispatchCore extraction PR #178](https://github.com/larsbx/biz-kit/pull/178): 13 legacy transition edges characterized plus portable proof/cancellation/uncertainty candidate policy. This is **not** a substitute for the operational Dispatch writer or FulfillmentCore's existing handoff.
+
+Both represent early R1/R2 development; the legacy authoritative writers, migrations and R3–R6 cutover remain unchanged.
+
 ## Decommission work packages (each separately reviewed)
 
 **R0 — Baseline and freeze.** Record exact standalone `dev` commit, imported-copy commit(s), current deployments, DNS/webhooks, clients, databases, schemas, secrets, third-party APIs, queues, CI, active orders/deliveries/subscribers/obligations, privacy/retention rules and archive/legal needs. Add a dual-source divergence diff: the current imported and standalone copies have some differing files, so do not assume an identical tree. Freeze **new** legacy-product features once an operational freeze is approved, except fixes required for safety, contractual commitments and security.
