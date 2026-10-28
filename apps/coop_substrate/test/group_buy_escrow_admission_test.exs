@@ -434,6 +434,36 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
                @campaign,
                ctx.now
              )
+
+    # Repinning alone is insufficient: the current provider must explicitly
+    # sign the exact legacy allocation and its prior evidence hash.
+    historical = %{historical | group_buys: GroupBuys.fold!(pin(ctx, @campaign, 1), historical)}
+
+    assert {:error, :escrow_or_stock_not_ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               historical,
+               @chapter,
+               @seller,
+               @campaign,
+               ctx.now
+             )
+
+    position =
+      historical.group_buys.escrow_states[{@chapter, @seller, @campaign}].positions[@buyer]
+
+    proof = reconfirmation(ctx, position, %{key_id: "provider-signing-1"})
+    renewal = evidence(ctx, proof, @campaign, 1)
+    assert :ok = GroupBuys.live_check(renewal, historical)
+    historical = %{historical | group_buys: GroupBuys.fold!(renewal, historical)}
+
+    assert {:ok, _} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               historical,
+               @chapter,
+               @seller,
+               @campaign,
+               ctx.now
+             )
   end
 
   test "inactive authority and stale provider pin revisions refuse new funding", ctx do
@@ -773,6 +803,201 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
              Log.append([provider_pin, pin(ctx, @campaign, 1)])
 
     assert Log.head() == head
+  end
+
+  defp rotated_provider(ctx) do
+    {public, private} = :crypto.generate_key(:eddsa, :ed25519)
+    rotated = %{ctx | provider_public: public, provider_private: private}
+
+    authority =
+      provider_authority(rotated, %{"expected_version" => 1, "key_id" => "provider-signing-2"})
+
+    assert {:ok, _} = GroupBuys.submit(authority)
+    %{rotated | authority_id: authority.event_id}
+  end
+
+  defp reconfirmation(ctx, position, changes \\ %{}) do
+    provider_report(
+      ctx,
+      @campaign,
+      Map.merge(
+        %{
+          key_id: "provider-signing-2",
+          event_ref: "funding-reconfirmed",
+          payload: %{
+            op: :hold_reconfirmed,
+            buyer: position.buyer,
+            pledge_id: position.pledge_id,
+            custody_ref: position.custody_ref,
+            currency: position.currency,
+            amount_minor: position.amount_minor,
+            expires_at: position.expires_at + 600,
+            prior_funding_evidence_ref: position.funding_evidence_ref
+          }
+        },
+        changes
+      )
+    )
+  end
+
+  test "current provider re-attestation restores readiness after rotation without new funds or stock",
+       ctx do
+    key = {@chapter, @seller, @campaign}
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+
+    assert {:ok, _} =
+             GroupBuys.submit(stock_event(ctx, stock_command("receive", "reconcile-stock", 0)))
+
+    assert {:ok, _} =
+             GroupBuys.submit(stock_event(ctx, stock_command("reserve", "reconcile-hold", 1)))
+
+    original = Log.gate().group_buys
+    position = original.escrow_states[key].positions[@buyer]
+    rotated = rotated_provider(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(rotated, @campaign, 1))
+
+    assert {:error, :escrow_or_stock_not_ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               Log.gate(),
+               @chapter,
+               @seller,
+               @campaign,
+               ctx.now
+             )
+
+    proof = reconfirmation(rotated, position)
+    head = Log.head()
+    assert {:ok, receipt} = GroupBuys.submit(evidence(rotated, proof, @campaign, 1))
+    assert receipt.payment == :not_collected
+    assert Log.head().global_seq == head.global_seq + 1
+    current = Log.gate().group_buys
+    updated = current.escrow_states[key].positions[@buyer]
+    assert updated.amount_minor == position.amount_minor
+    assert updated.custody_ref == position.custody_ref
+    assert updated.expires_at == position.expires_at + 600
+    assert current.stock_aggregates == original.stock_aggregates
+    assert current.stock_claims == original.stock_claims
+    assert map_size(current.escrow_custody_claims) == 1
+    assert map_size(current.escrow_provider_events) == 2
+
+    assert current.escrow_custody_claims[{@provider, position.custody_ref}].authority_event_id ==
+             rotated.authority_id
+
+    assert {:ok, ready} =
+             CoopSubstrate.GroupBuys.Stock.readiness(
+               Log.gate(),
+               @chapter,
+               @seller,
+               @campaign,
+               ctx.now
+             )
+
+    assert ready.verified_provider_funding_minor == 45_000
+    assert ready.settlement == :not_authorized
+    restart_log()
+    assert Log.gate().group_buys == current
+    assert {:ok, ^receipt} = GroupBuys.submit(evidence(rotated, proof, @campaign, 999))
+    assert Log.head().global_seq == head.global_seq + 1
+    assert {:ok, replayed} = Log.replay(Membership)
+    assert replayed.group_buys == current
+    assert :ok = Log.verify_chains()
+  end
+
+  test "old keys, altered money and missing current grant cannot reconcile funding", ctx do
+    key = {@chapter, @seller, @campaign}
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+    position = Log.gate().group_buys.escrow_states[key].positions[@buyer]
+    rotated = rotated_provider(ctx)
+    proof = reconfirmation(rotated, position)
+    rejected(evidence(rotated, proof, @campaign, 1), :authenticated_provider_pin_required)
+    assert {:ok, _} = GroupBuys.submit(pin(rotated, @campaign, 1))
+    old_key = reconfirmation(ctx, position, %{key_id: "provider-signing-1"})
+    rejected(evidence(ctx, old_key, @campaign, 1), :provider_proof_out_of_scope_or_stale)
+    forged = reconfirmation(ctx, position)
+    rejected(evidence(ctx, forged, @campaign, 1), :invalid_provider_signature)
+
+    altered =
+      reconfirmation(rotated, position, %{payload: %{proof.payload | amount_minor: 45_001}})
+
+    rejected(
+      evidence(rotated, altered, @campaign, 1),
+      :reconfirmation_requires_same_held_allocation_and_prior_evidence
+    )
+
+    assert Log.gate().group_buys.escrow_states[key].positions[@buyer] == position
+    assert map_size(Log.gate().group_buys.escrow_provider_events) == 1
+  end
+
+  test "re-attestation cannot take another campaign's existing custody allocation", ctx do
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+
+    position =
+      Log.gate().group_buys.escrow_states[{@chapter, @seller, @campaign}].positions[@buyer]
+
+    second = @campaign <> "-reconcile-theft"
+    offer = posted_offer(ctx.seller, second, ctx.now)
+    assert {:ok, _} = GroupBuys.submit(offer)
+    {:ok, hash} = GroupBuys.terms_hash(offer)
+    bind(ctx, second, hash)
+    rotated = rotated_provider(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(rotated, second))
+    base = reconfirmation(rotated, position)
+
+    proof =
+      provider_report(rotated, second, %{
+        key_id: "provider-signing-2",
+        event_ref: "foreign-recheck",
+        payload: base.payload
+      })
+
+    rejected(evidence(rotated, proof, second), :unowned_or_cross_campaign_custody)
+  end
+
+  test "concurrent re-attestations serialize and stale prior evidence cannot branch after restart",
+       ctx do
+    key = {@chapter, @seller, @campaign}
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+    position = Log.gate().group_buys.escrow_states[key].positions[@buyer]
+    rotated = rotated_provider(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(rotated, @campaign, 1))
+
+    proofs =
+      for ref <- ["recheck-a", "recheck-b"],
+          do: reconfirmation(rotated, position, %{event_ref: ref})
+
+    results =
+      proofs
+      |> Enum.map(fn proof ->
+        Task.async(fn -> GroupBuys.submit(evidence(rotated, proof, @campaign, 1)) end)
+      end)
+      |> Enum.map(&Task.await/1)
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+    assert Enum.count(results, &match?({:error, _}, &1)) == 1
+    restart_log()
+    assert Log.gate().group_buys.escrow_states[key].version == 2
+    assert map_size(Log.gate().group_buys.escrow_provider_events) == 2
+    stale = reconfirmation(rotated, position, %{event_ref: "stale-prior-recheck"})
+
+    rejected(
+      evidence(rotated, stale, @campaign, 2),
+      :reconfirmation_requires_same_held_allocation_and_prior_evidence
+    )
+
+    assert :ok =
+             CoopSubstrate.GroupBuys.EscrowAdmission.complete_coverage(
+               Log.gate().group_buys,
+               key,
+               ctx.now
+             )
   end
 
   defp stock_event(ctx, command, campaign \\ @campaign) do

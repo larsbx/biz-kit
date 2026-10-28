@@ -309,4 +309,150 @@ defmodule GroupBuyCore.EscrowProofTest do
                |> Map.put(:payload, %{op: :dispute_open, buyer: buyer("a")})
              )
   end
+
+  defp reconfirm_payload(position, changes \\ %{}) do
+    Map.merge(
+      %{
+        op: :hold_reconfirmed,
+        buyer: position.buyer,
+        pledge_id: position.pledge_id,
+        custody_ref: position.custody_ref,
+        currency: position.currency,
+        amount_minor: position.amount_minor,
+        expires_at: position.expires_at + 1000,
+        prior_funding_evidence_ref: position.funding_evidence_ref
+      },
+      changes
+    )
+  end
+
+  test "rotated provider key reconfirms exactly one held allocation and chains prior evidence" do
+    {public, private} = signing_keys()
+    {next_public, next_private} = signing_keys()
+    bound = round()
+    {:ok, initial} = Escrow.new(offer(), @now)
+
+    {:ok, held} =
+      EscrowProof.preview(initial, bound, report(funding("a", 2), private), grant(public), @now)
+
+    position = held.escrow_projection.positions[buyer("a")]
+
+    proof =
+      report(reconfirm_payload(position), next_private, %{
+        key_id: "rotation-2",
+        event_ref: "recheck-a"
+      })
+
+    current_grant = %{grant(next_public) | key_id: "rotation-2"}
+
+    assert {:ok, candidate} =
+             EscrowProof.preview(held.escrow_projection, bound, proof, current_grant, @now)
+
+    updated = candidate.escrow_projection
+    assert map_size(updated.positions) == 1
+    assert updated.positions[buyer("a")].amount_minor == 18_000
+    assert updated.positions[buyer("a")].custody_ref == position.custody_ref
+    assert updated.positions[buyer("a")].expires_at == position.expires_at + 1000
+    assert updated.positions[buyer("a")].funding_evidence_ref == candidate.provider_proof_hash
+    refute candidate.authoritative
+    assert {:ok, duplicate} = EscrowProof.preview(updated, bound, proof, current_grant, @now)
+    assert duplicate.disposition == :duplicate
+    assert duplicate.escrow_projection == updated
+
+    assert {:error, :provider_proof_out_of_scope_or_stale} =
+             EscrowProof.preview(held.escrow_projection, bound, proof, grant(public), @now)
+
+    stale_prior =
+      report(reconfirm_payload(position), next_private, %{
+        key_id: "rotation-2",
+        event_ref: "stale-prior"
+      })
+
+    assert {:error, :reconfirmation_requires_same_held_allocation_and_prior_evidence} =
+             EscrowProof.preview(updated, bound, stale_prior, current_grant, @now)
+  end
+
+  test "signed re-attestation cannot change allocation identity, amounts or shorten protection" do
+    {public, private} = signing_keys()
+    bound = round()
+    {:ok, initial} = Escrow.new(offer(), @now)
+
+    {:ok, held} =
+      EscrowProof.preview(initial, bound, report(funding("a", 2), private), grant(public), @now)
+
+    state = held.escrow_projection
+    position = state.positions[buyer("a")]
+
+    for patch <- [
+          %{amount_minor: 18_001},
+          %{currency: "EUR"},
+          %{buyer: buyer("b")},
+          %{pledge_id: "another-pledge"},
+          %{custody_ref: "another-allocation"},
+          %{prior_funding_evidence_ref: "another-receipt"},
+          %{expires_at: position.expires_at - 1}
+        ] do
+      signed =
+        report(reconfirm_payload(position, patch), private, %{event_ref: "invalid-recheck"})
+
+      assert {:error, :reconfirmation_requires_same_held_allocation_and_prior_evidence} =
+               EscrowProof.preview(state, bound, signed, grant(public), @now)
+    end
+
+    signed = report(reconfirm_payload(position), private, %{event_ref: "tampered-recheck"})
+
+    assert {:error, :invalid_provider_signature} =
+             EscrowProof.preview(
+               state,
+               bound,
+               %{signed | payload: %{signed.payload | prior_funding_evidence_ref: "tampered"}},
+               grant(public),
+               @now
+             )
+  end
+
+  test "re-attestation never reopens disputed, released or refunded money" do
+    {public, private} = signing_keys()
+    bound = round()
+    {:ok, initial} = Escrow.new(offer(), @now)
+
+    {:ok, held} =
+      EscrowProof.preview(initial, bound, report(funding("a", 2), private), grant(public), @now)
+
+    state = held.escrow_projection
+    position = state.positions[buyer("a")]
+    signed = report(reconfirm_payload(position), private, %{event_ref: "no-resurrection"})
+
+    for status <- [:disputed, :released, :refunded] do
+      stopped = put_in(state.positions[buyer("a")].status, status)
+
+      assert {:error, :reconfirmation_requires_same_held_allocation_and_prior_evidence} =
+               EscrowProof.preview(stopped, bound, signed, grant(public), @now)
+    end
+  end
+
+  test "fresh signed observation can extend an expired held position without creating funds" do
+    {public, private} = signing_keys()
+    bound = round()
+    {:ok, initial} = Escrow.new(offer(), @now)
+
+    {:ok, held} =
+      EscrowProof.preview(initial, bound, report(funding("a", 2), private), grant(public), @now)
+
+    position = held.escrow_projection.positions[buyer("a")]
+    later = position.expires_at + 1
+
+    signed =
+      report(reconfirm_payload(position), private, %{
+        issued_at: later,
+        expires_at: later + 300,
+        event_ref: "fresh-observation-after-expiry"
+      })
+
+    assert {:ok, candidate} =
+             EscrowProof.preview(held.escrow_projection, bound, signed, grant(public), later)
+
+    assert candidate.escrow_projection.positions[buyer("a")].amount_minor == position.amount_minor
+    assert candidate.escrow_projection.positions[buyer("a")].expires_at > later
+  end
 end

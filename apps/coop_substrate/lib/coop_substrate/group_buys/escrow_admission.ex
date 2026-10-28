@@ -22,6 +22,7 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
   @proof_keys ~w(schema provider_id key_id campaign_id seller offer_revision issued_at
                  expires_at event_ref payload signature)
   @hold_keys ~w(op buyer pledge_id custody_ref currency amount_minor expires_at)
+  @reconfirm_keys @hold_keys ++ ["prior_funding_evidence_ref"]
   @release_keys ~w(op buyer custody_ref settlement_ref delivery_proof_ref
                     seller_paid_minor buyer_refund_minor)
   @refund_keys ~w(op buyer custody_ref refund_ref refund_minor reason resolution_ref)
@@ -295,6 +296,9 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
   defp decode_payload(%{"op" => "hold_confirmed"} = raw),
     do: payload(raw, @hold_keys, :hold_confirmed)
 
+  defp decode_payload(%{"op" => "hold_reconfirmed"} = raw),
+    do: payload(raw, @reconfirm_keys, :hold_reconfirmed)
+
   defp decode_payload(%{"op" => "delivery_release_confirmed"} = raw),
     do: payload(raw, @release_keys, :delivery_release_confirmed)
 
@@ -364,6 +368,22 @@ defmodule CoopSubstrate.GroupBuys.EscrowAdmission do
       buyer: body.buyer,
       authority_event_id: Map.get(grant, :authority_event_id)
     })
+  end
+
+  # provider_custody/3 and the reducer already required this exact owner,
+  # held position and prior evidence. Update provenance, never allocate again.
+  defp add_custody_claim(
+         state,
+         _key,
+         %{
+           provider_id: provider,
+           payload: %{op: :hold_reconfirmed, custody_ref: custody}
+         },
+         grant
+       ) do
+    update_in(state, [:escrow_custody_claims, Access.key({provider, custody})], fn claim ->
+      Map.put(claim, :authority_event_id, grant.authority_event_id)
+    end)
   end
 
   defp add_custody_claim(state, _, _, _), do: state
