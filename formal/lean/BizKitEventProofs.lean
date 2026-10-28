@@ -53,7 +53,7 @@ def wakeOrCrash (s : Consumer) : Consumer := s
 
 theorem initial_safe : Safe initial := by
   constructor
-  · rfl
+  · exact Nat.le_refl _
   · intro n h
     exact False.elim (Nat.not_lt_zero n h)
 
