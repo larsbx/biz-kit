@@ -31,4 +31,23 @@ is an external assumption, never a host assertion of real financial success.
 
 See Hawala's `docs/CROSS_AUTHORITY_HOST_CONFORMANCE.md` for exact guarantees and
 limits. G3/D5.5 for an actual financial writer and all deployment gates remain
-open. There is no synthetic checkout orchestration in this app.
+open. A restricted TEST endpoint/outbox increment now exercises signed local
+RPC against the pinned Rust test service. `TestCheckoutOutbox` durably records
+signed requests before send; lost replies remain held across restart, replacement
+mutations are refused, and fresh signed status queries recover only complete
+TEST journal state. `test_reserved` always has `paid=false` and
+`financial_authority=false`; no domain checkout or fulfillment calls it.
+
+`SignedTestPort` independently verifies both signing domains, exact request hash,
+manifest binding, pinned service and epoch. Rust, Elixir and Node compare the
+same golden byte fixture. Pairing CI builds the service at the immutable Hawala
+pin and runs a real cross-process lost-reply/restart/status scenario over a
+127.0.0.1-only connection. Set `HAWALA_TEST_SERVICE_BIN` to its absolute path to
+run that scenario locally; ordinary test runs explicitly exclude it when absent.
+CI requires the binary and cannot silently skip it. All four helpers remain
+excluded from production builds.
+
+See canonical `docs/TEST_ENDPOINT_ORCHESTRATION.md` for wire bytes, formal
+premises, held failures and transport limits. This is a synthetic reservation
+harness, with no financial writer, real grant-policy mapping or settlement
+proof. Hawala remains the canonical financial owner.

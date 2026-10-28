@@ -27,9 +27,19 @@ REQUIRED = {
     'crates/hawala-cross-authority-test/Cargo.toml',
     'crates/hawala-cross-authority-test/src/lib.rs',
     'crates/hawala-cross-authority-test/tests/host.rs',
+    'crates/hawala-cross-authority-test/src/endpoints.rs',
+    'crates/hawala-cross-authority-test/src/bin/service.rs',
+    'crates/hawala-cross-authority-test/tests/endpoints.rs',
+    'formal/lean/EndpointOrchestration.lean', 'formal/lean/ExportEndpointOrchestration.lean',
+    'formal/quint/endpointOrchestration.qnt', 'formal/quint/endpointOrchestrationConformance.qnt',
+    'formal/traces/endpointOrchestration.tsv', 'formal/traces/endpoint-negative.json',
+    'formal/evidence/testEndpoints.tsv', 'tools/check_test_endpoint_vectors.mjs',
+    'tools/check_endpoint_orchestration.sh', 'tools/check_endpoint_counterexamples.py',
+    'docs/TEST_ENDPOINT_ORCHESTRATION.md',
 }
 
 COPIES = {
+    'formal/evidence/testEndpoints.tsv': 'apps/hawala_capability/test/fixtures/testEndpoints.tsv',
     'formal/traces/crossAuthority.tsv': 'apps/hawala_capability/test/fixtures/crossAuthority.tsv',
     'formal/traces/financialGates.tsv': 'apps/hawala_capability/test/fixtures/financialGates.tsv',
 }
