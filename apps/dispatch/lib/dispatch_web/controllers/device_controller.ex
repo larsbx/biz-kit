@@ -21,11 +21,13 @@ defmodule DispatchWeb.DeviceController do
     summary: "Register this installation's device key",
     description: """
     Self-service: the proof shows the caller's installation holds the key, and
-    no one approves it. Registering the same key again returns the device. An
+    no one approves it. Native sessions instead require a governance-approved
+    key and use MobileRegisterRequest; approval and revocation are checked by
+    MobileDevices before registration. Registering the same key again returns the device. An
     installation registered with another key, or to someone else, is a
     conflict; a new installation is how a key changes.
     """,
-    security: [%{"bearerAuth" => []}],
+    security: [%{"bearerAuth" => []}, %{"nativeSession" => []}],
     parameters: [
       "idempotency-key": [
         in: :header,
@@ -40,17 +42,39 @@ defmodule DispatchWeb.DeviceController do
             "The device is the participant's, whichever is selected."
       ]
     ],
-    request_body: {"Registration", "application/json", DeviceRegistrationRequest},
+    request_body:
+      {"Registration", "application/json",
+       %OpenApiSpex.Schema{
+         oneOf: [DeviceRegistrationRequest, DispatchWeb.Schemas.MobileRegisterRequest]
+       }},
     responses: [
-      created: {"Registered", "application/json", DeviceRegistration},
+      created:
+        {"Registered", "application/json",
+         %OpenApiSpex.Schema{
+           oneOf: [DeviceRegistration, DispatchWeb.Schemas.MobileDeviceResponse]
+         }},
       ok: {"Already registered", "application/json", DeviceRegistration},
       unauthorized: @problem,
+      forbidden: @problem,
       conflict: @problem,
       unprocessable_entity: @problem
     ]
   )
 
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def create(%{assigns: %{bizkit_session: session}} = conn, _params) when is_map(session) do
+    if Dispatch.MobileDevices.available?() do
+      DispatchWeb.MobileDeviceController.register(conn, conn.body_params)
+    else
+      Problem.send(
+        conn,
+        503,
+        "DEVICE_UNAVAILABLE",
+        "Device enrolment is temporarily unavailable."
+      )
+    end
+  end
+
   def create(conn, _params) do
     actor = conn.assigns.actor
     body = conn.body_params

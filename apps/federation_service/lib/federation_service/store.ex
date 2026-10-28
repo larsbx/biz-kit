@@ -11,7 +11,7 @@ defmodule FederationService.Store do
   alias FederationService.SubscriptionState
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
-  def call(store, op), do: GenServer.call(store, op, 15_000)
+  def call(store, op, timeout \\ 15_000), do: GenServer.call(store, op, timeout)
 
   def init(opts) do
     File.mkdir_p!(opts[:directory])

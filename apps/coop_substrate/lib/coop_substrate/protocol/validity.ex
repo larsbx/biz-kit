@@ -113,6 +113,11 @@ defmodule CoopSubstrate.Protocol.Validity do
   @task_types Map.keys(TaskCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
+  @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
+    CoopSubstrate.FederationAuthority.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @group_buy_types do
     CoopSubstrate.GroupBuys.check(env, gate)
   end

@@ -109,6 +109,21 @@ defmodule CoopSubstrate.Log do
   @spec gate(GenServer.server()) :: map()
   def gate(server \\ @server), do: GenServer.call(server, :gate)
 
+  @doc """
+  Trusted host subscription effect under current signed authority. The SQL
+  connection must target this ledger's database/schema. The effect must be a
+  bounded synchronous journal operation or HTTPS POST, and MUST NOT call Log.
+  The ledger stream row stays locked until the effect returns. No canonical
+  event is appended here; the discovery journal remains operational state.
+  """
+  def federation_effect(context, request, effect) when is_function(effect, 0),
+    do:
+      GenServer.call(
+        Map.get(context, :server, @server),
+        {:federation_effect, context, request, effect},
+        :infinity
+      )
+
   # -- read API (straight from the store; no serialization needed) -------------
 
   @doc """
@@ -422,6 +437,11 @@ defmodule CoopSubstrate.Log do
   end
 
   def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
+
+  def handle_call({:federation_effect, context, request, effect}, _from, state) do
+    result = CoopSubstrate.FederationFence.run(context, state.head, state.gate, request, effect)
+    {:reply, result, state}
+  end
 
   @impl true
   def handle_call({:append, envelopes}, from, state),

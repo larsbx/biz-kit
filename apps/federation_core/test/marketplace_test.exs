@@ -70,7 +70,9 @@ defmodule FederationCore.MarketplaceTest do
           {"tiers", [%{"min_quantity" => 5, "unit_minor" => 9_000}]},
           {"buyer_id", "https://buyer.example/actors/private"},
           {"consent", "private-canonical-signed-consent"},
-          {"contracted_quantity", 5}
+          {"contracted_quantity", 5},
+          {"prior_funding_evidence_ref", "private-provider-receipt-hash"},
+          {"proof", "private-provider-reconciliation-report"}
         ] do
       private = Map.put(metadata!(), field, value)
       assert {:error, :invalid_marketplace_metadata} = M.validate_metadata(private, @seller)

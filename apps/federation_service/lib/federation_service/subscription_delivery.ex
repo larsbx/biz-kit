@@ -6,7 +6,7 @@ defmodule FederationService.SubscriptionDelivery do
   Only explicitly configured remote peers are eligible; no recursive
   follower expansion and no business commands are made.
   """
-  alias FederationService.{Network, Signature, Store}
+  alias FederationService.{Network, Signature, Store, SubscriptionAuthority}
   @batch 8
 
   def deliver(config, now \\ System.system_time(:second)) do
@@ -25,11 +25,10 @@ defmodule FederationService.SubscriptionDelivery do
           with {:ok, remote} <- Signature.discover(row.destination, config.network),
                body <- Jason.encode!(row.activity),
                headers <- Signature.sign(remote.inbox, config.actor, config.private_key, body),
-               true <- ready?(Store.call(config.store, :snapshot), config, row),
-               {:ok, status, _, _} <-
-                 Network.request(:post, remote.inbox, headers, body, config.network) do
-            status in [200, 202]
+               {:ok, outcome} <- authorized_post(config, row, remote.inbox, headers, body) do
+            outcome
           else
+            {:error, :unverified_local_authority} -> :held
             false -> :held
             _ -> false
           end
@@ -39,6 +38,37 @@ defmodule FederationService.SubscriptionDelivery do
         end
       end
     end)
+  end
+
+  defp authorized_post(config, row, inbox, headers, body) do
+    effect = fn ->
+      if ready?(Store.call(config.store, :snapshot), config, row) do
+        case Network.request(:post, inbox, headers, body, config.network) do
+          {:ok, status, _, _} -> status in [200, 202]
+          _ -> false
+        end
+      else
+        :held
+      end
+    end
+
+    case row.activity["type"] do
+      "Follow" ->
+        {:ok, effect.()}
+
+      type when type in ["Accept", "Reject", "Undo"] ->
+        relation = Store.call(config.store, :snapshot).subscriptions[row.follow_id]
+        operation = %{"Accept" => :accept, "Reject" => :reject, "Undo" => :undo}[type]
+
+        SubscriptionAuthority.run(
+          config,
+          row.follow_id,
+          operation,
+          relation.authority,
+          row.activity["id"],
+          effect
+        )
+    end
   end
 
   @doc "A live policy and correlation check; never licenses an unrelated activity."
