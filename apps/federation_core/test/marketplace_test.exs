@@ -79,7 +79,9 @@ defmodule FederationCore.MarketplaceTest do
                M.publish(:create, private, @activity, @metadata_url)
     end
 
-    for type <- ~w(GroupBuyOfferPostedV1 GroupBuyContractAdmittedV1 GroupBuyConsentV1) do
+    for type <- ~w(GroupBuyOfferPostedV1 GroupBuyContractAdmittedV1 GroupBuyConsentV1
+                   GroupBuyEscrowProviderAuthorizedV1 GroupBuyEscrowProviderPinnedV2
+                   GroupBuyEscrowEvidenceAdmittedV1 GroupBuyFundedContractAdmittedV1) do
       assert {:error, :invalid_marketplace_activity} =
                M.decode_verified(
                  %{"type" => type, "payload" => %{"seller_id" => @seller}},
