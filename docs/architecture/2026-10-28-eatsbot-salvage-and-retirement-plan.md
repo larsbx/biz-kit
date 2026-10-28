@@ -53,6 +53,14 @@ migration. This is **not** a production database or active-obligation inventory.
 
 Both represent early R1/R2 development; the legacy authoritative writers, migrations and R3–R6 cutover remain unchanged.
 
+### First host-only composition candidates (stacked PRs)
+
+- [MarketingBridge #179](https://github.com/larsbx/biz-kit/pull/179), stacked on #177: combines current SalesCore consent, versioned tenant/party/campaign scope and a host-verified delivery receipt binding with MarketingCore attribution. Pure unsigned preflight, not authenticated sender or durable admission.
+- [LastMileBridge #180](https://github.com/larsbx/biz-kit/pull/180), stacked on #178: proposes FulfillmentCore handoffs only when merchant/transport/source/proof bindings match. The actual Dispatch/Fulfillment authorities and any uncertain cancellation/delivery remain independent; pending cancellation is a reconciliation blocker.
+
+Both are staged R3 **contract composition only**. They have no live host signatures, current-grant rechecks at append, actual ledger writes, durable queues or production traffic cutover. Their shared `biz_kit_composition/mix.exs` additions must be reconciled after the parent core PRs merge.
+
+
 ## Decommission work packages (each separately reviewed)
 
 **R0 — Baseline and freeze.** Record exact standalone `dev` commit, imported-copy commit(s), current deployments, DNS/webhooks, clients, databases, schemas, secrets, third-party APIs, queues, CI, active orders/deliveries/subscribers/obligations, privacy/retention rules and archive/legal needs. Add a dual-source divergence diff: the current imported and standalone copies have some differing files, so do not assume an identical tree. Freeze **new** legacy-product features once an operational freeze is approved, except fixes required for safety, contractual commitments and security.
