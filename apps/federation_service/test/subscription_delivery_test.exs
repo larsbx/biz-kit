@@ -312,4 +312,54 @@ defmodule FederationService.SubscriptionDeliveryTest do
 
     assert Store.call(c.store, :snapshot).subscription_outbox == %{}
   end
+
+  test "authority port takes precedence over legacy verifier and binds the exact activity", c do
+    {:ok, follow} = Wire.follow(@beta, @alpha, @beta <> "/activities/port")
+
+    {:ok, :pending} =
+      Store.call(c.store, {:subscription, {:receive, follow, @beta, @alpha, 1000}})
+
+    parent = self()
+
+    config = %{
+      c.config
+      | subscription_authority: fn request, _effect ->
+          send(parent, {:authority_request, request})
+          {:error, :unverified_local_authority}
+        end
+    }
+
+    assert {:error, :unverified_local_authority} =
+             FederationService.respond_follow(
+               config,
+               follow["id"],
+               :accept,
+               "port-source",
+               @receipt
+             )
+
+    assert_receive {:authority_request, request}
+    assert request.local_actor == @alpha and request.follow_id == follow["id"]
+    assert request.operation == :accept and request.receipt == @receipt
+
+    assert request.activity_id ==
+             @alpha <>
+               "/activities/subscription-accept-" <>
+               Base.encode16(:crypto.hash(:sha256, "port-source"), case: :lower)
+
+    assert Store.call(c.store, :snapshot).subscription_outbox == %{}
+
+    for port <- [fn _, _ -> raise "unavailable" end, fn _, _ -> throw(:unavailable) end] do
+      assert {:error, :unverified_local_authority} =
+               FederationService.respond_follow(
+                 %{config | subscription_authority: port},
+                 follow["id"],
+                 :accept,
+                 "port-source",
+                 @receipt
+               )
+    end
+
+    assert Store.call(c.store, :snapshot).subscriptions[follow["id"]].status == :pending
+  end
 end
