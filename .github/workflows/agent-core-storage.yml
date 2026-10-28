@@ -10,6 +10,8 @@ on:
       - "formal/**"
       - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
       - "apps/coop_substrate/test/signed_consumer_source_test.exs"
+      - "apps/coop_substrate/test/signed_event_replay_test.exs"
+      - ".github/workflows/signed-event-replay-acceptance.yml"
       - "apps/coop_substrate/lib/coop_substrate/log.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/**"
       - ".github/workflows/event-consumer-proofs.yml"

@@ -10,6 +10,7 @@ no production execution, business-write, payment or federation authority.
 | #168 formal repair | `14d27a92794d03392bc5f21a7e8acc6d91aaf9bb` | [Formal run 40690157567](https://github.com/larsbx/biz-kit/actions/runs/40690157567), [Consolidation 40690157617](https://github.com/larsbx/biz-kit/actions/runs/40690157617), [PostgreSQL 40690157493](https://github.com/larsbx/biz-kit/actions/runs/40690157493): success |
 | #169 cursor assertions | `df969082c1e14f541897aaa2cd421a9147914b19` | [PostgreSQL 40641053661](https://github.com/larsbx/biz-kit/actions/runs/40641053661), [Consolidation 40641053748](https://github.com/larsbx/biz-kit/actions/runs/40641053748): success |
 | #170 staging replay | `6c211b66bd6a5ae1f15e3cbe15ecb4ea236bff70` | [PostgreSQL 40641241023](https://github.com/larsbx/biz-kit/actions/runs/40641241023), [Consolidation 40641240961](https://github.com/larsbx/biz-kit/actions/runs/40641240961): success |
+| #183 reproducible complete-module proof gate | `a5884d43642e0ac2eb3178616425f5d48bfaf4c0` | [Formal 40723734567](https://github.com/larsbx/biz-kit/actions/runs/40723734567), [PostgreSQL 40723733733](https://github.com/larsbx/biz-kit/actions/runs/40723733733), [Consolidation 40723733760](https://github.com/larsbx/biz-kit/actions/runs/40723733760): success; merged as `e0b90ae`, identical source tree |
 
 These historical PR jobs used GitHub's synthetic merge checkout. In
 particular #168 checked `5534bd7448b3f7664f152f92f9dff5fea4cfa9c7`
@@ -57,7 +58,7 @@ changes to those three cursor files are #169's two corrected assertions.
 | Atomic complete bundle + processed receipt + cursor | `commit_event_bundle` locks the home/consumer cursor, inserts receipt and every effect, then advances under the observed sequence | Multi-effect/no-op/duplicate tests; a conflicting effect insert rolls back the receipt and cursor; two independent connections race |
 | Duplicate registration is idempotent | Existing positions must match event ID, digest and immutable bundle | Conflicting identity/bundle rejected; exact duplicate returns existing watermark |
 | Crash preserves committed facts | One SQL transaction per event; replay resumes from durable watermark | Partial-write rollback and bounded restart/resume tested; named-volume lane checks storage survival but its restart marker is not an EventStore replay crash test |
-| Authenticated immutable event and complete derivation are assumptions | `SignedConsumerSource.verified_head/0` audits both chains; bounded reads, canonical digest; reviewed `EventEffects` mapping | Separate real signed LogCase and synthetic-source PostgreSQL replay fixtures; no single cryptographic end-to-end replay fixture yet |
+| Authenticated immutable event and complete derivation are assumptions | `SignedConsumerSource.verified_head/0` audits both chains; bounded reads, canonical digest; reviewed `EventEffects` mapping | Separate original fixtures plus a [direct signed replay harness](2026-10-28-eventstore-signed-replay-acceptance.md); the harness must pass its exact-head CI gate before acceptance |
 | Per-home non-authority | Home/consumer compound keys; trusted staging host and explicit reviewed no-op types | Production host rejected; unknown event types halt; registered rows are non-executable candidates |
 
 `read_page/2` is a trusted-host adapter call, not a capability bound to a
@@ -69,7 +70,7 @@ of page-wide atomicity is made.
 
 Remaining production gates include independently anchored checkpoints and
 storage-rewrite trust, multi-process crash injection at transaction/ack
-boundaries, cryptographic end-to-end replay, independently accepted
+boundaries, production-scope cryptographic replay, independently accepted
 checkpointer recovery, current grant/profile/consent checks at execution,
 backend handle recovery and external effect deduplication, old-writer
 fencing and separate release/cutover approval. The O(history) prefix audit
