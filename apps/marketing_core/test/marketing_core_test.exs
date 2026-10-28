@@ -60,7 +60,10 @@ defmodule MarketingCoreTest do
     assert final.phase == :redeemed
     assert final.commission_minor == 500
     assert final.rate_ppm == 50_000
-    assert {:ok, final, :duplicate} = Redemption.redeem(final, "restaurant", :cashier, candidate, 300)
+
+    assert {:ok, final, :duplicate} =
+             Redemption.redeem(final, "restaurant", :cashier, candidate, 300)
+
     assert {:ok, final} = Redemption.replay(initial, "restaurant", [candidate, candidate], 300)
 
     assert {:error, :idempotency_conflict} =
@@ -73,18 +76,38 @@ defmodule MarketingCoreTest do
              )
 
     assert {:error, :already_redeemed} =
-             Redemption.redeem(final, "restaurant", :cashier, event(final, "another", @checkin), 300)
+             Redemption.redeem(
+               final,
+               "restaurant",
+               :cashier,
+               event(final, "another", @checkin),
+               300
+             )
   end
 
   test "truck repair uses same core without cross-merchant authorization" do
-    {:ok, initial} = Redemption.new("truck-repair", "visit-2", "CODE2", @delivered, false, 900_000)
+    {:ok, initial} =
+      Redemption.new("truck-repair", "visit-2", "CODE2", @delivered, false, 900_000)
+
     assert initial.rate_ppm == 0
 
     assert {:error, :wrong_merchant} =
-             Redemption.redeem(initial, "restaurant", :cashier, event(initial, "one", @checkin), 300)
+             Redemption.redeem(
+               initial,
+               "restaurant",
+               :cashier,
+               event(initial, "one", @checkin),
+               300
+             )
 
     assert {:error, :invalid_redemption} =
-             Redemption.redeem(initial, "truck-repair", :telegram, event(initial, "one", @checkin), 300)
+             Redemption.redeem(
+               initial,
+               "truck-repair",
+               :telegram,
+               event(initial, "one", @checkin),
+               300
+             )
 
     {:ok, final, :accepted} =
       Redemption.redeem(initial, "truck-repair", :cashier, event(initial, "one", @checkin), 300)
@@ -98,13 +121,31 @@ defmodule MarketingCoreTest do
              Redemption.redeem(initial, "merchant", :cashier, event(initial, "a", @checkin), 299)
 
     assert {:error, :invalid_redemption} =
-             Redemption.redeem(initial, "merchant", :cashier, event(initial, "a", @checkin, %{code: "bad"}), 300)
+             Redemption.redeem(
+               initial,
+               "merchant",
+               :cashier,
+               event(initial, "a", @checkin, %{code: "bad"}),
+               300
+             )
 
     assert {:error, :invalid_currency} =
-             Redemption.redeem(initial, "merchant", :cashier, event(initial, "a", @checkin, %{currency: "usd"}), 300)
+             Redemption.redeem(
+               initial,
+               "merchant",
+               :cashier,
+               event(initial, "a", @checkin, %{currency: "usd"}),
+               300
+             )
 
     assert {:error, :invalid_redemption} =
-             Redemption.redeem(initial, "merchant", :cashier, event(initial, "a", @checkin, %{amount_minor: 0}), 300)
+             Redemption.redeem(
+               initial,
+               "merchant",
+               :cashier,
+               event(initial, "a", @checkin, %{amount_minor: 0}),
+               300
+             )
 
     assert {:error, :stale_redemption_version} =
              Redemption.redeem(
@@ -126,3 +167,4 @@ defmodule MarketingCoreTest do
     assert {:error, :invalid_visit} = Redemption.new("m", "v", "c", @delivered, true, 1_000_001)
   end
 end
+
