@@ -117,6 +117,7 @@ defmodule MarketingCoreTest do
 
   test "malformed, expired, stale and wrong-code candidates fail closed" do
     {:ok, initial} = Redemption.new("merchant", "visit", "CODE", @delivered, true, 500_000)
+
     assert {:error, :redemption_expired} =
              Redemption.redeem(initial, "merchant", :cashier, event(initial, "a", @checkin), 299)
 
@@ -167,4 +168,3 @@ defmodule MarketingCoreTest do
     assert {:error, :invalid_visit} = Redemption.new("m", "v", "c", @delivered, true, 1_000_001)
   end
 end
-
