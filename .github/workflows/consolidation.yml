@@ -67,6 +67,10 @@ jobs:
           apps/agent_ops_store/mix.exs
           apps/agent_ops_store/lib/agent_ops_store/postgres.ex
           apps/agent_ops_store/lib/agent_ops_store/event_cursor.ex
+          apps/agent_ops_store/lib/agent_ops_store/event_replay.ex
+          apps/agent_ops_store/test/event_replay_test.exs
+          apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex
+          apps/coop_substrate/test/signed_consumer_source_test.exs
           apps/agent_ops_store/lib/agent_ops_store/event_effects.ex
           apps/agent_ops_store/test/event_cursor_test.exs
           apps/agent_ops_store/test/event_effects_test.exs
