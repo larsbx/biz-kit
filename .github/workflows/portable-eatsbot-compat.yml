@@ -1,0 +1,48 @@
+name: Portable business cores — Eatsbot OTP 26 compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'apps/task_core/**'
+      - 'apps/commerce_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/fulfillment_core/**'
+      - 'apps/sales_core/**'
+      - '.github/workflows/portable-eatsbot-compat.yml'
+      - 'mix.lock'
+      - 'mix.exs'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  external-eatsbot-toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [task_core, commerce_core, inventory_core, fulfillment_core, sales_core]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '26.2.5.21'
+          elixir-version: '1.18.4'
+      - name: Copy source out of umbrella and validate standalone version
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/portable-eatsbot"
+          cp -R "apps/${{ matrix.app }}" "$RUNNER_TEMP/portable-eatsbot/"
+          cd "$RUNNER_TEMP/portable-eatsbot/${{ matrix.app }}"
+          mix --version
+          mix deps.get
+          MIX_ENV=test mix compile --warnings-as-errors
+          MIX_ENV=test mix test --no-start
