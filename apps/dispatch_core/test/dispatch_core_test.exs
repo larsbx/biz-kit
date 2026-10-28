@@ -52,12 +52,20 @@ defmodule DispatchCoreTest do
                )
 
       ready = advance(initial, merchant, :commerce, "ready", :ready)
-      moving = advance(ready, merchant, :dispatch, "pickup", :picked_up, %{pickup_ref: "signed-pickup"})
+
+      moving =
+        advance(ready, merchant, :dispatch, "pickup", :picked_up, %{pickup_ref: "signed-pickup"})
+
       assert moving.pickup_ref == "signed-pickup"
       assert LastMile.pending?(moving)
 
       assert {:error, :invalid_transition_or_authority} =
-               LastMile.apply(moving, merchant, :commerce, event(moving, "fake", :delivered, %{delivery_proof_ref: "p"}))
+               LastMile.apply(
+                 moving,
+                 merchant,
+                 :commerce,
+                 event(moving, "fake", :delivered, %{delivery_proof_ref: "p"})
+               )
 
       delivered =
         advance(moving, merchant, :dispatch, "drop", :delivered, %{
@@ -79,13 +87,22 @@ defmodule DispatchCoreTest do
     assert requested.cancel_requested?
 
     assert {:error, :requires_transport_resolution} =
-             LastMile.apply(requested, "merchant", :dispatch, event(requested, "confirm", :cancel_confirmed))
+             LastMile.apply(
+               requested,
+               "merchant",
+               :dispatch,
+               event(requested, "confirm", :cancel_confirmed)
+             )
 
     observed = advance(requested, "merchant", :observer, "uncertain", :uncertain)
     assert observed.held?
     assert observed.phase == :in_transit
 
-    delivered = advance(observed, "merchant", :dispatch, "late-proof", :delivered, %{delivery_proof_ref: "signed"})
+    delivered =
+      advance(observed, "merchant", :dispatch, "late-proof", :delivered, %{
+        delivery_proof_ref: "signed"
+      })
+
     assert delivered.phase == :delivered
     assert delivered.held?
     assert delivered.cancel_requested?
@@ -100,7 +117,12 @@ defmodule DispatchCoreTest do
     assert final.phase == :cancelled
 
     assert {:error, :terminal_delivery} =
-             LastMile.apply(final, "merchant", :dispatch, event(final, "late", :picked_up, %{pickup_ref: "new"}))
+             LastMile.apply(
+               final,
+               "merchant",
+               :dispatch,
+               event(final, "late", :picked_up, %{pickup_ref: "new"})
+             )
   end
 
   test "conflicts, incorrect source/tenant, stale revisions and duplicate replay refuse" do
@@ -108,29 +130,58 @@ defmodule DispatchCoreTest do
     ready_event = event(initial, "ready", :ready)
     {:ok, ready, :accepted} = LastMile.apply(initial, "merchant", :commerce, ready_event)
     assert {:ok, ready, :duplicate} = LastMile.apply(ready, "merchant", :commerce, ready_event)
-    assert {:ok, ready} = LastMile.replay(initial, "merchant", [{:commerce, ready_event}, {:commerce, ready_event}])
 
-    assert {:error, :idempotency_conflict} = LastMile.apply(ready, "merchant", :dispatch, ready_event)
-    assert {:error, :wrong_merchant} = LastMile.apply(ready, "other", :dispatch, event(ready, "a", :picked_up))
-    assert {:error, :stale_last_mile_version} = LastMile.apply(ready, "merchant", :dispatch, %{ready_event | id: "other"})
+    assert {:ok, ready} =
+             LastMile.replay(initial, "merchant", [
+               {:commerce, ready_event},
+               {:commerce, ready_event}
+             ])
+
+    assert {:error, :idempotency_conflict} =
+             LastMile.apply(ready, "merchant", :dispatch, ready_event)
+
+    assert {:error, :wrong_merchant} =
+             LastMile.apply(ready, "other", :dispatch, event(ready, "a", :picked_up))
+
+    assert {:error, :stale_last_mile_version} =
+             LastMile.apply(ready, "merchant", :dispatch, %{ready_event | id: "other"})
+
     assert {:error, :invalid_reference} =
-             LastMile.apply(ready, "merchant", :dispatch, event(ready, "pick", :picked_up, %{pickup_ref: ""}))
+             LastMile.apply(
+               ready,
+               "merchant",
+               :dispatch,
+               event(ready, "pick", :picked_up, %{pickup_ref: ""})
+             )
   end
 
   test "exception requires an independently referenced resolution, not silent timeout" do
     {:ok, initial} = LastMile.new("merchant", "r")
     ready = advance(initial, "merchant", :commerce, "ready", :ready)
     moving = advance(ready, "merchant", :dispatch, "pickup", :picked_up, %{pickup_ref: "proof"})
-    exception = advance(moving, "merchant", :dispatch, "problem", :exception, %{reason_ref: "issue"})
+
+    exception =
+      advance(moving, "merchant", :dispatch, "problem", :exception, %{reason_ref: "issue"})
+
     assert exception.phase == :exception
 
     assert {:error, :invalid_transition_or_authority} =
-             LastMile.apply(exception, "merchant", :dispatch, event(exception, "drop", :delivered, %{delivery_proof_ref: "p"}))
+             LastMile.apply(
+               exception,
+               "merchant",
+               :dispatch,
+               event(exception, "drop", :delivered, %{delivery_proof_ref: "p"})
+             )
 
     uncertain = advance(exception, "merchant", :observer, "unknown", :uncertain)
     assert uncertain.phase == :exception
     assert uncertain.held?
-    resumed = advance(uncertain, "merchant", :dispatch, "resolved", :resolved, %{resolution_ref: "resolution"})
+
+    resumed =
+      advance(uncertain, "merchant", :dispatch, "resolved", :resolved, %{
+        resolution_ref: "resolution"
+      })
+
     assert resumed.phase == :in_transit
     assert resumed.held?
   end
