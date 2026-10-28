@@ -42,10 +42,11 @@ defmodule DispatchWeb.Schemas.StatusEventRequest do
       device_signature: %Schema{
         type: :string,
         description:
-          "Base64url Ed25519 signature by the registered device's key over the " <>
-            "CoopEventCanonicalV1 encoding of this body's other fields plus " <>
-            "\"schema\": \"DispatchStatusEventV1\". Required when device_id names the " <>
-            "caller's active device; the event is then DEVICE_AUTHENTICATED."
+          "Base64url Ed25519: DispatchStatusV1 canonical bytes for native sessions, or DispatchStatusEventV1 for bearer submissions. Required when device_id is supplied."
+      },
+      subject: %Schema{
+        type: :string,
+        description: "Native session's explicit Dispatch account binding; signed with the event."
       },
       supersedes_event_id: %Schema{
         type: :string,

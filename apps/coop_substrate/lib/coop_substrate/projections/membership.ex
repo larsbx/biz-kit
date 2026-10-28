@@ -43,6 +43,7 @@ defmodule CoopSubstrate.Projections.Membership do
       floor_rules: %{},
       obligations: %{},
       role_keys: %{},
+      federation_grants: %{},
       # Who each role key was declared for (its optional `member_id`), by
       # {chapter, role, key_id}: an administrator's browser key names the
       # biz-kit principal holding it (docs/architecture/2026-10-19-administration.md).
@@ -91,6 +92,11 @@ defmodule CoopSubstrate.Projections.Membership do
   @task_types Map.keys(TaskCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
+  @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+
+  def handle_event(%Envelope{type: type} = env, state) when type in @federation_types do
+    CoopSubstrate.FederationAuthority.fold(env, state)
+  end
 
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @group_buy_types do
@@ -178,6 +184,11 @@ defmodule CoopSubstrate.Projections.Membership do
       Map.delete(keys, p["key_id"])
     end)
     |> update_in([:role_key_members], &Map.delete(&1, {ch, p["role"], p["key_id"]}))
+    |> then(fn next ->
+      if p["role"] == "governance",
+        do: CoopSubstrate.FederationAuthority.revoke_key(next, ch, p["key_id"]),
+        else: next
+    end)
   end
 
   def handle_event(%Envelope{type: "ThroughputRuleActivated", chapter_id: ch, payload: p}, state) do

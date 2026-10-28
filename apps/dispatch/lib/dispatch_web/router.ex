@@ -37,15 +37,15 @@ defmodule DispatchWeb.Router do
   }
 
   pipeline :health do
-    plug :accepts, ["json"]
-    plug :put_no_store
+    plug(:accepts, ["json"])
+    plug(:put_no_store)
   end
 
   # Section 32 makes /health/dependencies an authenticated diagnostic endpoint.
   pipeline :diagnostic do
-    plug :accepts, ["json"]
-    plug :put_no_store
-    plug DispatchWeb.Plugs.DiagnosticAuth
+    plug(:accepts, ["json"])
+    plug(:put_no_store)
+    plug(DispatchWeb.Plugs.DiagnosticAuth)
   end
 
   # Section 23.2 separates authentication from authorization, and the pipeline
@@ -54,10 +54,10 @@ defmodule DispatchWeb.Router do
   # Ash policies behind each action decide what that assignment permits. No step
   # can stand in for the next.
   pipeline :api do
-    plug :accepts, ["json"]
-    plug :put_no_store
-    plug DispatchWeb.Plugs.Authenticate
-    plug DispatchWeb.Plugs.ResolveActor
+    plug(:accepts, ["json"])
+    plug(:put_no_store)
+    plug(DispatchWeb.Plugs.Authenticate)
+    plug(DispatchWeb.Plugs.ResolveActor)
   end
 
   # Authentication without actor resolution, for the one read that must precede
@@ -65,9 +65,22 @@ defmodule DispatchWeb.Router do
   # cannot yet name one, so `ResolveActor` would refuse the request that exists
   # to let them choose.
   pipeline :api_principal do
-    plug :accepts, ["json"]
-    plug :put_no_store
-    plug DispatchWeb.Plugs.Authenticate
+    plug(:accepts, ["json"])
+    plug(:put_no_store)
+    plug(DispatchWeb.Plugs.Authenticate)
+  end
+
+  pipeline :mobile_public do
+    plug(:accepts, ["json", "html"])
+    plug(:put_no_store)
+  end
+
+  scope "/v1/mobile", DispatchWeb do
+    pipe_through(:mobile_public)
+    post("/authorize", MobileSessionController, :start)
+    get("/login", MobileSessionController, :login)
+    get("/callback", MobileSessionController, :callback)
+    post("/token", MobileSessionController, :exchange)
   end
 
   # `:api` without content negotiation, for `/v1`'s event streams: `accepts`
@@ -79,10 +92,10 @@ defmodule DispatchWeb.Router do
   end
 
   scope "/health", DispatchWeb do
-    pipe_through :health
+    pipe_through(:health)
 
-    get "/live", HealthController, :live
-    get "/ready", HealthController, :ready
+    get("/live", HealthController, :live)
+    get("/ready", HealthController, :ready)
   end
 
   # Section 26.1: scripts from this origin only, and no inline scripts. The
@@ -110,19 +123,19 @@ defmodule DispatchWeb.Router do
   # Sign-in and role selection cannot require a resolved actor: they are how one
   # is obtained. Same headers and CSRF protection, no actor.
   pipeline :portal_public do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers, @portal_headers
-    plug :put_no_store
+    plug(:accepts, ["html"])
+    plug(:fetch_session)
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers, @portal_headers)
+    plug(:put_no_store)
   end
 
   scope "/", DispatchWeb do
-    pipe_through :portal_public
+    pipe_through(:portal_public)
 
-    get "/login", SessionController, :login
-    post "/session", SessionController, :create
-    delete "/session", SessionController, :delete
+    get("/login", SessionController, :login)
+    post("/session", SessionController, :create)
+    delete("/session", SessionController, :delete)
   end
 
   # Role selection sits between the two: it needs an authenticated subject and
@@ -131,19 +144,19 @@ defmodule DispatchWeb.Router do
   # need the switcher into a redirect loop — and only them, so a suite built on
   # single-assignment fixtures never meets it.
   pipeline :portal_choosing do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers, @portal_headers
-    plug :put_no_store
-    plug DispatchWeb.Plugs.RequireSubject
+    plug(:accepts, ["html"])
+    plug(:fetch_session)
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers, @portal_headers)
+    plug(:put_no_store)
+    plug(DispatchWeb.Plugs.RequireSubject)
   end
 
   scope "/", DispatchWeb do
-    pipe_through :portal_choosing
+    pipe_through(:portal_choosing)
 
-    get "/select-role", SessionController, :select_role
-    post "/select-role", SessionController, :choose_role
+    get("/select-role", SessionController, :select_role)
+    post("/select-role", SessionController, :choose_role)
   end
 
   scope "/", DispatchWeb do
@@ -178,13 +191,14 @@ defmodule DispatchWeb.Router do
   end
 
   scope "/v1", DispatchWeb do
-    pipe_through :api_principal
+    pipe_through(:api_principal)
 
-    get "/me/role-assignments", RoleCapabilityController, :assignments
+    get("/me/role-assignments", RoleCapabilityController, :assignments)
+    delete("/mobile/session", MobileSessionController, :logout)
   end
 
   scope "/v1", DispatchWeb do
-    pipe_through :api
+    pipe_through(:api)
 
     get "/role-capabilities", RoleCapabilityController, :capabilities
     get "/stops/:stop_id", PartnerApiController, :stop
@@ -192,6 +206,8 @@ defmodule DispatchWeb.Router do
     post "/stops/:stop_id/readiness-events", PartnerApiController, :readiness
     post "/stops/:stop_id/document-references", PartnerApiController, :document
     post "/actions/proposals", PartnerApiController, :proposal
+    post("/me/device-enrolment", MobileDeviceController, :request)
+    post("/me/device-enrolment/:id/proof", MobileDeviceController, :prove)
 
     # Section 23.1: the app registers its installation key after sign-in.
     post "/me/devices", DeviceController, :create
@@ -220,9 +236,9 @@ defmodule DispatchWeb.Router do
   end
 
   scope "/health", DispatchWeb do
-    pipe_through :diagnostic
+    pipe_through(:diagnostic)
 
-    get "/dependencies", HealthController, :dependencies
+    get("/dependencies", HealthController, :dependencies)
   end
 
   defp put_no_store(conn, _opts) do

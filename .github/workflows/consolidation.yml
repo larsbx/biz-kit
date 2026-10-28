@@ -47,6 +47,9 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/federation_authority.ex
+          apps/coop_substrate/lib/coop_substrate/federation_fence.ex
+          apps/coop_substrate/test/federation_authority_test.exs
           apps/coop_substrate/lib/coop_substrate/crypto.ex
           apps/coop_substrate/test/signing_domain_test.exs
           apps/coop_substrate/test/hawala_interop_test.exs
@@ -84,6 +87,8 @@ jobs:
           apps/agent_ops_store/lib/agent_ops_store/host.ex
           apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex
           apps/agent_ops_store/lib/agent_ops_store/worker.ex
+          apps/agent_ops_store/lib/agent_ops_store/event_wakeup.ex
+          apps/agent_ops_store/test/event_wakeup_test.exs
           apps/agent_ops_store/test/coordinator_test.exs
           apps/agent_ops_store/test/recovery_postgres_test.exs
           apps/agent_ops_store/test/test_helper.exs
@@ -354,6 +359,9 @@ jobs:
       - name: Test the agent-neutral execution contracts
         working-directory: apps/agent_core
         run: mix test
+      - name: Test staging-only ledger event wakeup
+        working-directory: apps/agent_ops_store
+        run: mix test test/event_wakeup_test.exs
       - name: Ensure PostgreSQL client for signed replay fixture migration
         run: |
           if ! command -v psql; then
