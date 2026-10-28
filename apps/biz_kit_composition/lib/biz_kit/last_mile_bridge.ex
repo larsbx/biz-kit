@@ -15,10 +15,24 @@ defmodule BizKit.LastMileBridge do
 
   alias FulfillmentCore, as: Fulfillment
 
+  @source_fields [
+    :merchant,
+    :delivery_id,
+    :phase,
+    :pickup_ref,
+    :delivery_proof_ref,
+    :exception_ref,
+    :cancel_requested?,
+    :held?,
+    :version,
+    :seen
+  ]
+
   @doc """
   Propose an immutable FulfillmentCore event from a trusted DispatchCore
   snapshot. The trusted context must be constructed by a host that verified
-  source grants, exact transport version, physical proof and event identity.
+  source grants, exact replayed source state (including cancellation/HOLD),
+  transport version, physical proof and event identity.
   """
   def preview(fulfillment, last_mile, trusted)
       when is_map(fulfillment) and is_map(last_mile) and is_map(trusted) do
@@ -69,6 +83,9 @@ defmodule BizKit.LastMileBridge do
       not is_integer(Map.get(fulfillment, :version)) ->
         {:error, :invalid_fulfillment_state}
 
+      not source_state_matches?(last_mile, trusted) ->
+        {:error, :unverified_transport_snapshot}
+
       true ->
         :ok
     end
@@ -112,6 +129,14 @@ defmodule BizKit.LastMileBridge do
       },
       extras
     )
+  end
+
+  defp source_state_matches?(last_mile, trusted) do
+    snapshot = Map.get(trusted, :verified_source_state)
+
+    is_map(snapshot) and
+      Enum.sort(Map.keys(snapshot)) == Enum.sort(@source_fields) and
+      Map.take(last_mile, @source_fields) === snapshot
   end
 
   defp valid_ref?(value), do: is_binary(value) and byte_size(value) in 1..128
