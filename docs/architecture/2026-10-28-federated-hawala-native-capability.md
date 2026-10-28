@@ -155,6 +155,16 @@ No permanent cloned Hawala Rust logic in biz-kit. No requirement
 to locate Hawala in biz-kit's Elixir umbrella: network integration is a
 **deployed, versioned contract**, not repository co-location.
 
+## Node-owned books storage profile
+
+The supplemental [PostgreSQL/TigerBeetle host contract](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
+integrates hawala-core #45's pinned node-books specification: one canonical
+PostgreSQL financial commit, followed by mandatory verification of the same
+source prefix in the fenced TigerBeetle accounting copy before execution.
+This is proposed implementation work, not a second financial writer or
+accepted storage refinement. The paired decisions, gaps and proof source pin
+below retain their existing meanings and review requirements.
+
 ## Acceptance sequence
 
 1. **Interface/spec (no money movement):** Freeze `HawalaCapabilityV1` ports,

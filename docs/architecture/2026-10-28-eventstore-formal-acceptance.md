@@ -76,6 +76,16 @@ backend handle recovery and external effect deduplication, old-writer
 fencing and separate release/cutover approval. The O(history) prefix audit
 is still a staging limitation. See [#161](https://github.com/larsbx/biz-kit/issues/161).
 
+## Financial profile boundary
+
+The [node-books host profile](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
+integrates Hawala's proposed one-PostgreSQL-commit and mandatory TigerBeetle
+verification gate. The present candidate-bundle/cursor proofs establish
+neither atomic financial admission nor verified accounting. A consumed
+EventStore position cannot authorize financial execution. Actual financial
+append participation, deterministic postings, exact-prefix verification,
+epoch fencing and generated-trace refinement require their own acceptance.
+
 ## Infrastructure prerequisites
 
 The full new gate requires a Linux x86_64 runner able to execute the
