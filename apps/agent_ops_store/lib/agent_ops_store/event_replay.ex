@@ -30,7 +30,9 @@ defmodule AgentOpsStore.EventReplay do
              has_more: boolean()
            }}
           | {:error, atom()}
-  def drain(conn, host, opts \\ []) when is_list(opts) do
+  def drain(conn, host, opts \\ [])
+
+  def drain(conn, host, opts) when is_list(opts) do
     with :ok <- staging(host),
          {:ok, max_events} <- max_events(opts),
          {:ok, %{home_id: home, consumer_id: consumer, source: source, ignored_types: ignored}} <-
