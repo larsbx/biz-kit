@@ -75,11 +75,17 @@ result admission.
 
 1. **Lean/Quint**: `formal/lean/BizKitBundles.lean` proves the abstract
    atomic prefix invariant; `formal/quint/cursor_transaction.qnt` models
-   crash rollback and a no-effect receipt. These proofs are not yet
-   accepted in CI: repair PR #168 remains open.
+   crash rollback and a no-effect receipt. Repair PR #168 merged on
+   2026-10-28 after successful build, kernel replay, root-module axiom audit,
+   bounded safety and negative-control CI at final head `14d27a9` (run
+   [40690157567](https://github.com/larsbx/biz-kit/actions/runs/40690157567)).
+   That run checked merge tree `5534bd7` with formatting correction #174.
+   It does not establish a formal refinement proof of the runtime.
 2. **SQL**: `004_event_cursor.sql` stores complete operational bundles
    and the contiguous watermark. PR #169 corrects a real test-contract
-   mismatch and remains pending hosted PostgreSQL acceptance.
+   mismatch. PRs #169 and #170 merged after their focused PostgreSQL and
+   Consolidation runs passed; see the [acceptance record](2026-10-28-eventstore-formal-acceptance.md)
+   for the exact revisions and remaining boundaries.
 3. **Replay**: bounded source snapshot + sequence validation +
    `EventCursor.commit/2` corresponds to the abstract `commitNext`
    transition, but the real Elixir/SQL refinement still requires exact-head
