@@ -46,7 +46,8 @@ current governance authorization and unexpired campaign pin. Historical
 seller-only funding cannot be promoted into a new funded assurance. Authority
 rotation/deactivation or pin expiry blocks new funded coverage and stock
 readiness; historical reports still replay. Reconciliation/re-attestation of
-such old positions is a separate provider workflow, not an automatic bypass.
+such old positions requires an explicit fresh provider report, not an automatic
+bypass; see the [provider reconciliation follow-up](2026-10-28-group-buy-provider-reconciliation.md).
 The existing EventStore transaction then commits ONE signed event. An invalid
 signature, underfunded position, stale grant/version, missing prior buyer's
 funding or any transaction failure commits neither the proposed contract nor
