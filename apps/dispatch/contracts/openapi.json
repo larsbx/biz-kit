@@ -604,6 +604,192 @@
         "title": "MobileTokenResponse",
         "type": "object"
       },
+      "PartnerProposalRequest": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "APPOINTMENT"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "window_start",
+              "window_end"
+            ]
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "INSTRUCTION"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "instructions"
+            ]
+          }
+        ],
+        "properties": {
+          "correlation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expected_version": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "instructions": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "APPOINTMENT",
+              "INSTRUCTION"
+            ],
+            "type": "string"
+          },
+          "stop_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stop_id",
+          "kind",
+          "expires_at",
+          "expected_version"
+        ],
+        "title": "PartnerProposalRequest",
+        "type": "object"
+      },
+      "PartnerReadinessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expected_latest_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "expected_version": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "note": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "NOT_READY",
+              "READY",
+              "CHECKED_IN",
+              "BLOCKED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "expected_version"
+        ],
+        "title": "PartnerReadinessRequest",
+        "type": "object"
+      },
+      "PartnerReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "PARTICIPANT"
+            ],
+            "type": "string"
+          },
+          "stop_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "stop_id",
+          "source",
+          "recorded_at"
+        ],
+        "title": "PartnerReceipt",
+        "type": "object"
+      },
+      "PartnerReferenceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "PICKUP_DOCUMENT",
+              "PROOF_OF_DELIVERY"
+            ],
+            "type": "string"
+          },
+          "correlation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expected_version": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "label": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "reference": {
+            "description": "Opaque proof locator; encrypted at rest. No URL, upload or download.",
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "label",
+          "reference",
+          "expected_version"
+        ],
+        "title": "PartnerReferenceRequest",
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": false,
         "properties": {
@@ -1083,6 +1269,115 @@
         ]
       }
     },
+    "/v1/actions/proposals": {
+      "post": {
+        "callbacks": {},
+        "description": "Selected assignment plus active party relationship. A current expected_version and Idempotency-Key are required. Readiness compares expected_latest_id. Proposals require stop_id, kind, expiry and a window or instructions; they never confirm or execute. Actor, tenant, approval and execution fields are rejected.",
+        "operationId": "DispatchWeb.PartnerApiController.proposal",
+        "parameters": [
+          {
+            "description": "",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerProposalRequest"
+              }
+            }
+          },
+          "description": "Contribution",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerReceipt"
+                }
+              }
+            },
+            "description": "Stored"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Submit a nonbinding proposal",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
     "/v1/driver/assignments": {
       "get": {
         "callbacks": {},
@@ -1320,6 +1615,73 @@
         "summary": "Declare a driver status (compatibility projection)",
         "tags": [
           "status"
+        ]
+      }
+    },
+    "/v1/loads/{load_id}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.PartnerApiController.load",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "load_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Projection"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read the authorized partner projection",
+        "tags": [
+          "partners"
         ]
       }
     },
@@ -2330,6 +2692,309 @@
         "summary": "The signed capability document for the selected role assignment",
         "tags": [
           "roles"
+        ]
+      }
+    },
+    "/v1/stops/{stop_id}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "DispatchWeb.PartnerApiController.stop",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "stop_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Projection"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read the authorized partner projection",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/v1/stops/{stop_id}/document-references": {
+      "post": {
+        "callbacks": {},
+        "description": "Selected assignment plus active party relationship. A current expected_version and Idempotency-Key are required. Readiness compares expected_latest_id. Proposals require stop_id, kind, expiry and a window or instructions; they never confirm or execute. Actor, tenant, approval and execution fields are rejected.",
+        "operationId": "DispatchWeb.PartnerApiController.document",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "stop_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReferenceRequest"
+              }
+            }
+          },
+          "description": "Contribution",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerReceipt"
+                }
+              }
+            },
+            "description": "Stored"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Add an encrypted proof reference",
+        "tags": [
+          "partners"
+        ]
+      }
+    },
+    "/v1/stops/{stop_id}/readiness-events": {
+      "post": {
+        "callbacks": {},
+        "description": "Selected assignment plus active party relationship. A current expected_version and Idempotency-Key are required. Readiness compares expected_latest_id. Proposals require stop_id, kind, expiry and a window or instructions; they never confirm or execute. Actor, tenant, approval and execution fields are rejected.",
+        "operationId": "DispatchWeb.PartnerApiController.readiness",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "stop_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "header",
+            "name": "x-role-assignment-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerReadinessRequest"
+              }
+            }
+          },
+          "description": "Contribution",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerReceipt"
+                }
+              }
+            },
+            "description": "Stored"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Problem"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Report readiness",
+        "tags": [
+          "partners"
         ]
       }
     }
