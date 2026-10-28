@@ -92,7 +92,8 @@ defmodule HawalaCapability.TestCheckoutOutbox do
          {:ok, op} <- Port.verify_request(raw, c, s.counter + 1),
          true <-
            (kind == :query and op == 4) or
-             (kind == :mutation and s.pending == nil and op == s.stage + 1 and op <= 3) do
+             (kind == :mutation and not s.held and s.pending == nil and op == s.stage + 1 and
+                op <= 3) do
       pending = if kind == :mutation, do: %{raw: raw, desired: op}, else: s.pending
 
       {:ok,
@@ -163,9 +164,14 @@ defmodule HawalaCapability.TestCheckoutOutbox do
       end
 
     cond do
-      state.data.pending != nil -> {:reply, {:hold, :query_original_attempt}, state}
-      n == nil or n != state.data.stage + 1 -> {:reply, {:error, :phase}, state}
-      true -> dispatch(state, :mutation, n)
+      state.data.held or state.data.pending != nil ->
+        {:reply, {:hold, :query_original_attempt}, state}
+
+      n == nil or n != state.data.stage + 1 ->
+        {:reply, {:error, :phase}, state}
+
+      true ->
+        dispatch(state, :mutation, n)
     end
   end
 

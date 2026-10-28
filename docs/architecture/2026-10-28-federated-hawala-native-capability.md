@@ -183,7 +183,7 @@ to locate Hawala in biz-kit's Elixir umbrella: network integration is a
 ## Proof increment and source pin
 
 The paired [Hawala TEST endpoint PR #49](https://github.com/larsbx/hawala-core/pull/49)
-provides the proposed [canonical evidence/commit profile](https://github.com/larsbx/hawala-core/blob/5f76a1234841b0ea57f036d8de3cf5d9988ba976/docs/CROSS_AUTHORITY_V1.md),
+provides the proposed [canonical evidence/commit profile](https://github.com/larsbx/hawala-core/blob/19d1912dc5017e6ab46d5fe314cb6704486119ed/docs/CROSS_AUTHORITY_V1.md),
 Lean agreement/consumer-gate proofs, the finite Quint model, generated prefix
 witnesses, actual counterexamples and signed TEST vectors. It does not
 implement a financial append or a settlement provider in biz-kit.
@@ -208,7 +208,7 @@ business journal. Pairing CI runs the actual pinned Rust service, loses a durabl
 commit reply, restarts the outbox and recovers only through a fresh signed status
 query. Its final `test_reserved` view always has `paid=false` and no financial
 authority. All helpers compile only in `MIX_ENV=test`; production excludes them.
-The canonical endpoint model supplies Lean safety proofs, 77 TLC states, 1,155
+The canonical endpoint model supplies Lean safety proofs, 101 TLC states, 1,515
 generated edge checks and four required counterexamples. These are synthetic
 reservation semantics, not financial-writer, custody, finality or Iroh refinement.
 G3/D5, G4–G8 and independent acceptance remain open for financial checkout.

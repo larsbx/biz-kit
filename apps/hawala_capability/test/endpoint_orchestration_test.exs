@@ -112,6 +112,25 @@ defmodule HawalaCapability.EndpointOrchestrationTest do
     TestCheckoutOutbox.close(restored)
   end
 
+  test "held status without a mutation remains query-only across restart and log replay" do
+    root = directory()
+    c = config(Path.join(root, "absent.sock"))
+    path = Path.join(root, "outbox.log")
+    {:ok, pid} = TestCheckoutOutbox.start(path, c, true)
+    assert %{status: :held, pending: false, mutations: 0} = TestCheckoutOutbox.query(pid)
+    TestCheckoutOutbox.close(pid)
+    {:ok, restored} = TestCheckoutOutbox.start(path, c, false)
+    assert {:hold, :query_original_attempt} = TestCheckoutOutbox.submit(restored, :create)
+    assert %{status: :held, pending: false, mutations: 0} = TestCheckoutOutbox.status(restored)
+    # A fabricated bypass record cannot turn a held history into permission.
+    log = :sys.get_state(restored).log
+    raw = SignedTestPort.request(c, 1, 2, System.system_time(:second))
+    assert :ok = :disk_log.log(log, {:dispatch, :mutation, raw})
+    assert :ok = :disk_log.sync(log)
+    TestCheckoutOutbox.close(restored)
+    assert {:error, _} = TestCheckoutOutbox.start(path, c, false)
+  end
+
   @tag :rust_endpoint
   test "real Rust socket lost reply is recovered only by signed status, without another mutation" do
     bin = System.fetch_env!("HAWALA_TEST_SERVICE_BIN")
