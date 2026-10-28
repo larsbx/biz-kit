@@ -30,6 +30,19 @@ Paired with [Eatsbot salvage/retirement](2026-10-28-eatsbot-salvage-and-retireme
 | `products/discount_rule.ex` | `dfc8e8f71243` | `9b4533d8baa1` | Different blob |
 | `orders/fulfillment_bridge.ex` | `a7c6800f2741` | — | Biz-kit-only |
 
+## Additional exact textual comparison of the six differing blobs
+
+At these **same pinned revisions**, all six differing source files have the
+same line count and the **same multiset of nonblank lines after trimming
+whitespace**. Their full files differ because line ordering and/or formatting
+differs; no nonblank source line was added or removed in this sample.
+This is **stronger evidence than a blob mismatch**, but it is *not proof of
+behavioral parity*: Ash DSL macro ordering, policy precedence and function
+clause ordering may be meaningful. Use compiler/AST and domain regression
+conformance rather than assuming that reordered lines are interchangeable.
+The six source paths are `marketing/{promotion,subscriber,visit,touchpoint}.ex`,
+`deliveries/delivery.ex` and `products/discount_rule.ex`.
+
 ## Consequences for extraction
 
 - `Attribution`, `Visit.CheckIn`, `DeliveryCoupling`, `Orders.Transitions`, `Cart.Checkout`, `Deliveries.Transitions`, and `StaleCleaner` have matching blob content at these two precise revisions. They are appropriate **starting points for characterization fixtures**, not authorization to cut over.
