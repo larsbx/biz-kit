@@ -85,19 +85,21 @@ def crash (s : State) : State := s
 
 theorem initial_safe (src : Source) : Safe src initial := by
   simp [Safe, initial]
+  intro scope n positive
+  omega
 
 theorem fresh_preserves (src : Source) (s : State) (scope : Scope) (n b : Nat)
     (hs : Safe src s) (hv : VerifiedAt src scope n b)
     (absent : s.stored (slotAt src scope n) = none) :
     Safe src (fresh s (slotAt src scope n) b) := by
-  rcases hs with ⟨records, empty, bounds, prefix⟩
+  rcases hs with ⟨records, empty, bounds, acceptedPrefix⟩
   refine ⟨?_, ?_, bounds, ?_⟩
   · intro k body stored
     by_cases hk : k = slotAt src scope n
     · subst k
       have hb : b = body := by simpa [fresh] using stored
       subst body
-      exact ⟨by simpa [fresh] using congrArg (· + 1) (empty _ absent),
+      exact ⟨by simpa [fresh] using empty _ absent,
         n, rfl, hv⟩
     · simpa [fresh, hk] using records k body (by simpa [fresh, hk] using stored)
   · intro k missing
@@ -105,7 +107,7 @@ theorem fresh_preserves (src : Source) (s : State) (scope : Scope) (n b : Nat)
     · simp [fresh, hk] at missing
     · simpa [fresh, hk] using empty k (by simpa [fresh, hk] using missing)
   · intro other i positive within
-    have old := prefix other i positive within
+    have old := acceptedPrefix other i positive within
     have different : slotAt src other i ≠ slotAt src scope n := by
       intro same
       rw [same, absent] at old
@@ -121,8 +123,9 @@ theorem recordOutcome_preserves (src : Source) (s : State) (scope : Scope) (n b 
 
 theorem checkpoint_preserves (src : Source) (s : State) (scope : Scope)
     (hs : Safe src s) : Safe src (checkpoint src s scope) := by
-  rcases hs with ⟨records, empty, bounds, prefix⟩
+  rcases hs with ⟨records, empty, bounds, acceptedPrefix⟩
   unfold checkpoint
+  dsimp only
   split
   · next h =>
     refine ⟨records, empty, ?_, ?_⟩
@@ -137,9 +140,9 @@ theorem checkpoint_preserves (src : Source) (s : State) (scope : Scope)
         have hn : n ≤ s.cursor scope + 1 := by simpa using within
         by_cases equal : n = s.cursor scope + 1
         · simpa [equal] using h.2
-        · exact prefix scope n positive (by omega)
-      · exact prefix other n positive (by simpa [same] using within)
-  · exact ⟨records, empty, bounds, prefix⟩
+        · exact acceptedPrefix scope n positive (by omega)
+      · exact acceptedPrefix other n positive (by simpa [same] using within)
+  · exact ⟨records, empty, bounds, acceptedPrefix⟩
 
 theorem exact_retry_stutters (src : Source) (s : State) (scope : Scope)
     (n body original : Nat) (present : s.stored (slotAt src scope n) = some original) :
@@ -177,12 +180,14 @@ theorem checkpoint_does_not_append (src : Source) (s : State) (scope : Scope)
     (checkpoint src s scope).stored k = s.stored k ∧
     (checkpoint src s scope).appends k = s.appends k := by
   unfold checkpoint
+  dsimp only
   split <;> exact ⟨rfl, rfl⟩
 
 theorem independent_cursor (src : Source) (s : State) (scope other : Scope)
     (different : other ≠ scope) :
     (checkpoint src s scope).cursor other = s.cursor other := by
   unfold checkpoint
+  dsimp only
   split
   · simp [different]
   · rfl
