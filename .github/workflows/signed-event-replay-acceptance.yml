@@ -69,10 +69,15 @@ jobs:
         run: mix compile --warnings-as-errors
       - name: Check test and dependency formatting
         working-directory: apps/coop_substrate
-        run: mix format --check-formatted mix.exs test/signed_event_replay_test.exs
+        run: |
+          mix format --check-formatted mix.exs \
+            lib/coop_substrate/log.ex \
+            lib/coop_substrate/outcome_admission.ex \
+            lib/coop_substrate/protocol/type_registry.ex \
+            test/signed_event_replay_test.exs test/tb_outcome_admission_test.exs
       - name: Test real signed replay and caller death with independent order seeds
         working-directory: apps/coop_substrate
         run: |
           for seed in 1 9173; do
-            mix test test/signed_consumer_source_test.exs test/signed_event_replay_test.exs --trace --seed "$seed" || exit 1
+            mix test test/log_test.exs test/signed_consumer_source_test.exs test/signed_event_replay_test.exs test/tb_outcome_admission_test.exs --trace --seed "$seed" || exit 1
           done
