@@ -1,7 +1,7 @@
 {
   "profile": "hawala-tigerbeetle-first/v1",
   "source_repository": "larsbx/hawala-core",
-  "source_commit": "2a8e04e31ede0986af103a0455a3e598bec52ca0",
+  "source_commit": "c858a42f1b172d0675743c3912d8126009fe78f3",
   "source_pr": "https://github.com/larsbx/hawala-core/pull/54",
   "files": {
     ".github/workflows/formal.yml": "4cbf9ca0a8e67befcea1aaf639a25d95ca08dcfa4f8a4a53037c97303785cfb4",
