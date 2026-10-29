@@ -1,127 +1,182 @@
-# Hawala node-owned books: PostgreSQL commit and verified TigerBeetle copy
+# Hawala node-owned books: TigerBeetle first, persistence afterward
 
-Date: 2026-10-28. Status: **Proposed host implementation contract**.
-Documentation integration only; no financial writer, projector, execution
-capability or production deployment is enabled.
+Selected architecture: 2026-10-28. **Host integration contract; native adapters
+and live financial execution are not activated.** This supersedes the
+[PostgreSQL-first host proposal](2026-10-28-hawala-node-books-postgres-first-archived.md).
+The canonical specification, core and opt-in native storage implementation remain owned
+by `larsbx/hawala-core`, pinned independently in
+[`hawala-tigerbeetle-first-pin.json`](fixtures/hawala-tigerbeetle-first-pin.json).
 
-Canonical source: hawala-core [PR #45](https://github.com/larsbx/hawala-core/pull/45),
-merged as `671c3e0ce8af42888bc397f5a80ba4d529c1efc8`. The exact
-[node-books specification](https://github.com/larsbx/hawala-core/blob/50a9c2ace013c28b4a55328e4f1ab8af4592f10a/docs/NODE_BOOKS_TIGERBEETLE_SPEC.md)
-is pinned at source commit `50a9c2ace013c28b4a55328e4f1ab8af4592f10a`,
-file SHA-256 `89a76509ed2fb06257660878ecdf38fe01a799c0183c065808802cef183de7da`.
-Hawala owns this financial profile; this record maps its requirements to the
-biz-kit host and acceptance work without copying its financial implementation.
+## Financial commit and downstream copies
 
-## Integrated storage and authority contract
+**Record securely in TigerBeetle first. Its confirmed complete linked operation
+is the financial commit. Persist the outcome elsewhere afterward.**
 
-Each independently administered installation retains its signed history,
-PostgreSQL journal/projections and TigerBeetle accounting data. One effective
-financial authority orders each declared scope, lot and collateral allocation,
-subject to all six [D5 gates](2026-10-28-hawala-shared-identity-and-scoped-authority.md).
-A node without that mandate retains attributed evidence and read-only mirrors.
+The financial call MUST NOT require a per-operation PostgreSQL intent/journal
+commit, SQL balance fold, EventStore append, SQL outbox insert, mirror verification
+or destination acknowledgement before reporting native financial acceptance.
+Authorization, registry provisioning and secure caller retention of original
+IDs/evidence remain prerequisites, not extra server-side financial decisions.
 
-The selected profile is **one canonical PostgreSQL financial commit, then
-mandatory TigerBeetle verification before execution**. PostgreSQL backs the
-existing signed history and its atomic reference financial fold. TigerBeetle
-is a required verified accounting copy, with one fenced projector. It does
-not independently admit financial facts or join the PostgreSQL transaction.
+| Component | Authority and persistence responsibility |
+| --- | --- |
+| Hawala financial gateway + TigerBeetle | Gateway verifies current signatures, consent, scope/policy and effective fencing; TigerBeetle decides native financial acceptance and balances |
+| `CoopSubstrate.Log` / `CoopSubstrate.EventStore` | Signed business admission and history; append authenticated financial outcomes afterward under the existing gate |
+| PostgreSQL projections and operational tables | Rebuildable financial reports, workflow state, destination receipts and cursors; never an independent spending authority |
+| CDC / replay source | Transport complete native history to independent persistence workers; delivery is not a new financial commit |
+| Executors / observers / attestors | Separate current permissions, original attempt, execution observations and settlement evidence |
 
-TigerBeetle replicas belong to one declared installation/authority trust
-domain, with local retention and declared failure domains. Independently
-governed businesses do not become replicas or co-writers of a universal book.
-Separate legal books retain separate accounting entries and authority.
+EventStore is the logical Elixir EventStore backed by PostgreSQL. This does
+not create two financial authorities or require two synchronous persistence
+acknowledgements. Nonfinancial business facts keep their signed admission
+path. The change is financial ownership and write order, not a bypass of Log.
 
-| Boundary | Required host behavior | Current acceptance boundary |
-| --- | --- | --- |
-| Canonical admission | In one fenced, serialized PostgreSQL transaction: recheck signatures, mandate/epoch, grants, quote, expiry and custody; consume nonce/IDs; apply reservations, balanced reference postings and owned decisions; append exact signed bytes; allocate permanent accounting IDs and projection work | Existing Log batches alone do not demonstrate that all these financial writes share that transaction |
-| Financial intent receipt | Return only after durable canonical commit, explicitly accounting-pending and non-executable until verified | Business append, operational receipt or transport acknowledgment is insufficient |
-| Accounting projection | Read accepted financial events in source order; persist deterministic request bytes and original IDs; submit each complete journal as one linked transfer chain | A replay cursor does not prove TigerBeetle accepted the complete journal |
-| Independent verification | Compare the same source checkpoint K, authority epoch, reference fold, registry/compiler digests and cluster generation; verify exact inventory, transfers, counters and balances | Delivery, CDC arrival, `exists`, current balances at a different prefix or a projection watermark is insufficient |
-| Execution release | Recheck current epoch, mandate and unresolved disputes in the serialized gate; require verification through the original committed intent; durably release only the original attempt-bound capability | No current EventReplay result or candidate row releases financial execution |
-| External observation/finality | Retain authenticated execution observations, settlement evidence and original encumbrances under Hawala's distinct authorities | Accounting verification does not establish cash movement, delivery or settlement |
+## Host flow
 
-The initial profile allows **at most one unverified committed financial event
-per scope**. Admission rechecks that the accounting copy matches the current
-financial head before accepting the next event. Missing, unavailable,
-diverged or recovery-required accounting state holds the affected financial
-scope. Committed intents remain committed and reserved while projection
-catches up. Unrelated nonfinancial business events and healthy scopes continue.
+1. Present the authorized operation to its scoped Hawala gateway using original
+   stable operation/transfer IDs. No PostgreSQL-first financial append.
+2. Gateway submits the complete native linked chain, including every required
+   financial uniqueness/reservation guard. TigerBeetle acceptance is the commit.
+3. Return the native financial outcome without waiting for downstream stores.
+   Missing response means Held/Unknown, never permission for another payout ID.
+4. Native replay/CDC consumers recover complete groups and independently persist
+   signed business outcomes, SQL views and any additional destinations.
+5. Business workflows advance only on the evidence their existing gates require.
+   Financial acceptance alone does not establish execution or settlement.
 
-## Relationship to the accepted EventStore work
+The native persisted group identifies operation, epoch, total leg count and
+each leg index; its first transfer ID is the permanent operation anchor. Linked
+flags are checked against the pinned native version before normalization;
+metadata IDs alone are not unique constraints. The immutable source profile defines the representation and
+supported posted-transfer subset. Never infer a whole journal from one CDC leg.
 
-The [formal acceptance record](2026-10-28-eventstore-formal-acceptance.md)
-and [direct signed-replay harness](2026-10-28-eventstore-signed-replay-acceptance.md)
-describe the abstract prefix/bundle proofs, staging operational cursor and
-added direct test harness. Exact-head native execution of the new harness
-remains a separate CI acceptance requirement.
-`EventCursor` atomically writes a complete supplied candidate bundle,
-processed receipt and watermark. It does not consume financial nonces,
-reserve custody, post reference journals, compare TigerBeetle state or
-authorize execution. Those proofs and tests cannot discharge D5 by themselves.
+Each destination owns a cursor for `(destination, cluster_id, generation)`.
+Persist the whole derived bundle, source-ID/body binding, processed receipt and
+cursor atomically in that destination where possible. Signed outcomes still
+enter through Log and retain native provenance. If Log append and cursor cannot
+share a transaction, source-bound idempotent admission MUST survive append-before-
+cursor crashes before that adapter is accepted. Do not write unsigned rows
+directly or give a projection permission to resubmit a financial command.
 
-In particular, placing financial tables in the same database does not prove
-transaction participation. The financial adapter must demonstrate that the
-actual signed append and **all** required reference financial writes commit
-or roll back together through the existing authority gate. Sequential calls
-on separate transactions, an after-append consumer, or a second financial
-append service cannot substitute for that requirement.
+ACK only after destination durability. Exact replay is a no-op; changed body
+under an original ID is conflict evidence. Source recovery must cover lost
+notifications, missing broker messages, destination outages and backup restore.
+Do not advance past incomplete groups or infer completeness from a maximum
+timestamp. One destination can catch up while another is unavailable.
 
-A generic global replay watermark and an authority scope's verified financial
-head are distinct facts. Verification must bind the canonical source
-sequence/hash and the exact scoped financial projection; it cannot infer
-accounting completion from a count of consumed business events. ActivityPub
-notifications, `:pg` wakeups and peer arrival order remain non-authoritative.
+## Retained evidence, recovery and fencing
 
-## Compiler, verification and recovery requirements
+TB records only its fixed financial schema. Participant signatures, complete
+terms and other business metadata must already exist durably with their evidence
+owner, or be losslessly recoverable under a reviewed native encoding. A pointer
+or hash cannot reconstruct missing bytes. Unsupported evidence/guard requirements
+must refuse this fast path; do not hide a required PostgreSQL prewrite inside it.
+Later host signatures attest the observed outcome, not the participant's consent.
 
-Use the canonical profile's exact integer range, currency/scale registry,
-rounding, distinct-account postings and permanent injective mapping from
-full canonical IDs to valid TigerBeetle IDs. Never truncate identity hashes,
-split one journal across independent requests, accept arbitrary opening
-balances or silently change compiler/registry versions. Publish canonical
-bytes and differential vectors before accepting an adapter.
+Uncertain submissions use lookup and identical retry of original IDs/payloads.
+An absent lookup after session interruption is not a terminal rejection because
+the original request may still commit. Partial or conflicting groups hold the
+affected scope. A stale PostgreSQL copy never overwrites newer TB balances.
+Ordinary mirror lag does not hold unrelated financial admission; declared
+capacity/evidence-retention constraints may apply scoped backpressure.
 
-A verification record binds authority, scope, epoch, source sequence/hash,
-journal digest, registry/compiler digests, accounting cluster ID/generation,
-state digest, verifier and prior verification record. Its exact signing bytes,
-domain and signer mandate remain implementation gates. It attests a checked
-accounting copy, not assets or native TigerBeetle financial authorization.
+Each independently governed installation keeps its own authoritative books and
+retained copies. Replica operators belong inside the same trust domain. One
+effective authority owns each declared scope/lot/collateral allocation; federation,
+read-only copies and CDC consumers confer no additional spending power.
+The actual gateway/native access and external execution boundary must fence old
+writers on authority succession. Cross-authority prepared holds and recovery
+retain the existing coordinator contract, not cross-store or cross-cluster ACID.
 
-After uncertain submission, look up and compare the **original** IDs and
-payloads, then retry identically where allowed. No new payout ID, timeout
-release or automatic canonical rollback is permitted. Extra accounting
-mutations, conflicting payloads, missing history or uncertain restore retain
-evidence and enter HOLD. A rebuild uses a new cluster generation, exact
-replay, full verification and an effective fenced cutover. Epoch succession
-must fence actual PostgreSQL writers, projector access and custody/execution
-adapters; incrementing a local epoch number is insufficient.
+## Existing proof work and actual delivery boundary
 
-Cross-authority obligations keep each party's books separate and follow the
-canonical bilateral coordination contract. Prepared reservations remain
-held during partition or coordinator failure. Replication and local commit
-do not establish a peer's commit, a coordinator mandate or cross-store ACID.
+The accepted EventStore candidate-bundle/cursor proofs and staging signed replay
+remain valid within their stated assumptions. They do not prove TB acceptance,
+native guard-account semantics, CDC completeness or the signed outcome adapter.
+Financial reconciliation compares complete inventory, counters, registry/compiler
+context and the same native checkpoint; equal net balances are insufficient.
 
-## Ordered implementation and acceptance
+The canonical `hawala-tigerbeetle-flow` core provides tested submission/recovery
+and independent sink-draining ports. Its bounded decoder and concrete
+`replay::HistorySource` implement complete-group recovery over a trusted paged
+native-history port. They preserve partial suffixes, reject unsupported native
+modes, bind cluster/generation and restart from each destination's durable cursor
+without skipping read-ahead records. No financial command is re-emitted by replay.
 
-1. Pin the actual server/client/deployment versions, scope and authority
-   manifest; publish registry, compiler, verification-record and export bytes.
-2. Implement the canonical pure accounting compiler in its Hawala-owned
-   location; run exact money/range, multi-debit/credit, multi-currency,
-   deterministic ID, capacity and changed-body replay vectors.
-3. Refine the actual PostgreSQL financial append adapter: independent
-   concurrent sessions, nonce/lot races, full rollback, crash after durable
-   commit, receipt withholding and historical replay.
-4. Run a real pinned TigerBeetle process through linked-journal failures,
-   lost replies, original-ID recovery, inventory divergence, stale restores,
-   projector fencing and complete cluster rebuild. Synthetic copies do not
-   establish this boundary.
-5. Extend Lean/Quint with canonical-prefix, accounting-prefix and execution
-   gating, including two financial authorities and a distinct coordinator.
-   Require the specified unsafe mutations to produce real counterexamples,
-   and replay generated traces against both real storage adapters.
-6. Review the host/profile integration in lockstep with Hawala before claiming
-   interoperability. Retain independent custody, security/legal/operator,
-   deployment, old-writer fencing and production release gates.
+The abstract finite model exhausts 100 states in Quint/TLC, with 1700 certificate
+edges checked against Quint and the Rust core harness. Four unsafe model steps
+and six Rust mutations produce their intended failures. New Lean sources and
+an exact exporter comparison are wired into CI; local Lean failed before
+elaboration on sandbox process-path access. This is not yet Lean acceptance or
+a universal native-storage refinement. Synthetic ports supply authentication,
+complete source coverage and durable sink behavior in these conformance tests.
 
-The mirrored D1–D6, N1–N7 and G1–G11 texts and existing cross-authority source
-pin remain unchanged. This supplemental profile closes none of those gaps.
+The expanded immutable source pin includes the decoder, model, certificate,
+generator and gates. It verifies exact source bytes, not runtime conformance.
+The opt-in native increment now supplies the official pinned SDK adapter,
+retained signed TEST evidence, deterministic compiler verification and an
+independent signed SQLite WAL/FULL archive with atomic outcome/cursor commits.
+Eight local storage/accounting/wire checks and four unsafe controls pass; the
+new storage model exhausts 18 states. The three actual-service recovery tests
+compile but local TB startup fails on denied io_uring. Native CI and Lean kernel
+acceptance remain mandatory. Authenticated production range completeness, real
+Log outcome admission, nonce/lot guards, effective fencing, cross-writer IDs and
+concrete storage refinement remain open. No existing business writer or staging
+consumer is silently promoted into a financial authority by this document.
+
+The existing paired ADR N1–N7, D1–D6, G1–G11 and cross-authority proof pin remain
+unchanged. The independent TB-first source pin avoids changing their acceptance
+status or interfering with separately pending gap/status updates.
+
+
+## Native increment and host admission gate
+
+Hawala [#55](https://github.com/larsbx/hawala-core/pull/55), stacked on #54,
+is pinned by exact source bytes. Its loopback-only adapter checks a complete
+linked request, every original native ID, native flags and timestamp sequence,
+and retained signed node-scoped admission. It never treats an unchecked native
+status as complete acceptance. Full registry bytes and independently specified
+posting pairs from #50 are checked; SQL-first checkpoint authority is excluded.
+The signature domain explicitly says TEST and cannot stand in for production
+participant consent. No production financial writer is enabled here.
+
+This host does not append the native archive directly into EventStore. The
+required next adapter must verify source context and original evidence, preserve
+the complete operation, register the business outcome envelope and call
+`CoopSubstrate.Log.append/2` or `append_if/3`. SQL inserts into EventStore bypass
+business admission and are inadmissible. A source-bound idempotency key must
+resolve an append-before-cursor crash without a duplicate business outcome.
+This bridge remains unconnected; financial commit remains TB even while this
+host's destination is unavailable. Native accounting evidence does not authorize
+execution or settlement.
+
+The native history reader trusts its isolated loopback server/OS and unfiltered
+SDK query semantics. Retained signatures authenticate financial bodies; they do
+not detect a malicious transport omitting an entire operation. Stronger native
+transport authentication, completeness and external anti-rollback checkpoints
+remain release gates. Separate destination databases/cursors can catch up without
+reissuing a financial command, and no outcome archive gains spending authority.
+
+Dependency order: accept #54, then the exact native/formal/workspace head of #55;
+accept #195 and then this host pin only after their canonical dependencies. Drafts
+with queued gates are not accepted changes. Do not merge the conflicting #50
+profile wholesale or infer production readiness from integration conformance.
+
+
+## Acceptance repair, 2026-10-29
+
+The native service and workspace gates now pass in hosted CI at Hawala
+`3db9d01f9ba7cf70ff5f9dee65c7989c49bbc9b4`. The independent host storage gate
+also passes at biz-kit `a869b4a72f69fb1e901edb221d71d5ced15a16a0`.
+The new storage Lean model compiled, but the aggregate Lean build failed on two
+independent-destination proofs in `TigerBeetleFirst`. The revised canonical pin
+contains their direct conditional-case proofs; full kernel build and exact
+exporter regeneration remain required at the new head.
+
+The parent host branch now incorporates accepted main changes, including the
+correct native exchange result shape and the existing observer/attestor pins.
+The full Dispatch integration job initializes its signed EventStore/Records
+schemas before running device-enrolment tests, matching the established mobile
+acceptance setup. This prepares test storage only; runtime financial, execution
+and settlement release gates remain in force. Authenticated production source
+completeness and actual idempotent EventStore outcome admission remain open.
