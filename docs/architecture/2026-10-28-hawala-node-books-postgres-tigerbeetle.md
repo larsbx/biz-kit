@@ -3,7 +3,7 @@
 Selected architecture: 2026-10-28. **Host integration contract; native adapters
 and live financial execution are not activated.** This supersedes the
 [PostgreSQL-first host proposal](2026-10-28-hawala-node-books-postgres-first-archived.md).
-The canonical specification and port-level Rust implementation remain owned
+The canonical specification, core and opt-in native storage implementation remain owned
 by `larsbx/hawala-core`, pinned independently in
 [`hawala-tigerbeetle-first-pin.json`](fixtures/hawala-tigerbeetle-first-pin.json).
 
@@ -46,8 +46,8 @@ path. The change is financial ownership and write order, not a bypass of Log.
 
 The native persisted group identifies operation, epoch, total leg count and
 each leg index; its first transfer ID is the permanent operation anchor. Linked
-flags are not retained by TigerBeetle and metadata IDs alone are not unique
-constraints. The immutable source profile defines the representation and
+flags are checked against the pinned native version before normalization;
+metadata IDs alone are not unique constraints. The immutable source profile defines the representation and
 supported posted-transfer subset. Never infer a whole journal from one CDC leg.
 
 Each destination owns a cursor for `(destination, cluster_id, generation)`.
@@ -113,12 +113,51 @@ complete source coverage and durable sink behavior in these conformance tests.
 
 The expanded immutable source pin includes the decoder, model, certificate,
 generator and gates. It verifies exact source bytes, not runtime conformance.
-Real TB SDK/server integration, authenticated complete native reads,
-signed source-bound outcome admission, transactional durable sinks,
-nonce/lot races, multi-process crash tests, effective fencing and formal storage
-refinement remain implementation work. No existing business writer or staging
+The opt-in native increment now supplies the official pinned SDK adapter,
+retained signed TEST evidence, deterministic compiler verification and an
+independent signed SQLite WAL/FULL archive with atomic outcome/cursor commits.
+Eight local storage/accounting/wire checks and four unsafe controls pass; the
+new storage model exhausts 18 states. The three actual-service recovery tests
+compile but local TB startup fails on denied io_uring. Native CI and Lean kernel
+acceptance remain mandatory. Authenticated production range completeness, real
+Log outcome admission, nonce/lot guards, effective fencing, cross-writer IDs and
+concrete storage refinement remain open. No existing business writer or staging
 consumer is silently promoted into a financial authority by this document.
 
 The existing paired ADR N1–N7, D1–D6, G1–G11 and cross-authority proof pin remain
 unchanged. The independent TB-first source pin avoids changing their acceptance
 status or interfering with separately pending gap/status updates.
+
+
+## Native increment and host admission gate
+
+Hawala [#55](https://github.com/larsbx/hawala-core/pull/55), stacked on #54,
+is pinned by exact source bytes. Its loopback-only adapter checks a complete
+linked request, every original native ID, native flags and timestamp sequence,
+and retained signed node-scoped admission. It never treats an unchecked native
+status as complete acceptance. Full registry bytes and independently specified
+posting pairs from #50 are checked; SQL-first checkpoint authority is excluded.
+The signature domain explicitly says TEST and cannot stand in for production
+participant consent. No production financial writer is enabled here.
+
+This host does not append the native archive directly into EventStore. The
+required next adapter must verify source context and original evidence, preserve
+the complete operation, register the business outcome envelope and call
+`CoopSubstrate.Log.append/2` or `append_if/3`. SQL inserts into EventStore bypass
+business admission and are inadmissible. A source-bound idempotency key must
+resolve an append-before-cursor crash without a duplicate business outcome.
+This bridge remains unconnected; financial commit remains TB even while this
+host's destination is unavailable. Native accounting evidence does not authorize
+execution or settlement.
+
+The native history reader trusts its isolated loopback server/OS and unfiltered
+SDK query semantics. Retained signatures authenticate financial bodies; they do
+not detect a malicious transport omitting an entire operation. Stronger native
+transport authentication, completeness and external anti-rollback checkpoints
+remain release gates. Separate destination databases/cursors can catch up without
+reissuing a financial command, and no outcome archive gains spending authority.
+
+Dependency order: accept #54, then the exact native/formal/workspace head of #55;
+accept #195 and then this host pin only after their canonical dependencies. Drafts
+with queued gates are not accepted changes. Do not merge the conflicting #50
+profile wholesale or infer production readiness from integration conformance.
