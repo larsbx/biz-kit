@@ -1,8 +1,8 @@
 {
   "profile": "hawala-tigerbeetle-first/v1",
   "source_repository": "larsbx/hawala-core",
-  "source_commit": "b660f8ba0f3b2808af03cd646b447d9fe25ac041",
-  "source_pr": "https://github.com/larsbx/hawala-core/pull/55",
+  "source_commit": "3867b79078df328faa5a67fd12240c20a21fb6b6",
+  "source_pr": "https://github.com/larsbx/hawala-core/pull/54",
   "files": {
     ".github/workflows/formal.yml": "0accd0666b0892770b0b630f7370728834b26ddcf3e88266fe4aebe01ceb39e0",
     ".github/workflows/rust.yml": "b32874d1ebef4939051e21b54cdb42e7dbcc6c3cc35f9fe9ad372a3fc9dcd9e5",
@@ -32,7 +32,7 @@
     "docs/NODE_BOOKS_TIGERBEETLE_SPEC.md": "e305a61335258a045c537ccde1ce2b1e70451f6b5c6a98f4a2d6c4840710bbd5",
     "formal/README.md": "7d6e1109d21a94b7017455b3f9134587342dc58f057eda8a42264d69c1414374",
     "formal/lean/ExportTigerBeetleFirst.lean": "1094dec4a6feeead5f2fe1b37a7bee676f4037dfce4fe00deee131e94d18573c",
-    "formal/lean/TigerBeetleFirst.lean": "f7e7d333b223329faedd245c3bc29a6167d92f694c261db434edeed22773210e",
+    "formal/lean/TigerBeetleFirst.lean": "c15d79470f40eb3d5c841d5cd32f8b0e60e606f836646dbd991175601aea8a7d",
     "formal/lean/TigerBeetleStorage.lean": "a0d0227ab62476543ee61da7e8ea466b6155a35be48736ac2f6f72ead4267811",
     "formal/lean/lakefile.toml": "dc59e1797b895b442411d574282eebd2a86576668d964566907c191e045c7e19",
     "formal/lean/lean-toolchain": "db7bb24b756d745bbde83fe92718b51bd3625dae3701ba0f598d0eedcd3f3028",

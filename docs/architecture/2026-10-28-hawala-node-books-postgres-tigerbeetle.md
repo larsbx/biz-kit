@@ -161,3 +161,22 @@ Dependency order: accept #54, then the exact native/formal/workspace head of #55
 accept #195 and then this host pin only after their canonical dependencies. Drafts
 with queued gates are not accepted changes. Do not merge the conflicting #50
 profile wholesale or infer production readiness from integration conformance.
+
+
+## Acceptance repair, 2026-10-29
+
+The native service and workspace gates now pass in hosted CI at Hawala
+`3db9d01f9ba7cf70ff5f9dee65c7989c49bbc9b4`. The independent host storage gate
+also passes at biz-kit `a869b4a72f69fb1e901edb221d71d5ced15a16a0`.
+The new storage Lean model compiled, but the aggregate Lean build failed on two
+independent-destination proofs in `TigerBeetleFirst`. The revised canonical pin
+contains their direct conditional-case proofs; full kernel build and exact
+exporter regeneration remain required at the new head.
+
+The parent host branch now incorporates accepted main changes, including the
+correct native exchange result shape and the existing observer/attestor pins.
+The full Dispatch integration job initializes its signed EventStore/Records
+schemas before running device-enrolment tests, matching the established mobile
+acceptance setup. This prepares test storage only; runtime financial, execution
+and settlement release gates remain in force. Authenticated production source
+completeness and actual idempotent EventStore outcome admission remain open.
