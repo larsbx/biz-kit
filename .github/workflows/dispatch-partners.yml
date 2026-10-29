@@ -24,6 +24,8 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
       PGPASSWORD: postgres
       DATABASE_URL: ecto://dispatch:dispatch@localhost:5432/dispatch_test
     steps:
@@ -34,6 +36,9 @@ jobs:
         run: mix deps.get --check-locked
       - name: Create dispatch database role
         run: psql -h localhost -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
+      - name: Initialize signed ledger storage for device-enrolment acceptance
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
       - name: Migrate and run all dispatch tests including partner authorization
         working-directory: apps/dispatch
         run: mix ash.setup --quiet && mix test --include integration
