@@ -2,6 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+bash check_tb_outcome_admission.sh
+
 # Version-pinned Quint 0.32.0 is installed by GitHub Actions. The safe
 # models must typecheck, pass sampled safety, and pass bounded Apalache.
 for spec in event_cursor.qnt lease_fencing.qnt effect_bundles.qnt cursor_transaction.qnt; do
