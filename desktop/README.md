@@ -1,7 +1,7 @@
 # biz-kit desktop
 
 A desktop console for the systemd services, scripts, config files and health of
-a small set of Linux hosts. Built with Tauri 2, React and TypeScript; runs on
+a small set of Linux hosts. Built with Tauri 2, SvelteKit (a static SPA) and TypeScript; runs on
 Linux, macOS and Windows.
 
 Remote hosts are reached through your own `ssh` configuration, so an alias from
@@ -16,6 +16,7 @@ no agent on the far side, nothing listening on a port.
 | **Services** | every systemd unit, user *and* system scope, on each host; start/stop/restart/enable/disable |
 | **Scripts** | discovers `*.sh` and `*.py` in the scripts directory and runs them locally with live output and a dry-run/apply split |
 | **Configs** | browse and edit the files matched by your config patterns, with a diff before every save |
+| **Dispatch** | the carrier's dispatch board over dispatch's `/v1/operations`: create loads, add stops, plan trips with a driver and equipment, and start, complete or cancel them |
 
 ### Restart-loop audit
 
@@ -59,6 +60,21 @@ missing file means defaults, a malformed one is reported as an error. See
 | `configs` | systemd user units and drop-ins | `{ "path", "label"? }`; paths and globs expand on the target host |
 | `protectedPaths` | `[]` | case-insensitive substrings; matching config files are read-only |
 | `checks` | `[]` | `{ "label", "command" }` run on each host by Health; exit 0 is healthy and the first output line is shown |
+| `dispatch` | none | `{ "api", "auth", "provider" }`: dispatch's base URL, biz-kit's `/auth` base URL, and the sign-in provider's name |
+
+### Dispatch sign-in
+
+The Dispatch panel signs in the way every native biz-kit client does
+(`docs/architecture/2026-10-21-native-sign-in.md`): the system browser opens
+`/auth/<provider>/native/login` with a PKCE challenge, `/auth` redirects to a
+listener on `http://127.0.0.1:47811/callback`, and the code is exchanged for a
+session that lasts until **Sign out**. That redirect URI must be in the
+server's `BIZKIT_NATIVE_REDIRECT_URIS`; `scripts/e2e-stack.sh` includes it.
+
+The session is kept in `dispatch-session` beside `config.json` (mode 0600) and
+never reaches the webview: the panel names a `/v1/` path and the backend makes
+the call. Against the dev stack, `"provider": "dispatcher"` signs in as its
+seeded dispatcher.
 
 Upgrading from `hosts.json`: move its array under `"hosts"` in `config.json`.
 
@@ -81,14 +97,20 @@ The backend enforces the part that matters rather than trusting the UI:
 
 ## Extending
 
-`src/App.tsx` holds the panel registry. Write a component taking
-`{ info }: { info: AppInfo }` and add one row:
+`src/lib/panels.ts` holds the panel registry. Write a Svelte component in
+`src/lib/panels/` taking `let { info }: { info: AppInfo } = $props();` and add
+one row:
 
 ```ts
-const PANELS: Panel[] = [
-  { id: "logs", label: "Logs", component: LogsPanel },
+export const PANELS: Panel[] = [
+  { id: "logs", label: "Logs", component: Logs },
 ];
 ```
+
+The frontend is SvelteKit 3 with `@sveltejs/adapter-static` and `ssr = false`
+(`src/routes/+layout.ts`): Tauri serves files, so there is no server to render
+on. SvelteKit is configured in `vite.config.ts`, and `src/lib` is imported as
+`#lib/...` (the `imports` map in `package.json`).
 
 Backend commands live in `src-tauri/src/`, one module per concern, registered
 in `lib.rs`. `exec::run(host, script)` is the primitive everything builds on:
@@ -96,11 +118,12 @@ it picks a local login `bash` or `ssh`, so a panel doesn't care where it runs.
 
 ## Develop / build
 
-Prerequisites: Node 20+, stable Rust, and the
+Prerequisites: Node 22.17+ (SvelteKit 3), stable Rust, and the
 [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
 
 ```sh
 npm ci
+npm run check                  # svelte-check
 npm run tauri dev                  # hot-reload dev window
 npm run tauri build                # installers for the current OS
 (cd src-tauri && cargo test)

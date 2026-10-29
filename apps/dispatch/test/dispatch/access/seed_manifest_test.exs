@@ -43,6 +43,15 @@ defmodule Dispatch.Access.SeedManifestTest do
     )
   }
 
+  # Granted beyond the table by owner decision (2026-10-27): the carrier's own
+  # dispatching work. Listed apart so the table above stays a transcription.
+  @extensions %{
+    "DISPATCHER" => ~w(
+      load.create stop.add assignment.read assignment.plan
+      assignment.update.status fleet.read
+    )
+  }
+
   test "the six seeded profiles are exactly those Section 23.2 names" do
     assert Enum.sort(SeedManifest.keys()) ==
              ~w(ADMIN BROKER DISPATCHER DRIVER RECEIVER SHIPPER)
@@ -51,8 +60,9 @@ defmodule Dispatch.Access.SeedManifestTest do
   for {key, expected} <- @normative do
     test "#{key} grants exactly the Section 23.2 capability bundle" do
       {:ok, manifest} = SeedManifest.fetch(unquote(key))
+      expected = unquote(expected) ++ Map.get(@extensions, unquote(key), [])
 
-      assert Enum.sort(manifest.capabilities) == Enum.sort(unquote(expected))
+      assert Enum.sort(manifest.capabilities) == Enum.sort(expected)
     end
   end
 

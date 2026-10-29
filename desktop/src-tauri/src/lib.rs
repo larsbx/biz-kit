@@ -11,6 +11,7 @@
 //! script arguments are allowlisted here, not merely hidden in the frontend.
 
 mod configs;
+mod dispatch;
 mod exec;
 mod health;
 mod scripts;
@@ -33,6 +34,10 @@ pub fn run() {
             configs::read_config,
             configs::diff_config,
             configs::write_config,
+            dispatch::dispatch_status,
+            dispatch::dispatch_sign_in,
+            dispatch::dispatch_sign_out,
+            dispatch::dispatch_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
