@@ -105,6 +105,62 @@ defmodule CoopSubstrate.TigerBeetleOutcomeAdmissionTest do
              Log.append(outcome(ctx.verifier, group), :tb_writer_a)
   end
 
+  test "multi-verifier envelopes are refused without stopping either Log write API", ctx do
+    writer = start_writer(:tb_writer_a, ctx.snapshot)
+    [group | _] = ctx.groups
+    actors = [ctx.verifier, ctx.other_key]
+
+    request =
+      multi_signed_event(
+        actors,
+        "TigerBeetleOutcomeRecordedV1",
+        Map.put(group, "destination", ctx.snapshot.destination),
+        chapter_id: group["home"]
+      )
+
+    # Generic envelopes permit several distinct keys with the required role.
+    # Source admission requires one pinned verifier and must reject this shape
+    # as input, while preserving the writer and its durable history.
+    assert :ok = Envelope.verify(request)
+
+    submitters = [
+      fn env -> Log.append(env, :tb_writer_a) end,
+      fn env -> Log.append_if([env], {__MODULE__, :allow, []}, :tb_writer_a) end
+    ]
+
+    for submit <- submitters do
+      assert {:error, :unverified_source_outcome} = submit.(request)
+      assert Process.alive?(writer)
+      assert Log.head(:tb_writer_a).global_seq == 0
+    end
+
+    assert {:ok, [receipt]} = Log.append(outcome(ctx.verifier, group), :tb_writer_a)
+    checkpoint_payload = checkpoint(ctx.verifier, receipt).payload
+
+    checkpoint_request =
+      multi_signed_event(actors, "TigerBeetleOutcomeCheckpointedV1", checkpoint_payload,
+        chapter_id: group["home"]
+      )
+
+    assert :ok = Envelope.verify(checkpoint_request)
+
+    for submit <- submitters, env <- [request, checkpoint_request] do
+      assert {:error, :unverified_source_outcome} = submit.(env)
+      assert Process.alive?(writer)
+      assert Log.head(:tb_writer_a).global_seq == 1
+      assert Log.outcome_cursor(OutcomeAdmission.scope(receipt.payload), :tb_writer_a) == 0
+    end
+
+    assert {:ok, [^receipt]} = Log.read_all()
+
+    assert {:ok, [checkpoint_receipt]} =
+             Log.append(checkpoint(ctx.verifier, receipt), :tb_writer_a)
+
+    assert Log.outcome_cursor(OutcomeAdmission.scope(receipt.payload), :tb_writer_a) == 1
+    assert {:ok, [^receipt, ^checkpoint_receipt]} = Log.read_all()
+    assert :ok = Log.verify_chains()
+  end
+
   test "out-of-order groups never checkpoint a gap or an unaccepted receipt", ctx do
     start_writer(:tb_writer_a, ctx.snapshot)
     [first, second] = ctx.groups

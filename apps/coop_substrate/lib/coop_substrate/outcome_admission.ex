@@ -160,6 +160,12 @@ defmodule CoopSubstrate.OutcomeAdmission do
     end
   end
 
+  # Generic envelopes allow several keys for one required role. This source
+  # protocol requires one pinned verifier; other signer shapes are input
+  # refusals, not a reason to terminate the canonical appender.
+  defp authenticated_source(_env, _snapshot, _state),
+    do: {:error, :unverified_source_outcome}
+
   defp destination(%Envelope{chapter_id: home, payload: p}, state) do
     if home == p["home"] and is_binary(p["destination"]) and p["destination"] != "" and
          state.destination in [nil, p["destination"]],

@@ -31,6 +31,15 @@ snapshot or support live snapshot succession. Test snapshots are fixtures, not
 native-verifier conformance evidence. A production host must not populate this
 option from notifications or unverified caller data.
 
+The source protocol requires exactly one pinned verifier per delivery envelope.
+Generic envelopes permit several distinct keys with the same required role;
+such a fully signed envelope must receive `:unverified_source_outcome` from this
+port, rather than terminate the Log appender. The regression first reproduced a
+`FunctionClauseError` in the prior source matcher. It now checks both write APIs
+for fresh and retried outcomes and checkpoints: the writer stays alive, no
+extra event or cursor is committed, and a subsequent single-verifier checkpoint
+succeeds. Signature validation and the source-slot/body rules are unchanged.
+
 ## Persistence and recovery
 
 `TigerBeetleOutcomeRecordedV1` signs the full group plus the receiving
