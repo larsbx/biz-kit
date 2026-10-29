@@ -126,7 +126,7 @@ defmodule DispatchWeb.MobileSessionController do
     config = Application.get_env(:dispatch, :native_identity, [])
 
     with redirect when is_binary(redirect) <- config[:redirect_uri],
-         {:ok, token, _expires_in} <-
+         {:ok, token} <-
            Identity.native_exchange(params["code"], params["code_verifier"], redirect),
          {:ok, session} <- Identity.session(token),
          {:ok, subject} <- Dispatch.Identity.Native.subject(session) do
@@ -165,4 +165,3 @@ defmodule DispatchWeb.MobileSessionController do
       secure: Application.get_env(:dispatch, :native_secure_cookies, true)
     ]
 end
-
