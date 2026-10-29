@@ -97,9 +97,24 @@ Financial reconciliation compares complete inventory, counters, registry/compile
 context and the same native checkpoint; equal net balances are insufficient.
 
 The canonical `hawala-tigerbeetle-flow` core provides tested submission/recovery
-and independent sink-draining ports. The pin check verifies exact source bytes;
-it is not runtime conformance. Real TB SDK/server integration, complete native
-replay, signed source-bound outcome admission, transactional durable sinks,
+and independent sink-draining ports. Its bounded decoder and concrete
+`replay::HistorySource` implement complete-group recovery over a trusted paged
+native-history port. They preserve partial suffixes, reject unsupported native
+modes, bind cluster/generation and restart from each destination's durable cursor
+without skipping read-ahead records. No financial command is re-emitted by replay.
+
+The abstract finite model exhausts 100 states in Quint/TLC, with 1700 certificate
+edges checked against Quint and the Rust core harness. Four unsafe model steps
+and six Rust mutations produce their intended failures. New Lean sources and
+an exact exporter comparison are wired into CI; local Lean failed before
+elaboration on sandbox process-path access. This is not yet Lean acceptance or
+a universal native-storage refinement. Synthetic ports supply authentication,
+complete source coverage and durable sink behavior in these conformance tests.
+
+The expanded immutable source pin includes the decoder, model, certificate,
+generator and gates. It verifies exact source bytes, not runtime conformance.
+Real TB SDK/server integration, authenticated complete native reads,
+signed source-bound outcome admission, transactional durable sinks,
 nonce/lot races, multi-process crash tests, effective fencing and formal storage
 refinement remain implementation work. No existing business writer or staging
 consumer is silently promoted into a financial authority by this document.

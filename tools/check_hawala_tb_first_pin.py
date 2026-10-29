@@ -17,6 +17,19 @@ REQUIRED = {
     'crates/hawala-tigerbeetle-flow/tests/flow.rs',
     'Cargo.toml', 'Cargo.lock', '.github/workflows/rust.yml',
     'tools/check_tb_first_mutations.py',
+    'crates/hawala-tigerbeetle-flow/src/replay.rs',
+    'crates/hawala-tigerbeetle-flow/tests/replay.rs',
+    'formal/README.md',
+    'formal/lean/TigerBeetleFirst.lean',
+    'formal/lean/ExportTigerBeetleFirst.lean',
+    'formal/lean/lakefile.toml', 'formal/lean/lean-toolchain',
+    'formal/quint/tigerBeetleFirst.qnt',
+    'formal/quint/tigerBeetleFirstConformance.qnt',
+    'formal/traces/tigerBeetleFirst.tsv',
+    'formal/package.json', 'formal/package-lock.json',
+    'tools/generate_tb_first_certificate.py',
+    'tools/check_tb_first_quint.sh', 'tools/check_trace_artifacts.sh',
+    '.github/workflows/formal.yml',
 }
 
 
