@@ -362,3 +362,82 @@ There is no dynamic peer admission, public approval API, follower collection,
 locally authorized reply delivery, private offer exposure or cross-node
 commercial write. Keep this pilot behind existing explicit peering and do not
 claim general Mastodon interoperability or production deployment.
+
+## Signed outbound subscription-control pilot (October 2026)
+
+The trusted in-process `FederationService.follow/3`,
+`respond_follow/5`, and `undo_follow/4` functions now stage
+a signed `Follow`, `Accept`/`Reject`, or `Undo` activity into
+`subscription_outbox` **in the same durable journal transaction**
+as its corresponding request/decision/replay receipt. No external
+admin HTTP route is created. `deliver_subscriptions/1` signs each
+bounded outgoing delivery with the node's existing RSA key, checks
+explicit peer policy immediately before posting, and retries after
+crashes or partitions. Confirmed HTTP 200/202 responses durably
+settle effects, while unsuccessful attempts are backed off.
+
+The journal only checks that an opaque, nonempty local authority
+reference was supplied. It does **not** verify a ledger grant or
+signature. Integration callers MUST independently authenticate the
+instruction and validate the approval's signed ledger authorization
+before calling these host-only functions. The standalone integration
+harness uses a synthetic receipt, which has no production authority.
+This does not enable arbitrary remote peer discovery or private
+business data distribution; only the configured public control
+activities flow. It is not generic Fediverse conformance.
+
+### Local authority verifier boundary
+
+A `subscription_authority` port or
+`config!(approval_verifier: fn local_actor, follow_id, operation, receipt, now ->
+  ... end)` is **mandatory** for `respond_follow` and `undo_follow`.
+No authority adapter means *fail closed*. The native port takes precedence and
+never falls back to the callback after a refusal. The callback is also checked
+again before control delivery, but it does not itself provide a revocation fence. The verifier must validate an independently
+admitted local governance grant, signing key, time validity and operation
+scope against the current authoritative ledger; only literal `:ok` is accepted.
+It is invoked before journal admission, so revocations racing the external
+ledger's admission fence still require an integration-level atomicity/fencing
+contract. The test harness intentionally uses a synthetic hardcoded receipt,
+not a production credential or proof of business authorization.
+
+
+### Upgrade from the pre-outbox journal (#154/#155)
+
+Startup replays the existing journal, validates each retained outgoing Follow
+against its exact original replay receipt, and atomically appends and syncs
+missing **pending** Follow delivery intents before exposing the Store. Active
+pending/accepted subscriptions are eligible; existing outbox rows (including
+backoff and acknowledgments) are never overwritten. Duplicate Follow calls
+remain duplicates and do not create new activity IDs or relationships.
+
+A withdrawn relationship is eligible only when an exact, receipted Undo is
+already pending in the outbox (including a cancellation stranded by an earlier
+#164 build). Its status stays withdrawn while its original Follow is replayed
+before Undo. Rejected records, incoming requests and old withdrawals without
+retained Undo bytes are not requeued. Hash-only receipts cannot reconstruct an
+old Undo's ID or body; recovery never fabricates those bytes or an HTTP receipt.
+The bounded outbox limit is enforced before any recovery write; capacity or
+storage failure refuses startup rather than exposing partial recovery.
+
+A recovered Follow starts with zero attempts and no acknowledgment. The ordinary
+sender still verifies current explicit peers, moderation, actor discovery and
+signed HTTPS; only a real 200/202 acknowledgment releases its pending Undo.
+Restart repeats neither migration writes nor settled effects. An unavailable or
+refusing peer can still delay withdrawal; at-least-once delivery is not a
+network-wide exactly-once or business authorization guarantee.
+
+### Remaining production gates (#153)
+
+- The opt-in [native CoopSubstrate authority adapter](../../docs/architecture/2026-10-28-federation-native-authority.md)
+  binds signed governance grants to one actor, Follow, operation and exact control
+  activity. It fences journal admission and delivery against the canonical ledger
+  row and current revocation state. Native PostgreSQL/TLS and exact-head hosted
+  acceptance are required before this gate is accepted. The legacy callback
+  remains a pilot-only compatibility path and does not supply that fence.
+- Accepted-subscription public listing routing and bounded followers/following
+  collections still require acceptance; private offers and commercial commands
+  stay behind signed seller-home ledger admission.
+- Dynamic peering policy, retention/compaction and external ActivityPub/Mastodon
+  conformance remain separate work. Passing this transport pilot does not close
+  #153 or establish production federation.

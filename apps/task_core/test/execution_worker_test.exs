@@ -58,4 +58,69 @@ defmodule TaskCore.ExecutionWorkerTest do
     assert Process.alive?(worker)
     assert :sys.get_state(worker).last in [:never, :error]
   end
+
+  test "coalesced event wakeups produce one follow-up while a tick is active" do
+    parent = self()
+
+    worker =
+      start_supervised!(
+        {ExecutionWorker,
+         tick: fn ->
+           send(parent, {:running_tick, self()})
+
+           receive do
+             :release -> :ok
+           end
+         end,
+         interval_ms: 60_000,
+         timeout_ms: 10_000}
+      )
+
+    assert_receive {:running_tick, first}, 1000
+
+    for _ <- 1..50, do: assert(:ok == ExecutionWorker.wake(worker))
+
+    send(first, :release)
+    assert_receive {:running_tick, second}, 1000
+    refute_receive {:running_tick, _another}, 50
+
+    send(second, :release)
+    refute_receive {:running_tick, _another}, 50
+
+    assert Process.alive?(worker)
+    assert GenServer.call(worker, :status).last in [:never, :ok]
+  end
+
+  test "wakeup cancels a scheduled timer instead of building periodic timer backlog" do
+    parent = self()
+
+    worker =
+      start_supervised!(
+        {ExecutionWorker,
+         tick: fn -> send(parent, :tick_observed) end, interval_ms: 60_000, timeout_ms: 10_000}
+      )
+
+    assert_receive :tick_observed, 1000
+    # Synchronize with the worker after its initial tick is completed.
+    wait_for_idle(worker, 30)
+
+    assert :ok = ExecutionWorker.wake(worker)
+    assert_receive :tick_observed, 1000
+    wait_for_idle(worker, 30)
+
+    refute_receive :tick_observed, 80
+  end
+
+  defp wait_for_idle(_worker, 0), do: flunk("worker did not return to idle")
+
+  defp wait_for_idle(worker, retries) do
+    case GenServer.call(worker, :status) do
+      %{running: false, last: :ok} ->
+        :ok
+
+      _ ->
+        Process.sleep(10)
+        wait_for_idle(worker, retries - 1)
+    end
+  end
 end

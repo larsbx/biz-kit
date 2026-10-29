@@ -5,8 +5,10 @@ on:
       - 'mix.lock'
       - 'apps/federation_core/**'
       - 'apps/federation_service/**'
+      - 'apps/coop_substrate/**'
       - 'native/marketplace_gossip/**'
       - 'scripts/test-federation-service.sh'
+      - 'scripts/test-federation-authority.sh'
       - '.github/workflows/federation-discovery.yml'
   push:
     branches: [main]
@@ -14,17 +16,52 @@ on:
       - 'mix.lock'
       - 'apps/federation_core/**'
       - 'apps/federation_service/**'
+      - 'apps/coop_substrate/**'
       - 'native/marketplace_gossip/**'
       - 'scripts/test-federation-service.sh'
+      - 'scripts/test-federation-authority.sh'
       - '.github/workflows/federation-discovery.yml'
 permissions:
   contents: read
 jobs:
+  native-subscription-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix local.hex --force && mix local.rebar --force
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Signed ledger authority, database fence and TLS acceptance
+        run: scripts/test-federation-authority.sh
+
   two-node-security:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -51,6 +88,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'

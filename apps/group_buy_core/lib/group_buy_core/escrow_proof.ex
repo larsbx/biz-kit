@@ -26,6 +26,7 @@ defmodule GroupBuyCore.EscrowProof do
   @grant_keys ~w(provider_id key_id public_key active grant_expires_at
                  campaign_id seller)a
   @hold_keys ~w(op buyer pledge_id custody_ref currency amount_minor expires_at)a
+  @reconfirm_keys @hold_keys ++ [:prior_funding_evidence_ref]
   @release_keys ~w(op buyer custody_ref settlement_ref delivery_proof_ref
                    seller_paid_minor buyer_refund_minor)a
   @refund_keys ~w(op buyer custody_ref refund_ref refund_minor reason resolution_ref)a
@@ -115,6 +116,18 @@ defmodule GroupBuyCore.EscrowProof do
   defp valid_event?(%{op: :hold_confirmed} = event) do
     exact?(event, @hold_keys) and
       identifiers?([event.buyer, event.pledge_id, event.custody_ref, event.currency]) and
+      bounded?(event.amount_minor) and bounded?(event.expires_at)
+  end
+
+  defp valid_event?(%{op: :hold_reconfirmed} = event) do
+    exact?(event, @reconfirm_keys) and
+      identifiers?([
+        event.buyer,
+        event.pledge_id,
+        event.custody_ref,
+        event.currency,
+        event.prior_funding_evidence_ref
+      ]) and
       bounded?(event.amount_minor) and bounded?(event.expires_at)
   end
 

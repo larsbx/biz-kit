@@ -14,7 +14,9 @@ defmodule BizKitComposition.MixProject do
         {:commerce_core, in_umbrella: true},
         {:group_buy_core, in_umbrella: true},
         {:inventory_core, in_umbrella: true},
-        {:fulfillment_core, in_umbrella: true}
+        {:fulfillment_core, in_umbrella: true},
+        {:sales_core, in_umbrella: true},
+        {:marketing_core, in_umbrella: true}
       ]
     ]
   end

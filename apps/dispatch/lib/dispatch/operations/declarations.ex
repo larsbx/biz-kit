@@ -60,7 +60,7 @@ defmodule Dispatch.Operations.Declarations do
   # What makes two declarations the same declaration. Deliberately excludes
   # `correlation_id` and every server-assigned field: a retry is a retry even
   # when the transport around it differs.
-  @identifying ~w(participant_id status occurred_at note assignment_id
+  @identifying ~w(participant_id role_assignment_id device_id device_sequence status occurred_at note assignment_id
                   location_sample_id supersedes_event_id)a
 
   @doc """
@@ -74,23 +74,29 @@ defmodule Dispatch.Operations.Declarations do
   what the device signed, as received.
   """
   @spec declare(Actor.t(), attrs()) :: result()
-  def declare(%Actor{} = actor, attrs) do
-    with {:ok, verification} <- verification(actor, attrs) do
-      record(actor, Map.put(attrs, :verification, verification))
+  @spec declare(Actor.t(), attrs(), keyword()) :: result()
+  def declare(%Actor{} = actor, attrs, opts \\ []) do
+    with {:ok, verification} <- verification(actor, attrs, Keyword.get(opts, :proof)) do
+      record(actor, Map.put(attrs, :verification, verification), opts)
     end
   end
 
-  defp verification(actor, attrs) do
+  # The native transport has already checked its governance-approved key and
+  # DispatchStatusV1 signature before entering the idempotency transaction.
+  # Bearer submissions retain DeviceKeys' distinct DispatchStatusEventV1 proof.
+  defp verification(_actor, _attrs, proof) when is_map(proof),
+    do: {:ok, :DEVICE_AUTHENTICATED}
+
+  defp verification(actor, attrs, nil) do
     %{fields: fields, signature: signature} =
       Map.get(attrs, :signed, %{fields: %{"device_id" => attrs[:device_id]}, signature: nil})
 
-    # The device verified is the one recorded: the signed fields must name it.
     if fields["device_id"] == attrs[:device_id],
       do: DeviceKeys.verify_event(actor, fields, signature),
       else: {:error, :device_signature_invalid}
   end
 
-  defp record(actor, attrs) do
+  defp record(actor, attrs, opts) do
     input =
       attrs
       |> Map.take(@accepted)
@@ -105,7 +111,7 @@ defmodule Dispatch.Operations.Declarations do
       })
 
     case existing(actor, input) do
-      nil -> create(actor, input)
+      nil -> create(actor, input, opts)
       {matched_on, event} -> reconcile(matched_on, event, input)
     end
   end
@@ -132,11 +138,11 @@ defmodule Dispatch.Operations.Declarations do
 
   def by_id(_actor, _event_id), do: nil
 
-  defp create(actor, input) do
+  defp create(actor, input, opts) do
     Dispatch.Repo.transaction(fn ->
       case create_event(actor, input) do
         {:ok, event} ->
-          record_audit!(actor, event)
+          record_audit!(actor, event, Keyword.get(opts, :proof))
 
           StreamRefresh.enqueue!(actor, event.participant_id, "status.declared", %{
             "event_id" => event.id
@@ -175,7 +181,7 @@ defmodule Dispatch.Operations.Declarations do
     |> Ash.create()
   end
 
-  defp record_audit!(actor, event) do
+  defp record_audit!(actor, event, proof) do
     # REVIEWED-UNAUTHORIZED: this is the audit record of an already-authorized
     # mutation. It must be written even when the actor cannot read audit data.
     _audit =
@@ -190,11 +196,15 @@ defmodule Dispatch.Operations.Declarations do
         subject_id: event.participant_id,
         occurred_at: event.recorded_at,
         correlation_id: event.correlation_id,
-        payload_json: %{
-          "event_id" => event.id,
-          "status" => to_string(event.status),
-          "source" => to_string(event.source)
-        }
+        payload_json:
+          %{
+            "event_id" => event.id,
+            "status" => to_string(event.status),
+            "source" => to_string(event.source)
+          }
+          |> then(fn payload ->
+            if proof, do: Map.put(payload, "device_proof", proof), else: payload
+          end)
       })
       # REVIEWED-UNAUTHORIZED: audit append follows an authorized mutation.
       |> Ash.create!(authorize?: false, tenant: actor.tenant_id)

@@ -29,7 +29,7 @@ defmodule DispatchWeb.RoleCapabilityController do
     `X-Role-Assignment-ID`; the choice selects authority context, it never
     grants it.
     """,
-    security: [%{"bearerAuth" => []}],
+    security: [%{"bearerAuth" => []}, %{"nativeSession" => []}],
     responses: [
       ok: {"Selectable assignments", "application/json", RoleAssignmentList},
       unauthorized: @problem
@@ -42,7 +42,7 @@ defmodule DispatchWeb.RoleCapabilityController do
     Features are enabled from this document, never from a role key. It governs
     what the client offers; every request is still authorized by the server.
     """,
-    security: [%{"bearerAuth" => []}],
+    security: [%{"bearerAuth" => []}, %{"nativeSession" => []}],
     parameters: [
       "x-role-assignment-id": [
         in: :header,

@@ -24,7 +24,7 @@ defmodule Eatsbot.Extensions.Prometheus.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.8"},
-      {:prom_ex, "~> 1.11.0"},
+      {:prom_ex, "~> 1.12.0"},
       {:eatsbot_core, in_umbrella: true}
     ]
   end

@@ -170,14 +170,22 @@ a missing implementation step. Deployment still exposes SpruceGoose's `/auth`,
 sets `BIZKIT_NATIVE_REDIRECT_URIS`, and selects Dispatch's `BizKitSession`
 verifier.
 
+The native session/device-key and courier/role-administration work is followed
+by [partner actions](architecture/2026-10-22-partner-actions.md): stop readiness,
+nonbinding proposals, encrypted proof references, and a relationship-scoped
+broker load and own-thread-metadata view. d-patch's real-server suite exercises
+17–19 with JavaScript enabled and disabled, including a stale offline form.
+The paired PRs preserve #61/#18 behavior and use separate acceptance branches.
+
 What remains, in order:
 
 1. **Security and required CI.** Close the session, administrative-admission,
    and integration-gate obligations above.
-2. **Partner actions and end-to-end acceptance.** Complete scenarios 17–19
-   through biz-kit #62 and d-patch #19. Record real-server browser and Android
-   emulator/handset evidence separately; merged code alone does not establish
-   deployed provider or device acceptance.
+2. **Hosted partner acceptance and later slices.** Run the new PostGIS partner
+   gate and paired browser suite; retain Android driver/courier emulator jobs.
+   Record browser, emulator and handset evidence separately. Consented
+   location/status/ETA summaries (Slice 2), provider message content/intake
+   (Slice 4), and common approval/execution controls (Slice 5) remain open.
 3. **Grants instead of the document.** When Dispatch's roles become ledger
    grants (consolidation step 4), the app reads them from the change feed and
    the capability document retires.

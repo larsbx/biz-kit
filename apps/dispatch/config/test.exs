@@ -67,3 +67,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Tests drive the publisher synchronously from the sandbox-owning process.
 # The production default remains supervised polling.
 config :dispatch, :start_outbox_publisher, false
+
+# Published synthetic key, exclusively for local reference fixtures.
+config :dispatch, :document_reference_key, :crypto.hash(:sha256, "dispatch-dev-reference-key")

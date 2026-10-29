@@ -20,6 +20,7 @@ defmodule GroupBuyCore.Escrow do
   @max 9_007_199_254_740_991
   @hold_keys ~w(id expected_version op buyer pledge_id provider_id custody_ref
                 currency amount_minor expires_at evidence_ref)a
+  @reconfirm_keys @hold_keys ++ [:prior_funding_evidence_ref]
   @dispute_keys ~w(id expected_version op buyer reason_ref)a
   @release_keys ~w(id expected_version op buyer provider_id custody_ref
                    settlement_ref delivery_proof_ref seller_paid_minor
@@ -51,6 +52,10 @@ defmodule GroupBuyCore.Escrow do
   Supported operations:
   - :hold_confirmed — a **verified external custodian** confirms segregated
     funds earmarked to a pledged buyer/quantity/campaign.
+  - :hold_reconfirmed — a fresh provider observation renews the evidence
+    for the SAME held allocation, explicitly superseding its prior evidence.
+    Cannot change money, buyer, pledge, provider or custody identity, and
+    cannot reopen released/refunded/disputed positions.
   - :delivery_release_confirmed — AFTER binding and verified delivery,
     provider confirms payment to seller AND refund of any surplus caused
     by a deeper discounted tier.
@@ -200,6 +205,28 @@ defmodule GroupBuyCore.Escrow do
       {:ok, %{state | positions: Map.put(state.positions, c.buyer, position)}}
     else
       _ -> {:error, :invalid_or_duplicate_external_hold}
+    end
+  end
+
+  defp transition(state, round, actor, %{op: :hold_reconfirmed} = c, now) do
+    with {:ok, position} <- held(state, c.buyer),
+         :ok <- provider_matches(actor, c, position),
+         :ok <- pledge_identity(round, c.buyer, c.pledge_id, now),
+         :ok <- reference(c.evidence_ref),
+         true <- c.prior_funding_evidence_ref == position.funding_evidence_ref,
+         true <- c.pledge_id == position.pledge_id and c.currency == position.currency,
+         true <- c.amount_minor == position.amount_minor,
+         true <- money?(c.amount_minor),
+         true <- is_integer(c.expires_at) and c.expires_at <= @max,
+         true <- c.expires_at > max(now, state.offer.expires_at),
+         true <- c.expires_at >= position.expires_at do
+      update_position(state, c.buyer, %{
+        position
+        | expires_at: c.expires_at,
+          funding_evidence_ref: c.evidence_ref
+      })
+    else
+      _ -> {:error, :reconfirmation_requires_same_held_allocation_and_prior_evidence}
     end
   end
 
@@ -376,6 +403,7 @@ defmodule GroupBuyCore.Escrow do
 
   defp state_scope(_, _), do: {:error, :wrong_campaign_scope}
 
+  defp shape(%{op: :hold_reconfirmed} = c), do: exact(c, @reconfirm_keys)
   defp shape(%{op: :hold_confirmed} = c), do: exact(c, @hold_keys)
   defp shape(%{op: :delivery_release_confirmed} = c), do: exact(c, @release_keys)
   defp shape(%{op: :refund_confirmed} = c), do: exact(c, @refund_keys)

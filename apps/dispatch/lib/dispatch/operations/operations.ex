@@ -13,6 +13,7 @@ defmodule Dispatch.Operations do
   use Ash.Domain
 
   resources do
+    resource Dispatch.Operations.StopReadinessEvent
     resource Dispatch.Operations.ParticipantStatusEvent
     resource Dispatch.Operations.ConsentGrant
     resource Dispatch.Operations.LocationSample

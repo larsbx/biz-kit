@@ -609,6 +609,21 @@ if config_env() == :prod do
   end
 end
 
+# Separate proof-reference encryption key; no production default. A deployment
+# without one can read other partner data but reference additions fail closed.
+if config_env() == :prod do
+  case System.get_env("DOCUMENT_REFERENCE_KEY") do
+    nil ->
+      :ok
+
+    encoded ->
+      case Base.decode64(encoded) do
+        {:ok, key} when byte_size(key) == 32 -> config :dispatch, :document_reference_key, key
+        _ -> raise "DOCUMENT_REFERENCE_KEY must be base64 for 32 bytes"
+      end
+  end
+end
+
 # ── eatsbot (from larsbx/eatsbot) ───────────────────────────────────────────
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
