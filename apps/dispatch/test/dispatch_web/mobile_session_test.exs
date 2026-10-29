@@ -74,6 +74,7 @@ defmodule DispatchWeb.MobileSessionTest do
     id = URI.decode_query(url.query)["id"]
     login = call(:get, "/v1/mobile/login?" <> url.query)
     assert login.status == 302
+
     assert %{
              value: ^id,
              http_only: true,
@@ -143,6 +144,7 @@ defmodule DispatchWeb.MobileSessionTest do
     f = flow()
     code = complete(f)
     config = Application.fetch_env!(:dispatch, :native_identity)
+
     Application.put_env(
       :dispatch,
       :native_identity,
@@ -208,4 +210,3 @@ defmodule DispatchWeb.MobileSessionTest do
     assert call(:post, "/v1/mobile/token", %{"code" => nil, "code_verifier" => nil}).status == 401
   end
 end
-
