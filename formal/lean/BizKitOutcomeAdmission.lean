@@ -69,7 +69,7 @@ def fresh (s : State) (k : Slot) (body : Nat) : State :=
 
 /-- Model of one serialized, durable Log admission and its rebuilt binding.
     A separate cursor write is deliberately NOT in this transition. -/
-def admit (src : Source) (s : State) (scope : Scope) (n body : Nat) : State :=
+def recordOutcome (src : Source) (s : State) (scope : Scope) (n body : Nat) : State :=
   if VerifiedAt src scope n body ∧ s.stored (slotAt src scope n) = none
   then fresh s (slotAt src scope n) body else s
 
@@ -112,9 +112,9 @@ theorem fresh_preserves (src : Source) (s : State) (scope : Scope) (n b : Nat)
       contradiction
     simpa [fresh, different] using old
 
-theorem admit_preserves (src : Source) (s : State) (scope : Scope) (n b : Nat)
-    (hs : Safe src s) : Safe src (admit src s scope n b) := by
-  unfold admit
+theorem recordOutcome_preserves (src : Source) (s : State) (scope : Scope) (n b : Nat)
+    (hs : Safe src s) : Safe src (recordOutcome src s scope n b) := by
+  unfold recordOutcome
   split
   · next h => exact fresh_preserves src s scope n b hs h.1 h.2
   · exact hs
@@ -143,31 +143,31 @@ theorem checkpoint_preserves (src : Source) (s : State) (scope : Scope)
 
 theorem exact_retry_stutters (src : Source) (s : State) (scope : Scope)
     (n body original : Nat) (present : s.stored (slotAt src scope n) = some original) :
-    admit src s scope n body = s := by
-  simp [admit, present]
+    recordOutcome src s scope n body = s := by
+  simp [recordOutcome, present]
 
 theorem changed_body_cannot_replace (src : Source) (s : State) (scope : Scope)
     (n body original : Nat) (present : s.stored (slotAt src scope n) = some original)
-    (_changed : body ≠ original) : admit src s scope n body = s :=
+    (_changed : body ≠ original) : recordOutcome src s scope n body = s :=
   exact_retry_stutters src s scope n body original present
 
 theorem unverified_stutters (src : Source) (s : State) (scope : Scope) (n b : Nat)
-    (invalid : ¬ VerifiedAt src scope n b) : admit src s scope n b = s := by
-  simp [admit, invalid]
+    (invalid : ¬ VerifiedAt src scope n b) : recordOutcome src s scope n b = s := by
+  simp [recordOutcome, invalid]
 
 theorem admission_does_not_checkpoint (src : Source) (s : State) (scope : Scope)
     (n b : Nat) (other : Scope) :
-    (admit src s scope n b).cursor other = s.cursor other := by
-  unfold admit
+    (recordOutcome src s scope n b).cursor other = s.cursor other := by
+  unfold recordOutcome
   split <;> rfl
 
 theorem independent_destination (src : Source) (s : State) (scope other : Scope)
     (n b operation : Nat) (different : other ≠ scope) :
-    (admit src s scope n b).stored ⟨other, operation⟩ = s.stored ⟨other, operation⟩ := by
+    (recordOutcome src s scope n b).stored ⟨other, operation⟩ = s.stored ⟨other, operation⟩ := by
   have keyDifferent : (Slot.mk other operation) ≠ slotAt src scope n := by
     intro same
     exact different (congrArg Slot.scope same)
-  unfold admit
+  unfold recordOutcome
   split
   · simp [fresh, keyDifferent]
   · rfl
@@ -192,19 +192,25 @@ theorem missing_append_cannot_checkpoint (src : Source) (s : State) (scope : Sco
     checkpoint src s scope = s := by
   simp [checkpoint, missing]
 
+theorem at_most_one_append (src : Source) (s : State) (k : Slot)
+    (hs : Safe src s) : s.appends k ≤ 1 := by
+  cases present : s.stored k with
+  | none => have count := hs.2.1 k present; omega
+  | some body => have count := (hs.1 k body present).1; omega
+
 theorem lost_reply_retry_stutters (src : Source) (s : State) (scope : Scope)
     (n b : Nat) (hv : VerifiedAt src scope n b) :
-    admit src (crash (admit src s scope n b)) scope n b = admit src s scope n b := by
+    recordOutcome src (crash (recordOutcome src s scope n b)) scope n b = recordOutcome src s scope n b := by
   by_cases present : s.stored (slotAt src scope n) = none
-  · have accepted : (admit src s scope n b).stored (slotAt src scope n) = some b := by
-      simp [admit, hv, present, fresh]
+  · have accepted : (recordOutcome src s scope n b).stored (slotAt src scope n) = some b := by
+      simp [recordOutcome, hv, present, fresh]
     exact exact_retry_stutters src _ scope n b b accepted
-  · simp [admit, present, crash]
+  · simp [recordOutcome, present, crash]
 
 inductive Reachable (src : Source) : State → Prop where
   | init : Reachable src initial
   | append {s} : Reachable src s → (scope : Scope) → (n b : Nat) →
-      Reachable src (admit src s scope n b)
+      Reachable src (recordOutcome src s scope n b)
   | advance {s} : Reachable src s → (scope : Scope) →
       Reachable src (checkpoint src s scope)
   | restart {s} : Reachable src s → Reachable src (crash s)
@@ -212,7 +218,7 @@ inductive Reachable (src : Source) : State → Prop where
 theorem reachable_safe (src : Source) {s : State} (h : Reachable src s) : Safe src s := by
   induction h with
   | init => exact initial_safe src
-  | append _ scope n b ih => exact admit_preserves src _ scope n b ih
+  | append _ scope n b ih => exact recordOutcome_preserves src _ scope n b ih
   | advance _ scope ih => exact checkpoint_preserves src _ scope ih
   | restart _ ih => exact ih
 

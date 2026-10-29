@@ -127,4 +127,14 @@ module tb_outcome_admission {
     .then(admit((0, 0, 0, 0), 2, 2, true))
     .then(checkpoint((0, 0, 0, 0)))
     .then(all { crash, assert(cursor.get((0, 0, 0, 0)) == 0 and safety) })
+
+  run sameNumericAnchorScopesTest = init
+    .then(admit((0, 0, 0, 0), 1, 1, true))
+    .then(admit((1, 0, 0, 0), 1, 1001, true))
+    .then(admit((0, 1, 0, 0), 1, 1, true))
+    .then(admit((0, 0, 1, 0), 1, 101, true))
+    .then(admit((0, 0, 0, 1), 1, 11, true))
+    .then(all { crash, assert(SCOPES.forall(scope =>
+      appends.get(key(scope, 1)) == 1 and stored.get(key(scope, 1)) == expected(scope, 1))
+      and safety) })
 }

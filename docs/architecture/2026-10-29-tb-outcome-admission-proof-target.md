@@ -13,6 +13,8 @@ it is not a transfer ID or native timestamp, and need not equal either one.
 The `Source.anchor` mapping keeps these concepts separate. Including destination
 allows independent durable sinks; it does not license different financial books.
 Two installations with equal numeric IDs still have distinct admission slots.
+The receiving Log fixes its configured destination identity; callers cannot
+choose aliases for one Log to bypass its source-slot uniqueness boundary.
 
 `Source` is an immutable snapshot supplied by the trusted native verification
 boundary. Its `verified` premise means complete original evidence, canonical
@@ -66,7 +68,7 @@ not a refinement proof for arbitrary SQL or Elixir implementations.
 | Model item | Runtime obligation before accepting the bridge |
 | --- | --- |
 | Verified snapshot and `anchor` | Read complete authenticated original native groups; retain source ordinal/range and stable original anchor; reject incomplete, conflicting or wrong-context history |
-| `admit` + recovered binding | Register the outcome envelope/schema and signed validity rules; deduplicate by full source slot inside the serialized `CoopSubstrate.Log` admission; rebuild bindings by audited replay |
+| `recordOutcome` + recovered binding | Register the outcome envelope/schema and signed validity rules; deduplicate by full source slot inside the serialized `CoopSubstrate.Log` admission; rebuild bindings by audited replay |
 | One `appends` increment | Persist binding with the canonical signed event, or derive it entirely from that event; a separate operational table written after append cannot supply this guarantee |
 | Exact retry / conflict | Compare retained exact source outcome bytes and recover the original accepted receipt, even when a delivery envelope has a different retry ID |
 | `checkpoint` | Update only that destination's complete-prefix cursor after confirmed durable Log admission; retry unknown replies using the same source identity |
