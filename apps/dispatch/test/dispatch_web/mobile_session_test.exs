@@ -45,7 +45,7 @@ defmodule DispatchWeb.MobileSessionTest do
     )
 
     Application.put_env(:dispatch, :mobile_principals, %{principal => "explicit-account-link"})
-    Application.put_env(:dispatch, :native_secure_cookies, false)
+    Application.put_env(:dispatch, :native_secure_cookies, true)
     :ok
   end
 
@@ -74,7 +74,16 @@ defmodule DispatchWeb.MobileSessionTest do
     id = URI.decode_query(url.query)["id"]
     login = call(:get, "/v1/mobile/login?" <> url.query)
     assert login.status == 302
-    cookie = "dispatch_native_state=" <> id
+    assert %{
+             value: ^id,
+             http_only: true,
+             secure: true,
+             same_site: "Lax",
+             path: "/v1/mobile",
+             max_age: 600
+           } = login.resp_cookies["dispatch_native_state"]
+
+    cookie = "dispatch_native_state=" <> login.resp_cookies["dispatch_native_state"].value
     %{id: id, cookie: cookie, verifier: verifier}
   end
 
@@ -108,6 +117,79 @@ defmodule DispatchWeb.MobileSessionTest do
            ]).status == 204
 
     assert {:error, _} = Identity.session(session["access_token"])
+  end
+
+  defp complete(f) do
+    callback = "/v1/mobile/callback?" <> URI.encode_query(%{state: f.id, code: "good"})
+    response = call(:get, callback, %{}, [{"cookie", f.cookie}])
+    assert response.status == 302
+    assert response.resp_cookies["dispatch_native_state"].max_age == 0
+    [location] = get_resp_header(response, "location")
+    URI.parse(location).query |> URI.decode_query() |> Map.fetch!("code")
+  end
+
+  test "a wrong PKCE verifier refuses and consumes the handoff" do
+    f = flow()
+    code = complete(f)
+
+    for verifier <- [String.duplicate("w", 43), f.verifier] do
+      response = call(:post, "/v1/mobile/token", %{"code" => code, "code_verifier" => verifier})
+      assert response.status == 401
+      refute Map.has_key?(Jason.decode!(response.resp_body), "access_token")
+    end
+  end
+
+  test "the server's redirect binding cannot be replaced by token request parameters" do
+    f = flow()
+    code = complete(f)
+    config = Application.fetch_env!(:dispatch, :native_identity)
+    Application.put_env(
+      :dispatch,
+      :native_identity,
+      Keyword.put(config, :redirect_uri, "other://app")
+    )
+
+    assert call(:post, "/v1/mobile/token", %{
+             "code" => code,
+             "code_verifier" => f.verifier,
+             "redirect_uri" => "com.dispatch.driver://signin"
+           }).status == 401
+
+    Application.put_env(:dispatch, :native_identity, config)
+
+    assert call(:post, "/v1/mobile/token", %{
+             "code" => code,
+             "code_verifier" => f.verifier
+           }).status == 401
+  end
+
+  test "an identity unbound after callback cannot exchange its handoff" do
+    f = flow()
+    code = complete(f)
+    Application.put_env(:biz_kit_identity, :bindings, [])
+
+    assert call(:post, "/v1/mobile/token", %{
+             "code" => code,
+             "code_verifier" => f.verifier
+           }).status == 401
+  end
+
+  test "a verified identity still needs an explicit Dispatch account link" do
+    f = flow()
+    code = complete(f)
+    Application.put_env(:dispatch, :mobile_principals, %{})
+
+    response = call(:post, "/v1/mobile/token", %{"code" => code, "code_verifier" => f.verifier})
+    assert response.status == 401
+    refute Map.has_key?(Jason.decode!(response.resp_body), "access_token")
+  end
+
+  test "a matching browser cookie cannot authorize a rejected provider or replay a callback" do
+    f = flow()
+    rejected = "/v1/mobile/callback?" <> URI.encode_query(%{state: f.id, code: "bad"})
+    assert call(:get, rejected, %{}, [{"cookie", f.cookie}]).status == 401
+    callback = "/v1/mobile/callback?" <> URI.encode_query(%{state: f.id, code: "good"})
+    assert call(:get, callback, %{}, [{"cookie", f.cookie}]).status == 401
   end
 
   test "caller URLs cannot choose the provider redirect and malformed callbacks fail closed" do

@@ -21,7 +21,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready --health-interval 10s
+          --health-cmd "pg_isready -U postgres -d postgres" --health-interval 10s
           --health-timeout 5s --health-retries 5
     env:
       MIX_ENV: test
@@ -59,6 +59,21 @@ jobs:
       - name: Migrate Dispatch PostgreSQL/PostGIS
         working-directory: apps/dispatch
         run: mix ecto.create && mix ecto.migrate
+      - name: Require missing signed storage to fail readiness before initialization
+        run: |
+          if python3 tools/check_dispatch_test_storage.py > /tmp/storage-check.log 2>&1; then
+            echo 'Uninitialized signed storage unexpectedly passed readiness'
+            exit 1
+          fi
+          cat /tmp/storage-check.log
+          grep -q 'signed EventStore/Records test database unavailable or uninitialized' /tmp/storage-check.log
+      - name: Initialize signed ledger storage for device-enrolment acceptance
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
+      - name: Require initialized services and reject unavailable or unauthorized databases
+        run: python3 tools/test_dispatch_test_storage.py
+      - name: Reproduce inherited native-session mismatch with a regression control
+        run: python3 tools/check_dispatch_session_regression.py
       - name: Dispatch including portal, stream and role integration
         working-directory: apps/dispatch
         run: mix test --include integration
