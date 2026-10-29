@@ -4,6 +4,7 @@ on:
     paths:
       - 'docs/architecture/**hawala**'
       - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
+      - 'docs/architecture/fixtures/hawala-tigerbeetle-first-pin.json'
       - 'tools/*hawala*'
       - 'apps/hawala_capability/**'
       - '.github/workflows/hawala-architecture.yml'
@@ -12,6 +13,7 @@ on:
     paths:
       - 'docs/architecture/**hawala**'
       - 'docs/architecture/fixtures/hawala-cross-authority-v1-pin.json'
+      - 'docs/architecture/fixtures/hawala-tigerbeetle-first-pin.json'
       - 'tools/*hawala*'
       - 'apps/hawala_capability/**'
       - '.github/workflows/hawala-architecture.yml'
@@ -82,3 +84,43 @@ jobs:
           test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestJournal.beam
           test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.SignedTestPort.beam
           test ! -e ../../_build/prod/lib/hawala_capability/ebin/Elixir.HawalaCapability.TestCheckoutOutbox.beam
+
+
+  canonical-native-storage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read immutable TB-first storage revision
+        id: native-pin
+        run: |
+          python3 - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          pin = json.loads(Path('docs/architecture/fixtures/hawala-tigerbeetle-first-pin.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('sha=' + pin['source_commit'] + '\n')
+          PYCODE
+      - uses: actions/checkout@v4
+        with:
+          repository: larsbx/hawala-core
+          ref: ${{ steps.native-pin.outputs.sha }}
+          path: .hawala-native-source
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check exact pinned source before compiling
+        run: python3 tools/check_hawala_tb_first_pin.py --source .hawala-native-source
+      - name: Install exact native service
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 https://github.com/tigerbeetle/tigerbeetle/releases/download/0.17.9/tigerbeetle-x86_64-linux.zip -o /tmp/tigerbeetle.zip
+          echo 'af71f2c0057e3b409bf79940fa94894b738187b0d4f1e711097bca15df5d8cd4  /tmp/tigerbeetle.zip' | sha256sum --check
+          mkdir /tmp/hawala-native-tb
+          unzip /tmp/tigerbeetle.zip -d /tmp/hawala-native-tb
+      - name: Require storage recovery matrix without activating a host writer
+        working-directory: .hawala-native-source
+        env:
+          TB_BINARY: /tmp/hawala-native-tb/tigerbeetle
+        run: |
+          cargo test -p hawala-tigerbeetle-flow -p hawala-tigerbeetle-native --features native-conformance --locked
+          cargo clippy -p hawala-tigerbeetle-native --features native-conformance --all-targets --locked -- -D warnings
+          timeout 180s cargo test -p hawala-tigerbeetle-native --features native-conformance --locked --test native -- --ignored --skip native_worker --nocapture --test-threads=1
