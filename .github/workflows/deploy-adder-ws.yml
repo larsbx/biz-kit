@@ -1,0 +1,29 @@
+name: Deploy to adder-ws
+# After a push to main, tell adder-ws to pull and rebuild. The runner joins the
+# tailnet as tag:ci and posts to biz-kit-cd-trigger.socket; adder-ws fetches
+# main itself, so nothing from this job is deployed.
+#
+# Dormant until the repository variable ADDER_WS_CD is "true", which needs the
+# TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET secrets and a tailnet ACL letting tag:ci
+# reach adder-ws:8791.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-adder-ws
+  cancel-in-progress: false
+jobs:
+  trigger:
+    if: vars.ADDER_WS_CD == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - run: curl --fail --silent --show-error --retry 3 --retry-connrefused --max-time 15 -X POST http://100.67.165.25:8791/deploy
