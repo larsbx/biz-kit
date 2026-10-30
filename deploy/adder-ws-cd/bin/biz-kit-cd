@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# biz-kit-cd: fast-forward ~/biz-kit to origin/main and rebuild what changed.
+#
+# Run by biz-kit-cd.service, which biz-kit-cd.path starts when the trigger
+# (biz-kit-cd-trigger.socket, posted to by CI after a push to main) leaves a
+# pending marker. Nothing polls: between pushes this is idle.
+#
+#   desktop/ changed            rebuild the desktop app (relaunch it yourself)
+#   backend changed             compile, then restart biz-kit-stack.service
+#   docs/formal/.github/*.md    nothing to build
+#
+# A failed step leaves the last good commit recorded, so the next trigger
+# retries everything since then. Logs: journalctl --user -u biz-kit-cd
+set -euo pipefail
+
+repo="${BIZKIT_REPO:-$HOME/biz-kit}"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/biz-kit-cd"
+mkdir -p "$state"
+
+pending="$state/pending"
+
+notify() {
+  echo "$1"
+  notify-send -a biz-kit-cd "biz-kit deploy" "$1" 2>/dev/null || true
+}
+
+# Written to a synced temporary file and renamed, so a crash leaves either the
+# old checkpoint or the new one, never a torn or unsynced one.
+checkpoint() {
+  printf '%s\n' "$1" >"$state/deployed.tmp"
+  sync "$state/deployed.tmp"
+  mv -f "$state/deployed.tmp" "$state/deployed"
+  sync "$state"
+}
+
+# One deploy at a time, whether started by the trigger or by hand.
+exec 9>"$state/lock"
+flock 9
+
+# The trigger leaves $pending for biz-kit-cd.path, which starts this unit and
+# starts it again if $pending exists when it exits. Consume it before anything
+# can refuse, or a refusal would re-run forever; a trigger that arrives after
+# this point leaves a fresh one, so its push is never lost.
+rm -f "$pending"
+
+cd "$repo"
+branch="$(git symbolic-ref --short HEAD)"
+if [ "$branch" != main ]; then
+  notify "skipped: $repo is on $branch, not main"
+  exit 1
+fi
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  notify "skipped: $repo has uncommitted changes"
+  exit 1
+fi
+
+build_desktop() {
+  cd "$repo/desktop"
+  if [ ! -d node_modules ] || grep -qx 'desktop/package-lock.json' <<<"$1"; then
+    npm ci
+  fi
+  npx tauri build --no-bundle
+  cd "$repo"
+}
+
+restart_stack() {
+  if ! systemctl --user is-enabled -q biz-kit-stack.service; then
+    echo "biz-kit-stack.service is not enabled; not restarting the stack"
+    return 0
+  fi
+  # Compile before stopping anything, so a broken commit leaves the running stack up.
+  MIX_ENV=dev mix deps.get
+  MIX_ENV=dev mix compile
+  systemctl --user restart biz-kit-stack.service
+  for _ in $(seq 1 600); do
+    if ss -ltn | grep -q '127.0.0.1:4001 '; then
+      return 0
+    fi
+    if ! systemctl --user is-active -q biz-kit-stack.service; then
+      break
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+# A push that lands mid-deploy cannot start the unit again, so loop until
+# origin/main stops moving.
+while :; do
+  rm -f "$pending"
+  git fetch --quiet origin main
+  new="$(git rev-parse origin/main)"
+  old="$(cat "$state/deployed" 2>/dev/null || git rev-parse HEAD)"
+  if [ "$old" = "$new" ]; then
+    break
+  fi
+  if ! git merge --ff-only --quiet origin/main; then
+    notify "stopped: local main has diverged from origin/main"
+    exit 1
+  fi
+  changed="$(git diff --name-only "$old" "$new")"
+
+  if grep -q '^desktop/' <<<"$changed"; then
+    if ! (build_desktop "$changed"); then
+      notify "desktop build failed at ${new:0:8}; journalctl --user -u biz-kit-cd"
+      exit 1
+    fi
+    desktop=" (desktop rebuilt; relaunch it)"
+  else
+    desktop=""
+  fi
+
+  if grep -vqE '^(desktop/|docs/|formal/|\.github/)|\.md$' <<<"$changed"; then
+    if ! restart_stack; then
+      notify "stack did not come up at ${new:0:8}; journalctl --user -u biz-kit-cd -u biz-kit-stack"
+      exit 1
+    fi
+  fi
+
+  checkpoint "$new"
+  notify "deployed ${new:0:8}, $(wc -l <<<"$changed") files changed$desktop"
+done

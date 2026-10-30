@@ -90,10 +90,12 @@ Tailscale action, policy, systemd, production compile/restart, or recovery.
 Use an authenticated shell as the actual deployment owner. Export sanitized
 copies of the installed scripts and units into a reviewable PR; do not export
 tokens, private keys, environment files, command-line credentials or journal
-payloads. Record the owner, paths and SHA-256 hashes of those copies. Inspect:
+payloads. Record the owner, paths and SHA-256 hashes of those copies. The
+export lives in [`deploy/adder-ws-cd/`](../deploy/adder-ws-cd/README.md), with
+owner, paths and `SHA256SUMS`. Inspect:
 
 ```sh
-systemctl --user cat biz-kit-cd.service biz-kit-cd-trigger.socket biz-kit-cd-trigger.service
+systemctl --user cat biz-kit-cd.service biz-kit-cd.path biz-kit-cd-trigger.socket biz-kit-cd-trigger@.service
 systemctl --user show biz-kit-cd.service -p ExecStart -p WorkingDirectory -p Restart -p TimeoutStartUSec
 systemctl --user show biz-kit-cd-trigger.socket -p Listen -p Accept
 ss -ltn '( sport = :8791 )'

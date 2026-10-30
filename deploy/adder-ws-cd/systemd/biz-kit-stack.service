@@ -1,0 +1,16 @@
+[Unit]
+Description=biz-kit dev stack (dispatch :4000, /auth 127.0.0.1:4001); recreates the e2e databases on every start
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+WorkingDirectory=%h/biz-kit
+Environment=PATH=%h/bin:%h/.asdf/shims:%h/.asdf/bin:%h/.local/bin:%h/.cargo/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin
+Environment=ASDF_DIR=%h/.asdf
+ExecStart=%h/biz-kit/scripts/e2e-stack.sh
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
