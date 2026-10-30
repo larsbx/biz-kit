@@ -1,0 +1,9 @@
+[Unit]
+Description=biz-kit CD: fast-forward ~/biz-kit to main and rebuild what changed
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/bin:%h/.asdf/shims:%h/.asdf/bin:%h/.local/bin:%h/.cargo/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin
+Environment=ASDF_DIR=%h/.asdf
+ExecStart=%h/bin/biz-kit-cd
+TimeoutStartSec=45min

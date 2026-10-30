@@ -1,0 +1,9 @@
+[Unit]
+Description=biz-kit CD trigger request
+
+[Service]
+ExecStart=%h/bin/biz-kit-cd-trigger
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=10
