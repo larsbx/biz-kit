@@ -49,7 +49,7 @@ def commit (s : Trip) (a : Action) : Trip :=
     ended := if a = .activate then s.ended else true
     events := s.events ++ [a] }
 
-def admitted (s : Trip) (actorOrganization : Nat)
+abbrev admitted (s : Trip) (actorOrganization : Nat)
     (a : Action) (expected : Option Nat) : Prop :=
   s.organization = actorOrganization ∧
   permitted s.status a = true ∧
@@ -57,9 +57,8 @@ def admitted (s : Trip) (actorOrganization : Nat)
 
 /-- The option represents the entire SQL transaction, including the audit event. -/
 def transition (s : Trip) (actorOrganization : Nat)
-    (a : Action) (expected : Option Nat) : Option Trip := by
-  classical
-  exact if admitted s actorOrganization a expected then some (commit s a) else none
+    (a : Action) (expected : Option Nat) : Option Trip :=
+  if admitted s actorOrganization a expected then some (commit s a) else none
 
 theorem admitted_commits (s : Trip) (org : Nat) (a : Action) (v : Option Nat)
     (h : admitted s org a v) :
