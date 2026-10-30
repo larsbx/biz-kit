@@ -46,11 +46,13 @@ echo "@@@FAILED"; systemctl --user --failed --no-legend --plain 2>/dev/null | aw
 systemctl --system --failed --no-legend --plain 2>/dev/null | awk '{print "system:"$1}'
 "#;
 
-/// Each check prints its exit code, then up to three lines of output.
+/// Each check prints its exit code, then up to three lines of output. Checks
+/// are bounded by `timeout` where it exists; macOS has none, and there a check
+/// runs unbounded rather than failing as "command not found".
 fn probe(checks: &[Check]) -> String {
     checks.iter().enumerate().fold(PROBE.to_string(), |acc, (i, c)| {
         acc + &format!(
-            "echo \"@@@CHECK{i}\"; out=$(timeout 20 sh -c {} 2>&1); echo $?; printf '%s\\n' \"$out\" | head -n 3\n",
+            "echo \"@@@CHECK{i}\"; out=$($(command -v timeout >/dev/null && echo timeout 20) sh -c {} 2>&1); echo $?; printf '%s\\n' \"$out\" | head -n 3\n",
             exec::shq(&c.command)
         )
     })
