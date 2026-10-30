@@ -71,6 +71,23 @@ theorem refused_is_noop (s : Trip) (org : Nat) (a : Action) (v : Option Nat)
     transition s org a v = none := by
   simp [transition, h]
 
+/-- Every reported success has passed all guards and is the one atomic commit. -/
+theorem successful_transition_is_committed (s : Trip) (org : Nat)
+    (a : Action) (v : Option Nat) (t : Trip)
+    (h : transition s org a v = some t) :
+    admitted s org a v ∧ t = commit s a := by
+  by_cases ha : admitted s org a v
+  · constructor
+    · exact ha
+    · have eqSome : some t = some (commit s a) := by
+        calc
+          some t = transition s org a v := h.symm
+          _ = some (commit s a) := admitted_commits s org a v ha
+      exact Option.some.inj eqSome
+  · have rejected := refused_is_noop s org a v ha
+    rw [rejected] at h
+    cases h
+
 theorem foreign_organization_refused (s : Trip) (org : Nat) (a : Action)
     (v : Option Nat) (different : s.organization ≠ org) :
     transition s org a v = none := by
