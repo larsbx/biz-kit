@@ -5,6 +5,9 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [PostgreSQL event log, Redis operations and TigerBeetle — 2026-10-30](2026-10-30-postgres-event-log-redis-consolidation.md):
+  selected staged EventStore-library replacement, Redis/Oban/Kafka consolidation,
+  SQL priorities, legacy retirement and compatibility/recovery gates; implementation pending.
 - [One source of truth — 2026-10-11](2026-10-11-single-source-of-truth.md): current
   direction, common command/write path, removal targets, and cutover proof.
 - [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
