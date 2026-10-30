@@ -29,6 +29,11 @@ defmodule Dispatch.Operations.Board do
           :forbidden | :not_found | :stale | {:invalid, String.t()}
 
   @transitions %{"activate" => :activate, "complete" => :complete, "cancel" => :cancel}
+  @transition_events %{
+    activate: "assignment.activated",
+    complete: "assignment.completed",
+    cancel: "assignment.cancelled"
+  }
 
   @doc "The organization's loads, newest first, each with its stops and trips."
   @spec loads(Actor.t()) :: {:ok, [Load.t()]} | {:error, :forbidden}
@@ -211,7 +216,7 @@ defmodule Dispatch.Operations.Board do
           |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
           # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
           |> Ash.update(authorize?: false, tenant: actor.tenant_id)
-          |> audited(actor, "assignment.#{action}d", "assignment", & &1.id)
+          |> audited(actor, Map.fetch!(@transition_events, action), "assignment", & &1.id)
         end
       end)
       |> then(fn
