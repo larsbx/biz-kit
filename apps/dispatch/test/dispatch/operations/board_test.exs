@@ -131,7 +131,12 @@ defmodule Dispatch.Operations.BoardTest do
         assert moved.version == trip.version + 1
         assert moved.status ==
                  %{"activate" => :ACTIVE, "complete" => :COMPLETED, "cancel" => :CANCELLED}[@action]
-        assert length(audit_types(ctx)) == length(before_audit) + 1
+        expected_event = %{
+          "activate" => "assignment.activated",
+          "complete" => "assignment.completed",
+          "cancel" => "assignment.cancelled"
+        }
+        assert audit_types(ctx) == Enum.sort([Map.fetch!(expected_event, @action) | before_audit])
       else
         for version <- [trip.version, nil] do
           assert {:error, {:invalid, _}} =
