@@ -118,6 +118,7 @@ defmodule Dispatch.Operations.BoardTest do
         end
 
       before_audit = audit_types(ctx)
+
       allowed =
         {@source, @action} in [
           {:PLANNED, "activate"},
@@ -129,13 +130,18 @@ defmodule Dispatch.Operations.BoardTest do
       if allowed do
         moved = move(ctx, trip, @action)
         assert moved.version == trip.version + 1
+
         assert moved.status ==
-                 %{"activate" => :ACTIVE, "complete" => :COMPLETED, "cancel" => :CANCELLED}[@action]
+                 %{"activate" => :ACTIVE, "complete" => :COMPLETED, "cancel" => :CANCELLED}[
+                   @action
+                 ]
+
         expected_event = %{
           "activate" => "assignment.activated",
           "complete" => "assignment.completed",
           "cancel" => "assignment.cancelled"
         }
+
         assert audit_types(ctx) == Enum.sort([Map.fetch!(expected_event, @action) | before_audit])
       else
         for version <- [trip.version, nil] do
@@ -144,8 +150,10 @@ defmodule Dispatch.Operations.BoardTest do
         end
 
         {:ok, %{assignments: [unchanged]}} = Board.load(ctx.dispatcher, trip.load_id)
+
         assert {unchanged.status, unchanged.ends_at, unchanged.version} ==
                  {trip.status, trip.ends_at, trip.version}
+
         assert audit_types(ctx) == before_audit
       end
     end
@@ -169,6 +177,7 @@ defmodule Dispatch.Operations.BoardTest do
   test "a foreign organization's trip cannot be transitioned", ctx do
     other = Fixtures.organization(ctx.tenant, :CARRIER)
     trip = Fixtures.assignment_record(ctx.tenant, other, ctx.driver)
+
     assert {:error, :not_found} =
              Board.transition(ctx.dispatcher, trip.id, "activate", trip.version)
 

@@ -103,13 +103,21 @@ defmodule DispatchWeb.OperationsControllerTest do
 
     refused = call(:patch, "/v1/operations/loads/#{second}", ctx.token, body, key)
     assert {refused.status, decoded(refused)["code"]} == {409, "IDEMPOTENCY_KEY_REUSED"}
+
     assert decoded(call(:get, "/v1/operations/loads/#{second}", ctx.token))["commodity_text"] ==
              nil
 
     changed_body =
-      call(:patch, "/v1/operations/loads/#{first}", ctx.token, %{"commodity_text" => "Copper"}, key)
+      call(
+        :patch,
+        "/v1/operations/loads/#{first}",
+        ctx.token,
+        %{"commodity_text" => "Copper"},
+        key
+      )
 
     assert {changed_body.status, decoded(changed_body)["code"]} == {409, "IDEMPOTENCY_KEY_REUSED"}
+
     assert decoded(call(:get, "/v1/operations/loads/#{first}", ctx.token))["commodity_text"] ==
              "Steel"
   end
@@ -131,6 +139,7 @@ defmodule DispatchWeb.OperationsControllerTest do
     actor = ctx.actor
     key = "same-target-method"
     body = %{"commodity_text" => "Steel"}
+
     make_conn = fn method ->
       conn(method, "/v1/operations/loads", body)
       |> assign(:actor, actor)

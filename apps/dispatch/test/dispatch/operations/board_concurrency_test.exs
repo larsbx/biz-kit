@@ -59,7 +59,9 @@ defmodule Dispatch.Operations.BoardConcurrencyTest do
 
       assert_receive {:holding, backend, cancelled}, 5_000
       expected = if @versioned, do: ctx.trip.version, else: nil
-      requester = session(fn -> Board.transition(ctx.actor, ctx.trip.id, "activate", expected) end)
+
+      requester =
+        session(fn -> Board.transition(ctx.actor, ctx.trip.id, "activate", expected) end)
 
       try do
         assert waiting_on?(backend), "the transition must wait on the assignment row lock"
@@ -77,6 +79,7 @@ defmodule Dispatch.Operations.BoardConcurrencyTest do
 
       {:ok, %{assignments: [trip]}} = Board.load(ctx.actor, ctx.trip.load_id)
       [ended] = cancelled.assignments
+
       assert {trip.status, trip.ends_at, trip.version} ==
                {:CANCELLED, ended.ends_at, ctx.trip.version + 1}
 
