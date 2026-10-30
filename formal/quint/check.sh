@@ -90,7 +90,7 @@ done
 # Deliberately broken protocols must be REFUTED: first typecheck, then demand
 # a real invariant violation. Never accept a parse/typecheck/runtime crash as
 # a successful safety counterexample.
-for spec in cursor_first_bug.qnt lease_crash_bug.qnt bundle_partial_bug.qnt dispatch_terminal_bug.qnt; do
+for spec in cursor_first_bug.qnt lease_crash_bug.qnt bundle_partial_bug.qnt dispatch_terminal_bug.qnt dispatch_idempotency_bug.qnt; do
   quint typecheck "$spec"
   out=$(quint run "$spec" --invariant=safety --max-samples=10000 --max-steps=25 --seed=1 2>&1 || true)
   if grep -q '\[violation\]' <<<"$out"; then
