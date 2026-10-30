@@ -19,11 +19,13 @@ defmodule DispatchWeb.OperationsControllerTest do
     org = Fixtures.carrier()
     tenant = org.id
     %{user: desk, participant: dispatcher} = Fixtures.person(tenant, org)
-    Fixtures.assignment(tenant, org, dispatcher, "DISPATCHER")
+    role = Fixtures.assignment(tenant, org, dispatcher, "DISPATCHER")
+    {:ok, actor} = Dispatch.Access.Actor.from_assignment(role)
     %{user: field, participant: driver} = Fixtures.person(tenant, org, display_name: "Dana")
     Fixtures.assignment(tenant, org, driver, "DRIVER")
 
     %{
+      actor: actor,
       driver: driver,
       token: StaticVerifier.token_for(desk.oidc_subject),
       driver_token: StaticVerifier.token_for(field.oidc_subject)
@@ -85,6 +87,60 @@ defmodule DispatchWeb.OperationsControllerTest do
     again = call(:post, "/v1/operations/loads", ctx.token, %{"commodity_text" => "A"}, key)
 
     assert decoded(first)["load_id"] == decoded(again)["load_id"]
+    assert [_one] = decoded(call(:get, "/v1/operations/loads", ctx.token))["loads"]
+  end
+
+  test "one key cannot replay an identical body onto another load", ctx do
+    %{"load_id" => first} = decoded(call(:post, "/v1/operations/loads", ctx.token, %{}))
+    %{"load_id" => second} = decoded(call(:post, "/v1/operations/loads", ctx.token, %{}))
+    key = [{"idempotency-key", "load-target"}]
+    body = %{"commodity_text" => "Steel"}
+
+    written = call(:patch, "/v1/operations/loads/#{first}", ctx.token, body, key)
+    assert written.status == 200
+    replay = call(:patch, "/v1/operations/loads/#{first}", ctx.token, body, key)
+    assert decoded(replay) == decoded(written)
+
+    refused = call(:patch, "/v1/operations/loads/#{second}", ctx.token, body, key)
+    assert {refused.status, decoded(refused)["code"]} == {409, "IDEMPOTENCY_KEY_REUSED"}
+    assert decoded(call(:get, "/v1/operations/loads/#{second}", ctx.token))["commodity_text"] ==
+             nil
+
+    changed_body =
+      call(:patch, "/v1/operations/loads/#{first}", ctx.token, %{"commodity_text" => "Copper"}, key)
+
+    assert {changed_body.status, decoded(changed_body)["code"]} == {409, "IDEMPOTENCY_KEY_REUSED"}
+    assert decoded(call(:get, "/v1/operations/loads/#{first}", ctx.token))["commodity_text"] ==
+             "Steel"
+  end
+
+  test "a key cannot be shared by different operation kinds", ctx do
+    key = [{"idempotency-key", "operation-kind"}]
+    body = %{"commodity_text" => "Steel"}
+    created = call(:post, "/v1/operations/loads", ctx.token, body, key)
+    %{"load_id" => id} = decoded(created)
+    assert created.status == 201
+
+    refused = call(:patch, "/v1/operations/loads/#{id}", ctx.token, body, key)
+    assert {refused.status, decoded(refused)["code"]} == {409, "IDEMPOTENCY_KEY_REUSED"}
+  end
+
+  test "method is part of the idempotency claim even for the same target", ctx do
+    # The router currently has one mutation method per target. Exercise the
+    # shared write boundary directly to keep this guarantee independent of routing.
+    actor = ctx.actor
+    key = "same-target-method"
+    body = %{"commodity_text" => "Steel"}
+    make_conn = fn method ->
+      conn(method, "/v1/operations/loads", body)
+      |> assign(:actor, actor)
+      |> put_req_header("idempotency-key", key)
+    end
+
+    first = DispatchWeb.OperationsController.create(make_conn.(:post), %{})
+    assert first.status == 201
+    refused = DispatchWeb.OperationsController.create(make_conn.(:put), %{})
+    assert {refused.status, decoded(refused)["code"]} == {409, "IDEMPOTENCY_KEY_REUSED"}
     assert [_one] = decoded(call(:get, "/v1/operations/loads", ctx.token))["loads"]
   end
 

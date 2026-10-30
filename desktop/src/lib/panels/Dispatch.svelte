@@ -13,7 +13,7 @@
     dispatchSignOut,
     dispatchStatus,
   } from "../api";
-  import { confirm } from "../confirm.svelte";
+  import { confirm } from "../confirmation.svelte";
 
   let { info }: { info: AppInfo } = $props();
 

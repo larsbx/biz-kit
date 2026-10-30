@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { type AppInfo, appInfo } from "#lib/api.js";
   import { PANELS } from "#lib/panels.js";
+  import PanelContent from "#lib/PanelContent.svelte";
   import Confirm from "#lib/Confirm.svelte";
 
   let info = $state<AppInfo | null>(null);
@@ -14,7 +15,7 @@
 
   $effect(() => { localStorage.setItem("panel", active); });
 
-  const Current = $derived((PANELS.find((p) => p.id === active) ?? PANELS[0]).component);
+  const panel = $derived(PANELS.find((p) => p.id === active) ?? PANELS[0]);
 </script>
 
 <div class="app">
@@ -37,14 +38,8 @@
       <div class="body"><p class="err">{err}</p></div>
     {:else if !info}
       <div class="body"><div class="empty">Loading…</div></div>
-    {:else if info.hosts.length === 0}
-      <div class="body">
-        <div class="empty">
-          No hosts configured. Add them to <code class="mono">{info.configPath}</code>
-        </div>
-      </div>
     {:else}
-      {#key active}<Current {info} />{/key}
+      {#key active}<PanelContent {info} {panel} />{/key}
     {/if}
   </main>
 </div>

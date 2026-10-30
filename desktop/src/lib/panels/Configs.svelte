@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { type AppInfo, type ConfigEntry, listConfigs, readConfig, diffConfig, writeConfig } from "../api";
-  import { confirm } from "../confirm.svelte";
+  import { confirm } from "../confirmation.svelte";
   import HostSelect from "../HostSelect.svelte";
 
   let { info }: { info: AppInfo } = $props();

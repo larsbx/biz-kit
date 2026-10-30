@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { pending } from "./confirm.svelte";
+  import { pending } from "./confirmation.svelte";
 
   let busy = $state(false);
   let err = $state<string | null>(null);
