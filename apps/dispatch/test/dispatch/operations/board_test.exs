@@ -87,12 +87,14 @@ defmodule Dispatch.Operations.BoardTest do
 
     [trip] = load.assignments
     assert {trip.status, trip.vehicle_id} == {:PLANNED, truck.id}
+    assert is_nil(trip.ends_at)
     # Derived from the driver's own role, never asserted by the dispatcher.
     assert trip.operator_exclusive
 
     assert {:ok, load} = Board.transition(ctx.dispatcher, trip.id, "activate", trip.version)
     [trip] = load.assignments
     assert trip.status == :ACTIVE
+    assert is_nil(trip.ends_at)
 
     assert {:ok, load} = Board.transition(ctx.dispatcher, trip.id, "complete", trip.version)
     assert [%{status: :COMPLETED}] = load.assignments
@@ -164,6 +166,39 @@ defmodule Dispatch.Operations.BoardTest do
              Board.transition(ctx.dispatcher, trip.id, action, trip.version)
 
     moved
+  end
+
+  for end_action <- ["complete", "cancel"] do
+    @end_action end_action
+    test "activation preserves a scheduled end before #{@end_action}", ctx do
+      scheduled = DateTime.add(DateTime.utc_now(), 3600, :second)
+      {:ok, load} = Board.create_load(ctx.dispatcher, %{})
+
+      assert {:ok, %{assignments: [planned]}} =
+               Board.plan(ctx.dispatcher, load.id, %{
+                 "operator_participant_id" => ctx.driver.id,
+                 "ends_at" => DateTime.to_iso8601(scheduled)
+               })
+
+      assert planned.ends_at == scheduled
+      active = move(ctx, planned, "activate")
+      assert active.ends_at == scheduled
+      assert active.status == :ACTIVE
+
+      ended = move(ctx, active, @end_action)
+      assert DateTime.compare(ended.ends_at, scheduled) == :lt
+      before_audit = audit_types(ctx)
+
+      assert {:error, {:invalid, _}} =
+               Board.transition(ctx.dispatcher, ended.id, "activate", ended.version)
+
+      {:ok, %{assignments: [unchanged]}} = Board.load(ctx.dispatcher, load.id)
+
+      assert {unchanged.status, unchanged.ends_at, unchanged.version} ==
+               {ended.status, ended.ends_at, ended.version}
+
+      assert audit_types(ctx) == before_audit
+    end
   end
 
   test "a transition increments the version and rejects a stale retry", ctx do

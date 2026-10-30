@@ -18,7 +18,13 @@ No action is admitted from `COMPLETED` or `CANCELLED`. Every admitted move
 requires actor-organization equality and, when supplied, a matching version.
 A successful commit increments the version once, appends exactly one audit
 event and retains organization ownership; refusal leaves the abstract state
-unchanged. A complete/cancel commit sets the end marker.
+unchanged. `endPresent` abstracts `ends_at != nil`, including a scheduled end
+on a PLANNED or ACTIVE trip. Activation preserves its incoming timestamp;
+complete/cancel overwrites it with the actual end time. `terminalWritten` is a
+separate ghost history bit: a complete/cancel commit has occurred. It is never
+inferred from timestamp presence. Both Lean and Quint preserve both fields on
+activation and set both on complete/cancel. Exact timestamp values are a runtime
+refinement obligation; the models only track presence and terminal history.
 
 The same Lean module binds a replay claim to
 `(tenant, role, key, method, resource, canonical-body-digest)`.
@@ -27,15 +33,29 @@ cannot satisfy exact claim equality. The digest collision assumption and the
 durable atomic idempotency claim are **not** proved.
 
 Quint `dispatch_trip.qnt` explores valid lifecycle moves, rejected attempts
-and crashes. Its safety property requires terminal states to stay terminal,
-active trips not to retain an end marker, and one audit per version increase.
-Quint `dispatch_idempotency.qnt` explores claims, same-request replays,
-conflicting requests and restart; a matching retry cannot perform a second
-mutation. These bounded checks require reachable completed/cancelled trips,
-rejection, replay and conflict, rather than permitting vacuous success.
+and restarts. Initialization covers trips with and without a scheduled end.
+Its safety property requires terminal history to remain terminal, activation
+to preserve the scheduled timestamp's presence, and one audit per version
+increase. Reachability checks require ACTIVE trips both with and without a
+scheduled timestamp, as well as completed/cancelled trips and rejected attempts.
+
+Quint `dispatch_idempotency.qnt` covers **one unexpired claim/retention epoch**
+for one tenant/role/key. A matching retry cannot perform a second mutation
+**within that epoch**. The epoch starts with a committed claim and ends at its
+expiration (24 hours in the runtime). Expiration/purge and acquisition of a new
+claim are outside this model; its mutation count is epoch-local. Restart means
+a process restart while the same durable claim is still live. Replay and
+conflict must both be reachable.
+
+The Lean replay equality predicate likewise compares identity candidates for
+one live claim; it does not establish expiry selection or global exactly-once
+execution. After expiration, the runtime may intentionally execute the same
+request again in a new epoch. `IdempotencyTest` checks expiration without a
+sweep, permits that second mutation, and verifies a subsequent live retry
+replays the second response without a third mutation.
 
 **Negative controls are essential:** `dispatch_terminal_bug.qnt` allows
-resurrection with a stale end marker, and `dispatch_idempotency_bug.qnt`
+resurrection after a recorded terminal commit, and `dispatch_idempotency_bug.qnt`
 allows a body-only key to replay a different resource. Both must typecheck
 and yield concrete invariant violations, not merely tool errors.
 
@@ -44,10 +64,12 @@ and yield concrete invariant violations, not merely tool errors.
 | Property | Model | Runtime site | Concrete acceptance |
 | --- | --- | --- | --- |
 | Source-status guard after lock | Lean `terminal_states_refused`; Quint `dispatch_trip` | `Dispatch.Operations.Board.transition/4` | All 12 source/action cases; separate-session lock contention, with and without `expected_version` |
+| Scheduled end preservation | Lean `activation_preserves_scheduled_end`; Quint scheduled/unscheduled ACTIVE witnesses | `Board.plan/3` and `Assignment.activate` | Non-null planned `ends_at` survives activation; complete/cancel replaces it; forbidden reactivation preserves terminal timestamp/version/audit |
 | No stale overwrite | Lean `stale_version_refused` | `Assignment` update actions with `optimistic_lock(:version)` | Stale expected version; stale Ash snapshot |
 | Organization isolation | Lean `foreign_organization_refused` | `Board.own_trip/2` before and after row lock | Foreign trip remains 404 and unchanged |
 | Audit-event atomicity | Lean `commit_appends_exactly_one_audit`; Quint `auditCount == version` | `Board.transaction`, `audited` | One exact event per accepted move, zero for refused moves, rollback on persistence failure |
-| Resource-bound replay | Lean `target_change_cannot_replay` and `method_change_cannot_replay`; Quint `dispatch_idempotency` | `OperationsController.write/3` + `Idempotency.execute/4` | Same-key retry same target and body; cross-target/method/body = 409; zero second mutation |
+| Resource-bound replay | Lean `target_change_cannot_replay` and `method_change_cannot_replay`; Quint `dispatch_idempotency` | `OperationsController.write/3` + `Idempotency.execute/4` | Same-key retry same target and body; cross-target/method/body = 409; zero second mutation within one unexpired claim epoch |
+| Claim retention boundary | One-epoch assumption, not a global exactly-once theorem | `Idempotency.resolve/7` and `purge_expired/1` | Expired claim permits a new mutation; a live retry then replays the new epoch response |
 | Hostless Dispatch | UI composition requirement, not Lean theorem | `PanelContent.svelte` and `panels.ts` | Render Dispatch sign-in without SSH hosts on Windows/macOS/Linux |
 | Authentication isolation | Existing auth contract (not modeled here) | `desktop/src-tauri/src/dispatch.rs` | Preserve PKCE, `/v1/` restriction, session isolation, no redirect following |
 

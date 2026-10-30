@@ -1,28 +1,36 @@
-// Finite Dispatch lifecycle refinement: one organization-owned assignment.
-// Successful moves atomically update status, version, end marker and audit count.
-// Unauthorized/stale/invalid requests are represented as rejected stuttering
-// attempts, never as state mutations. Actual SQL transaction isolation is a
-// separate integration obligation.
+// One organization-owned assignment, with or without a scheduled ends_at.
+// endPresent abstracts ends_at != nil; it does NOT mean the trip has terminated.
+// terminalWritten is ghost history: a complete/cancel commit has occurred.
+// Rejected attempts stutter; actual SQL isolation remains an integration obligation.
 module dispatch_trip {
   var status: str
   var version: int
-  var ended: bool
+  var endPresent: bool
+  var scheduledEndPresent: bool
+  var terminalWritten: bool
   var auditCount: int
   var refusals: int
 
-  action init = all {
-    status' = "PLANNED",
-    version' = 0,
-    ended' = false,
-    auditCount' = 0,
-    refusals' = 0,
+  action init = {
+    nondet scheduled = Set(false, true).oneOf()
+    all {
+      status' = "PLANNED",
+      version' = 0,
+      endPresent' = scheduled,
+      scheduledEndPresent' = scheduled,
+      terminalWritten' = false,
+      auditCount' = 0,
+      refusals' = 0,
+    }
   }
 
   action activate = all {
     status == "PLANNED",
     status' = "ACTIVE",
     version' = version + 1,
-    ended' = false,
+    endPresent' = endPresent,
+    scheduledEndPresent' = scheduledEndPresent,
+    terminalWritten' = terminalWritten,
     auditCount' = auditCount + 1,
     refusals' = refusals,
   }
@@ -31,7 +39,9 @@ module dispatch_trip {
     status == "ACTIVE",
     status' = "COMPLETED",
     version' = version + 1,
-    ended' = true,
+    endPresent' = true,
+    scheduledEndPresent' = scheduledEndPresent,
+    terminalWritten' = true,
     auditCount' = auditCount + 1,
     refusals' = refusals,
   }
@@ -40,7 +50,9 @@ module dispatch_trip {
     status == "PLANNED" or status == "ACTIVE",
     status' = "CANCELLED",
     version' = version + 1,
-    ended' = true,
+    endPresent' = true,
+    scheduledEndPresent' = scheduledEndPresent,
+    terminalWritten' = true,
     auditCount' = auditCount + 1,
     refusals' = refusals,
   }
@@ -48,7 +60,9 @@ module dispatch_trip {
   action reject = all {
     status' = status,
     version' = version,
-    ended' = ended,
+    endPresent' = endPresent,
+    scheduledEndPresent' = scheduledEndPresent,
+    terminalWritten' = terminalWritten,
     auditCount' = auditCount,
     refusals' = refusals + 1,
   }
@@ -56,7 +70,9 @@ module dispatch_trip {
   action restart = all {
     status' = status,
     version' = version,
-    ended' = ended,
+    endPresent' = endPresent,
+    scheduledEndPresent' = scheduledEndPresent,
+    terminalWritten' = terminalWritten,
     auditCount' = auditCount,
     refusals' = refusals,
   }
@@ -65,14 +81,15 @@ module dispatch_trip {
 
   val safety =
     auditCount == version and
-    (status == "PLANNED" implies (version == 0 and not(ended))) and
-    (status == "ACTIVE" implies (version == 1 and not(ended))) and
-    (status == "COMPLETED" implies (version == 2 and ended)) and
-    (status == "CANCELLED" implies (ended and (version == 1 or version == 2))) and
-    (ended implies (status == "COMPLETED" or status == "CANCELLED"))
+    (status == "PLANNED" implies (version == 0 and not(terminalWritten) and endPresent == scheduledEndPresent)) and
+    (status == "ACTIVE" implies (version == 1 and not(terminalWritten) and endPresent == scheduledEndPresent)) and
+    (status == "COMPLETED" implies (version == 2 and terminalWritten and endPresent)) and
+    (status == "CANCELLED" implies (terminalWritten and endPresent and (version == 1 or version == 2))) and
+    (terminalWritten implies (status == "COMPLETED" or status == "CANCELLED"))
 
-  // Require traces to both terminal statuses and to a rejected request.
   val noCompletedWitness = not(status == "COMPLETED")
   val noCancelledWitness = not(status == "CANCELLED")
   val noRefusalWitness = not(refusals > 0)
+  val noScheduledActiveWitness = not(status == "ACTIVE" and scheduledEndPresent and endPresent)
+  val noUnscheduledActiveWitness = not(status == "ACTIVE" and not(scheduledEndPresent) and not(endPresent))
 }

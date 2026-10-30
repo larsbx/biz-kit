@@ -35,7 +35,10 @@ structure Trip where
   organization : Nat
   status : Status
   version : Nat
-  ended : Bool
+  /-- Presence of `ends_at`, which may be a scheduled end before termination. -/
+  endPresent : Bool
+  /-- Ghost history: a complete/cancel commit has occurred, not a nullable timestamp test. -/
+  terminalWritten : Bool
   events : List Action
   deriving Repr
 
@@ -46,7 +49,8 @@ def commit (s : Trip) (a : Action) : Trip :=
       | .complete => .completed
       | .cancel => .cancelled
     version := s.version + 1
-    ended := if a = .activate then s.ended else true
+    endPresent := if a = .activate then s.endPresent else true
+    terminalWritten := if a = .activate then s.terminalWritten else true
     events := s.events ++ [a] }
 
 abbrev admitted (s : Trip) (actorOrganization : Nat)
@@ -123,7 +127,17 @@ theorem commit_appends_exactly_one_audit (s : Trip) (a : Action) :
     (commit s a).events = s.events ++ [a] := rfl
 
 theorem complete_or_cancel_sets_end (s : Trip) :
-    (commit s .complete).ended = true ∧ (commit s .cancel).ended = true := by
+    (commit s .complete).endPresent = true ∧ (commit s .cancel).endPresent = true := by
+  simp [commit]
+
+theorem activation_preserves_scheduled_end (s : Trip) :
+    (commit s .activate).endPresent = s.endPresent ∧
+    (commit s .activate).terminalWritten = s.terminalWritten := by
+  simp [commit]
+
+theorem complete_or_cancel_records_terminal_history (s : Trip) :
+    (commit s .complete).terminalWritten = true ∧
+    (commit s .cancel).terminalWritten = true := by
   simp [commit]
 
 /-- The complete identity is method + target + canonical body, not body alone. -/
@@ -140,6 +154,8 @@ structure Claim where
   request : HttpRequest
   deriving DecidableEq, Repr
 
+/-- Identity comparison within one live, unexpired claim/retention epoch.
+    Expiration and selection of a new claim are separate runtime obligations. -/
 def mayReplay (saved incoming : Claim) : Prop :=
   saved = incoming
 

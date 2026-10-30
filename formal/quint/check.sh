@@ -65,7 +65,7 @@ done
 # Dispatch nonvacuity: a passing invariant over only the initial state is
 # insufficient. Exercise both terminal outcomes, a refused attempt, exact
 # replay, and rejection of a different request with the same key.
-for witness in noCompletedWitness noCancelledWitness noRefusalWitness; do
+for witness in noCompletedWitness noCancelledWitness noRefusalWitness noScheduledActiveWitness noUnscheduledActiveWitness; do
   out=$(quint run dispatch_trip.qnt --invariant="$witness" --max-samples=10000 --max-steps=25 --seed=1 2>&1 || true)
   if grep -q '\[violation\]' <<<"$out"; then
     echo "dispatch_trip: $witness reachable"

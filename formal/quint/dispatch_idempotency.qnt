@@ -1,4 +1,8 @@
-// One canonical Idempotency-Key in one tenant/role scope.
+// One canonical Idempotency-Key in one tenant/role scope, within ONE retention epoch.
+// An epoch starts with the first committed claim and ends when that claim expires
+// (24 hours in the runtime). `mutations` counts only that epoch, not all history.
+// Expiration/purge and claiming a new epoch are outside this model. A runtime
+// restart here occurs while the same persisted claim remains unexpired.
 // A retry is a replay ONLY when method, resource target, and canonical body
 // all match the original claim; every different request is rejected.
 // Storage durability and transaction coupling are runtime obligations.
