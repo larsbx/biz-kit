@@ -202,11 +202,16 @@ a cache, source checkout or transport ACK as business or financial authority.
 | [accountabot_dashboard](https://github.com/larsbx/accountabot_dashboard/blob/main/docs/decisions/2026-10-30-platform-projections-and-commands.md) ([PR #8](https://github.com/larsbx/accountabot_dashboard/pull/8)) | Task projections, reviewed commands, PTY and SMS boundaries |
 | [truck-dispatch](https://github.com/larsbx/truck-dispatch/blob/main/docs/decisions/2026-10-30-platform-storage-and-routing-state.md) ([PR #1](https://github.com/larsbx/truck-dispatch/pull/1)) | Development deployment and routing/map source separation |
 
-The companion ADRs are being proposed on their repositories' active bases:
-Eatsbot uses `dev`; the other listed repositories use `main`. Links name
-their intended canonical paths and may remain pending until those PRs merge.
+The eleven companion ADR PRs above merged on 2026-10-30. Eatsbot uses
+`dev`; the other listed repositories use `main`. Their merges select
+integration targets and do not establish runtime or cutover acceptance.
 The earlier d-patch ADR-0015 and Eatsbot source-ownership proposals remain
-separate dependencies; this matrix does not declare them accepted.
+separate decisions; this matrix does not declare them accepted.
+
+SchoolOps' [hosted backend contract](2026-10-23-school-ops.md) spells out how
+its application inherits shared admission, durable replay and worker obligations.
+Its curriculum repository remains the independent authoring authority and
+acquires no datastore deployment dependency.
 
 Every implementation must identify authoritative sources, retained evidence,
 current permission checks, original operation/effect IDs, complete replay
