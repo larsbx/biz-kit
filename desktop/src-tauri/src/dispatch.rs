@@ -25,6 +25,13 @@ pub const REDIRECT_URI: &str = "http://127.0.0.1:47811/callback";
 const LISTEN: &str = "127.0.0.1:47811";
 /// Long enough to type a password; a sign-in request lives ten minutes server-side.
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
+/// How long an accepted connection has to send its request line.
+const REQUEST_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Cancels the sign-in in progress, so starting another frees the port
+/// instead of failing to bind it.
+static PENDING: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>> =
+    std::sync::Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -183,13 +190,34 @@ fn open_browser(url: &str) -> Result<(), String> {
     cmd.arg(url).spawn().map(|_| ()).map_err(|e| format!("could not open a browser: {e}"))
 }
 
+/// Reads until the request line is complete, or gives up after `REQUEST_READ_TIMEOUT`.
+///
+/// Browsers open speculative connections that never send a request; without
+/// the deadline one of those would hold the listener while the real redirect
+/// waited in the backlog until sign-in timed out.
+async fn read_request(sock: &mut tokio::net::TcpStream) -> Option<String> {
+    let read = async {
+        let mut buf = Vec::with_capacity(1024);
+        let mut chunk = [0u8; 1024];
+        while !buf.windows(2).any(|w| w == b"\r\n") && buf.len() < 8192 {
+            let n = sock.read(&mut chunk).await.ok()?;
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+        }
+        Some(String::from_utf8_lossy(&buf).into_owned())
+    };
+    tokio::time::timeout(REQUEST_READ_TIMEOUT, read).await.ok().flatten()
+}
+
 /// Waits for the browser to arrive at the loopback redirect and returns the code.
 async fn await_code(listener: TcpListener, state: &str) -> Result<String, String> {
     loop {
         let (mut sock, _) = listener.accept().await.map_err(|e| e.to_string())?;
-        let mut buf = vec![0u8; 8192];
-        let n = sock.read(&mut buf).await.map_err(|e| e.to_string())?;
-        let request = String::from_utf8_lossy(&buf[..n]).into_owned();
+        let Some(request) = read_request(&mut sock).await else {
+            continue;
+        };
 
         // Anything else (a favicon, a stray probe) is answered and ignored.
         let Some(query) = callback_query(&request) else {
@@ -229,16 +257,38 @@ pub fn dispatch_status() -> Result<Status, String> {
 #[tauri::command]
 pub async fn dispatch_sign_in() -> Result<(), String> {
     let cfg = config()?;
-    // Bound before the browser opens, so the redirect cannot arrive first.
-    let listener = TcpListener::bind(LISTEN)
+    let auth = cfg.auth.trim_end_matches('/');
+    // A browser sent to a server that is down shows its own error and never
+    // redirects, which would leave the app waiting the full timeout.
+    client()?
+        .get(auth)
+        .timeout(Duration::from_secs(5))
+        .send()
         .await
-        .map_err(|e| format!("cannot listen on {LISTEN} for the sign-in redirect: {e}"))?;
+        .map_err(|e| format!("biz-kit sign-in at {auth} is unreachable: {e}"))?;
+
+    let (cancel, cancelled) = tokio::sync::oneshot::channel();
+    if let Some(previous) = PENDING.lock().unwrap().replace(cancel) {
+        let _ = previous.send(());
+    }
+    // Bound before the browser opens, so the redirect cannot arrive first. A
+    // replaced sign-in releases the port once its task next runs, so retry briefly.
+    let mut attempt = 0;
+    let listener = loop {
+        match TcpListener::bind(LISTEN).await {
+            Ok(l) => break l,
+            Err(e) if attempt < 20 && e.kind() == std::io::ErrorKind::AddrInUse => {
+                attempt += 1;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            Err(e) => return Err(format!("cannot listen on {LISTEN} for the sign-in redirect: {e}")),
+        }
+    };
 
     let verifier = random_url_safe(32);
     let state = random_url_safe(16);
     let url = format!(
-        "{}/auth/{}/native/login?redirect_uri={}&code_challenge={}&code_challenge_method=S256&state={}",
-        cfg.auth.trim_end_matches('/'),
+        "{auth}/auth/{}/native/login?redirect_uri={}&code_challenge={}&code_challenge_method=S256&state={}",
         encode(&cfg.provider),
         encode(REDIRECT_URI),
         challenge(&verifier),
@@ -246,12 +296,15 @@ pub async fn dispatch_sign_in() -> Result<(), String> {
     );
     open_browser(&url)?;
 
-    let code = tokio::time::timeout(SIGN_IN_TIMEOUT, await_code(listener, &state))
-        .await
-        .map_err(|_| "sign-in timed out".to_string())??;
+    let code = tokio::select! {
+        outcome = tokio::time::timeout(SIGN_IN_TIMEOUT, await_code(listener, &state)) => {
+            outcome.map_err(|_| "sign-in timed out".to_string())?
+        }
+        _ = cancelled => Err("replaced by a newer sign-in".to_string()),
+    }?;
 
     let resp = client()?
-        .post(format!("{}/auth/token", cfg.auth.trim_end_matches('/')))
+        .post(format!("{auth}/auth/token"))
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
@@ -366,6 +419,21 @@ mod tests {
         let q = callback_query("GET /callback?code=a%2Bb&state=s1 HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
         assert_eq!(q, [("code".into(), "a+b".into()), ("state".into(), "s1".into())]);
         assert!(callback_query("GET /favicon.ico HTTP/1.1\r\n").is_none());
+    }
+
+    #[tokio::test]
+    async fn an_idle_connection_does_not_hold_up_the_redirect() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let waiting = tokio::spawn(async move { await_code(listener, "s1").await });
+
+        // A browser preconnect: accepted first, never sends a byte.
+        let _idle = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let mut real = tokio::net::TcpStream::connect(addr).await.unwrap();
+        real.write_all(b"GET /callback?code=c1&state=s1 HTTP/1.1\r\n\r\n").await.unwrap();
+
+        let code = tokio::time::timeout(REQUEST_READ_TIMEOUT * 2, waiting).await;
+        assert_eq!(code.expect("redirect was held up").unwrap(), Ok("c1".to_string()));
     }
 
     #[test]
