@@ -46,7 +46,7 @@ def commit (s : Trip) (a : Action) : Trip :=
       | .complete => .completed
       | .cancel => .cancelled
     version := s.version + 1
-    ended := if a == .activate then s.ended else true
+    ended := if a = .activate then s.ended else true
     events := s.events ++ [a] }
 
 def admitted (s : Trip) (actorOrganization : Nat)
