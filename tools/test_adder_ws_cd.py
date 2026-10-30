@@ -20,6 +20,28 @@ WORKFLOW = ROOT / ".github/workflows/deploy-adder-ws.yml"
 ENDPOINT = "http://100.67.165.25:8791/deploy"
 
 
+def push_to_main_workflows():
+    """Names of the workflows that run on push to main, other than the trigger.
+
+    Their completions are what wake adder-ws, so the trigger must list exactly
+    these: a missing one could be the last to finish and leave a green commit
+    undeployed until the next push.
+    """
+    names = []
+    for path in sorted(WORKFLOW.parent.glob("*.yml")):
+        if path == WORKFLOW:
+            continue
+        workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+        events = workflow.get("on")
+        if not isinstance(events, dict) or "push" not in events:
+            continue
+        push = events["push"]
+        branches = push.get("branches") if isinstance(push, dict) else None
+        if branches is None or "main" in branches:
+            names.append(workflow["name"])
+    return sorted(names)
+
+
 def contract_errors(workflow):
     errors = []
     job = workflow["jobs"]["trigger"]
@@ -36,7 +58,15 @@ def contract_errors(workflow):
         errors.append("token permissions")
     if workflow["concurrency"] != {"group": "deploy-adder-ws", "cancel-in-progress": "false"}:
         errors.append("concurrency")
-    if workflow["on"] != {"push": {"branches": ["main"]}, "workflow_dispatch": ""}:
+    expected_events = {
+        "workflow_run": {
+            "workflows": push_to_main_workflows(),
+            "types": ["completed"],
+            "branches": ["main"],
+        },
+        "workflow_dispatch": "",
+    }
+    if workflow["on"] != expected_events:
         errors.append("events")
     action = job["steps"][1]
     if action["uses"] != "tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c":
@@ -117,6 +147,8 @@ class Contract(unittest.TestCase):
             ("tag:biz-kit-deploy", "tag:ci"),
             ("cancel-in-progress: false", "cancel-in-progress: true"),
             ("permissions: {}", "permissions: {contents: write}"),
+            ("      - 'Consolidation'\n", ""),
+            ("types: [completed]", "types: [requested]"),
         ]
         for before, after in mutations:
             with self.subTest(mutation=before):

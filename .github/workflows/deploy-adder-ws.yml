@@ -1,11 +1,46 @@
 name: Deploy to adder-ws
-# After a push to main, tell adder-ws to pull and rebuild. The runner joins the
-# tailnet as tag:biz-kit-deploy and posts to biz-kit-cd-trigger.socket; adder-ws fetches
-# main itself, so nothing from this job is deployed.
+# Each time a CI workflow on main completes, wake adder-ws. The runner joins the
+# tailnet as tag:biz-kit-deploy and posts to biz-kit-cd-trigger.socket; adder-ws
+# fetches main itself and deploys it only once every workflow run on that commit
+# is green, so nothing from this job or its triggering event is deployed. A
+# completion from another repository's pull request can only cause a wake-up
+# that the host's own CI check turns into a no-op.
+#
+# The list is every workflow that runs on push to main except this one;
+# tools/test_adder_ws_cd.py fails when it drifts.
 #
 # Activation evidence and host requirements: docs/adder-ws-cd.md.
 on:
-  push:
+  workflow_run:
+    workflows:
+      - 'Adder-ws CD contract'
+      - 'Barter core'
+      - 'Business capability composition'
+      - 'CommerceCore extraction'
+      - 'Consolidation'
+      - 'Desktop'
+      - 'Dispatch partner acceptance'
+      - 'DispatchCore salvage — portable last-mile policy'
+      - 'Eatsbot Kafka producer'
+      - 'Eatsbot salvage candidate safety — Quint'
+      - 'EventStore signed replay acceptance'
+      - 'Federation contract'
+      - 'Federation discovery'
+      - 'Formal safety proofs (Lean + Quint)'
+      - 'FulfillmentCore contract'
+      - 'Group buy core'
+      - 'Group buy seller-home authority'
+      - 'Hawala canonical architecture pin'
+      - 'InventoryCore rules'
+      - 'Location cross-repository acceptance'
+      - 'Marketing attribution consent composition'
+      - 'MarketingCore salvage — portable pure rules'
+      - 'Portable business cores — Eatsbot OTP 26 compatibility'
+      - 'Portable cores — independent consumers'
+      - 'Portal authentication acceptance'
+      - 'SalesCore consent and pipeline'
+      - 'SchoolOps domain'
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 permissions: {}

@@ -1,10 +1,11 @@
 # Adder-ws deployment trigger and activation acceptance
 
-Status: **activation blocked pending host and tailnet evidence**. This repository
-contains the trigger and its local acceptance tests. It does not contain, and
-has not verified, the installed `~/bin/biz-kit-cd`, `~/bin/biz-kit-cd-trigger`,
-`biz-kit-cd.service`, `biz-kit-cd-trigger.socket`, or associated user units.
-Do not interpret HTTP 202 or a green trigger job as a completed deployment.
+Status: **activation blocked pending tailnet evidence**. The host scripts and
+units are exported in [`deploy/adder-ws-cd/`](../deploy/adder-ws-cd/README.md),
+with their hashes, the host's CI gate and rollback, a failure-injection suite,
+and which rows of the host acceptance matrix below it covers. The tailnet
+policy rows remain open. Do not interpret HTTP 202 or a green trigger job as a
+completed deployment.
 
 ## Workflow boundary
 
