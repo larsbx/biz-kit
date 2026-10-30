@@ -147,6 +147,7 @@ defmodule Dispatch.Fleet.Assignment do
       argument :expected_version, :integer
       change set_attribute(:status, :ACTIVE)
       change Dispatch.Accounts.Changes.IncrementVersion
+      change optimistic_lock(:version)
     end
 
     update :complete do
@@ -156,6 +157,7 @@ defmodule Dispatch.Fleet.Assignment do
       change set_attribute(:status, :COMPLETED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
       change Dispatch.Accounts.Changes.IncrementVersion
+      change optimistic_lock(:version)
       # Section 6.1: consent lasts for the trip plus grace, so it ends now too.
       change Dispatch.Fleet.Changes.CloseLocationConsents
     end
@@ -167,6 +169,7 @@ defmodule Dispatch.Fleet.Assignment do
       change set_attribute(:status, :CANCELLED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
       change Dispatch.Accounts.Changes.IncrementVersion
+      change optimistic_lock(:version)
       # Section 6.1: consent lasts for the trip plus grace, so it ends now too.
       change Dispatch.Fleet.Changes.CloseLocationConsents
     end

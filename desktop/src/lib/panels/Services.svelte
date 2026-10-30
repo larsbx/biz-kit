@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { type AppInfo, type Unit, listUnits, unitActionScript, runOn, previewCommand } from "../api";
-  import { confirm } from "../confirm.svelte";
+  import { confirm } from "../confirmation.svelte";
   import HostSelect from "../HostSelect.svelte";
 
   const ACTIONS = ["start", "stop", "restart", "enable", "disable"] as const;

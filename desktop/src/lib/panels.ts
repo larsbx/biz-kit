@@ -13,13 +13,14 @@ import Dispatch from "./panels/Dispatch.svelte";
 export type Panel = {
   id: string;
   label: string;
+  requiresHosts: boolean;
   component: Component<{ info: AppInfo }>;
 };
 
 export const PANELS: Panel[] = [
-  { id: "health", label: "Health", component: Health },
-  { id: "services", label: "Services", component: Services },
-  { id: "scripts", label: "Scripts", component: Scripts },
-  { id: "configs", label: "Configs", component: Configs },
-  { id: "dispatch", label: "Dispatch", component: Dispatch },
+  { id: "health", label: "Health", requiresHosts: true, component: Health },
+  { id: "services", label: "Services", requiresHosts: true, component: Services },
+  { id: "scripts", label: "Scripts", requiresHosts: true, component: Scripts },
+  { id: "configs", label: "Configs", requiresHosts: true, component: Configs },
+  { id: "dispatch", label: "Dispatch", requiresHosts: false, component: Dispatch },
 ];

@@ -87,12 +87,14 @@ defmodule Dispatch.Operations.BoardTest do
 
     [trip] = load.assignments
     assert {trip.status, trip.vehicle_id} == {:PLANNED, truck.id}
+    assert is_nil(trip.ends_at)
     # Derived from the driver's own role, never asserted by the dispatcher.
     assert trip.operator_exclusive
 
     assert {:ok, load} = Board.transition(ctx.dispatcher, trip.id, "activate", trip.version)
     [trip] = load.assignments
     assert trip.status == :ACTIVE
+    assert is_nil(trip.ends_at)
 
     assert {:ok, load} = Board.transition(ctx.dispatcher, trip.id, "complete", trip.version)
     assert [%{status: :COMPLETED}] = load.assignments
@@ -100,6 +102,121 @@ defmodule Dispatch.Operations.BoardTest do
     assert audit_types(ctx) ==
              ~w(assignment.activated assignment.completed assignment.planned
                 load.created stop.added stop.added)
+  end
+
+  for source <- [:PLANNED, :ACTIVE, :COMPLETED, :CANCELLED],
+      action <- ["activate", "complete", "cancel"] do
+    @source source
+    @action action
+    test "#{action} from #{source} follows the transition table", ctx do
+      trip = Fixtures.assignment_record(ctx.tenant, ctx.carrier, ctx.driver)
+
+      trip =
+        case @source do
+          :PLANNED -> trip
+          :ACTIVE -> move(ctx, trip, "activate")
+          :COMPLETED -> ctx |> move(trip, "activate") |> then(&move(ctx, &1, "complete"))
+          :CANCELLED -> move(ctx, trip, "cancel")
+        end
+
+      before_audit = audit_types(ctx)
+
+      allowed =
+        {@source, @action} in [
+          {:PLANNED, "activate"},
+          {:PLANNED, "cancel"},
+          {:ACTIVE, "complete"},
+          {:ACTIVE, "cancel"}
+        ]
+
+      if allowed do
+        moved = move(ctx, trip, @action)
+        assert moved.version == trip.version + 1
+
+        assert moved.status ==
+                 %{"activate" => :ACTIVE, "complete" => :COMPLETED, "cancel" => :CANCELLED}[
+                   @action
+                 ]
+
+        expected_event = %{
+          "activate" => "assignment.activated",
+          "complete" => "assignment.completed",
+          "cancel" => "assignment.cancelled"
+        }
+
+        assert audit_types(ctx) == Enum.sort([Map.fetch!(expected_event, @action) | before_audit])
+      else
+        for version <- [trip.version, nil] do
+          assert {:error, {:invalid, _}} =
+                   Board.transition(ctx.dispatcher, trip.id, @action, version)
+        end
+
+        {:ok, %{assignments: [unchanged]}} = Board.load(ctx.dispatcher, trip.load_id)
+
+        assert {unchanged.status, unchanged.ends_at, unchanged.version} ==
+                 {trip.status, trip.ends_at, trip.version}
+
+        assert audit_types(ctx) == before_audit
+      end
+    end
+  end
+
+  defp move(ctx, trip, action) do
+    assert {:ok, %{assignments: [moved]}} =
+             Board.transition(ctx.dispatcher, trip.id, action, trip.version)
+
+    moved
+  end
+
+  for end_action <- ["complete", "cancel"] do
+    @end_action end_action
+    test "activation preserves a scheduled end before #{@end_action}", ctx do
+      scheduled = DateTime.add(DateTime.utc_now(), 3600, :second)
+      {:ok, load} = Board.create_load(ctx.dispatcher, %{})
+
+      assert {:ok, %{assignments: [planned]}} =
+               Board.plan(ctx.dispatcher, load.id, %{
+                 "operator_participant_id" => ctx.driver.id,
+                 "ends_at" => DateTime.to_iso8601(scheduled)
+               })
+
+      assert planned.ends_at == scheduled
+      active = move(ctx, planned, "activate")
+      assert active.ends_at == scheduled
+      assert active.status == :ACTIVE
+
+      ended = move(ctx, active, @end_action)
+      assert DateTime.compare(ended.ends_at, scheduled) == :lt
+      before_audit = audit_types(ctx)
+
+      assert {:error, {:invalid, _}} =
+               Board.transition(ctx.dispatcher, ended.id, "activate", ended.version)
+
+      {:ok, %{assignments: [unchanged]}} = Board.load(ctx.dispatcher, load.id)
+
+      assert {unchanged.status, unchanged.ends_at, unchanged.version} ==
+               {ended.status, ended.ends_at, ended.version}
+
+      assert audit_types(ctx) == before_audit
+    end
+  end
+
+  test "a transition increments the version and rejects a stale retry", ctx do
+    trip = Fixtures.assignment_record(ctx.tenant, ctx.carrier, ctx.driver)
+    moved = move(ctx, trip, "activate")
+    assert moved.version == trip.version + 1
+    assert {:error, :stale} = Board.transition(ctx.dispatcher, trip.id, "cancel", trip.version)
+    assert {:ok, %{assignments: [%{status: :ACTIVE}]}} = Board.load(ctx.dispatcher, trip.load_id)
+  end
+
+  test "a foreign organization's trip cannot be transitioned", ctx do
+    other = Fixtures.organization(ctx.tenant, :CARRIER)
+    trip = Fixtures.assignment_record(ctx.tenant, other, ctx.driver)
+
+    assert {:error, :not_found} =
+             Board.transition(ctx.dispatcher, trip.id, "activate", trip.version)
+
+    assert {:error, :not_found} = Board.transition(ctx.dispatcher, trip.id, "cancel", nil)
   end
 
   test "a stale version is refused and changes nothing", ctx do

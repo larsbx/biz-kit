@@ -40,7 +40,10 @@ defmodule Dispatch.Idempotency do
 
   ## What "the same request" means
 
-  The hash is over the caller's own body, so replaying a request returns the
+  The hash is over the request term supplied by the caller. HTTP callers must
+  include the method and mutation target alongside the body (as the operations
+  controller does), so equal bodies for distinct mutations cannot replay each
+  other. Replaying the same request returns the
   first response, while reusing a key for *different* content is refused rather
   than silently answered with someone else's result. The key is scoped to the
   role assignment as well as the tenant: Section 23.3 makes the assignment the

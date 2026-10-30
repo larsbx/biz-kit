@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { type AppInfo, type Script, type Line, listScripts, runScript } from "../api";
-  import { confirm } from "../confirm.svelte";
+  import { confirm } from "../confirmation.svelte";
 
   let { info }: { info: AppInfo } = $props();
   const scriptsDir = $derived(info.scriptsDir);

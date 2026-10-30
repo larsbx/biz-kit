@@ -3,7 +3,8 @@ defmodule DispatchWeb.OperationsController do
   The carrier's dispatch board over `/v1/operations` (`Dispatch.Operations.Board`):
   its loads, stops and trips, and the fleet trips are planned with.
 
-  Every write honours `Idempotency-Key` (Section 24) and answers with the whole
+  Every write binds `Idempotency-Key` to its HTTP method, target path and body
+  (Section 24), and answers with the whole
   load it changed, so a client never has to stitch a partial response back
   into what it holds.
   """
@@ -163,7 +164,13 @@ defmodule DispatchWeb.OperationsController do
   defp write(conn, status, change) do
     actor = conn.assigns.actor
 
-    Idempotency.execute(actor, idempotency_key(conn), conn.body_params, fn ->
+    request = %{
+      "method" => conn.method,
+      "target" => conn.request_path,
+      "body" => conn.body_params
+    }
+
+    Idempotency.execute(actor, idempotency_key(conn), request, fn ->
       case change.(actor) do
         {:ok, changed} -> {:ok, status, load(changed)}
         {:error, reason} -> {:error, reason}

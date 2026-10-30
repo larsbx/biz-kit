@@ -195,6 +195,15 @@ defmodule Dispatch.IdempotencyTest do
                Idempotency.execute(ctx.actor, k, body, declare(ctx, :AT_PICKUP))
 
       refute first == second
+
+      # Expiry starts a new epoch, and a retry within that epoch replays its
+      # response rather than running a third mutation.
+      assert {:ok, 201, %{"id" => ^second}} =
+               Idempotency.execute(ctx.actor, k, body, fn ->
+                 flunk("a live claim in the new retention epoch must replay")
+               end)
+
+      assert length(events(ctx)) == 2
     end
 
     test "purges records past their window and keeps the rest", ctx do

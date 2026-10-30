@@ -1,9 +1,15 @@
-name: EventStore consumer proofs (Lean + Quint)
+name: Formal safety proofs (Lean + Quint)
 
 on:
   pull_request:
     paths:
       - "formal/**"
+      - "apps/dispatch/lib/dispatch/operations/**"
+      - "apps/dispatch/lib/dispatch/fleet/assignment.ex"
+      - "apps/dispatch/lib/dispatch/idempotency.ex"
+      - "apps/dispatch/lib/dispatch_web/controllers/operations_controller.ex"
+      - "desktop/src/lib/panels.ts"
+      - "desktop/src/lib/PanelContent.svelte"
       - "apps/agent_ops_store/**"
       - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
       - "apps/coop_substrate/test/signed_consumer_source_test.exs"
@@ -19,6 +25,12 @@ on:
     branches: [main]
     paths:
       - "formal/**"
+      - "apps/dispatch/lib/dispatch/operations/**"
+      - "apps/dispatch/lib/dispatch/fleet/assignment.ex"
+      - "apps/dispatch/lib/dispatch/idempotency.ex"
+      - "apps/dispatch/lib/dispatch_web/controllers/operations_controller.ex"
+      - "desktop/src/lib/panels.ts"
+      - "desktop/src/lib/PanelContent.svelte"
       - "apps/agent_ops_store/**"
       - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
       - "apps/coop_substrate/test/signed_consumer_source_test.exs"

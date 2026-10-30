@@ -16,6 +16,8 @@ defmodule Dispatch.Operations.Board do
   commit.
   """
 
+  import Ecto.Query, only: [from: 2]
+
   require Ash.Query
 
   alias Dispatch.Access.Actor
@@ -27,6 +29,11 @@ defmodule Dispatch.Operations.Board do
           :forbidden | :not_found | :stale | {:invalid, String.t()}
 
   @transitions %{"activate" => :activate, "complete" => :complete, "cancel" => :cancel}
+  @transition_events %{
+    activate: "assignment.activated",
+    complete: "assignment.completed",
+    cancel: "assignment.cancelled"
+  }
 
   @doc "The organization's loads, newest first, each with its stops and trips."
   @spec loads(Actor.t()) :: {:ok, [Load.t()]} | {:error, :forbidden}
@@ -196,14 +203,21 @@ defmodule Dispatch.Operations.Board do
   def transition(%Actor{} = actor, assignment_id, action, expected_version) do
     with :ok <- can(actor, "assignment.update.status"),
          {:ok, action} <- transition_action(action),
-         {:ok, trip} <- own_trip(actor, assignment_id),
-         :ok <- current(trip, expected_version) do
+         {:ok, trip} <- own_trip(actor, assignment_id) do
       transaction(fn ->
-        trip
-        |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
-        # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
-        |> Ash.update(authorize?: false, tenant: actor.tenant_id)
-        |> audited(actor, "assignment.#{action}d", "assignment", & &1.id)
+        # Ordinary UPDATEs take this lock too. Re-read ownership, version and
+        # source state after acquiring it, in the mutation/audit transaction.
+        lock_trip!(actor, trip.id)
+
+        with {:ok, trip} <- own_trip(actor, trip.id),
+             :ok <- current(trip, expected_version),
+             :ok <- permitted(trip.status, action) do
+          trip
+          |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
+          # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
+          |> Ash.update(authorize?: false, tenant: actor.tenant_id)
+          |> audited(actor, Map.fetch!(@transition_events, action), "assignment", & &1.id)
+        end
       end)
       |> then(fn
         {:ok, moved} -> load(actor, moved.load_id)
@@ -324,6 +338,21 @@ defmodule Dispatch.Operations.Board do
   defp current(_record, nil), do: :ok
   defp current(%{version: version}, version), do: :ok
   defp current(_record, _expected), do: {:error, :stale}
+
+  defp permitted(:PLANNED, action) when action in [:activate, :cancel], do: :ok
+  defp permitted(:ACTIVE, action) when action in [:complete, :cancel], do: :ok
+
+  defp permitted(status, action),
+    do: {:error, {:invalid, "cannot #{action} a #{status} trip"}}
+
+  defp lock_trip!(actor, id) do
+    from(a in "assignments",
+      where: a.id == type(^id, :binary_id) and a.tenant_id == type(^actor.tenant_id, :binary_id),
+      select: a.id,
+      lock: "FOR UPDATE"
+    )
+    |> Dispatch.Repo.one()
+  end
 
   defp transition_action(action) do
     case Map.fetch(@transitions, action) do
