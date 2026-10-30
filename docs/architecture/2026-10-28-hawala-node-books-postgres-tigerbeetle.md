@@ -7,6 +7,13 @@ The canonical specification, core and opt-in native storage implementation remai
 by `larsbx/hawala-core`, pinned independently in
 [`hawala-tigerbeetle-first-pin.json`](fixtures/hawala-tigerbeetle-first-pin.json).
 
+Storage implementation update, 2026-10-30:
+[PostgreSQL event log and Redis consolidation](2026-10-30-postgres-event-log-redis-consolidation.md)
+specifies staged replacement of the Elixir EventStore library behind Log.
+References to EventStore below describe the active adapter and recorded
+acceptance; the replacement must preserve signed admission and durable replay.
+The financial commit order and all production gates remain in force.
+
 ## Financial commit and downstream copies
 
 **Record securely in TigerBeetle first. Its confirmed complete linked operation
