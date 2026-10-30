@@ -179,6 +179,48 @@ Temporary comparisons have an explicit retirement condition. After new writes,
 rollback must retain the entire verified new prefix and fence the replacement;
 never switch back to a stale legacy database.
 
+## Ecosystem adoption and repository responsibilities
+
+The shared contract applies through repository-specific ADRs, not by deploying
+a new PostgreSQL event log, Redis scheduler or TigerBeetle process in every app.
+Content repositories keep Git source authority, clients keep local custody and
+offline intent, standalone providers keep explicit ports, and retiring runtimes
+need verified capability/consumer migration before shutdown. No app may treat
+a cache, source checkout or transport ACK as business or financial authority.
+
+| Repository | Role and local decision |
+| --- | --- |
+| [school-ops](https://github.com/larsbx/school-ops/blob/main/docs/decisions/0008-platform-storage-and-operations.md) ([PR #17](https://github.com/larsbx/school-ops/pull/17)) | Curriculum source; hosted staff-workflow consumer |
+| [d-patch](https://github.com/larsbx/d-patch/blob/main/docs/adr/0016-platform-storage-and-delivery.md) ([PR #39](https://github.com/larsbx/d-patch/pull/39)) | Android/web clients; frozen server snapshot retirement |
+| [eatsbot](https://github.com/larsbx/eatsbot/blob/dev/docs/modules/decisions/pages/platform-storage-and-retirement.adoc) ([PR #36](https://github.com/larsbx/eatsbot/pull/36)) | Legacy product salvage and verified runtime retirement |
+| [sprucegoose](https://github.com/larsbx/sprucegoose/blob/main/docs/decisions/2026-10-30-biz-kit-retirement-storage.md) ([PR #26](https://github.com/larsbx/sprucegoose/pull/26)) | Task/actor/permit authority succession and verified retirement |
+| [spruce](https://github.com/larsbx/spruce/blob/main/docs/decisions/2026-10-30-platform-delivery-and-turn-history.md) ([PR #6](https://github.com/larsbx/spruce/pull/6)) | Agent turns, budgets and long-tool delivery |
+| [truck-shop](https://github.com/larsbx/truck-shop/blob/main/docs/architecture/2026-10-30-biz-kit-storage-and-delivery.md) ([PR #26](https://github.com/larsbx/truck-shop/pull/26)) | Tenant-scoped maintenance, inventory and billing workflows |
+| [bizops-kb](https://github.com/larsbx/bizops-kb/blob/main/docs/decisions/2026-10-30-source-custody-and-platform-storage.md) ([PR #6](https://github.com/larsbx/bizops-kb/pull/6)) | Source custody and governed retrieval/publication |
+| [agent-runtime-platform](https://github.com/larsbx/agent-runtime-platform/blob/main/docs/decisions/2026-10-30-shared-operational-fabric.md) ([PR #4](https://github.com/larsbx/agent-runtime-platform/pull/4)) | Shared worker adapter and execution recovery |
+| [coop_substrate](https://github.com/larsbx/coop_substrate/blob/main/docs/decisions/2026-10-30-postgres-log-backend-boundary.md) ([PR #9](https://github.com/larsbx/coop_substrate/pull/9)) | Standalone signed-log/protocol compatibility |
+| [accountabot_dashboard](https://github.com/larsbx/accountabot_dashboard/blob/main/docs/decisions/2026-10-30-platform-projections-and-commands.md) ([PR #8](https://github.com/larsbx/accountabot_dashboard/pull/8)) | Task projections, reviewed commands, PTY and SMS boundaries |
+| [truck-dispatch](https://github.com/larsbx/truck-dispatch/blob/main/docs/decisions/2026-10-30-platform-storage-and-routing-state.md) ([PR #1](https://github.com/larsbx/truck-dispatch/pull/1)) | Development deployment and routing/map source separation |
+
+The companion ADRs are being proposed on their repositories' active bases:
+Eatsbot uses `dev`; the other listed repositories use `main`. Links name
+their intended canonical paths and may remain pending until those PRs merge.
+The earlier d-patch ADR-0015 and Eatsbot source-ownership proposals remain
+separate dependencies; this matrix does not declare them accepted.
+
+Every implementation must identify authoritative sources, retained evidence,
+current permission checks, original operation/effect IDs, complete replay
+watermarks, Redis-loss reconstruction, bounded SQL/provider reads, and its
+consumer/writer cutover. Test the actual adapter and retain exact-revision
+proof/CI evidence. Do not transplant an entire platform contract into a content
+repository or replace nonrebuildable map, inventory, consent or terminal data
+with expiring cache entries.
+
+The source scan also found `keel` and `accountabot` repositories with only
+placeholder/readme material at their inspected heads. No datastore or invented
+runtime contract is added there. Keel's pure calculations do not by themselves
+grant authority. Add a local ADR when an actual integration/consumer exists.
+
 ## References
 
 - [Elixir EventStore API](https://eventstore.hexdocs.pm/EventStore.html):
