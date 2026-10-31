@@ -6,7 +6,7 @@ defmodule InventoryCore.MixProject do
       app: :inventory_core,
       version: "0.1.0",
       elixir: "~> 1.18",
-      deps: []
+      deps: [{:stream_data, "~> 1.1", only: :test}]
     ] ++ umbrella_paths()
   end
 

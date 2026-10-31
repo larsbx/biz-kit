@@ -6,8 +6,17 @@ defmodule CommerceCore.MixProject do
       app: :commerce_core,
       version: "0.1.0",
       elixir: "~> 1.18",
-      deps: [{:ex_money, "~> 6.2"}]
+      deps: [{:ex_money, "~> 6.2"}, {:stream_data, "~> 1.1", only: :test}] ++ json_polyfill()
     ] ++ umbrella_paths()
+  end
+
+  # ex_money's localize needs OTP 27's :json module. Hosts still on OTP 26
+  # (Eatsbot's toolchain) get the polyfill; the umbrella, on OTP 27, does not,
+  # so its lock is unchanged.
+  defp json_polyfill do
+    if String.to_integer(System.otp_release()) < 27,
+      do: [{:json_polyfill, "~> 0.2 or ~> 1.0"}],
+      else: []
   end
 
   # In the biz-kit umbrella all apps share one _build, deps, config and lock.

@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""One connection from biz-kit-cd-trigger.socket.
+
+POST /deploy records a pending deploy and answers 202; anything else is a 404.
+The request carries nothing the deploy uses: biz-kit-cd fetches main itself,
+so the worst a stray caller can do is cause a no-op deploy.
+
+202 means the wake-up is on disk and biz-kit-cd.path is watching for it, so it
+survives a deploy already running and a reboot. If either is not true the
+answer is 503 and CI fails instead of reporting a deploy that will not happen.
+"""
+import os
+import subprocess
+import sys
+import time
+
+STATE = os.path.join(
+    os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "biz-kit-cd"
+)
+PENDING = os.path.join(STATE, "pending")
+
+
+def record_pending():
+    """Writes the marker atomically and durably: synced file, rename, synced directory."""
+    os.makedirs(STATE, exist_ok=True)
+    tmp = PENDING + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, f"{time.time():.0f}\n".encode())
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, PENDING)
+    dfd = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
+def watched():
+    return subprocess.run(
+        ["systemctl", "--user", "is-active", "--quiet", "biz-kit-cd.path"], check=False
+    ).returncode == 0
+
+
+stdin = sys.stdin.buffer
+request = stdin.readline(1024).decode("latin-1").split()
+while stdin.readline(8192) not in (b"\r\n", b"\n", b""):
+    pass
+
+if request[:2] != ["POST", "/deploy"]:
+    status, body = "404 Not Found", ""
+elif not watched():
+    status, body = "503 Service Unavailable", "biz-kit-cd.path is not active\n"
+else:
+    try:
+        record_pending()
+        status, body = "202 Accepted", "deploy pending\n"
+    except OSError as e:
+        print(f"could not record the pending deploy: {e}", file=sys.stderr)
+        status, body = "503 Service Unavailable", "could not record the pending deploy\n"
+
+sys.stdout.write(
+    f"HTTP/1.1 {status}\r\nContent-Type: text/plain\r\n"
+    f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n{body}"
+)
+sys.stdout.flush()

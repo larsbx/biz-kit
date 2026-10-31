@@ -13,7 +13,7 @@ event history, projections, evidence custody, scheduling and interface
 infrastructure, with additional school-specific domain features.
 
 `apps/school_ops` is **not a migration** from `larsbx/school-ops`. The
-original repo can be the upstream authoring source for curriculum assets.
+original repo remains the authoritative curriculum-authoring source.
 Its pinned copies live under `apps/school_ops/priv/content/`; source commit
 `ccacc596d63a7b04d33d62bc77636fd93de9f995` and per-file Git blobs
 are retained for reproducible content updates. There is no required editor,
@@ -33,6 +33,36 @@ The ledger is the platform's admission authority, not an instructional-grade
 storage subsystem. Private learner records need domain-specific protections,
 but must not create an independent authority for shared task transitions.
 No teacher review grants can be inferred from course names or a login.
+
+## Selected storage contract for the hosted backend
+
+The [October 30 storage ADR](2026-10-30-postgres-event-log-redis-consolidation.md)
+and [school-ops decision 0008](https://github.com/larsbx/school-ops/blob/main/docs/decisions/0008-platform-storage-and-operations.md)
+supplement this domain slice. Curriculum, assessment text, editorial readiness
+and source rights remain under the independent content repository; immutable
+imports do not transfer authoring authority or require its authors to deploy
+PostgreSQL, Redis, TigerBeetle or Hawala.
+
+| Concern | SchoolOps backend obligation |
+| --- | --- |
+| Commands | Use the shared signed admission path and current scoped grants/revocation; no direct SQL appender or competing task writer |
+| PostgreSQL | Retain admitted business history, governed import manifests, operational intent, permanent source/body bindings and effect receipts; projections retain their verified source watermark |
+| Replay | Consume a verified complete prefix with bounded reads; atomically persist the complete bundle, receipt and cursor where co-located, otherwise use source-bound idempotent admission and prove append-before-cursor recovery; stop on unknown types or gaps |
+| Redis | Use the shared worker for retained scheduling, retry, cancellation, reclaim and notifications; rebuild work/views from durable intent, receipts and pinned source after Redis loss |
+| Optional finance | Use the authenticated Hawala boundary only for separately authorized future financial workflows; TigerBeetle acceptance/balances do not establish teaching or learner outcomes |
+
+Original IDs and immutable body binding survive retries. Recheck authorization
+at execution, retain durable effect evidence, and ACK only after durable owner
+completion. A scheduler lease, cached role or task preview cannot authorize an
+effect. Preserve tenant/scope and source-revision separation in derived views.
+
+This is a selected target specification. The existing EventStore backend stays
+active until P1–P8 pass against its actual replacement; historical proof and
+synthetic acceptance do not certify new adapters. Backend implementation PRs
+must retain exact-revision Lean/Quint refinement, concurrency, crash/replay,
+Redis-loss and scoped authorization evidence, then fence old writers at verified
+cutover. Optional finance retains Hawala S-A1–S-A7 and existing release gates.
+This amendment activates no school commands, learner storage or financial path.
 
 ## First school-specific slice
 

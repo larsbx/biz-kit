@@ -1,0 +1,93 @@
+name: Deploy to adder-ws
+# Each time a CI workflow on main completes, wake adder-ws. The runner joins the
+# tailnet as tag:biz-kit-deploy and posts to biz-kit-cd-trigger.socket; adder-ws
+# fetches main itself and deploys it only once every workflow run on that commit
+# is green, so nothing from this job or its triggering event is deployed. A
+# completion from another repository's pull request can only cause a wake-up
+# that the host's own CI check turns into a no-op.
+#
+# The list is every workflow that runs on push to main except this one;
+# tools/test_adder_ws_cd.py fails when it drifts.
+#
+# Activation evidence and host requirements: docs/adder-ws-cd.md.
+on:
+  workflow_run:
+    workflows:
+      - 'Adder-ws CD contract'
+      - 'Barter core'
+      - 'Business capability composition'
+      - 'CommerceCore extraction'
+      - 'Consolidation'
+      - 'Desktop'
+      - 'Dispatch partner acceptance'
+      - 'DispatchCore salvage — portable last-mile policy'
+      - 'Eatsbot Kafka producer'
+      - 'Eatsbot salvage candidate safety — Quint'
+      - 'EventStore signed replay acceptance'
+      - 'Federation contract'
+      - 'Federation discovery'
+      - 'Formal safety proofs (Lean + Quint)'
+      - 'FulfillmentCore contract'
+      - 'Group buy core'
+      - 'Group buy seller-home authority'
+      - 'Hawala canonical architecture pin'
+      - 'InventoryCore rules'
+      - 'Location cross-repository acceptance'
+      - 'Marketing attribution consent composition'
+      - 'MarketingCore salvage — portable pure rules'
+      - 'Portable business cores — Eatsbot OTP 26 compatibility'
+      - 'Portable cores — independent consumers'
+      - 'Portal authentication acceptance'
+      - 'SalesCore consent and pipeline'
+      - 'SchoolOps domain'
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions: {}
+# Coalesces pending triggers; this is NOT a host deployment lock or a FIFO.
+concurrency:
+  group: deploy-adder-ws
+  cancel-in-progress: false
+jobs:
+  trigger:
+    if: github.repository == 'larsbx/biz-kit' && github.ref == 'refs/heads/main' && vars.ADDER_WS_CD == 'true' && vars.ADDER_WS_CD_ACCEPTANCE == 'v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require credentials
+        env:
+          TS_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_CLIENT_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$TS_CLIENT_ID" || -z "$TS_CLIENT_SECRET" ]]; then
+            echo '::error::Both Tailscale OAuth repository secrets are required.'
+            exit 1
+          fi
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:biz-kit-deploy
+          args: --accept-routes=false --accept-dns=false
+          version: '1.104.4'
+          use-cache: 'false'
+          timeout: '60s'
+          retry: '1'
+      - name: Request deployment (acceptance only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Tailnet peer authentication + audited ACLs authorize this endpoint.
+          # Ignore curlrc/proxies, discard untrusted bodies, reject redirects.
+          # No retry: a lost response can follow an accepted POST.
+          status=$(curl -q --noproxy '*' --proto '=http' --silent --show-error \
+            --connect-timeout 5 --max-time 15 --retry 0 \
+            --output /dev/null --write-out '%{http_code}' \
+            --request POST http://100.67.165.25:8791/deploy)
+          if [[ "$status" != '202' ]]; then
+            echo "::error::Deployment trigger rejected (HTTP $status; expected 202)."
+            exit 1
+          fi
+          echo 'Trigger accepted. Deployment completion must be verified on adder-ws.' >> "$GITHUB_STEP_SUMMARY"

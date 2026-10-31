@@ -13,6 +13,21 @@ behind adapters. The selected direction is one source of truth. The proposed
 implementation uses the existing CoopSubstrate signed ledger as that source,
 rather than building another persistence framework.
 
+## Storage decision update — 2026-10-30
+
+The [PostgreSQL event-log and Redis decision](2026-10-30-postgres-event-log-redis-consolidation.md)
+selects staged replacement of the `eventstore` library behind the signed Log
+boundary. EventStore already uses PostgreSQL; the existing backend remains
+active until byte compatibility, concurrency, recovery and refinement gates
+pass. This supersedes backend-retention instructions below as a future target,
+not the canonical signed protocol or the current implementation.
+
+The [TigerBeetle-first financial contract](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
+owns financial acceptance and balances. The one business ledger records signed
+outcomes afterward; it is not a competing financial commit. Redis supplies
+covered operational delivery and derived views. Independently governed homes
+retain their own authorities and required independent evidence copies.
+
 ## Target
 
 **One signed business-event ledger, one command admission path, one principal
@@ -26,11 +41,11 @@ dashboard, or Ash resource cannot independently establish a competing fact.
 
 | Concern | Common implementation |
 | --- | --- |
-| Durable business facts | Promote `CoopSubstrate.Log` and its existing `eventstore` backend to the platform ledger. Extend its typed event registry and append validation for the admitted domains. |
+| Durable business facts | Promote `CoopSubstrate.Log` to the platform ledger. Replace its existing PostgreSQL-backed `eventstore` library only after the 2026-10-30 compatibility/cutover gates pass; preserve typed event registration and admission. |
 | Event bytes, signatures, and order | Existing `CoopEventCanonicalV1` profile, Ed25519 signer declarations, global/per-stream chains, and checkpoints. Global order is ledger acceptance order; effective time remains event data. |
 | Writes | Domain commands validate against a committed ledger version; the serialized append gate rechecks authority and preconditions before accepting events. Acknowledge only after the append is durable. |
 | Reads | Ash/PostgreSQL tables provide queryable projections. They can be rebuilt or replaced without changing business history. |
-| Database/configuration | One database connection target and one deployment/migration contract. Isolate EventStore-owned tables from projection/job tables inside that database; consolidate projection Repos. |
+| Database/configuration | One governed business database target and migration contract; isolate canonical history from projection/operational tables and consolidate projection Repos. TB financial books and required independent evidence destinations retain their separate roles. |
 | Identity | One platform principal registry and scoped grant model, derived from the ledger. External authentication providers connect through `BizKit.Identity`; retain separate token audiences and domain permission meanings. |
 
 The existing ledger already has verify-on-append, atomic batches, exact-byte
@@ -64,7 +79,7 @@ retain separate databases, receipt bridges or business authorities indefinitely.
 | SpruceGoose live task-row authority and Dispatch direct domain writes | Convert mutations to commands and rows to projections. | A covered command cannot succeed via a row write or an old writer; ledger append failure changes no business state. |
 | Per-app business outboxes and audit bridges | Derive delivery work from the accepted common ledger, with consumer cursors and stable effect IDs. | Durable delivery/retry replaces each current transport before its code is removed. Delivery accounting is operational state, not a second business log. |
 | Duplicate principal/user/grant registries and local OAuth issuer | Introduce one governed principal-link/grant model and one authentication entry point. Retire redundant issuer/token machinery once clients migrate. | Preserve identity mappings, active grants, revocations, service/agent scopes, and MCP client authorization. Never merge users merely because names/emails match. |
-| Duplicate projection Repos, migration owners, and production configuration | Consolidate projection ownership in one Repo and retain the existing EventStore backend in the same database. | Resolve conflicting `users`, `outbox_events`, and migration tables by explicit mappings, not by pointing today's Repos at the same schema. |
+| Duplicate projection Repos, migration owners, and production configuration | Consolidate projection ownership in one Repo; retain the active backend until the staged PostgreSQL adapter passes its gates, then remove covered EventStore wiring. | Resolve conflicting `users`, `outbox_events`, and migration tables by explicit mappings, not by pointing today's Repos at the same schema. |
 | Unused constitutional-kernel scaffold | Remove code with no delivered admission caller; retain the actual implemented domain checks. | Preserve immutable artifact/provenance bytes referenced by existing records. `Kernel.Constitution` currently has callers only in its own test. |
 
 The notes code/dependency is retired by the first implementation stage.

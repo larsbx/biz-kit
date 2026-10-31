@@ -52,8 +52,20 @@ defmodule Dispatch.Access.Capabilities do
     proposal.create
     action.execute.approved
   )
+  # The carrier's own dispatching work, beyond Section 23.2's table: creating
+  # loads and stops for its own organization and planning and moving its own
+  # trips. None of these binds another organization, sets a rate, or accepts a
+  # load on anyone's behalf -- that remains the proposal and approval flow.
+  @dispatching ~w(
+    load.create
+    stop.add
+    assignment.read
+    assignment.plan
+    assignment.update.status
+    fleet.read
+  )
 
-  @all @self_service ++ @administration ++ @operations ++ @commercial
+  @all @self_service ++ @administration ++ @operations ++ @commercial ++ @dispatching
 
   @constraints ~w(
     self_only

@@ -25,7 +25,7 @@ cp lean-toolchain "$scratch/audit/lean-toolchain"
 
 # The audit selects declarations by defining MODULE, not their namespace.
 # Auditing only BizKitEventProofs would omit BizKitBundles and BizKitLeases.
-for root in BizKitLeases BizKitBundles BizKitEventProofs BizKitOutcomeAdmission; do
+for root in BizKitLeases BizKitBundles BizKitDispatch BizKitEventProofs BizKitOutcomeAdmission; do
   lake env "$scratch/audit/.lake/build/bin/axiom-audit" \
     --root "$root" --allow propext,Classical.choice,Quot.sound
 done

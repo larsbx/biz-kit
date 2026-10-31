@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Decides whether a biz-kit commit's CI allows deploying it.
+
+    biz-kit-cd-gate <sha>
+
+Looks at every GitHub Actions workflow run for the commit, except the deploy
+trigger itself, keeping the latest run per workflow (a re-run replaces a
+failure). Exits:
+
+    0   green: at least one run, all completed as success, skipped or neutral
+    75  pending: some run has not completed; the next completion wakes the host
+    1   failed: some run completed any other way
+    2   could not ask GitHub
+
+Workflow runs, not check runs: GitHub creates every triggered workflow's run
+at push time, but a check run only when its job is queued, so counting check
+runs could pass a commit before its slower workflows exist.
+"""
+import json
+import subprocess
+import sys
+
+REPO = "larsbx/biz-kit"
+EXCLUDED = {".github/workflows/deploy-adder-ws.yml"}
+GREEN = {"success", "skipped", "neutral"}
+
+
+def runs(sha):
+    out = subprocess.run(
+        ["gh", "api", "--paginate", f"repos/{REPO}/actions/runs?head_sha={sha}&per_page=100",
+         "--jq", ".workflow_runs[] | {id, path, name, status, conclusion}"],
+        capture_output=True, text=True, timeout=60, check=True,
+    ).stdout
+    return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+
+def main():
+    if len(sys.argv) != 2 or len(sys.argv[1]) != 40:
+        print("usage: biz-kit-cd-gate <full sha>", file=sys.stderr)
+        return 2
+    try:
+        found = runs(sys.argv[1])
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError) as e:
+        print(f"could not list workflow runs: {e}", file=sys.stderr)
+        return 2
+
+    latest = {}
+    for run in found:
+        if run["path"] in EXCLUDED:
+            continue
+        if run["path"] not in latest or run["id"] > latest[run["path"]]["id"]:
+            latest[run["path"]] = run
+
+    if not latest:
+        print("pending: no workflow runs yet")
+        return 75
+    failed = [r for r in latest.values() if r["status"] == "completed" and r["conclusion"] not in GREEN]
+    waiting = [r for r in latest.values() if r["status"] != "completed"]
+    for r in sorted(failed, key=lambda r: r["name"]):
+        print(f"failed: {r['name']} ({r['conclusion']})")
+    for r in sorted(waiting, key=lambda r: r["name"]):
+        print(f"waiting: {r['name']} ({r['status']})")
+    if failed:
+        return 1
+    if waiting:
+        return 75
+    print(f"green: {len(latest)} workflows")
+    return 0
+
+
+sys.exit(main())
