@@ -92,12 +92,12 @@
 
   {#if !open}
     <table>
-      <thead><tr><th>Type</th><th>Path</th><th style="width: 80px">Size</th></tr></thead>
+      <thead><tr><th>Type</th><th>Path</th><th style="width: 6rem">Size</th></tr></thead>
       <tbody>
         {#each items as c (c.path)}
           <tr style="cursor: pointer" onclick={() => openFile(c)}>
             <td>{c.label} {#if c.protected}<span class="pill">read-only</span>{/if}</td>
-            <td class="mono trunc" style="max-width: 460px">{c.path}</td>
+            <td class="mono trunc" style="max-width: 36rem">{c.path}</td>
             <td style="color: var(--dim)">{c.size}</td>
           </tr>
         {/each}
@@ -107,10 +107,10 @@
       <div class="empty">No matching files on {host}. Patterns are set under <code class="mono">configs</code> in {info.configPath}</div>
     {/if}
   {:else}
-    <div class="mono" style="font-size: 12px; color: var(--dim); margin-bottom: 8px">{open.host}:{open.path}</div>
+    <div class="mono" style="font-size: .92rem; color: var(--dim); margin-bottom: 8px">{open.host}:{open.path}</div>
     {#if diff}
       <div class="row" style="margin-bottom: 6px">
-        <strong style="font-size: 12px">Pending change</strong>
+        <strong style="font-size: .92rem">Pending change</strong>
         <div class="spacer"></div>
         <button class="btn" onclick={() => (diff = null)}>Back to editor</button>
       </div>

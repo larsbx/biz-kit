@@ -77,7 +77,7 @@
             <span class={d.failedUnits.length ? "pill warn" : "pill ok"}>{d.failedUnits.length}</span>
           </div>
           {#if d.failedUnits.length > 0}
-            <div class="mono" style="font-size: 11px; color: var(--dim); margin-top: 4px">
+            <div class="mono" style="font-size: .85rem; color: var(--dim); margin-top: 4px">
               {#each d.failedUnits.slice(0, 6) as u (u)}<div class="trunc">{u}</div>{/each}
               {#if d.failedUnits.length > 6}<div>+{d.failedUnits.length - 6} more</div>{/if}
             </div>
@@ -89,7 +89,7 @@
               <span
                 class={"trunc pill " + (c.ok ? "ok" : "bad")}
                 title={c.detail}
-                style="max-width: 180px; display: inline-block"
+                style="max-width: 14rem; display: inline-block"
               >{c.detail.split("\n")[0] || (c.ok ? "ok" : "failed")}</span>
             </div>
           {/each}

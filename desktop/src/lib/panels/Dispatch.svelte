@@ -261,7 +261,7 @@
       <button class={"chip" + (filter === "open" ? " on" : "")} onclick={() => (filter = "open")}>open</button>
       <button class={"chip" + (filter === "all" ? " on" : "")} onclick={() => (filter = "all")}>all</button>
     </div>
-    <input type="text" placeholder="Filter…" bind:value={q} style="width: 160px" />
+    <input type="text" placeholder="Filter…" bind:value={q} style="width: 13rem" />
   {/if}
   <div class="spacer"></div>
   {#if status?.signedIn}
@@ -451,7 +451,7 @@
 <style>
   .board {
     display: grid;
-    grid-template-columns: minmax(240px, 320px) 1fr;
+    grid-template-columns: minmax(18rem, 24rem) 1fr;
     gap: 16px;
     align-items: start;
   }
@@ -467,7 +467,7 @@
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: .6rem .75rem;
     color: inherit;
     font: inherit;
     cursor: pointer;
@@ -479,16 +479,16 @@
   .load.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
     gap: 8px;
     margin-top: 10px;
     align-items: end;
   }
-  .grid label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--dim); }
+  .grid label { display: flex; flex-direction: column; gap: 3px; font-size: .92rem; color: var(--dim); }
   .grid .wide { grid-column: span 2; }
   .grid input, .grid select { width: 100%; box-sizing: border-box; }
   .stops { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
   .stops li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
   .detail table { margin-top: 6px; }
-  .load .sub, .stops .sub { color: var(--dim); font-size: 11px; }
+  .load .sub, .stops .sub { color: var(--dim); font-size: .85rem; }
 </style>
