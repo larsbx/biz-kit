@@ -62,3 +62,20 @@ bound and merchant scoping.
 **Characterization.** `test/eatsbot_characterization_test.exs` checks this core
 against the old eatsbot's recorded behaviour, pinned by sha256 to
 `larsbx/eatsbot@15a201e` (rebuild slice 1): all 314 recorded baskets price to the same totals or are refused with the same error term.
+
+**Order and checkout safety.** `CommerceCore.OrderLifecycle` adds a pure,
+order-scoped candidate reducer and mathematical history replay.
+Host-verified operation grants precede all protected state/revision/history
+inspection. `CommerceCore.Checkout` produces immutable priced order candidates,
+one per cart, with channel-scoped idempotency and a delivery-request marker.
+Both require serialized authenticated host admission; neither is a database or
+production writer. Checkout creates no tracking secrets or transport record.
+
+Checkout and lifecycle completion do not accept money. Every checkout candidate
+is `financial_status: :unconfirmed`, including duplicate requests containing a
+claimed settlement. A computed tax reversal is arithmetic only. Financial
+acceptance requires a confirmed canonical TigerBeetle operation through the
+Hawala gateway, followed by downstream persistence; this core exposes no
+financial-acceptance action.
+
+See [the fixture provenance, intentional differences and remaining migration gates](../../docs/architecture/2026-10-31-eatsbot-safety-compatibility.md).
