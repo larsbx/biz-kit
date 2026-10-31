@@ -27,3 +27,11 @@ Recipes, batch expiry, hazardous stock, serial numbers, picking/packing and
 warehouse devices remain domain extensions.
 
 Run `mix test --no-start` in `apps/inventory_core` (no database required).
+
+**Menu availability.** `InventoryCore.Menu.sellable/4` gives how many units of a
+menu item can still be sold at a location: the minimum over its stock
+requirements of ⌊available / per-unit quantity⌋, where available excludes
+active reservations. An item with no requirements is `:unlimited`.
+`eighty_sixed?/4` is true when none can be sold, and fails closed when
+availability cannot be computed. A property checks that the sellable count's
+worth of every requirement can be reserved and one more unit's cannot.
