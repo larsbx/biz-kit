@@ -5,7 +5,7 @@
   import Confirm from "#lib/Confirm.svelte";
   import Icon from "#lib/Icon.svelte";
   import Tiles from "#lib/Tiles.svelte";
-  import { PRESETS, currentPreset, leaves } from "#lib/layout.js";
+  import { PRESETS, currentPreset, leaves, retainPanels } from "#lib/layout.js";
   import { addPanel, restoreLayout, saveLayout, tiling } from "#lib/tiling.svelte.js";
   import { DEFAULTS, FONT, prefs, setFontSize } from "#lib/prefs.svelte.js";
   import { pending } from "#lib/confirmation.svelte.js";
@@ -32,7 +32,7 @@
 
   function usePreset(name: string) {
     tiling.zoomed = null;
-    tiling.root = PRESETS.find((p) => p.name === name)!.build();
+    tiling.root = retainPanels(PRESETS.find((p) => p.name === name)!.build(), tiling.root);
   }
 
   function onKey(e: KeyboardEvent) {

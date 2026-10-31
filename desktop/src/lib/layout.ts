@@ -54,6 +54,16 @@ export const setPanel = (root: Node, id: number, p: string): Node =>
 export const setRatio = (root: Node, id: number, r: number): Node =>
   map(root, (n) => (n.t === "split" && n.id === id ? { ...n, r: clampRatio(r) } : undefined));
 
+/** Match panel occurrences in reading order, retaining each live instance at most once. */
+export function retainPanels(next: Node, current: Node): Node {
+  const available = leaves(current);
+  return map(next, (n) => {
+    if (n.t !== "leaf") return undefined;
+    const index = available.findIndex((l) => l.p === n.p);
+    return index < 0 ? n : available.splice(index, 1)[0];
+  });
+}
+
 type Shape = string | ["h" | "v", Shape, Shape];
 export const shape = (n: Node): Shape => (n.t === "leaf" ? n.p : [n.dir, shape(n.a), shape(n.b)]);
 

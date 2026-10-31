@@ -1,4 +1,4 @@
-import { PRESETS, type Leaf, type Node, leaves, parseLayout, serialize, splitLeaf } from "./layout";
+import { PRESETS, type Leaf, type Node, leaves, parseLayout, retainPanels, serialize, splitLeaf } from "./layout";
 
 const KEY = "layout";
 
@@ -10,7 +10,7 @@ export const tiling = $state<{ root: Node; zoomed: number | null }>({
 
 /** Restore the saved layout, keeping only panels that still exist. */
 export function restoreLayout(panelIds: Iterable<string>) {
-  tiling.root = parseLayout(localStorage.getItem(KEY), new Set(panelIds)) ?? PRESETS[0].build();
+  tiling.root = retainPanels(parseLayout(localStorage.getItem(KEY), new Set(panelIds)) ?? PRESETS[0].build(), tiling.root);
   tiling.zoomed = null;
 }
 
