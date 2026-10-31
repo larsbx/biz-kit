@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# biz-kit-cd: deploy origin/main to ~/biz-kit once its CI is green, and roll
+# back to the last good deploy if anything after the fast-forward fails.
+#
+# Run by biz-kit-cd.service, which biz-kit-cd.path starts when the trigger
+# (biz-kit-cd-trigger.socket, posted to by CI each time a workflow on main
+# completes) leaves a pending marker. Nothing polls: between events this is idle.
+#
+#   CI pending                  do nothing; the next workflow completion wakes us
+#   CI failed                   refuse, notify once per commit
+#   desktop/ changed            rebuild the desktop app (relaunch it yourself)
+#   backend changed             compile, then restart biz-kit-stack.service
+#   docs/formal/.github/*.md    nothing to build
+#   any step fails              restore the source, _build/dev, deps and desktop
+#                               binary of the last good deploy, restart the stack
+#                               if it was touched, and do not retry that commit
+#
+# State in ~/.local/state/biz-kit-cd: deployed (last good commit), good/ (its
+# artifacts), failed (a commit not to retry; delete it to retry), pending, lock.
+# Logs: journalctl --user -u biz-kit-cd -u biz-kit-stack
+set -euo pipefail
+
+repo="${BIZKIT_REPO:-$HOME/biz-kit}"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/biz-kit-cd"
+mkdir -p "$state"
+
+pending="$state/pending"
+good="$state/good"
+desktop_bin="desktop/src-tauri/target/release/biz-kit"
+# Overridable only so failure injection can run against a test checkout,
+# test service and fake gate instead of the live ones.
+stack="${BIZKIT_STACK_UNIT:-biz-kit-stack.service}"
+ports="${BIZKIT_HEALTH_PORTS:-4001 4000}"
+gate_cmd="${BIZKIT_CD_GATE:-$HOME/bin/biz-kit-cd-gate}"
+
+notify() {
+  echo "$1"
+  notify-send -a biz-kit-cd "biz-kit deploy" "$1" 2>/dev/null || true
+}
+
+# Notifies once per (kind, commit), so each of a commit's many workflow
+# completions does not repeat the same refusal.
+notify_once() {
+  if [ "$(cat "$state/notified-$1" 2>/dev/null)" != "$2" ]; then
+    notify "$3"
+    write_atomic "$state/notified-$1" "$2"
+  fi
+}
+
+# A synced temporary file renamed into place: a crash leaves the old content or
+# the new, never a torn or unsynced one.
+write_atomic() {
+  printf '%s\n' "$2" >"$1.tmp"
+  sync "$1.tmp"
+  mv -f "$1.tmp" "$1"
+  sync "$(dirname "$1")"
+}
+
+# One deploy at a time, whether started by the trigger or by hand.
+exec 9>"$state/lock"
+flock 9
+
+# The trigger leaves $pending for biz-kit-cd.path, which starts this unit and
+# starts it again if $pending exists when it exits. Consume it before anything
+# can refuse, or a refusal would re-run forever; a trigger that arrives after
+# this point leaves a fresh one, so its event is never lost.
+rm -f "$pending"
+
+cd "$repo"
+branch="$(git symbolic-ref --short -q HEAD || echo "a detached HEAD")"
+if [ "$branch" != main ]; then
+  notify "skipped: $repo is on $branch, not main"
+  exit 1
+fi
+# Tracked edits, staged changes and untracked files all refuse; ignored build
+# output does not. Nothing is ever reset or cleaned to get past this.
+if [ -n "$(git status --porcelain)" ]; then
+  notify "skipped: $repo has uncommitted or untracked files"
+  exit 1
+fi
+
+healthy() {
+  local port
+  systemctl --user is-active -q "$stack" || return 1
+  for port in $ports; do
+    [ "$(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$port/")" != 000 ] || return 1
+  done
+}
+
+# The stack rebuilds and reseeds on start, which takes minutes.
+wait_healthy() {
+  for _ in $(seq 1 600); do
+    if healthy; then
+      return 0
+    fi
+    if [ "$(systemctl --user show "$stack" -p ActiveState --value)" = failed ]; then
+      return 1
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+# A deliberate restart clears the start limiter first: the failures that tripped
+# it (a broken deploy and its automatic retries) are exactly what a rollback
+# restart follows, and must not block it.
+restart_stack() {
+  systemctl --user reset-failed "$stack" 2>/dev/null || true
+  systemctl --user restart "$stack"
+}
+
+stack_managed() {
+  systemctl --user is-enabled -q "$stack"
+}
+
+build_desktop() {
+  cd "$repo/desktop"
+  if [ ! -d node_modules ] || grep -qx 'desktop/package-lock.json' <<<"$1"; then
+    npm ci
+  fi
+  npx tauri build --no-bundle
+}
+
+# Copies the artifacts of a healthy deploy beside the state, then swaps them in.
+retain() {
+  rm -rf "$good.new"
+  mkdir -p "$good.new"
+  rsync -a --delete "$repo/_build/dev/" "$good.new/build-dev/"
+  rsync -a --delete "$repo/deps/" "$good.new/deps/"
+  if [ -f "$repo/$desktop_bin" ]; then
+    cp -p "$repo/$desktop_bin" "$good.new/desktop-biz-kit"
+  fi
+  write_atomic "$good.new/commit" "$1"
+  rm -rf "$good.old"
+  if [ -d "$good" ]; then
+    mv "$good" "$good.old"
+  fi
+  mv "$good.new" "$good"
+  rm -rf "$good.old"
+  sync "$state"
+}
+
+# Puts back the last good source and artifacts; restarts the stack when it was
+# stopped or restarted. Exits: 1 when rolled back, 2 when that also failed.
+rollback() {
+  local failed_at="$1" why="$2" restart="$3" to note=""
+  in_flight=""
+  write_atomic "$state/failed" "$failed_at"
+  to="$(cat "$state/deployed")"
+  git reset --keep --quiet "$to"
+  if [ -f "$good/commit" ] && [ "$(cat "$good/commit")" = "$to" ]; then
+    rsync -a --delete "$good/build-dev/" "$repo/_build/dev/"
+    rsync -a --delete "$good/deps/" "$repo/deps/"
+    if [ -f "$good/desktop-biz-kit" ]; then
+      cp -p "$good/desktop-biz-kit" "$repo/$desktop_bin"
+    fi
+  else
+    note="; no retained artifacts for ${to:0:8}, so only the source was restored"
+  fi
+  if [ "$restart" = yes ] && stack_managed; then
+    if ! restart_stack || ! wait_healthy; then
+      notify "ROLLBACK FAILED: deploy of ${failed_at:0:8} failed ($why) and the stack is not healthy at ${to:0:8}$note. journalctl --user -u biz-kit-cd -u biz-kit-stack"
+      exit 2
+    fi
+  fi
+  notify "deploy of ${failed_at:0:8} failed ($why); rolled back to ${to:0:8}$note. Not retrying that commit; delete $state/failed to retry."
+  exit 1
+}
+
+# Set from the fast-forward until the checkpoint. An error between them that no
+# step handles (set -e) would otherwise leave an unvetted commit checked out.
+in_flight=""
+restarted=no
+on_exit() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] && [ -n "$in_flight" ]; then
+    set +e
+    rollback "$in_flight" "unexpected error, exit $rc" "$restarted"
+  fi
+}
+trap on_exit EXIT
+
+if [ ! -f "$state/deployed" ]; then
+  write_atomic "$state/deployed" "$(git rev-parse HEAD)"
+fi
+
+# A wake-up that lands mid-deploy cannot start the unit again, so loop until
+# origin/main stops moving.
+while :; do
+  rm -f "$pending"
+  git fetch --quiet origin main
+  new="$(git rev-parse origin/main)"
+  old="$(cat "$state/deployed")"
+  if [ "$old" = "$new" ]; then
+    break
+  fi
+  if [ -n "$(git rev-list "$new..HEAD")" ]; then
+    notify "stopped: local main has commits that are not on origin/main"
+    exit 1
+  fi
+  if [ "$(cat "$state/failed" 2>/dev/null)" = "$new" ]; then
+    echo "${new:0:8} failed to deploy before; not retrying"
+    break
+  fi
+
+  gate=0
+  "$gate_cmd" "$new" || gate=$?
+  case "$gate" in
+    0) ;;
+    75) echo "CI for ${new:0:8} has not finished; waiting for the next completion"; break ;;
+    1) notify_once ci "$new" "not deploying ${new:0:8}: its CI failed"; break ;;
+    *) notify "could not check CI for ${new:0:8}"; exit 1 ;;
+  esac
+
+  if ! git merge --ff-only --quiet "$new"; then
+    notify "stopped: local main has diverged from ${new:0:8}"
+    exit 1
+  fi
+  in_flight="$new"
+  restarted=no
+  changed="$(git diff --name-only "$old" "$new")"
+
+  desktop=""
+  if grep -q '^desktop/' <<<"$changed"; then
+    if ! (build_desktop "$changed"); then
+      rollback "$new" "desktop build failed" no
+    fi
+    desktop=" (desktop rebuilt; relaunch it)"
+  fi
+
+  if grep -vqE '^(desktop/|docs/|formal/|\.github/)|\.md$' <<<"$changed" && stack_managed; then
+    # Compile before stopping anything, so a broken commit leaves the running stack up.
+    if ! MIX_ENV=dev mix deps.get || ! MIX_ENV=dev mix compile; then
+      rollback "$new" "backend did not compile" no
+    fi
+    restarted=yes
+    if ! restart_stack || ! wait_healthy; then
+      rollback "$new" "stack not healthy after restart" yes
+    fi
+  elif ! healthy && stack_managed; then
+    rollback "$new" "stack not healthy" yes
+  fi
+
+  retain "$new"
+  write_atomic "$state/deployed" "$new"
+  in_flight=""
+  rm -f "$state/failed"
+  notify "deployed ${new:0:8}, $(wc -l <<<"$changed") files changed$desktop"
+done

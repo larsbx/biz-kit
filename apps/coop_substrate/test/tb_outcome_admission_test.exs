@@ -33,6 +33,38 @@ defmodule CoopSubstrate.TigerBeetleOutcomeAdmissionTest do
     assert :ok = Log.verify_chains()
   end
 
+  test "invalid signatures cannot append, recover cached receipts or checkpoint", ctx do
+    writer = start_writer(:tb_writer_a, ctx.snapshot)
+    [group | _] = ctx.groups
+    request = outcome(ctx.verifier, group)
+
+    submitters = [
+      fn env -> Log.append(env, :tb_writer_a) end,
+      fn env -> Log.append_if([env], {__MODULE__, :allow, []}, :tb_writer_a) end
+    ]
+
+    for submit <- submitters do
+      assert {:error, {:reject, 0, {:invalid_signature, _}}} = submit.(bad_signature(request))
+      assert Log.head(:tb_writer_a).global_seq == 0
+    end
+
+    assert {:ok, [receipt]} = Log.append(request, :tb_writer_a)
+    retry = outcome(ctx.other_key, group)
+    checkpoint_request = checkpoint(ctx.verifier, receipt)
+
+    for submit <- submitters, env <- [retry, checkpoint_request] do
+      assert {:error, {:reject, 0, {:invalid_signature, _}}} = submit.(bad_signature(env))
+      assert Process.alive?(writer)
+      assert Log.head(:tb_writer_a).global_seq == 1
+      assert Log.outcome_cursor(OutcomeAdmission.scope(receipt.payload), :tb_writer_a) == 0
+    end
+
+    assert {:ok, [^receipt]} = Log.read_all()
+    assert {:ok, [^receipt]} = Log.append(retry, :tb_writer_a)
+    assert {:ok, [_]} = Log.append(checkpoint_request, :tb_writer_a)
+    assert :ok = Log.verify_chains()
+  end
+
   test "changed exact body, native evidence and ordinal fail without durable changes", ctx do
     start_writer(:tb_writer_a, ctx.snapshot)
     [group | _] = ctx.groups
@@ -410,6 +442,9 @@ defmodule CoopSubstrate.TigerBeetleOutcomeAdmissionTest do
       {:ok, _} = Supervisor.restart_child(CoopSubstrate.Supervisor, CoopSubstrate.EventStore)
     end
   end
+
+  defp bad_signature(%Envelope{signers: [signer]} = env),
+    do: %{env | sigs: Map.put(env.sigs, signer.key_id, <<0::512>>)}
 
   def allow(_gate), do: :ok
 

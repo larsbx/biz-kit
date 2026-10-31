@@ -182,6 +182,9 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
         event("created1", "TaskCreatedV1", %{
           "task_id" => "task1",
           "title" => "Reviewed candidate",
+          "principal_id" => "operator1",
+          "authorization_event_id" => "operator1",
+          "lifecycle_version" => 1,
           "timing" => %{"schedule" => nil, "due_ms" => nil}
         }),
         state

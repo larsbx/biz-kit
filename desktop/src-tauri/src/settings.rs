@@ -39,6 +39,19 @@ pub struct Check {
     pub command: String,
 }
 
+/// Where the Dispatch panel signs in and what it calls. Absent, the panel
+/// says so instead of guessing at a server.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Dispatch {
+    /// Dispatch's base URL, e.g. `http://localhost:4000`.
+    pub api: String,
+    /// biz-kit's `/auth` base URL, e.g. `http://127.0.0.1:4001`.
+    pub auth: String,
+    /// The sign-in provider's name in `/auth/:provider/native/login`.
+    pub provider: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -49,6 +62,7 @@ pub struct Settings {
     /// Case-insensitive substrings; any config path containing one is read-only.
     pub protected_paths: Vec<String>,
     pub checks: Vec<Check>,
+    pub dispatch: Option<Dispatch>,
 }
 
 impl Default for Settings {
@@ -62,6 +76,7 @@ impl Default for Settings {
             ],
             protected_paths: vec![],
             checks: vec![],
+            dispatch: None,
         }
     }
 }

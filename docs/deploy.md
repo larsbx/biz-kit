@@ -1,5 +1,9 @@
 # Deploying
 
+For the dormant adder-ws event-driven trigger, see
+[activation and host acceptance](adder-ws-cd.md). HTTP trigger acceptance does
+not establish successful deployment.
+
 Date: 2026-10-20. The shortest path to a running deployment.
 
 ## Releases

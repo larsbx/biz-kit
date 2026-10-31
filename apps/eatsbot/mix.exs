@@ -72,7 +72,7 @@ defmodule Eatsbot.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.3.1"},
-      {:bandit, "~> 1.14.0"},
+      {:bandit, "~> 1.14.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.36", only: [:dev, :test], runtime: false},
       {:opentelemetry_exporter, "~> 1.8.0"},

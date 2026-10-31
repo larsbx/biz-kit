@@ -100,3 +100,39 @@ mechanically checked SQL/Elixir refinement theorem. Hosted exact-head formal
 AND integration acceptance is required before integration. Unrelated queued or
 failed repository checks must be reported separately; local success does not
 replace the hosted acceptance gate.
+
+## Integration acceptance follow-up (2026-10-31)
+
+Refresh against current main preserves the Dispatch proof module, its axiom
+audit, and every existing Quint check alongside outcome admission. AgentCore's
+PostgreSQL lane failed before its dispatch assertions because its trusted
+`TaskCreatedV1` fixture omitted the required operator authorization fields.
+The fixture now names its existing operator grant and lifecycle version;
+production admission and delegation checks remain unchanged.
+
+Federation's full-lock and reachable-graph audits independently identified
+Bandit 1.14.0 as affected by GHSA-pxjf-g536-7r93. Upgrade only Bandit to 1.14.1,
+with the Hex release and archive checksums checked against the published
+package. Eatsbot and federation minimum patch constraints now exclude 1.14.0.
+The full-lock audit and all adversarial transport requirements remain blocking.
+Primary release source:
+https://github.com/mtrudel/bandit/blob/1.14.1/CHANGELOG.md
+
+The Location driver trial timed out after 30 seconds in Android's signed offline
+queue scenario. Other driver trials and the browser/courier lanes passed in
+that run. This establishes an intermittent acceptance failure, not its cause;
+the unchanged failed job is retried, with no timeout increase or assertion
+removal. New source heads require fresh acceptance rather than inheriting that
+retry's result.
+
+The additional real-store signature regression exercises fresh outcomes,
+exact-body retries and checkpoints through both Log write APIs. Invalid
+signatures must fail before cached receipt recovery, leaving the canonical
+ledger and destination cursor unchanged.
+
+Merging this recording adapter does not release production financial writing
+or execution. Release still requires independently authenticated native-history
+completeness, safe snapshot succession, writer/generation fencing and the
+remaining financial release obligations. The supervisor supplies no source
+snapshot, so source outcome and checkpoint admission remain disabled by
+default. Storage refinement remains an explicit unproved correspondence.
