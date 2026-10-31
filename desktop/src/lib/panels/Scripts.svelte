@@ -51,7 +51,7 @@
 
 <div class="bar">
   <h1>Scripts</h1>
-  <span class="mono trunc" style="color: var(--dim); font-size: 12px">{scriptsDir}</span>
+  <span class="mono trunc" style="color: var(--dim); font-size: .92rem">{scriptsDir}</span>
   <div class="spacer"></div>
   <button class="btn" onclick={load} disabled={running}>Rescan</button>
 </div>
@@ -62,7 +62,7 @@
   <div class="cards" style="margin-bottom: 16px">
     {#each scripts as s (s.path)}
       <div class="card">
-        <h3 class="mono" style="font-size: 12px">{s.name}</h3>
+        <h3 class="mono" style="font-size: .92rem">{s.name}</h3>
         <div class="sub">{s.summary || "—"}</div>
         <div class="row">
           <button class="btn" disabled={running} onclick={() => start(s, false)}>{s.hasApply ? "Dry run" : "Run"}</button>
@@ -76,7 +76,7 @@
 
   {#if lines.length > 0 || running}
     <div class="row" style="margin-bottom: 6px">
-      <strong class="mono" style="font-size: 12px">{sel?.name}</strong>
+      <strong class="mono" style="font-size: .92rem">{sel?.name}</strong>
       {#if running}<span class="pill warn">running…</span>{/if}
       {#if done}<span class={"pill " + (done.code === 0 ? "ok" : "bad")}>exit {done.code}</span>{/if}
       <div class="spacer"></div>

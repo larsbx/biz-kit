@@ -73,7 +73,7 @@
       </button>
     {/each}
   </div>
-  <input type="text" placeholder="Filter…" bind:value={q} style="width: 160px" />
+  <input type="text" placeholder="Filter…" bind:value={q} style="width: 13rem" />
   <div class="spacer"></div>
   <button class="btn" onclick={() => load()} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button>
 </div>
@@ -85,7 +85,7 @@
       <thead>
         <tr>
           <th>unit</th><th>scope</th><th>active</th><th>enabled</th>
-          <th>restart</th><th>limit</th><th style="width: 250px"></th>
+          <th>restart</th><th>limit</th><th></th>
         </tr>
       </thead>
       <tbody>

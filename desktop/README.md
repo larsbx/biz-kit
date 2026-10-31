@@ -17,6 +17,9 @@ no agent on the far side, nothing listening on a port.
 | **Scripts** | discovers `*.sh` and `*.py` in the scripts directory and runs them locally with live output and a dry-run/apply split |
 | **Configs** | browse and edit the files matched by your config patterns, with a diff before every save |
 | **Dispatch** | the carrier's dispatch board over dispatch's `/v1/operations`: create loads, add stops, plan trips with a driver and equipment, and start, complete or cancel them |
+| **Settings** | theme (dark, light, high contrast, or match the OS) and text size; stored per machine in the webview, not in `config.json` |
+
+**Navigation:** panels are grouped by what they act on, with a one-line hint under each. `Ctrl` `1`–`5` opens a panel, `Ctrl` `,` opens Settings, `↑`/`↓` move through the sidebar, and `Ctrl` `+`/`-`/`0` change or reset the text size.
 
 ### Restart-loop audit
 
