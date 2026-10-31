@@ -6,7 +6,7 @@
   import PanelContent from "./PanelContent.svelte";
   import { type TileCtx, tileEls, tiling } from "./tiling.svelte";
 
-  let { leaf, info }: { leaf: Leaf; info: AppInfo } = $props();
+  let { leaf, info, style }: { leaf: Leaf; info: AppInfo; style: string } = $props();
 
   const panel = $derived(PANELS.find((p) => p.id === leaf.p) ?? PANELS[0]);
   /** A new panel goes where it is least likely to be open already. */
@@ -36,6 +36,7 @@
 </script>
 
 <section class={"tile" + (tiling.zoomed === leaf.id ? " zoomed" : "")} data-panel={leaf.p}
+  style={tiling.zoomed === leaf.id ? "inset:0" : style}
   aria-label={panel.label} {@attach register}>
   <PanelContent {info} {panel} />
 </section>

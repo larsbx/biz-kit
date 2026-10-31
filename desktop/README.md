@@ -23,6 +23,14 @@ no agent on the far side, nothing listening on a port.
 
 **Navigation:** panels are grouped by what they act on, with a one-line hint under each and ● open / + add. `Ctrl` `1`–`5` adds or highlights a panel, `Ctrl` `,` opens Settings, and `Ctrl` `+`/`-`/`0` change or reset the text size.
 
+Surviving tiles retain their mounted panels when split, resized, zoomed, or moved
+by closing a neighbor or inserting a sidebar panel. Duplicate panels have separate
+state. Presets and live layout restoration reuse matching panel occurrences in
+reading order. Closing or replacing a panel, or selecting a preset that omits it,
+removes that instance. Only panel names, split directions, and ratios are saved;
+configuration contents and unsaved edits stay in memory and do not survive an
+application reload.
+
 ### Restart-loop audit
 
 Services flags any unit whose start limiter can never trip. systemd only stops
@@ -129,10 +137,24 @@ Prerequisites: Node 22.17+ (SvelteKit 3), stable Rust, and the
 ```sh
 npm ci
 npm run check                  # svelte-check
+npm test                       # mounted-component and layout regressions
 npm run tauri dev                  # hot-reload dev window
 npm run tauri build                # installers for the current OS
 (cd src-tauri && cargo test)
 ```
+
+Linux native acceptance also exercises the actual Tauri/WebKit webview and config
+IPC with disposable files and XDG directories. Install `webkit2gtk-driver`,
+`xvfb`, and `xauth`, then run:
+
+```sh
+cargo install tauri-driver --version 2.0.4 --locked
+npm run tauri build -- --debug --no-bundle
+xvfb-run -a python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
+```
+
+The Desktop workflow runs this acceptance on Linux as well as the frontend and
+Rust checks on Linux, macOS, and Windows.
 
 `tauri build` produces `.deb`, `.rpm` and AppImage on Linux, `.app` and `.dmg`
 on macOS, and `.msi` and NSIS `.exe` on Windows, under

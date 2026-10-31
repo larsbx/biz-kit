@@ -118,10 +118,11 @@ kbd {
 
 /* ---- tiling (src/lib/Tiles.svelte) ---- */
 .tiles { flex-direction: row; padding: 6px; position: relative; min-height: 0; background: var(--bg); }
-.split { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.tile-surface { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.split { position: absolute; display: flex; min-width: 0; min-height: 0; pointer-events: none; }
 .split.v { flex-direction: column; }
 .split > .pane { display: flex; min-width: 0; min-height: 0; }
-.divider { flex: none; position: relative; outline: none; }
+.divider { flex: none; position: relative; outline: none; pointer-events: auto; }
 .split.h > .divider { width: 12px; cursor: col-resize; }
 .split.v > .divider { height: 12px; cursor: row-resize; }
 /* A visible grip, so the gap reads as something to drag; it spans the gap while in use. */
@@ -135,13 +136,13 @@ kbd {
 .split.h > .divider:hover::after, .split.h > .divider:focus-visible::after, .split.h > .divider.drag::after { height: 100%; }
 .split.v > .divider:hover::after, .split.v > .divider:focus-visible::after, .split.v > .divider.drag::after { width: 100%; }
 .tile {
-  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  position: absolute; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
   outline: 2px solid transparent; outline-offset: -1px;
   container-type: inline-size;
 }
 /* Zoom covers the tiling area; the other tiles stay mounted underneath, keeping their state. */
-.tile.zoomed { position: absolute; inset: 6px; z-index: 5; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+.tile.zoomed { position: absolute; z-index: 5; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
 .tile .bar { background: var(--panel-2); }
 select.picker {
   font-size: 1.08rem; font-weight: 600; background-color: transparent; border-color: transparent;

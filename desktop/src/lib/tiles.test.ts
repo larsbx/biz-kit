@@ -27,6 +27,24 @@ async function renderPage() {
 }
 
 describe("tiling", () => {
+  it("keeps the mounted config editor and its unsaved draft when split", async () => {
+    localStorage.setItem("layout", JSON.stringify({ t: "leaf", p: "configs" }));
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "app_info") return { ...info, hosts: [{ name: "local", label: "Local", ssh: null }] };
+      if (cmd === "list_configs") return [{ host: "local", path: "/test/config.json", label: "Fixture", size: 2, protected: false }];
+      if (cmd === "read_config") return "{}";
+      return [];
+    });
+    await renderPage();
+    await fireEvent.click(await screen.findByText("/test/config.json"));
+    const editor = await screen.findByRole("textbox") as HTMLTextAreaElement;
+    await fireEvent.input(editor, { target: { value: '{"token":"unsaved-secret"}' } });
+    await fireEvent.click(within(tile("configs")).getByRole("button", { name: "Split right" }));
+    expect(screen.queryByRole("textbox")).toBe(editor);
+    expect(editor.value).toBe('{"token":"unsaved-secret"}');
+    expect(screen.getByText("unsaved")).toBeTruthy();
+  });
+
   it("opens on the Overview preset, marked in the sidebar", async () => {
     await renderPage();
     expect(panelsShown()).toEqual(["health", "services"]);
