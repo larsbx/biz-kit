@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/sve
 import { invoke } from "@tauri-apps/api/core";
 import Page from "../routes/+page.svelte";
 import { DEFAULTS, prefs, resetPrefs } from "./prefs.svelte";
-import { tiling } from "./tiles.svelte";
+import { tiling } from "./tiling.svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(), Channel: vi.fn() }));
 

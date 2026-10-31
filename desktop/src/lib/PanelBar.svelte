@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getContext, type Snippet } from "svelte";
   import Icon from "./Icon.svelte";
-  import type { TileCtx } from "./tiles.svelte";
+  import type { TileCtx } from "./tiling.svelte";
 
   /**
    * A panel's header row. Inside a tile it also carries the tile's controls --

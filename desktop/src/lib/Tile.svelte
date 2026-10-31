@@ -4,7 +4,7 @@
   import { type Leaf, closeLeaf, leaves, setPanel, splitLeaf } from "./layout";
   import { PANELS } from "./panels";
   import PanelContent from "./PanelContent.svelte";
-  import { type TileCtx, tileEls, tiling } from "./tiles.svelte";
+  import { type TileCtx, tileEls, tiling } from "./tiling.svelte";
 
   let { leaf, info }: { leaf: Leaf; info: AppInfo } = $props();
 

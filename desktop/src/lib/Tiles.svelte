@@ -3,7 +3,7 @@
   import { type Node, clampRatio, setRatio } from "./layout";
   import Tile from "./Tile.svelte";
   import Tiles from "./Tiles.svelte";
-  import { tiling } from "./tiles.svelte";
+  import { tiling } from "./tiling.svelte";
 
   let { node, info }: { node: Node; info: AppInfo } = $props();
 
