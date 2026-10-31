@@ -32,7 +32,10 @@ defmodule CommerceCore.Checkout do
     end
   end
 
-  defp authorized?(%{granted: true, principal: p, merchant: m, cart_id: cart}, %{cart_id: cart}) do
+  defp authorized?(
+         %{granted: true, operation: :checkout, principal: p, merchant: m, cart_id: cart},
+         %{cart_id: cart}
+       ) do
     is_binary(p) and byte_size(p) > 0 and is_binary(m) and byte_size(m) > 0 and
       is_binary(cart) and byte_size(cart) > 0
   end

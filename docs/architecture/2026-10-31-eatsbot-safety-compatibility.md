@@ -30,7 +30,8 @@ full database/adapter/production parity.
 ## Intentional differences from legacy behavior
 
 1. Authorization first. A host supplies a verified grant bound to merchant,
-   order, principal and actor class. Denied operations return exactly
+   order, principal, actor class and explicit allowed actions. Checkout context
+   must name `operation: :checkout`; unrelated grants cannot be reused. Denied operations return exactly
    `{:error, :forbidden}` before examining state, history, revision or duplicate
    outcomes. Actor names or a request-provided boolean are not authentication.
    Public tracking is outside these command reducers.

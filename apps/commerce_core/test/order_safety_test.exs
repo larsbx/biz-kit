@@ -45,7 +45,22 @@ defmodule CommerceCore.OrderSafetyTest do
   defp atom(value), do: String.to_existing_atom(value)
 
   defp trusted(actor),
-    do: %{merchant: "shop", order_id: "order", principal: "person", actor: actor, granted: true}
+    do: %{
+      merchant: "shop",
+      order_id: "order",
+      principal: "person",
+      actor: actor,
+      granted: true,
+      allowed_actions: [
+        :accept,
+        :start_preparing,
+        :mark_ready,
+        :dispatch,
+        :complete,
+        :fail,
+        :cancel
+      ]
+    }
 
   defp command(action, n \\ 0),
     do: %{id: "event-#{n}", expected_version: n, action: action, reason: "characterization"}
@@ -148,12 +163,19 @@ defmodule CommerceCore.OrderSafetyTest do
 
     for ctx <- [
           nil,
+          %{trusted(:admin) | allowed_actions: []},
           %{trusted(:admin) | granted: false},
           %{trusted(:admin) | merchant: "other"},
           %{trusted(:admin) | order_id: "other"}
         ] do
       assert Order.apply(state, ctx, command(:accept)) == {:error, :forbidden}
     end
+
+    assert Order.apply(
+             :unreadable,
+             %{trusted(:admin) | allowed_actions: [:accept]},
+             command(:cancel)
+           ) == {:error, :forbidden}
   end
 
   test "retries bind full payload and principal and require a current grant" do

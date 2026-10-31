@@ -10,7 +10,9 @@ defmodule CommerceCore.CheckoutSafetyTest do
     do: %{name: name, unit_price: m(price), quantity: qty, discount: m(0)}
 
   defp cart(lines), do: %{principal: "ada", status: :active, currency: :USD, lines: lines}
-  defp trusted(cart), do: %{merchant: "shop", principal: "ada", cart_id: cart, granted: true}
+
+  defp trusted(cart),
+    do: %{merchant: "shop", principal: "ada", cart_id: cart, granted: true, operation: :checkout}
 
   defp command(cart, key, extras \\ %{}) do
     Map.merge(
@@ -139,6 +141,7 @@ defmodule CommerceCore.CheckoutSafetyTest do
 
     for ctx <- [
           nil,
+          %{trusted("pickup") | operation: :refund},
           %{trusted("pickup") | granted: false},
           %{trusted("pickup") | principal: "mallory"},
           %{trusted("pickup") | merchant: "other"},

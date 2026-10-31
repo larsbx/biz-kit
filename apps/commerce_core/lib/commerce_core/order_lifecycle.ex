@@ -3,7 +3,7 @@ defmodule CommerceCore.OrderLifecycle do
   Pure order lifecycle and authorized candidate reducer (Eatsbot I₃/I₆).
 
   `trusted` is host-verified context, never request JSON: merchant, order_id,
-  principal, actor class and `granted: true` for this order and operation. The
+  principal, actor class, `allowed_actions` and `granted: true` for this order. The
   host must authenticate it, serialize admission and persist the candidate.
   Authorization precedes inspection of state, history, revision or errors.
   Delivery-owned steps require the separate FulfillmentCore/Dispatch handoff;
@@ -70,10 +70,13 @@ defmodule CommerceCore.OrderLifecycle do
 
   def new(_, _, _), do: {:error, :invalid_order}
 
-  def authorized?(%{granted: true, principal: principal, actor: actor}, action)
-      when is_binary(principal) and byte_size(principal) > 0 do
+  def authorized?(
+        %{granted: true, principal: principal, actor: actor, allowed_actions: actions},
+        action
+      )
+      when is_binary(principal) and byte_size(principal) > 0 and is_list(actions) do
     case Map.get(@actions, action) do
-      {_, roles} -> actor in roles
+      {_, roles} -> actor in roles and action in actions
       _ -> false
     end
   end
