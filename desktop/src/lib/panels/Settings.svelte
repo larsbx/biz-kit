@@ -1,15 +1,15 @@
 <script lang="ts">
   import type { AppInfo } from "../api";
+  import PanelBar from "../PanelBar.svelte";
   import { FONT, THEMES, prefs, resetPrefs, setFontSize } from "../prefs.svelte";
 
   let { info }: { info: AppInfo } = $props();
 </script>
 
-<div class="bar">
-  <h1>Settings</h1>
+<PanelBar title="Settings">
   <div class="spacer"></div>
   <button class="btn" onclick={resetPrefs}>Restore defaults</button>
-</div>
+</PanelBar>
 <div class="body settings">
   <section>
     <h2>Theme</h2>
@@ -49,11 +49,15 @@
   </section>
 
   <section>
-    <h2>Navigation</h2>
-    <p class="sub">
-      <kbd>Ctrl</kbd> <kbd>1</kbd>–<kbd>5</kbd> opens a panel, <kbd>Ctrl</kbd> <kbd>,</kbd> opens
-      Settings, and <kbd>↑</kbd> <kbd>↓</kbd> move through the sidebar.
-    </p>
+    <h2>Tiles and navigation</h2>
+    <dl class="keys">
+      <dt>Sidebar panel</dt><dd>Adds it as a tile, or highlights it if it's already open</dd>
+      <dt>Tile header</dt><dd>Change the panel, split right or down, zoom to fill, close</dd>
+      <dt>Gap between tiles</dt><dd>Drag to resize; double-click evens it out; arrow keys when focused</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>1</kbd>–<kbd>5</kbd></dt><dd>Add or highlight a panel, in sidebar order</dd>
+      <dt><kbd>Ctrl</kbd> <kbd>,</kbd></dt><dd>Settings</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Restore a zoomed tile</dd>
+    </dl>
   </section>
 
   <section>
@@ -99,6 +103,9 @@
   .slider-row { gap: .75rem; }
   .value { min-width: 3.5rem; text-align: right; }
   .preview { margin-top: .8rem; max-width: 26rem; }
+  .keys { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.2rem; margin: 0; }
+  .keys dt { white-space: nowrap; }
+  .keys dd { margin: 0; color: var(--dim); }
   .settings .kv { gap: 1rem; }
   .settings .kv span:last-child { text-align: right; overflow-wrap: anywhere; }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import PanelBar from "../PanelBar.svelte";
   import { type AppInfo, type ConfigEntry, listConfigs, readConfig, diffConfig, writeConfig } from "../api";
   import { confirm } from "../confirmation.svelte";
   import HostSelect from "../HostSelect.svelte";
@@ -72,8 +73,7 @@
   }
 </script>
 
-<div class="bar">
-  <h1>Configs</h1>
+<PanelBar title="Configs">
   <HostSelect {hosts} bind:value={host} />
   <div class="spacer"></div>
   {#if open}
@@ -85,7 +85,7 @@
   {:else}
     <button class="btn" onclick={() => load()} disabled={busy}>Refresh</button>
   {/if}
-</div>
+</PanelBar>
 
 <div class="body">
   {#if err}<p class="err">{err}</p>{/if}

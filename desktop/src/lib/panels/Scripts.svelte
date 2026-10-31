@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import PanelBar from "../PanelBar.svelte";
   import { type AppInfo, type Script, type Line, listScripts, runScript } from "../api";
   import { confirm } from "../confirmation.svelte";
 
@@ -49,12 +50,11 @@
   const done = $derived(lines.find((l) => l.kind === "done") as { kind: "done"; code: number } | undefined);
 </script>
 
-<div class="bar">
-  <h1>Scripts</h1>
+<PanelBar title="Scripts">
   <span class="mono trunc" style="color: var(--dim); font-size: .92rem">{scriptsDir}</span>
   <div class="spacer"></div>
   <button class="btn" onclick={load} disabled={running}>Rescan</button>
-</div>
+</PanelBar>
 <div class="body">
   {#if err}<p class="err">{err}</p>{/if}
   {#if scripts.length === 0}<div class="empty">No .sh or .py scripts in {scriptsDir}</div>{/if}

@@ -93,6 +93,9 @@ body {
 .entry .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .entry .label { font-weight: 500; }
 .entry .hint { font-size: .8rem; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry .state { width: 1rem; text-align: center; color: var(--dim); }
+.entry:hover .state { color: var(--accent); }
+.entry.on .state { color: var(--accent); font-size: .7rem; }
 .entry kbd { opacity: 0; transition: opacity .1s; }
 .entry:hover kbd, .entry:focus-visible kbd { opacity: 1; }
 .side-foot { padding: .6rem 1.1rem 0; color: var(--dim); font-size: .8rem; }
@@ -107,11 +110,54 @@ kbd {
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: .6rem;
-  padding: .7rem 1.1rem; border-bottom: 1px solid var(--line); background: var(--panel);
+  padding: .55rem .8rem; border-bottom: 1px solid var(--line); background: var(--panel);
 }
 .bar h1 { font-size: 1.15rem; margin: 0; font-weight: 600; }
 .bar .spacer { flex: 1; }
-.body { flex: 1; overflow: auto; padding: 1rem 1.1rem; }
+.body { flex: 1; min-height: 0; overflow: auto; padding: 1rem 1.1rem; }
+
+/* ---- tiling (src/lib/Tiles.svelte) ---- */
+.tiles { flex-direction: row; padding: 6px; position: relative; min-height: 0; background: var(--bg); }
+.split { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.split.v { flex-direction: column; }
+.split > .pane { display: flex; min-width: 0; min-height: 0; }
+.divider { flex: none; position: relative; outline: none; }
+.split.h > .divider { width: 12px; cursor: col-resize; }
+.split.v > .divider { height: 12px; cursor: row-resize; }
+/* A visible grip, so the gap reads as something to drag; it spans the gap while in use. */
+.divider::after {
+  content: ""; position: absolute; inset: 0; margin: auto; border-radius: 99px;
+  background: var(--line); transition: background .15s;
+}
+.split.h > .divider::after { width: 4px; height: 2.6rem; }
+.split.v > .divider::after { height: 4px; width: 2.6rem; }
+.divider:hover::after, .divider:focus-visible::after, .divider.drag::after { background: var(--accent); }
+.split.h > .divider:hover::after, .split.h > .divider:focus-visible::after, .split.h > .divider.drag::after { height: 100%; }
+.split.v > .divider:hover::after, .split.v > .divider:focus-visible::after, .split.v > .divider.drag::after { width: 100%; }
+.tile {
+  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  outline: 2px solid transparent; outline-offset: -1px;
+  container-type: inline-size;
+}
+/* Zoom covers the tiling area; the other tiles stay mounted underneath, keeping their state. */
+.tile.zoomed { position: absolute; inset: 6px; z-index: 5; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+.tile .bar { background: var(--panel-2); }
+select.picker {
+  font-size: 1.08rem; font-weight: 600; background-color: transparent; border-color: transparent;
+  padding-left: .4em;
+}
+select.picker:hover, select.picker:focus-visible { background-color: var(--panel); border-color: var(--line); }
+.tile-tools { display: flex; gap: 2px; margin-left: auto; }
+.icon-btn {
+  width: 2rem; height: 1.9rem; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 5px; background: transparent; color: var(--dim); cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { background: var(--panel); color: var(--fg); }
+.icon-btn[aria-pressed="true"] { color: var(--accent); }
+.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.icon-btn .icon { width: 1.05rem; height: 1.05rem; }
 
 /* ---- controls ---- */
 button.btn, select, input[type="text"] {
@@ -150,6 +196,8 @@ th {
 td { padding: .4em .6em; border-bottom: 1px solid var(--panel); }
 tr:hover td { background: var(--panel); }
 td.mono, .mono { font-family: var(--mono); }
+/* A narrow tile scrolls sideways rather than breaking unit names and policies mid-word. */
+td.mono { white-space: nowrap; }
 
 .pill { padding: 1px 7px; border-radius: 4px; font-size: .85rem; background: var(--panel-2); color: var(--dim); }
 .pill.ok { color: var(--ok); }
@@ -157,7 +205,7 @@ td.mono, .mono { font-family: var(--mono); }
 .pill.warn { color: var(--warn); }
 
 /* ---- cards ---- */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); gap: 12px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; }
 .card h3 { margin: 0 0 2px; font-size: 1rem; }
 .card .sub { color: var(--dim); font-size: .85rem; margin-bottom: .7rem; }

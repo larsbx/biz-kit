@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import PanelBar from "../PanelBar.svelte";
   import { type AppInfo, type Health, hostHealth } from "../api";
 
   let { info }: { info: AppInfo } = $props();
@@ -33,11 +34,10 @@
   <div class="meter"><i class={meterClass(pct)} style:width="{Math.min(pct, 100)}%"></i></div>
 {/snippet}
 
-<div class="bar">
-  <h1>Health</h1>
+<PanelBar title="Health">
   <div class="spacer"></div>
   <button class="btn" onclick={load} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
-</div>
+</PanelBar>
 <div class="body">
   <div class="cards">
     {#each hosts as h (h.name)}
