@@ -42,7 +42,7 @@ defmodule Eatsbot.MixProject do
     [
       {:ash_authentication, "~> 5.0-rc"},
       {:ash_authentication_phoenix, "~> 3.0-rc"},
-      {:ash_graphql, "~> 1.12.0"},
+      {:ash_graphql, "~> 1.13.0"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "~> 2.15.2"},
       {:ash, "~> 3.37.2"},
@@ -84,7 +84,7 @@ defmodule Eatsbot.MixProject do
       {:opentelemetry_ash, "~> 0.1.0"},
       {:picosat_elixir, "~> 0.2.0"},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:ash_admin, "~> 1.3.2"},
+      {:ash_admin, "~> 1.4.0"},
       {:plug, "~> 1.20.3"},
       {:friendlyid, "~> 0.2.0"},
       {:req, "~> 0.7.5"},
