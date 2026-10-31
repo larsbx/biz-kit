@@ -1,6 +1,6 @@
-defmodule CommerceCore.OrderSafetyTest do
+defmodule RestaurantCore.KitchenSafetyTest do
   use ExUnit.Case, async: true
-  alias CommerceCore.OrderLifecycle, as: Order
+  alias RestaurantCore.Kitchen, as: Order
 
   setup_all do
     Code.ensure_loaded!(Order)

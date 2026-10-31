@@ -35,6 +35,7 @@ Shared apps developed in this umbrella:
 | `agent_core` | `apps/agent_core` | Dependency-free, agent/framework-neutral execution port and immutable execution-profile checks; no worker SDK or business writer |
 | `commerce_core` | `apps/commerce_core` | Commercial pricing, merchant-scoped catalog projection and read-only Eatsbot adapter |
 | `inventory_core` | `apps/inventory_core` | Pure scoped stock, reservations, transfers and deterministic replay (no live writer) |
+| `restaurant_core` | `apps/restaurant_core` | Restaurant layer over CommerceCore's order core: kitchen stages and the pinned legacy order fixtures |
 | `fulfillment_core` | `apps/fulfillment_core` | Cross-domain transport handoff protocol with Eatsbot/Dispatch adapters |
 | `sales_core` | `apps/sales_core` | Tenant-scoped lead pipeline, consent and campaign planning rules |
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
