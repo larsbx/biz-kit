@@ -16,7 +16,11 @@ defmodule BizKit.Extension.ManifestTest do
         capabilities: ["example.catalog.read"],
         requested_grants: ["example.order.write"],
         commands: [
-          %{name: "example.order.place", writer: "example", required_grants: ["example.order.write"]}
+          %{
+            name: "example.order.place",
+            writer: "example",
+            required_grants: ["example.order.write"]
+          }
         ],
         events: [%{name: "example.order.placed", writer: "example"}],
         projections: [%{name: "example.orders", source_event: "example.order.placed"}],
@@ -33,7 +37,7 @@ defmodule BizKit.Extension.ManifestTest do
 
     @impl true
     def manifest do
-      Base.manifest()
+      BizKit.Extension.ManifestTest.Base.manifest()
       |> Map.merge(%{
         id: "consumer",
         version: "0.2.0",
@@ -52,7 +56,7 @@ defmodule BizKit.Extension.ManifestTest do
 
     @impl true
     def manifest do
-      Consumer.manifest()
+      BizKit.Extension.ManifestTest.Consumer.manifest()
       |> Map.merge(%{
         id: "example",
         version: "2.0.0",
@@ -63,8 +67,9 @@ defmodule BizKit.Extension.ManifestTest do
 
   defmodule Old do
     @behaviour BizKit.Extension
+
     @impl true
-    def manifest, do: %{Base.manifest() | version: "1.0.0"}
+    def manifest, do: %{BizKit.Extension.ManifestTest.Base.manifest() | version: "1.0.0"}
   end
 
   test "strict manifest and deterministic canonical order" do
@@ -76,35 +81,56 @@ defmodule BizKit.Extension.ManifestTest do
 
   test "unknown fields, invalid versions, duplicate names and foreign writers refuse" do
     manifest = Base.manifest()
-    assert {:error, {:invalid_fields, :manifest}} = Manifest.validate(Map.put(manifest, :extra, true))
-    assert {:error, {:invalid_field, :version}} = Manifest.validate(%{manifest | version: "latest"})
+
+    assert {:error, {:invalid_fields, :manifest}} =
+             Manifest.validate(Map.put(manifest, :extra, true))
+
+    assert {:error, {:invalid_field, :version}} =
+             Manifest.validate(%{manifest | version: "latest"})
 
     assert {:error, {:invalid_field, :capabilities}} =
              Manifest.validate(%{manifest | capabilities: ["example.a", "example.a"]})
 
     assert {:error, {:invalid_field, :commands}} =
-             Manifest.validate(%{manifest | commands: [
-               %{name: "example.order.place", writer: "dispatch", required_grants: []}
-             ]})
+             Manifest.validate(%{
+               manifest
+               | commands: [
+                   %{name: "example.order.place", writer: "dispatch", required_grants: []}
+                 ]
+             })
 
     assert {:error, {:invalid_field, :events}} =
-             Manifest.validate(%{manifest | events: [%{name: "dispatch.order.placed", writer: "example"}]})
+             Manifest.validate(%{
+               manifest
+               | events: [%{name: "dispatch.order.placed", writer: "example"}]
+             })
 
     assert {:error, {:invalid_field, :commands}} =
-             Manifest.validate(%{manifest | commands: [
-               %{name: "example.order.place", writer: "example", required_grants: ["example.superuser"]}
-             ]})
+             Manifest.validate(%{
+               manifest
+               | commands: [
+                   %{
+                     name: "example.order.place",
+                     writer: "example",
+                     required_grants: ["example.superuser"]
+                   }
+                 ]
+             })
   end
 
   test "registration resolves approved modules in dependency order" do
     assert {:ok, entries} = Catalog.build([Consumer, Base])
     assert Enum.map(entries, & &1.manifest.id) == ["example", "consumer"]
     assert {:ok, []} = Catalog.activation_plan(entries, [])
+
     assert {:error, {:unapproved_dependency, "consumer"}} =
              Catalog.activation_plan(entries, ["consumer"])
+
     assert {:ok, ^entries} = Catalog.activation_plan(entries, ["consumer", "example"])
     assert {:error, :unknown_extension} = Catalog.activation_plan(entries, ["missing"])
-    assert {:error, :invalid_approvals} = Catalog.activation_plan(entries, ["example", "example"])
+
+    assert {:error, :invalid_approvals} =
+             Catalog.activation_plan(entries, ["example", "example"])
   end
 
   test "duplicate modules, absent dependencies, version mismatch and cycles refuse" do
@@ -116,7 +142,7 @@ defmodule BizKit.Extension.ManifestTest do
              Catalog.build([Old, Consumer])
   end
 
-  test "no arbitrary module names or callback crashes are accepted" do
+  test "no arbitrary module names are accepted" do
     assert {:error, {:not_an_extension, String}} = Catalog.build([String])
     assert {:error, {:not_an_extension, "Not.A.Module"}} = Catalog.build(["Not.A.Module"])
   end
