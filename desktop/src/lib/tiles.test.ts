@@ -116,4 +116,19 @@ describe("tiling", () => {
     await ctrl("0");
     expect(prefs.fontSize).toBe(DEFAULTS.fontSize);
   });
+
+  it("folds the sidebar to a rail with Ctrl+B and remembers it", async () => {
+    await renderPage();
+    const side = document.querySelector<HTMLElement>("aside.side")!;
+    const before = panelsShown();
+    expect(side.classList.contains("rail")).toBe(false);
+    await ctrl("b");
+    expect(side.classList.contains("rail")).toBe(true);
+    expect(localStorage.getItem("sidebar")).toBe("hidden");
+    expect(panelsShown()).toEqual(before);
+    // The rail keeps panel entries clickable, and the button brings it back.
+    await fireEvent.click(screen.getByRole("button", { name: "Show sidebar" }));
+    expect(side.classList.contains("rail")).toBe(false);
+    expect(localStorage.getItem("sidebar")).toBe("shown");
+  });
 });
