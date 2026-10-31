@@ -6,8 +6,18 @@ First extracted business kernel of the [biz-kit modular platform](../../docs/arc
 order total from Money-valued line snapshots and named adjustments. It rejects
 empty orders, zero/negative quantities, mismatched currencies, negative inputs,
 excessive line discounts, and negative totals. It never silently performs FX,
-tax calculation, promotions, payment execution, inventory reservation or
-restaurant fulfillment.
+promotions, payment execution, inventory reservation or restaurant
+fulfillment.
+
+`CommerceCore.Tax.flat/4` computes an order's sales tax once, at checkout, from
+one combined rate and whether the delivery fee is taxed. It rounds half-up once
+per order and spreads the result across lines by largest remainder, so the
+line taxes and the fee tax sum exactly to `tax_total` (I₇), and each share is
+within one minor unit of its exact tax. Tips are never an input.
+`CommerceCore.Tax.reverse/4` gives the tax a refund reverses, in proportion to
+the amount refunded; the refunds of a whole order reverse exactly its tax.
+Jurisdiction lookup, marketplace remittance and filing stay with the host;
+pass the result to `Pricing.price/3` as `tax_total`.
 
 This implementation was lifted from `EatsbotCore.Orders.Pricing` preserving
 the original algorithm and error terms; the Eatsbot module now delegates back

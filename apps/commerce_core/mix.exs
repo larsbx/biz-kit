@@ -6,7 +6,7 @@ defmodule CommerceCore.MixProject do
       app: :commerce_core,
       version: "0.1.0",
       elixir: "~> 1.18",
-      deps: [{:ex_money, "~> 6.2"}] ++ json_polyfill()
+      deps: [{:ex_money, "~> 6.2"}, {:stream_data, "~> 1.1", only: :test}] ++ json_polyfill()
     ] ++ umbrella_paths()
   end
 
