@@ -2,7 +2,7 @@
 """Linux Tauri acceptance: real WebKit, IPC, file reads, and unsaved editors.
 
 Build: npm run tauri build -- --debug --no-bundle
-Run:   xvfb-run -a python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
+Run:   xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
 Needs tauri-driver 2.0.4 and WebKitWebDriver on PATH. Uses disposable XDG dirs
 and a synthetic config; never touches an operator's files or credentials.
 """
@@ -103,12 +103,16 @@ def run(binary):
                       window.panels[i].textContent.includes('unsaved'));""")
 
                 until(lambda: js("return !!document.querySelector('section.tile')"), "initial panels")
+                request("POST", base + "/window/rect", {"width": 1600, "height": 1000})
                 leaf = lambda p: {"t": "leaf", "p": p}
                 split = lambda a, b, d="h": {"t": "split", "dir": d, "r": 0.4, "a": a, "b": b}
-                layout = split(leaf("services"), split(leaf("configs"), leaf("configs"), "v"))
+                layout = split(leaf("services"), split(leaf("configs"), leaf("configs")))
                 js("localStorage.setItem('layout', JSON.stringify(arguments[0]))", layout)
                 request("POST", base + "/refresh", {})
                 until(lambda: js("return document.querySelectorAll('[data-panel=configs].tile tbody tr').length === 2"), "real config listings")
+                js("""window.nativeErrors=[];
+                  const error=console.error; console.error=(...args)=>{window.nativeErrors.push(args.map(x=>String(x)+' '+(x?.stack||'')).join(' '));error(...args)};
+                  window.addEventListener('error',e=>window.nativeErrors.push(e.message+' '+(e.error?.stack||'')));""")
                 js("window.panels = [...document.querySelectorAll('[data-panel=configs].tile')]; window.panels.forEach(p => p.querySelector('tbody tr').click());")
                 until(lambda: js("return document.querySelectorAll('textarea.editor').length === 2"), "real config reads")
                 assert js("return [...document.querySelectorAll('textarea')].every(e => e.value === arguments[0])", original)
@@ -127,7 +131,7 @@ def run(binary):
                 until(intact, "split")
                 click('.entry[data-panel=settings]')
                 until(intact, "sidebar insertion")
-                assert js("return document.querySelectorAll('section.tile').length") == 4
+                until(lambda: js("return document.querySelectorAll('section.tile').length === 4"), "sidebar tile count")
 
                 # Real pointer actions exercise capture, live preview, and ratio persistence.
                 count = js("return document.querySelectorAll('[role=separator]').length")
@@ -171,6 +175,16 @@ def run(binary):
                 assert fixture.read_text() == original, "unsaved draft changed the real fixture"
                 print("PASS: native Tauri/WebKit config drafts, duplicate panels, split, adjacent close, sidebar, pointer resize, zoom, geometry, storage, restore")
             except Exception:
+                if session:
+                    try:
+                        print("Native geometry:", request("POST", f"/session/{session}/execute/sync", {
+                            "script": "return [...document.querySelectorAll('.main,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
+                        print("Native page:", request("POST", f"/session/{session}/execute/sync", {
+                            "script": "return {url:location.href,ready:document.readyState,text:document.body.innerText.slice(0,1000)}", "args": []}))
+                        print("Native errors:", request("POST", f"/session/{session}/execute/sync", {
+                            "script": "return window.nativeErrors", "args": []}))
+                    except Exception:
+                        pass
                 log.flush()
                 log.seek(0)
                 print(log.read())

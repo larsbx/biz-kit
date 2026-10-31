@@ -13,6 +13,19 @@ const panel = (id: string) => PANELS.find((p) => p.id === id)!;
 afterEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear(); });
 
 describe("panel connection requirements", () => {
+  it("renders repeated Health failure lines without crashing the desktop", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      host: "local", reachable: true, error: null, uptime: "", load: "", diskPct: 0,
+      diskUsed: "", diskTotal: "", memUsedMb: 0, memTotalMb: 0, swapUsedMb: 0,
+      swapTotalMb: 0, failedUnits: ["Repeated failure", "Repeated failure"], checks: [],
+    });
+    render(PanelContent, {
+      info: { ...info, hosts: [{ name: "local", label: "Local", ssh: null }] },
+      panel: panel("health"),
+    });
+    expect(await screen.findAllByText("Repeated failure")).toHaveLength(2);
+  });
+
   it("opens Dispatch and uses its API with no SSH hosts", async () => {
     vi.mocked(invoke).mockResolvedValue({ signedIn: false, api: "https://dispatch.example", auth: "https://auth.example" });
     render(PanelContent, { info, panel: panel("dispatch") });

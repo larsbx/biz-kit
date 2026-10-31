@@ -150,7 +150,7 @@ IPC with disposable files and XDG directories. Install `webkit2gtk-driver`,
 ```sh
 cargo install tauri-driver --version 2.0.4 --locked
 npm run tauri build -- --debug --no-bundle
-xvfb-run -a python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
+xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
 ```
 
 The Desktop workflow runs this acceptance on Linux as well as the frontend and

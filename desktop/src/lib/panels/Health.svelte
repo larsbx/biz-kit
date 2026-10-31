@@ -78,7 +78,7 @@
           </div>
           {#if d.failedUnits.length > 0}
             <div class="mono" style="font-size: .85rem; color: var(--dim); margin-top: 4px">
-              {#each d.failedUnits.slice(0, 6) as u (u)}<div class="trunc">{u}</div>{/each}
+              {#each d.failedUnits.slice(0, 6) as u, i (i)}<div class="trunc">{u}</div>{/each}
               {#if d.failedUnits.length > 6}<div>+{d.failedUnits.length - 6} more</div>{/if}
             </div>
           {/if}
