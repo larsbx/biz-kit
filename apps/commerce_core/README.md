@@ -19,6 +19,12 @@ the amount refunded; the refunds of a whole order reverse exactly its tax.
 Jurisdiction lookup, marketplace remittance and filing stay with the host;
 pass the result to `Pricing.price/3` as `tax_total`.
 
+Neither function holds state or performs an effect. A computed reversal is
+not a refund: under the [PostgreSQL event log, Redis and TigerBeetle
+decision](../../docs/architecture/2026-10-30-postgres-event-log-redis-consolidation.md),
+refunds and other financial operations are accepted only by a confirmed
+TigerBeetle commit through the Hawala gateway.
+
 This implementation was lifted from `EatsbotCore.Orders.Pricing` preserving
 the original algorithm and error terms; the Eatsbot module now delegates back
 to this one. Existing orders, checkout locks, order/delivery state machines,
