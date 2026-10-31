@@ -36,6 +36,7 @@ defmodule CoopSubstrate.Log do
 
   alias CoopSubstrate.Canonical
   alias CoopSubstrate.Crypto
+  alias CoopSubstrate.OutcomeAdmission
   alias CoopSubstrate.Projections.Membership, as: Gate
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.Protocol.StreamRoot
@@ -58,10 +59,12 @@ defmodule CoopSubstrate.Log do
   end
 
   @impl true
-  def init(_opts) do
-    {head, gate, links} = recover()
+  def init(opts) do
+    snapshot = OutcomeAdmission.validate_snapshot!(Keyword.get(opts, :outcome_source_snapshot))
+    {head, gate, links, outcomes} = recover()
+    OutcomeAdmission.validate_recovered!(outcomes, snapshot)
     :ok = repair_links(links)
-    {:ok, %{head: head, gate: gate}}
+    {:ok, %{head: head, gate: gate, outcomes: outcomes, outcome_source_snapshot: snapshot}}
   end
 
   @doc "How any node calls the appender."
@@ -95,6 +98,10 @@ defmodule CoopSubstrate.Log do
           {:ok, [Envelope.t()]} | {:error, term()}
   def append_if(envelopes, {_m, _f, _a} = guard, server \\ @server) when is_list(envelopes),
     do: GenServer.call(server, {:append, envelopes, guard})
+
+  @doc "The durable complete-group prefix for a source/destination scope."
+  def outcome_cursor(scope, server \\ @server),
+    do: GenServer.call(server, {:outcome_cursor, scope})
 
   @doc "Current global head: `%{global_seq: n, global_hash: <<_::256>> | nil}`."
   @spec head(GenServer.server()) :: %{global_seq: non_neg_integer(), global_hash: binary() | nil}
@@ -436,6 +443,9 @@ defmodule CoopSubstrate.Log do
     {:reply, %{global_seq: head.global_seq, global_hash: head.global_hash}, state}
   end
 
+  def handle_call({:outcome_cursor, scope}, _from, state),
+    do: {:reply, OutcomeAdmission.cursor(state.outcomes, scope), state}
+
   def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
 
   def handle_call({:federation_effect, context, request, effect}, _from, state) do
@@ -450,13 +460,20 @@ defmodule CoopSubstrate.Log do
   def handle_call({:append, envelopes, guard}, _from, %{head: head, gate: gate} = state) do
     with :ok <- verify_batch(envelopes),
          :ok <- guard(guard, gate) do
-      case duplicate(envelopes, gate) do
+      case source_duplicate(envelopes, state) do
         {:ok, accepted} -> {:reply, {:ok, accepted}, state}
         {:error, reason} -> {:reply, {:error, reason}, state}
         :new -> append_verified(envelopes, head, gate, state)
       end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp source_duplicate(envelopes, state) do
+    case OutcomeAdmission.admission(envelopes, state.outcomes, state.outcome_source_snapshot) do
+      :new -> duplicate(envelopes, state.gate)
+      result -> result
     end
   end
 
@@ -475,7 +492,8 @@ defmodule CoopSubstrate.Log do
       link_batch(assigned, head)
       :ok = CoopSubstrate.Feed.publish(assigned)
       new_gate = Enum.reduce(assigned, gate, &Gate.handle_event/2)
-      {:reply, {:ok, assigned}, %{state | head: new_head, gate: new_gate}}
+      outcomes = Enum.reduce(assigned, state.outcomes, &OutcomeAdmission.fold!/2)
+      {:reply, {:ok, assigned}, %{state | head: new_head, gate: new_gate, outcomes: outcomes}}
     else
       # Another appender moved the ledger: this one's head is stale. Stop, and
       # start again from the store.
@@ -655,10 +673,10 @@ defmodule CoopSubstrate.Log do
   defp recover do
     # Admission projections must not rebuild from a reordered or broken chain.
     :ok = verify_chains()
-    initial = {%Head{}, Gate.init(), %{}}
+    initial = {%Head{}, Gate.init(), %{}, OutcomeAdmission.init()}
 
-    {:ok, {head, gate, links}} =
-      fold_ledger(initial, fn env, bytes, {head, gate, links} ->
+    {:ok, {head, gate, links, outcomes}} =
+      fold_ledger(initial, fn env, bytes, {head, gate, links, outcomes} ->
         hash = :crypto.hash(:sha256, bytes)
         {:ok, uuid} = ULID.to_uuid(env.event_id)
 
@@ -669,11 +687,13 @@ defmodule CoopSubstrate.Log do
         }
 
         {head, Gate.handle_event(env, gate),
-         Map.update(links, env.stream_id, [uuid], &[uuid | &1])}
+         Map.update(links, env.stream_id, [uuid], &[uuid | &1]),
+         OutcomeAdmission.fold!(env, outcomes)}
       end)
 
     {head, gate,
-     Map.new(links, fn {stream_id, reversed} -> {stream_id, Enum.reverse(reversed)} end)}
+     Map.new(links, fn {stream_id, reversed} -> {stream_id, Enum.reverse(reversed)} end),
+     outcomes}
   end
 
   defp repair_links(links) do
