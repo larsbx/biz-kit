@@ -82,7 +82,7 @@ defmodule BizKit.Extension.Catalog do
 
   defp verify_dependencies(index) do
     Enum.reduce_while(index, :ok, fn {id, entry}, :ok ->
-      Enum.reduce_while(entry.manifest.dependencies, {:cont, :ok}, fn dep, _ ->
+      Enum.reduce_while(entry.manifest.dependencies, :ok, fn dep, :ok ->
         case Map.fetch(index, dep.id) do
           :error ->
             {:halt, {:error, {:missing_dependency, id, dep.id}}}
