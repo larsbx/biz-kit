@@ -51,6 +51,14 @@ umbrella-relative build paths work unchanged in an external host.
 cross-domain order/Dispatch fulfillment interfaces must be reviewed separately
 before moving persistent Ash resources or writers.
 
+**Modifiers.** A catalog product may carry `modifier_groups`: each group lists
+options with non-negative per-currency price deltas and allows between `min`
+and `max` choices. `Catalog.quote/6` takes the chosen `{group_id, option_id}`
+pairs in any order and prices the unit at the variant's price plus their
+deltas; unknown, repeated or out-of-bounds choices are refused. `quote/5` is a
+quote with no modifiers. Properties check the sum, order independence, every
+bound and merchant scoping.
+
 **Characterization.** `test/eatsbot_characterization_test.exs` checks this core
 against the old eatsbot's recorded behaviour, pinned by sha256 to
 `larsbx/eatsbot@15a201e` (rebuild slice 1): all 314 recorded baskets price to the same totals or are refused with the same error term.
