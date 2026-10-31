@@ -153,6 +153,13 @@ npm run tauri build -- --debug --no-bundle
 xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
 ```
 
+On headless CI, run the acceptance command under `dbus-run-session --` with
+`LIBGL_ALWAYS_SOFTWARE=1`, `WEBKIT_DISABLE_DMABUF_RENDERER=1`,
+`WEBKIT_DISABLE_COMPOSITING_MODE=1`, and `NO_AT_BRIDGE=1`. These are test-runner
+settings for Xvfb; the application keeps its normal graphics configuration.
+The native handshake has a bounded 60-second timeout and prints a separate
+session-ready marker before running panel assertions.
+
 The Desktop workflow runs this acceptance on Linux as well as the frontend and
 Rust checks on Linux, macOS, and Windows.
 
