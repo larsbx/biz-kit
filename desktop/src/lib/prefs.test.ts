@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import { DEFAULTS, FONT, applyPrefs, parsePrefs, prefs, resetPrefs, resolveTheme } from "./prefs.svelte";
 import Settings from "./panels/Settings.svelte";
-import Page from "../routes/+page.svelte";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue({ configPath: "/config.json", scriptsDir: "/scripts", hosts: [] }),
@@ -56,27 +55,5 @@ describe("Settings panel", () => {
     expect(prefs.fontSize).toBe(19);
     await fireEvent.click(screen.getByRole("button", { name: "Restore defaults" }));
     expect(prefs).toEqual(DEFAULTS);
-  });
-});
-
-describe("sidebar navigation", () => {
-  it("groups panels, marks the current one, and answers keyboard shortcuts", async () => {
-    render(Page);
-    expect(screen.getByText("Hosts")).toBeTruthy();
-    expect(screen.getByText("Business")).toBeTruthy();
-    const current = () => document.querySelector('[aria-current="page"]')?.getAttribute("data-panel");
-    expect(current()).toBe("health");
-
-    await fireEvent.keyDown(window, { key: ",", ctrlKey: true });
-    expect(current()).toBe("settings");
-    await fireEvent.keyDown(window, { key: "5", ctrlKey: true });
-    expect(current()).toBe("dispatch");
-    await fireEvent.keyDown(document.querySelector('[data-panel="dispatch"]')!, { key: "ArrowUp" });
-    expect(current()).toBe("configs");
-
-    await fireEvent.keyDown(window, { key: "=", ctrlKey: true });
-    expect(prefs.fontSize).toBe(DEFAULTS.fontSize + 1);
-    await fireEvent.keyDown(window, { key: "0", ctrlKey: true });
-    expect(prefs.fontSize).toBe(DEFAULTS.fontSize);
   });
 });

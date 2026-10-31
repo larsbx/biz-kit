@@ -15,6 +15,12 @@
       "M5.5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18.5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
     ],
     settings: ["M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3", "M1 14h6M9 8h6M17 16h6"],
+    layout: ["M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M12 3v18M12 12h9"],
+    "split-h": ["M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M12 4v16"],
+    "split-v": ["M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M3 12h18"],
+    zoom: ["M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"],
+    restore: ["M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"],
+    close: ["M6 6l12 12M18 6L6 18"],
   } satisfies Record<string, string[]>;
 
   export type IconName = keyof typeof PATHS;

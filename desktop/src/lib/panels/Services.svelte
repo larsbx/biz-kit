@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import PanelBar from "../PanelBar.svelte";
   import { type AppInfo, type Unit, listUnits, unitActionScript, runOn, previewCommand } from "../api";
   import { confirm } from "../confirmation.svelte";
   import HostSelect from "../HostSelect.svelte";
@@ -63,8 +64,7 @@
   }
 </script>
 
-<div class="bar">
-  <h1>Services</h1>
+<PanelBar title="Services">
   <HostSelect {hosts} bind:value={host} />
   <div class="chips">
     {#each ["all", "active", "limit"] as const as k (k)}
@@ -76,7 +76,7 @@
   <input type="text" placeholder="Filter…" bind:value={q} style="width: 13rem" />
   <div class="spacer"></div>
   <button class="btn" onclick={() => load()} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button>
-</div>
+</PanelBar>
 <div class="body">
   {#if err}<p class="err">{err}</p>{/if}
   {#if !err && !loading && shown.length === 0}<div class="empty">no units match</div>{/if}

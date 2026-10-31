@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import PanelBar from "../PanelBar.svelte";
   import {
     type AppInfo,
     type BoardLoad,
@@ -248,8 +249,7 @@
   const activeTrip = (l: BoardLoad) => l.trips.find((t) => t.status === "ACTIVE") ?? l.trips.find((t) => t.status === "PLANNED");
 </script>
 
-<div class="bar">
-  <h1>Dispatch</h1>
+<PanelBar title="Dispatch">
   {#if status?.signedIn && roles.length > 1}
     <select class="btn" bind:value={role} onchange={refresh}>
       <option value="" disabled>Choose a role…</option>
@@ -268,7 +268,7 @@
     <button class="btn" onclick={refresh} disabled={busy}>{busy ? "Loading…" : "Refresh"}</button>
     <button class="btn" onclick={signOut} disabled={busy}>Sign out</button>
   {/if}
-</div>
+</PanelBar>
 
 <div class="body">
   {#if err}<p class="err">{err}</p>{/if}
@@ -455,7 +455,7 @@
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 760px) {
+  @container (max-width: 760px) {
     .board { grid-template-columns: 1fr; }
   }
   .list { display: flex; flex-direction: column; gap: 6px; }
