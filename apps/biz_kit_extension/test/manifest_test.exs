@@ -61,6 +61,12 @@ defmodule BizKit.Extension.ManifestTest do
     end
   end
 
+  defmodule Old do
+    @behaviour BizKit.Extension
+    @impl true
+    def manifest, do: %{Base.manifest() | version: "1.0.0"}
+  end
+
   test "strict manifest and deterministic canonical order" do
     assert {:ok, valid} = Manifest.validate(Base.manifest())
     assert valid.id == "example"
@@ -105,12 +111,6 @@ defmodule BizKit.Extension.ManifestTest do
     assert {:error, :duplicate_extension} = Catalog.build([Base, Base])
     assert {:error, {:missing_dependency, "consumer", "example"}} = Catalog.build([Consumer])
     assert {:error, :dependency_cycle} = Catalog.build([Consumer, Cycle])
-
-    defmodule Old do
-      @behaviour BizKit.Extension
-      @impl true
-      def manifest, do: %{Base.manifest() | version: "1.0.0"}
-    end
 
     assert {:error, {:outdated_dependency, "consumer", "example"}} =
              Catalog.build([Old, Consumer])
