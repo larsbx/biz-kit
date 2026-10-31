@@ -50,3 +50,7 @@ umbrella-relative build paths work unchanged in an external host.
 **Next:** catalog/price API ownership, inventory reservation design, and
 cross-domain order/Dispatch fulfillment interfaces must be reviewed separately
 before moving persistent Ash resources or writers.
+
+**Characterization.** `test/eatsbot_characterization_test.exs` checks this core
+against the old eatsbot's recorded behaviour, pinned by sha256 to
+`larsbx/eatsbot@15a201e` (rebuild slice 1): all 314 recorded baskets price to the same totals or are refused with the same error term.
