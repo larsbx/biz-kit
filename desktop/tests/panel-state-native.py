@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import signal
 import socket
 import subprocess
 import tempfile
@@ -34,7 +35,7 @@ def until(check, description):
     raise AssertionError(f"Timed out: {description}")
 
 
-def run(binary):
+def run(binary, session_timeout=60):
     with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp:
         root = Path(tmp)
         fixture = root / "app.json"
@@ -53,12 +54,12 @@ def run(binary):
         # Ignore shell proxy variables for the local WebDriver connection.
         http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-        def request(method, path, payload=None):
+        def request(method, path, payload=None, timeout=30):
             data = None if payload is None else json.dumps(payload).encode()
             req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data,
                                          headers={"Content-Type": "application/json"}, method=method)
             try:
-                with http.open(req, timeout=30) as reply:
+                with http.open(req, timeout=timeout) as reply:
                     result = json.load(reply)
             except urllib.error.HTTPError as error:
                 raise AssertionError(error.read().decode()) from error
@@ -69,7 +70,7 @@ def run(binary):
 
         with open(root / "driver.log", "w+") as log:
             driver = subprocess.Popen(["tauri-driver", "--port", str(port), "--native-port", str(native_port)],
-                                      env=env, stdout=log, stderr=log)
+                                      env=env, stdout=log, stderr=log, start_new_session=True)
             session = None
             try:
                 def ready():
@@ -84,10 +85,12 @@ def run(binary):
                     except OSError:
                         return False
                 until(ready, "tauri-driver")
+                print("Native acceptance: creating Tauri/WebKit session", flush=True)
                 session = request("POST", "/session", {"capabilities": {"alwaysMatch": {
                     "tauri:options": {"application": str(binary)},
-                }}})["sessionId"]
+                }}}, timeout=session_timeout)["sessionId"]
                 base = f"/session/{session}"
+                print("Native acceptance: session ready; exercising mounted editors", flush=True)
 
                 def js(script, *args):
                     return request("POST", base + "/execute/sync", {"script": script, "args": list(args)})
@@ -194,16 +197,22 @@ def run(binary):
                     if session:
                         request("DELETE", f"/session/{session}")
                 finally:
-                    driver.terminate()
+                    # Also stop WebKit/app descendants after a failed session handshake.
+                    try:
+                        os.killpg(driver.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
                     try:
                         driver.wait(timeout=5)
                     except subprocess.TimeoutExpired:
-                        driver.kill()
+                        os.killpg(driver.pid, signal.SIGKILL)
                         driver.wait()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=lambda s: Path(s).resolve())
+    parser.add_argument("--session-timeout", type=float, default=60,
+                        help="Bound the native WebDriver handshake (seconds; default: 60).")
     args = parser.parse_args()
-    run(args.binary)
+    run(args.binary, args.session_timeout)
