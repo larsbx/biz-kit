@@ -6,6 +6,9 @@ on:
       - 'tools/check_halaqa_federation_draft.py'
       - 'tools/test_halaqa_federation_draft.py'
       - 'tools/halaqa_federation_draft/**'
+      - 'tools/halaqa_signed_draft.exs'
+      - 'tools/check_halaqa_signed_draft.exs'
+      - 'tools/test_halaqa_signed_draft.exs'
       - 'docs/architecture/2026-10-31-halaqa-iroh-federation-boundary.md'
       - '.github/workflows/halaqa-federation-draft.yml'
   push:
@@ -14,6 +17,9 @@ on:
       - 'tools/check_halaqa_federation_draft.py'
       - 'tools/test_halaqa_federation_draft.py'
       - 'tools/halaqa_federation_draft/**'
+      - 'tools/halaqa_signed_draft.exs'
+      - 'tools/check_halaqa_signed_draft.exs'
+      - 'tools/test_halaqa_signed_draft.exs'
       - 'docs/architecture/2026-10-31-halaqa-iroh-federation-boundary.md'
       - '.github/workflows/halaqa-federation-draft.yml'
 
@@ -34,3 +40,17 @@ jobs:
       - run: openssl version
       - run: python3 tools/check_halaqa_federation_draft.py
       - run: python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
+
+  independent-elixir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: elixir tools/check_halaqa_signed_draft.exs
+      - run: elixir tools/test_halaqa_signed_draft.exs

@@ -115,11 +115,42 @@ ingress, shared schema or business writer is added by this slice.
 
 ## Next implementation gates
 
+### Independent Elixir signed verifier — 2026-11-01
+
+`tools/halaqa_signed_draft.exs` independently implements bounded JSON decoding,
+duplicate-key refusal, candidate validation, exact signing-byte construction,
+external TEST policy binding and Ed25519 verification through OTP `:crypto`.
+It does not invoke Python or import the reference implementation. OTP 27's
+`:json.decode/3` callbacks refuse duplicates before map construction. No new
+Mix dependency or production application module is introduced.
+
+Run `elixir tools/check_halaqa_signed_draft.exs` and
+`elixir tools/test_halaqa_signed_draft.exs` on Elixir 1.19 / OTP 27. The verifier
+matches all 48 signed cases, including exact positive transcript/payload bytes
+and all refusal reasons; its 8 ExUnit checks pass locally. Both implementations
+use OpenSSL-backed cryptography, so this is independent protocol/decoder evidence,
+not independent cryptographic primitive evidence. Rust agreement, actual identity
+succession/current revocation sources, durable replay and live Iroh remain open.
+The focused CI workflow runs Python and Elixir in separate jobs.
+
+The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
+failed at its dependency audits, before the Elixir two-node acceptance suite.
+Its Rust formatting, clippy, tests and build passed. The four affected lock
+entries are corrected in the [dependency ledger](../security/remaining-dependencies-2026-10.md#november-1-federation-ci-audit-repair).
+The new verifier does not waive the existing broad acceptance gates.
+
+With the corrected lock, local full audit reports zero findings. The staged
+federation harness passes 17 core tests, a 107-case service suite (2 test-mode
+skips), and the separately run production-compiled HTTPS listener check.
+The remaining native-gossip case has no local sidecar executable. Independent Elixir
+and the 7 Python pin/reference tests pass separately. New-head hosted native
+Iroh/umbrella checks remain required; these local results do not close F3.
+
 | Stage | Required result |
 | --- | --- |
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
-| F2 — Verified boundary | Independent Rust/Elixir implementation on signed vectors; remote validity flags cannot enter the Buzz bridge; altered scope/audience/evidence, revoked keys and stale epochs refuse |
+| F2 — Verified boundary | Python/OpenSSL and independent Elixir agree on 48 experimental signed cases; Rust agreement, actual identity/evidence sources and production admission remain pending |
 | F3 — Native delivery | Two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable inbox/outbox and original-ID status reconciliation across lost ACKs, partition and restart |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
