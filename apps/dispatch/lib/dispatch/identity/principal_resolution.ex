@@ -69,8 +69,10 @@ defmodule Dispatch.Identity.PrincipalResolution do
 
     with {:ok, user} <- fetch_user(subject),
          {:ok, chosen} <- select(contexts(user.id, at), requested_assignment_id),
-         {:ok, assignment} <- fetch_assignment(chosen, at) do
-      Actor.from_assignment(assignment, at: at)
+         {:ok, assignment} <- fetch_assignment(chosen, at),
+         {:ok, actor} <- Actor.from_assignment(assignment, at: at),
+         :ok <- principal_still_active?(actor) do
+      {:ok, actor}
     end
   end
 
