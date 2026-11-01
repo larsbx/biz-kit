@@ -40,9 +40,11 @@ jobs:
           apps/inventory_core/lib/inventory_core.ex
           apps/inventory_core/lib/inventory_core/wire.ex
           apps/inventory_core/lib/inventory_core/menu.ex
+          apps/inventory_core/lib/inventory_core/basket.ex
           apps/inventory_core/test/inventory_core_test.exs
           apps/inventory_core/test/wire_test.exs
           apps/inventory_core/test/menu_test.exs
+          apps/inventory_core/test/basket_test.exs
       - name: Test replay and reservation rules
         working-directory: apps/inventory_core
         run: mix test --no-start
