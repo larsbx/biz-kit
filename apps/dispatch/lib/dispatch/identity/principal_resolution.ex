@@ -90,9 +90,26 @@ defmodule Dispatch.Identity.PrincipalResolution do
       |> contexts(at)
       |> Enum.map(&label_for(&1, at))
       |> Enum.reject(&is_nil/1)
+      |> disambiguate_labels()
     else
       _unknown -> []
     end
+  end
+
+  # Display names are not unique. Even inside one organization multiple
+  # resource-scoped assignments can share a role label. Keep the existing
+  # %{id, label} API and distinguish duplicate labels by the *full* assignment
+  # identifier rather than by a lossy short prefix.
+  defp disambiguate_labels(options) do
+    frequencies = Enum.frequencies_by(options, & &1.label)
+
+    Enum.map(options, fn choice ->
+      if Map.fetch!(frequencies, choice.label) > 1 do
+        %{choice | label: "#{choice.label} [#{choice.id}]"}
+      else
+        choice
+      end
+    end)
   end
 
   defp label_for(context, at) do
