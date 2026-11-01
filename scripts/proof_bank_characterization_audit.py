@@ -2,6 +2,7 @@
 """Fail-closed static Proof Bank catalog audit; NOT an app conformance verifier."""
 import argparse
 import json
+import hashlib
 from pathlib import Path
 
 SCHEMA = "biz-kit.proof-bank.characterizations.v1"
@@ -40,6 +41,11 @@ def audit(root, data):
         if not paths:
             problems.append(f"{name}: no code evidence")
         test = r.get("observed_test_path")
+        evidence = r.get("evidence_git_blobs", {})
+        expected_paths = set(paths + ([test] if test else []))
+        if not isinstance(evidence, dict) or set(evidence) != expected_paths:
+            problems.append(f"{name}: missing/extra pinned evidence hashes")
+            evidence = {}
         for item in paths + ([test] if test else []):
             if not isinstance(item, str):
                 problems.append(f"{name}: invalid path")
@@ -47,6 +53,11 @@ def audit(root, data):
             p = Path(item)
             if p.is_absolute() or ".." in p.parts or not (root / p).is_file():
                 problems.append(f"{name}: missing/unsafe evidence path {item}")
+            else:
+                content = (root / p).read_bytes()
+                digest = hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
+                if digest != evidence.get(item):
+                    problems.append(f"{name}: changed source/test bytes require re-characterization: {item}")
     return problems
 
 def main():

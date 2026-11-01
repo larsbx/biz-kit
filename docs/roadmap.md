@@ -24,6 +24,8 @@ with app-inventory drift checks. All 29 records require owner review and remain
 unverified/inert. First reconcile platform identity and admission, Dispatch,
 Inventory and Hawala boundaries before opening the marketplace.
 See [first-party adoption](architecture/2026-11-01-proof-bank-first-party.md).
+See [source-grounded app characterization](proof-bank/characterizations/v1/README.md)
+for present implementation and test evidence before creating Lean obligations.
 
 ## Proposed Halaqa federation over Iroh — 2026-10-31
 

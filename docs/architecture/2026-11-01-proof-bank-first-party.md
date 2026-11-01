@@ -88,3 +88,18 @@ a second distinct capability such as InventoryCore or SchoolOps.
 Keep separate verified, tested, unresolved and proposed statuses.
 
 See [Proof Bank rollout](2026-11-01-proof-bank-rollout.md).
+
+## Source/test conformance characterization
+
+The [29-app characterization catalog](../../proof_bank/characterizations/v1/catalog.json)
+and [audit matrix](../proof-bank/characterizations/v1/README.md) now distinguish
+intended features, observed code, test leads and outstanding authority gaps.
+Every evidence path is pinned to a Git blob at `e9388efeacd07882357889f110c5e642b2fae6ed`; an edited
+source/test byte fails the static check until deliberately re-characterized.
+These content hashes detect drift but are not signed provenance, a test run,
+or a mathematical verification result.
+
+**Baseline reconciliation:** `ProofBankCore.Portfolio` is a *draft seed*;
+its generic GroupBuy pledge/escrow wording and SpruceGoose `:hosted` category
+must be reviewed against the more precise semantics documented in the new
+catalog. Do not promote those seeds as approved requirements.

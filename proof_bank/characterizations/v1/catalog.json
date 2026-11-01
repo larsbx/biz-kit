@@ -28,7 +28,11 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "mix.exs": "49ab077f97bdfd9e9be1634125759ea8f177a5b9",
+        "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -55,7 +59,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/agent_core/lib/agent_core/profiles.ex": "5805f22b45c7c3089ded5b187ac769361c1d7660",
+        "apps/agent_core/lib/agent_core/execution_port.ex": "18190393bf0aa25198af04a23df579524d8259a9",
+        "apps/agent_core/test/profiles_test.exs": "3b6b74c8c793448644ec8bd77dd77bfb61e6c59f"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -83,7 +92,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex": "06eab3bc9af56b882f7a6936db47dbcd9738a47a",
+        "apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex": "709c146ed4c824cd4d3ce027654d544843f780ad",
+        "apps/agent_ops_store/test/coordinator_test.exs": "c7a03d7467ddc740c35631147851d3e33fd61630"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -109,7 +123,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/barter_core/lib/barter_core/optimizer.ex": "6e4b47fd7dbe68e6166df42afb35907cdb502406",
+        "apps/barter_core/lib/barter_core/brokerage.ex": "8df4e06174e32ce1e0477a1f1588021773860bbe",
+        "apps/barter_core/test/barter_core_test.exs": "bce7796bad685a8b9d5f5f352555a4af18db033c"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -134,7 +153,11 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_cluster/lib/biz_kit/cluster/singleton.ex": "7a57359ee8aab4f958051601864d834bd1c3dda8",
+        "apps/biz_kit_cluster/test/singleton_test.exs": "17fe014d821eef12b0ff7da37970afd3e66b0a23"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -159,7 +182,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_composition/lib/biz_kit/composition.ex": "c8e107d5c55134b2cbd55bb51503c1e9cb347b91",
+        "apps/biz_kit_composition/lib/biz_kit/marketing_bridge.ex": "cd9e7778e009e263a48d23959ecf6530855acfce",
+        "apps/biz_kit_composition/test/composition_test.exs": "580ffcadcd0371adfd54b0c164dee97c7354cbf0"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -186,7 +214,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex": "9a954820349991a601539da121f2d129616f5df9",
+        "apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex": "c1d1adb6164414da8452583287ef94aaf7fc2476",
+        "apps/biz_kit_identity/test/durable_sessions_test.exs": "8a46203b2a345c306d454d0c66d14b630a47e13a"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -213,7 +246,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/commerce_core/lib/commerce_core/pricing.ex": "7dfb9a672008075e16a46104ca306fb5e68a08f9",
+        "apps/commerce_core/lib/commerce_core/tax.ex": "9d1a2b861fb416c97f3e8944b7f85a5eccb625d8",
+        "apps/commerce_core/test/checkout_safety_test.exs": "e6a1cfdda0dbbd3e7235667043bbd81985aaa07b"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -239,7 +277,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/coop_substrate/lib/coop_substrate/canonical.ex": "a61cbebaa3154f2615c6e5d5c63d8c2fc298c2b3",
+        "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex": "d792dba38347b34c897ee502be9ea5625620043a",
+        "apps/coop_substrate/test/canonical_test.exs": "d5534845cc1e99d6df22135821fee24076169e44"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -267,7 +310,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "bb9f0c38ba809d1c8d444824008e3266ea70d19e",
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "a5aa3b65df8278f055e1a788c471756280eed99e"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -294,7 +342,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/dispatch_core/lib/dispatch_core/last_mile.ex": "4c7022ea618044a4166640c41906e6891743a528",
+        "apps/dispatch_core/lib/dispatch_core/legacy_delivery.ex": "6ecf565e5de48927e34eb5f522e9659ef7898526",
+        "apps/dispatch_core/test/dispatch_core_test.exs": "c39be4063de0461016c1936c8cce90ea6713c535"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -321,7 +374,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/eatsbot/lib/eatsbot.ex": "925b9d891b43db43cf52f0275006fedf7593fc9d",
+        "apps/eatsbot/lib/eatsbot/application.ex": "ccf6194b0632d2689ace29915a3b2d0198ba5ad0",
+        "apps/eatsbot/test/eatsbot/orders/checkout_concurrency_test.exs": "3892437a9274c9272fcc449fd916e4c9e8d2063e"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -348,7 +406,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/eatsbot_core/lib/products/product.ex": "b85b6bb3a2d8c7e8fe8af5da089a4f5cdc928e66",
+        "apps/eatsbot_core/lib/carts/cart.ex": "904f8373fafbc11a0bce498d3e5ed87d2c4f39b5",
+        "apps/eatsbot_core/test/core_test.exs": "661aff18c2302c01816f3ea06ee0a9546bda53c9"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -374,7 +437,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/eatsbot_extension_kafka/lib/driver.ex": "c560467a5bb213d637082cafee448245279d7f3d",
+        "apps/eatsbot_extension_kafka/lib/extension.ex": "467ed7e662d62256438908803704f7281c68be5f",
+        "apps/eatsbot_extension_kafka/test/driver_test.exs": "1c87a2d097c8efb43a280bc7b9a120d2f85fff39"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -399,7 +467,11 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/eatsbot_extension_prometheus/lib/extension.ex": "aecf4593bf4a25086fc6731cd102f09bf8b06504",
+        "apps/eatsbot_extension_prometheus/lib/promex_plugin.ex": "c780a1603d35cf81c7f8a919e0962048808a3a81"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -426,7 +498,11 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/eatsbot_extension_telegram_bot/lib/controller.ex": "2eebf525195cf0136d3bb11334fc3fda510fe637",
+        "apps/eatsbot_extension_telegram_bot/lib/telegram/chain_handler.ex": "70e0f8ee8c37d3497fbbe27ed21e14f12cfed734"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -451,7 +527,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/federation_core/lib/federation_core/marketplace.ex": "7d5b2f34baed5454163e69ad907879a46b860182",
+        "apps/federation_core/lib/federation_core/subscriptions.ex": "1ed48a3241db386a6dc109a01862801d06587874",
+        "apps/federation_core/test/marketplace_test.exs": "0946ff7c944b6e37d63fd8f44be34728648085bc"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -477,7 +558,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/federation_service/lib/federation_service/inbox.ex": "f49f5423dd9e0a11e7b03a5bdeaa7622e1d99387",
+        "apps/federation_service/lib/federation_service/network.ex": "0c04b547837ee20a07a66599baa7f20fbae50699",
+        "apps/federation_service/test/network_test.exs": "61e3b0ea8d7f39ba526aadf2aad7fd84fa58bb5a"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -504,7 +590,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/fulfillment_core/lib/fulfillment_core.ex": "ee139fb7f0693b1d27d4e51aaff3587eb150bc40",
+        "apps/fulfillment_core/lib/fulfillment_core/order_coupling.ex": "cbbb46ea1333dde1a3eb354483ab0b7e595f72fe",
+        "apps/fulfillment_core/test/fulfillment_core_test.exs": "645f63061e8328cfbfcf12a12db919fec6bdfd3f"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -531,7 +622,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/group_buy_core/lib/group_buy_core/binding_round.ex": "406cde7d475235a47be7a203e99a7d21dfb86125",
+        "apps/group_buy_core/lib/group_buy_core/escrow.ex": "fc43369ad3d3ab15b580dfe79fb8c1f43aff37f3",
+        "apps/group_buy_core/test/binding_round_test.exs": "5020302471e33b457a0d38558e8767d264610cf8"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -557,7 +653,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/hawala_capability/test/support/cross_authority_host.ex": "a1d259c3ef82d6bf64ec1c7488eab4a5dc580a95",
+        "apps/hawala_capability/test/support/signed_test_port.ex": "81c3578eeb22605e1bc0ed5d835347a6671ed0e6",
+        "apps/hawala_capability/test/conformance_test.exs": "b450e00b938f65f7d8b63a07361bdd83a9fe8538"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -583,7 +684,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/inventory_core/lib/inventory_core.ex": "9af124663dcd329861e8ae9037a856e5875c2b4b",
+        "apps/inventory_core/lib/inventory_core/basket.ex": "457d2b106f4b03411d932b34166df1e77c7494f2",
+        "apps/inventory_core/test/inventory_core_test.exs": "47bf89ac823c8e7b19bccbf475da1bddbdda0685"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -609,7 +715,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/keel/lib/keel/invariants.ex": "cd525419de5a4f47d8a17975b1d3abe28f88e6ce",
+        "apps/keel/lib/keel/decision.ex": "5064abc54b309a7b84faed531a9a330f32c96a73",
+        "apps/keel/test/conformance_test.exs": "2de5b753d5fc09fcb9bf855bb008e96ec3a2186b"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -635,7 +746,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/marketing_core/lib/marketing_core/attribution.ex": "972f63d9b8a72f07825c1385ab1627f84b08a656",
+        "apps/marketing_core/lib/marketing_core/redemption.ex": "b3763829a6fe7b26fcfaab4b397dd5e5107162de",
+        "apps/marketing_core/test/marketing_core_test.exs": "8facd330a92170fca4561a6050942dbebb57f2cf"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -660,7 +776,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/proof_bank_core/lib/proof_bank_core.ex": "0fad72d6702600b38cce79a585007d9e627f424a",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "b455c0cb0df927fd0685e89dbd5df58e0498c9cd",
+        "apps/proof_bank_core/test/proof_bank_core_test.exs": "2538e6448566abdc2bb2446d75ab76acbf6112a7"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -687,7 +808,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/sales_core/lib/sales_core/consent.ex": "7efd5bc6e3b437efe053f6f4452cf4dec88850e3",
+        "apps/sales_core/lib/sales_core/pipeline.ex": "c6b149d85cf0cbdee1e88f184da6cd5ea5261d0b",
+        "apps/sales_core/test/sales_core_test.exs": "f6a00f42dc0bfbc36fbcc971c4c8e4437a453a43"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -712,7 +838,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/school_ops/lib/school_ops/catalog.ex": "1473414ddd516dd07f445cccda0947d1db38e5ba",
+        "apps/school_ops/lib/school_ops/workflows.ex": "e5fe65a198375382de72292827dac90e982c08ab",
+        "apps/school_ops/test/domain_test.exs": "2e53948aff1115733abb18054826e8b6bb0951ac"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -738,7 +869,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/spruce_goose/lib/spruce_goose/actors.ex": "a33b0bf900ab778b50a65701f4722397ca800958",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "d710a25373fe846a0cfc3ae4e49fb7d770bb0d9a",
+        "apps/spruce_goose/test/authority_runtime_test.exs": "7ccba2dbfb78867713276f9f914c5f203b8e7b0e"
+      }
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
@@ -765,7 +901,12 @@
       "test_result": "not_executed",
       "implementation_conformance": "not_established",
       "proof_status": "not_proven",
-      "runtime_conformance": "not_established"
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/task_core/lib/task_core/admission.ex": "d4e8c8852c89676f0eaa58e0facdf4efddb248c5",
+        "apps/task_core/lib/task_core/agent_runs.ex": "e2cea02be4c1e7f2d28e829d1eb09c85e7b45844",
+        "apps/task_core/test/agent_runs_test.exs": "74e16f5dc07bac66e82a9a72a6452560c09a7f19"
+      }
     }
   ]
 }
