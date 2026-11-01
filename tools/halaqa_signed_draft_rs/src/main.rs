@@ -5,7 +5,7 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, fmt, fs::File, io::Read, path::Path};
+use std::{collections::HashSet, fmt};
 
 type Code = &'static str;
 const MAX_INTEGER: u64 = (1 << 53) - 1;
@@ -17,7 +17,33 @@ struct UniqueVisitor;
 
 impl<'de> Deserialize<'de> for Unique {
     fn deserialize<D: Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
-        decoder.deserialize_any(UniqueVisitor)
+        // Preserve lexical integer types: serde_json otherwise turns -0 into
+        // a float. Parsing semantics here never reserializes signed bytes.
+        let raw = Box::<serde_json::value::RawValue>::deserialize(decoder)?;
+        let text = raw.get();
+        if text
+            .as_bytes()
+            .first()
+            .is_some_and(|b| *b == b'-' || b.is_ascii_digit())
+        {
+            let integer_token = !text.bytes().any(|b| b".eE".contains(&b));
+            let value = if integer_token {
+                text.parse::<i64>()
+                    .map(Value::from)
+                    .ok()
+                    .or_else(|| text.parse::<u64>().map(Value::from).ok())
+                    .unwrap_or(Value::Null)
+            } else {
+                serde_json::from_str(text).unwrap_or(Value::Null)
+            };
+            // Out-of-range numbers become an invalid typed value. Every
+            // numeric slot is checked against the smaller 0..2^53-1 bound;
+            // nonnumeric slots also refuse null. No oversized number passes.
+            return Ok(Unique(value));
+        }
+        let mut json = serde_json::Deserializer::from_str(text);
+        json.deserialize_any(UniqueVisitor)
+            .map_err(de::Error::custom)
     }
 }
 
@@ -139,6 +165,7 @@ fn uint(v: &Value, code: Code) -> Result<u64, Code> {
 
 fn base64(v: &Value, code: Code, size: Option<usize>) -> Result<Vec<u8>, Code> {
     let text = v.as_str().ok_or(code)?;
+    require(size.is_none_or(|n| text.len() == n.div_ceil(3) * 4), code)?;
     let bytes = STANDARD.decode(text).map_err(|_| code)?;
     require(
         STANDARD.encode(&bytes) == text && size.is_none_or(|n| bytes.len() == n),
@@ -202,6 +229,7 @@ fn candidate(bytes: &[u8]) -> Result<(Map<String, Value>, Vec<u8>), Code> {
     Ok((m.clone(), payload))
 }
 
+#[derive(Debug)]
 struct Verified {
     payload: Vec<u8>,
     transcript: Vec<u8>,
@@ -365,25 +393,74 @@ fn check(bytes: &[u8]) -> Result<Value, String> {
     )
 }
 
+const SOURCE: &str = "7f677f7f82bd9c2d8f020996dc5352bc59a364af";
+const CORPUS_HASH: &str = "52d3450403e0c26cee4bfa2c86b5431fe3bc8d8488d15fafee2ecd75d6f8b4bd";
+const PINNED_CORPUS: &[u8] = include_bytes!("../../halaqa_federation_draft/signed-vectors.json");
+
+fn check_pinned(bytes: &[u8]) -> Result<Value, String> {
+    require(
+        format!("{:x}", Sha256::digest(bytes)) == CORPUS_HASH,
+        "source_pin",
+    )?;
+    let mut summary = check(bytes)?;
+    require(
+        summary["counts"][VERDICT] == 8 && summary["counts"]["REFUSED_SIGNED_TEST"] == 66,
+        "corpus_count",
+    )?;
+    summary["source_revision"] = SOURCE.into();
+    summary["corpus_sha256"] = CORPUS_HASH.into();
+    summary["edge_probes"] = edge_probes();
+    Ok(summary)
+}
+// Fixed synthetic edge probes are diagnostics, not additional accepted corpus.
+// Keep these separate so corpus agreement never hides backend disagreements.
+fn edge_probes() -> Value {
+    let root: Value = serde_json::from_slice(PINNED_CORPUS).expect("pinned corpus");
+    let fixture = &root["vectors"][0];
+    let raw = base64(&fixture["wire_base64"], "encoding", None).unwrap();
+    let mut envelope = decode(&raw).unwrap();
+    let mut p = fixture["test_policy"].clone();
+    let mut identity = [0u8; 32];
+    identity[0] = 1;
+    let mut weak = [0u8; 64];
+    weak[0] = 1;
+    p["public_key"] = STANDARD.encode(identity).into();
+    envelope["signature"] = STANDARD.encode(weak).into();
+    let weak_outcome = match verify(&serde_json::to_vec(&envelope).unwrap(), &p) {
+        Ok(_) => VERDICT,
+        Err(reason) => reason,
+    };
+    let candidate_bytes = base64(&envelope["candidate"], "encoding", None).unwrap();
+    let raw = std::str::from_utf8(&candidate_bytes).unwrap();
+    let probes = [
+        ("lone-surrogate", raw.replace("actor:alpha", r"\ud800")),
+        (
+            "negative-zero-epoch",
+            raw.replace("\"epoch\":1", "\"epoch\":-0"),
+        ),
+        (
+            "overflow-epoch",
+            raw.replace("\"epoch\":1", "\"epoch\":1e400"),
+        ),
+    ];
+    let mut outcomes = Map::new();
+    outcomes.insert("weak-identity-key".into(), weak_outcome.into());
+    for (name, wire) in probes {
+        let outcome = match candidate(wire.as_bytes()) {
+            Ok(_) => "FORMAT_ONLY_UNVERIFIED",
+            Err(reason) => reason,
+        };
+        outcomes.insert(name.into(), outcome.into());
+    }
+    Value::Object(outcomes)
+}
+
 fn main() {
-    let args: Vec<_> = std::env::args_os().skip(1).collect();
-    if args.len() > 1 {
-        eprintln!("usage: halaqa-signed-draft-conformance [corpus.json]");
+    if std::env::args_os().len() != 1 {
+        eprintln!("offline runner accepts only its compiled source-pinned corpus");
         std::process::exit(2);
     }
-    let default = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../halaqa_federation_draft/signed-vectors.json");
-    let path = args.first().map_or(default.as_path(), Path::new);
-    let result = (|| -> Result<Value, String> {
-        let mut bytes = Vec::new();
-        File::open(path)
-            .map_err(|e| e.to_string())?
-            .take(2_000_001)
-            .read_to_end(&mut bytes)
-            .map_err(|e| e.to_string())?;
-        check(&bytes)
-    })();
-    match result {
+    match check_pinned(PINNED_CORPUS) {
         Ok(summary) => println!("{summary}"),
         Err(error) => {
             eprintln!("{error}");
@@ -480,3 +557,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod regression_tests;
