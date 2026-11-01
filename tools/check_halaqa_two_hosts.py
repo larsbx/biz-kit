@@ -50,18 +50,25 @@ def initialize(directory, role, binary):
     return public
 
 
-def inputs(args, role):
-    if re.fullmatch(r"[0-9a-f]{40}", args.revision) is None:
+def checkout_state(revision, local_rehearsal):
+    """Check the executing/reviewing sources, never infer binary or host provenance."""
+    if type(revision) is not str or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("exact 40-character source revision required")
+    if local_rehearsal:
+        return "local_rehearsal_unverified"
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+                          capture_output=True, check=True).stdout.strip()
+    changes = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--", *SOURCE_FILES],
+                             cwd=ROOT, text=True, capture_output=True, check=True).stdout
+    if head != revision or changes:
+        raise ValueError("clean exact-revision checkout required; local rehearsal must be explicitly labeled")
+    return "clean_git_head"
+
+
+def inputs(args, role):
+    checkout_state(args.revision, args.local_rehearsal)
     if not args.host_label or len(args.host_label) > 64:
         raise ValueError("operator host label required")
-    if not args.local_rehearsal:
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
-                              capture_output=True, check=True).stdout.strip()
-        changes = subprocess.run(["git", "status", "--porcelain", "--", *SOURCE_FILES], cwd=ROOT,
-                                 text=True, capture_output=True, check=True).stdout
-        if head != args.revision or changes:
-            raise ValueError("clean exact-revision checkout required; local rehearsal must be explicitly labeled")
     own = read_json(Path(args.identity_dir) / "public.json")
     remote = read_json(args.peer_public)
     for value, expected in ((own, role), (remote, "receiver" if role == "sender" else "sender")):
@@ -75,13 +82,17 @@ def inputs(args, role):
 
 
 def base_report(args, own, remote, relay, wire, candidate):
-    return {"schema": "halaqa-two-host-fixture-report/0", "role": own["role"],
+    # Hash the selected executable and trust root as observations. These hashes
+    # do not establish a reproducible build or an independently attested binary.
+    return {"schema": "halaqa-two-host-fixture-report/1", "role": own["role"],
             "implementation_revision": args.revision, "host_label": args.host_label,
             "checkout_state": "local_rehearsal_unverified" if args.local_rehearsal else "clean_git_head",
             "own_endpoint": own["endpoint"], "peer_endpoint": remote["endpoint"],
             "relay_url": relay["url"].rstrip("/") + "/",
             "candidate_sha256": hashlib.sha256(candidate).hexdigest(),
             "wire_sha256": hashlib.sha256(wire).hexdigest(),
+            "native_binary_sha256": hashlib.sha256(Path(args.binary).read_bytes()).hexdigest(),
+            "relay_ca_sha256": hashlib.sha256(Path(relay["ca_file"]).read_bytes()).hexdigest(),
             "source_sha256": {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in SOURCE_FILES},
             "authority_verified": False, "production_receiver": False,
             "host_provenance": "operator label; physical independence not attested"}
@@ -182,28 +193,34 @@ def send(args):
         IsolatedHost.doClassCleanups()
 
 
-def compare_reports(sender, receiver, expected_revision):
+def compare_reports(sender, receiver, expected_revision, *, local_rehearsal=False):
     def require(value, message):
         if not value:
             raise ValueError(message)
-    require(re.fullmatch(r"[0-9a-f]{40}", expected_revision) is not None, "exact revision required")
+    review_state = checkout_state(expected_revision, local_rehearsal)
     for report, role in ((sender, "sender"), (receiver, "receiver")):
-        require(report["schema"] == "halaqa-two-host-fixture-report/0" and report["role"] == role, "report role/schema")
+        require(report["schema"] == "halaqa-two-host-fixture-report/1" and report["role"] == role, "report role/schema")
         require(report["implementation_revision"] == expected_revision, "implementation revision mismatch")
         require(report["authority_verified"] is False and report["production_receiver"] is False, "authority amplification")
         require(report["checkout_state"] in ("local_rehearsal_unverified", "clean_git_head"), "unknown checkout evidence")
+        require(local_rehearsal or report["checkout_state"] == "clean_git_head", "rehearsal reports require explicit rehearsal comparison")
+        for field in ("native_binary_sha256", "relay_ca_sha256"):
+            require(type(report[field]) is str and re.fullmatch(r"[0-9a-f]{64}", report[field]) is not None,
+                    "missing or malformed " + field)
         require(bool(report["paths"]), "no path evidence")
         for path in report["paths"]:
             check_path(path, {"url": report["relay_url"]})
     require(sender["own_endpoint"] == receiver["peer_endpoint"] and sender["peer_endpoint"] == receiver["own_endpoint"], "endpoint pins do not cross-match")
     require(sender["own_endpoint"] != sender["peer_endpoint"], "identical endpoint identities")
     require(sender["host_label"] != receiver["host_label"], "host labels must differ; labels alone do not prove hosts")
-    for field in ("checkout_state", "relay_url", "candidate_sha256", "wire_sha256", "source_sha256", "receipt"):
+    for field in ("checkout_state", "relay_url", "relay_ca_sha256", "candidate_sha256", "wire_sha256", "source_sha256", "receipt"):
         require(sender[field] == receiver[field], "mismatched " + field)
     require(set(sender["source_sha256"]) == set(SOURCE_FILES), "incomplete source inventory")
     require(sender["source_sha256"] == {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in SOURCE_FILES}, "reports do not match this source checkout")
     require(sender["state"] == "CONFIRMED_TEST_ONLY" and sender["unknown_before_recovery"] is True, "missing sender recovery")
-    require(receiver["state"] == "RECEIVER_RETAINED" and receiver["native_restarted"] is True and receiver["delivery_count"] == 1, "missing receiver restart or duplicate delivery")
+    require(receiver["state"] == "RECEIVER_RETAINED" and receiver["native_restarted"] is True
+            and type(receiver["delivery_count"]) is int and receiver["delivery_count"] == 1,
+            "missing receiver restart or duplicate delivery")
     require(sender["receipt"]["status"] == "STORED_TEST_ONLY" and sender["receipt"]["candidate_sha256"] == sender["candidate_sha256"], "unbound retained receipt")
     require(sender["receipt"]["authority_verified"] is False and sender["receipt"]["production_receiver"] is False, "receipt authority amplification")
     wire, policy, candidate = fixture()
@@ -211,10 +228,12 @@ def compare_reports(sender, receiver, expected_revision):
             and sender["wire_sha256"] == hashlib.sha256(wire).hexdigest(), "different source fixture")
     message = json.loads(candidate)
     require(all(sender["receipt"][k] == message[k] for k in ("sender", "recipient", "message_id")), "receipt scope mismatch")
-    return {"schema": "halaqa-two-host-report-check/0",
+    return {"schema": "halaqa-two-host-report-check/1",
             "result": "PAIR_CONSISTENT_HOST_PROVENANCE_UNVERIFIED",
             "implementation_revision": expected_revision,
-            "checkout_verified": sender["checkout_state"] == "clean_git_head",
+            "checkout_verified": review_state == "clean_git_head" and sender["checkout_state"] == "clean_git_head",
+            "review_checkout_state": review_state,
+            "native_binary_provenance_verified": False,
             "separate_hosts_verified": False,
             "authority_verified": False, "production_receiver": False}
 
@@ -238,6 +257,8 @@ def main():
     check.add_argument("--sender", required=True)
     check.add_argument("--receiver", required=True)
     check.add_argument("--revision", required=True)
+    check.add_argument("--local-rehearsal", action="store_true",
+                       help="compare rehearsal evidence without claiming clean reviewing sources")
     args = parser.parse_args()
     if args.command == "init":
         result = initialize(args.directory, args.role, args.binary)
@@ -246,7 +267,8 @@ def main():
     elif args.command == "send":
         result = send(args)
     else:
-        result = compare_reports(read_json(args.sender), read_json(args.receiver), args.revision)
+        result = compare_reports(read_json(args.sender), read_json(args.receiver), args.revision,
+                                 local_rehearsal=args.local_rehearsal)
     print(json.dumps(result, sort_keys=True))
 
 

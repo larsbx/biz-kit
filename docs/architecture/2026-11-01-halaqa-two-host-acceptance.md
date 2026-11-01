@@ -16,7 +16,10 @@ unconfigured endpoint, mixed direct/relay targets, outage/restart recovery and
 the operator runner's one-host rehearsal with report-mutation controls. The
 relay is allowlisted and its certificate chains to an explicit private CA.
 Certificate verification remains enabled; no bypass is configured. Six Rust tests
-and 51 Python checks pass locally. Hosted CI is separate evidence.
+and 62 Python checks pass locally, including 11 offline report-gate checks.
+Hosted CI is separate evidence. The local PostgreSQL run uses the ownership
+shim described in the experiment README; standard hosted ownership remains a
+separate check. No I/O, durability, clock or SQL function is intercepted.
 
 ## Prerequisites and retained boundaries
 
@@ -46,6 +49,13 @@ SHA-256 values for those sources; comparison also checks them against the
 reviewing checkout. This detects revision/source drift, not privileged forgery.
 `--local-rehearsal` explicitly bypasses the clean-head requirement and labels
 its result unverified. CI uses that flag only for its one-host rehearsal.
+
+Report schema `halaqa-two-host-fixture-report/1` also records the SHA-256 of
+each role's selected native executable and DER relay trust root. Comparison
+requires matching trust roots. Executable hashes are retained observations;
+they may differ across platforms and do not establish a reproducible build.
+Clean source hashes never attest that the selected executable was built from
+those sources. `native_binary_provenance_verified` remains false.
 
 ## Identities and controlled relay
 
@@ -146,6 +156,19 @@ relay-only path evidence on both sides with zero IP sockets, the same original
 wire/candidate hashes and receiver receipt, exactly one delivery, receiver
 restart, sender unknown-to-confirmed recovery and false authority flags.
 Changed revisions, endpoints, bytes or duplicate delivery counts are refused.
+
+The reviewing command also checks its own actual Git HEAD and clean source
+inventory. Matching declarations and hashes cannot substitute for that check.
+Rehearsal reports require explicit `compare --local-rehearsal`; that flag always
+leaves `checkout_verified=false`, even if the reports declare clean sources.
+Historical report schema `/0` is refused rather than upgraded implicitly.
+Eleven offline tests cover these gates using temporary Git checkouts and
+invented reports, including changed reviewer HEAD, staged/unstaged edits,
+rehearsal flags, CA mismatch and mutations. They do not exercise native traffic.
+
+```sh
+python3 -m unittest discover -s tools -p 'test_halaqa_two_hosts.py' -v
+```
 
 The result is deliberately
 `PAIR_CONSISTENT_HOST_PROVENANCE_UNVERIFIED`, with

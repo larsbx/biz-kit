@@ -197,7 +197,7 @@ class RelayAcceptanceTests(IrohTestCase):
             _, error = process.communicate(timeout=15)
             self.assertEqual(process.returncode, 0, error.decode())
             s, r = read_json(sender_report), read_json(receiver_report)
-            checked = compare_reports(s, r, revision)
+            checked = compare_reports(s, r, revision, local_rehearsal=True)
             self.assertEqual(checked["result"], "PAIR_CONSISTENT_HOST_PROVENANCE_UNVERIFIED")
             self.assertIs(checked["checkout_verified"], False)
             self.assertIs(checked["separate_hosts_verified"], False)
@@ -206,7 +206,7 @@ class RelayAcceptanceTests(IrohTestCase):
                 changed = copy.deepcopy(r)
                 changed[field] = value
                 with self.subTest(field=field), self.assertRaises(ValueError):
-                    compare_reports(s, changed, revision)
+                    compare_reports(s, changed, revision, local_rehearsal=True)
         finally:
             if process.poll() is None:
                 process.send_signal(signal.SIGINT)

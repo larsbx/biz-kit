@@ -15,6 +15,7 @@ on:
       - 'tools/test_halaqa_iroh_draft.py'
       - 'tools/test_halaqa_iroh_relay.py'
       - 'tools/check_halaqa_two_hosts.py'
+      - 'tools/test_halaqa_two_hosts.py'
       - 'docs/architecture/2026-11-01-halaqa-two-host-acceptance.md'
       - 'tools/halaqa_iroh_draft_rs/**'
       - 'tools/test_halaqa_outbox_draft.py'
@@ -39,6 +40,7 @@ on:
       - 'tools/test_halaqa_iroh_draft.py'
       - 'tools/test_halaqa_iroh_relay.py'
       - 'tools/check_halaqa_two_hosts.py'
+      - 'tools/test_halaqa_two_hosts.py'
       - 'docs/architecture/2026-11-01-halaqa-two-host-acceptance.md'
       - 'tools/halaqa_iroh_draft_rs/**'
       - 'tools/test_halaqa_outbox_draft.py'
@@ -66,6 +68,8 @@ jobs:
       - run: openssl version
       - run: python3 tools/check_halaqa_federation_draft.py
       - run: python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
+      - name: Offline report mutation and reviewing-checkout gates
+        run: python3 -m unittest discover -s tools -p 'test_halaqa_two_hosts.py' -v
 
   independent-elixir:
     runs-on: ubuntu-24.04
