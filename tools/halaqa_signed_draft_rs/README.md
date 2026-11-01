@@ -28,9 +28,13 @@ prove no real identity succession, revocation freshness or governance authority.
 
 ## Reproduce
 
-Run from the repository root. CI selects Rust 1.99.1; the conflict-resolution tree was verified locally
-with that exact toolchain. Earlier results also passed on Rust 1.93.1. The existing package minimum remains Rust 1.85; that
-minimum was not separately tested.
+Run from the repository root. The primary CI job selects Rust 1.99.1 for
+formatting, clippy, tests and conformance. The separate minimum-version job
+selects Rust 1.85.0, matching the package's declared Rust 1.85 minimum.
+Both versions pass locally with the locked dependencies. The minimum-version
+job checks tests, conformance and the Python/Rust differential offline after
+fetching dependencies; each job retains its own exact-head evidence artifact.
+Earlier results also passed on Rust 1.93.1.
 
 ```sh
 cargo fetch --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
@@ -57,7 +61,8 @@ output. The merge-resolution receipt `evidence-2026-11-01-merge.json` records th
 reconciled workflow and Rust 1.99.1 results. Hosted workflow artifacts
 separately retain the exact head, tool
 versions, tests, conformance and diagnostic JSON. Local evidence is not a claim
-that hosted CI passed or production contracts were approved.
+that hosted CI passed or production contracts were approved. The separate
+`evidence-2026-11-01-msrv.json` receipt records the Rust 1.85.0 verification.
 
 ## Diagnostics and profile history
 
