@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "formal/**"
+      - "apps/inventory_core/**"
       - "apps/dispatch/lib/dispatch/operations/**"
       - "apps/dispatch/lib/dispatch/fleet/assignment.ex"
       - "apps/dispatch/lib/dispatch/idempotency.ex"
