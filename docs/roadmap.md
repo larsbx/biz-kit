@@ -10,6 +10,13 @@ remove the existing WorkOS sign-in adapter. WorkOS organization/permission
 records are not a business-authority source, and NetBird connectivity would
 not enforce tenant isolation.
 
+The [partial T0 source review](architecture/2026-11-01-multi-organization-t0-source-audit.md)
+identifies unscoped legacy Eatsbot/SpruceGoose models as shared-tenant rollout
+blockers. The standalone tenancy inventory workflow emits an exact-source
+review queue, not authorization proof. The first Dispatch implementation also
+refreshes user/participant/organization status before held-actor operations
+and revalidates administrative authority after the organization lock.
+
 The stages are: **T0** ownership and unsafe-query inventory; **T1** verified,
 non-unioning acting context on web/native/stream/job/extension paths; **T2**
 Ash, raw SQL, PostgreSQL and hosted integration isolation; **T3** explicit
