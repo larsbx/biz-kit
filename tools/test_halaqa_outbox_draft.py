@@ -13,7 +13,7 @@ from halaqa_receipt_draft import ReceiptDraft, ROOT
 from test_halaqa_receipt_draft import ReceiptTestCase
 
 
-class OutboxAcceptanceTests(ReceiptTestCase):
+class TwoDatabaseTestCase(ReceiptTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -49,6 +49,8 @@ class OutboxAcceptanceTests(ReceiptTestCase):
         return int(self.run_process(["psql", "-X", "-qAt", "--dbname", self.receiver_database],
                                     input=query).stdout)
 
+
+class OutboxAcceptanceTests(TwoDatabaseTestCase):
     def test_stage_retains_first_bytes_and_changed_content_evidence(self):
         wire, policy, candidate = self.fixture()
         original = self.sender.stage(wire, policy)

@@ -112,8 +112,9 @@ python3 tools/check_halaqa_federation_draft.py
 python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 ```
 
-The focused CI workflow runs Python, Elixir, Rust and isolated PostgreSQL jobs.
-It opens no Iroh connection. The Rust crate has its own locked test dependencies;
+The focused CI workflow runs Python, Elixir, Rust, isolated PostgreSQL and
+experimental direct-Iroh jobs. Only the explicit Iroh fixture job opens peer
+connections, constrained to loopback with public discovery/relays disabled. The Rust crate has its own locked test dependencies;
 no application runtime dependency, production ingress, shared schema or business
 writer is added by this slice.
 
@@ -197,8 +198,9 @@ lost ACK, immediate server crash/restart, unavailability, scope/epoch binding,
 refusal before SQL and append-only role controls. The experiment README records
 the local ownership shim and limits of this evidence; standard hosted acceptance
 is a separate CI job. The 7 Python pin/mutation tests also pass with the shared
-captured-source loader. No Iroh connection, actual identity/current revocation
-source, canonical admission or business effect is enabled. F3/F4 remain open.
+captured-source loader. The receipt/storage layer itself enables no network
+listener, actual identity/current revocation source, canonical admission or
+business effect. F3/F4 remain open.
 
 ### Durable sender outbox and local reconciliation — 2026-11-01
 
@@ -224,8 +226,37 @@ Sixteen sender integration tests pass in addition to 14 receiver tests and
 PostgreSQL cluster with separate commit boundaries and in-process callbacks.
 They demonstrate custody, generation fencing, strict reply binding, lost-ACK
 reconciliation and crash recovery. They do not establish independent hosts,
-authenticated Iroh peers/status replies or direct/relay delivery. The experiment
-README records the state transitions, evidence and remaining acceptance.
+authenticated Iroh peers/status replies or direct/relay delivery by themselves.
+The transport experiment below adds local direct-path evidence. The experiment
+README records the state transitions and remaining acceptance.
+
+### Pinned direct Iroh experiment — 2026-11-01
+
+`tools/halaqa_iroh_draft_rs/` and `tools/halaqa_iroh_draft.py` replace the
+in-process fixture callback with actual Iroh 1.4.1 QUIC client/server processes.
+The dedicated ALPN, length-prefixed frames, exact byte/EOF limits and deadlines
+are documented in the receipt experiment. Each request has a fresh challenge;
+client/server check configured endpoint IDs before trusting a response or
+allowing a host callback. The host maps that pin to a local synthetic actor pair
+and still verifies signed candidate/context evidence before SQL commit. Transport
+endpoint identity is not production actor authority or domain admission.
+
+The Minimal endpoint clears default IP transports, binds only loopback, disables
+relays and configures no public lookup/publisher. Only explicit loopback IP targets
+are permitted. No application HTTP server/client is started. This preserves the
+original IDs/wire bytes, SQL custody and generation fences; it changes neither
+marketplace gossip nor ordinary ActivityPub interoperability.
+
+Seven native integration tests pass, including rejected client/server pins,
+scoped status, stale host challenges, malformed/oversized messages and current
+receiver TEST revocation/signature refusal. The lost post-commit reply case
+restarts the receiver sidecar with its original endpoint key, then reconciles
+retention after expiry using a fresh status request without redelivery. The
+Iroh crate's 5 tests, formatting, clippy and locked build pass. All 44 Python
+checks pass (7 pin, 14 receiver, 16 sender, 7 native transport). This is direct
+loopback and separate-database evidence on one host; configured relays, independent
+installations, real identity/disclosure sources and production adapters remain
+required for F3/F4. Exact-head hosted CI is separate evidence.
 
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
@@ -245,7 +276,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
 | F2 — Verified boundary | Python/OpenSSL, independent Elixir/OTP and Rust/dalek agree on 74 experimental signed cases; actual identity/evidence sources and production admission remain pending |
-| F3 — Native delivery | PostgreSQL receiver/outbox preparation has 30 passing integration tests. Still required: independent installations, application HTTP disabled, authenticated bounded Iroh streams/status replies, configured direct/relay delivery and unknown-outcome reconciliation across partition/restart |
+| F3 — Native delivery | PostgreSQL custody and pinned direct-loopback Iroh have 37 integration tests. Still required: independent installations, configured relay/path evidence, production identity/disclosure and unknown-outcome reconciliation across network partition/restart with application HTTP disabled |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
 
