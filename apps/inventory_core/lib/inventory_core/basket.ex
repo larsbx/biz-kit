@@ -84,31 +84,41 @@ defmodule InventoryCore.Basket do
           when is_integer(version) and version >= 0 and is_map(locations) and
                  is_map(reservations) and is_map(seen) and is_integer(watermark) and
                  watermark >= 0 ->
-            command = %{
-              id: basket_id,
-              expected_version: stock.version,
-              op: :reserve,
-              location: location,
-              quantity: amount,
-              reservation_id: basket_id,
-              expires_at_ms: expires
-            }
+            # A previously admitted command retains its ORIGINAL revision.
+            # Checking seen history first avoids rebuilding the same intent
+            # at stock.version + 1, which InventoryCore would correctly
+            # reject as a different command with the same id.
+            case prior_reservation(stock, basket_id, location, amount, expires) do
+              :new ->
+                command = %{
+                  id: basket_id,
+                  expected_version: stock.version,
+                  op: :reserve,
+                  location: location,
+                  quantity: amount,
+                  reservation_id: basket_id,
+                  expires_at_ms: expires
+                }
 
-            case InventoryCore.apply(stock, merchant, command) do
-              {:ok, _candidate_state, :accepted} ->
-                {:ok,
-                 %{
-                   item: item,
-                   unit: unit,
-                   expected_version: stock.version,
-                   command: command
-                 }}
+                case InventoryCore.apply(stock, merchant, command) do
+                  {:ok, _candidate_state, :accepted} ->
+                    {:ok,
+                     %{
+                       item: item,
+                       unit: unit,
+                       expected_version: stock.version,
+                       command: command
+                     }}
 
-              {:ok, _state, :duplicate} ->
-                {:error, :already_reserved}
+                  {:ok, _state, :duplicate} ->
+                    {:error, :already_reserved}
 
-              {:error, reason} ->
-                {:error, reason}
+                  {:error, reason} ->
+                    {:error, reason}
+                end
+
+              {:error, _} = error ->
+                error
             end
 
           {:ok, _} ->
@@ -117,6 +127,45 @@ defmodule InventoryCore.Basket do
           :error ->
             {:error, :unknown_stock}
         end
+    end
+  end
+
+  # Historical idempotency is checked against the originally admitted
+  # command, not the stock's current version (which changes after admission).
+  # This distinguishes a true retry from a changed location, amount, expiry,
+  # or a command ID already used for another operation. A recorded hold may
+  # subsequently have been committed, released or expired: :already_reserved
+  # acknowledges the historical reservation only, NOT a currently live hold.
+  defp prior_reservation(stock, basket_id, location, amount, expires) do
+    case {Map.fetch(stock.seen, basket_id), Map.fetch(stock.reservations, basket_id)} do
+      {{:ok,
+        %{
+          id: ^basket_id,
+          expected_version: original_version,
+          op: :reserve,
+          location: ^location,
+          quantity: ^amount,
+          reservation_id: ^basket_id,
+          expires_at_ms: ^expires
+        } = recorded},
+       {:ok,
+        %{
+          location: ^location,
+          expires_at_ms: ^expires,
+          remaining: remaining,
+          status: status
+        }}}
+      when map_size(recorded) == 7 and is_integer(original_version) and
+             original_version >= 0 and original_version < stock.version and
+             is_integer(remaining) and remaining >= 0 and remaining <= amount and
+             status in [:active, :committed, :released, :expired] ->
+        {:error, :already_reserved}
+
+      {:error, :error} ->
+        :new
+
+      _ ->
+        {:error, :idempotency_conflict}
     end
   end
 
