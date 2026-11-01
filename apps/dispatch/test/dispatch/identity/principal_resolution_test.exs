@@ -143,6 +143,18 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       assert {:error, :no_active_assignment} = PrincipalResolution.actor(user.oidc_subject)
     end
 
+    test "a fabricated held actor cannot adopt another participant's assignment", ctx do
+      assert {:ok, genuine} = PrincipalResolution.actor(ctx.user.oidc_subject)
+      %{participant: another} = Fixtures.person(ctx.tenant, ctx.org)
+
+      forged = %{genuine | principal_id: another.id}
+
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(forged)
+      assert {:ok, original} = PrincipalResolution.revalidate(genuine)
+      assert original.principal_id == ctx.driver.id
+    end
+
     test "suspended participant invalidates a held actor before a stream or job can use it", ctx do
       assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
 
