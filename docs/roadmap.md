@@ -1,20 +1,56 @@
 # biz-kit roadmap
 
-## Proposed Halaqa federation over Iroh — 2026-10-31
+## Halaqa federation over Iroh — updated 2026-11-01
 
 The [native federation boundary](architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
-records F0–F5: pinned offline format conformance; Halaqa owner decisions;
-independent signed Rust/Elixir verification; native Iroh delivery with
-application HTTP disabled; real domain admission; optional ActivityPub HTTP
-compatibility. F0 is a test-only snapshot/oracle, not an activated protocol,
-verified authority adapter or production cutover. Halaqa owns the proposed
+records F0–F5: offline conformance, Halaqa owner decisions, independent
+verification, native delivery with application HTTP disabled, domain admission
+and optional ActivityPub HTTP compatibility. The experimental implementation is
+in [PR #229](https://github.com/larsbx/biz-kit/pull/229); Halaqa owns its proposed
 semantic contract in [PR #9](https://github.com/larsbx/halaqa/pull/9).
 
-The pinned follow-up also exercises exact-byte Ed25519 signatures, explicit
-local TEST actor/key/context bindings and lifetime/revocation refusal across
-48 signed vectors. This prepares F1 review; it does not close identity
-succession, production authorization, durable replay or independent Rust/Elixir
-verification.
+**Implemented and tested, with production authority disabled:** pinned signed
+draft-2 has 74 synthetic cases (8 signature-valid, 66 refused), independently
+checked by Python/OpenSSL, Elixir/OTP and Rust/dalek. PostgreSQL retains original
+sender intent, receiver receipts and immutable same-ID conflicts. Pinned direct
+and TLS-verified relay-only Iroh exchanges recover retained receipts after a
+lost reply and native restart without redelivery. The operator runner requires
+clean exact-revision sources, checks the reviewing checkout's Git HEAD and
+records binary/relay-CA hashes; rehearsal reports cannot claim a verified
+checkout. Neither source hashes nor endpoint keys attest binary build or
+independent-host provenance.
+
+At implementation head
+[`82a57e5e26f68fcfed71685493bca49a5a447909`](https://github.com/larsbx/biz-kit/commit/82a57e5e26f68fcfed71685493bca49a5a447909),
+62 Python checks and 6 Rust transport tests passed locally; the preserved
+independent Rust verifier has 19 tests. All six associated hosted PR workflows
+completed successfully, including
+[Halaqa conformance](https://github.com/larsbx/biz-kit/actions/runs/41308159312)
+and [Consolidation](https://github.com/larsbx/biz-kit/actions/runs/41308159292).
+These results cover synthetic fixtures and a one-host rehearsal, not a
+production cutover or independently administered installations.
+
+**Next: actual two-host acceptance (F3 remains open).** Follow the
+[executable handoff](architecture/2026-11-01-halaqa-two-host-acceptance.md):
+
+1. Identify two independently administered test hosts and a controlled,
+   endpoint-allowlisted relay. Record host/administration provenance, the relay
+   URL and its trusted CA certificate. No Halaqa host targets or relay have
+   been selected; unrelated existing deployment hosts are not implied targets.
+2. Run sender and receiver roles from clean checkouts of the same reviewed
+   revision. Retain both public reports and operator observations showing
+   actual relay traffic, zero direct-IP sockets, lost-reply/native-restart
+   recovery and exactly one delivery of the original intent.
+3. Compare the reports in a clean reviewing checkout and review the separate
+   host evidence. The runner deliberately returns
+   `PAIR_CONSISTENT_HOST_PROVENANCE_UNVERIFIED`; different labels, keys,
+   processes or databases alone cannot close the host-provenance obligation.
+
+Actual identity succession, current revocation/disclosure sources, envelope
+refresh, supervised production Elixir adapters and canonical domain admission
+remain F1/F2/F4 obligations. A signed fixture or operational retention receipt
+confers no governing, business or financial authority. No production migration,
+business writer or HTTP ActivityPub gateway is activated.
 
 ## Existing consolidation roadmap
 
