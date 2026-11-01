@@ -138,10 +138,31 @@ defmodule Dispatch.Identity.PrincipalResolution do
       participant_id: actor.principal_id
     }
 
-    with {:ok, assignment} <- fetch_assignment(context, at) do
+    with :ok <- principal_still_active?(actor),
+         {:ok, assignment} <- fetch_assignment(context, at) do
       Actor.from_assignment(assignment, at: at)
     end
   end
+
+  # A long-lived stream or an administrator entering a transaction may still
+  # hold an actor after the participant or global user was suspended. Re-reading
+  # only the role row would preserve that stale authority.
+  defp principal_still_active?(%Actor{principal_type: :PARTICIPANT} = actor) do
+    active? =
+      from(p in "participants",
+        join: u in "users",
+        on: u.id == p.user_id,
+        where: p.id == type(^actor.principal_id, :binary_id),
+        where: p.tenant_id == type(^actor.tenant_id, :binary_id),
+        where: p.status == "ACTIVE" and u.status == "ACTIVE",
+        select: 1
+      )
+      |> Dispatch.Repo.exists?()
+
+    if active?, do: :ok, else: {:error, :role_assignment_not_active}
+  end
+
+  defp principal_still_active?(%Actor{principal_type: :SERVICE}), do: :ok
 
   @doc """
   The authority contexts `user_id` holds at `at`, as identifiers only.
