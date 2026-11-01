@@ -34,6 +34,7 @@ defmodule Dispatch.Accounts.Administration do
   import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access
+  alias Dispatch.Identity.PrincipalResolution
   alias Dispatch.Access.{Actor, RoleProfile}
   alias Dispatch.Accounts.{Participant, RoleAssignment, RoleDefinition}
   alias Dispatch.Audit.AuditEvent
@@ -80,15 +81,15 @@ defmodule Dispatch.Accounts.Administration do
   @spec grant(Actor.t(), map(), DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def grant(%Actor{} = actor, params, authenticated_at) do
-    serialized(actor, fn ->
-      with :ok <- manages(actor),
-           :ok <- recent(authenticated_at, actor.at),
-           {:ok, participant} <- participant(actor, params["participant_id"]),
-           :ok <- not_own(actor, participant.id),
-           {:ok, definition, scope} <- definition(actor, params["role_definition_id"]),
-           :ok <- not_held(actor, participant, definition) do
-        assignment = create!(actor, participant, definition, scope)
-        audit!(actor, "role_assignment.granted", assignment, definition)
+    serialized(actor, fn current ->
+      with :ok <- manages(current),
+           :ok <- recent(authenticated_at, current.at),
+           {:ok, participant} <- participant(current, params["participant_id"]),
+           :ok <- not_own(current, participant.id),
+           {:ok, definition, scope} <- definition(current, params["role_definition_id"]),
+           :ok <- not_held(current, participant, definition) do
+        assignment = create!(current, participant, definition, scope)
+        audit!(current, "role_assignment.granted", assignment, definition)
         {:ok, assignment}
       end
     end)
@@ -101,19 +102,19 @@ defmodule Dispatch.Accounts.Administration do
   @spec revoke(Actor.t(), String.t(), integer() | nil, DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def revoke(%Actor{} = actor, assignment_id, expected_version, authenticated_at) do
-    serialized(actor, fn ->
-      with :ok <- manages(actor),
-           :ok <- recent(authenticated_at, actor.at),
-           {:ok, assignment} <- held(actor, assignment_id),
+    serialized(actor, fn current_actor ->
+      with :ok <- manages(current_actor),
+           :ok <- recent(authenticated_at, current_actor.at),
+           {:ok, assignment} <- held(current_actor, assignment_id),
            :ok <- current(assignment, expected_version),
-           :ok <- not_last_administrator(actor, assignment) do
+           :ok <- not_last_administrator(current_actor, assignment) do
         revoked =
           assignment
           |> Ash.Changeset.for_update(:revoke, %{})
           # REVIEWED-UNAUTHORIZED: authorized above against Section 23.3's rules.
-          |> Ash.update!(authorize?: false, tenant: actor.tenant_id)
+          |> Ash.update!(authorize?: false, tenant: current_actor.tenant_id)
 
-        audit!(actor, "role_assignment.revoked", revoked, assignment.role_definition)
+        audit!(current_actor, "role_assignment.revoked", revoked, assignment.role_definition)
         {:ok, revoked}
       end
     end)
@@ -275,16 +276,24 @@ defmodule Dispatch.Accounts.Administration do
     |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
   end
 
-  # One organization's role changes at a time, released with the transaction.
+  # A caller may have been authorized before it waited on this lock. The
+  # assignment, organization and participant must still be active *after*
+  # acquiring it; a cached actor must never authorize a new grant or revocation.
   defp serialized(actor, fun) do
     Dispatch.Repo.transaction(fn ->
       Dispatch.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))", [
         "role-administration:" <> organization(actor)
       ])
 
-      case fun.() do
-        {:ok, result} -> result
-        {:error, reason} -> Dispatch.Repo.rollback(reason)
+      case PrincipalResolution.revalidate(actor) do
+        {:ok, current_actor} ->
+          case fun.(current_actor) do
+            {:ok, result} -> result
+            {:error, reason} -> Dispatch.Repo.rollback(reason)
+          end
+
+        {:error, _stale_authority} ->
+          Dispatch.Repo.rollback(:not_found)
       end
     end)
   end
