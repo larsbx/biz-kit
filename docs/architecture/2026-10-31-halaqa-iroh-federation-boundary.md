@@ -197,10 +197,35 @@ lost ACK, immediate server crash/restart, unavailability, scope/epoch binding,
 refusal before SQL and append-only role controls. The experiment README records
 the local ownership shim and limits of this evidence; standard hosted acceptance
 is a separate CI job. The 7 Python pin/mutation tests also pass with the shared
-captured-source loader. No Iroh connection, outbox, actual identity/current
-revocation source, canonical admission or business effect is enabled. F3/F4
-remain open; next retain sender intent/outbox and test authenticated two-peer
-reconciliation across lost replies with application HTTP disabled.
+captured-source loader. No Iroh connection, actual identity/current revocation
+source, canonical admission or business effect is enabled. F3/F4 remain open.
+
+### Durable sender outbox and local reconciliation — 2026-11-01
+
+The receipt experiment now also retains immutable sender intent and first wire
+bytes, creating its pending work row atomically. Before any peer callback,
+`begin_attempt` commits `UNKNOWN` and advances a generation. Matching completion
+records a bound remote retention receipt or original-ID content conflict;
+terminal results cannot reactivate. Stale generations cannot overwrite a later
+attempt. Original IDs and candidate bytes persist through retries, restarts and
+lost acknowledgements; no replacement business command is created.
+
+`tools/halaqa_outbox_draft.py` queries original-ID status before transmission.
+Known matching retention can be reconciled after signature expiry without
+re-admission. A strict missing result requires current sender TEST verification
+and separate receiver TEST verification before sending the original wire.
+Expired unsent work stays unknown pending an explicit envelope-refresh contract.
+Scoped pending pages contain at most 16 results and must periodically rescan
+from zero; sequence IDs are not complete-prefix watermarks. No Redis runtime,
+new generic scheduler, business writer or production dependency is added.
+
+Sixteen sender integration tests pass in addition to 14 receiver tests and
+7 pin/mutation tests (37 Python tests). They use two databases on one disposable
+PostgreSQL cluster with separate commit boundaries and in-process callbacks.
+They demonstrate custody, generation fencing, strict reply binding, lost-ACK
+reconciliation and crash recovery. They do not establish independent hosts,
+authenticated Iroh peers/status replies or direct/relay delivery. The experiment
+README records the state transitions, evidence and remaining acceptance.
 
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
@@ -220,7 +245,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
 | F2 — Verified boundary | Python/OpenSSL, independent Elixir/OTP and Rust/dalek agree on 74 experimental signed cases; actual identity/evidence sources and production admission remain pending |
-| F3 — Native delivery | Offline PostgreSQL receipt/replay preparation has 14 passing integration tests. Still required: two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable sender outbox and authenticated original-ID reconciliation across lost ACKs, partition and restart |
+| F3 — Native delivery | PostgreSQL receiver/outbox preparation has 30 passing integration tests. Still required: independent installations, application HTTP disabled, authenticated bounded Iroh streams/status replies, configured direct/relay delivery and unknown-outcome reconciliation across partition/restart |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
 

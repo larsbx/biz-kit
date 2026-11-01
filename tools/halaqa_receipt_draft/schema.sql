@@ -55,6 +55,18 @@ CREATE FUNCTION halaqa_receipt_draft.receipt_result(
     'authority_verified', false, 'production_receiver', false);
 $$;
 
+CREATE FUNCTION halaqa_receipt_draft.require_durability() RETURNS void
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+  IF current_setting('transaction_isolation') <> 'read committed'
+     OR current_setting('synchronous_commit') <> 'on'
+     OR current_setting('fsync') <> 'on'
+     OR current_setting('full_page_writes') <> 'on' THEN
+    RAISE EXCEPTION 'unsupported receipt transaction/durability settings';
+  END IF;
+END;
+$$;
+
 CREATE FUNCTION halaqa_receipt_draft.record_candidate(
   p_candidate bytea, p_signed_wire bytea, p_test_policy jsonb
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
@@ -64,12 +76,7 @@ DECLARE
 BEGIN
   -- ON CONFLICT's wait and the subsequent SELECT require a fresh command
   -- snapshot. Higher isolation needs transaction retries, not silent reuse.
-  IF current_setting('transaction_isolation') <> 'read committed'
-     OR current_setting('synchronous_commit') <> 'on'
-     OR current_setting('fsync') <> 'on'
-     OR current_setting('full_page_writes') <> 'on' THEN
-    RAISE EXCEPTION 'unsupported receipt transaction/durability settings';
-  END IF;
+  PERFORM halaqa_receipt_draft.require_durability();
   IF p_candidate IS NULL OR octet_length(p_candidate) NOT BETWEEN 1 AND 8192
      OR p_signed_wire IS NULL OR octet_length(p_signed_wire) NOT BETWEEN 1 AND 12288
      OR p_test_policy IS NULL OR jsonb_typeof(p_test_policy) <> 'object' THEN

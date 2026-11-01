@@ -1,4 +1,4 @@
-# Experimental PostgreSQL receipts
+# Experimental PostgreSQL receipts and sender outbox
 
 Date: 2026-11-01 (America/New_York).
 Status: **Offline fixture host only; no production migration or receiver.**
@@ -85,6 +85,67 @@ message. An eventual network status request needs fresh authenticated recipient
 and actor scoping, disclosure policy and current permission checks. A fresh
 signature on changed content can never replace the original ID binding.
 
+## Sender custody and unknown-outcome recovery
+
+`outbox.sql` installs after `schema.sql` in a fresh disposable database.
+`tools/halaqa_outbox_draft.py` stages a locally verified signed fixture into an
+immutable intent and its pending delivery row in one SQL transaction. Sender,
+recipient and message ID bind the full original candidate, first signed wire
+and TEST-policy snapshot. Re-signing that candidate at staging returns the
+original wire; changed content retains a separate outbound conflict. Epoch,
+charter and key changes never reset the ID namespace. No producer business
+permission is inferred from staging a disclosed test signature.
+
+| Previous state | Operation | Committed state |
+| --- | --- | --- |
+| Absent | Stage original intent and work row atomically | `PENDING_TEST_ONLY` |
+| Pending or unknown | Begin attempt, increment generation | `UNKNOWN` before any peer callback |
+| Unknown, matching generation | Fully bound stored receipt | `CONFIRMED_TEST_ONLY` |
+| Unknown, matching generation | Bound remote original-ID/content mismatch | `REMOTE_CONFLICT` |
+| Any state | Stale callback | State unchanged; `STALE_ATTEMPT` |
+| Terminal | Begin again | Original terminal result; no peer call |
+
+The unique intent key fixes one candidate. A row lock serializes attempts and
+completion; the generation comparison prevents a late callback from overwriting
+a newer attempt or terminal observation. A claim is not an expiring lease or
+proof that a prior sender stopped. Concurrent workers can still transmit the
+same original bytes: receiver replay handling remains necessary. This is an
+implementation argument backed by tests, not a formal refinement proof.
+
+`advance` always queries retained receiver status first. A fully matching
+receipt can settle retention even after the old signature expires or its TEST
+pin is revoked; this does not re-admit that message or confer permission.
+Only a strict `NOT_FOUND` response permits considering transmission. The sender
+then verifies the retained original wire against the **current** TEST policy,
+and the receiver independently verifies against its own TEST policy. The
+staging snapshot is not reused as a current clock/revocation source. Missing,
+expired or revoked delivery stays `UNKNOWN`. An explicit retained-envelope
+refresh/admission contract is still needed for expired unsent work; the harness
+never silently re-signs or substitutes a new message ID.
+
+Completion validates the reply schema, scoped actor/recipient/message tuple,
+original candidate hash, positive int64 receiver receipt ID, exact fields and
+literal false authority/production flags. A conflict must bind different remote
+content under that same tuple; a content-conflict ACK must also bind attempted
+content. Malformed, missing, unrelated or authority-amplifying responses cannot
+settle an attempt. The selected full terminal reply is retained and cannot be
+replaced through the operational interface. This is not an audit of every
+failed/stale network response or a signed remote receipt protocol.
+
+`LocalReceiptPeer` is an explicitly bound **in-process synthetic callback** with
+its own local TEST policy. The acceptance harness uses two databases on one
+PostgreSQL cluster; sender completion and receiver commit share no transaction.
+There is no Iroh, HTTP, authenticated endpoint identity, fresh challenge-bound
+status protocol or disclosure enforcement. JSON field checks do not authenticate
+who issued an acknowledgement. Those are required before any live ingress.
+
+The sender's pending/unknown pages come from durable SQL, scoped by sender and
+recipient, with at most 16 results and a partial work index. A lost transient
+wakeup does not erase intent or completion. These pages are not a complete
+commit-prefix cursor: SQL sequence allocation can precede a later commit, and
+each sweep must wrap back to zero to find late lower IDs. No Redis runtime or
+scheduler is added, and actual Redis-loss/catch-up acceptance remains pending.
+
 ## Reproducible acceptance
 
 Install PostgreSQL 16 server/client binaries and an Ed25519-capable OpenSSL CLI.
@@ -93,6 +154,8 @@ Run as an ordinary user permitted to create a child PostgreSQL process:
 ```sh
 HALAQA_PG_BIN=/usr/lib/postgresql/16/bin \
   python3 -m unittest discover -s tools -p test_halaqa_receipt_draft.py -v
+HALAQA_PG_BIN=/usr/lib/postgresql/16/bin \
+  python3 -m unittest discover -s tools -p test_halaqa_outbox_draft.py -v
 python3 -m unittest discover -s tools -p test_halaqa_federation_draft.py -v
 ```
 
@@ -108,8 +171,12 @@ epoch reuse conflicts; rollback before receipt/conflict commit; server terminati
 after COMMIT but before a successful client return; immediate database stop/start
 with WAL recovery; unavailability; expired/revoked new delivery versus retained
 status; all 66 signed refusals stopping before SQL; role/immutability controls;
-and unsupported durability/isolation settings. The 7 existing pin/mutation tests
-also pass after sharing the captured-source loader.
+and unsupported durability/isolation settings. Sixteen sender tests additionally
+cover atomic staging, first-byte custody, concurrent staging, current receiver
+policy, strict negative status, stale callback fencing, scoped/bounded SQL work
+pages, terminal immutability, lost receiver ACK after expiry, lost sender commit
+ACK, unavailable/wrong peers and immediate database crash recovery of unknown
+and terminal states. The 7 pin/mutation tests also pass: 37 Python tests total.
 
 Local SQL acceptance ran on PostgreSQL 16.15. The restricted local environment
 maps only uid 0, so a test-only libc ownership shim presented that mapped user as
@@ -120,12 +187,12 @@ termination tests crash recovery, not machine power loss.
 
 ## Remaining F3/F4 work
 
-This slice provides a test receipt store and local reconciliation interface.
-It does not supply an outbox, Redis scheduler, authenticated Iroh ingress/status
-protocol, direct/relay transport, actual key/charter/revocation sources, domain
-admission or effect execution. Next, retain original sender intent/outbox bytes
-and reconcile unknown delivery using the original IDs; then exercise two
-installations over bounded Iroh streams with application HTTP disabled.
+This slice provides a test receipt store, durable sender outbox and local
+reconciliation interface. Next, bind these operations to authenticated bounded
+Iroh streams and challenge-bound status requests, then exercise independently
+administered direct/relay peers with application HTTP disabled. Redis scheduling,
+actual key/charter/revocation sources, expired-envelope refresh, production
+Elixir adapters, domain admission and effect execution remain pending.
 
 Production receipt retention, access roles, capacity, home isolation, writer
 fencing, failover/backup recovery and relationship to canonical admission require

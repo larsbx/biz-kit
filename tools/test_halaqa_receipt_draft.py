@@ -20,7 +20,7 @@ from unittest.mock import patch
 from halaqa_receipt_draft import ReceiptDraft, ROOT, sql_bytes, sql_text
 
 
-class ReceiptAcceptanceTests(unittest.TestCase):
+class ReceiptTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory(prefix="halaqa_receipt_test_")
@@ -112,6 +112,8 @@ class ReceiptAcceptanceTests(unittest.TestCase):
         return int(self.admin(f"SELECT count(*) FROM halaqa_receipt_draft.{table} "
                               f"WHERE receipt_id={int(receipt_id)}"))
 
+
+class ReceiptAcceptanceTests(ReceiptTestCase):
     def test_committed_receipt_survives_lost_ack_and_expiry(self):
         wire, policy, candidate = self.fixture()
         real_run = subprocess.run

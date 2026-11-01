@@ -9,6 +9,8 @@ on:
       - 'tools/halaqa_signed_draft_rs/**'
       - 'tools/halaqa_receipt_draft/**'
       - 'tools/halaqa_receipt_draft.py'
+      - 'tools/halaqa_outbox_draft.py'
+      - 'tools/test_halaqa_outbox_draft.py'
       - 'tools/test_halaqa_receipt_draft.py'
       - 'tools/halaqa_signed_draft.exs'
       - 'tools/check_halaqa_signed_draft.exs'
@@ -24,6 +26,8 @@ on:
       - 'tools/halaqa_signed_draft_rs/**'
       - 'tools/halaqa_receipt_draft/**'
       - 'tools/halaqa_receipt_draft.py'
+      - 'tools/halaqa_outbox_draft.py'
+      - 'tools/test_halaqa_outbox_draft.py'
       - 'tools/test_halaqa_receipt_draft.py'
       - 'tools/halaqa_signed_draft.exs'
       - 'tools/check_halaqa_signed_draft.exs'
@@ -92,7 +96,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends postgresql-16 postgresql-client-16
-      - name: Receipt concurrency, rollback and WAL recovery
+      - name: Receiver receipts, rollback and WAL recovery
         env:
           HALAQA_PG_BIN: /usr/lib/postgresql/16/bin
         run: python3 -m unittest discover -s tools -p 'test_halaqa_receipt_draft.py' -v
+      - name: Sender custody and two-database reconciliation
+        env:
+          HALAQA_PG_BIN: /usr/lib/postgresql/16/bin
+        run: python3 -m unittest discover -s tools -p 'test_halaqa_outbox_draft.py' -v
