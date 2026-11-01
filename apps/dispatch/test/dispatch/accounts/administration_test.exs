@@ -137,6 +137,7 @@ defmodule Dispatch.Accounts.AdministrationTest do
       Fixtures.revoke(ctx.tenant, ctx.admin_assignment)
 
       assert grant(ctx, ctx.driver, "DRIVER") == {:error, :not_found}
+      assert Administration.overview(ctx.actor) == {:error, :not_found}
     end
 
     test "suspended administrator cannot grant despite an active assignment", ctx do
@@ -145,6 +146,7 @@ defmodule Dispatch.Accounts.AdministrationTest do
       |> Ash.update!(authorize?: false, tenant: ctx.tenant)
 
       assert grant(ctx, ctx.driver, "DRIVER") == {:error, :not_found}
+      assert Administration.overview(ctx.actor) == {:error, :not_found}
     end
 
     test "closed global user cannot grant with a stale assignment", ctx do
