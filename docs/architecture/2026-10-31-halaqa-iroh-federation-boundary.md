@@ -100,7 +100,9 @@ No new Python dependency is introduced; an Ed25519-capable OpenSSL CLI is needed
 Success is `SIGNATURE_VALID_AUTHORITY_UNVERIFIED`, with authority and production
 receiver flags false. TEST pins are not actual identity succession, fresh
 revocation evidence, charter adoption or permission. The verifier is stateless:
-expiry checks do not establish durable replay prevention or effect idempotency.
+expiry checks alone do not establish durable replay prevention or effect idempotency.
+The separate operational receipt experiment below adds test persistence, not
+production replay/admission acceptance.
 Neither experiment has a live ingress or can invoke BuzzBridge/domain admission.
 
 Run:
@@ -110,7 +112,7 @@ python3 tools/check_halaqa_federation_draft.py
 python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 ```
 
-The focused CI workflow runs separate Python, Elixir and Rust offline jobs.
+The focused CI workflow runs Python, Elixir, Rust and isolated PostgreSQL jobs.
 It opens no Iroh connection. The Rust crate has its own locked test dependencies;
 no application runtime dependency, production ingress, shared schema or business
 writer is added by this slice.
@@ -168,8 +170,37 @@ cargo run --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
 
 CI installs Rust 1.99.1 and runs those commands. PR #226 is merged at
 `a2e13ea58465fbedb20dbf14934f9378c7e70e5d`; this follow-up does not reinterpret its
-queued hosted checks as successful validation. No live receiver or replay store
+queued hosted checks as successful validation. No live receiver or production replay store
 is enabled by this change.
+
+### PostgreSQL receipt/replay experiment — 2026-11-01
+
+The [receipt experiment](../../tools/halaqa_receipt_draft/README.md) adds an
+isolated operational SQL schema and Python fixture adapter, following the
+selected PostgreSQL/Redis storage responsibilities. It retains full original
+candidate/wire/TEST-policy evidence under `(recipient, sender, message_id)`.
+A committed identical candidate returns its original receipt even after
+re-signing; different exact bytes retain conflict evidence without overwriting
+the original. Epoch changes cannot reset an actor's message ID. Local status
+reconciliation survives signature expiry without re-admitting that message.
+
+The adapter verifies with the captured draft-2 reference before SQL, and returns
+no receipt until COMMIT succeeds. READ COMMITTED, synchronous commit and normal
+WAL durability are explicit requirements. A unique scoped key serializes
+competing inserts; no global business-log lock, Redis dependency, domain writer
+or existing discovery-store migration is introduced. SQL is operational storage,
+not a signature or authority verifier. All receipts remain `STORED_TEST_ONLY`.
+
+Fourteen integration tests pass against a disposable PostgreSQL 16.15 cluster,
+covering concurrent duplicate/conflicting backends, rollback, full evidence,
+lost ACK, immediate server crash/restart, unavailability, scope/epoch binding,
+refusal before SQL and append-only role controls. The experiment README records
+the local ownership shim and limits of this evidence; standard hosted acceptance
+is a separate CI job. The 7 Python pin/mutation tests also pass with the shared
+captured-source loader. No Iroh connection, outbox, actual identity/current
+revocation source, canonical admission or business effect is enabled. F3/F4
+remain open; next retain sender intent/outbox and test authenticated two-peer
+reconciliation across lost replies with application HTTP disabled.
 
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
@@ -189,7 +220,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
 | F2 — Verified boundary | Python/OpenSSL, independent Elixir/OTP and Rust/dalek agree on 74 experimental signed cases; actual identity/evidence sources and production admission remain pending |
-| F3 — Native delivery | Two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable inbox/outbox and original-ID status reconciliation across lost ACKs, partition and restart |
+| F3 — Native delivery | Offline PostgreSQL receipt/replay preparation has 14 passing integration tests. Still required: two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable sender outbox and authenticated original-ID reconciliation across lost ACKs, partition and restart |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
 

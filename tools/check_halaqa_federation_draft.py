@@ -31,7 +31,8 @@ def _unique(pairs):
     return value
 
 
-def check(root: Path):
+def load_snapshot(root: Path):
+    """Load captured hash-verified modules for offline fixture consumers only."""
     directory = root / "tools/halaqa_federation_draft"
     pin = json.loads((directory / "source-pin.json").read_text(), object_pairs_hook=_unique)
     if type(pin) is not dict or set(pin) != {
@@ -65,7 +66,6 @@ def check(root: Path):
     module = types.ModuleType("pinned_halaqa_federation_draft")
     exec(compile(verified["halaqa_federation_draft.py"],
                  str(directory / "halaqa_federation_draft.py"), "exec"), module.__dict__)
-    result = module.check_corpus(directory / "vectors.json")
     previous = sys.modules.get("halaqa_federation_draft")
     sys.modules["halaqa_federation_draft"] = module
     try:
@@ -78,6 +78,12 @@ def check(root: Path):
             sys.modules.pop("halaqa_federation_draft", None)
         else:
             sys.modules["halaqa_federation_draft"] = previous
+    return pin, directory, module, signed
+
+
+def check(root: Path):
+    pin, directory, module, signed = load_snapshot(root)
+    result = module.check_corpus(directory / "vectors.json")
     signed_result = signed.check_corpus(directory / "signed-vectors.json")
     return {**result, "signed_experiment": signed_result,
             "source_revision": pin["revision"], "production_receiver": False}
