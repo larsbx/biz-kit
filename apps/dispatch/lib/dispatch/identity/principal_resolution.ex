@@ -77,7 +77,8 @@ defmodule Dispatch.Identity.PrincipalResolution do
   @doc """
   The assignments this subject may select between, for the role switcher.
 
-  Identifiers and organization-qualified labels only. Section 4.3's switcher needs to name the choices;
+  Identifiers and organization-qualified labels only. Section 4.3's switcher
+  needs to name the choices;
   it does not need — and must not carry — anything about what each one permits.
   """
   @spec selectable(String.t(), keyword()) :: [%{id: Ash.UUID.t(), label: String.t()}]
@@ -101,7 +102,10 @@ defmodule Dispatch.Identity.PrincipalResolution do
         # "Dispatcher" label makes the selected authority context unknowable
         # to the person choosing it. Read only the organization named by this
         # already-verified assignment; the label is not a separate grant.
-        %{id: assignment.id, label: "#{assignment.organization.name} — #{assignment.role_definition.label}"}
+        %{
+          id: assignment.id,
+          label: "#{assignment.organization.name} — #{assignment.role_definition.label}"
+        }
 
       _gone ->
         nil
