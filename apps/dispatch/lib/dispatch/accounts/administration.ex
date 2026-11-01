@@ -65,15 +65,18 @@ defmodule Dispatch.Accounts.Administration do
   @spec overview(Actor.t()) ::
           {:ok, %{members: [member()], grantable: [RoleDefinition.t()]}} | {:error, :not_found}
   def overview(%Actor{} = actor) do
-    with :ok <- manages(actor) do
-      held = Enum.group_by(active(actor), & &1.principal_id)
+    with {:ok, current} <- PrincipalResolution.revalidate(actor),
+         :ok <- manages(current) do
+      held = Enum.group_by(active(current), & &1.principal_id)
 
       members =
-        actor
+        current
         |> participants()
         |> Enum.map(&%{participant: &1, assignments: Map.get(held, &1.id, [])})
 
-      {:ok, %{members: members, grantable: grantable(actor)}}
+      {:ok, %{members: members, grantable: grantable(current)}}
+    else
+      {:error, _stale_authority} -> {:error, :not_found}
     end
   end
 
