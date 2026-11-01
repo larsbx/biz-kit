@@ -123,7 +123,10 @@ architecture review, or a unit-only green job.
 
 ## Implementation stages
 
-**T0 — inventory and threat model.** Enumerate organization/home ownership
+**T0 — inventory and threat model.** The [initial source audit](2026-11-01-multi-organization-t0-source-audit.md)
+records reviewed candidates and shared-tenant blockers, while the static
+inventory script and hosted artifact produce a larger review queue.
+Enumerate organization/home ownership
 across Ash resources, SQL, contracts, events, sessions, jobs and extension
 adapters. Classify each record as global directory metadata, home-owned,
 partner-visible or strictly private. Record all unsafe `authorize?: false`
