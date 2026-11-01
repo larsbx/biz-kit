@@ -1,6 +1,7 @@
 # Proof Bank first-party adoption — Biz-kit application baseline
 
 Date: 2026-11-01. Status: **repository-derived draft intake only**.
+Tracking: [internal acceptance issue #242](https://github.com/larsbx/biz-kit/issues/242).
 Depends on Proof Bank B0 draft PR #236; not a deployed reasoning workbench.
 
 ## Internal-first policy
