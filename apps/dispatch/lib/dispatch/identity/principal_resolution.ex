@@ -38,7 +38,7 @@ defmodule Dispatch.Identity.PrincipalResolution do
   import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access.Actor
-  alias Dispatch.Accounts.{RoleAssignment, User}
+  alias Dispatch.Accounts.{Organization, RoleAssignment, User}
 
   require Ash.Query
 
@@ -69,15 +69,18 @@ defmodule Dispatch.Identity.PrincipalResolution do
 
     with {:ok, user} <- fetch_user(subject),
          {:ok, chosen} <- select(contexts(user.id, at), requested_assignment_id),
-         {:ok, assignment} <- fetch_assignment(chosen, at) do
-      Actor.from_assignment(assignment, at: at)
+         {:ok, assignment} <- fetch_assignment(chosen, at),
+         {:ok, actor} <- Actor.from_assignment(assignment, at: at),
+         :ok <- principal_still_active?(actor) do
+      {:ok, actor}
     end
   end
 
   @doc """
   The assignments this subject may select between, for the role switcher.
 
-  Identifiers and labels only. Section 4.3's switcher needs to name the choices;
+  Identifiers and organization-qualified labels only. Section 4.3's switcher
+  needs to name the choices;
   it does not need — and must not carry — anything about what each one permits.
   """
   @spec selectable(String.t(), keyword()) :: [%{id: Ash.UUID.t(), label: String.t()}]
@@ -89,15 +92,39 @@ defmodule Dispatch.Identity.PrincipalResolution do
       |> contexts(at)
       |> Enum.map(&label_for(&1, at))
       |> Enum.reject(&is_nil/1)
+      |> disambiguate_labels()
     else
       _unknown -> []
     end
   end
 
+  # Display names are not unique. Even inside one organization multiple
+  # resource-scoped assignments can share a role label. Keep the existing
+  # %{id, label} API and distinguish duplicate labels by the *full* assignment
+  # identifier rather than by a lossy short prefix.
+  defp disambiguate_labels(options) do
+    frequencies = Enum.frequencies_by(options, & &1.label)
+
+    Enum.map(options, fn choice ->
+      if Map.fetch!(frequencies, choice.label) > 1 do
+        %{choice | label: "#{choice.label} [#{choice.id}]"}
+      else
+        choice
+      end
+    end)
+  end
+
   defp label_for(context, at) do
     case fetch_assignment(context, at) do
       {:ok, assignment} ->
-        %{id: assignment.id, label: assignment.role_definition.label}
+        # A person can hold identical roles in several organizations. A bare
+        # "Dispatcher" label makes the selected authority context unknowable
+        # to the person choosing it. Read only the organization named by this
+        # already-verified assignment; the label is not a separate grant.
+        %{
+          id: assignment.id,
+          label: "#{assignment.organization.name} — #{assignment.role_definition.label}"
+        }
 
       _gone ->
         nil
@@ -130,10 +157,45 @@ defmodule Dispatch.Identity.PrincipalResolution do
       participant_id: actor.principal_id
     }
 
-    with {:ok, assignment} <- fetch_assignment(context, at) do
+    with :ok <- principal_still_active?(actor),
+         {:ok, assignment} <- fetch_assignment(context, at),
+         true <- same_principal_and_home?(actor, assignment) do
       Actor.from_assignment(assignment, at: at)
+    else
+      false -> {:error, :role_assignment_not_active}
+      {:error, _reason} = error -> error
     end
   end
+
+  # Revalidation is also called by internal jobs and admin transactions; no
+  # caller-provided Actor struct may substitute a different principal or home
+  # while presenting an otherwise valid assignment ID.
+  defp same_principal_and_home?(actor, assignment) do
+    assignment.tenant_id == actor.tenant_id and
+      assignment.principal_type == actor.principal_type and
+      assignment.principal_id == actor.principal_id and
+      assignment.organization_id == actor.role_assignment.organization_id
+  end
+
+  # A long-lived stream or an administrator entering a transaction may still
+  # hold an actor after the participant or global user was suspended. Re-reading
+  # only the role row would preserve that stale authority.
+  defp principal_still_active?(%Actor{principal_type: :PARTICIPANT} = actor) do
+    active? =
+      from(p in "participants",
+        join: u in "users",
+        on: u.id == p.user_id,
+        where: p.id == type(^actor.principal_id, :binary_id),
+        where: p.tenant_id == type(^actor.tenant_id, :binary_id),
+        where: p.status == "ACTIVE" and u.status == "ACTIVE",
+        select: 1
+      )
+      |> Dispatch.Repo.exists?()
+
+    if active?, do: :ok, else: {:error, :role_assignment_not_active}
+  end
+
+  defp principal_still_active?(%Actor{principal_type: :SERVICE}), do: :ok
 
   @doc """
   The authority contexts `user_id` holds at `at`, as identifiers only.
@@ -148,6 +210,9 @@ defmodule Dispatch.Identity.PrincipalResolution do
     from(ra in "role_assignments",
       join: p in "participants",
       on: p.id == ra.principal_id and p.tenant_id == ra.tenant_id,
+      join: o in "organizations",
+      on: o.id == ra.organization_id,
+      where: o.status == "ACTIVE",
       where: p.user_id == type(^user_id, :binary_id),
       where: p.status == "ACTIVE",
       where: ra.principal_type == "PARTICIPANT",
@@ -200,11 +265,17 @@ defmodule Dispatch.Identity.PrincipalResolution do
     RoleAssignment
     |> Ash.Query.for_read(:active, %{at: at})
     |> Ash.Query.filter(id == ^context.role_assignment_id)
-    |> Ash.Query.load(:role_definition)
+    |> Ash.Query.load([:role_definition, :organization])
     |> Ash.read_one(authorize?: false, tenant: context.tenant_id)
     |> case do
-      {:ok, %RoleAssignment{} = assignment} -> {:ok, assignment}
-      _otherwise -> {:error, :role_assignment_not_active}
+      # The organization is an independent lifecycle boundary. A suspended
+      # or closed organization does not retain access through an otherwise
+      # active assignment, including on stream revalidation.
+      {:ok, %RoleAssignment{organization: %Organization{status: :ACTIVE}} = assignment} ->
+        {:ok, assignment}
+
+      _otherwise ->
+        {:error, :role_assignment_not_active}
     end
   end
 end

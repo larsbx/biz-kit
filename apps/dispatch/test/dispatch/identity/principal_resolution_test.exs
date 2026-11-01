@@ -73,6 +73,63 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       assert first.tenant_id == ctx.tenant
     end
 
+    test "selectable roles identify the organization that owns each assignment", ctx do
+      options = PrincipalResolution.selectable(ctx.user.oidc_subject)
+
+      assert Enum.find(options, &(&1.id == ctx.assignment.id)) == %{
+               id: ctx.assignment.id,
+               label: "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"
+             }
+
+      assert Enum.find(options, &(&1.id == ctx.second.id)) == %{
+               id: ctx.second.id,
+               label: "#{ctx.other_org.name} — #{ctx.second.role_definition.label}"
+             }
+    end
+
+    test "identical role names in two organizations remain distinguishable", ctx do
+      other_driver = Fixtures.assignment(ctx.other_org.id, ctx.other_org, ctx.elsewhere, "DRIVER")
+      options = PrincipalResolution.selectable(ctx.user.oidc_subject)
+
+      assert Enum.find(options, &(&1.id == ctx.assignment.id)).label ==
+               "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"
+
+      assert Enum.find(options, &(&1.id == other_driver.id)).label ==
+               "#{ctx.other_org.name} — #{other_driver.role_definition.label}"
+
+      refute ctx.org.name == ctx.other_org.name
+    end
+
+    test "duplicate organization and role names still offer unique choices", ctx do
+      same_role = Fixtures.assignment(ctx.other_org.id, ctx.other_org, ctx.elsewhere, "DRIVER")
+
+      ctx.other_org
+      |> Ash.Changeset.for_update(:rename, %{name: ctx.org.name})
+      |> Ash.update!(authorize?: false)
+
+      options = PrincipalResolution.selectable(ctx.user.oidc_subject)
+      first = Enum.find(options, &(&1.id == ctx.assignment.id))
+      second = Enum.find(options, &(&1.id == same_role.id))
+
+      assert first.label ==
+               "#{ctx.org.name} — #{ctx.assignment.role_definition.label} [#{ctx.assignment.id}]"
+      assert second.label ==
+               "#{ctx.org.name} — #{same_role.role_definition.label} [#{same_role.id}]"
+    end
+
+    test "a suspended organization cannot be selected alongside an active one", ctx do
+      ctx.other_org
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false)
+
+      assert {:ok, actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
+      assert actor.role_assignment.id == ctx.assignment.id
+      assert {:error, :role_assignment_not_held} =
+               PrincipalResolution.actor(ctx.user.oidc_subject, ctx.second.id)
+      assert Enum.map(PrincipalResolution.selectable(ctx.user.oidc_subject), & &1.id) ==
+               [ctx.assignment.id]
+    end
+
     test "a header naming an assignment held by someone else selects nothing", ctx do
       stranger_org = Fixtures.carrier()
       %{participant: stranger} = Fixtures.person(stranger_org.id, stranger_org)
@@ -101,6 +158,55 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       )
 
       assert {:error, :no_active_assignment} = PrincipalResolution.actor(user.oidc_subject)
+    end
+
+    test "a fabricated held actor cannot adopt another participant's assignment", ctx do
+      assert {:ok, genuine} = PrincipalResolution.actor(ctx.user.oidc_subject)
+      %{participant: another} = Fixtures.person(ctx.tenant, ctx.org)
+
+      forged = %{genuine | principal_id: another.id}
+
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(forged)
+      assert {:ok, original} = PrincipalResolution.revalidate(genuine)
+      assert original.principal_id == ctx.driver.id
+    end
+
+    test "suspended participant invalidates a held actor before a stream or job can use it", ctx do
+      assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
+
+      ctx.driver
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(held_actor)
+      assert {:error, :no_active_assignment} = PrincipalResolution.actor(ctx.user.oidc_subject)
+    end
+
+    test "closed global user invalidates a held actor", ctx do
+      assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
+
+      ctx.user
+      |> Ash.Changeset.for_update(:set_status, %{status: :CLOSED})
+      |> Ash.update!(authorize?: false)
+
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(held_actor)
+      assert {:error, :unknown_principal} = PrincipalResolution.actor(ctx.user.oidc_subject)
+    end
+
+    test "suspension revokes organizational access including held-actor revalidation", ctx do
+      assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
+
+      ctx.org
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false)
+
+      assert PrincipalResolution.selectable(ctx.user.oidc_subject) == []
+      assert {:error, :no_active_assignment} = PrincipalResolution.actor(ctx.user.oidc_subject)
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(held_actor)
     end
 
     test "an assignment whose window has not opened does not resolve yet", ctx do

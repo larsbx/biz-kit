@@ -132,6 +132,51 @@ defmodule Dispatch.Accounts.AdministrationTest do
     end
   end
 
+  describe "stale administrative actors" do
+    test "revoked admin assignment cannot grant with a previously held actor", ctx do
+      Fixtures.revoke(ctx.tenant, ctx.admin_assignment)
+
+      assert grant(ctx, ctx.driver, "DRIVER") == {:error, :not_found}
+      assert Administration.overview(ctx.actor) == {:error, :not_found}
+    end
+
+    test "suspended administrator cannot grant despite an active assignment", ctx do
+      ctx.admin
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+
+      assert grant(ctx, ctx.driver, "DRIVER") == {:error, :not_found}
+      assert Administration.overview(ctx.actor) == {:error, :not_found}
+    end
+
+    test "closed global user cannot grant with a stale assignment", ctx do
+      participant = Ash.get!(Dispatch.Accounts.Participant, ctx.admin.id,
+        authorize?: false,
+        tenant: ctx.tenant
+      )
+
+      user = Ash.get!(Dispatch.Accounts.User, participant.user_id, authorize?: false)
+
+      user
+      |> Ash.Changeset.for_update(:set_status, %{status: :CLOSED})
+      |> Ash.update!(authorize?: false)
+
+      assert grant(ctx, ctx.driver, "DRIVER") == {:error, :not_found}
+    end
+
+    test "suspended organization refuses stale grant and revoke", ctx do
+      {:ok, granted} = grant(ctx, ctx.driver, "DRIVER")
+
+      ctx.carrier
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false)
+
+      assert grant(ctx, ctx.driver, "DISPATCHER") == {:error, :not_found}
+      assert Administration.revoke(ctx.actor, granted.id, granted.version, ctx.now) ==
+               {:error, :not_found}
+    end
+  end
+
   describe "revoking" do
     test "ends the assignment at the version the administrator saw", ctx do
       {:ok, granted} = grant(ctx, ctx.driver, "DISPATCHER")

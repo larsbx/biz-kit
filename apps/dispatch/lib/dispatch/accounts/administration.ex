@@ -34,6 +34,7 @@ defmodule Dispatch.Accounts.Administration do
   import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access
+  alias Dispatch.Identity.PrincipalResolution
   alias Dispatch.Access.{Actor, RoleProfile}
   alias Dispatch.Accounts.{Participant, RoleAssignment, RoleDefinition}
   alias Dispatch.Audit.AuditEvent
@@ -64,15 +65,26 @@ defmodule Dispatch.Accounts.Administration do
   @spec overview(Actor.t()) ::
           {:ok, %{members: [member()], grantable: [RoleDefinition.t()]}} | {:error, :not_found}
   def overview(%Actor{} = actor) do
-    with :ok <- manages(actor) do
-      held = Enum.group_by(active(actor), & &1.principal_id)
+    # A roster read is sensitive even though it has no write: keep the
+    # authorization rows stable until all tenant-scoped projections are read.
+    case Dispatch.Repo.transaction(fn ->
+           with :ok <- lock_current_authority(actor),
+                {:ok, current} <- PrincipalResolution.revalidate(actor),
+                :ok <- manages(current) do
+             held = Enum.group_by(active(current), & &1.principal_id)
 
-      members =
-        actor
-        |> participants()
-        |> Enum.map(&%{participant: &1, assignments: Map.get(held, &1.id, [])})
+             members =
+               current
+               |> participants()
+               |> Enum.map(&%{participant: &1, assignments: Map.get(held, &1.id, [])})
 
-      {:ok, %{members: members, grantable: grantable(actor)}}
+             %{members: members, grantable: grantable(current)}
+           else
+             _stale_or_forbidden -> Dispatch.Repo.rollback(:not_found)
+           end
+         end) do
+      {:ok, result} -> {:ok, result}
+      {:error, _reason} -> {:error, :not_found}
     end
   end
 
@@ -80,15 +92,15 @@ defmodule Dispatch.Accounts.Administration do
   @spec grant(Actor.t(), map(), DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def grant(%Actor{} = actor, params, authenticated_at) do
-    serialized(actor, fn ->
-      with :ok <- manages(actor),
-           :ok <- recent(authenticated_at, actor.at),
-           {:ok, participant} <- participant(actor, params["participant_id"]),
-           :ok <- not_own(actor, participant.id),
-           {:ok, definition, scope} <- definition(actor, params["role_definition_id"]),
-           :ok <- not_held(actor, participant, definition) do
-        assignment = create!(actor, participant, definition, scope)
-        audit!(actor, "role_assignment.granted", assignment, definition)
+    serialized(actor, fn current ->
+      with :ok <- manages(current),
+           :ok <- recent(authenticated_at, current.at),
+           {:ok, participant} <- participant(current, params["participant_id"]),
+           :ok <- not_own(current, participant.id),
+           {:ok, definition, scope} <- definition(current, params["role_definition_id"]),
+           :ok <- not_held(current, participant, definition) do
+        assignment = create!(current, participant, definition, scope)
+        audit!(current, "role_assignment.granted", assignment, definition)
         {:ok, assignment}
       end
     end)
@@ -101,19 +113,19 @@ defmodule Dispatch.Accounts.Administration do
   @spec revoke(Actor.t(), String.t(), integer() | nil, DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def revoke(%Actor{} = actor, assignment_id, expected_version, authenticated_at) do
-    serialized(actor, fn ->
-      with :ok <- manages(actor),
-           :ok <- recent(authenticated_at, actor.at),
-           {:ok, assignment} <- held(actor, assignment_id),
+    serialized(actor, fn current_actor ->
+      with :ok <- manages(current_actor),
+           :ok <- recent(authenticated_at, current_actor.at),
+           {:ok, assignment} <- held(current_actor, assignment_id),
            :ok <- current(assignment, expected_version),
-           :ok <- not_last_administrator(actor, assignment) do
+           :ok <- not_last_administrator(current_actor, assignment) do
         revoked =
           assignment
           |> Ash.Changeset.for_update(:revoke, %{})
           # REVIEWED-UNAUTHORIZED: authorized above against Section 23.3's rules.
-          |> Ash.update!(authorize?: false, tenant: actor.tenant_id)
+          |> Ash.update!(authorize?: false, tenant: current_actor.tenant_id)
 
-        audit!(actor, "role_assignment.revoked", revoked, assignment.role_definition)
+        audit!(current_actor, "role_assignment.revoked", revoked, assignment.role_definition)
         {:ok, revoked}
       end
     end)
@@ -275,19 +287,72 @@ defmodule Dispatch.Accounts.Administration do
     |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
   end
 
-  # One organization's role changes at a time, released with the transaction.
+  # A caller may have been authorized before it waited on this lock. The
+  # assignment, organization and participant must still be active *after*
+  # acquiring it; a cached actor must never authorize a new grant or revocation.
   defp serialized(actor, fun) do
     Dispatch.Repo.transaction(fn ->
       Dispatch.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))", [
         "role-administration:" <> organization(actor)
       ])
 
-      case fun.() do
-        {:ok, result} -> result
-        {:error, reason} -> Dispatch.Repo.rollback(reason)
+      with :ok <- lock_current_authority(actor),
+           {:ok, current_actor} <- PrincipalResolution.revalidate(actor) do
+        case fun.(current_actor) do
+          {:ok, result} -> result
+          {:error, reason} -> Dispatch.Repo.rollback(reason)
+        end
+      else
+        _stale_or_unavailable -> Dispatch.Repo.rollback(:not_found)
       end
     end)
   end
+
+  # Post-organization-lock authority must be stable until the write commits.
+  # An advisory lock alone only serializes callers that voluntarily acquire it;
+  # participant/user/org suspension and direct grant revocation use ordinary
+  # PostgreSQL updates. SHARE row locks force those updates to serialize with
+  # this transaction, so an earlier revocation commits before admission or a
+  # later revocation waits until this already-authorized write commits.
+  #
+  # The locked join is a precondition, not a grant: the current assignment
+  # still goes through the complete role/scope check after these locks.
+  defp lock_current_authority(%Actor{principal_type: :PARTICIPANT} = actor) do
+    sql = """
+    SELECT ra.id
+    FROM role_assignments AS ra
+    JOIN participants AS p
+      ON p.id = ra.principal_id AND p.tenant_id = ra.tenant_id
+    JOIN users AS u ON u.id = p.user_id
+    JOIN organizations AS o ON o.id = ra.organization_id
+    JOIN role_definitions AS rd
+      ON rd.id = ra.role_definition_id AND rd.tenant_id = ra.tenant_id
+    WHERE ra.id = $1 AND ra.tenant_id = $2
+      AND ra.principal_id = $3 AND ra.organization_id = $4
+      AND ra.principal_type = 'PARTICIPANT'
+      AND ra.status = 'ACTIVE' AND p.status = 'ACTIVE'
+      AND u.status = 'ACTIVE' AND o.status = 'ACTIVE'
+      AND rd.status = 'ACTIVE'
+      AND p.home_organization_id = ra.organization_id
+    FOR SHARE OF ra, p, u, o, rd
+    """
+
+    params =
+      [
+        actor.role_assignment.id,
+        actor.tenant_id,
+        actor.principal_id,
+        organization(actor)
+      ]
+      |> Enum.map(&Ecto.UUID.dump!/1)
+
+    case Dispatch.Repo.query!(sql, params) do
+      %Postgrex.Result{num_rows: 1} -> :ok
+      _absent -> {:error, :not_found}
+    end
+  end
+
+  defp lock_current_authority(_non_participant), do: {:error, :not_found}
 
   defp organization(actor), do: actor.role_assignment.organization_id
 end
