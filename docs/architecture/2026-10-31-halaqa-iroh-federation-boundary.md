@@ -100,7 +100,9 @@ No new Python dependency is introduced; an Ed25519-capable OpenSSL CLI is needed
 Success is `SIGNATURE_VALID_AUTHORITY_UNVERIFIED`, with authority and production
 receiver flags false. TEST pins are not actual identity succession, fresh
 revocation evidence, charter adoption or permission. The verifier is stateless:
-expiry checks do not establish durable replay prevention or effect idempotency.
+expiry checks alone do not establish durable replay prevention or effect idempotency.
+The separate operational receipt experiment below adds test persistence, not
+production replay/admission acceptance.
 Neither experiment has a live ingress or can invoke BuzzBridge/domain admission.
 
 Run:
@@ -110,8 +112,9 @@ python3 tools/check_halaqa_federation_draft.py
 python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 ```
 
-The focused CI workflow runs separate Python, Elixir and Rust offline jobs.
-It opens no Iroh connection. The Rust crate has its own locked test dependencies;
+The focused CI workflow runs Python, Elixir, Rust, isolated PostgreSQL and
+experimental direct-Iroh jobs. Only the explicit Iroh fixture job opens peer
+connections, constrained to loopback with public discovery/relays disabled. The Rust crate has its own locked test dependencies;
 no application runtime dependency, production ingress, shared schema or business
 writer is added by this slice.
 
@@ -168,8 +171,92 @@ cargo run --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
 
 CI installs Rust 1.99.1 and runs those commands. PR #226 is merged at
 `a2e13ea58465fbedb20dbf14934f9378c7e70e5d`; this follow-up does not reinterpret its
-queued hosted checks as successful validation. No live receiver or replay store
+queued hosted checks as successful validation. No live receiver or production replay store
 is enabled by this change.
+
+### PostgreSQL receipt/replay experiment — 2026-11-01
+
+The [receipt experiment](../../tools/halaqa_receipt_draft/README.md) adds an
+isolated operational SQL schema and Python fixture adapter, following the
+selected PostgreSQL/Redis storage responsibilities. It retains full original
+candidate/wire/TEST-policy evidence under `(recipient, sender, message_id)`.
+A committed identical candidate returns its original receipt even after
+re-signing; different exact bytes retain conflict evidence without overwriting
+the original. Epoch changes cannot reset an actor's message ID. Local status
+reconciliation survives signature expiry without re-admitting that message.
+
+The adapter verifies with the captured draft-2 reference before SQL, and returns
+no receipt until COMMIT succeeds. READ COMMITTED, synchronous commit and normal
+WAL durability are explicit requirements. A unique scoped key serializes
+competing inserts; no global business-log lock, Redis dependency, domain writer
+or existing discovery-store migration is introduced. SQL is operational storage,
+not a signature or authority verifier. All receipts remain `STORED_TEST_ONLY`.
+
+Fourteen integration tests pass against a disposable PostgreSQL 16.15 cluster,
+covering concurrent duplicate/conflicting backends, rollback, full evidence,
+lost ACK, immediate server crash/restart, unavailability, scope/epoch binding,
+refusal before SQL and append-only role controls. The experiment README records
+the local ownership shim and limits of this evidence; standard hosted acceptance
+is a separate CI job. The 7 Python pin/mutation tests also pass with the shared
+captured-source loader. The receipt/storage layer itself enables no network
+listener, actual identity/current revocation source, canonical admission or
+business effect. F3/F4 remain open.
+
+### Durable sender outbox and local reconciliation — 2026-11-01
+
+The receipt experiment now also retains immutable sender intent and first wire
+bytes, creating its pending work row atomically. Before any peer callback,
+`begin_attempt` commits `UNKNOWN` and advances a generation. Matching completion
+records a bound remote retention receipt or original-ID content conflict;
+terminal results cannot reactivate. Stale generations cannot overwrite a later
+attempt. Original IDs and candidate bytes persist through retries, restarts and
+lost acknowledgements; no replacement business command is created.
+
+`tools/halaqa_outbox_draft.py` queries original-ID status before transmission.
+Known matching retention can be reconciled after signature expiry without
+re-admission. A strict missing result requires current sender TEST verification
+and separate receiver TEST verification before sending the original wire.
+Expired unsent work stays unknown pending an explicit envelope-refresh contract.
+Scoped pending pages contain at most 16 results and must periodically rescan
+from zero; sequence IDs are not complete-prefix watermarks. No Redis runtime,
+new generic scheduler, business writer or production dependency is added.
+
+Sixteen sender integration tests pass in addition to 14 receiver tests and
+7 pin/mutation tests (37 Python tests). They use two databases on one disposable
+PostgreSQL cluster with separate commit boundaries and in-process callbacks.
+They demonstrate custody, generation fencing, strict reply binding, lost-ACK
+reconciliation and crash recovery. They do not establish independent hosts,
+authenticated Iroh peers/status replies or direct/relay delivery by themselves.
+The transport experiment below adds local direct-path evidence. The experiment
+README records the state transitions and remaining acceptance.
+
+### Pinned direct Iroh experiment — 2026-11-01
+
+`tools/halaqa_iroh_draft_rs/` and `tools/halaqa_iroh_draft.py` replace the
+in-process fixture callback with actual Iroh 1.4.1 QUIC client/server processes.
+The dedicated ALPN, length-prefixed frames, exact byte/EOF limits and deadlines
+are documented in the receipt experiment. Each request has a fresh challenge;
+client/server check configured endpoint IDs before trusting a response or
+allowing a host callback. The host maps that pin to a local synthetic actor pair
+and still verifies signed candidate/context evidence before SQL commit. Transport
+endpoint identity is not production actor authority or domain admission.
+
+The Minimal endpoint clears default IP transports, binds only loopback, disables
+relays and configures no public lookup/publisher. Only explicit loopback IP targets
+are permitted. No application HTTP server/client is started. This preserves the
+original IDs/wire bytes, SQL custody and generation fences; it changes neither
+marketplace gossip nor ordinary ActivityPub interoperability.
+
+Seven native integration tests pass, including rejected client/server pins,
+scoped status, stale host challenges, malformed/oversized messages and current
+receiver TEST revocation/signature refusal. The lost post-commit reply case
+restarts the receiver sidecar with its original endpoint key, then reconciles
+retention after expiry using a fresh status request without redelivery. The
+Iroh crate's 5 tests, formatting, clippy and locked build pass. All 44 Python
+checks pass (7 pin, 14 receiver, 16 sender, 7 native transport). This is direct
+loopback and separate-database evidence on one host; configured relays, independent
+installations, real identity/disclosure sources and production adapters remain
+required for F3/F4. Exact-head hosted CI is separate evidence.
 
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
@@ -189,7 +276,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
 | F2 — Verified boundary | Python/OpenSSL, independent Elixir/OTP and Rust/dalek agree on 74 experimental signed cases; actual identity/evidence sources and production admission remain pending |
-| F3 — Native delivery | Two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable inbox/outbox and original-ID status reconciliation across lost ACKs, partition and restart |
+| F3 — Native delivery | PostgreSQL custody and pinned direct-loopback Iroh have 37 integration tests. Still required: independent installations, configured relay/path evidence, production identity/disclosure and unknown-outcome reconciliation across network partition/restart with application HTTP disabled |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
 

@@ -8,6 +8,14 @@ on:
       - 'tools/halaqa_federation_draft/**'
       - 'tools/halaqa_signed_draft_rs/**'
       - 'tools/check_halaqa_rust_differential.py'
+      - 'tools/halaqa_receipt_draft/**'
+      - 'tools/halaqa_receipt_draft.py'
+      - 'tools/halaqa_outbox_draft.py'
+      - 'tools/halaqa_iroh_draft.py'
+      - 'tools/test_halaqa_iroh_draft.py'
+      - 'tools/halaqa_iroh_draft_rs/**'
+      - 'tools/test_halaqa_outbox_draft.py'
+      - 'tools/test_halaqa_receipt_draft.py'
       - 'tools/halaqa_signed_draft.exs'
       - 'tools/check_halaqa_signed_draft.exs'
       - 'tools/test_halaqa_signed_draft.exs'
@@ -21,6 +29,14 @@ on:
       - 'tools/halaqa_federation_draft/**'
       - 'tools/halaqa_signed_draft_rs/**'
       - 'tools/check_halaqa_rust_differential.py'
+      - 'tools/halaqa_receipt_draft/**'
+      - 'tools/halaqa_receipt_draft.py'
+      - 'tools/halaqa_outbox_draft.py'
+      - 'tools/halaqa_iroh_draft.py'
+      - 'tools/test_halaqa_iroh_draft.py'
+      - 'tools/halaqa_iroh_draft_rs/**'
+      - 'tools/test_halaqa_outbox_draft.py'
+      - 'tools/test_halaqa_receipt_draft.py'
       - 'tools/halaqa_signed_draft.exs'
       - 'tools/check_halaqa_signed_draft.exs'
       - 'tools/test_halaqa_signed_draft.exs'
@@ -92,3 +108,52 @@ jobs:
           name: halaqa-offline-rust-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/halaqa-rust-evidence/
           if-no-files-found: error
+
+  postgres-receipts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install isolated test-cluster binaries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-16 postgresql-client-16
+      - name: Receiver receipts, rollback and WAL recovery
+        env:
+          HALAQA_PG_BIN: /usr/lib/postgresql/16/bin
+        run: python3 -m unittest discover -s tools -p 'test_halaqa_receipt_draft.py' -v
+      - name: Sender custody and two-database reconciliation
+        env:
+          HALAQA_PG_BIN: /usr/lib/postgresql/16/bin
+        run: python3 -m unittest discover -s tools -p 'test_halaqa_outbox_draft.py' -v
+
+  iroh-direct:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
+      - name: Install isolated test-cluster binaries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-16 postgresql-client-16
+      - run: cargo fmt --manifest-path tools/halaqa_iroh_draft_rs/Cargo.toml --check
+      - run: cargo clippy --locked --manifest-path tools/halaqa_iroh_draft_rs/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --locked --manifest-path tools/halaqa_iroh_draft_rs/Cargo.toml
+      - run: cargo build --locked --manifest-path tools/halaqa_iroh_draft_rs/Cargo.toml
+      - name: Pinned direct Iroh, receiver restart and lost-reply reconciliation
+        env:
+          HALAQA_PG_BIN: /usr/lib/postgresql/16/bin
+        run: python3 -m unittest discover -s tools -p 'test_halaqa_iroh_draft.py' -v

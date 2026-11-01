@@ -28,8 +28,8 @@ prove no real identity succession, revocation freshness or governance authority.
 
 ## Reproduce
 
-Run from the repository root. CI selects Rust 1.99.1; local results were also
-verified with Rust 1.93.1. The existing package minimum remains Rust 1.85; that
+Run from the repository root. CI selects Rust 1.99.1; the conflict-resolution tree was verified locally
+with that exact toolchain. Earlier results also passed on Rust 1.93.1. The existing package minimum remains Rust 1.85; that
 minimum was not separately tested.
 
 ```sh
@@ -53,7 +53,9 @@ encoding/size/depth limits, numeric lexemes, source tampering and remote authori
 flags. Repeated verification remains stateless and commits no replay ID.
 
 The execution receipt hashes the actual tested inputs and records command
-output. Hosted workflow artifacts separately retain the exact head, tool
+output. The merge-resolution receipt `evidence-2026-11-01-merge.json` records the
+reconciled workflow and Rust 1.99.1 results. Hosted workflow artifacts
+separately retain the exact head, tool
 versions, tests, conformance and diagnostic JSON. Local evidence is not a claim
 that hosted CI passed or production contracts were approved.
 
