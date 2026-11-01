@@ -299,3 +299,22 @@ Removing this experiment deletes its offline tools, fixture snapshot and CI
 lane; it changes no ledger or external effect. Never downgrade a future signed
 profile to unsigned draft-0. A live migration must preserve signed originals,
 IDs, tombstones, revocations and receipts and explicitly fence prior writers.
+
+
+### Additional Rust regressions and exact-head evidence — 2026-11-01
+
+The follow-up to PR #229 reuses `tools/halaqa_signed_draft_rs` rather than adding
+a second verifier. Nineteen Rust tests now cover fresh signed payload/signature,
+context, revocation, expiry and malformed-input mutations in addition to all 74
+pinned draft-2 cases. Raw numeric lexemes preserve integer `-0` while refusing
+floats and numeric overflow without changing the original signed transcript.
+Fixed-size key/signature lengths are checked before allocation. The standalone
+runner accepts only its compiled, SHA-256-anchored corpus and checks exact counts;
+caller-selected corpora/frames do not enter it.
+
+`tools/check_halaqa_rust_differential.py` independently reproduces the resolved
+weak-key refusal and records the remaining lone-surrogate refusal-code difference
+(Python `identifier`, Rust `invalid_json`). That diagnostic is not counted as
+signed conformance. Integer-zero and overflow probes now agree. The input-hashed
+local receipt and reproduction guide are beside the crate; CI artifacts capture
+the exact tested head and output. No production contract or live path changes.

@@ -7,6 +7,7 @@ on:
       - 'tools/test_halaqa_federation_draft.py'
       - 'tools/halaqa_federation_draft/**'
       - 'tools/halaqa_signed_draft_rs/**'
+      - 'tools/check_halaqa_rust_differential.py'
       - 'tools/halaqa_receipt_draft/**'
       - 'tools/halaqa_receipt_draft.py'
       - 'tools/halaqa_outbox_draft.py'
@@ -27,6 +28,7 @@ on:
       - 'tools/test_halaqa_federation_draft.py'
       - 'tools/halaqa_federation_draft/**'
       - 'tools/halaqa_signed_draft_rs/**'
+      - 'tools/check_halaqa_rust_differential.py'
       - 'tools/halaqa_receipt_draft/**'
       - 'tools/halaqa_receipt_draft.py'
       - 'tools/halaqa_outbox_draft.py'
@@ -83,10 +85,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
-      - run: cargo fmt --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --check
-      - run: cargo clippy --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --all-targets -- -D warnings
-      - run: cargo test --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
-      - run: cargo run --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check locked Rust conformance and retain exact-head evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/halaqa-rust-evidence"
+          git rev-parse HEAD | tee "$RUNNER_TEMP/halaqa-rust-evidence/revision.txt"
+          rustc -Vv | tee "$RUNNER_TEMP/halaqa-rust-evidence/rustc.txt"
+          openssl version | tee "$RUNNER_TEMP/halaqa-rust-evidence/openssl.txt"
+          cargo fetch --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
+          cargo fmt --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml -- --check
+          cargo clippy --locked --offline --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --all-targets -- -D warnings
+          cargo test --locked --offline --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml 2>&1 | tee "$RUNNER_TEMP/halaqa-rust-evidence/tests.txt"
+          cargo run --locked --offline --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml | tee "$RUNNER_TEMP/halaqa-rust-evidence/conformance.json"
+          python3 tools/check_halaqa_rust_differential.py | tee "$RUNNER_TEMP/halaqa-rust-evidence/differential.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: halaqa-offline-rust-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/halaqa-rust-evidence/
+          if-no-files-found: error
 
   postgres-receipts:
     runs-on: ubuntu-24.04
