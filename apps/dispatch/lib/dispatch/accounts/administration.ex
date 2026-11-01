@@ -288,18 +288,63 @@ defmodule Dispatch.Accounts.Administration do
         "role-administration:" <> organization(actor)
       ])
 
-      case PrincipalResolution.revalidate(actor) do
-        {:ok, current_actor} ->
-          case fun.(current_actor) do
-            {:ok, result} -> result
-            {:error, reason} -> Dispatch.Repo.rollback(reason)
-          end
-
-        {:error, _stale_authority} ->
-          Dispatch.Repo.rollback(:not_found)
+      with :ok <- lock_current_authority(actor),
+           {:ok, current_actor} <- PrincipalResolution.revalidate(actor) do
+        case fun.(current_actor) do
+          {:ok, result} -> result
+          {:error, reason} -> Dispatch.Repo.rollback(reason)
+        end
+      else
+        _stale_or_unavailable -> Dispatch.Repo.rollback(:not_found)
       end
     end)
   end
+
+  # Post-organization-lock authority must be stable until the write commits.
+  # An advisory lock alone only serializes callers that voluntarily acquire it;
+  # participant/user/org suspension and direct grant revocation use ordinary
+  # PostgreSQL updates. SHARE row locks force those updates to serialize with
+  # this transaction, so an earlier revocation commits before admission or a
+  # later revocation waits until this already-authorized write commits.
+  #
+  # The locked join is a precondition, not a grant: the current assignment
+  # still goes through the complete role/scope check after these locks.
+  defp lock_current_authority(%Actor{principal_type: :PARTICIPANT} = actor) do
+    sql = """
+    SELECT ra.id
+    FROM role_assignments AS ra
+    JOIN participants AS p
+      ON p.id = ra.principal_id AND p.tenant_id = ra.tenant_id
+    JOIN users AS u ON u.id = p.user_id
+    JOIN organizations AS o ON o.id = ra.organization_id
+    JOIN role_definitions AS rd
+      ON rd.id = ra.role_definition_id AND rd.tenant_id = ra.tenant_id
+    WHERE ra.id = $1 AND ra.tenant_id = $2
+      AND ra.principal_id = $3 AND ra.organization_id = $4
+      AND ra.principal_type = 'PARTICIPANT'
+      AND ra.status = 'ACTIVE' AND p.status = 'ACTIVE'
+      AND u.status = 'ACTIVE' AND o.status = 'ACTIVE'
+      AND rd.status = 'ACTIVE'
+      AND p.home_organization_id = ra.organization_id
+    FOR SHARE OF ra, p, u, o, rd
+    """
+
+    params =
+      [
+        actor.role_assignment.id,
+        actor.tenant_id,
+        actor.principal_id,
+        organization(actor)
+      ]
+      |> Enum.map(&Ecto.UUID.dump!/1)
+
+    case Dispatch.Repo.query!(sql, params) do
+      %Postgrex.Result{num_rows: 1} -> :ok
+      _absent -> {:error, :not_found}
+    end
+  end
+
+  defp lock_current_authority(_non_participant), do: {:error, :not_found}
 
   defp organization(actor), do: actor.role_assignment.organization_id
 end
