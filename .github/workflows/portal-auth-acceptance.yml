@@ -44,6 +44,8 @@ jobs:
           apps/biz_kit_identity/lib/biz_kit/identity.ex
           apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex
           apps/biz_kit_identity/test/session_reference_test.exs
+          apps/dispatch/lib/dispatch/identity/principal_resolution.ex
+          apps/dispatch/test/dispatch/identity/principal_resolution_test.exs
           apps/dispatch/lib/dispatch/identity/tokens/biz_kit_session.ex
           apps/dispatch/lib/dispatch/identity/tokens/verifier.ex
           apps/dispatch/lib/dispatch_web/controllers/session_controller.ex
