@@ -358,7 +358,7 @@ defmodule FederationService.TwoInstanceTest do
       File.rm_rf!(dir)
     end)
 
-    assert Application.spec(:bandit, :vsn) == ~c"1.14.0"
+    assert Application.spec(:bandit, :vsn) == ~c"1.14.1"
 
     assert {:error, :test_transport_disabled} =
              Network.request(:get, "https://beta.example/actors/shop", [], "",

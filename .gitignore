@@ -9,3 +9,4 @@ erl_crash.dump
 /native/marketplace_gossip/target/
 /apps/federation_service/test/support/__pycache__/
 /tools/__pycache__/
+/tools/halaqa_federation_draft/__pycache__/

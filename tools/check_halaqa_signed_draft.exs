@@ -1,0 +1,5 @@
+Code.require_file("halaqa_signed_draft.exs", __DIR__)
+{:ok, _} = Application.ensure_all_started(:crypto)
+path = Path.join(__DIR__, "halaqa_federation_draft/signed-vectors.json")
+result = HalaqaSignedDraft.check_corpus(path)
+IO.puts(:json.encode(result))

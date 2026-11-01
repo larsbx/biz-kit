@@ -11,6 +11,12 @@ It reuses the accepted activities and metadata, with explicit publisher key
 pins and durable scoped inbox projections. Its topic transport does not use
 HTTP delivery peering or Follow/Accept polling.
 
+The [proposed Halaqa federation boundary](../../docs/architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
+maps the next native protocol work and supplies a pinned offline candidate-format
+corpus and an offline signed-envelope experiment. Its reference tools are not
+production receivers or adopted Halaqa schemas and do not change this service's
+active HTTP/gossip contracts.
+
 ## What runs
 
 - Public Service actors with an RSA public key, inbox and paged outbox.
