@@ -149,7 +149,7 @@ defmodule BizKit.Extension.Manifest do
   defp check_modes(m) do
     if m.contract_version == 1 and m.deployment in [:integrated, :external] and
          m.activation == :manual and m.health == :host,
-      do: :ok,
-      else: {:error, {:invalid_field, :contract_modes}}
+       do: :ok,
+       else: {:error, {:invalid_field, :contract_modes}}
   end
 end
