@@ -65,18 +65,26 @@ defmodule Dispatch.Accounts.Administration do
   @spec overview(Actor.t()) ::
           {:ok, %{members: [member()], grantable: [RoleDefinition.t()]}} | {:error, :not_found}
   def overview(%Actor{} = actor) do
-    with {:ok, current} <- PrincipalResolution.revalidate(actor),
-         :ok <- manages(current) do
-      held = Enum.group_by(active(current), & &1.principal_id)
+    # A roster read is sensitive even though it has no write: keep the
+    # authorization rows stable until all tenant-scoped projections are read.
+    case Dispatch.Repo.transaction(fn ->
+           with :ok <- lock_current_authority(actor),
+                {:ok, current} <- PrincipalResolution.revalidate(actor),
+                :ok <- manages(current) do
+             held = Enum.group_by(active(current), & &1.principal_id)
 
-      members =
-        current
-        |> participants()
-        |> Enum.map(&%{participant: &1, assignments: Map.get(held, &1.id, [])})
+             members =
+               current
+               |> participants()
+               |> Enum.map(&%{participant: &1, assignments: Map.get(held, &1.id, [])})
 
-      {:ok, %{members: members, grantable: grantable(current)}}
-    else
-      {:error, _stale_authority} -> {:error, :not_found}
+             %{members: members, grantable: grantable(current)}
+           else
+             _stale_or_forbidden -> Dispatch.Repo.rollback(:not_found)
+           end
+         end) do
+      {:ok, result} -> {:ok, result}
+      {:error, _reason} -> {:error, :not_found}
     end
   end
 
