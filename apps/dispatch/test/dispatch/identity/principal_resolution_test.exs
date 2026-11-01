@@ -100,6 +100,21 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       refute ctx.org.name == ctx.other_org.name
     end
 
+    test "duplicate organization and role names still offer unique choices", ctx do
+      same_role = Fixtures.assignment(ctx.other_org.id, ctx.other_org, ctx.elsewhere, "DRIVER")
+
+      ctx.other_org
+      |> Ash.Changeset.for_update(:rename, %{name: ctx.org.name})
+      |> Ash.update!(authorize?: false)
+
+      options = PrincipalResolution.selectable(ctx.user.oidc_subject)
+      first = Enum.find(options, &(&1.id == ctx.assignment.id))
+      second = Enum.find(options, &(&1.id == same_role.id))
+
+      assert first.label == "#{ctx.org.name} — Driver [#{ctx.assignment.id}]"
+      assert second.label == "#{ctx.org.name} — Driver [#{same_role.id}]"
+    end
+
     test "a suspended organization cannot be selected alongside an active one", ctx do
       ctx.other_org
       |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
