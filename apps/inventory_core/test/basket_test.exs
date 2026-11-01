@@ -61,6 +61,23 @@ defmodule InventoryCore.BasketTest do
     assert original["dough"].reservations == %{}
   end
 
+  test "menu sellable ceiling matches all-ingredient reservation feasibility" do
+    original = stock()
+
+    recipe =
+      Enum.map(ingredients(), fn %{item: item, per_unit: amount} ->
+        %{item: item, quantity: amount}
+      end)
+
+    assert {:ok, 12} = InventoryCore.Menu.sellable(recipe, original, "restaurant", "kitchen")
+
+    assert {:ok, %{commands: [_cheese, _dough]}} =
+             Basket.plan(original, "restaurant", "kitchen", "max-sellable", 12, ingredients(), 500)
+
+    assert {:error, {"cheese", :insufficient_available}} =
+             Basket.plan(original, "restaurant", "kitchen", "over-sellable", 13, ingredients(), 500)
+  end
+
   test "supplier repair kit uses the same preflight without restaurant concepts" do
     stocks = %{
       "brake-kit" => stocked("workshop", "brake-kit", "each", 4),
