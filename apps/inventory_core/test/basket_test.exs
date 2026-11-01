@@ -1,5 +1,6 @@
 defmodule InventoryCore.BasketTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias InventoryCore.Basket
 
@@ -190,6 +191,37 @@ defmodule InventoryCore.BasketTest do
                ingredients(),
                100
              )
+  end
+
+  property "the Menu.sellable bound agrees with every ingredient preflight" do
+    check all(
+            cheese_stock <- integer(1..500),
+            dough_stock <- integer(1..500),
+            cheese_per <- integer(1..80),
+            dough_per <- integer(1..80),
+            max_runs: 75
+          ) do
+      stocks = %{
+        "cheese" => stocked("restaurant", "cheese", "grams", cheese_stock),
+        "dough" => stocked("restaurant", "dough", "grams", dough_stock)
+      }
+
+      needs = [
+        %{item: "cheese", unit: "grams", per_unit: cheese_per},
+        %{item: "dough", unit: "grams", per_unit: dough_per}
+      ]
+
+      menu = Enum.map(needs, &%{item: &1.item, quantity: &1.per_unit})
+      {:ok, sellable} = InventoryCore.Menu.sellable(menu, stocks, "restaurant", "kitchen")
+
+      if sellable > 0 do
+        assert {:ok, %{kind: :unsigned_inventory_basket}} =
+                 Basket.plan(stocks, "restaurant", "kitchen", "order", sellable, needs, 100)
+      end
+
+      assert {:error, {_item, :insufficient_available}} =
+               Basket.plan(stocks, "restaurant", "kitchen", "order", sellable + 1, needs, 100)
+    end
   end
 
   test "supplied requirements have a stable command order regardless of input order" do
