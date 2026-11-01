@@ -15,7 +15,9 @@ identifies unscoped legacy Eatsbot/SpruceGoose models as shared-tenant rollout
 blockers. The standalone tenancy inventory workflow emits an exact-source
 review queue, not authorization proof. The first Dispatch implementation also
 refreshes user/participant/organization status before held-actor operations
-and revalidates administrative authority after the organization lock.
+and locks actor role, participant, user, organization and role definition
+inside administrative mutations. Two-connection revocation/suspension tests
+are added, but hosted acceptance is still unverified.
 
 The stages are: **T0** ownership and unsafe-query inventory; **T1** verified,
 non-unioning acting context on web/native/stream/job/extension paths; **T2**
