@@ -63,8 +63,8 @@ defmodule Sample.Direct do
 end
 """)
         self.assertEqual(row["kind"], "ecto_schema_review")
-        self.assertEqual(row["observations"]["raw_repo_calls"], [6])
-        self.assertEqual(row["observations"]["ash_authorization_bypass"], [7])
+        self.assertEqual(row["observations"]["raw_repo_calls"], [7])
+        self.assertEqual(row["observations"]["ash_authorization_bypass"], [8])
 
     def test_output_is_deterministically_path_sorted(self):
         self.write("z.ex", "defmodule Z do\n  use Ash.Resource\nend\n")
