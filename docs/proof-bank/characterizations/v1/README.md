@@ -80,3 +80,19 @@ Lean proof of an abstract model does **not** verify its Elixir implementation. B
 Reconcile P0 business authority and current app behavior, prioritize a pure InventoryCore reservation invariant plus concurrent Dispatch authority as two unlike pilot domains, and map every relevant test to the modeled rule. Require exact-head test runs and evidence of host refinement. Keep unverified or contradictory requirements as explicit blocking findings. Promote no third-party extension to marketplace until these first-party gates are accepted.
 
 Machine audit: `python3 scripts/proof_bank_characterization_audit.py`; the script only checks catalog/source integrity, **not correctness of applications**.
+
+## Executable conformance probe lane
+
+A separate GitHub Actions matrix runs existing `mix test --no-start --trace`
+for 12 pure policy/portable apps at the exact checked-out PR revision.
+This lane is **behavioral regression evidence**, not a Lean proof or a
+verification of the live host, its DB migrations, external signatures or
+side effects. CI must show passing jobs and captured log links before a
+reviewer changes any `not_executed` catalog state. The current catalog
+remains deliberately pessimistic even after tests are scheduled.
+
+Hosts (`dispatch`, `spruce_goose`, `eatsbot`, `federation_service`),
+remaining app/test fixtures, external `hawala-core` and the two legacy
+Eatsbot extensions with no app-local ExUnit cases require separate
+infrastructure-specific acceptance gates. The pure-core lane cannot
+substitute for those tests.
