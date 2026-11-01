@@ -139,9 +139,23 @@ defmodule Dispatch.Identity.PrincipalResolution do
     }
 
     with :ok <- principal_still_active?(actor),
-         {:ok, assignment} <- fetch_assignment(context, at) do
+         {:ok, assignment} <- fetch_assignment(context, at),
+         true <- same_principal_and_home?(actor, assignment) do
       Actor.from_assignment(assignment, at: at)
+    else
+      false -> {:error, :role_assignment_not_active}
+      {:error, _reason} = error -> error
     end
+  end
+
+  # Revalidation is also called by internal jobs and admin transactions; no
+  # caller-provided Actor struct may substitute a different principal or home
+  # while presenting an otherwise valid assignment ID.
+  defp same_principal_and_home?(actor, assignment) do
+    assignment.tenant_id == actor.tenant_id and
+      assignment.principal_type == actor.principal_type and
+      assignment.principal_id == actor.principal_id and
+      assignment.organization_id == actor.role_assignment.organization_id
   end
 
   # A long-lived stream or an administrator entering a transaction may still
