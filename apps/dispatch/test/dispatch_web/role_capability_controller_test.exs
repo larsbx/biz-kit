@@ -90,6 +90,28 @@ defmodule DispatchWeb.RoleCapabilityControllerTest do
       assert Enum.all?(listed, &(Map.keys(&1) |> Enum.sort() == ["id", "label"]))
     end
 
+    test "labels cross-organization roles and refuses a suspended home's roles", ctx do
+      other_org = Fixtures.carrier()
+      %{participant: colleague} = Fixtures.person(other_org.id, other_org, user: ctx.user)
+      elsewhere = Fixtures.assignment(other_org.id, other_org, colleague, "DRIVER")
+
+      response = get("/v1/me/role-assignments", token: ctx.token)
+      assert response.status == 200
+
+      listed = Jason.decode!(response.resp_body)["role_assignments"]
+      assert %{"id" => ctx.assignment.id, "label" => "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"} in listed
+      assert %{"id" => elsewhere.id, "label" => "#{other_org.name} — #{elsewhere.role_definition.label}"} in listed
+
+      other_org
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false)
+
+      response = get("/v1/me/role-assignments", token: ctx.token)
+      assert response.status == 200
+      assert [%{"id" => id}] = Jason.decode!(response.resp_body)["role_assignments"]
+      assert id == ctx.assignment.id
+    end
+
     test "omits another principal's assignments and revoked ones", ctx do
       %{participant: stranger} = Fixtures.person(ctx.tenant, ctx.org)
       _theirs = Fixtures.assignment(ctx.tenant, ctx.org, stranger, "DRIVER")
