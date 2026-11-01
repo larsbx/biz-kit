@@ -18,7 +18,7 @@ SOURCE_PATHS = {
     "halaqa_federation_draft.py": "scripts/halaqa_federation_draft.py",
     "vectors.json": ".polyglot/halaqa-federation-draft-0/vectors.json",
     "halaqa_federation_signed_draft.py": "scripts/halaqa_federation_signed_draft.py",
-    "signed-vectors.json": ".polyglot/halaqa-federation-signed-draft-1/vectors.json",
+    "signed-vectors.json": ".polyglot/halaqa-federation-signed-draft-2/vectors.json",
 }
 
 

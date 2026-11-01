@@ -14,7 +14,7 @@ The native binding is not wire-compatible with unmodified ActivityPub servers.
 
 The semantic proposal and exact-byte format corpus are owned in
 [Halaqa PR #9](https://github.com/larsbx/halaqa/pull/9), pinned for this slice at
-[`11eb6309ec6caccb6aab3c821eba2311881c9ba0`](https://github.com/larsbx/halaqa/blob/11eb6309ec6caccb6aab3c821eba2311881c9ba0/.polyglot/halaqa-federation-draft-0/contract.md).
+[`7f677f7f82bd9c2d8f020996dc5352bc59a364af`](https://github.com/larsbx/halaqa/blob/7f677f7f82bd9c2d8f020996dc5352bc59a364af/.polyglot/halaqa-federation-draft-0/contract.md).
 Halaqa's canonical event, authority and replication formats remain controlled
 placeholders. The draft does not adopt those formats or create a gateway.
 
@@ -58,7 +58,7 @@ on their unmerged implementation or claim runtime activation is delivered.
 ## First executable slice: offline format conformance
 
 `tools/halaqa_federation_draft/` holds test-only copies of Halaqa's proposed
-Python format/signed oracles, 40 unsigned vectors and 48 signed vectors. `source-pin.json`
+Python format/signed oracles, 40 unsigned vectors and 74 signed vectors. `source-pin.json`
 records the full source commit, original paths, SHA-256 and Git blob hashes.
 `tools/check_halaqa_federation_draft.py` checks fixed paths and both hashes
 before executing the captured verified Python source bytes. It bypasses stale
@@ -82,18 +82,19 @@ delegations, privacy and authority are unverified even on format success.
 
 ## Signed experiment: exact bytes and local TEST bindings
 
-The [signed draft-1 contract](https://github.com/larsbx/halaqa/blob/11eb6309ec6caccb6aab3c821eba2311881c9ba0/.polyglot/halaqa-federation-signed-draft-1/contract.md)
+The [signed draft-2 contract](https://github.com/larsbx/halaqa/blob/7f677f7f82bd9c2d8f020996dc5352bc59a364af/.polyglot/halaqa-federation-signed-draft-2/contract.md)
 adds Ed25519 verification using OpenSSL and an explicit proposed signing domain.
 The signature binds the exact original candidate bytes, key ID and lifetime;
 changing inner JSON whitespace invalidates it. No JSON canonicalization or
 prehash is assumed. Separate local TEST pins bind the actor, key, recipient,
 circle, charter digest and epoch and supply the clock/revocation state.
 
-All 48 signed cases are synthetic: 8 signature-valid and 40 refused. They cover
+All 74 signed cases are synthetic: 8 signature-valid and 66 refused. They cover
 cross-domain signatures, forged/changed signatures, candidate/payload tampering,
 wrong recipient/context, revoked test keys, key substitution, expiry and malformed
-encodings. Test signatures were generated through cryptography and checked
-through OpenSSL; this is not independent cryptographic implementation evidence.
+encodings. Draft-2 adds 25 weak/noncanonical point or scalar regressions and
+refuses the legacy draft-1 schema. Test signatures use disclosed synthetic
+seeds and were generated through cryptography; Python verifies through OpenSSL.
 No new Python dependency is introduced; an Ed25519-capable OpenSSL CLI is needed.
 
 Success is `SIGNATURE_VALID_AUTHORITY_UNVERIFIED`, with authority and production
@@ -109,9 +110,10 @@ python3 tools/check_halaqa_federation_draft.py
 python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 ```
 
-The focused CI workflow runs both offline checks. It neither boots Elixir
-nor opens an Iroh connection. No application, runtime dependency, production
-ingress, shared schema or business writer is added by this slice.
+The focused CI workflow runs separate Python, Elixir and Rust offline jobs.
+It opens no Iroh connection. The Rust crate has its own locked test dependencies;
+no application runtime dependency, production ingress, shared schema or business
+writer is added by this slice.
 
 ## Next implementation gates
 
@@ -126,12 +128,48 @@ Mix dependency or production application module is introduced.
 
 Run `elixir tools/check_halaqa_signed_draft.exs` and
 `elixir tools/test_halaqa_signed_draft.exs` on Elixir 1.19 / OTP 27. The verifier
-matches all 48 signed cases, including exact positive transcript/payload bytes
+matches all 74 signed cases, including exact positive transcript/payload bytes
 and all refusal reasons; its 8 ExUnit checks pass locally. Both implementations
 use OpenSSL-backed cryptography, so this is independent protocol/decoder evidence,
-not independent cryptographic primitive evidence. Rust agreement, actual identity
-succession/current revocation sources, durable replay and live Iroh remain open.
-The focused CI workflow runs Python and Elixir in separate jobs.
+not independent cryptographic primitive evidence. The Rust consumer below adds
+a separate primitive implementation. Actual identity succession/current revocation
+sources, durable replay and live Iroh remain open.
+
+### Independent Rust verifier and strict draft-2 — 2026-11-01
+
+`tools/halaqa_signed_draft_rs/` independently decodes and verifies the signed
+experiment with RustCrypto `ed25519-dalek` 2.2.0, SHA-256 and a duplicate-refusing
+Serde visitor. It implements the proposed transcript and local TEST policy
+without calling Python, Elixir, OpenSSL or the marketplace runtime. The standalone
+CLI bounds corpus input to 2 MB and frame input to the profile limits. Its locked
+Cargo dependencies are isolated from application/native production crates.
+
+The Rust strict verifier exposed a backend discrepancy: the previous OpenSSL/OTP
+experiment accepted a synthetic identity-key/trivial signature. Signed draft-2
+adds explicit canonical field-coordinate, small-order A/R and scalar-range
+refusals before OpenSSL/OTP verification. The contract lists the exact rules and
+primary sources. Rust enforces canonical coordinates and uses dalek's weak-point
+checks plus `verify_strict`. Both schema and domain change; old draft-1 frames
+are refused rather than reinterpreted. Historical Halaqa draft-1 artifacts remain.
+
+All three consumers agree on the 74 draft-2 cases, exact positive transcript and
+payload bytes, and refusal reasons. Rust's 6 tests, formatting and clippy pass;
+Elixir's 8 tests and the 7 Python pin tests pass. Halaqa's 8 signed-reference
+tests include a control proving 25 bad encodings cannot reach OpenSSL. This is
+finite cross-implementation evidence, not a crypto audit, complete equivalence,
+production identity validation or authority adoption.
+
+```sh
+cargo fmt --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --check
+cargo clippy --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --all-targets -- -D warnings
+cargo test --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
+cargo run --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
+```
+
+CI installs Rust 1.99.1 and runs those commands. PR #226 is merged at
+`a2e13ea58465fbedb20dbf14934f9378c7e70e5d`; this follow-up does not reinterpret its
+queued hosted checks as successful validation. No live receiver or replay store
+is enabled by this change.
 
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
@@ -150,7 +188,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | --- | --- |
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
-| F2 — Verified boundary | Python/OpenSSL and independent Elixir agree on 48 experimental signed cases; Rust agreement, actual identity/evidence sources and production admission remain pending |
+| F2 — Verified boundary | Python/OpenSSL, independent Elixir/OTP and Rust/dalek agree on 74 experimental signed cases; actual identity/evidence sources and production admission remain pending |
 | F3 — Native delivery | Two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable inbox/outbox and original-ID status reconciliation across lost ACKs, partition and restart |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |

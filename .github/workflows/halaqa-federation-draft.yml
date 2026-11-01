@@ -6,6 +6,7 @@ on:
       - 'tools/check_halaqa_federation_draft.py'
       - 'tools/test_halaqa_federation_draft.py'
       - 'tools/halaqa_federation_draft/**'
+      - 'tools/halaqa_signed_draft_rs/**'
       - 'tools/halaqa_signed_draft.exs'
       - 'tools/check_halaqa_signed_draft.exs'
       - 'tools/test_halaqa_signed_draft.exs'
@@ -17,6 +18,7 @@ on:
       - 'tools/check_halaqa_federation_draft.py'
       - 'tools/test_halaqa_federation_draft.py'
       - 'tools/halaqa_federation_draft/**'
+      - 'tools/halaqa_signed_draft_rs/**'
       - 'tools/halaqa_signed_draft.exs'
       - 'tools/check_halaqa_signed_draft.exs'
       - 'tools/test_halaqa_signed_draft.exs'
@@ -54,3 +56,18 @@ jobs:
           elixir-version: '1.19.0'
       - run: elixir tools/check_halaqa_signed_draft.exs
       - run: elixir tools/test_halaqa_signed_draft.exs
+
+  independent-rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --check
+      - run: cargo clippy --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
+      - run: cargo run --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
