@@ -1,0 +1,87 @@
+{
+  "schema": "halaqa-offline-minimum-rust-execution/1",
+  "executed_at_utc": "2026-11-01T11:07:40.731997+00:00",
+  "baseline_commit": "6fb6ee9718a41da8f0cb6c649c27f28d2af4283a",
+  "halaqa_revision": "7f677f7f82bd9c2d8f020996dc5352bc59a364af",
+  "scope": "offline-minimum-toolchain-validation",
+  "toolchain": "1.85.0",
+  "implementation_and_lock_unchanged": true,
+  "authority_verified": false,
+  "production_receiver": false,
+  "hosted_acceptance": "pending",
+  "inputs_sha256": {
+    ".github/workflows/halaqa-federation-draft.yml": "c2e1e7f1285980807ceef9c47cc4aba11e8ad42dbaa033860c555fd582ae0186",
+    "tools/halaqa_signed_draft_rs/Cargo.toml": "28cc1fdd44427825d815644da287fe6dca20ae92873ef8991b786fe31a47f719",
+    "tools/halaqa_signed_draft_rs/Cargo.lock": "b7f196989d9717bdd95c329b1e4db863e821fdfe8f7a6e651935ccbf893cd9f2",
+    "tools/halaqa_signed_draft_rs/src/main.rs": "9512a20f1b0c46dfcbe5af7fa17ebc72170c2f844621749d6219314e196d38af",
+    "tools/halaqa_signed_draft_rs/src/regression_tests.rs": "ff44f1f088334b3a98325750c29f9235c2d806870b644beb6e41cf54ece7ccd5",
+    "tools/check_halaqa_rust_differential.py": "be1356e980831114f04dbfdbbde71edca810f09037bf932a20bf9ab83d6c983d",
+    "tools/halaqa_federation_draft/source-pin.json": "1ba0fe29e75a0e49b8e82b33c1fa675c5e968a9c3fc23f7a25c14358bbdeb3bb",
+    "tools/halaqa_federation_draft/signed-vectors.json": "52d3450403e0c26cee4bfa2c86b5431fe3bc8d8488d15fafee2ecd75d6f8b4bd"
+  },
+  "results": [
+    {
+      "command": [
+        "rustc",
+        "-Vv"
+      ],
+      "exit_code": 0,
+      "stdout": "rustc 1.85.0 (4d91de4e4 2025-02-17)\nbinary: rustc\ncommit-hash: 4d91de4e48198da2e33413efdcd9cd2cc0c46688\ncommit-date: 2025-02-17\nhost: x86_64-unknown-linux-gnu\nrelease: 1.85.0\nLLVM version: 19.1.7\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "-V"
+      ],
+      "exit_code": 0,
+      "stdout": "cargo 1.85.0 (d73d2caf9 2024-12-31)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_draft_rs/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 19 tests\ntest regression_tests::local_policy_shape_and_types_are_not_remote_claims ... ok\ntest regression_tests::malformed_encodings_numbers_and_limits_fail_closed ... ok\ntest regression_tests::modified_payload_with_recomputed_digest_still_fails_signature ... ok\ntest regression_tests::numeric_lexemes_preserve_integer_rules_without_changing_signed_bytes ... ok\ntest regression_tests::unsigned_probe_records_lone_surrogate_refusal_reason_difference ... ok\ntest regression_tests::candidate_whitespace_is_bound_outer_whitespace_is_not ... ok\ntest regression_tests::fresh_signature_preserves_payload_and_original_candidate ... ok\ntest tests::duplicates_trailing_values_and_depth_fail_closed ... ok\ntest regression_tests::changed_signature_and_wrong_public_key_fail ... ok\ntest regression_tests::remote_authority_claim_cannot_become_a_success ... ok\ntest regression_tests::weak_identity_key_and_noncanonical_scalar_are_refused ... ok\ntest regression_tests::correctly_signed_wrong_recipient_epoch_and_identity_are_refused ... ok\ntest tests::identity_key_and_trivial_signature_are_rejected ... ok\ntest tests::policy_booleans_and_integers_are_not_interchangeable ... ok\ntest tests::signature_and_key_cannot_be_substituted ... ok\ntest regression_tests::revoked_key_and_half_open_lifetime_are_external_test_inputs ... ok\ntest tests::corpus_cannot_claim_authority_or_change_verified_bytes ... ok\ntest regression_tests::pinned_default_cannot_accept_an_altered_corpus ... ok\ntest tests::every_vector_and_exact_transcript_matches ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s\n     Running unittests src/main.rs (tools/halaqa_signed_draft_rs/target/debug/deps/halaqa_signed_draft_conformance-c95167da33f917d5)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "run",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_draft_rs/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\":false,\"corpus_sha256\":\"52d3450403e0c26cee4bfa2c86b5431fe3bc8d8488d15fafee2ecd75d6f8b4bd\",\"counts\":{\"REFUSED_SIGNED_TEST\":66,\"SIGNATURE_VALID_AUTHORITY_UNVERIFIED\":8},\"edge_probes\":{\"lone-surrogate\":\"invalid_json\",\"negative-zero-epoch\":\"FORMAT_ONLY_UNVERIFIED\",\"overflow-epoch\":\"epoch\",\"weak-identity-key\":\"invalid_signature\"},\"implementation\":\"independent-rust-dalek\",\"production_receiver\":false,\"scope\":\"offline-signed-test-only\",\"source_revision\":\"7f677f7f82bd9c2d8f020996dc5352bc59a364af\"}\n",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s\n     Running `tools/halaqa_signed_draft_rs/target/debug/halaqa-signed-draft-conformance`\n"
+    },
+    {
+      "command": [
+        "python3",
+        "tools/check_halaqa_rust_differential.py"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\": false, \"known_disagreements\": [\"lone-surrogate\"], \"production_receiver\": false, \"python_openssl\": {\"lone-surrogate\": \"identifier\", \"negative-zero-epoch\": \"FORMAT_ONLY_UNVERIFIED\", \"overflow-epoch\": \"epoch\", \"weak-identity-key\": \"invalid_signature\"}, \"resolved_from_draft1\": [\"weak-identity-key\"], \"rust_dalek_strict\": {\"lone-surrogate\": \"invalid_json\", \"negative-zero-epoch\": \"FORMAT_ONLY_UNVERIFIED\", \"overflow-epoch\": \"epoch\", \"weak-identity-key\": \"invalid_signature\"}, \"scope\": \"offline-diagnostic-known-disagreements-not-profile-approval\", \"source_revision\": \"7f677f7f82bd9c2d8f020996dc5352bc59a364af\"}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

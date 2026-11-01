@@ -157,3 +157,32 @@ jobs:
         env:
           HALAQA_PG_BIN: /usr/lib/postgresql/16/bin
         run: python3 -m unittest discover -s tools -p 'test_halaqa_iroh_draft.py' -v
+
+  minimum-rust-verifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test the verifier's declared minimum Rust version
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/halaqa-rust-msrv-evidence"
+          git rev-parse HEAD | tee "$RUNNER_TEMP/halaqa-rust-msrv-evidence/revision.txt"
+          rustc -Vv | tee "$RUNNER_TEMP/halaqa-rust-msrv-evidence/rustc.txt"
+          cargo fetch --locked --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml
+          cargo test --locked --offline --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml 2>&1 | tee "$RUNNER_TEMP/halaqa-rust-msrv-evidence/tests.txt"
+          cargo run --locked --offline --manifest-path tools/halaqa_signed_draft_rs/Cargo.toml | tee "$RUNNER_TEMP/halaqa-rust-msrv-evidence/conformance.json"
+          python3 tools/check_halaqa_rust_differential.py | tee "$RUNNER_TEMP/halaqa-rust-msrv-evidence/differential.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: halaqa-offline-rust-msrv-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/halaqa-rust-msrv-evidence/
+          if-no-files-found: error
