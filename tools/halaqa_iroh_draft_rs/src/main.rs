@@ -1,16 +1,18 @@
-//! Loopback-only experimental Iroh framing. No identity/governance authority.
+//! Explicit direct/relay experimental Iroh framing. No governance authority.
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use iroh::{
-    Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey,
-    endpoint::{QuicTransportConfig, presets},
+    Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey,
+    endpoint::{Connection, QuicTransportConfig, presets},
 };
+use iroh_relay::{RelayMap, tls::CaTlsConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     io::Write,
     net::SocketAddr,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 use tokio::io::{
@@ -92,6 +94,8 @@ struct ServerConfig {
     allowed_endpoint: EndpointId,
     sender: String,
     recipient: String,
+    #[serde(default)]
+    relay: Option<RelaySettings>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -100,6 +104,21 @@ struct ClientConfig {
     bind: SocketAddr,
     target: EndpointAddr,
     request: Request,
+    #[serde(default)]
+    relay: Option<RelaySettings>,
+}
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RelaySettings {
+    url: RelayUrl,
+    ca_file: PathBuf,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RelayServerConfig {
+    cert_file: PathBuf,
+    key_file: PathBuf,
+    allowed_endpoints: Vec<EndpointId>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -197,33 +216,165 @@ fn response_bytes(response: Response, expected: &str) -> Result<Vec<u8>> {
     );
     canonical(&response.reply, 8_192)
 }
-async fn endpoint(path: &Path, bind: SocketAddr) -> Result<Endpoint> {
+fn validate_relay(relay: &RelaySettings) -> Result<()> {
+    let url = &relay.url;
+    ensure!(
+        url.scheme() == "https"
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+            && url.path() == "/"
+            && url.port_or_known_default().is_some_and(|p| p > 0)
+            && url.host_str().is_some_and(|h| h
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok()),
+        "explicit HTTPS relay IP/root path required"
+    );
+    Ok(())
+}
+async fn endpoint(
+    path: &Path,
+    bind: SocketAddr,
+    relay: Option<&RelaySettings>,
+) -> Result<Endpoint> {
     ensure!(bind.ip().is_loopback(), "experiment requires loopback bind");
     let transport = QuicTransportConfig::builder()
         .max_concurrent_bidi_streams(1u32.into())
         .max_concurrent_uni_streams(0u32.into())
         .max_idle_timeout(Some(Duration::from_secs(10).try_into()?))
         .build();
-    Ok(Endpoint::builder(presets::Minimal)
+    let mut builder = Endpoint::builder(presets::Minimal)
         .clear_ip_transports()
         .secret_key(key(path)?)
-        .relay_mode(RelayMode::Disabled)
         .transport_config(transport)
-        .alpns(vec![ALPN.to_vec()])
-        .bind_addr(bind)?
-        .bind()
-        .await?)
+        .alpns(vec![ALPN.to_vec()]);
+    if let Some(relay) = relay {
+        validate_relay(relay)?;
+        let root = rustls::pki_types::CertificateDer::from(std::fs::read(&relay.ca_file)?);
+        builder = builder
+            .relay_mode(RelayMode::Custom(RelayMap::from_iter([relay.url.clone()])))
+            .ca_tls_config(CaTlsConfig::custom_roots([root]));
+    } else {
+        builder = builder.relay_mode(RelayMode::Disabled).bind_addr(bind)?;
+    }
+    let endpoint = builder.bind().await?;
+    if relay.is_some() {
+        ensure!(
+            endpoint.bound_sockets().is_empty(),
+            "relay-only profile bound a direct IP socket"
+        );
+        tokio::time::timeout(DEADLINE, endpoint.online()).await?;
+    }
+    Ok(endpoint)
+}
+async fn path_evidence(
+    connection: &Connection,
+    relay: Option<&RelaySettings>,
+    ip_sockets: usize,
+) -> Result<serde_json::Value> {
+    tokio::time::timeout(Duration::from_secs(2),async {
+        loop {
+            let paths=connection.paths();
+            let rows: Vec<_>=paths.iter().map(|p| {
+                let s=p.stats();
+                json!({"kind":if p.is_relay(){"relay"}else{"direct"},"selected":p.is_selected(),
+                    "address":p.remote_addr().to_string(),"tx_bytes":s.udp_tx.bytes,"rx_bytes":s.udp_rx.bytes,
+                    "stream_rx":s.frame_rx.stream})
+            }).collect();
+            let correct=if let Some(r)=relay {
+                ip_sockets==0 && paths.iter().all(|p| p.is_relay() && p.remote_addr().to_string()==format!("relay:{}",r.url))
+            } else { paths.iter().all(|p| p.is_ip()) };
+            if !rows.is_empty() && correct && rows.iter().any(|r| r["selected"]==true && r["stream_rx"].as_u64().is_some_and(|n|n>0)) {
+                ensure!(rows.len()<=4,"path evidence limit");
+                return Ok::<_,anyhow::Error>(json!({"mode":if relay.is_some(){"relay_only"}else{"direct"},"ip_bound_sockets":ip_sockets,"paths":rows}));
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }).await?
+}
+#[derive(Debug)]
+struct RelayAccess(Vec<EndpointId>);
+impl iroh_relay::server::AccessControl for RelayAccess {
+    async fn on_connect(
+        &self,
+        request: &iroh_relay::server::ClientRequest,
+    ) -> iroh_relay::server::Access {
+        if self.0.contains(&request.endpoint_id()) {
+            iroh_relay::server::Access::Allow
+        } else {
+            iroh_relay::server::Access::Deny {
+                reason: Some("unconfigured fixture endpoint".into()),
+            }
+        }
+    }
+}
+async fn relay_server<R: AsyncBufRead + Unpin>(
+    config: RelayServerConfig,
+    input: &mut R,
+) -> Result<()> {
+    use iroh_relay::server::{CertConfig, RelayConfig, Server, ServerConfig, TlsConfig};
+    ensure!(
+        !config.allowed_endpoints.is_empty() && config.allowed_endpoints.len() <= 4,
+        "relay endpoint limit"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        ensure!(
+            std::fs::metadata(&config.key_file)?.permissions().mode() & 0o077 == 0,
+            "private TLS key permissions"
+        );
+    }
+    let cert = rustls::pki_types::CertificateDer::from(std::fs::read(&config.cert_file)?);
+    let key = rustls::pki_types::PrivatePkcs8KeyDer::from(std::fs::read(&config.key_file)?);
+    let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(&[&rustls::version::TLS13])?
+    .with_no_client_auth()
+    .with_single_cert(vec![cert], key.into())?;
+    let mut relay = RelayConfig::new("127.0.0.1:0".parse::<SocketAddr>()?);
+    relay.tls = Some(TlsConfig::new(
+        "127.0.0.1:0".parse::<SocketAddr>()?,
+        CertConfig::Manual { server_config: tls },
+    ));
+    relay.access = Arc::new(RelayAccess(config.allowed_endpoints));
+    let mut cfg = ServerConfig::default();
+    cfg.relay = Some(relay);
+    let server = Server::spawn(cfg).await?;
+    output(
+        json!({"event":"relay_ready","url":format!("https://{}/",server.https_addr().context("TLS relay address")?),"tls":true}),
+    )?;
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Stop {
+        op: String,
+    }
+    let stop: Stop = serde_json::from_slice(&line(input).await?)?;
+    ensure!(stop.op == "stop", "local relay stop required");
+    server.shutdown().await?;
+    Ok(())
 }
 async fn client(config: ClientConfig) -> Result<()> {
     config.request.validate()?;
-    ensure!(
-        !config.target.addrs.is_empty()
-            && config.target.addrs.len() <= 4
-            && config.target.addrs.iter().all(|a| a.is_ip())
-            && config.target.ip_addrs().all(|a| a.ip().is_loopback()),
-        "only explicit loopback IP targets"
-    );
-    let endpoint = endpoint(&config.key_file, config.bind).await?;
+    if let Some(relay) = config.relay.as_ref() {
+        validate_relay(relay)?;
+        ensure!(
+            config.target.addrs.len() == 1 && config.target.relay_urls().next() == Some(&relay.url),
+            "target must use exactly the configured relay"
+        );
+    } else {
+        ensure!(
+            !config.target.addrs.is_empty()
+                && config.target.addrs.len() <= 4
+                && config.target.addrs.iter().all(|a| a.is_ip())
+                && config.target.ip_addrs().all(|a| a.ip().is_loopback()),
+            "only explicit loopback IP targets"
+        );
+    }
+    let endpoint = endpoint(&config.key_file, config.bind, config.relay.as_ref()).await?;
     let result=tokio::time::timeout(Duration::from_secs(10),async {
         let expected=config.target.id;
         let connection=endpoint.connect(config.target,ALPN).await?;
@@ -232,7 +383,8 @@ async fn client(config: ClientConfig) -> Result<()> {
         write_frame(&mut send,&serde_json::to_vec(&config.request)?,MAX_REQUEST).await?; send.finish()?;
         let bytes=read_frame(&mut recv,MAX_RESPONSE).await?;
         let reply=response_bytes(serde_json::from_slice(&bytes)?,config.request.challenge())?;
-        output(json!({"event":"reply","peer":connection.remote_id().to_string(),"challenge":config.request.challenge(),"reply":STANDARD.encode(reply)}))?;
+        let evidence=path_evidence(&connection,config.relay.as_ref(),endpoint.bound_sockets().len()).await?;
+        output(json!({"event":"reply","peer":connection.remote_id().to_string(),"challenge":config.request.challenge(),"reply":STANDARD.encode(reply),"path":evidence}))?;
         connection.close(0u32.into(),b"complete");
         Ok::<_,anyhow::Error>(())
     }).await;
@@ -245,16 +397,20 @@ async fn server<R: AsyncBufRead + Unpin>(config: ServerConfig, input: &mut R) ->
         token(&config.sender) && token(&config.recipient),
         "configured fixture actor identifiers"
     );
-    let endpoint = endpoint(&config.key_file, config.bind).await?;
-    // Publish only the loopback socket, never discovered/public addresses.
-    let bind = endpoint
-        .bound_sockets()
-        .into_iter()
-        .find(|a| a.is_ipv4() == config.bind.is_ipv4())
-        .context("bound socket")?;
-    let address = EndpointAddr::new(endpoint.id()).with_ip_addr(bind);
+    let endpoint = endpoint(&config.key_file, config.bind, config.relay.as_ref()).await?;
+    let address = if let Some(relay) = config.relay.as_ref() {
+        EndpointAddr::new(endpoint.id()).with_relay_url(relay.url.clone())
+    } else {
+        let bind = endpoint
+            .bound_sockets()
+            .into_iter()
+            .find(|a| a.is_ipv4() == config.bind.is_ipv4())
+            .context("bound socket")?;
+        EndpointAddr::new(endpoint.id()).with_ip_addr(bind)
+    };
     output(
-        json!({"event":"ready","address":address,"endpoint":endpoint.id().to_string(),"application_http":false,"relay":false}),
+        json!({"event":"ready","address":address,"endpoint":endpoint.id().to_string(),"application_http":false,
+        "relay":config.relay.is_some(),"ip_bound_sockets":endpoint.bound_sockets().len()}),
     )?;
     let mut request_id = 0_u64;
     while let Some(incoming) = endpoint.accept().await {
@@ -275,7 +431,8 @@ async fn server<R: AsyncBufRead + Unpin>(config: ServerConfig, input: &mut R) ->
             }
             request_id=request_id.checked_add(1).context("request counter exhausted")?;
             host_pending = true;
-            output(json!({"event":"request","request_id":request_id,"peer":connection.remote_id().to_string(),"request":request}))?;
+            let evidence=path_evidence(&connection,config.relay.as_ref(),endpoint.bound_sockets().len()).await?;
+            output(json!({"event":"request","request_id":request_id,"peer":connection.remote_id().to_string(),"request":request,"path":evidence}))?;
             let command: HostReply=serde_json::from_slice(&tokio::time::timeout(DEADLINE,line(input)).await??)?;
             match command {
                 HostReply::Drop { request_id: id } => { ensure!(id==request_id,"host response ID"); host_pending=false; connection.close(3u32.into(),b"test lost reply"); }
@@ -317,6 +474,7 @@ async fn main() -> Result<()> {
         }
         "client" => client(serde_json::from_slice(&bytes)?).await?,
         "server" => server(serde_json::from_slice(&bytes)?, &mut input).await?,
+        "relay-server" => relay_server(serde_json::from_slice(&bytes)?, &mut input).await?,
         _ => anyhow::bail!("unknown experimental mode"),
     }
     Ok(())
@@ -325,6 +483,29 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn relay_profile_requires_explicit_https_ip_and_no_url_credentials() {
+        for url in [
+            "http://127.0.0.1:4443/",
+            "https://localhost:4443/",
+            "https://127.0.0.1:4443/other",
+            "https://user:pass@127.0.0.1:4443/",
+            "https://127.0.0.1:0/",
+        ] {
+            let r = RelaySettings {
+                url: url.parse().unwrap(),
+                ca_file: PathBuf::from("unused"),
+            };
+            assert!(validate_relay(&r).is_err());
+        }
+        for url in ["https://127.0.0.1:4443/", "https://[::1]:4443/"] {
+            let r = RelaySettings {
+                url: url.parse().unwrap(),
+                ca_file: PathBuf::from("unused"),
+            };
+            assert!(validate_relay(&r).is_ok());
+        }
+    }
     #[tokio::test]
     async fn framing_refuses_oversize_truncation_and_trailing_bytes() {
         for raw in [
