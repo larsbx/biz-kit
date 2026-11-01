@@ -73,6 +73,33 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       assert first.tenant_id == ctx.tenant
     end
 
+    test "selectable roles identify the organization that owns each assignment", ctx do
+      options = PrincipalResolution.selectable(ctx.user.oidc_subject)
+
+      assert Enum.find(options, &(&1.id == ctx.assignment.id)) == %{
+               id: ctx.assignment.id,
+               label: "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"
+             }
+
+      assert Enum.find(options, &(&1.id == ctx.second.id)) == %{
+               id: ctx.second.id,
+               label: "#{ctx.other_org.name} — #{ctx.second.role_definition.label}"
+             }
+    end
+
+    test "identical role names in two organizations remain distinguishable", ctx do
+      other_driver = Fixtures.assignment(ctx.other_org.id, ctx.other_org, ctx.elsewhere, "DRIVER")
+      options = PrincipalResolution.selectable(ctx.user.oidc_subject)
+
+      assert Enum.find(options, &(&1.id == ctx.assignment.id)).label ==
+               "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"
+
+      assert Enum.find(options, &(&1.id == other_driver.id)).label ==
+               "#{ctx.other_org.name} — #{other_driver.role_definition.label}"
+
+      refute ctx.org.name == ctx.other_org.name
+    end
+
     test "a header naming an assignment held by someone else selects nothing", ctx do
       stranger_org = Fixtures.carrier()
       %{participant: stranger} = Fixtures.person(stranger_org.id, stranger_org)
