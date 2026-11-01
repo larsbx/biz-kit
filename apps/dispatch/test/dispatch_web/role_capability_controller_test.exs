@@ -99,8 +99,15 @@ defmodule DispatchWeb.RoleCapabilityControllerTest do
       assert response.status == 200
 
       listed = Jason.decode!(response.resp_body)["role_assignments"]
-      assert %{"id" => ctx.assignment.id, "label" => "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"} in listed
-      assert %{"id" => elsewhere.id, "label" => "#{other_org.name} — #{elsewhere.role_definition.label}"} in listed
+      assert %{
+               "id" => ctx.assignment.id,
+               "label" => "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"
+             } in listed
+
+      assert %{
+               "id" => elsewhere.id,
+               "label" => "#{other_org.name} — #{elsewhere.role_definition.label}"
+             } in listed
 
       other_org
       |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
