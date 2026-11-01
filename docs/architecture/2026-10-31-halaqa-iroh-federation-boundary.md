@@ -14,7 +14,7 @@ The native binding is not wire-compatible with unmodified ActivityPub servers.
 
 The semantic proposal and exact-byte format corpus are owned in
 [Halaqa PR #9](https://github.com/larsbx/halaqa/pull/9), pinned for this slice at
-[`ba418bc3154130620565521a98c8eff4b4a83d04`](https://github.com/larsbx/halaqa/blob/ba418bc3154130620565521a98c8eff4b4a83d04/.polyglot/halaqa-federation-draft-0/contract.md).
+[`11eb6309ec6caccb6aab3c821eba2311881c9ba0`](https://github.com/larsbx/halaqa/blob/11eb6309ec6caccb6aab3c821eba2311881c9ba0/.polyglot/halaqa-federation-draft-0/contract.md).
 Halaqa's canonical event, authority and replication formats remain controlled
 placeholders. The draft does not adopt those formats or create a gateway.
 
@@ -57,25 +57,50 @@ on their unmerged implementation or claim runtime activation is delivered.
 
 ## First executable slice: offline format conformance
 
-`tools/halaqa_federation_draft/` holds a test-only copy of Halaqa's proposed
-Python format oracle and 40 exact-byte synthetic vectors. `source-pin.json`
+`tools/halaqa_federation_draft/` holds test-only copies of Halaqa's proposed
+Python format/signed oracles, 40 unsigned vectors and 48 signed vectors. `source-pin.json`
 records the full source commit, original paths, SHA-256 and Git blob hashes.
 `tools/check_halaqa_federation_draft.py` checks fixed paths and both hashes
-before executing that local oracle. Nothing is downloaded at runtime or CI.
+before executing the captured verified Python source bytes. It bypasses stale
+bytecode and substitutes only the verified dependency during signed-module
+loading, restoring any preloaded module afterward. Nothing is downloaded at
+runtime or CI.
 
-This is a pinned copy of one reference implementation, **not independent
+These are pinned copies of reference implementations, **not independent
 Python/Elixir/Rust agreement**. The reviewed pin selects the source; local
 hash checks alone cannot prove commit inclusion, source authority or adoption.
 At preparation time the copied files were verified against GitHub reads at
 the exact pinned commit. Future repins must repeat that source verification.
 
-The 6 positive vectors return `FORMAT_ONLY_UNVERIFIED`; the 34 negative
+The 6 unsigned positive vectors return `FORMAT_ONLY_UNVERIFIED`; the 34 negative
 vectors exercise exact refusal codes. Payload digests bind original decoded
 bytes, including whitespace. Draft-0 has no signature or grant fields and
 must never be accepted by a live network ingress. It is not the existing
 marketplace gossip envelope, a HAI artifact, or a SANAD+ transcript.
 Payload semantics, evidence closure, actor identity, current charter/epoch,
 delegations, privacy and authority are unverified even on format success.
+
+## Signed experiment: exact bytes and local TEST bindings
+
+The [signed draft-1 contract](https://github.com/larsbx/halaqa/blob/11eb6309ec6caccb6aab3c821eba2311881c9ba0/.polyglot/halaqa-federation-signed-draft-1/contract.md)
+adds Ed25519 verification using OpenSSL and an explicit proposed signing domain.
+The signature binds the exact original candidate bytes, key ID and lifetime;
+changing inner JSON whitespace invalidates it. No JSON canonicalization or
+prehash is assumed. Separate local TEST pins bind the actor, key, recipient,
+circle, charter digest and epoch and supply the clock/revocation state.
+
+All 48 signed cases are synthetic: 8 signature-valid and 40 refused. They cover
+cross-domain signatures, forged/changed signatures, candidate/payload tampering,
+wrong recipient/context, revoked test keys, key substitution, expiry and malformed
+encodings. Test signatures were generated through cryptography and checked
+through OpenSSL; this is not independent cryptographic implementation evidence.
+No new Python dependency is introduced; an Ed25519-capable OpenSSL CLI is needed.
+
+Success is `SIGNATURE_VALID_AUTHORITY_UNVERIFIED`, with authority and production
+receiver flags false. TEST pins are not actual identity succession, fresh
+revocation evidence, charter adoption or permission. The verifier is stateless:
+expiry checks do not establish durable replay prevention or effect idempotency.
+Neither experiment has a live ingress or can invoke BuzzBridge/domain admission.
 
 Run:
 
@@ -84,7 +109,7 @@ python3 tools/check_halaqa_federation_draft.py
 python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 ```
 
-The focused CI workflow runs the same offline checks. It neither boots Elixir
+The focused CI workflow runs both offline checks. It neither boots Elixir
 nor opens an Iroh connection. No application, runtime dependency, production
 ingress, shared schema or business writer is added by this slice.
 
@@ -93,7 +118,7 @@ ingress, shared schema or business writer is added by this slice.
 | Stage | Required result |
 | --- | --- |
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
-| F1 — Halaqa owner decisions | Immutable governing sources; actual producer/consumer designation; signed byte grammar; actor/key succession; disclosure, epoch, dependency and replication/conflict rules |
+| F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
 | F2 — Verified boundary | Independent Rust/Elixir implementation on signed vectors; remote validity flags cannot enter the Buzz bridge; altered scope/audience/evidence, revoked keys and stale epochs refuse |
 | F3 — Native delivery | Two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable inbox/outbox and original-ID status reconciliation across lost ACKs, partition and restart |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |

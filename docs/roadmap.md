@@ -10,6 +10,12 @@ compatibility. F0 is a test-only snapshot/oracle, not an activated protocol,
 verified authority adapter or production cutover. Halaqa owns the proposed
 semantic contract in [PR #9](https://github.com/larsbx/halaqa/pull/9).
 
+The pinned follow-up also exercises exact-byte Ed25519 signatures, explicit
+local TEST actor/key/context bindings and lifetime/revocation refusal across
+48 signed vectors. This prepares F1 review; it does not close identity
+succession, production authorization, durable replay or independent Rust/Elixir
+verification.
+
 ## Existing consolidation roadmap
 
 Updated 2026-10-22 (security audit priorities and Slice 1 status). The direction is

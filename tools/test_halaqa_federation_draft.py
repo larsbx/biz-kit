@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
+import sys
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
@@ -33,6 +35,9 @@ class HalaqaFederationPinTests(unittest.TestCase):
         self.assertFalse(result["production_receiver"])
         self.assertEqual(result["counts"], {
             "FORMAT_ONLY_UNVERIFIED": 6, "REFUSED_FORMAT": 34})
+        self.assertEqual(result["signed_experiment"]["counts"], {
+            "SIGNATURE_VALID_AUTHORITY_UNVERIFIED": 8, "REFUSED_SIGNED_TEST": 40})
+        self.assertFalse(result["signed_experiment"]["authority_verified"])
 
     def test_source_or_fixture_change_refused_before_execution(self):
         for name in checker.SOURCE_PATHS:
@@ -58,6 +63,18 @@ class HalaqaFederationPinTests(unittest.TestCase):
         self.alter_pin(lambda p: p["files"].update(extra={}))
         with self.assertRaisesRegex(ValueError, "invalid source pin"):
             checker.check(self.root)
+
+    def test_preloaded_dependency_cannot_replace_pinned_oracle(self):
+        poison = object()
+        with patch.dict(sys.modules, {"halaqa_federation_draft": poison}):
+            result = checker.check(self.root)
+            self.assertIs(sys.modules["halaqa_federation_draft"], poison)
+            self.assertFalse(result["signed_experiment"]["authority_verified"])
+
+    def test_missing_openssl_cannot_report_signature_success(self):
+        with patch("subprocess.run", side_effect=OSError("unavailable")):
+            with self.assertRaisesRegex(ValueError, "verification_backend"):
+                checker.check(self.root)
 
 
 if __name__ == "__main__":

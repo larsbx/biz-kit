@@ -13,8 +13,9 @@ HTTP delivery peering or Follow/Accept polling.
 
 The [proposed Halaqa federation boundary](../../docs/architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
 maps the next native protocol work and supplies a pinned offline candidate-format
-corpus. Its format-only oracle is not a production receiver or an adopted Halaqa
-schema and does not change this service's active HTTP/gossip contracts.
+corpus and an offline signed-envelope experiment. Its reference tools are not
+production receivers or adopted Halaqa schemas and do not change this service's
+active HTTP/gossip contracts.
 
 ## What runs
 

@@ -31,5 +31,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - run: openssl version
       - run: python3 tools/check_halaqa_federation_draft.py
       - run: python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v

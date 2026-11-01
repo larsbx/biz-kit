@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Check a pinned, test-only Halaqa format oracle and its exact-byte corpus.
 
-No network calls, production imports, Halaqa admission or signature verification.
-The reviewed pin is the source selection; hashes do not prove owner adoption.
+No network calls, production imports or Halaqa admission. The signed experiment
+checks Ed25519 against explicit TEST pins, never production identity or authority.
+The reviewed pin is source selection; hashes do not prove owner adoption.
 """
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import re
+import sys
+import types
 
 SOURCE_PATHS = {
     "halaqa_federation_draft.py": "scripts/halaqa_federation_draft.py",
     "vectors.json": ".polyglot/halaqa-federation-draft-0/vectors.json",
+    "halaqa_federation_signed_draft.py": "scripts/halaqa_federation_signed_draft.py",
+    "signed-vectors.json": ".polyglot/halaqa-federation-signed-draft-1/vectors.json",
 }
 
 
@@ -36,7 +40,7 @@ def check(root: Path):
         raise ValueError("invalid source pin fields")
     if (pin["schema"] != "bizkit-halaqa-federation-draft-pin/1"
             or pin["repository"] != "larsbx/halaqa"
-            or pin["scope"] != "offline-format-only"
+            or pin["scope"] != "offline-format-and-signed-test-only"
             or type(pin["revision"]) is not str
             or re.fullmatch(r"[0-9a-f]{40}", pin["revision"]) is None
             or pin["source_review"] != "https://github.com/larsbx/halaqa/pull/9"
@@ -44,6 +48,7 @@ def check(root: Path):
             or set(pin["files"]) != set(SOURCE_PATHS)):
         raise ValueError("invalid source pin")
     # Fixed local/source paths: no paths from pin data are followed.
+    verified = {}
     for local, upstream in SOURCE_PATHS.items():
         entry = pin["files"][local]
         if (type(entry) is not dict
@@ -55,12 +60,27 @@ def check(root: Path):
         blob = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
         if digest != entry["sha256"] or blob != entry["git_blob_sha"]:
             raise ValueError(f"pinned source mismatch: {local}")
-    spec = importlib.util.spec_from_file_location(
-        "pinned_halaqa_federation_draft", directory / "halaqa_federation_draft.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+        verified[local] = data
+    # Execute the captured verified bytes, never an unpinned .pyc or second read.
+    module = types.ModuleType("pinned_halaqa_federation_draft")
+    exec(compile(verified["halaqa_federation_draft.py"],
+                 str(directory / "halaqa_federation_draft.py"), "exec"), module.__dict__)
     result = module.check_corpus(directory / "vectors.json")
-    return {**result, "source_revision": pin["revision"], "production_receiver": False}
+    previous = sys.modules.get("halaqa_federation_draft")
+    sys.modules["halaqa_federation_draft"] = module
+    try:
+        signed = types.ModuleType("pinned_halaqa_federation_signed_draft")
+        exec(compile(verified["halaqa_federation_signed_draft.py"],
+                     str(directory / "halaqa_federation_signed_draft.py"), "exec"),
+             signed.__dict__)
+    finally:
+        if previous is None:
+            sys.modules.pop("halaqa_federation_draft", None)
+        else:
+            sys.modules["halaqa_federation_draft"] = previous
+    signed_result = signed.check_corpus(directory / "signed-vectors.json")
+    return {**result, "signed_experiment": signed_result,
+            "source_revision": pin["revision"], "production_receiver": False}
 
 
 if __name__ == "__main__":
