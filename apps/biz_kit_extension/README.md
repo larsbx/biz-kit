@@ -26,5 +26,16 @@ Umbrella contract validation (compile without booting domain applications):
 
     mix run --no-start scripts/check-extension-contract.exs
 
+Dispatch isolated descriptor acceptance (the ordinary database helper is unchanged):
+
+    cd apps/dispatch && MIX_ENV=test mix run --no-start contract_test/test_helper.exs
+
+This explicitly loads only the descriptor test and bootstrap regressions, including
+an unstarted-repository negative control against the normal helper. Database tests
+continue to use `mix test` / `mix test --include integration` and Sandbox normally.
+The ExtensionV1 workflow pins the exact PR head and validates the exported host
+manifests with the Draft 2020-12 schema. Schema acceptance proves wire shape;
+Manifest/Catalog still enforce ownership, grants and dependency semantics.
+
 See docs/architecture/2026-10-31-extension-v1-first-slice.md for incomplete
 runtime, authorization, external compatibility and migration obligations.

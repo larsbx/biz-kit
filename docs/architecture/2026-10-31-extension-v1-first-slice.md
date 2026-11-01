@@ -44,3 +44,26 @@ The host does not dynamically load or discover modules from untrusted names.
 
 Hawala retains independent financial semantics; this extension package does
 not enable a financial writer or sign on behalf of a participant.
+
+## Contract acceptance bootstrap repair
+
+PR #224's initial run 41247012638 failed before the Dispatch descriptor test:
+`test/test_helper.exs:6` called Sandbox on an unstarted Dispatch.Repo under
+`mix test --no-start`. The hosted job log confirms the Ecto registry exception.
+
+The contract-only entrypoint is now, from `apps/dispatch`:
+
+    MIX_ENV=test mix run --no-start contract_test/test_helper.exs
+
+It loads an explicit test allowlist and checks that descriptor validation and
+approved plans leave domain applications and repository/endpoint processes
+stopped. A subprocess negative control reproduces the ordinary helper's failure
+without a repository; the integration helper and PostGIS acceptance are unchanged.
+No environment flag makes the ordinary test suite bypass Sandbox.
+
+ExtensionV1 CI verifies the exact checked-out PR head, retains portable negative
+policy tests, and validates JSON exported from actual host descriptors using a
+Draft 2020-12 validator. Wire patterns reject terminal newlines consistently with
+the Elixir validator. Shape acceptance does not establish namespace ownership,
+command grants, dependency compatibility or runtime authority; those remain
+host policy and the production obligations tracked in #225.

@@ -72,6 +72,16 @@ defmodule BizKit.Extension.ManifestTest do
     def manifest, do: %{BizKit.Extension.ManifestTest.Base.manifest() | version: "1.0.0"}
   end
 
+  defmodule Independent do
+    @behaviour BizKit.Extension
+
+    @impl true
+    def manifest do
+      BizKit.Extension.ManifestTest.Consumer.manifest()
+      |> Map.merge(%{id: "independent", dependencies: []})
+    end
+  end
+
   test "strict manifest and deterministic canonical order" do
     assert {:ok, valid} = Manifest.validate(Base.manifest())
     assert valid.id == "example"
@@ -145,5 +155,67 @@ defmodule BizKit.Extension.ManifestTest do
   test "no arbitrary module names are accepted" do
     assert {:error, {:not_an_extension, String}} = Catalog.build([String])
     assert {:error, {:not_an_extension, "Not.A.Module"}} = Catalog.build(["Not.A.Module"])
+  end
+
+  test "required fields, contract modes, nested shape and terminal newlines refuse" do
+    manifest = Base.manifest()
+
+    for field <- Map.keys(manifest) do
+      assert {:error, _} = Manifest.validate(Map.delete(manifest, field))
+    end
+
+    for {field, value} <- [
+          {:contract_version, 2},
+          {:activation, :automatic},
+          {:deployment, :unknown},
+          {:health, :extension},
+          {:id, "example\n"},
+          {:version, "1.2.0\n"},
+          {:capabilities, ["example.read\n"]},
+          {:dependencies, [%{id: "example", min_version: "1.0.0"}]},
+          {:dependencies, [%{id: "other", min_version: "1.0.0", extra: true}]},
+          {:dependencies,
+           [%{id: "other", min_version: "1.0.0"}, %{id: "other", min_version: "1.1.0"}]}
+        ] do
+      assert {:error, _} = Manifest.validate(Map.put(manifest, field, value))
+    end
+  end
+
+  test "every resource namespace and writer is checked independently" do
+    manifest = Base.manifest()
+
+    for {field, value} <- [
+          {:commands, [%{name: "foreign.write", writer: "example", required_grants: []}]},
+          {:events, [%{name: "example.written", writer: "foreign"}]},
+          {:projections, [%{name: "foreign.view", source_event: "example.written"}]},
+          {:commands, manifest.commands ++ manifest.commands},
+          {:events, manifest.events ++ manifest.events},
+          {:projections, manifest.projections ++ manifest.projections}
+        ] do
+      assert {:error, {:invalid_field, ^field}} =
+               Manifest.validate(Map.put(manifest, field, value))
+    end
+
+    assert {:ok, _} =
+             Manifest.validate(%{
+               manifest
+               | projections: [%{name: "example.view", source_event: "foreign.written"}]
+             })
+  end
+
+  test "catalog order and approval order are independent of input order" do
+    modules = [Base, Consumer, Independent]
+    assert {:ok, expected} = Catalog.build(modules)
+    assert Enum.map(expected, & &1.manifest.id) == ["example", "consumer", "independent"]
+
+    for first <- modules, second <- modules -- [first], third <- modules -- [first, second] do
+      assert {:ok, ^expected} = Catalog.build([first, second, third])
+    end
+
+    assert {:ok, ^expected} =
+             Catalog.activation_plan(expected, ["independent", "example", "consumer"])
+
+    assert {:ok, ^expected} =
+             Catalog.activation_plan(expected, ["consumer", "example", "independent"])
   end
 end
