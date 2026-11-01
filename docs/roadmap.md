@@ -17,6 +17,14 @@ and [B5–B6 marketplace and optional GPU #240](https://github.com/larsbx/biz-ki
 Reuse the versioned ExtensionV1 manifest under review in PR #224; do not
 introduce a second extension loader or bypass existing signed admission.
 
+**Internal-first adoption precedes third-party app generation.**
+[PR #241](https://github.com/larsbx/biz-kit/pull/241) (stacked on #236)
+seeds draft Proof Bank baselines for the platform and all 28 umbrella apps,
+with app-inventory drift checks. All 29 records require owner review and remain
+unverified/inert. First reconcile platform identity and admission, Dispatch,
+Inventory and Hawala boundaries before opening the marketplace.
+See [first-party adoption](architecture/2026-11-01-proof-bank-first-party.md).
+
 ## Proposed Halaqa federation over Iroh — 2026-10-31
 
 The [native federation boundary](architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
