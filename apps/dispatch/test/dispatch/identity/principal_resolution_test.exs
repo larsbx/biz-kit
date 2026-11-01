@@ -143,6 +143,30 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       assert {:error, :no_active_assignment} = PrincipalResolution.actor(user.oidc_subject)
     end
 
+    test "suspended participant invalidates a held actor before a stream or job can use it", ctx do
+      assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
+
+      ctx.driver
+      |> Ash.Changeset.for_update(:set_status, %{status: :SUSPENDED})
+      |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(held_actor)
+      assert {:error, :no_active_assignment} = PrincipalResolution.actor(ctx.user.oidc_subject)
+    end
+
+    test "closed global user invalidates a held actor", ctx do
+      assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
+
+      ctx.user
+      |> Ash.Changeset.for_update(:set_status, %{status: :CLOSED})
+      |> Ash.update!(authorize?: false)
+
+      assert {:error, :role_assignment_not_active} =
+               PrincipalResolution.revalidate(held_actor)
+      assert {:error, :unknown_principal} = PrincipalResolution.actor(ctx.user.oidc_subject)
+    end
+
     test "suspension revokes organizational access including held-actor revalidation", ctx do
       assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
 
