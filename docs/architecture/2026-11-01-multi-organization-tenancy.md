@@ -166,9 +166,11 @@ global security guarantee is claimed by the first slice.
 `Dispatch.Identity.PrincipalResolution.selectable/2` now returns
 organization-qualified labels while preserving the existing `%{id, label}`
 API shape. Authority is still chosen by assignment ID, never label. The
-database-backed resolution checks current organization status before
-selecting or revalidating an assignment; suspended/closed organizations cannot
-remain active solely because a role row is still active. Integration tests
-cover identical roles across organizations, selection under suspension and
-stale-actor revalidation. This is **not** evidence of completed T2/RLS,
-transaction-time grant checks, production federation or data migration.
+database-backed resolution checks organization, participant and global-user
+lifecycle during role selection and revalidation. Administrative writes now
+lock the actor's role, participant, user, organization and role-definition
+rows inside the effect transaction and revalidate after acquiring those locks.
+Integration tests include identical roles, suspension and two independent
+PostgreSQL-session revocation/suspension races. These tests have **not yet been
+observed passing on hosted CI**. This is not evidence of completed T2/RLS,
+comprehensive transaction-time checks, federation or data migration.
