@@ -70,7 +70,20 @@ defmodule InventoryCore.Basket do
 
       true ->
         case Map.fetch(stocks, item) do
-          {:ok, %{merchant: ^merchant, item: ^item, unit: ^unit} = stock} ->
+          {:ok,
+           %{
+             merchant: ^merchant,
+             item: ^item,
+             unit: ^unit,
+             version: version,
+             locations: locations,
+             reservations: reservations,
+             seen: seen,
+             expiry_watermark: watermark
+           } = stock}
+          when is_integer(version) and version >= 0 and is_map(locations) and
+                 is_map(reservations) and is_map(seen) and is_integer(watermark) and
+                 watermark >= 0 ->
             command = %{
               id: basket_id,
               expected_version: stock.version,
