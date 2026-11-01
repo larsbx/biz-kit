@@ -134,6 +134,150 @@ defmodule InventoryCore.BasketTest do
              InventoryCore.apply(changed, "restaurant", dough_command)
   end
 
+  test "an unchanged accepted reservation is recognized after unrelated stock revisions" do
+    original = stock()
+
+    {:ok, basket} =
+      Basket.plan(original, "restaurant", "kitchen", "order-2", 1, ingredients(), 500)
+
+    cheese = hd(basket.commands).command
+
+    {:ok, reserved, :accepted} =
+      InventoryCore.apply(original["cheese"], "restaurant", cheese)
+
+    {:ok, advanced, :accepted} =
+      InventoryCore.apply(reserved, "restaurant", %{
+        id: "later-delivery",
+        expected_version: reserved.version,
+        op: :receive,
+        location: "kitchen",
+        quantity: 5
+      })
+
+    assert advanced.version == cheese.expected_version + 2
+    assert advanced.seen["order-2"] == cheese
+
+    assert {:error, {"cheese", :already_reserved}} =
+             Basket.plan(
+               %{original | "cheese" => advanced},
+               "restaurant",
+               "kitchen",
+               "order-2",
+               1,
+               ingredients(),
+               500
+             )
+
+    {:ok, released, :accepted} =
+      InventoryCore.apply(advanced, "restaurant", %{
+        id: "release-2",
+        expected_version: advanced.version,
+        op: :release,
+        reservation_id: "order-2"
+      })
+
+    # This is historical idempotency, not an assertion that a live hold exists.
+    assert released.reservations["order-2"].status == :released
+
+    assert {:error, {"cheese", :already_reserved}} =
+             Basket.plan(
+               %{original | "cheese" => released},
+               "restaurant",
+               "kitchen",
+               "order-2",
+               1,
+               ingredients(),
+               500
+             )
+  end
+
+  test "reusing an accepted basket ID with changed request details is a conflict" do
+    original = stock()
+
+    {:ok, basket} =
+      Basket.plan(original, "restaurant", "kitchen", "order-3", 1, ingredients(), 500)
+
+    {:ok, reserved, :accepted} =
+      InventoryCore.apply(original["cheese"], "restaurant", hd(basket.commands).command)
+
+    stocks = %{original | "cheese" => reserved}
+
+    for {location, count, requirements, expires} <- [
+          {"kitchen", 2, ingredients(), 500},
+          {"kitchen", 1, [%{hd(ingredients()) | per_unit: 81} | tl(ingredients())], 500},
+          {"kitchen", 1, ingredients(), 501},
+          {"warehouse", 1, ingredients(), 500}
+        ] do
+      assert {:error, {"cheese", :idempotency_conflict}} =
+               Basket.plan(stocks, "restaurant", location, "order-3", count, requirements, expires)
+    end
+  end
+
+  test "a reused non-reservation command ID or orphaned reservation fails closed" do
+    original = stock()
+
+    # The receipt is already indexed under this ID, but was not a reservation.
+    assert {:error, {"cheese", :idempotency_conflict}} =
+             Basket.plan(
+               original,
+               "restaurant",
+               "kitchen",
+               "receipt-cheese",
+               1,
+               ingredients(),
+               500
+             )
+
+    {:ok, basket} =
+      Basket.plan(original, "restaurant", "kitchen", "order-4", 1, ingredients(), 500)
+
+    {:ok, reserved, :accepted} =
+      InventoryCore.apply(original["cheese"], "restaurant", hd(basket.commands).command)
+
+    orphaned = %{reserved | seen: Map.delete(reserved.seen, "order-4")}
+
+    assert {:error, {"cheese", :idempotency_conflict}} =
+             Basket.plan(
+               %{original | "cheese" => orphaned},
+               "restaurant",
+               "kitchen",
+               "order-4",
+               1,
+               ingredients(),
+               500
+             )
+  end
+
+  test "a new basket uses the current stock revision after an unrelated accepted command" do
+    original = stock()
+
+    {:ok, advanced, :accepted} =
+      InventoryCore.apply(original["cheese"], "restaurant", %{
+        id: "unrelated-delivery",
+        expected_version: original["cheese"].version,
+        op: :receive,
+        location: "kitchen",
+        quantity: 5
+      })
+
+    assert {:ok, basket} =
+             Basket.plan(
+               %{original | "cheese" => advanced},
+               "restaurant",
+               "kitchen",
+               "fresh-basket",
+               1,
+               ingredients(),
+               500
+             )
+
+    cheese_command = hd(basket.commands).command
+    assert cheese_command.expected_version == advanced.version
+
+    assert {:ok, _reserved, :accepted} =
+             InventoryCore.apply(advanced, "restaurant", cheese_command)
+  end
+
   test "rejects cross-merchant, wrong-unit, missing and duplicated requirements" do
     original = stock()
     requirements = ingredients()
