@@ -1,0 +1,22 @@
+name: Proof Bank — characterization integrity
+on:
+  pull_request:
+    paths:
+      - 'proof_bank/characterizations/**'
+      - 'scripts/proof_bank_characterization_audit.py'
+      - 'scripts/tests/test_proof_bank_characterization_audit.py'
+      - 'apps/**/mix.exs'
+      - '.github/workflows/proof-bank-characterization.yml'
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  static-source-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate 29 candidate source dossiers (NOT implementation conformance)
+        run: python3 scripts/proof_bank_characterization_audit.py
+      - name: Test audit refuses missing apps and falsely promoted results
+        run: python3 -m unittest discover -s scripts/tests -p 'test_proof_bank_characterization_audit.py' -v
