@@ -1,5 +1,17 @@
 # biz-kit roadmap
 
+## Proposed Halaqa federation over Iroh — 2026-10-31
+
+The [native federation boundary](architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
+records F0–F5: pinned offline format conformance; Halaqa owner decisions;
+independent signed Rust/Elixir verification; native Iroh delivery with
+application HTTP disabled; real domain admission; optional ActivityPub HTTP
+compatibility. F0 is a test-only snapshot/oracle, not an activated protocol,
+verified authority adapter or production cutover. Halaqa owns the proposed
+semantic contract in [PR #9](https://github.com/larsbx/halaqa/pull/9).
+
+## Existing consolidation roadmap
+
 Updated 2026-10-22 (security audit priorities and Slice 1 status). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
