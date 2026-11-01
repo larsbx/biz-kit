@@ -40,7 +40,7 @@ jobs:
       MIX_ENV: test
       KAFKA_PORT: '19092'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
