@@ -101,13 +101,7 @@ defmodule Dispatch.Identity.PrincipalResolution do
         # "Dispatcher" label makes the selected authority context unknowable
         # to the person choosing it. Read only the organization named by this
         # already-verified assignment; the label is not a separate grant.
-        case Ash.get(Organization, assignment.organization_id, authorize?: false) do
-          {:ok, %Organization{name: organization_name}} ->
-            %{id: assignment.id, label: "#{organization_name} — #{assignment.role_definition.label}"}
-
-          _missing_or_unavailable ->
-            nil
-        end
+        %{id: assignment.id, label: "#{assignment.organization.name} — #{assignment.role_definition.label}"}
 
       _gone ->
         nil
@@ -158,6 +152,9 @@ defmodule Dispatch.Identity.PrincipalResolution do
     from(ra in "role_assignments",
       join: p in "participants",
       on: p.id == ra.principal_id and p.tenant_id == ra.tenant_id,
+      join: o in "organizations",
+      on: o.id == ra.organization_id,
+      where: o.status == "ACTIVE",
       where: p.user_id == type(^user_id, :binary_id),
       where: p.status == "ACTIVE",
       where: ra.principal_type == "PARTICIPANT",
@@ -210,11 +207,17 @@ defmodule Dispatch.Identity.PrincipalResolution do
     RoleAssignment
     |> Ash.Query.for_read(:active, %{at: at})
     |> Ash.Query.filter(id == ^context.role_assignment_id)
-    |> Ash.Query.load(:role_definition)
+    |> Ash.Query.load([:role_definition, :organization])
     |> Ash.read_one(authorize?: false, tenant: context.tenant_id)
     |> case do
-      {:ok, %RoleAssignment{} = assignment} -> {:ok, assignment}
-      _otherwise -> {:error, :role_assignment_not_active}
+      # The organization is an independent lifecycle boundary. A suspended
+      # or closed organization does not retain access through an otherwise
+      # active assignment, including on stream revalidation.
+      {:ok, %RoleAssignment{organization: %Organization{status: :ACTIVE}} = assignment} ->
+        {:ok, assignment}
+
+      _otherwise ->
+        {:error, :role_assignment_not_active}
     end
   end
 end
