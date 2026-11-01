@@ -111,8 +111,10 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
       first = Enum.find(options, &(&1.id == ctx.assignment.id))
       second = Enum.find(options, &(&1.id == same_role.id))
 
-      assert first.label == "#{ctx.org.name} — Driver [#{ctx.assignment.id}]"
-      assert second.label == "#{ctx.org.name} — Driver [#{same_role.id}]"
+      assert first.label ==
+               "#{ctx.org.name} — #{ctx.assignment.role_definition.label} [#{ctx.assignment.id}]"
+      assert second.label ==
+               "#{ctx.org.name} — #{same_role.role_definition.label} [#{same_role.id}]"
     end
 
     test "a suspended organization cannot be selected alongside an active one", ctx do
