@@ -1,5 +1,24 @@
 # biz-kit roadmap
 
+## Priority: multi-organization tenant isolation — 2026-11-01
+
+The [tenant-first architecture and acceptance contract](architecture/2026-11-01-multi-organization-tenancy.md)
+and [tracking issue #233](https://github.com/larsbx/biz-kit/issues/233)
+place organizational isolation ahead of optional provider and network expansion.
+**WorkOS feature expansion and NetBird integration are deferred**; do not
+remove the existing WorkOS sign-in adapter. WorkOS organization/permission
+records are not a business-authority source, and NetBird connectivity would
+not enforce tenant isolation.
+
+The stages are: **T0** ownership and unsafe-query inventory; **T1** verified,
+non-unioning acting context on web/native/stream/job/extension paths; **T2**
+Ash, raw SQL, PostgreSQL and hosted integration isolation; **T3** explicit
+partner sharing and domain-owner admission; **T4** signed portability to an
+independently governed home, with single-writer fencing. The first Dispatch
+slice adds organization-qualified role labels and checks organization
+lifecycle during role selection/revalidation. It does not establish T2/RLS,
+production cutover or cross-home federation.
+
 ## Proposed Halaqa federation over Iroh — 2026-10-31
 
 The [native federation boundary](architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
