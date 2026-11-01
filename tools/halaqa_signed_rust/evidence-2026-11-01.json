@@ -1,0 +1,180 @@
+{
+  "schema": "halaqa-offline-rust-local-execution/1",
+  "executed_at_utc": "2026-11-01T09:31:46.179722+00:00",
+  "baseline_commit": "a2e13ea58465fbedb20dbf14934f9378c7e70e5d",
+  "halaqa_revision": "11eb6309ec6caccb6aab3c821eba2311881c9ba0",
+  "scope": "local-offline-test-evidence-only",
+  "authority_verified": false,
+  "production_receiver": false,
+  "hosted_acceptance": "not-established-by-this-receipt",
+  "inputs_sha256": {
+    "tools/halaqa_signed_rust/Cargo.toml": "2039471e988c33bc49963a1054c2b8ff3352df94c9391ddf0d6029f27e2aa101",
+    "tools/halaqa_signed_rust/Cargo.lock": "4008630f871507292a8a73f5cd4d229037bcba3da3c4dbfbe9031ec933675241",
+    "tools/halaqa_signed_rust/src/main.rs": "54349307b21cbd23d6f47583970578f44a94e563f9bffeee303a10400bf8d9ce",
+    "tools/halaqa_signed_rust/src/tests.rs": "9a757b0d12c02d8492536c26dcaeb2be511981f38ef9a59f818a7b906ae8c549",
+    "tools/check_halaqa_rust_differential.py": "62fc6900508b295269451089c8b1e1647406c1661122b2f1d83f6594b39c2467",
+    ".github/workflows/halaqa-federation-draft.yml": "ca39a4fe87695fe628b8fdea76041ee6b35ce7cff55039bba367118d97bff125",
+    "tools/halaqa_federation_draft/source-pin.json": "c076a771cc66c517266995f635afeba23763d0b633875f72f47d32424f10f253",
+    "tools/halaqa_federation_draft/signed-vectors.json": "03d87ac6cbb664135b7fd03a9450355b01fb42c1f486f1c8e76764795b15ac04",
+    "tools/halaqa_federation_draft/vectors.json": "e4ef86ff11a300f138c6ab4ac24c788f2a3ae84e034737e5e69a120ff11a1d72",
+    "tools/halaqa_federation_draft/halaqa_federation_draft.py": "479902628f1c27180b9ffeb5ed8a79779f05479ba752acb24d85dc8243d2b242",
+    "tools/halaqa_federation_draft/halaqa_federation_signed_draft.py": "ba802b681b43763c1b6e2b1fbdfae3a0588c1dd5c4a18266aa523146a27ec948",
+    "tools/halaqa_signed_draft.exs": "3e95c36ded9bc20704db58ea7c4d4d50d3de0166b4331ccb8bf0ebb145dabbe6"
+  },
+  "results": [
+    {
+      "command": [
+        "rustc",
+        "-Vv"
+      ],
+      "exit_code": 0,
+      "stdout": "rustc 1.93.1 (01f6ddf75 2026-02-11)\nbinary: rustc\ncommit-hash: 01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf\ncommit-date: 2026-02-11\nhost: x86_64-unknown-linux-gnu\nrelease: 1.93.1\nLLVM version: 21.1.8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python3",
+        "--version"
+      ],
+      "exit_code": 0,
+      "stdout": "Python 3.12.14\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "openssl",
+        "version"
+      ],
+      "exit_code": 0,
+      "stdout": "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "elixir",
+        "--version"
+      ],
+      "exit_code": 0,
+      "stdout": "Erlang/OTP 27 [erts-15.2.7.14] [source] [64-bit] [smp:9:8] [ds:9:8:10] [async-threads:1] [jit:ns]\n\nElixir 1.19.0 (compiled with Erlang/OTP 27)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "tools/halaqa_signed_rust/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_rust/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_rust/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 15 tests\ntest tests::local_policy_shape_and_types_are_not_remote_claims ... ok\ntest tests::malformed_encodings_numbers_and_limits_fail_closed ... ok\ntest tests::fixed_diagnostic_probes_do_not_hide_reference_disagreement ... ok\ntest tests::correctly_signed_wrong_recipient_epoch_and_identity_are_refused ... ok\ntest tests::remote_authority_claim_cannot_become_a_success ... ok\ntest tests::corpus_tampering_is_not_a_repin ... ok\ntest tests::unsigned_probe_records_lone_surrogate_refusal_reason_difference ... ok\ntest tests::weak_identity_key_and_noncanonical_scalar_are_refused ... ok\ntest tests::modified_payload_with_recomputed_digest_still_fails_signature ... ok\ntest tests::numeric_lexemes_preserve_integer_rules_without_changing_signed_bytes ... ok\ntest tests::candidate_whitespace_is_bound_outer_whitespace_is_not ... ok\ntest tests::changed_signature_and_wrong_public_key_fail ... ok\ntest tests::fresh_signature_preserves_payload_and_original_candidate ... ok\ntest tests::revoked_key_and_half_open_lifetime_are_external_test_inputs ... ok\ntest tests::exact_pinned_signed_corpus ... ok\n\ntest result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s\n     Running unittests src/main.rs (tools/halaqa_signed_rust/target/debug/deps/halaqa_signed_offline_conformance-7f2c1796874836d1)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "run",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_rust/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\":false,\"edge_probes\":{\"lone-surrogate\":\"invalid_json\",\"negative-zero-epoch\":\"FORMAT_ONLY_UNVERIFIED\",\"overflow-epoch\":\"epoch\",\"weak-identity-key\":\"invalid_signature\"},\"production_receiver\":false,\"scope\":\"offline-conformance-only\",\"signature_verdict\":\"SIGNATURE_VALID_AUTHORITY_UNVERIFIED\",\"signed\":{\"refused\":40,\"sha256\":\"03d87ac6cbb664135b7fd03a9450355b01fb42c1f486f1c8e76764795b15ac04\",\"valid_unverified\":8},\"source_revision\":\"11eb6309ec6caccb6aab3c821eba2311881c9ba0\"}\n",
+      "stderr": "   Compiling halaqa-signed-offline-conformance v0.1.0 (/workspace/scratch/17fe13ad069e/repo/tools/halaqa_signed_rust)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s\n     Running `tools/halaqa_signed_rust/target/debug/halaqa-signed-offline-conformance`\n"
+    },
+    {
+      "command": [
+        "python3",
+        "tools/check_halaqa_federation_draft.py"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"counts\": {\"FORMAT_ONLY_UNVERIFIED\": 6, \"REFUSED_FORMAT\": 34}, \"production_receiver\": false, \"scope\": \"offline-format-only\", \"signed_experiment\": {\"authority_verified\": false, \"counts\": {\"REFUSED_SIGNED_TEST\": 40, \"SIGNATURE_VALID_AUTHORITY_UNVERIFIED\": 8}, \"production_receiver\": false, \"scope\": \"offline-signed-test-only\"}, \"source_revision\": \"11eb6309ec6caccb6aab3c821eba2311881c9ba0\"}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_halaqa_federation_draft.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_missing_openssl_cannot_report_signature_success (test_halaqa_federation_draft.HalaqaFederationPinTests.test_missing_openssl_cannot_report_signature_success) ... ok\ntest_missing_or_extra_source_file_refused (test_halaqa_federation_draft.HalaqaFederationPinTests.test_missing_or_extra_source_file_refused) ... ok\ntest_path_substitution_refused (test_halaqa_federation_draft.HalaqaFederationPinTests.test_path_substitution_refused) ... ok\ntest_pinned_corpus (test_halaqa_federation_draft.HalaqaFederationPinTests.test_pinned_corpus) ... ok\ntest_preloaded_dependency_cannot_replace_pinned_oracle (test_halaqa_federation_draft.HalaqaFederationPinTests.test_preloaded_dependency_cannot_replace_pinned_oracle) ... ok\ntest_scope_amplification_refused (test_halaqa_federation_draft.HalaqaFederationPinTests.test_scope_amplification_refused) ... ok\ntest_source_or_fixture_change_refused_before_execution (test_halaqa_federation_draft.HalaqaFederationPinTests.test_source_or_fixture_change_refused_before_execution) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.216s\n\nOK\n"
+    },
+    {
+      "command": [
+        "python3",
+        "tools/check_halaqa_rust_differential.py"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\": false, \"known_disagreements\": [\"weak-identity-key\", \"lone-surrogate\"], \"production_receiver\": false, \"python_openssl\": {\"lone-surrogate\": \"identifier\", \"negative-zero-epoch\": \"FORMAT_ONLY_UNVERIFIED\", \"overflow-epoch\": \"epoch\", \"weak-identity-key\": \"SIGNATURE_VALID_AUTHORITY_UNVERIFIED\"}, \"rust_dalek_strict\": {\"lone-surrogate\": \"invalid_json\", \"negative-zero-epoch\": \"FORMAT_ONLY_UNVERIFIED\", \"overflow-epoch\": \"epoch\", \"weak-identity-key\": \"invalid_signature\"}, \"scope\": \"offline-diagnostic-known-disagreements-not-profile-approval\", \"source_revision\": \"11eb6309ec6caccb6aab3c821eba2311881c9ba0\"}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "elixir",
+        "tools/check_halaqa_signed_draft.exs"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\":false,\"counts\":{\"REFUSED_SIGNED_TEST\":40,\"SIGNATURE_VALID_AUTHORITY_UNVERIFIED\":8},\"implementation\":\"independent-elixir\",\"production_receiver\":false,\"scope\":\"offline-signed-test-only\"}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "elixir",
+        "tools/test_halaqa_signed_draft.exs"
+      ],
+      "exit_code": 0,
+      "stdout": "Running ExUnit with seed: 81107, max_cases: 16\n\n........\nFinished in 0.1 seconds (0.08s on load, 0.05s async, 0.00s sync)\n8 tests, 0 failures\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

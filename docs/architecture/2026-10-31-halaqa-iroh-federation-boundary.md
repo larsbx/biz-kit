@@ -109,9 +109,9 @@ python3 tools/check_halaqa_federation_draft.py
 python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 ```
 
-The focused CI workflow runs both offline checks. It neither boots Elixir
-nor opens an Iroh connection. No application, runtime dependency, production
-ingress, shared schema or business writer is added by this slice.
+The focused CI workflow runs the reference, independent Elixir and independent
+Rust checks in separate jobs. No Iroh connection is opened. No application,
+production runtime dependency, ingress, shared schema or business writer is added.
 
 ## Next implementation gates
 
@@ -129,9 +129,37 @@ Run `elixir tools/check_halaqa_signed_draft.exs` and
 matches all 48 signed cases, including exact positive transcript/payload bytes
 and all refusal reasons; its 8 ExUnit checks pass locally. Both implementations
 use OpenSSL-backed cryptography, so this is independent protocol/decoder evidence,
-not independent cryptographic primitive evidence. Rust agreement, actual identity
-succession/current revocation sources, durable replay and live Iroh remain open.
+not independent cryptographic primitive evidence. Rust corpus agreement is
+recorded below; actual identity succession/current revocation sources, durable
+replay and live Iroh remain open.
 The focused CI workflow runs Python and Elixir in separate jobs.
+
+### Independent Rust signed verifier — 2026-11-01
+
+[`tools/halaqa_signed_rust`](../../tools/halaqa_signed_rust/README.md) adds an
+isolated test executable using an independent decoder/transcript implementation
+and Dalek's Rust Ed25519 primitive. It matches all 48 source-pinned signed cases,
+including the eight exact payload/transcript pairs and 40 refusal reasons.
+Fifteen Rust tests add fresh signed mutations and bounded-decoder edge checks.
+The original Python sources and both fixture corpora remain byte-identical.
+The focused workflow adds locked/offline Rust checks and uploads exact-head
+execution artifacts. A local execution receipt is retained beside the tool.
+
+The expanded probes uncover a material **weak TEST-key acceptance difference**:
+Python/OpenSSL and the current Elixir OTP verifier accept an identity-point
+public key and R with zero S; Dalek `verify_strict` refuses it. This requires an
+owner decision and a new reviewed profile/vector revision, not relaxing Rust.
+The unsigned lone-surrogate sender is refused as `identifier` by Python and
+`invalid_json` by Rust. Integer `-0` and exponent overflow behavior agree after
+preserving numeric lexemes separately from original signed bytes. The diagnostic
+runner records known disagreements explicitly; they do not count as conformance.
+The unsigned 40-case probe therefore has one exact-reason difference.
+
+Corpus agreement is demonstrated, not a blanket equivalence or F2 completion
+claim. Strict key/point/scalar validation, production signing, real identity and
+current revocation/governance contracts still need separate review. No crate is
+linked into the Iroh sidecar, Port or admission path. Both authority and production
+receiver flags stay false, and no replay or business effect is committed.
 
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
@@ -150,7 +178,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | --- | --- |
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
-| F2 — Verified boundary | Python/OpenSSL and independent Elixir agree on 48 experimental signed cases; Rust agreement, actual identity/evidence sources and production admission remain pending |
+| F2 — Verified boundary | Python/OpenSSL, independent Elixir and Rust agree on 48 experimental signed cases; weak-key acceptance and decoder edge differences, actual identity/evidence sources and production admission remain pending |
 | F3 — Native delivery | Two independent installations, application HTTP disabled, bounded streams, configured direct/relay tests, durable inbox/outbox and original-ID status reconciliation across lost ACKs, partition and restart |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
