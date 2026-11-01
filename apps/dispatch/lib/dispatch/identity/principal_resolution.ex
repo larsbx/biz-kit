@@ -38,7 +38,7 @@ defmodule Dispatch.Identity.PrincipalResolution do
   import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access.Actor
-  alias Dispatch.Accounts.{RoleAssignment, User}
+  alias Dispatch.Accounts.{Organization, RoleAssignment, User}
 
   require Ash.Query
 
@@ -77,7 +77,7 @@ defmodule Dispatch.Identity.PrincipalResolution do
   @doc """
   The assignments this subject may select between, for the role switcher.
 
-  Identifiers and labels only. Section 4.3's switcher needs to name the choices;
+  Identifiers and organization-qualified labels only. Section 4.3's switcher needs to name the choices;
   it does not need — and must not carry — anything about what each one permits.
   """
   @spec selectable(String.t(), keyword()) :: [%{id: Ash.UUID.t(), label: String.t()}]
@@ -97,7 +97,17 @@ defmodule Dispatch.Identity.PrincipalResolution do
   defp label_for(context, at) do
     case fetch_assignment(context, at) do
       {:ok, assignment} ->
-        %{id: assignment.id, label: assignment.role_definition.label}
+        # A person can hold identical roles in several organizations. A bare
+        # "Dispatcher" label makes the selected authority context unknowable
+        # to the person choosing it. Read only the organization named by this
+        # already-verified assignment; the label is not a separate grant.
+        case Ash.get(Organization, assignment.organization_id, authorize?: false) do
+          {:ok, %Organization{name: organization_name}} ->
+            %{id: assignment.id, label: "#{organization_name} — #{assignment.role_definition.label}"}
+
+          _missing_or_unavailable ->
+            nil
+        end
 
       _gone ->
         nil
