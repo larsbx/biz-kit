@@ -8,9 +8,17 @@ defmodule CommerceCore.Catalog do
   proof of a grant.
   """
 
+  alias CommerceCore.Ownership
+
   @visibility [:published, :hidden, :disabled]
 
-  @doc "Create an empty merchant-owned catalog projection."
+  @doc "Create a home/merchant projection from an owner map, or a merchant-only compatibility candidate."
+  def new(%{home_id: home, merchant: merchant} = owner) do
+    if Ownership.valid?(owner),
+      do: {:ok, %{home_id: home, merchant: merchant, version: 0, products: %{}}},
+      else: {:error, :invalid_merchant}
+  end
+
   def new(merchant) when is_binary(merchant) and byte_size(merchant) > 0 do
     {:ok, %{merchant: merchant, version: 0, products: %{}}}
   end
@@ -47,7 +55,7 @@ defmodule CommerceCore.Catalog do
          {:ok, chosen} <- selection(modifiers),
          {:ok, deltas} <- modifier_deltas(product.modifier_groups, chosen, currency) do
       {:ok,
-       %{
+       Ownership.stamp(state, %{
          merchant: state.merchant,
          catalog_version: state.version,
          product_id: product.id,
@@ -56,7 +64,7 @@ defmodule CommerceCore.Catalog do
          modifiers: chosen,
          unit_price: Enum.reduce(deltas, money, &Money.add!(&2, &1)),
          tax_context: product.tax_context
-       }}
+       })}
     end
   end
 
@@ -65,6 +73,7 @@ defmodule CommerceCore.Catalog do
     with :ok <- scope(state, merchant), do: lookup(state, id)
   end
 
+  defp scope(%{home_id: _} = state, context), do: Ownership.check(state, context)
   defp scope(%{merchant: expected}, merchant) when expected == merchant, do: :ok
   defp scope(%{merchant: _}, _), do: {:error, :wrong_merchant}
   defp scope(_, _), do: {:error, :invalid_catalog}

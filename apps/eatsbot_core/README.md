@@ -178,3 +178,12 @@ This is part of the Eatsbot e-commerce platform. See the main repository for con
 
 AGPLv3 - See LICENSE file for details.
 
+
+## Shared-tenant admission is closed
+
+The legacy catalog/cart/order resources do not establish merchant/home ownership.
+Retain isolated runtimes, stores, credentials and routing. The guarded read-only
+CatalogBridge requires a reviewed isolated source binding and current host grant;
+its former merchant-only `preview/2` refuses. This is candidate projection, not
+a production writer cutover. See the [source audit, ownership contract and pending
+persistence decisions](../../docs/architecture/2026-11-01-eatsbot-home-isolation-boundary.md).

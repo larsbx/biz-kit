@@ -1,7 +1,11 @@
 defmodule CommerceCore.Checkout do
   @moduledoc """
   Pure checkout candidate projection: immutable priced lines, one order per cart,
-  channel-scoped idempotency, and exactly one delivery request for delivery.
+  channel-scoped idempotency within one owner, and one delivery request for delivery.
+
+  Home-bound candidates use `%{home_id: ..., merchant: ...}` in `new/2`;
+  their cart snapshots and host grants must carry that exact ownership pair.
+  Merchant-string constructors remain unscoped compatibility candidates.
 
   The host supplies a trusted cart snapshot and order index in `new/2`, and a
   verified per-cart checkout grant in `apply/3`. It must serialize admission and
@@ -15,7 +19,17 @@ defmodule CommerceCore.Checkout do
   this reducer has no financial-acceptance operation.
   """
 
-  alias CommerceCore.Pricing
+  alias CommerceCore.{Ownership, Pricing}
+
+  def new(%{home_id: home, merchant: merchant} = owner, carts) when is_map(carts) do
+    if Ownership.valid?(owner) and
+         Enum.all?(carts, fn {id, cart} ->
+           Ownership.id?(id) and Ownership.check(owner, cart) == :ok and
+             Ownership.id?(Map.get(cart, :principal))
+         end),
+       do: {:ok, %{home_id: home, merchant: merchant, carts: carts, orders: %{}}},
+       else: {:error, :invalid_checkout_projection}
+  end
 
   def new(merchant, carts) when is_binary(merchant) and byte_size(merchant) > 0 and is_map(carts),
     do: {:ok, %{merchant: merchant, carts: carts, orders: %{}}}
@@ -25,12 +39,45 @@ defmodule CommerceCore.Checkout do
   @doc "Authorize before inspecting cart existence, status, prices or idempotency history."
   def apply(state, trusted, command) do
     with true <- authorized?(trusted, command),
-         %{merchant: merchant} when merchant == trusted.merchant <- state do
+         :ok <- scope(state, trusted) do
       checkout(state, trusted, command)
     else
       _ -> {:error, :forbidden}
     end
   end
+
+  @doc "Read a home-bound cart only with a current, exact per-cart host grant."
+  def fetch_cart(%{home_id: _} = state, trusted, id) do
+    with :ok <- read_grant(state, trusted, :cart_read, id),
+         cart when is_map(cart) <- Map.get(state.carts, id),
+         :ok <- Ownership.check(state, cart),
+         true <- cart.principal == trusted.principal do
+      {:ok, cart}
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  def fetch_cart(_, _, _), do: {:error, :forbidden}
+
+  defp read_grant(state, trusted, operation, id) do
+    with %{granted: true, operation: ^operation, cart_id: ^id, principal: p} <- trusted,
+         true <- Ownership.id?(p),
+         :ok <- scope(state, trusted),
+         do: :ok,
+         else: (_ -> {:error, :forbidden})
+  end
+
+  defp scope(%{home_id: _} = state, trusted), do: Ownership.check(state, trusted)
+
+  defp scope(%{merchant: merchant}, %{merchant: merchant} = trusted) do
+    if Map.has_key?(trusted, :home_id), do: {:error, :forbidden}, else: :ok
+  end
+
+  defp scope(_, _), do: {:error, :forbidden}
+
+  defp owned?(%{home_id: _} = state, record), do: Ownership.check(state, record) == :ok
+  defp owned?(_, _), do: true
 
   defp authorized?(
          %{granted: true, operation: :checkout, principal: p, merchant: m, cart_id: cart},
@@ -48,21 +95,25 @@ defmodule CommerceCore.Checkout do
     cart = Map.get(state.carts, cmd.cart_id)
 
     # Ownership is checked before disclosing either an order or a key collision.
-    if cart != nil and Map.get(cart, :principal) != trusted.principal do
+    if cart != nil and
+         (not owned?(state, cart) or Map.get(cart, :principal) != trusted.principal) do
       {:error, :forbidden}
     else
       case Map.get(state.orders, {channel, key}) do
-        %{principal: principal} when principal != trusted.principal ->
-          {:error, :forbidden}
-
-        %{cart_id: cart_id} = prior when cart_id == cmd.cart_id ->
-          {:ok, state, prior, :duplicate}
-
-        %{} ->
-          {:error, :idempotency_conflict}
-
         nil ->
           place(state, cart, trusted, cmd)
+
+        prior ->
+          cond do
+            not owned?(state, prior) or Map.get(prior, :principal) != trusted.principal ->
+              {:error, :forbidden}
+
+            prior.cart_id == cmd.cart_id ->
+              {:ok, state, prior, :duplicate}
+
+            true ->
+              {:error, :idempotency_conflict}
+          end
       end
     end
   end
@@ -93,6 +144,8 @@ defmodule CommerceCore.Checkout do
         delivery_request: if(cmd.fulfillment == :delivery, do: :required, else: nil),
         financial_status: :unconfirmed
       }
+
+      order = Ownership.stamp(state, order)
 
       updated = %{
         state
