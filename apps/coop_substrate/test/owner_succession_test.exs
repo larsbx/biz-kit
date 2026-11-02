@@ -34,6 +34,7 @@ defmodule CoopSubstrate.OwnerSuccessionTest do
   end
 
   defp o, do: Log.gate().orchestration
+
   defp signatures(batch, gov),
     do: Enum.map(batch.commands, &Crypto.sign(&1.signing_bytes, gov.seed))
 
@@ -77,7 +78,10 @@ defmodule CoopSubstrate.OwnerSuccessionTest do
 
     assert {:ok, batch} =
              Offboarding.prepare_chapter(
-               "owner", "chapter-genesis", w.gov.signer.key_id, @successors
+               "owner",
+               "chapter-genesis",
+               w.gov.signer.key_id,
+               @successors
              )
 
     assert Enum.map(batch.commands, & &1.type) == [
@@ -87,6 +91,7 @@ defmodule CoopSubstrate.OwnerSuccessionTest do
 
     before = Log.head()
     assert Projects.owner(o(), @scope) == "owner"
+
     assert {:ok, appended} =
              Offboarding.offboard_chapter("owner", batch.id, signatures(batch, w.gov))
 
@@ -100,34 +105,46 @@ defmodule CoopSubstrate.OwnerSuccessionTest do
 
   test "only an eligible successor in an owned project can be nominated", w do
     assert Offboarding.prepare_chapter(
-             "owner", "chapter-genesis", w.gov.signer.key_id,
+             "owner",
+             "chapter-genesis",
+             w.gov.signer.key_id,
              %{{"tenant-1", "project-2"} => "alice"}
            ) == {:error, {:successor_required, [{"tenant-1", "project-1"}]}}
 
     assert Offboarding.prepare_chapter(
-             "owner", "chapter-genesis", w.gov.signer.key_id,
+             "owner",
+             "chapter-genesis",
+             w.gov.signer.key_id,
              Map.put(@successors, {"tenant-1", "project-2"}, "alice")
            ) == {:error, :unexpected_successor_project}
 
     assert Offboarding.prepare_chapter(
-             "owner", "chapter-genesis", w.gov.signer.key_id,
+             "owner",
+             "chapter-genesis",
+             w.gov.signer.key_id,
              %{{"tenant-1", "project-1"} => ""}
            ) == {:error, :invalid_successors}
 
     assert Offboarding.prepare_chapter(
-             "owner", "chapter-genesis", w.gov.signer.key_id,
+             "owner",
+             "chapter-genesis",
+             w.gov.signer.key_id,
              %{{"tenant-1", "project-1"} => "undeclared"}
            ) == {:error, {:invalid, :project_owner_ineligible}}
 
-    {:ok, _} = Log.append([
-      signed_event(w.gov, "TaskPrincipalKindDeclaredV1", %{
-        "principal_id" => "bot", "kind" => "agent"
-      }),
-      grant(w.gov, @scope, "bot")
-    ])
+    {:ok, _} =
+      Log.append([
+        signed_event(w.gov, "TaskPrincipalKindDeclaredV1", %{
+          "principal_id" => "bot",
+          "kind" => "agent"
+        }),
+        grant(w.gov, @scope, "bot")
+      ])
 
     assert Offboarding.prepare_chapter(
-             "owner", "chapter-genesis", w.gov.signer.key_id,
+             "owner",
+             "chapter-genesis",
+             w.gov.signer.key_id,
              %{{"tenant-1", "project-1"} => "bot"}
            ) == {:error, {:invalid, :project_owner_ineligible}}
 
@@ -135,17 +152,22 @@ defmodule CoopSubstrate.OwnerSuccessionTest do
   end
 
   test "an owner of two projects must have a successor for both", w do
-    {:ok, _} = Log.append([
-      grant(w.gov, @second_scope, "owner"),
-      assign(w.gov, @second_scope, "owner"),
-      grant(w.gov, @second_scope, "alice")
-    ])
+    {:ok, _} =
+      Log.append([
+        grant(w.gov, @second_scope, "owner"),
+        assign(w.gov, @second_scope, "owner"),
+        grant(w.gov, @second_scope, "alice")
+      ])
 
     assert Offboarding.prepare_chapter(
-             "owner", "chapter-genesis", w.gov.signer.key_id, @successors
+             "owner",
+             "chapter-genesis",
+             w.gov.signer.key_id,
+             @successors
            ) == {:error, {:successor_required, [{"tenant-1", "project-2"}]}}
 
     selections = Map.put(@successors, {"tenant-1", "project-2"}, "alice")
+
     {:ok, batch} =
       Offboarding.prepare_chapter("owner", "chapter-genesis", w.gov.signer.key_id, selections)
 
