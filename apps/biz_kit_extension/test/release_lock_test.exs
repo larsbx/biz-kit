@@ -83,6 +83,37 @@ defmodule BizKit.Extension.ReleaseLockTest do
              })
   end
 
+  test "reordered required grant sets hash to the same canonical manifest" do
+    original = School.manifest()
+    grants = ["school.course.read", "school.lesson.preview"]
+
+    old = %{
+      original
+      | requested_grants: grants,
+        commands: [
+          %{
+            name: "school.lesson.review",
+            writer: "school",
+            required_grants: grants
+          }
+        ]
+    }
+
+    reordered = %{
+      old
+      | commands: [
+          %{
+            name: "school.lesson.review",
+            writer: "school",
+            required_grants: Enum.reverse(grants)
+          }
+        ]
+    }
+
+    assert {:ok, digest} = ReleaseLock.fingerprint(old)
+    assert {:ok, ^digest} = ReleaseLock.fingerprint(reordered)
+  end
+
   test "same-version manifest changes are refused, even if the source pin is reused" do
     assert {:ok, reviewed} = ReleaseLock.build([School], %{"school" => @school_source})
 
