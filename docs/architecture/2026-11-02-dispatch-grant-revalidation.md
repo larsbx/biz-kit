@@ -196,6 +196,9 @@ main.
   evaluate whatever actor they are given. A writer that hands them a fresh actor
   inherits the fix; one that hands them a snapshot keeps a window of one
   request.
-- **Open, owner decision:** whether revoking a driver's role should also close
-  that driver's open location consents. It does not today.
+- **Owner decision (2026-11-02):** revoking a driver's role does **not** close
+  that driver's open location consents. Consent belongs to the participant. It
+  ends with the trip plus grace, or when the participant revokes it.
+  `LocationsTest` "consent outlives the revocation of the role that began it"
+  pins this.
 
