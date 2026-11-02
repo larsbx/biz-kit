@@ -5,7 +5,7 @@ defmodule Dispatch.Operations.LocationsTest do
 
   require Ash.Query
 
-  alias Dispatch.Operations.{LocationSample, Locations}
+  alias Dispatch.Operations.{ConsentGrant, LocationSample, Locations}
   alias Dispatch.Support.Fixtures
 
   @moduletag :integration
@@ -61,6 +61,18 @@ defmodule Dispatch.Operations.LocationsTest do
 
       assert Locations.begin_consent(dispatcher, ctx.trip.id) == {:error, :forbidden}
       assert Locations.ingest(dispatcher, []) == {:error, :forbidden}
+    end
+
+    # Owner decision (2026-11-02, #254 follow-up): consent belongs to the
+    # participant and is bounded by the trip plus grace or their own
+    # revocation. Revoking a role does not close it.
+    test "outlives the revocation of the role that began it", ctx do
+      assert {:ok, grant} = Locations.begin_consent(ctx.actor, ctx.trip.id)
+      Fixtures.revoke(ctx.tenant, ctx.actor.role_assignment)
+
+      current = Ash.get!(ConsentGrant, grant.id, authorize?: false, tenant: ctx.tenant)
+      assert is_nil(current.revoked_at)
+      assert ConsentGrant.covers?(current, DateTime.utc_now())
     end
   end
 

@@ -29,9 +29,12 @@ defmodule Dispatch.Operations.BoardAuthorityConcurrencyTest do
     %{user: user, participant: dispatcher} = Fixtures.person(org.id, org)
     grant = Fixtures.assignment(org.id, org, dispatcher, "DISPATCHER")
     {:ok, actor} = Actor.from_assignment(grant)
-    trip = Fixtures.assignment_record(org.id, org, dispatcher)
+    # A trip starts only with a driver who holds a driving role.
+    %{user: driver_user, participant: driver} = Fixtures.person(org.id, org)
+    Fixtures.assignment(org.id, org, driver, "DRIVER")
+    trip = Fixtures.assignment_record(org.id, org, driver)
 
-    on_exit(fn -> ConcurrentSessions.cleanup(org, [user]) end)
+    on_exit(fn -> ConcurrentSessions.cleanup(org, [user, driver_user]) end)
 
     %{org: org, user: user, dispatcher: dispatcher, grant: grant, actor: actor, trip: trip}
   end
