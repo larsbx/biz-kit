@@ -117,10 +117,14 @@ yields the same tasks.
 
 ## Not yet
 
-* **Administration views.** Chapter offboarding (`Offboarding`) now refuses to
-  offboard a project's owner unless the batch also reassigns the project. The
-  administration page cannot yet add a successor to that batch, so it shows
-  the refusal. A follow-up adds successor selection.
+* **Administration views.** The server-side chapter offboarding interface
+  now supports `Offboarding.prepare_chapter/4`, with a map from
+  `{tenant_id, project_id}` to eligible successor principals. It requires
+  one successor for *every* project still owned by the departing principal,
+  produces one governance-signed atomic batch, and rechecks selections
+  against current owner/holdings state at admission. The administration
+  page/client does not yet expose successor selection or legacy backfill;
+  that remains tracked in issue #265.
 * **Stewards and an explicit project lifecycle** (draft, active, archived) are
   deferred until a rule needs them.
 * **Model check.** The Quint models (`apps/task_core/spec`) do not include
