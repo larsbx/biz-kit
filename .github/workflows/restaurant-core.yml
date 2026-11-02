@@ -38,6 +38,8 @@ jobs:
           MIX_ENV=test mix format --check-formatted
           apps/restaurant_core/mix.exs
           apps/restaurant_core/lib/restaurant_core/kitchen.ex
+          apps/restaurant_core/lib/restaurant_core/admission.ex
+          apps/restaurant_core/test/admission_test.exs
           apps/restaurant_core/test/kitchen_safety_test.exs
           apps/restaurant_core/test/kitchen_checkout_safety_test.exs
           apps/restaurant_core/test/test_helper.exs
