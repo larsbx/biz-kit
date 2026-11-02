@@ -13,7 +13,7 @@ from halaqa_receipt_draft import ROOT
 from test_halaqa_outbox_draft import TwoDatabaseTestCase
 
 
-class IrohAcceptanceTests(TwoDatabaseTestCase):
+class IrohTestCase(TwoDatabaseTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -37,6 +37,8 @@ class IrohAcceptanceTests(TwoDatabaseTestCase):
         peer = IrohReceiptPeer(self.binary, self.client_key, server.address, policy["sender"], policy["recipient"])
         return server, peer
 
+
+class IrohAcceptanceTests(IrohTestCase):
     def test_direct_delivery_over_pinned_quic_without_application_http(self):
         wire, policy, candidate = self.fixture()
         staged = self.sender.stage(wire, policy)

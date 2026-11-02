@@ -114,7 +114,8 @@ python3 -m unittest discover -s tools -p 'test_halaqa_federation_draft.py' -v
 
 The focused CI workflow runs Python, Elixir, Rust, isolated PostgreSQL and
 experimental direct-Iroh jobs. Only the explicit Iroh fixture job opens peer
-connections, constrained to loopback with public discovery/relays disabled. The Rust crate has its own locked test dependencies;
+connections: default direct loopback or an explicit TLS relay-only profile.
+Public discovery/default relays remain disabled. The Rust crate has its own locked test dependencies;
 no application runtime dependency, production ingress, shared schema or business
 writer is added by this slice.
 
@@ -258,6 +259,25 @@ loopback and separate-database evidence on one host; configured relays, independ
 installations, real identity/disclosure sources and production adapters remain
 required for F3/F4. Exact-head hosted CI is separate evidence.
 
+### Verified relay paths and separate-host handoff — 2026-11-01
+
+The same Iroh 1.4.1 sidecar now has an explicit relay-only configuration with
+normal TLS verification against supplied CA roots. It removes all direct-IP
+transports and requires a relay-only target. Both ends record and check selected
+Iroh paths, received stream frames and byte counters; a configured URL alone
+cannot count as relay delivery. The controlled local relay is endpoint-allowlisted.
+Application HTTP remains disabled; relay infrastructure itself uses HTTPS.
+
+Seven relay/runner cases pass, covering actual relay traffic, certificate and
+endpoint refusal, mixed-path rejection, missing path evidence, outage/restart
+reconciliation and a labeled one-host role rehearsal with report-mutation
+controls. The full current set has 51 Python tests and 6 Iroh Rust tests, plus
+formatting/clippy/locked build. The new [separate-host runner handoff](2026-11-01-halaqa-two-host-acceptance.md)
+requires clean exact-revision sources and matching public reports but deliberately
+does not certify physical-host provenance. No separate installations have been
+configured or executed here. Their actual administration/host evidence, governing
+identity/disclosure inputs and production Elixir/admission remain open.
+
 The broader federation run at `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
 failed at its dependency audits, before the Elixir two-node acceptance suite.
 Its Rust formatting, clippy, tests and build passed. The four affected lock
@@ -276,7 +296,7 @@ Iroh/umbrella checks remain required; these local results do not close F3.
 | F0 — This PR | Pinned offline format oracle/corpus, mutation checks and implementation map |
 | F1 — Halaqa owner decisions | Offline signed grammar/fixtures now available for review; immutable governing sources, actual producer/verifier, succession, disclosure, current epoch and replication/conflict decisions remain pending |
 | F2 — Verified boundary | Python/OpenSSL, independent Elixir/OTP and Rust/dalek agree on 74 experimental signed cases; actual identity/evidence sources and production admission remain pending |
-| F3 — Native delivery | PostgreSQL custody and pinned direct-loopback Iroh have 37 integration tests. Still required: independent installations, configured relay/path evidence, production identity/disclosure and unknown-outcome reconciliation across network partition/restart with application HTTP disabled |
+| F3 — Native delivery | PostgreSQL custody, pinned direct/relay paths and runner rehearsal have 44 integration tests. Still required: actual independent-installation execution/provenance, production identity/disclosure and unknown-outcome reconciliation across network partition/restart with application HTTP disabled |
 | F4 — Domain admission | Real current biz-kit grants, canonical signed admission, durable effect IDs and mutation-time revocation checks; no dual writer or direct remote execution |
 | F5 — Optional HTTP interoperability | Preserve original IDs/evidence, make gateway signing roles explicit, and test external ActivityPub separately |
 

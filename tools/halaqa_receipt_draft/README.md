@@ -152,7 +152,7 @@ scheduler is added, and actual Redis-loss/catch-up acceptance remains pending.
 `tools/halaqa_iroh_draft_rs/` is a standalone, loopback-only Iroh 1.4.1 sidecar,
 matching the version of the existing marketplace sidecar without modifying its
 wire format or runtime. `tools/halaqa_iroh_draft.py` adapts the fixture receiver
-and outbox to it. The separate Cargo.lock captures 361 packages; these are test
+and outbox to it. The separate Cargo.lock captures 411 packages; these are test
 crate dependencies, not application dependency or production activation changes.
 
 Each endpoint has a generated private 32-byte seed file with private Unix
@@ -192,9 +192,10 @@ sidecar instead of contaminating the next request; restart and reconcile using
 the original intent. The test-only drop-reply command exists only on owned local
 stdin, never as an operation a network peer can request.
 
-The endpoint uses the Minimal preset, clears default IP transports before binding
-loopback, disables relays, and configures no address lookup/publisher. Targets
-must contain only explicit loopback IP addresses. The harness starts no application
+The default direct profile uses the Minimal preset, clears default IP transports
+before binding loopback, disables relays, and configures no address lookup/publisher.
+Direct targets must contain only explicit loopback IP addresses. The explicit
+relay-only profile below enables a configured relay without any direct IP socket. The harness starts no application
 HTTP server/client. Iroh's dependency graph includes web/relay components; this
 experiment's configuration does not activate those services. It is native QUIC,
 not wire-compatible HTTP ActivityPub or an HTTP compatibility gateway.
@@ -215,6 +216,38 @@ Primary API source: locked Iroh 1.4.1 package, upstream revision
 including `examples/echo-no-router.rs`, endpoint bindings/presets and connection
 `remote_id`. No Iroh default relay/discovery configuration is assumed.
 
+## Verified relay-only profile and separate-host runner
+
+An explicit `relay` configuration supplies a HTTPS IP URL and CA DER file.
+The endpoint uses only that relay map, trusts only the configured roots, and
+binds **zero direct-IP sockets**. A target must contain exactly that relay URL;
+mixed direct/relay targets are refused. No public lookup or default relay is
+activated. TLS hostname/chain verification stays enabled. The private fixture
+relay allowlists endpoint IDs and binds only loopback; its HTTPS infrastructure
+is distinct from an application HTTP endpoint.
+
+After receiving application data, Rust records Iroh's selected path, path kind,
+remote relay URL, byte counters and received stream frames. Both the client and
+host validate those observations against the configured mode/relay. Relay-mode
+success requires relay paths, a selected path with actual received stream traffic
+and zero bound IP sockets. This prevents an unnoticed direct shortcut from
+satisfying a relay test. These are implementation observations, not portable
+signed proof or a grant.
+
+Seven additional tests cover relay-only delivery, an untrusted CA, unknown
+endpoint, mixed target refusal, missing/false path evidence, relay outage/restart
+recovery without redelivery, and a one-host rehearsal of the operator role runner.
+The runner creates separate sender/receiver processes and disposable clusters,
+requires a clean exact Git head by default, and compares source/ID/hash/path
+reports. A deliberately labeled local-rehearsal flag cannot claim verified
+checkout or host provenance. Report mutations are negative controls.
+
+The [two-host handoff](../../docs/architecture/2026-11-01-halaqa-two-host-acceptance.md)
+provides the actual operator commands, controlled relay/TLS setup and evidence
+requirements. No separate hosts have been configured or executed here. Even
+matching reports return `PAIR_CONSISTENT_HOST_PROVENANCE_UNVERIFIED`; distinct
+keys, labels and databases do not attest distinct hardware or administrations.
+
 ## Reproducible acceptance
 
 Install PostgreSQL 16 server/client binaries and an Ed25519-capable OpenSSL CLI.
@@ -232,6 +265,8 @@ cargo test --locked --manifest-path tools/halaqa_iroh_draft_rs/Cargo.toml
 cargo build --locked --manifest-path tools/halaqa_iroh_draft_rs/Cargo.toml
 HALAQA_PG_BIN=/usr/lib/postgresql/16/bin \
   python3 -m unittest discover -s tools -p test_halaqa_iroh_draft.py -v
+HALAQA_PG_BIN=/usr/lib/postgresql/16/bin \
+  python3 -m unittest discover -s tools -p test_halaqa_iroh_relay.py -v
 ```
 
 The suite creates its own temporary cluster/database and test role, listens
@@ -252,7 +287,8 @@ policy, strict negative status, stale callback fencing, scoped/bounded SQL work
 pages, terminal immutability, lost receiver ACK after expiry, lost sender commit
 ACK, unavailable/wrong peers and immediate database crash recovery of unknown
 and terminal states. The 7 pin/mutation tests also pass. With the 7 direct-Iroh tests, there are
-44 passing Python tests; the new Iroh crate has 5 passing Rust tests.
+51 passing Python tests including the 7 relay/runner cases; the Iroh crate has
+6 passing Rust tests.
 
 Local SQL acceptance ran on PostgreSQL 16.15. The restricted local environment
 maps only uid 0, so a test-only libc ownership shim presented that mapped user as
@@ -264,9 +300,9 @@ termination tests crash recovery, not machine power loss.
 ## Remaining F3/F4 work
 
 This slice provides test receipts, durable sender custody and a pinned direct
-Iroh loopback binding. Next exercise independently administered installations
-and a configured relay path, with path evidence, application HTTP disabled and
-original-ID reconciliation across partition/restart. Redis scheduling, actual
+Iroh direct/relay binding and selected-path evidence. Next execute the prepared
+runner on independently administered installations and retain actual host/relay
+provenance with application HTTP disabled and original-ID reconciliation. Redis scheduling, actual
 key/charter/revocation/disclosure sources, expired-envelope refresh, supervised
 production Elixir adapters, domain admission and effect execution remain pending.
 Retire/consolidate the standalone fixture sidecar when an accepted production

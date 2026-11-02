@@ -64,11 +64,37 @@ def identity(binary, key_file):
     return strict_json(result.stdout, 1024)["endpoint"]
 
 
+def check_path(value, relay):
+    mode = "relay_only" if relay else "direct"
+    if (type(value) is not dict or set(value) != {"mode", "ip_bound_sockets", "paths"}
+            or value["mode"] != mode or type(value["ip_bound_sockets"]) is not int
+            or (relay and value["ip_bound_sockets"] != 0)
+            or type(value["paths"]) is not list or not 1 <= len(value["paths"]) <= 4):
+        raise ValueError("missing or mismatched path evidence")
+    selected = False
+    for path in value["paths"]:
+        if (type(path) is not dict
+                or set(path) != {"kind", "selected", "address", "tx_bytes", "rx_bytes", "stream_rx"}
+                or path["kind"] != ("relay" if relay else "direct")
+                or type(path["selected"]) is not bool
+                or type(path["address"]) is not str or len(path["address"]) > 512
+                or any(type(path[k]) is not int or path[k] < 0 for k in ("tx_bytes", "rx_bytes", "stream_rx"))):
+            raise ValueError("invalid path evidence")
+        if relay and path["address"] != "relay:" + relay["url"].rstrip("/") + "/":
+            raise ValueError("unexpected relay path")
+        selected |= path["selected"] and path["stream_rx"] > 0 and path["rx_bytes"] > 0
+    if not selected:
+        raise ValueError("no selected receiving path")
+    return value
+
+
 class IrohReceiptPeer:
-    def __init__(self, binary, key_file, target, sender, recipient):
+    def __init__(self, binary, key_file, target, sender, recipient, relay=None):
         self.binary, self.key_file = str(binary), str(key_file)
         self.target = target
         self.sender, self.recipient = sender, recipient
+        self.relay = relay
+        self.path_evidence = []
         self.challenges = []  # bounded to the last two requests, test inspection only
 
     def request(self, request):
@@ -77,13 +103,17 @@ class IrohReceiptPeer:
         self.challenges = (self.challenges + [challenge])[-2:]
         config = {"key_file": self.key_file, "bind": "127.0.0.1:0",
                   "target": self.target, "request": request}
+        if self.relay is not None:
+            config["relay"] = self.relay
         result = subprocess.run([self.binary, "client"], input=json.dumps(config).encode() + b"\n",
                                 capture_output=True, timeout=20, check=True)
         response = strict_json(result.stdout, 16_000)
-        if (type(response) is not dict or set(response) != {"event", "peer", "challenge", "reply"}
+        if (type(response) is not dict or set(response) != {"event", "peer", "challenge", "reply", "path"}
                 or response["event"] != "reply" or response["peer"] != self.target["id"]
                 or response["challenge"] != challenge):
             raise ValueError("unbound transport response")
+        evidence = check_path(response["path"], self.relay)
+        self.path_evidence = (self.path_evidence + [evidence])[-8:]
         return strict_json(canonical(response["reply"], 8192), 8192)
 
     def status(self, recipient, sender, message_id, digest):
@@ -100,10 +130,13 @@ class IrohReceiptPeer:
 
 class IrohReceiverFixture:
     """Owns a test sidecar and its private stdin/stdout, not a deployment API."""
-    def __init__(self, binary, key_file, allowed_endpoint, receiver, policy):
+    def __init__(self, binary, key_file, allowed_endpoint, receiver, policy, relay=None):
         self.peer = LocalReceiptPeer(receiver, policy)
         self.allowed_endpoint = allowed_endpoint
+        self.relay = relay
+        self.path_evidence = []
         self.ready = threading.Event()
+        self.delivery_count = 0
         self.error = None
         self.address = None
         self.requests = []  # bounded recent metadata, never original payload storage
@@ -115,6 +148,8 @@ class IrohReceiverFixture:
         config = {"key_file": str(key_file), "bind": "127.0.0.1:0",
                   "allowed_endpoint": allowed_endpoint, "sender": policy["sender"],
                   "recipient": policy["recipient"]}
+        if relay is not None:
+            config["relay"] = relay
         self.process.stdin.write(json.dumps(config).encode() + b"\n")
         self.process.stdin.flush()
         self.thread = threading.Thread(target=self._serve, daemon=True)
@@ -128,7 +163,9 @@ class IrohReceiverFixture:
             while raw := self.process.stdout.readline(32_001):
                 event = strict_json(raw, 32_000)
                 if event.get("event") == "ready":
-                    if event.get("application_http") is not False or event.get("relay") is not False:
+                    if (event.get("application_http") is not False
+                            or event.get("relay") is not bool(self.relay)
+                            or (self.relay and event.get("ip_bound_sockets") != 0)):
                         raise ValueError("unexpected transport activation")
                     self.address = event["address"]
                     self.ready.set()
@@ -137,7 +174,9 @@ class IrohReceiverFixture:
                     raise ValueError("unknown sidecar event")
                 if event["peer"] != self.allowed_endpoint:
                     raise ValueError("sidecar endpoint binding mismatch")
+                self.path_evidence = (self.path_evidence + [check_path(event["path"], self.relay)])[-8:]
                 request = event["request"]
+                self.delivery_count += request["op"] == "deliver"
                 self.requests = (self.requests + [(event["peer"], request["op"], request["challenge"])])[-8:]
                 command = {"op": "drop", "request_id": event["request_id"]}
                 try:
