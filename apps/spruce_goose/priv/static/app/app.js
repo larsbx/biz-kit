@@ -37,6 +37,7 @@ import {
   otherSteps,
   ownDevices,
   ownRevocation,
+  ownerBackfillCommands,
   pendingSuggestions,
   projectSearch,
   projectsHeld,
@@ -853,14 +854,46 @@ async function showPerson(id) {
 // administrator keys (docs/architecture/2026-10-19-chapter-offboarding.md).
 function personInChapter(found, keys) {
   const id = found.principal_id;
-  const offboard = el("button", { textContent: "Offboard from this chapter", disabled: deciding });
+  const owned = found.projects.filter(
+    (p) => p.chapter_id === chapterId && (p.accountable_owner === id || p.successor_required),
+  );
+  const selectors = owned.map((p) => {
+    const input = el("input", { maxLength: 128, placeholder: "Eligible human principal", required: true });
+    return {
+      project: p,
+      input,
+      row: el(
+        "label",
+        { className: "row" },
+        `Successor for ${p.tenant_id} / ${p.project_id}: `,
+        input,
+      ),
+    };
+  });
+
+  const offboard = el("button", { textContent: "Offboard from this chapter…", disabled: deciding });
   offboard.onclick = async () => {
-    if (!confirm(`End everything ${id} holds in this chapter: every project, and their administrator keys?`)) return;
+    const successors = selectors.map(({ project: p, input }) => ({
+      tenant_id: p.tenant_id,
+      project_id: p.project_id,
+      principal_id: input.value.trim(),
+    }));
+
+    let expected;
+    try {
+      expected = chapterOffboarding(found, chapterId, successors);
+    } catch (error) {
+      return status(error.message, true);
+    }
+
+    if (!confirm(`Offboard ${id} from every chapter project and transfer ${owned.length} owned project(s) atomically?`))
+      return;
+
     const path = `/api/v1/principals/${encodeURIComponent(id)}/chapter_offboarding`;
     const done = await signEach(
-      () => governed("POST", path, { governance_key_id: keyId, chapter_id: chapterId }),
+      () => governed("POST", path, { governance_key_id: keyId, chapter_id: chapterId, successors }),
       (prepared) => prepared.commands,
-      (cores) => device.isExpectedBatch(cores, { keyId, chapter: chapterId, commands: chapterOffboarding(found, chapterId) }),
+      (cores) => device.isExpectedBatch(cores, { keyId, chapter: chapterId, commands: expected }),
       (prepared, signatures) => postJSON(`${path}/${encodeURIComponent(prepared.id)}`, { signatures }),
     );
     if (done) await showPerson(id);
@@ -875,6 +908,10 @@ function personInChapter(found, keys) {
         ? `${id} administers it with ${keys.map((k) => k.key_id).join(", ")}.`
         : `${id} does not administer it.`,
     }),
+    ...(owned.length
+      ? [el("p", { className: "muted", textContent: "A replacement human with an active operator grant is required for every owned project. No owner is removed without a successor." })]
+      : []),
+    ...selectors.map((s) => s.row),
     el("div", { className: "actions" }, offboard),
   );
 }
@@ -918,6 +955,89 @@ function personInProject(id, p) {
     el("p", { textContent: `${id} holds ${p.held.map((h) => h.kind).join(", ")}.` }),
     ...rows,
     el("div", { className: "actions" }, offboard),
+  );
+}
+
+// Ownerless legacy projects have no work permission until governance backfills
+// them. This view reads only through a signed chapter governance request.
+async function refreshOwnerless() {
+  if (!governing || !pair) return;
+  const results = $("ownerless-projects");
+  results.replaceChildren(el("p", { className: "muted", textContent: "Loading ownerless projects…" }));
+
+  try {
+    const projects = await governed("GET", `/api/v1/chapters/${chapter}/ownerless_projects`);
+    results.replaceChildren(
+      ...(projects.length
+        ? projects.map(ownerlessProject)
+        : [el("p", { className: "muted", textContent: "Every existing project has an owner." })]),
+    );
+  } catch (error) {
+    results.replaceChildren(el("p", { className: "status error", textContent: error.message }));
+  }
+}
+
+function ownerlessProject(p) {
+  const scope = [chapterId, p.tenant_id, p.project_id];
+  const principal = el("input", { maxLength: 128, placeholder: "Accountable human principal", required: true });
+  const operatorKey = el("input", { maxLength: 128, placeholder: "Operator key ID (if needed)" });
+  const operatorPub = el("input", { placeholder: "Operator public key, base64url (if needed)" });
+  const button = el("button", { textContent: "Assign owner…", disabled: deciding });
+
+  button.onclick = async () => {
+    const owner = principal.value.trim();
+    if (!owner) return status("Choose an accountable human principal.", true);
+
+    let operatorDevice = null;
+    let deviceParams = {};
+    const id = operatorKey.value.trim();
+    const pub = operatorPub.value.trim();
+    if (id || pub) {
+      try {
+        const raw = base64url.decode(pub);
+        if (!id || raw.length !== 32 || device.keyId(raw) !== id)
+          throw new Error("Operator key ID and 32-byte public key must match");
+        operatorDevice = { key_id: id, pubkey_hex: hex(raw) };
+        deviceParams = { operator_device: { key_id: id, pubkey: pub } };
+      } catch {
+        return status("Invalid operator key ID or public key. Enrol the device first or supply both values.", true);
+      }
+    }
+
+    if (!confirm(`Assign ${owner} as the accountable human owner of ${p.tenant_id} / ${p.project_id}?`))
+      return;
+
+    const path =
+      `/api/v1/chapters/${chapter}/tenants/${encodeURIComponent(p.tenant_id)}` +
+      `/projects/${encodeURIComponent(p.project_id)}/ownership/backfill/${encodeURIComponent(owner)}`;
+    const done = await signEach(
+      () => governed("POST", path, { governance_key_id: keyId, ...deviceParams }),
+      (prepared) => prepared.commands,
+      (cores) => {
+        try {
+          const commands = ownerBackfillCommands(
+            { tenant: scope[1], project: scope[2], principal: owner, operatorDevice },
+            cores.map((c) => c.type),
+          );
+          return device.isExpectedBatch(cores, { keyId, chapter: chapterId, commands });
+        } catch {
+          return false;
+        }
+      },
+      (prepared, signatures) => postJSON(`${path}/${encodeURIComponent(prepared.id)}`, { signatures }),
+    );
+    if (done) await refreshOwnerless();
+  };
+
+  return el(
+    "div",
+    { className: "held" },
+    el("h4", { textContent: `${p.tenant_id} / ${p.project_id}` }),
+    el("p", { className: "muted", textContent: "A declared human with an active operator grant can be assigned directly. Otherwise, provide that person's existing device key and public key." }),
+    el("label", {}, "Owner ", principal),
+    el("div", { className: "actions" }, el("label", {}, "Operator key (optional) ", operatorKey)),
+    el("div", { className: "actions" }, el("label", {}, "Public key (optional) ", operatorPub)),
+    el("div", { className: "actions" }, button),
   );
 }
 
@@ -1062,6 +1182,7 @@ async function enrolment() {
   if (!operator || !reviewer || !governance) return next(30_000);
   const { status: state, code } = operator;
   next([state, reviewer.status, governance.status].includes("pending") ? 10_000 : 30_000);
+  const wasGoverning = governing;
   enrolled = state === "enrolled";
   reviewing = reviewer.status === "enrolled";
   governing = governance.status === "enrolled";
@@ -1093,6 +1214,7 @@ async function enrolment() {
     $("enrolment").textContent = "This device cannot decide yet. Request access, then give the code to your administrator.";
   }
   render();
+  if (governing && !wasGoverning) refreshOwnerless();
 }
 
 async function requestAccess(event) {
@@ -1150,6 +1272,7 @@ async function start() {
     $("amend-kind").addEventListener("change", showKind);
     $("approve-form").addEventListener("submit", lookUpRequest);
     $("person-form").addEventListener("submit", lookUpPerson);
+    $("ownerless-refresh").addEventListener("click", refreshOwnerless);
     await enrolment();
   } catch (e) {
     status(`This browser cannot hold a signing key (${e.message}); you can read but not decide.`, true);
