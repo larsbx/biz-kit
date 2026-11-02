@@ -129,6 +129,13 @@ defmodule BizKit.Extension.UpgradeTest do
              Upgrade.assess(old, %{old | version: "1.3.0", requested_grants: []})
   end
 
+  test "deployment mode cannot silently change under the same contract" do
+    old = baseline()
+
+    assert {:error, :execution_contract_changed} =
+             Upgrade.assess(old, %{old | version: "1.3.0", deployment: :external})
+  end
+
   test "changing dependency range is not an automatically compatible upgrade" do
     old = baseline()
 
