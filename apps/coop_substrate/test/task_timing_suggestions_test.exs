@@ -20,7 +20,7 @@ defmodule CoopSubstrate.TaskTimingSuggestionsTest do
     agent = new_member("suggester")
     op_grant = operator_grant(gov, op, "alice")
     agent_grant = suggester_grant(gov, agent, "bot")
-    {:ok, _} = Log.append([declare_governance(gov)])
+    {:ok, _} = Log.append([declare_governance(gov) | project_owner(gov)])
     {:ok, _} = Log.append([op_grant, agent_grant])
     %{gov: gov, op: op, agent: agent, op_grant: op_grant, agent_grant: agent_grant}
   end

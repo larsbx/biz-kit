@@ -213,11 +213,51 @@ defmodule SpruceGoose.LedgerFixtures do
       })
     )
 
+    owners!(w)
+
     Map.merge(w, %{
       op_grant: grant!(w, "TaskOperatorGrantedV1", w.op, "alice", "project-1"),
       op_grant_2: grant!(w, "TaskOperatorGrantedV1", w.op, "alice", "project-2"),
       agent_grant: grant!(w, "TaskSuggesterGrantedV1", w.agent, "bot", "project-1")
     })
+  end
+
+  # Each project's accountable owner, which work there needs
+  # (`TaskCore.Projects`): a principal governance declares human, with its own
+  # operator key in the project. It never signs in these tests.
+  defp owners!(w) do
+    owner = member("operator")
+
+    assignments =
+      for project <- ~w(project-1 project-2),
+          payload <- [
+            %{
+              "principal_id" => "owner",
+              "key_id" => owner.signer.key_id,
+              "pubkey" => {:bytes, owner.signer.pubkey}
+            },
+            %{"principal_id" => "owner"}
+          ] do
+        type =
+          if Map.has_key?(payload, "key_id"),
+            do: "TaskOperatorGrantedV1",
+            else: "TaskProjectOwnerAssignedV1"
+
+        event(
+          w,
+          w.gov,
+          type,
+          Map.merge(%{"tenant_id" => @tenant, "project_id" => project}, payload)
+        )
+      end
+
+    append!([
+      event(w, w.gov, "TaskPrincipalKindDeclaredV1", %{
+        "principal_id" => "owner",
+        "kind" => "human"
+      })
+      | assignments
+    ])
   end
 
   def feed_path(w, project \\ "project-1"),

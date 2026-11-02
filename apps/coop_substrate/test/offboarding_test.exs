@@ -24,7 +24,7 @@ defmodule CoopSubstrate.OffboardingTest do
       Enum.map(1..6, fn _ -> new_member("operator") end)
 
     deleg = as_role(new_member("operator"), "operator")
-    {:ok, _} = Log.append(declare_governance(gov))
+    {:ok, _} = Log.append([declare_governance(gov) | project_owner(gov)])
 
     {:ok, [laptop_g, phone_g, suggester_g, reviewer_g, bob_g, elsewhere_g]} =
       Log.append([

@@ -18,8 +18,11 @@ defmodule CoopSubstrate.ChapterProjectsTest do
     laptop = new_member("operator")
     tablet = new_member("reviewer")
 
-    {:ok, [_, grant]} =
-      Log.append([declare_governance(gov), operator_grant(gov, laptop, "alice")])
+    {:ok, [_, grant | _owner]} =
+      Log.append([
+        declare_governance(gov),
+        operator_grant(gov, laptop, "alice") | project_owner(gov)
+      ])
 
     {:ok, _} =
       Log.append([
@@ -44,8 +47,9 @@ defmodule CoopSubstrate.ChapterProjectsTest do
                tenant_id: "tenant-1",
                project_id: "project-1",
                tasks: %{"inbox" => 2},
-               grants: 1,
-               people: ["alice"]
+               # Alice's grant, and the project owner's (`project_owner/1`).
+               grants: 2,
+               people: ["alice", "owner"]
              },
              %{tenant_id: "tenant-1", project_id: "project-2", tasks: %{}, grants: 0, people: []}
            ]

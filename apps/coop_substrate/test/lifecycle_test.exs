@@ -19,7 +19,7 @@ defmodule CoopSubstrate.LifecycleTest do
     gov = new_member("governance")
     op = new_member("operator")
     grant = operator_grant(gov, op, "alice")
-    {:ok, _} = Log.append([declare_governance(gov), grant])
+    {:ok, _} = Log.append([declare_governance(gov), grant | project_owner(gov)])
     {:ok, _} = Log.append(create(op, grant, "task-1", unscheduled()))
 
     sop = store!("The standard operating procedure")
