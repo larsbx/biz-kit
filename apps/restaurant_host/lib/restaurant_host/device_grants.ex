@@ -70,7 +70,8 @@ defmodule RestaurantHost.DeviceGrants do
   # Include the chapter, merchant and configured key, so a hold cannot be
   # submitted through another restaurant or after the device is reconfigured.
   defp owner(%{chapter_id: chapter, payload: p}) do
-    {:restaurant_device_grant, chapter, p["merchant_id"], p["device_id"], p["key_id"], p["pubkey"]}
+    {:restaurant_device_grant, chapter, p["merchant_id"], p["device_id"], p["key_id"],
+     p["pubkey"]}
   end
 
   @doc """

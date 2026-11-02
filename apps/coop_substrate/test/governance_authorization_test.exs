@@ -19,8 +19,10 @@ defmodule CoopSubstrate.GovernanceAuthorizationTest do
   test "the client codec round-trips and accepts field order and comma-containing keys" do
     r = request()
     signature = :binary.copy(<<7>>, 64)
+
     assert {:ok, ^r, ^signature} =
              Authorization.parse(Authorization.encode(r, signature), r.method, r.path)
+
     sig = Base.url_encode64(signature, padding: false)
 
     reordered =
