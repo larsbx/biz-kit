@@ -155,7 +155,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
   @doc false
   def expected?(
         cores,
-        %{"projects" => projects, "keys" => keys},
+        %{"projects" => projects, "keys" => keys} = details,
         principal,
         chapter,
         signer_key,
@@ -201,7 +201,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
         {core["type"], core["payload"], core["chapter_id"]}
       end)
 
-    complete?(%{"projects" => projects}, principal, chapter, successors) == :ok and
+    complete?(details, principal, chapter, successors) == :ok and
       actual ==
         for {type, payload} <- offboardings ++ assignments ++ revocations do
           {type, payload, chapter}
