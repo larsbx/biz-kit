@@ -143,8 +143,59 @@ equivalence proof for the actual organization/grant resolution") still applies.
   re-check it inside the transaction, so the remaining window lasts one request.
   User and participant suspension and the assignment's validity interval are
   re-checked.
-- **Other Dispatch writers.** These still authorize from the actor snapshot and
-  were not examined against this interleaving: `Dispatch.Operations.Trips`,
-  `Locations`, `LocationDemand`, `Dispatch.Accounts.Administration` and
-  `StatusEventController`.
+- **Other Dispatch writers.** Examined in the follow-up below.
 - **No refinement proof** relates the Lean transition relation to this code.
+
+## Follow-up: the other Dispatch writers (2026-11-02)
+
+The race needs a write that authorizes from the `Actor` snapshot and then waits
+on a lock before mutating.
+
+| Writer | Writes? | Waits on a lock after authorizing? | Finding |
+| --- | --- | --- | --- |
+| `Operations.Trips` | no (`mine/1` reads) | — | not affected |
+| `Operations.LocationDemand` | no (`:pg` membership; reads consent) | — | not affected |
+| `Accounts.Administration.grant/3`, `revoke/4` | role assignments, audit | yes, the per-organization advisory lock | **reproduced** |
+| `Operations.Locations.begin_consent/2` | consent grant, audit | yes, the trip row lock | **reproduced** |
+| `Operations.Locations.revoke_consent/2` | consent revocation | yes, the trip row lock | left on the snapshot on purpose (below) |
+| `Operations.Locations.ingest/2` | location samples | no; each sample is authorized by its consent at acquisition | snapshot window bounded by one request |
+| `StatusEventController` → `Declarations.declare/3` | status events, audit | only a same-key idempotency row, `lock_timeout` 3 s, and the waiter replays the first result rather than writing | snapshot window bounded by one request |
+
+**Reproduction** at `e894f142` (tests only, `lib/` = main `fb3bb006`):
+`writer_authority_concurrency_test.exs`, `--seed 0` → **6 tests, 4 failures**.
+Each failure is an unauthorized success:
+
+- An administrator revoked while queued on the organization lock still revoked
+  another administrator. With only two administrators, the last-administrator
+  guard refused this, but only by coincidence; with three, it succeeded.
+- An administrator revoked while queued still granted a role.
+- A stale snapshot of a revoked administrator still revoked another.
+- A driver whose assignment was revoked while `begin_consent` waited on the trip
+  lock still began location consent.
+
+**Correction** at `99171887`:
+
+- `Administration.serialized/2` re-authorizes `role_assignment.manage` with
+  `authorize/3` (`lock: true`) once the advisory lock is held. It runs the write,
+  and the step-up comparison, as that fresh actor; a refusal is `:not_found`.
+- `begin_consent/2` re-authorizes `location.share.self` the same way after the
+  trip lock.
+
+At `99171887`: the 6 writer tests pass, also on three repeat runs, and the full
+Dispatch suite gives 2 doctests, 481 tests, 0 failures. Two mutations were each
+caught: removing the administration re-check failed 3 tests, and removing the
+consent re-check failed 1. The credo findings on the changed `lib/` files match
+main.
+
+**Left on the snapshot, by design or bound.**
+
+- `revoke_consent` stays as it is. Withdrawing consent only reduces what is
+  shared, and refusing it because the participant's role lapsed mid-request
+  would keep sharing alive.
+- The Ash policy checks (`HasCapability`, `ActingOnSelf`, `PartnerScope`)
+  evaluate whatever actor they are given. A writer that hands them a fresh actor
+  inherits the fix; one that hands them a snapshot keeps a window of one
+  request.
+- **Open, owner decision:** whether revoking a driver's role should also close
+  that driver's open location consents. It does not today.
+
