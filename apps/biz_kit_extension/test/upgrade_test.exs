@@ -47,7 +47,9 @@ defmodule BizKit.Extension.UpgradeTest do
       %{old | version: "1.3.0"}
       |> Map.update!(:capabilities, &["school_ops.lessons.read" | &1])
       |> Map.update!(:requested_grants, &["school_ops.review.perform" | &1])
-      |> Map.update!(:events, &[ %{name: "school_ops.lesson.reviewed", writer: "school_ops"} | &1])
+      |> Map.update!(:events, fn events ->
+        [%{name: "school_ops.lesson.reviewed", writer: "school_ops"} | events]
+      end)
 
     assert {:ok, result} = Upgrade.assess(old, candidate)
     assert result.classification == :compatible_additive
@@ -67,8 +69,37 @@ defmodule BizKit.Extension.UpgradeTest do
     assert {:error, :version_downgrade} =
              Upgrade.assess(old, %{old | version: "1.1.9"})
 
-    assert {:error, :extension_identity_changed} =
-             Upgrade.assess(old, %{old | id: "dispatch"})
+    other =
+      old
+      |> Map.put(:id, "dispatch")
+      |> Map.update!(:capabilities, &Enum.map(&1, fn name -> String.replace_prefix(name, "school_ops.", "dispatch.") end))
+      |> Map.update!(:requested_grants, &Enum.map(&1, fn name -> String.replace_prefix(name, "school_ops.", "dispatch.") end))
+      |> Map.update!(:commands, fn commands ->
+        Enum.map(commands, fn command ->
+          %{
+            command
+            | name: String.replace_prefix(command.name, "school_ops.", "dispatch."),
+              writer: "dispatch",
+              required_grants: ["dispatch.workflow.propose"]
+          }
+        end)
+      end)
+      |> Map.update!(:events, fn events ->
+        Enum.map(events, fn event ->
+          %{event | name: String.replace_prefix(event.name, "school_ops.", "dispatch."), writer: "dispatch"}
+        end)
+      end)
+      |> Map.update!(:projections, fn projections ->
+        Enum.map(projections, fn projection ->
+          %{
+            projection
+            | name: String.replace_prefix(projection.name, "school_ops.", "dispatch."),
+              source_event: String.replace_prefix(projection.source_event, "school_ops.", "dispatch.")
+          }
+        end)
+      end)
+
+    assert {:error, :extension_identity_changed} = Upgrade.assess(old, other)
 
     assert {:error, :major_upgrade_requires_separate_migration} =
              Upgrade.assess(old, %{old | version: "2.0.0"})
