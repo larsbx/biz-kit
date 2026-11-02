@@ -79,6 +79,41 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
     end
   end
 
+  test "actual CLI option parsing keeps repeated successor values and duplicates" do
+    {opts, positional, invalid} =
+      Succeed.parse_options([
+        @principal,
+        @chapter,
+        "--successor",
+        "tenant-1/project-1=alice",
+        "--successor",
+        "tenant-1/project-2=bob",
+        "--yes"
+      ])
+
+    assert positional == [@principal, @chapter]
+    assert invalid == []
+    assert opts[:yes]
+    assert Keyword.get_values(opts, :successor) == [
+             "tenant-1/project-1=alice",
+             "tenant-1/project-2=bob"
+           ]
+
+    assert Succeed.parse_successors(Keyword.get_values(opts, :successor)) ==
+             {:ok, %{{"tenant-1", "project-1"} => "alice", {"tenant-1", "project-2"} => "bob"}}
+
+    {dupes, _, []} =
+      Succeed.parse_options([
+        "--successor",
+        "tenant-1/project-1=alice",
+        "--successor",
+        "tenant-1/project-1=mallory"
+      ])
+
+    assert {:error, :invalid_successor_selection} =
+             Succeed.parse_successors(Keyword.get_values(dupes, :successor))
+  end
+
   test "complete succession covers exactly projects actually owned in one chapter" do
     assert Succeed.complete?(details(), @principal, @chapter, successors()) == :ok
 
@@ -99,6 +134,19 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
   test "sign only exact scoped offboard/assignment/key-revocation sequence" do
     assert Succeed.expected?(
              cores(), details(), @principal, @chapter, "governance-A", successors()
+           )
+
+    refute Succeed.expected?(
+             cores(),
+             Map.put(details(), "principal_id", "mallory"),
+             @principal,
+             @chapter,
+             "governance-A",
+             successors()
+           )
+
+    refute Succeed.expected?(
+             cores(), details(), "mallory", @chapter, "governance-A", successors()
            )
 
     for candidate <- [
