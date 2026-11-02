@@ -45,8 +45,8 @@ it at the legacy eatsbot's locale cache.
 
 ## Not yet
 
-* Granting devices from an operator tool (today: a governance-signed
-  `RestaurantDeviceGrantedV1` appended by hand). Deploying is described in
+* Revoking a device's grant. Deploying, and granting devices with
+  `mix restaurant.grant`, are described in
   [docs/deploy.md](../../docs/deploy.md#the-restaurant-release).
 * Grant revocation, staff sign-in, cancellation reasons chosen at the board,
   receipt printing, delivery (slice 5) and card payments through Hawala.

@@ -122,9 +122,18 @@ a board's pairing secret only as its SHA-256.
 
 The host validates all of it at boot (`RestaurantHost.Config`) and refuses to
 start on any error. Each device's key must also be granted on the ledger by
-the chapter's governance key (`RestaurantDeviceGrantedV1`: the storefront
-`checkout`, a board its kitchen steps); until then the ledger refuses what it
-signs. Pair a board by opening `/board/pair/<board>/<secret>` on it once.
+the chapter's governance key; until then the ledger refuses what it signs.
+From the administrator's machine, with the governance key in
+`HARNESS_KEYS_DIR`:
+
+```sh
+mix restaurant.grant storefront --server https://order.example   # checkout
+mix restaurant.grant board-1 --server https://order.example      # kitchen steps
+```
+
+Each shows the grant the host asks for (merchant, device, key, actor, actions)
+and signs exactly that, once confirmed; the seed never leaves the machine.
+Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
 
 ## Testing a deployment
 

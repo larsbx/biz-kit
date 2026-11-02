@@ -17,8 +17,10 @@ defmodule RestaurantHost.Web.Layouts do
           .order { border: 1px solid #ccc; border-radius: .5rem; padding: .75rem; margin: .75rem 0; }
           button + button { margin-left: .5rem; }
         </style>
-        <script src="/assets/phoenix.min.js"></script>
-        <script src="/assets/phoenix_live_view.min.js"></script>
+        <script src="/assets/phoenix.min.js">
+        </script>
+        <script src="/assets/phoenix_live_view.min.js">
+        </script>
         <script>
           window.addEventListener("DOMContentLoaded", () => {
             const csrf = document.querySelector("meta[name='csrf-token']").content;
