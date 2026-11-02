@@ -184,7 +184,11 @@ defmodule SpruceGoose.Web.AdministrationTest do
 
     assert {:ok,
             [
-              %{"project_id" => "project-1", "tasks" => %{}, "people" => ["alice", "bot", "owner"]},
+              %{
+                "project_id" => "project-1",
+                "tasks" => %{},
+                "people" => ["alice", "bot", "owner"]
+              },
               %{"project_id" => "project-2", "tasks" => %{}, "people" => ["alice", "owner"]}
             ]} = Client.get_signed(url, governance(w))
   end

@@ -1,6 +1,6 @@
 # Project ownership: an eligible accountable owner before work
 
-Date: 2026-11-02. Status: **implemented in TaskCore; ledger wiring awaiting CI**.
+Date: 2026-11-02. Status: **implemented**.
 Follows [typed intake](2026-11-02-typed-intake.md), which introduced the
 project owner who adopts the intake catalogue.
 
@@ -130,8 +130,9 @@ yields the same tasks.
 
 ## Validation
 
-TaskCore: 148 tests, all passing locally on Elixir 1.14/OTP 25 with the app's
-Elixir requirement relaxed, including the 21 ownership tests and the updated
-intake, lesson and salvage fixtures. CoopSubstrate and SpruceGoose changes
-could not be compiled here (Hex unreachable); they run in the Consolidation
-and SchoolOps workflows on Elixir 1.19/OTP 27.
+TaskCore: 148 tests, including the 23 ownership tests and the updated intake,
+lesson and salvage fixtures. They pass locally on Elixir 1.14/OTP 25 with the
+app's Elixir requirement relaxed, and in CI on Elixir 1.19/OTP 27. CoopSubstrate
+and SpruceGoose could not be compiled in the authoring sandbox (Hex
+unreachable); their suites and the release smoke run in the Consolidation
+workflow, and SchoolOps in its own.
