@@ -71,4 +71,29 @@ defmodule RestaurantHost.ConfigTest do
 
     assert Config.parse(json(%{"boards" => bad_hash}), env()) == {:error, {:invalid, "boards"}}
   end
+
+  test "device IDs, keys and seed references are unambiguous and safe to display" do
+    for storefront <- [
+          %{"device_id" => "bad\nname", "key_id" => "k-store"},
+          %{"device_id" => "storefront", "key_id" => ""}
+        ] do
+      assert {:error, _} = Config.parse(json(%{"storefront" => storefront}), env())
+    end
+
+    for storefront <- [
+          %{"device_id" => "board-1", "key_id" => "k-store"},
+          %{"device_id" => "storefront", "key_id" => "k-board"}
+        ] do
+      assert {:error, :ambiguous_devices} =
+               Config.parse(json(%{"storefront" => storefront}), env())
+    end
+
+    assert {:error, :ambiguous_devices} =
+             Config.parse(
+               json(),
+               %{env() | "RESTAURANT_DEVICE_SEED_BOARD_1" => Base.encode64(@seed)}
+             )
+
+    assert {:error, _} = Config.parse(json(%{"chapter" => ""}), env())
+  end
 end

@@ -10,6 +10,9 @@ defmodule RestaurantHost.ReleaseTasks do
   migrating means initializing the ledger's event stores. Idempotent.
   """
 
+  @doc "Review and enroll devices from an operator's release copy, without starting the host."
+  def grant(args), do: RestaurantHost.Enrollment.main(args)
+
   @spec migrate() :: :ok
   def migrate, do: CoopSubstrate.ReleaseTasks.init_event_stores()
 end

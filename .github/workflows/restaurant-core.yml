@@ -13,6 +13,7 @@ on:
       - 'config/**'
       - 'scripts/restaurant-release-smoke.sh'
       - 'scripts/restaurant_release_smoke.exs'
+      - 'scripts/restaurant_enrollment_smoke_setup.exs'
       - 'config/runtime.exs'
       - '.github/workflows/restaurant-core.yml'
   push:
@@ -86,7 +87,7 @@ jobs:
       - run: mix deps.get --check-locked
       - name: Signed restaurant admission through the Log (race, authority, replay)
         working-directory: apps/coop_substrate
-        run: mix test test/restaurant_admission_test.exs test/log_test.exs --warnings-as-errors
+        run: mix test test/restaurant_admission_test.exs test/log_test.exs test/governance_authorization_test.exs --warnings-as-errors
 
   host:
     runs-on: ubuntu-24.04

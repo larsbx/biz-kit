@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the production restaurant release, migrate, boot it, check it serves
-# the storefront and pairs a board, then place and complete a pickup order on
+# the storefront and pairs a board, enroll both devices, then complete a pickup order on
 # its own ledger (scripts/restaurant_release_smoke.exs). Locally and in CI; see
 # docs/deploy.md.
 #
@@ -21,9 +21,10 @@ export RESTAURANT_DEVICE_SEED_STOREFRONT="$(seed)" RESTAURANT_DEVICE_SEED_BOARD_
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 pairing=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+chapter="smoke-$(date +%s)-$RANDOM"
 cat > "$work/restaurant.json" <<JSON
 {
-  "chapter": "smoke-$(date +%s)-$RANDOM",
+  "chapter": "$chapter",
   "merchant": "shop",
   "currency": "USD",
   "tax_rate": "0.0825",
@@ -41,7 +42,11 @@ release=_build/prod/rel/restaurant/bin/restaurant
 # Twice: migrating must be safe to repeat before every start.
 for _ in 1 2; do "$release" eval "RestaurantHost.ReleaseTasks.migrate()"; done
 
-"$release" daemon
+# The only bootstrap is a self-signed governance declaration, never a device grant.
+export RESTAURANT_SMOKE_BOOTSTRAP="$work/governance.event"
+HARNESS_KEYS_DIR="$work/keys" "$release" eval "Code.eval_file(\"$PWD/scripts/restaurant_enrollment_smoke_setup.exs\")"
+# The server does not receive HARNESS_KEYS_DIR or the governance seed.
+env -u HARNESS_KEYS_DIR "$release" daemon
 trap '"$release" stop >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
 url="http://localhost:$RESTAURANT_PORT"
@@ -51,6 +56,13 @@ curl -fs "$url/" | grep -q "Margherita" || { echo "the storefront did not come u
 # A wrong secret is refused; the right one pairs the board and redirects to it.
 test "$(curl -s -o /dev/null -w '%{http_code}' "$url/board/pair/board-1/wrong")" = 403
 test "$(curl -s -o /dev/null -w '%{http_code}' "$url/board/pair/board-1/$pairing")" = 302
+
+"$release" rpc 'env = System.fetch_env!("RESTAURANT_SMOKE_BOOTSTRAP") |> File.read!() |> :erlang.binary_to_term([:safe]); {:ok, _} = CoopSubstrate.Log.append(env)'
+for device in storefront board-1; do
+  # A separate release VM has neither device seeds nor a running appender.
+  HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
+    "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.grant([\"$device\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"
+done
 
 out=$("$release" rpc "Code.eval_file(\"$PWD/scripts/restaurant_release_smoke.exs\")")
 echo "$out"

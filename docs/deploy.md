@@ -122,9 +122,55 @@ a board's pairing secret only as its SHA-256.
 
 The host validates all of it at boot (`RestaurantHost.Config`) and refuses to
 start on any error. Each device's key must also be granted on the ledger by
-the chapter's governance key (`RestaurantDeviceGrantedV1`: the storefront
-`checkout`, a board its kitchen steps); until then the ledger refuses what it
-signs. Pair a board by opening `/board/pair/<board>/<secret>` on it once.
+the chapter's governance key; until then the ledger refuses what it signs.
+The chapter must already have its governance key declared by the existing
+chapter bootstrap ceremony. Enrollment never declares governance or lets a
+device grant itself authority. Keep `HARNESS_KEYS_DIR/governance.seed` (0600)
+on the administrator's machine, outside the restaurant file and server
+environment. Do not copy it to the restaurant server or use `rpc` to enroll.
+
+From a source checkout on the administrator's machine:
+
+```sh
+export HARNESS_KEYS_DIR=/secure/operator-keys
+mix restaurant.grant storefront --chapter chapter-genesis --merchant shop --server https://order.example
+mix restaurant.grant board-1 --chapter chapter-genesis --merchant shop --server https://order.example
+```
+
+Or use a copy of the built `restaurant` release on the administrator's machine
+without Mix (with its normal public URL, endpoint secret and restaurant-file
+path settings loaded; device seeds and event-store credentials are unnecessary
+because `eval` does not start the host or ledger):
+
+```sh
+bin/restaurant eval 'RestaurantHost.ReleaseTasks.grant(["storefront", "--chapter", "chapter-genesis", "--merchant", "shop", "--server", "https://order.example"])'
+bin/restaurant eval 'RestaurantHost.ReleaseTasks.grant(["board-1", "--chapter", "chapter-genesis", "--merchant", "shop", "--server", "https://order.example"])'
+```
+
+Both commands show chapter, merchant, device identifier, key identifier,
+public key and exact permissions before asking for confirmation. Review them
+against the deployment's expected device keys. The storefront receives only
+`system` / `checkout`; boards receive `staff` / `accept`, `start_preparing`,
+`mark_ready`, `complete`, `cancel`. A board's pairing secret controls access to
+the board UI; its governance grant separately authorizes ledger events.
+`--yes` skips the interactive question for reviewed automation, but still
+requires explicit chapter and merchant and verifies the exact signed proposal.
+Remote servers require HTTPS; HTTP is accepted only on loopback.
+
+Preparing a grant also requires a signed governance HTTP request with a fresh
+nonce; anonymous requests cannot fill or evict enrollment holds.
+The host holds a grant for five minutes, bound to chapter, merchant and the
+configured device key. The client checks the canonical bytes match the
+reviewed grant and governance signer, then sends only a signature. Submission
+is single-use; expired, replayed, unauthorized or malformed grants cannot
+append. A repeat enrollment is refused as already granted. For refusal,
+check chapter governance, device configuration, key identifiers and clock
+before preparing a new grant. This command does not rotate or revoke keys.
+Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
+`_`, `.` or `-`, starting with a letter or digit. Device IDs, key IDs, derived
+seed-variable names and device keys must be distinct in one restaurant.
+
+Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
 
 ## Testing a deployment
 
@@ -144,8 +190,12 @@ The script signs task commands on the release's own ledger and checks:
 
 `scripts/restaurant-release-smoke.sh` does the same for the `restaurant`
 release (the `release-smoke` job of `restaurant-core.yml`): build, migrate
-twice, boot, check the storefront and board pairing over HTTP, then place and
-complete a pickup order on the release's own ledger in a fresh chapter.
+twice, boot, check the storefront and board pairing over HTTP, then enroll both
+devices with the operator-side release command over HTTP and complete a pickup
+order on the release's own ledger in a fresh chapter. Only the initial
+governance declaration is bootstrapped; no device grant is manually appended.
+The operator VM is checked to have no running ledger and receives no device
+seeds; the server receives no governance seed. PostgreSQL 16 is required.
 
 ## What this does not cover
 
