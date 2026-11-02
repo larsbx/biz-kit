@@ -115,6 +115,25 @@ governance backfills them with one batch per project:
 Backfill adds facts and rewrites no history: replay of the old events
 yields the same tasks.
 
+The server-side backfill implementation in the stacked successor branch is
+`CoopSubstrate.ProjectOwnership`:
+
+* `ownerless(chapter)` lists only existing projects with historical tasks or
+  grants and no owner, without mutating the ledger.
+* `prepare_backfill({chapter, tenant, project}, principal, governance_key_id, device)`
+  prepares the missing human-kind declaration (unless already declared),
+  an operator-device grant (unless already held), and an owner assignment.
+  The key and public key must be supplied by the administrator/device; no
+  device is created or silently inferred. Agent principals are refused.
+* `backfill(scope, principal, held_id, signatures)` attaches a governance
+  signature to every command. Its admission guard recomputes the exact
+  expected batch against current state, so an intervening assignment or
+  grant cannot be overwritten by a stale held request.
+
+This backfill implementation is server-side only. The administrator-facing
+form/API integration and authenticated UI workflow remain tracked in #265.
+
+
 ## Not yet
 
 * **Administration views.** The server-side chapter offboarding interface
