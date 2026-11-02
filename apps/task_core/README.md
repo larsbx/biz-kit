@@ -5,7 +5,8 @@ Task and workflow rules for any application:
 - dependency graphs;
 - readiness and execution;
 - Definitions of Done, evidence and review, and typed intake: request types
-  that fix a definition's shape, agreed to by the requester;
+  a project's owner adopts, which fix a definition's shape, agreed to by the
+  requester;
 - timing, suggestions and delegation;
 - roadmaps and workflows from reviewed blueprints, and workflow runs.
 

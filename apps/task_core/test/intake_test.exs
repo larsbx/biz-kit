@@ -3,7 +3,8 @@ defmodule TaskCore.IntakeTest do
   Typed intake (docs/architecture/2026-11-02-typed-intake.md): a request
   type fixes the shape of a task's Definition of Done, governance fills only
   its declared parameters, and the person who proposed the task agrees to
-  that exact definition before it can be queued.
+  that exact definition before it can be queued. A project's request types
+  are the catalogue its owner adopted.
   """
   use ExUnit.Case, async: true
 
@@ -46,10 +47,11 @@ defmodule TaskCore.IntakeTest do
     @impl true
     def hash(term), do: digest(term)
 
-    # The catalogues the host holds, by digest.
+    # The catalogues the host holds, decoded, by digest (of their YAML, in a
+    # real host): two revisions and one nobody adopted.
     @impl true
     def read_catalogue(digest) do
-      case Enum.find([TaskCore.IntakeTest.catalogue()], &(digest(&1) == digest)) do
+      case Enum.find(TaskCore.IntakeTest.stored(), &(digest(&1) == digest)) do
         nil -> {:error, :not_found}
         doc -> {:ok, doc}
       end
@@ -62,7 +64,21 @@ defmodule TaskCore.IntakeTest do
     def hash(term), do: :crypto.hash(:sha256, :erlang.term_to_binary(term))
   end
 
-  def catalogue, do: @catalogue
+  # The second revision changes what a research note requires.
+  @revised put_in(@catalogue, ["request_types", "research-note", "criteria"], [
+             %{
+               "id" => "grounded",
+               "description" => "Every claim about {topic} cites a primary source"
+             }
+           ])
+
+  # In the store, never adopted: a type whose criteria anyone could write.
+  @stray put_in(@catalogue, ["request_types", "anything"], %{
+           "params" => ["whatever"],
+           "criteria" => [%{"id" => "done", "description" => "{whatever}"}]
+         })
+
+  def stored, do: [@catalogue, @revised, @stray]
 
   @chapter "acme"
   @where %{"tenant_id" => "ops", "project_id" => "kernel"}
@@ -159,6 +175,8 @@ defmodule TaskCore.IntakeTest do
       |> admit!(@head, "TaskOperatorGrantedV1", grant("lars", @lars), "lars-grant")
       |> admit!(@head, "TaskOperatorGrantedV1", grant("agent", @agent), "agent-grant")
       |> admit!(@head, "TaskOperatorGrantedV1", grant("head-as-operator", @head), "head-grant")
+      |> admit!(@head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "lars"})
+      |> step!({:adopt_catalogue, Host.digest(@catalogue), @catalogue})
       |> admit!(@lars, "TaskCreatedV1", %{
         "principal_id" => "lars",
         "authorization_event_id" => "lars-grant",
@@ -190,12 +208,92 @@ defmodule TaskCore.IntakeTest do
              {:error, :intake_params_mismatch}
   end
 
-  test "an unknown catalogue, or a host without catalogues, refuses", %{s: s} do
-    elsewhere = typed(%{"catalogue_ref" => {:bytes, Host.digest(:other)}})
-    assert govern(s, "TaskDoDDefinedV2", elsewhere) == {:error, :intake_catalogue_unavailable}
+  describe "project owner and catalogue adoption" do
+    test "a project's owner is assigned by governance, and can be replaced", %{s: s} do
+      assert s.state.projects[scope()].owner == "lars"
 
-    plain = %{s | state: %{s.state | host: PlainHost}}
-    assert govern(plain, "TaskDoDDefinedV2", typed()) == {:error, :intake_catalogue_unavailable}
+      operator =
+        event(@lars, "TaskProjectOwnerAssignedV1", Map.put(@where, "principal_id", "lars"))
+
+      assert admit(operator, s) == {:error, :task_governance_not_declared}
+
+      same = event(@head, "TaskProjectOwnerAssignedV1", Map.put(@where, "principal_id", "lars"))
+      assert admit(same, s) == {:error, :project_owner_unchanged}
+
+      blank = event(@head, "TaskProjectOwnerAssignedV1", Map.put(@where, "principal_id", " "))
+      assert admit(blank, s) == {:error, :empty_task_field}
+
+      s = admit!(s, @head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "agent"})
+      assert s.state.projects[scope()].owner == "agent"
+    end
+
+    test "a catalogue is adopted only in a project with an owner, by that owner", %{s: s} do
+      ownerless = %{s | state: %{s.state | projects: %{}}}
+
+      assert admit(adoption(ownerless, @revised), ownerless) ==
+               {:error, :project_has_no_owner}
+
+      assert admit(adoption(s, @revised, @agent, "agent-grant"), s) ==
+               {:error, :not_project_owner}
+
+      # Naming the owner is not being the owner: the owner's own key and live grant sign.
+      impostor = %{adoption(s, @revised) | signers: [@agent]}
+      assert admit(impostor, s) == {:error, :task_operator_key_mismatch}
+
+      revoked =
+        admit!(s, @head, "TaskOperatorRevokedV1", %{"authorization_event_id" => "lars-grant"})
+
+      assert admit(adoption(revoked, @revised), revoked) == {:error, :task_grant_revoked}
+
+      s = admit!(s, @head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "agent"})
+      assert admit(adoption(s, @revised), s) == {:error, :not_project_owner}
+      assert admit(adoption(s, @revised, @agent, "agent-grant"), s) == :ok
+    end
+
+    test "the adopted catalogue is what the host holds under the digest, normalized", %{s: s} do
+      assert s.state.projects[scope()].catalogue.digest == {:bytes, Host.digest(@catalogue)}
+
+      claimed = adoption(s, @revised)
+      forged = put_in(claimed.payload["catalogue"], @stray)
+      assert admit(forged, s) == {:error, :intake_catalogue_mismatch}
+
+      missing = put_in(claimed.payload["catalogue_digest"], {:bytes, Host.digest(:none)})
+      assert admit(missing, s) == {:error, :intake_catalogue_unavailable}
+
+      plain = %{s | state: %{s.state | host: PlainHost}}
+      assert admit(adoption(plain, @revised), plain) == {:error, :intake_catalogue_unavailable}
+
+      assert admit(adoption(s, @catalogue), s) == {:error, :intake_catalogue_already_adopted}
+    end
+
+    test "a typed definition cites the catalogue its project adopted, and only that", %{s: s} do
+      stray = typed(%{"catalogue_ref" => {:bytes, Host.digest(@stray)}})
+      assert govern(s, "TaskDoDDefinedV2", stray) == {:error, :intake_catalogue_not_adopted}
+
+      # A type only the stray catalogue has cannot be smuggled in either.
+      {:ok, anything} = Intake.instantiate(@stray, "anything", %{"whatever" => "vibes"})
+
+      smuggled = %{
+        "request_type" => "anything",
+        "params" => %{"whatever" => "vibes"},
+        "catalogue_ref" => {:bytes, Host.digest(@catalogue)},
+        "criteria" => anything
+      }
+
+      assert govern(s, "TaskDoDDefinedV2", smuggled) == {:error, :unknown_request_type}
+
+      # After a new revision, definitions cite it, not the old one.
+      s = fold!(s, adoption(s, @revised))
+      assert govern(s, "TaskDoDDefinedV2", typed()) == {:error, :intake_catalogue_not_adopted}
+
+      current = typed(%{"catalogue_ref" => {:bytes, Host.digest(@revised)}})
+      assert govern(s, "TaskDoDDefinedV2", current) == :ok
+    end
+
+    test "a project with no adopted catalogue admits no typed definitions", %{s: s} do
+      bare = %{s | state: put_in(s.state, [:projects, scope(), :catalogue], nil)}
+      assert govern(bare, "TaskDoDDefinedV2", typed()) == {:error, :intake_catalogue_not_adopted}
+    end
   end
 
   test "a typed definition queues only once the requester agrees to it", %{s: s} do
@@ -285,6 +383,11 @@ defmodule TaskCore.IntakeTest do
   end
 
   # -- helpers ---------------------------------------------------------------
+
+  defp adoption(s, catalogue, signer \\ @lars, grant \\ "lars-grant"),
+    do: prepare(s, {:adopt_catalogue, Host.digest(catalogue), catalogue}, signer, grant)
+
+  defp scope, do: {@chapter, "ops", "kernel"}
 
   defp typed(overrides \\ %{}) do
     params = Map.get(overrides, "params", %{"area" => "dedup", "kill_rate" => "0.8"})

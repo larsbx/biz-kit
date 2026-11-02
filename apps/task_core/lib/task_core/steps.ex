@@ -10,6 +10,9 @@ defmodule TaskCore.Steps do
     * ready → `TaskReadyV1` (queued → ready), citing a custody receipt for
       each required input;
     * revoke a delegation they made → `TaskDelegationRevokedV1`;
+    * adopt an intake catalogue, as the project's owner →
+      `TaskIntakeCatalogueAdoptedV1`, with the catalogue the host stores
+      under the digest, normalized (docs/architecture/2026-11-02-typed-intake.md);
     * record custody of an artifact they stored → `ArtifactCustodyRecordedV1`
       (docs/architecture/2026-10-19-uploads.md), which the ledger admits
       only once the bytes are in the store.
@@ -68,6 +71,7 @@ defmodule TaskCore.Steps do
           | {:reopen, String.t(), String.t()}
           | {:revoke_delegation, String.t()}
           | {:record_custody, <<_::256>>}
+          | {:adopt_catalogue, <<_::256>>, map()}
           | {:instantiate, String.t(), String.t(), String.t(), %{String.t() => String.t()}}
           | {:add_todo, String.t(), String.t(), String.t(), [String.t()]}
           | {:revise_todo, String.t(), String.t(), String.t(), [String.t()]}
@@ -77,7 +81,7 @@ defmodule TaskCore.Steps do
   # Definition of Done commands predate lifecycle versions: their actor is
   # principal and grant only.
   @unversioned ~w(TaskDoDAgreedV1 TaskEvidenceSubmittedV2 TaskDoDReviewedV1
-                  ArtifactCustodyRecordedV1)
+                  ArtifactCustodyRecordedV1 TaskIntakeCatalogueAdoptedV1)
 
   @spec command(map(), TaskCore.State.scope(), action(), map()) ::
           {:ok, String.t(), map()} | {:error, term()}
@@ -90,6 +94,22 @@ defmodule TaskCore.Steps do
        "project_id" => project,
        "artifact_digest" => {:bytes, digest}
      })}
+  end
+
+  # Whether the signer owns the project, and the host holds this catalogue
+  # under the digest, is the ledger's check.
+  def command(_o, {_chapter, tenant, project}, {:adopt_catalogue, digest, catalogue}, actor) do
+    with {:ok, normal} <- TaskCore.Intake.normalize_catalogue(catalogue) do
+      {:ok, "TaskIntakeCatalogueAdoptedV1",
+       actor
+       |> versioned("TaskIntakeCatalogueAdoptedV1")
+       |> Map.merge(%{
+         "tenant_id" => tenant,
+         "project_id" => project,
+         "catalogue_digest" => {:bytes, digest},
+         "catalogue" => normal
+       })}
+    end
   end
 
   # A workflow run under its current revision: `task_ids` names a new task

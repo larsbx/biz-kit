@@ -31,6 +31,7 @@ defmodule TaskCore.State do
       |> Map.merge(TaskCore.Hierarchy.init())
       |> Map.merge(TaskCore.AgentRuns.init())
       |> Map.merge(TaskCore.Access.init())
+      |> Map.merge(TaskCore.Projects.init())
 
   @doc """
   A task entering the inbox at version 1. Baselines and operator creation share
@@ -120,6 +121,7 @@ defmodule TaskCore.State do
     state = TaskCore.Todos.handle_event(env, state)
     state = TaskCore.Timing.handle_event(env, state)
     state = TaskCore.AgentRuns.handle_event(env, state)
+    state = TaskCore.Projects.handle_event(env, state)
     TaskCore.Access.handle_event(env, state)
   end
 

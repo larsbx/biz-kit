@@ -20,7 +20,8 @@ defmodule TaskCore.DoD do
 
     * `TaskDoDDefinedV2`, by governance, is a definition whose criteria are
       exactly a request type's template filled with its parameters
-      (`TaskCore.Intake`), from a catalogue the host holds by digest;
+      (`TaskCore.Intake`), from the catalogue the project's owner adopted
+      (`TaskCore.Projects`), which it cites;
     * `TaskDoDAgreedV1`, by the operator who proposed the task, agrees to
       that exact definition with a key other than the one that defined it.
       A typed definition is queued only once agreed, and a new definition
@@ -188,7 +189,7 @@ defmodule TaskCore.DoD do
   def check(%{type: "TaskDoDDefinedV2", payload: p} = env, state, keys) do
     with :ok <- governance(env, keys),
          {:ok, _task} <- current_task(env, state),
-         {:ok, catalogue} <- catalogue(state.host, p["catalogue_ref"]),
+         {:ok, catalogue} <- adopted(state, env),
          {:ok, criteria} <- TaskCore.Intake.instantiate(catalogue, p["request_type"], p["params"]) do
       if criteria == p["criteria"], do: :ok, else: {:error, :intake_template_mismatch}
     end
@@ -366,18 +367,16 @@ defmodule TaskCore.DoD do
     end)
   end
 
-  defp catalogue(host, {:bytes, <<digest::binary-size(32)>>}) do
-    with true <- Code.ensure_loaded?(host) and function_exported?(host, :read_catalogue, 1),
-         {:ok, doc} <- host.read_catalogue(digest),
-         {:ok, catalogue} <- TaskCore.Intake.normalize_catalogue(doc) do
-      {:ok, catalogue}
-    else
-      {:error, :invalid_intake_catalogue} = error -> error
-      _ -> {:error, :intake_catalogue_unavailable}
+  # The catalogue the project adopted, which the definition must cite. It was
+  # read and normalized on adoption; a definition reads no store.
+  defp adopted(state, %{payload: p} = env) do
+    ref = p["catalogue_ref"]
+
+    case TaskCore.Projects.catalogue(state, State.scope(env)) do
+      %{digest: ^ref, catalogue: catalogue} -> {:ok, catalogue}
+      _ -> {:error, :intake_catalogue_not_adopted}
     end
   end
-
-  defp catalogue(_host, _ref), do: {:error, :intake_catalogue_unavailable}
 
   defp revision(%{dod: nil}, _), do: {:error, :dod_not_defined}
 

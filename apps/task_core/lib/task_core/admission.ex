@@ -64,6 +64,7 @@ defmodule TaskCore.Admission do
     |> Map.merge(TaskCore.Access.event_types())
     |> Map.merge(TaskCore.Hierarchy.event_types())
     |> Map.merge(TaskCore.Todos.event_types())
+    |> Map.merge(TaskCore.Projects.event_types())
   end
 
   defp holder_revocation(role),
@@ -122,6 +123,9 @@ defmodule TaskCore.Admission do
 
         Map.has_key?(TaskCore.Todos.event_types(), env.type) ->
           TaskCore.Todos.check(env, gate.orchestration, gate.role_keys)
+
+        Map.has_key?(TaskCore.Projects.event_types(), env.type) ->
+          TaskCore.Projects.check(env, gate.orchestration, gate.role_keys)
 
         env.type in @holder_revocations ->
           holder_revocation(env, gate)
