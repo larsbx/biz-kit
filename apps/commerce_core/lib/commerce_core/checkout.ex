@@ -17,6 +17,11 @@ defmodule CommerceCore.Checkout do
 
   alias CommerceCore.Pricing
 
+  @channels [:web, :telegram, :whatsapp, :phone, :aggregator, :pos]
+
+  @doc "The channels an order may be placed through."
+  def channels, do: @channels
+
   @doc """
   A projection for one merchant. The workflow (`OrderLifecycle.workflow/1`) names
   the fulfillments checkout offers, so every placed order can start its lifecycle.
@@ -48,7 +53,7 @@ defmodule CommerceCore.Checkout do
   defp authorized?(_, _), do: false
 
   defp checkout(state, trusted, %{channel: channel, idempotency_key: key} = cmd)
-       when channel in [:web, :telegram, :whatsapp, :phone, :aggregator, :pos] and
+       when channel in @channels and
               is_binary(key) and byte_size(key) > 0 do
     cart = Map.get(state.carts, cmd.cart_id)
 

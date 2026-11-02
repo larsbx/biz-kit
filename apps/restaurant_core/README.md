@@ -27,6 +27,15 @@ sha256-pinned to `larsbx/eatsbot@15a201e`). All 48 recorded successes are
 preserved, all 459 unauthorized requests uniformly refuse, and the other 207 get
 typed refusals. See [the compatibility record](../../docs/architecture/2026-10-31-eatsbot-safety-compatibility.md).
 
+`RestaurantCore.Admission` is the pure admission rule for signed restaurant
+events, in the shape of `TaskCore.Admission`: a governance-signed
+`RestaurantDeviceGrantedV1` binds a device key to a merchant, actor and actions;
+`RestaurantOrderPlacedV1` and `RestaurantOrderStepV1`, signed by a granted
+device, run `CommerceCore.Checkout` and `Kitchen.apply/3`. The trusted context
+comes from the grant, never the payload, and `test/admission_test.exs` proves
+admission refines the kitchen reducer (same outcome, same state, for any step
+sequence). Registering it in the substrate's Log is a separate step.
+
 Umbrella only: it depends on CommerceCore in the umbrella.
 
 ```sh
