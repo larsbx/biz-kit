@@ -10,6 +10,7 @@
 //! confirming it. The backend enforces the half that matters -- action verbs and
 //! script arguments are allowlisted here, not merely hidden in the frontend.
 
+mod config_edit;
 mod configs;
 mod dispatch;
 mod exec;

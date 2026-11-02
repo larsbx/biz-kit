@@ -35,12 +35,29 @@ def until(check, description):
     raise AssertionError(f"Timed out: {description}")
 
 
-def run(binary, session_timeout=60):
+def run(binary, session_timeout=60, service_owner_fixture=False):
     with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp:
         root = Path(tmp)
         fixture = root / "app.json"
         original = '{"token":"original-native-fixture"}'
         fixture.write_text(original)
+        scripts = root / "scripts"
+        scripts.mkdir()
+        applied = root / "script-applied"
+        (scripts / "fixture.sh").write_text(
+            "#!/usr/bin/env bash\n# Native dry-run and apply fixture.\n"
+            "case \"$1\" in\n"
+            "--dry-run) echo 'dry-run confirmed';;\n"
+            f"--apply) echo applied > '{applied}'; echo 'apply confirmed';;\n"
+            "*) echo 'explicit flag required' >&2; exit 64;;\nesac\n"
+        )
+        service_file = root / "service-owned.json"
+        service_original = '{"service":"original"}'
+        if service_owner_fixture:
+            service_file.write_text(service_original)
+            service_file.chmod(0o660)
+            subprocess.run(["sudo", "-n", "chown", f"0:{os.getgid()}", str(service_file)], check=True)
+            assert service_file.stat().st_uid == 0 and os.getuid() != 0, "ownership fixture needs an ordinary editing user"
         config = root / "config" / "biz-kit"
         config.mkdir(parents=True)
         (config / "config.json").write_text(json.dumps({
@@ -177,6 +194,65 @@ def run(binary, session_timeout=60):
                 assert js("return localStorage.getItem('layout')") == saved
                 assert fixture.read_text() == original, "unsaved draft changed the real fixture"
                 print("PASS: native Tauri/WebKit config drafts, duplicate panels, split, adjacent close, sidebar, pointer resize, zoom, geometry, storage, restore")
+                # Exercise actual reviewed writes and version guards through the real IPC backend.
+                js("window.panels=[...document.querySelectorAll('[data-panel=configs].tile')];window.panels.forEach(p=>p.querySelector('tbody tr').click())")
+                until(lambda: js("return document.querySelectorAll('textarea.editor').length===2"), "fresh config editors")
+                changed = '{"token":"native-saved"}'
+                js("const e=window.panels[0].querySelector('textarea');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}))", changed)
+                until(lambda: js("return window.panels[0].textContent.includes('unsaved')"), "edited file")
+                assert js("return [...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Save…').disabled"), "save bypassed review"
+                js("[...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Review diff').click()")
+                until(lambda: js("return window.panels[0].textContent.includes('Pending change')"), "actual reviewed diff")
+                js("[...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Save…').click()")
+                until(lambda: js("return !!document.querySelector('.modal')"), "save confirmation")
+                assert js("return document.querySelector('.modal pre').textContent.includes('native-saved')"), "confirmation omitted reviewed diff"
+                click('.modal .btn.danger')
+                until(lambda: fixture.read_text() == changed, "real guarded config write")
+                until(lambda: js("return !document.querySelector('.modal')"), "save completed")
+                backups = list(root.glob("app.json.bak-*"))
+                assert len(backups) == 1 and backups[0].read_text() == original, "backup did not preserve opened bytes"
+                js("const e=window.panels[1].querySelector('textarea');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}))", '{"token":"stale-draft"}')
+                js("[...window.panels[1].querySelectorAll('button')].find(b=>b.textContent==='Review diff').click()")
+                until(lambda: js("return window.panels[1].textContent.includes('File changed since it was opened')"), "duplicate stale editor refusal")
+                assert fixture.read_text() == changed, "stale editor overwrote the saved file"
+                assert js("return window.panels[1].querySelector('textarea').value.includes('stale-draft')"), "stale refusal discarded the draft"
+                print("PASS: native reviewed save, exact backup, stale duplicate refusal and draft retention")
+                click('button[data-panel=scripts]')
+                until(lambda: js("return !!document.querySelector('[data-panel=scripts].tile .card')"), "actual script discovery")
+                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Dry run').click()")
+                until(lambda: js("return document.querySelector('[data-panel=scripts].tile').textContent.includes('dry-run confirmed') && document.querySelector('[data-panel=scripts].tile').textContent.includes('exit 0')"), "explicit dry-run output")
+                assert not applied.exists(), "dry run applied a change"
+                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
+                until(lambda: js("return !!document.querySelector('.modal')"), "apply confirmation")
+                assert js("return document.querySelector('.modal pre').textContent.includes('--apply')")
+                click('.modal .btn:not(.danger)')
+                assert not applied.exists(), "cancelled apply ran the script"
+                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
+                until(lambda: js("return !!document.querySelector('.modal')"), "second apply confirmation")
+                click('.modal .btn.danger')
+                until(lambda: applied.exists(), "confirmed real apply")
+                assert applied.read_text().strip() == "applied"
+                print("PASS: native script discovery, explicit dry-run, cancelled apply and confirmed apply")
+                def ipc(command, args):
+                    return request("POST", base + "/execute/async", {
+                        "script": "const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(value=>done({ok:true,value}),error=>done({ok:false,reason:String(error)}));",
+                        "args": [command, args],
+                    })
+                large = json.dumps({"large": "x" * 100_000})
+                result = ipc("write_config", {"host": "local", "path": str(fixture), "expected": changed, "content": large})
+                assert result["ok"], result
+                assert fixture.read_text() == large, "large snapshot did not reach actual config IPC"
+                print("PASS: native large snapshot transported outside argv")
+                if service_owner_fixture:
+                    result = ipc("write_config", {"host": "local", "path": str(service_file), "expected": service_original, "content": '{"service":"edited"}'})
+                    assert not result["ok"], "service-owned config was replaced with an operator-owned file"
+                    assert "Cannot preserve config owner" in result["reason"], result
+                    assert service_file.stat().st_uid == 0
+                    assert service_file.read_text() == service_original
+                    print("PASS: native service-owned group-writable config save refused without ownership/content changes")
+
+
+
             except Exception:
                 if session:
                     try:
@@ -214,5 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("binary", type=lambda s: Path(s).resolve())
     parser.add_argument("--session-timeout", type=float, default=60,
                         help="Bound the native WebDriver handshake (seconds; default: 60).")
+    parser.add_argument("--service-owner-fixture", action="store_true",
+                        help="Also require the Linux CI service-owned file regression (uses sudo only to create the disposable fixture).")
     args = parser.parse_args()
-    run(args.binary, args.session_timeout)
+    run(args.binary, args.session_timeout, args.service_owner_fixture)
