@@ -37,6 +37,7 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
 
     operator = member("operator")
     url = backfill_url(w, "old-project", "bob")
+
     params = %{
       "operator_device" => %{
         "key_id" => operator.signer.key_id,
@@ -87,6 +88,7 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
     )
 
     url = w.base <> "/api/v1/principals/owner/chapter_offboarding"
+
     selections = [
       %{"tenant_id" => tenant(), "project_id" => "project-1", "principal_id" => "alice"},
       %{"tenant_id" => tenant(), "project_id" => "project-2", "principal_id" => "alice"}
@@ -158,6 +160,7 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
   test "backfill cannot cross a tenant or create a phantom legacy project", w do
     grant!(w, "TaskOperatorGrantedV1", member("operator"), "legacy", "old-project")
     operator = member("operator")
+
     params = %{
       "operator_device" => %{
         "key_id" => operator.signer.key_id,
@@ -165,9 +168,10 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
       }
     }
 
-    foreign = w.base <>
-      "/api/v1/chapters/#{w.chapter}/tenants/tenant-9/projects/old-project" <>
-      "/ownership/backfill/bob"
+    foreign =
+      w.base <>
+        "/api/v1/chapters/#{w.chapter}/tenants/tenant-9/projects/old-project" <>
+        "/ownership/backfill/bob"
 
     assert {:error, {404, _}} =
              Client.sign_batch(foreign, governance(w), fn _ -> true end, params)
