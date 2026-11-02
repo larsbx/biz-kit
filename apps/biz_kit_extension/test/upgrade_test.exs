@@ -63,8 +63,10 @@ defmodule BizKit.Extension.UpgradeTest do
   test "same-version changes, downgrades, identity swaps and major changes refuse" do
     old = baseline()
 
+    changed = %{old | capabilities: ["school_ops.course.read", "school_ops.new.read"]}
+
     assert {:error, :manifest_changed_without_version_bump} =
-             Upgrade.assess(old, %{old | capabilities: ["school_ops.course.read", "school_ops.new.read"]})
+             Upgrade.assess(old, changed)
 
     assert {:error, :version_downgrade} =
              Upgrade.assess(old, %{old | version: "1.1.9"})
