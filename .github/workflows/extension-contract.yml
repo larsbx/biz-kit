@@ -64,7 +64,9 @@ jobs:
           apps/biz_kit_extension/lib/biz_kit/extension.ex
           apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex
           apps/biz_kit_extension/lib/biz_kit/extension/catalog.ex
+          apps/biz_kit_extension/lib/biz_kit/extension/registry.ex
           apps/biz_kit_extension/test/manifest_test.exs
+          apps/biz_kit_extension/test/registry_test.exs
           apps/school_ops/mix.exs
           apps/school_ops/lib/school_ops/extension.ex
           apps/school_ops/test/extension_test.exs
