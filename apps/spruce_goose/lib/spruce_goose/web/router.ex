@@ -93,13 +93,13 @@ defmodule SpruceGoose.Web.Router do
     )
 
     post(
-      "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill",
+      "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:principal_id",
       ProjectOwnershipController,
       :prepare
     )
 
     post(
-      "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:held_id",
+      "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:principal_id/:held_id",
       ProjectOwnershipController,
       :backfill
     )
