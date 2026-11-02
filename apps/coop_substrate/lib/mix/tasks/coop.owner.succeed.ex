@@ -31,10 +31,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
   def run(args) do
     Mix.Task.run("app.config")
 
-    {opts, positional, invalid} =
-      OptionParser.parse(args,
-        strict: [server: :string, yes: :boolean, successor: :string]
-      )
+    {opts, positional, invalid} = parse_options(args)
 
     unless invalid == [] and length(positional) == 2 do
       Mix.raise(
@@ -95,6 +92,14 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
     end
   end
 
+  @doc """
+  Parse the command-line switches without collapsing repeated `--successor`
+  arguments. Both duplicate detection and multi-project succession depend on
+  preserving the complete original sequence.
+  """
+  def parse_options(args) when is_list(args),
+    do: OptionParser.parse(args, strict: [server: :string, yes: :boolean, successor: :keep])
+
   @doc false
   def parse_successors(items) when is_list(items) do
     Enum.reduce_while(items, {:ok, %{}}, fn value, {:ok, acc} ->
@@ -146,8 +151,15 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
   def complete?(_, _, _, _), do: {:error, :invalid_chapter_holdings}
 
   @doc false
-  def expected?(cores, %{"projects" => projects, "keys" => keys}, principal, chapter, signer_key, successors)
-      when is_list(cores) and is_list(projects) and is_list(keys) do
+  def expected?(
+        cores,
+        %{"principal_id" => stated, "projects" => projects, "keys" => keys} = details,
+        principal,
+        chapter,
+        signer_key,
+        successors
+      )
+      when is_list(cores) and is_list(projects) and is_list(keys) and stated == principal do
     chapter_projects =
       for %{"chapter_id" => ^chapter} = p <- projects,
           do: p
@@ -185,7 +197,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
         {core["type"], core["payload"], core["chapter_id"]}
       end)
 
-    complete?(%{"projects" => projects}, principal, chapter, successors) == :ok and
+    complete?(details, principal, chapter, successors) == :ok and
       actual ==
         for {type, payload} <- offboardings ++ assignments ++ revocations do
           {type, payload, chapter}
