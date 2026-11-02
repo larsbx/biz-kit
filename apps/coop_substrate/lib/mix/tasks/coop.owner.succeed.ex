@@ -127,8 +127,8 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
     do: if(Admission.segment?(s), do: :ok, else: {:error, :invalid_chapter_or_scope})
 
   @doc false
-  def complete?(%{"projects" => projects}, principal, chapter, successors)
-      when is_list(projects) and is_map(successors) do
+  def complete?(%{"principal_id" => stated, "projects" => projects}, principal, chapter, successors)
+      when is_list(projects) and is_map(successors) and stated == principal do
     owned =
       for %{
             "chapter_id" => ^chapter,
