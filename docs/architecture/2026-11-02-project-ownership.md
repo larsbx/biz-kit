@@ -130,8 +130,14 @@ The server-side backfill implementation in the stacked successor branch is
   expected batch against current state, so an intervening assignment or
   grant cannot be overwritten by a stale held request.
 
-This backfill implementation is server-side only. The administrator-facing
-form/API integration and authenticated UI workflow remain tracked in #265.
+The signed HTTP interface now exposes
+`GET /api/v1/chapters/:chapter_id/ownerless_projects` and
+`POST /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:principal_id`
+(with a `/:held_id` submission route). Governance must authorize the
+read and preparation, and each prepared command's canonical core is signed
+before commit. The chapter offboarding prepare API also accepts a
+duplicate-free `successors` array with tenant, project and principal IDs.
+A graphical owner/successor selector remains outstanding in #265.
 
 
 ## Not yet
