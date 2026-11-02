@@ -141,6 +141,8 @@ jobs:
           apps/coop_substrate/test/feed_access_test.exs
           apps/spruce_goose/lib/spruce_goose/web/feed_controller.ex
           apps/spruce_goose/lib/spruce_goose/web/router.ex
+          apps/spruce_goose/lib/spruce_goose/web/project_ownership_controller.ex
+          apps/spruce_goose/test/spruce_goose/web/project_ownership_test.exs
           apps/spruce_goose/test/spruce_goose/web/feed_test.exs
           apps/spruce_goose/config/test.exs
           apps/spruce_goose/lib/spruce_goose/web/auth_controller.ex
@@ -190,6 +192,13 @@ jobs:
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
           apps/coop_substrate/lib/coop_substrate/offboarding.ex
+          apps/coop_substrate/lib/coop_substrate/project_ownership.ex
+          apps/coop_substrate/lib/mix/tasks/coop.owner.backfill.ex
+          apps/coop_substrate/lib/mix/tasks/coop.owner.succeed.ex
+          apps/coop_substrate/test/project_ownership_backfill_test.exs
+          apps/coop_substrate/test/owner_succession_test.exs
+          apps/coop_substrate/test/owner_backfill_cli_test.exs
+          apps/coop_substrate/test/owner_succession_cli_test.exs
           apps/coop_substrate/lib/coop_substrate/offboarding/offboarder.ex
           apps/coop_substrate/lib/coop_substrate/governance/read.ex
           apps/coop_substrate/lib/coop_substrate/enrolments.ex
