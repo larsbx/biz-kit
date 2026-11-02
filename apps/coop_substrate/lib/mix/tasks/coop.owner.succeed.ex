@@ -60,7 +60,9 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
 
       if opts[:yes] || Mix.shell().yes?("Sign the complete offboarding and succession batch?") do
         url =
-          base <> "/api/v1/principals/" <> Client.segment(principal) <>
+          base <>
+            "/api/v1/principals/" <>
+            Client.segment(principal) <>
             "/chapter_offboarding"
 
         params = %{
@@ -132,7 +134,12 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
     do: if(Admission.segment?(s), do: :ok, else: {:error, :invalid_chapter_or_scope})
 
   @doc false
-  def complete?(%{"principal_id" => stated, "projects" => projects}, principal, chapter, successors)
+  def complete?(
+        %{"principal_id" => stated, "projects" => projects},
+        principal,
+        chapter,
+        successors
+      )
       when is_list(projects) and is_map(successors) and stated == principal do
     owned =
       for %{
@@ -166,20 +173,22 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
 
     offboardings =
       for p <- Enum.sort_by(chapter_projects, &{&1["tenant_id"], &1["project_id"]}) do
-        {"TaskPrincipalOffboardedV1", %{
-          "tenant_id" => p["tenant_id"],
-          "project_id" => p["project_id"],
-          "principal_id" => principal
-        }}
+        {"TaskPrincipalOffboardedV1",
+         %{
+           "tenant_id" => p["tenant_id"],
+           "project_id" => p["project_id"],
+           "principal_id" => principal
+         }}
       end
 
     assignments =
       for {{tenant, project}, next} <- Enum.sort(successors) do
-        {"TaskProjectOwnerAssignedV1", %{
-          "tenant_id" => tenant,
-          "project_id" => project,
-          "principal_id" => next
-        }}
+        {"TaskProjectOwnerAssignedV1",
+         %{
+           "tenant_id" => tenant,
+           "project_id" => project,
+           "principal_id" => next
+         }}
       end
 
     revocations =
