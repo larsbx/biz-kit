@@ -17,7 +17,20 @@ defmodule RestaurantHost.Restaurant do
 
   def current, do: :restaurant_host |> Application.fetch_env!(:restaurant) |> build()
 
+  @doc """
+  Build and install a replacement configuration before exposing it to readers.
+  Production calls this at startup; explicit reconfiguration replaces the whole
+  derived model. A failed build leaves the previous configuration intact.
+  """
+  def configure(config) do
+    restaurant = build(config)
+    Application.put_env(:restaurant_host, :restaurant, restaurant)
+    restaurant
+  end
+
   @doc "A restaurant from its configuration (raises on an invalid one)."
+  def build(%__MODULE__{} = restaurant), do: restaurant
+
   def build(config) do
     currency = Map.fetch!(config, :currency)
     merchant = Map.fetch!(config, :merchant)

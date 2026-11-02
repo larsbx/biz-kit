@@ -84,6 +84,7 @@ defmodule RestaurantHost.EnrollmentTest do
           ["device-a", "--yes"],
           base ++ ["extra"],
           base ++ ["--unknown"],
+          base ++ ["--seed", "secret"],
           base ++ ["--server", "http://remote.example"],
           base ++ ["--server", "https://user:secret@remote.example"],
           base ++ ["--server", "https://remote.example/?query=x"],
@@ -92,4 +93,22 @@ defmodule RestaurantHost.EnrollmentTest do
       assert {:error, :invalid_options} = Enrollment.run(args, io)
     end
   end
+  test "decoded proposals preserve scope and capabilities with the normalized key" do
+    shown = proposal("system", ["checkout"])
+    assert {:ok, decoded} = DeviceGrants.decode_details(shown)
+    assert decoded["payload"]["pubkey"] == {:bytes, :binary.copy(<<7>>, 32)}
+    assert decoded["chapter_id"] == shown["chapter_id"]
+    assert decoded["payload"]["actions"] == ["checkout"]
+    assert DeviceGrants.matches?(decoded, decoded)
+    refute DeviceGrants.matches?(%{}, %{})
+
+    refute DeviceGrants.matches?(
+             put_in(decoded, ["payload", "pubkey"], {:bytes, :binary.copy(<<8>>, 32)}),
+             decoded
+           )
+
+    refute DeviceGrants.matches?(Map.put(decoded, "chapter_id", "chapter-b"), decoded)
+    assert {:error, :unexpected_proposal} = DeviceGrants.decode_details(decoded)
+  end
+
 end

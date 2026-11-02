@@ -7,6 +7,7 @@ defmodule RestaurantHost.Web.DeviceGrantController do
   """
   use Phoenix.Controller, formats: [:json]
 
+  alias CoopSubstrate.Governance.{Authorization, Read}
   alias RestaurantHost.{DeviceGrants, Restaurant}
 
   def show(conn, %{"device" => device}) do
@@ -57,25 +58,9 @@ defmodule RestaurantHost.Web.DeviceGrantController do
   # knowing the public governance key ID could evict an operator's live holds.
   defp authorize(conn, key_id, chapter) do
     with [header] <- get_req_header(conn, "authorization"),
-         [_, ^key_id, ts, nonce, encoded] <-
-           Regex.run(
-             ~r/\ACoopGovernance key="([^"]+)", ts="([0-9]+)", nonce="([^"]+)", sig="([^"]+)"\z/,
-             header
-           ),
-         {timestamp, ""} <- Integer.parse(ts),
-         true <- timestamp in 0..9_223_372_036_854_775_807 and byte_size(nonce) in 16..128,
-         {:ok, <<_::512>> = signature} <- Base.url_decode64(encoded, padding: false),
-         {:ok, chapters} <-
-           CoopSubstrate.Governance.Read.authorize(
-             %{
-               method: conn.method,
-               path: conn.request_path,
-               timestamp_ms: timestamp,
-               nonce: nonce,
-               key_id: key_id
-             },
-             signature
-           ),
+         {:ok, %{key_id: ^key_id} = request, signature} <-
+           Authorization.parse(header, conn.method, conn.request_path),
+         {:ok, chapters} <- Read.authorize(request, signature),
          true <- chapter in chapters do
       :ok
     else

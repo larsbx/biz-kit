@@ -12,7 +12,7 @@ defmodule RestaurantHost.Enrollment do
 
   def run(args, io \\ %{info: &IO.puts/1, confirm: &confirm/1}) do
     with {:ok, device, chapter, merchant, base, yes?} <- options(args),
-         {:ok, details} <- fetch(base, device, chapter, merchant),
+         {:ok, details, proposal} <- fetch_proposal(base, device, chapter, merchant),
          {:ok, signer} <- load_signer() do
       p = details["payload"]
 
@@ -25,7 +25,7 @@ defmodule RestaurantHost.Enrollment do
       """)
 
       if yes? or io.confirm.("Grant?") do
-        case approve(base, details, signer) do
+        case approve_proposal(base, proposal, signer) do
           {:ok, %{"event_id" => id}} ->
             io.info.("granted: event #{id}")
             :ok
@@ -53,29 +53,36 @@ defmodule RestaurantHost.Enrollment do
   end
 
   def fetch(base, device, chapter, merchant) do
+    with {:ok, details, _proposal} <- fetch_proposal(base, device, chapter, merchant),
+         do: {:ok, details}
+  end
+
+  def approve(base, details, signer) do
+    with {:ok, proposal} <- DeviceGrants.decode_details(details),
+         do: approve_proposal(base, proposal, signer)
+  end
+
+  defp fetch_proposal(base, device, chapter, merchant) do
     with {:ok, details} <- Client.get(url(base, device)),
-         true <- DeviceGrants.valid_details?(details),
-         true <- details["chapter_id"] == chapter,
-         true <- details["payload"]["merchant_id"] == merchant,
-         true <- details["payload"]["device_id"] == device do
-      {:ok, details}
+         {:ok, proposal} <- DeviceGrants.decode_details(details),
+         true <- proposal["chapter_id"] == chapter,
+         true <- proposal["payload"]["merchant_id"] == merchant,
+         true <- proposal["payload"]["device_id"] == device do
+      {:ok, details, proposal}
     else
       _ -> {:error, :unexpected_proposal}
     end
   end
 
-  def approve(base, details, signer) do
-    if DeviceGrants.valid_details?(details) do
-      Client.sign_held(
-        url(base, details["payload"]["device_id"]),
-        signer,
-        &DeviceGrants.grants?(&1, details),
-        Map.take(details, ["chapter_id"])
-        |> Map.put("merchant_id", details["payload"]["merchant_id"])
-      )
-    else
-      {:error, :unexpected_proposal}
-    end
+  defp approve_proposal(base, proposal, signer) do
+    p = proposal["payload"]
+
+    Client.sign_held(
+      url(base, p["device_id"]),
+      signer,
+      &DeviceGrants.matches?(&1, proposal),
+      %{"chapter_id" => proposal["chapter_id"], "merchant_id" => p["merchant_id"]}
+    )
   rescue
     _ -> {:error, :unexpected_proposal}
   end

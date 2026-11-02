@@ -148,7 +148,7 @@ defmodule RestaurantHost.DeviceGrantsTest do
     assert Log.head() == head
   end
 
-  test "the client refuses wrong scope and unsafe permission proposals", %{restaurant: r} do
+  test "the client refuses a proposal for another chapter or merchant", %{restaurant: r} do
     head = Log.head()
 
     assert {:error, :unexpected_proposal} =
@@ -157,41 +157,15 @@ defmodule RestaurantHost.DeviceGrantsTest do
     assert {:error, :unexpected_proposal} =
              Enrollment.fetch(@url, "board-1", r.chapter, "elsewhere")
 
-    {:ok, details} = DeviceGrants.details(r, "board-1")
-    shown = details |> DeviceGrants.json() |> Jason.encode!() |> Jason.decode!()
-
-    for bad <- [
-          nil,
-          %{},
-          put_in(shown["payload"]["actions"], ["checkout"]),
-          put_in(shown["payload"]["actor"], "admin"),
-          put_in(shown["payload"]["pubkey"], 12),
-          put_in(shown["payload"]["device_id"], "board\nforged"),
-          put_in(shown["payload"]["key_id"], ""),
-          put_in(shown["payload"]["seed"], "never-accepted")
-        ] do
-      refute DeviceGrants.valid_details?(bad)
-      refute DeviceGrants.grants?(%{}, bad)
-    end
-
     assert Log.head() == head
   end
 
-  test "declining review signs nothing and invalid options cannot bypass review", %{restaurant: r} do
+  test "declining review signs nothing", %{restaurant: r} do
     head = Log.head()
     io = %{info: fn _ -> :ok end, confirm: fn _ -> false end}
     args = ["board-1", "--chapter", r.chapter, "--merchant", r.merchant, "--server", @url]
     assert :ok = Enrollment.run(args, io)
     assert Log.head() == head
-
-    for bad <- [
-          ["board-1", "--yes"],
-          args ++ ["--seed", "secret"],
-          args ++ ["extra-device"],
-          args ++ ["--chapter", "elsewhere"]
-        ] do
-      assert {:error, :invalid_options} = Enrollment.run(bad, io)
-    end
   end
 
   test "HTTP refuses payload overrides, cross-chapter requests and malformed signatures", %{

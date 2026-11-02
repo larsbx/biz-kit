@@ -16,7 +16,7 @@ defmodule RestaurantHost.Application do
 
   # Production names a restaurant file (config/runtime.exs); tests configure
   # `:restaurant` directly. Either way the restaurant is built now, so a bad
-  # configuration stops the boot.
+  # configuration stops the boot. Keep the derived model for subsequent reads.
   defp load_restaurant! do
     with path when is_binary(path) <- Application.get_env(:restaurant_host, :restaurant_file) do
       case RestaurantHost.Config.load(path) do
@@ -28,7 +28,7 @@ defmodule RestaurantHost.Application do
       end
     end
 
-    if Application.get_env(:restaurant_host, :restaurant),
-      do: RestaurantHost.Restaurant.current()
+    if config = Application.get_env(:restaurant_host, :restaurant),
+      do: RestaurantHost.Restaurant.configure(config)
   end
 end
