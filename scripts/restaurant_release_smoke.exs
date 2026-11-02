@@ -1,11 +1,11 @@
 # Run inside the restaurant release (scripts/restaurant-release-smoke.sh): a
 # throwaway governance key declares itself in the smoke's fresh chapter and
-# grants the configured devices; a pickup order is then placed by the
+# grants the configured devices (signing in-process, which only a smoke may); a pickup order is then placed by the
 # storefront device and walked to completion by the board, every step admitted
 # by the release's own ledger.
 alias CoopSubstrate.{Crypto, Log, ULID}
 alias CoopSubstrate.Protocol.Envelope
-alias RestaurantHost.{Orders, Restaurant}
+alias RestaurantHost.{DeviceGrants, Orders, Restaurant}
 
 r = Restaurant.current()
 {pubkey, seed} = Crypto.generate_keypair()
@@ -33,18 +33,10 @@ append.("RoleKeyDeclared", %{
   "pubkey" => {:bytes, pubkey}
 })
 
-for {device, actor, actions} <- [
-      {r.storefront, "system", ["checkout"]},
-      {r.boards["board-1"], "staff", ~w(accept start_preparing mark_ready complete cancel)}
-    ] do
-  append.("RestaurantDeviceGrantedV1", %{
-    "merchant_id" => r.merchant,
-    "device_id" => device.device_id,
-    "key_id" => device.signer.key_id,
-    "pubkey" => {:bytes, device.signer.pubkey},
-    "actor" => actor,
-    "actions" => actions
-  })
+# The grants `mix restaurant.grant` would ask the administrator to sign.
+for device <- ["storefront", "board-1"] do
+  {:ok, d} = DeviceGrants.details(r, device)
+  append.(d.type, d.payload)
 end
 
 {:ok, id} = Orders.place(r, %{"margherita" => 2}, "Smoke", ULID.generate())

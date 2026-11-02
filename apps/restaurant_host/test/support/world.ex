@@ -2,18 +2,28 @@ defmodule RestaurantHost.World do
   @moduledoc """
   A restaurant in a fresh Log chapter, so tests share the ledger without a
   reset: a declared governance key grants a storefront device (`checkout`) and
-  one kitchen board (staff), and the host is configured to sign as them.
+  one kitchen board (staff), as `RestaurantHost.DeviceGrants` would, and the
+  host is configured to sign as them.
   """
 
   alias CoopSubstrate.{Crypto, Log, ULID}
   alias CoopSubstrate.Protocol.Envelope
-  alias RestaurantHost.Restaurant
+  alias RestaurantHost.{DeviceGrants, Restaurant}
 
-  @board_actions ~w(accept start_preparing mark_ready complete cancel)
-
-  def build do
+  @doc """
+  Options: `grant: false` leaves the devices ungranted; `governance:` a signer
+  (`%{key_id, pubkey, seed}`, e.g. from `CoopSubstrate.Harness.Ops`) to declare
+  instead of a fresh key.
+  """
+  def build(opts \\ []) do
     chapter = "rh-" <> ULID.generate()
-    gov = key("governance")
+
+    gov =
+      case opts[:governance] do
+        nil -> key("governance")
+        g -> %{seed: g.seed, signer: %{role: "governance", key_id: g.key_id, pubkey: g.pubkey}}
+      end
+
     storefront = key("restaurant_device")
     board = key("restaurant_device")
     secret = "pair-" <> ULID.generate()
@@ -23,20 +33,6 @@ defmodule RestaurantHost.World do
       "key_id" => gov.signer.key_id,
       "pubkey" => {:bytes, gov.signer.pubkey}
     })
-
-    for {device, id, actor, actions} <- [
-          {storefront, "storefront", "system", ["checkout"]},
-          {board, "board-1", "staff", @board_actions}
-        ] do
-      append!(chapter, gov, "RestaurantDeviceGrantedV1", %{
-        "merchant_id" => "shop",
-        "device_id" => id,
-        "key_id" => device.signer.key_id,
-        "pubkey" => {:bytes, device.signer.pubkey},
-        "actor" => actor,
-        "actions" => actions
-      })
-    end
 
     Application.put_env(:restaurant_host, :restaurant, %{
       chapter: chapter,
@@ -62,7 +58,16 @@ defmodule RestaurantHost.World do
       }
     })
 
-    %{restaurant: Restaurant.current(), secret: secret, chapter: chapter}
+    r = Restaurant.current()
+
+    if Keyword.get(opts, :grant, true) do
+      for device <- ["storefront", "board-1"] do
+        {:ok, d} = DeviceGrants.details(r, device)
+        append!(chapter, gov, d.type, d.payload)
+      end
+    end
+
+    %{restaurant: r, secret: secret, chapter: chapter, governance: gov}
   end
 
   defp key(role) do
