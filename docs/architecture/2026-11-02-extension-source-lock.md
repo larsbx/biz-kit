@@ -11,8 +11,10 @@ validated, canonically encoded manifest. Dependencies determine lock order.
 This detects same-version manifest drift, wrong or extra source pins, missing
 dependencies, duplicate module IDs, version mismatch and unreviewed replacements.
 The fingerprint is domain-separated and length-delimited, sorting validated
-map keys and top-level unordered descriptor collections. It is a local Elixir
-V1 encoder and **not** a cross-language JSON canonicalization standard.
+map keys and top-level unordered descriptor collections. A fixed SchoolOps-like
+fixture has digest `602de6d20b186c21a3ebe76523935e5ffdfcf378d142db3cbe5cbeb53adf539f`,
+independently computed using Python's SHA-256 over the specified tagged bytes.
+This is a local Elixir V1 encoder, **not** a JSON canonicalization standard.
 
 A source SHA is not itself an attestation that BEAM bytecode matches a Git tree:
 the trusted release builder must verify checkout, source and artifacts against
