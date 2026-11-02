@@ -30,6 +30,7 @@ import {
   chapterProjects,
   chapterAdministrators,
   chapterOffboarding,
+  ownerBackfillCommands,
   workflows,
   runTaskIds,
   runOf,
@@ -561,6 +562,91 @@ test("offboarding from a chapter: every project and key, signed only as the exac
   assert.ok(!ok([cores[0], cores[1], core({ ...commands[2], payload: { ...commands[2].payload, reason: "x" } })]));
   assert.ok(!ok([core(commands[0], "k-other"), cores[1], cores[2]]), "another signer");
   assert.ok(!ok([core(commands[0], "k-admin", "other"), cores[1], cores[2]]), "another chapter");
+});
+
+test("chapter offboarding requires exact accountable-owner succession, including two projects", () => {
+  const found = {
+    principal_id: "owner",
+    projects: [
+      { chapter_id: "c", tenant_id: "t", project_id: "a", accountable_owner: "owner", successor_required: true },
+      { chapter_id: "c", tenant_id: "t", project_id: "b", accountable_owner: "owner", successor_required: true },
+      { chapter_id: "other", tenant_id: "t", project_id: "x", accountable_owner: "owner", successor_required: true },
+    ],
+    keys: [{ chapter_id: "c", key_id: "governance-k" }],
+  };
+  const successors = [
+    { tenant_id: "t", project_id: "a", principal_id: "alice" },
+    { tenant_id: "t", project_id: "b", principal_id: "bob" },
+  ];
+  const commands = chapterOffboarding(found, "c", successors);
+  assert.deepEqual(commands, [
+    { type: "TaskPrincipalOffboardedV1", payload: { tenant_id: "t", project_id: "a", principal_id: "owner" } },
+    { type: "TaskPrincipalOffboardedV1", payload: { tenant_id: "t", project_id: "b", principal_id: "owner" } },
+    { type: "TaskProjectOwnerAssignedV1", payload: { tenant_id: "t", project_id: "a", principal_id: "alice" } },
+    { type: "TaskProjectOwnerAssignedV1", payload: { tenant_id: "t", project_id: "b", principal_id: "bob" } },
+    { type: "RoleKeyRevoked", payload: { role: "governance", key_id: "governance-k" } },
+  ]);
+
+  assert.throws(() => chapterOffboarding(found, "c"), /exactly one successor/);
+  assert.throws(() => chapterOffboarding(found, "c", successors.slice(0, 1)), /exactly one successor/);
+  assert.throws(() => chapterOffboarding(found, "c", [successors[0], successors[0]]), /Duplicate/);
+  assert.throws(
+    () => chapterOffboarding(found, "c", [successors[0], { tenant_id: "t", project_id: "x", principal_id: "bob" }]),
+    /exactly one successor/,
+  );
+  assert.throws(
+    () => chapterOffboarding(found, "c", [successors[0], { ...successors[1], principal_id: "" }]),
+    /accountable human/,
+  );
+
+  const keyId = "k-governance";
+  const cores = commands.map((c) => ({
+    ...c,
+    chapter_id: "c",
+    signers: [{ role: "governance", key_id: keyId }],
+  }));
+  assert.ok(isExpectedBatch(cores, { keyId, chapter: "c", commands }));
+  assert.ok(!isExpectedBatch(cores.slice(0, -1), { keyId, chapter: "c", commands }));
+  assert.ok(!isExpectedBatch(
+    [cores[0], cores[1], { ...cores[2], payload: { ...cores[2].payload, principal_id: "agent" } }, cores[3], cores[4]],
+    { keyId, chapter: "c", commands },
+  ));
+});
+
+test("ownerless backfill signs only a human assignment and the necessary exact device grant", () => {
+  const scope = { tenant: "t", project: "p", principal: "human", operatorDevice: null };
+  assert.deepEqual(ownerBackfillCommands(scope, ["TaskProjectOwnerAssignedV1"]), [
+    { type: "TaskProjectOwnerAssignedV1", payload: { tenant_id: "t", project_id: "p", principal_id: "human" } },
+  ]);
+  assert.deepEqual(ownerBackfillCommands(scope, ["TaskPrincipalKindDeclaredV1", "TaskProjectOwnerAssignedV1"]), [
+    { type: "TaskPrincipalKindDeclaredV1", payload: { principal_id: "human", kind: "human" } },
+    { type: "TaskProjectOwnerAssignedV1", payload: { tenant_id: "t", project_id: "p", principal_id: "human" } },
+  ]);
+  assert.throws(() => ownerBackfillCommands(scope, ["TaskOperatorGrantedV1", "TaskProjectOwnerAssignedV1"]), /unexpected/);
+  assert.throws(() => ownerBackfillCommands(scope, ["TaskPrincipalKindWithdrawnV1", "TaskProjectOwnerAssignedV1"]), /unexpected/);
+  assert.throws(() => ownerBackfillCommands(scope, ["TaskProjectOwnerAssignedV1", "TaskProjectOwnerAssignedV1"]), /unexpected/);
+  const withDevice = {
+    ...scope,
+    operatorDevice: { key_id: "k-01020304", pubkey_hex: "01020304" + "0a".repeat(28) },
+  };
+  const commands = ownerBackfillCommands(withDevice, [
+    "TaskPrincipalKindDeclaredV1", "TaskOperatorGrantedV1", "TaskProjectOwnerAssignedV1",
+  ]);
+  const keyId = "governance";
+  const cores = commands.map((c) => ({
+    ...c,
+    chapter_id: "c",
+    signers: [{ role: "governance", key_id: keyId }],
+  }));
+  assert.ok(isExpectedBatch(cores, { keyId, chapter: "c", commands }));
+  assert.ok(!isExpectedBatch(
+    [cores[0], { ...cores[1], payload: { ...cores[1].payload, principal_id: "agent" } }, cores[2]],
+    { keyId, chapter: "c", commands },
+  ));
+  assert.ok(!isExpectedBatch(
+    [cores[0], cores[1], { ...cores[2], payload: { ...cores[2].payload, project_id: "foreign" } }],
+    { keyId, chapter: "c", commands },
+  ));
 });
 
 test("workflows: sorted, a run's task IDs checked, a run task's origin named", () => {
