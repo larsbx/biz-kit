@@ -72,7 +72,9 @@ defmodule CoopSubstrate.ProjectOwnership do
       Enum.find_value(expected, fn
         {"TaskOperatorGrantedV1", %{"key_id" => key, "pubkey" => {:bytes, pubkey}}} ->
           %{key_id: key, pubkey: pubkey}
-        _ -> nil
+
+        _ ->
+          nil
       end)
 
     case commands(gate, scope, principal, device) do
@@ -96,11 +98,12 @@ defmodule CoopSubstrate.ProjectOwnership do
           else: []
 
       assignment =
-        {"TaskProjectOwnerAssignedV1", %{
-          "tenant_id" => tenant,
-          "project_id" => project,
-          "principal_id" => principal
-        }}
+        {"TaskProjectOwnerAssignedV1",
+         %{
+           "tenant_id" => tenant,
+           "project_id" => project,
+           "principal_id" => principal
+         }}
 
       {:ok, kind ++ grant ++ [assignment]}
     end
@@ -122,8 +125,8 @@ defmodule CoopSubstrate.ProjectOwnership do
     if Enum.any?(Administrators.projects(o, chapter), fn p ->
          p.tenant_id == tenant and p.project_id == project
        end),
-      do: :ok,
-      else: {:error, :unknown_legacy_project}
+       do: :ok,
+       else: {:error, :unknown_legacy_project}
   end
 
   defp unowned(o, scope) do
@@ -158,13 +161,16 @@ defmodule CoopSubstrate.ProjectOwnership do
         {_, tenant, project} = scope
 
         {:ok,
-         [{"TaskOperatorGrantedV1", %{
-            "tenant_id" => tenant,
-            "project_id" => project,
-            "principal_id" => principal,
-            "key_id" => device.key_id,
-            "pubkey" => {:bytes, device.pubkey}
-          }}]}
+         [
+           {"TaskOperatorGrantedV1",
+            %{
+              "tenant_id" => tenant,
+              "project_id" => project,
+              "principal_id" => principal,
+              "key_id" => device.key_id,
+              "pubkey" => {:bytes, device.pubkey}
+            }}
+         ]}
     end
   end
 

@@ -120,6 +120,11 @@ jobs:
         run: mix compile --warnings-as-errors
       - name: Verify format
         run: mix format --check-formatted apps/restaurant_host/mix.exs "apps/restaurant_host/{config,lib,test}/**/*.{ex,exs}"
+      # The host starts coop_substrate, which needs its event store; only
+      # coop_substrate's own `mix test` alias creates it.
+      - name: Create the coop_substrate event store
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
       # Slice 4's gate: a pickup order placed on the web, then accepted,
       # prepared and completed on the kitchen board, through the signed Log.
       - name: Storefront, board and orders against the Log
