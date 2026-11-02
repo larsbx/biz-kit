@@ -18,7 +18,7 @@ defmodule CoopSubstrate.TaskHierarchyTest do
     gov = new_member("governance")
     laptop = new_member("operator")
 
-    {:ok, [_, grant]} =
+    {:ok, [_, grant | _owner]} =
       Log.append([
         declare_governance(gov),
         operator_grant(gov, laptop, "alice") | project_owner(gov)

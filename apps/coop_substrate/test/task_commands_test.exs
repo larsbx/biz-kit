@@ -8,6 +8,9 @@ defmodule CoopSubstrate.TaskCommandsTest do
   alias CoopSubstrate.ULID
 
   @scope %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
+  # Setup's last event: governance's key, the project's owner (kind, grant,
+  # assignment), the operator grant and the baseline.
+  @setup_seq 6
   @subject Map.put(@scope, "task_id", "task-1")
   @key {"chapter-genesis", "tenant-1", "project-1", "task-1"}
 
@@ -164,7 +167,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
     command = proposal(ctx, %{}, timestamp_ms: 1)
     {:ok, result} = Tasks.propose(command)
     assert result.task_version == 2
-    assert result.global_seq == 4
+    assert result.global_seq == @setup_seq + 1
     assert result.event_id == command.event_id
 
     {:ok, state} = Log.replay(Projection)
@@ -172,7 +175,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
     assert id == command.event_id
 
     assert {:ok, %{tasks: %{@key => %{state: "inbox", version: 1}}}} =
-             Log.replay(Projection, as_of: 3)
+             Log.replay(Projection, as_of: @setup_seq)
 
     {:ok, records} = Log.export_stream("chapter-genesis/tasks/tenant-1/project-1/task-1")
     {:ok, verified} = Log.verify_export(records)
@@ -190,7 +193,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
 
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
     assert {:error, {:reject, 0, {:stale_task_version, 1, 2}}} in results
-    assert Log.head().global_seq == 4
+    assert Log.head().global_seq == @setup_seq + 1
   end
 
   test "duplicate retry returns its original acknowledgement after restart and revocation", ctx do
@@ -308,7 +311,7 @@ defmodule CoopSubstrate.TaskCommandsTest do
 
   test "projection tampering and unsupported states cannot license an append", ctx do
     {:ok, _} = Tasks.propose(proposal(ctx))
-    {:ok, stale_view} = Log.replay(Projection, as_of: 3)
+    {:ok, stale_view} = Log.replay(Projection, as_of: @setup_seq)
     forged = put_in(stale_view, [:tasks, @key, :state], "inbox")
 
     assert_rejected(
