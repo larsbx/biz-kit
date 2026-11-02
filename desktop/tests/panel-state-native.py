@@ -235,7 +235,7 @@ def run(binary, session_timeout=60, service_owner_fixture=False):
                 print("PASS: native script discovery, explicit dry-run, cancelled apply and confirmed apply")
                 def ipc(command, args):
                     return request("POST", base + "/execute/async", {
-                        "script": "const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(value=>done({ok:true,value}),error=>done({ok:false,error:String(error)}));",
+                        "script": "const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(value=>done({ok:true,value}),error=>done({ok:false,reason:String(error)}));",
                         "args": [command, args],
                     })
                 large = json.dumps({"large": "x" * 100_000})
@@ -246,6 +246,7 @@ def run(binary, session_timeout=60, service_owner_fixture=False):
                 if service_owner_fixture:
                     result = ipc("write_config", {"host": "local", "path": str(service_file), "expected": service_original, "content": '{"service":"edited"}'})
                     assert not result["ok"], "service-owned config was replaced with an operator-owned file"
+                    assert "Cannot preserve config owner" in result["reason"], result
                     assert service_file.stat().st_uid == 0
                     assert service_file.read_text() == service_original
                     print("PASS: native service-owned group-writable config save refused without ownership/content changes")
