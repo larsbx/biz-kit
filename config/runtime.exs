@@ -520,10 +520,18 @@ if config_env() == :prod and restaurant_released? do
   %URI{host: host, scheme: scheme, port: port} =
     URI.parse(require_env.("RESTAURANT_PUBLIC_BASE_URL"))
 
+  # IPv4 any by default; "::" where the host has IPv6, "127.0.0.1" behind a
+  # local proxy.
+  bind =
+    case :inet.parse_address(String.to_charlist(System.get_env("RESTAURANT_BIND_IP", "0.0.0.0"))) do
+      {:ok, ip} -> ip
+      {:error, _} -> raise "RESTAURANT_BIND_IP must be an IP address"
+    end
+
   # The websocket origin check compares against this URL's host.
   config :restaurant_host, RestaurantHost.Web.Endpoint,
     url: [host: host, scheme: scheme, port: port || 443],
-    http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: integer_env.("RESTAURANT_PORT", 4070)],
+    http: [ip: bind, port: integer_env.("RESTAURANT_PORT", 4070)],
     secret_key_base: require_env.("RESTAURANT_SECRET_KEY_BASE"),
     server: true
 

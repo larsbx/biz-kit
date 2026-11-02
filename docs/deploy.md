@@ -99,7 +99,7 @@ bin/restaurant daemon
 | --- | --- |
 | `RESTAURANT_PUBLIC_BASE_URL` | the public URL; the live pages' websocket origin check compares against its host |
 | `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | the signed session that holds a paired board |
-| `RESTAURANT_PORT` (default `4070`) | the listening port, behind a TLS-terminating proxy |
+| `RESTAURANT_PORT` (default `4070`), `RESTAURANT_BIND_IP` (default `0.0.0.0`; `::` for IPv6, `127.0.0.1` behind a local proxy) | where it listens, behind a TLS-terminating proxy |
 | `RESTAURANT_CONFIG_FILE` | the restaurant file (below) |
 | `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` | each device's 32-byte signing seed, base64; `<DEVICE_ID>` upper-cased with other characters as `_` |
 | `EVENTSTORE_*` | the ledger, as above |
