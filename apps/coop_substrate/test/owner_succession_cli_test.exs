@@ -44,15 +44,24 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
 
   defp commands do
     [
-      {"TaskPrincipalOffboardedV1", %{
-        "tenant_id" => "tenant-1", "project_id" => "project-1", "principal_id" => @principal
-      }},
-      {"TaskPrincipalOffboardedV1", %{
-        "tenant_id" => "tenant-1", "project_id" => "project-2", "principal_id" => @principal
-      }},
-      {"TaskProjectOwnerAssignedV1", %{
-        "tenant_id" => "tenant-1", "project_id" => "project-1", "principal_id" => "alice"
-      }},
+      {"TaskPrincipalOffboardedV1",
+       %{
+         "tenant_id" => "tenant-1",
+         "project_id" => "project-1",
+         "principal_id" => @principal
+       }},
+      {"TaskPrincipalOffboardedV1",
+       %{
+         "tenant_id" => "tenant-1",
+         "project_id" => "project-2",
+         "principal_id" => @principal
+       }},
+      {"TaskProjectOwnerAssignedV1",
+       %{
+         "tenant_id" => "tenant-1",
+         "project_id" => "project-1",
+         "principal_id" => "alice"
+       }},
       {"RoleKeyRevoked", %{"role" => "governance", "key_id" => "governance-B"}},
       {"RoleKeyRevoked", %{"role" => "governance", "key_id" => "governance-A"}}
     ]
@@ -83,7 +92,12 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
     assert Succeed.complete?(details(), @principal, @chapter, successors()) == :ok
 
     assert {:error, :invalid_chapter_holdings} =
-             Succeed.complete?(Map.put(details(), "principal_id", "mallory"), @principal, @chapter, successors())
+             Succeed.complete?(
+               Map.put(details(), "principal_id", "mallory"),
+               @principal,
+               @chapter,
+               successors()
+             )
 
     assert {:error, _} = Succeed.complete?(details(), @principal, @chapter, %{})
 
@@ -98,7 +112,12 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
 
   test "sign only exact scoped offboard/assignment/key-revocation sequence" do
     assert Succeed.expected?(
-             cores(), details(), @principal, @chapter, "governance-A", successors()
+             cores(),
+             details(),
+             @principal,
+             @chapter,
+             "governance-A",
+             successors()
            )
 
     for candidate <- [
@@ -107,11 +126,24 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
           cores() ++ [hd(cores())],
           [put_in(hd(cores()), ["payload", "principal_id"], "mallory") | tl(cores())],
           [Map.put(hd(cores()), "chapter_id", "other-chapter") | tl(cores())],
-          List.replace_at(cores(), 2, put_in(Enum.at(cores(), 2), ["payload", "project_id"], "foreign")),
-          List.replace_at(cores(), 3, put_in(Enum.at(cores(), 3), ["payload", "key_id"], "attacker"))
+          List.replace_at(
+            cores(),
+            2,
+            put_in(Enum.at(cores(), 2), ["payload", "project_id"], "foreign")
+          ),
+          List.replace_at(
+            cores(),
+            3,
+            put_in(Enum.at(cores(), 3), ["payload", "key_id"], "attacker")
+          )
         ] do
       refute Succeed.expected?(
-               candidate, details(), @principal, @chapter, "governance-A", successors()
+               candidate,
+               details(),
+               @principal,
+               @chapter,
+               "governance-A",
+               successors()
              )
     end
   end

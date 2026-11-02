@@ -36,8 +36,10 @@ defmodule Mix.Tasks.Coop.Owner.Backfill do
       )
 
     unless invalid == [] and length(positions) == 4 do
-      Mix.raise("usage: mix coop.owner.backfill CHAPTER TENANT PROJECT PRINCIPAL " <>
-                "[--server URL] [--device-key-id KEY --device-pubkey BASE64URL] [--yes]")
+      Mix.raise(
+        "usage: mix coop.owner.backfill CHAPTER TENANT PROJECT PRINCIPAL " <>
+          "[--server URL] [--device-key-id KEY --device-pubkey BASE64URL] [--yes]"
+      )
     end
 
     [chapter, tenant, project, principal] = positions
@@ -49,7 +51,10 @@ defmodule Mix.Tasks.Coop.Owner.Backfill do
         "/api/v1/chapters/#{Client.segment(chapter)}/tenants/#{Client.segment(tenant)}" <>
           "/projects/#{Client.segment(project)}/ownership/backfill/#{Client.segment(principal)}"
 
-      if opts[:yes] || Mix.shell().yes?("Assign #{principal} as accountable owner of #{chapter}/#{tenant}/#{project}?") do
+      if opts[:yes] ||
+           Mix.shell().yes?(
+             "Assign #{principal} as accountable owner of #{chapter}/#{tenant}/#{project}?"
+           ) do
         expected = &matches?(&1, {chapter, tenant, project}, principal, device)
 
         case Client.sign_batch(base <> path, signer, expected, params(device)) do
@@ -69,7 +74,9 @@ defmodule Mix.Tasks.Coop.Owner.Backfill do
 
   defp device(opts) do
     case {opts[:device_key_id], opts[:device_pubkey]} do
-      {nil, nil} -> {:ok, nil}
+      {nil, nil} ->
+        {:ok, nil}
+
       {key, text} when is_binary(key) and is_binary(text) ->
         with {:ok, bytes} <- Base.url_decode64(text, padding: false),
              true <- byte_size(bytes) == 32 and key != "" do
@@ -77,16 +84,21 @@ defmodule Mix.Tasks.Coop.Owner.Backfill do
         else
           _ -> {:error, :invalid_operator_device}
         end
-      _ -> {:error, :invalid_operator_device}
+
+      _ ->
+        {:error, :invalid_operator_device}
     end
   end
 
   defp params(nil), do: %{}
+
   defp params(%{key_id: key_id, pubkey: pubkey}) do
-    %{"operator_device" => %{
-      "key_id" => key_id,
-      "pubkey" => Base.url_encode64(pubkey, padding: false)
-    }}
+    %{
+      "operator_device" => %{
+        "key_id" => key_id,
+        "pubkey" => Base.url_encode64(pubkey, padding: false)
+      }
+    }
   end
 
   @doc false
