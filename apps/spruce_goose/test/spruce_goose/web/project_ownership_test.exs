@@ -10,7 +10,7 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
 
   setup do
     w = world()
-    %{w | base: serve!()}
+    Map.put(w, :base, serve!())
   end
 
   defp backfill_url(w, project, principal) do
