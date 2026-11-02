@@ -15,7 +15,7 @@ defmodule Dispatch.WriterAuthorityConcurrencyTest do
 
   alias Dispatch.Access.Actor
   alias Dispatch.Accounts.{Administration, RoleAssignment}
-  alias Dispatch.Operations.{ConsentGrant, Locations}
+  alias Dispatch.Operations.{Board, ConsentGrant, Locations}
   alias Dispatch.Repo
   alias Dispatch.Support.{ConcurrentSessions, Fixtures}
   alias Ecto.Adapters.SQL.Sandbox
@@ -145,6 +145,51 @@ defmodule Dispatch.WriterAuthorityConcurrencyTest do
       assert length(consents(ctx)) == 1
     end
   end
+
+  describe "revoking a driver's role against activating their trip" do
+    setup ctx do
+      driver = ctx.people["Driver"].participant
+      role = Fixtures.assignment(ctx.org.id, ctx.org, driver, "DRIVER")
+      vehicle = Fixtures.equipment(ctx.org.id, ctx.org, Dispatch.Fleet.Vehicle)
+      trip = Fixtures.assignment_record(ctx.org.id, ctx.org, driver, vehicle_id: vehicle.id)
+      %{participant: desk} = Fixtures.person(ctx.org.id, ctx.org, display_name: "Desk")
+      dispatcher = Fixtures.actor(ctx.org.id, ctx.org, desk, "DISPATCHER")
+      %{driver_role: role, trip: trip, dispatcher: dispatcher}
+    end
+
+    test "an activation committed first keeps the role", ctx do
+      [first, _second, _third] = admins(ctx)
+
+      assert {:error, :equipment_not_checked_in} =
+               queued_behind(
+                 fn ->
+                   Board.transition(ctx.dispatcher, ctx.trip.id, "activate", ctx.trip.version)
+                 end,
+                 fn -> revoke(first, ctx.driver_role) end
+               )
+
+      assert status(ctx, RoleAssignment, ctx.driver_role) == :ACTIVE
+      assert status(ctx, Dispatch.Fleet.Assignment, ctx.trip) == :ACTIVE
+    end
+
+    test "a revocation committed first stops the activation", ctx do
+      [first, _second, _third] = admins(ctx)
+
+      assert {:error, {:invalid, _}} =
+               queued_behind(
+                 fn -> revoke(first, ctx.driver_role) end,
+                 fn ->
+                   Board.transition(ctx.dispatcher, ctx.trip.id, "activate", ctx.trip.version)
+                 end
+               )
+
+      assert status(ctx, RoleAssignment, ctx.driver_role) == :REVOKED
+      assert status(ctx, Dispatch.Fleet.Assignment, ctx.trip) == :PLANNED
+    end
+  end
+
+  defp status(ctx, resource, record),
+    do: Ash.get!(resource, record.id, authorize?: false, tenant: ctx.org.id).status
 
   defp admins(ctx) do
     for name <- ~w(First Second Third) do
