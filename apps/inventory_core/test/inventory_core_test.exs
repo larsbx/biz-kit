@@ -165,6 +165,29 @@ defmodule InventoryCoreTest do
              )
   end
 
+  test "reconciliation rejects an active hold for a missing stock location" do
+    {:ok, initial} = InventoryCore.new("workshop", "part", "each")
+    assert :ok = InventoryCore.check(initial, "workshop")
+
+    orphan = %{
+      initial
+      | reservations: %{
+          "orphan-hold" => %{
+            location: "missing",
+            remaining: 2,
+            status: :active,
+            expires_at_ms: 100
+          }
+        }
+    }
+
+    assert {:error, :stock_invariant_violated} = InventoryCore.check(orphan, "workshop")
+    assert {:error, :stock_invariant_violated} =
+             InventoryCore.check(%{orphan | locations: %{"missing" => 1}}, "workshop")
+
+    assert :ok = InventoryCore.check(%{orphan | locations: %{"missing" => 2}}, "workshop")
+  end
+
   test "deterministic replay gives the same stock and reservation state" do
     initial = empty("restaurant")
 

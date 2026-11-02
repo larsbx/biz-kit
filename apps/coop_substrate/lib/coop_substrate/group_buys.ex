@@ -18,6 +18,10 @@ defmodule CoopSubstrate.GroupBuys do
   alias GroupBuyCore.Escrow
   alias GroupBuyCore.BindingRound, as: Round
 
+  # Compile-time clock seam for deterministic admission/expiry tests. Release
+  # builds use System; requests cannot supply the appender's trusted instant.
+  @clock Application.compile_env(:coop_substrate, :group_buy_clock, System)
+
   @policy "binding-at-minimum;free-withdrawal-before-activation;expiry-before-activation;cash-independent.v1"
   @seller "GroupBuySellerAuthorizedV1"
   @member "GroupBuyMemberAuthorizedV1"
@@ -201,7 +205,7 @@ defmodule CoopSubstrate.GroupBuys do
       Envelope.new(
         type: @accept,
         chapter_id: consent.chapter_id,
-        timestamp_ms: System.system_time(:millisecond),
+        timestamp_ms: @clock.system_time(:millisecond),
         signers: [seller_signer],
         payload: %{
           "seller_id" => consent.payload["seller_id"],
@@ -298,7 +302,7 @@ defmodule CoopSubstrate.GroupBuys do
   @doc false
   def live_check(%Envelope{type: type} = env, gate) do
     if Map.has_key?(event_types(), type) do
-      now = System.system_time(:second)
+      now = @clock.system_time(:second)
       # The host signs admissions in the current seller-home second. This
       # makes the deterministic replay instant exactly the expiry/threshold
       # instant checked by the appender, rather than a buyer's old timestamp.

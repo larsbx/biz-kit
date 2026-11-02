@@ -1,10 +1,13 @@
 defmodule Dispatch.Operations.BoardConcurrencyTest do
   use ExUnit.Case, async: false
 
-  alias Dispatch.Operations.Board
+  import Dispatch.Support.ConcurrentSessions,
+    only: [session: 1, backend: 0, lock_trip: 1, waiting_on?: 1]
+
   alias Dispatch.Fleet.Assignment
+  alias Dispatch.Operations.Board
   alias Dispatch.Repo
-  alias Dispatch.Support.Fixtures
+  alias Dispatch.Support.{ConcurrentSessions, Fixtures}
   alias Ecto.Adapters.SQL.Sandbox
 
   @moduletag :integration
@@ -18,26 +21,7 @@ defmodule Dispatch.Operations.BoardConcurrencyTest do
     actor = Fixtures.actor(org.id, org, driver, "DISPATCHER")
     trip = Fixtures.assignment_record(org.id, org, driver)
 
-    on_exit(fn ->
-      :ok = Sandbox.checkout(Repo, sandbox: false)
-
-      for table <- [
-            "outbox_events",
-            "audit_events",
-            "consent_grants",
-            "assignments",
-            "loads",
-            "role_assignments",
-            "role_definitions",
-            "participants"
-          ] do
-        Repo.query!("DELETE FROM #{table} WHERE tenant_id = $1", [Ecto.UUID.dump!(org.id)])
-      end
-
-      Repo.query!("DELETE FROM users WHERE id = $1", [Ecto.UUID.dump!(user.id)])
-      Repo.query!("DELETE FROM organizations WHERE id = $1", [Ecto.UUID.dump!(org.id)])
-      Sandbox.checkin(Repo)
-    end)
+    on_exit(fn -> ConcurrentSessions.cleanup(org, [user]) end)
 
     %{actor: actor, trip: trip}
   end
@@ -102,46 +86,5 @@ defmodule Dispatch.Operations.BoardConcurrencyTest do
     current = Ash.get!(Assignment, ctx.trip.id, authorize?: false, tenant: ctx.actor.tenant_id)
     assert current.status == :CANCELLED
     assert current.version == ctx.trip.version + 1
-  end
-
-  defp session(fun) do
-    Task.async(fn ->
-      :ok = Sandbox.checkout(Repo, sandbox: false)
-
-      try do
-        fun.()
-      after
-        Sandbox.checkin(Repo)
-      end
-    end)
-  end
-
-  defp backend, do: Repo.query!("SELECT pg_backend_pid()").rows |> hd() |> hd()
-
-  defp lock_trip(trip) do
-    Repo.query!("SELECT id FROM assignments WHERE id = $1 FOR UPDATE", [Ecto.UUID.dump!(trip.id)])
-  end
-
-  defp waiting_on?(backend, attempts \\ 100)
-  defp waiting_on?(_backend, 0), do: false
-
-  defp waiting_on?(backend, attempts) do
-    %{rows: [[waiting]]} =
-      Repo.query!(
-        """
-        SELECT EXISTS (
-          SELECT 1 FROM pg_stat_activity
-          WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))
-        )
-        """,
-        [backend]
-      )
-
-    if waiting do
-      true
-    else
-      Process.sleep(25)
-      waiting_on?(backend, attempts - 1)
-    end
   end
 end

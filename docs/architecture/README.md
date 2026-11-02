@@ -19,6 +19,15 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
   proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
   with R0–R6 source inventory, migration, authorization, cutover and archive gates.
+- [ExtensionV1 source-pinned release lock — 2026-11-02](2026-11-02-extension-source-lock.md):
+  deterministic exact-source and manifest fingerprints for trusted build
+  preflight; not executable activation or signed deployment authority.
+- [ExtensionV1 staged read-only registry — 2026-11-01](2026-11-01-extension-registry-stage.md):
+  ephemeral validated descriptor visibility, atomic dependency-safe view
+  reconciliation and fail-closed restart; no runtime execution or grants.
+- [ExtensionV1 first nonmutating contract slice — 2026-10-31](2026-10-31-extension-v1-first-slice.md):
+  strict manifests, deterministic allowlisted catalog, dry-run activation,
+  SchoolOps/Dispatch reference descriptors and portability CI; live admission pending.
 - [Cross-repository extension and Hawala capability — 2026-10-28](2026-10-28-cross-repository-extension-and-hawala-capability.md):
   proposed common application-extension and source-ownership contract across biz-kit,
   hawala-core, Eatsbot, d-patch and school-ops; authority and live-money gates remain separate.

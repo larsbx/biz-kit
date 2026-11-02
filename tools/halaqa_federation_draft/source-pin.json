@@ -1,7 +1,7 @@
 {
   "schema": "bizkit-halaqa-federation-draft-pin/1",
   "repository": "larsbx/halaqa",
-  "revision": "11eb6309ec6caccb6aab3c821eba2311881c9ba0",
+  "revision": "7f677f7f82bd9c2d8f020996dc5352bc59a364af",
   "source_review": "https://github.com/larsbx/halaqa/pull/9",
   "scope": "offline-format-and-signed-test-only",
   "files": {
@@ -17,13 +17,13 @@
     },
     "halaqa_federation_signed_draft.py": {
       "source_path": "scripts/halaqa_federation_signed_draft.py",
-      "sha256": "ba802b681b43763c1b6e2b1fbdfae3a0588c1dd5c4a18266aa523146a27ec948",
-      "git_blob_sha": "3bd138466ba577260bdf57566c73f01c13b246f7"
+      "sha256": "42d3b898b210085769f7d59ff1f235d51078474846b88f2674e12df28c494e4e",
+      "git_blob_sha": "1b4263f4d75ce30a657b1257db7f3117b3f4aa94"
     },
     "signed-vectors.json": {
-      "source_path": ".polyglot/halaqa-federation-signed-draft-1/vectors.json",
-      "sha256": "03d87ac6cbb664135b7fd03a9450355b01fb42c1f486f1c8e76764795b15ac04",
-      "git_blob_sha": "2145518b6efb2be057a8b6ec81af812b1cabbd66"
+      "source_path": ".polyglot/halaqa-federation-signed-draft-2/vectors.json",
+      "sha256": "52d3450403e0c26cee4bfa2c86b5431fe3bc8d8488d15fafee2ecd75d6f8b4bd",
+      "git_blob_sha": "26082ffb5f7a62429fa49a7978d990e2c7ada9a1"
     }
   }
 }

@@ -5,7 +5,17 @@ defmodule HalaqaSignedDraft do
   All identity/context inputs are explicit TEST policy assertions.
   """
   @max_integer 9_007_199_254_740_991
-  @domain "halaqa.federation.signed-experiment/draft-1\0"
+  import Bitwise, only: [band: 2, bsl: 2]
+  @field_prime bsl(1, 255) - 19
+  @scalar_order bsl(1, 252) + 27_742_317_777_372_353_535_851_937_790_883_648_493
+  @small_order_y [
+    0,
+    1,
+    @field_prime - 1,
+    2_707_385_501_144_840_649_318_225_287_225_658_788_936_804_267_575_313_519_463_743_609_750_303_402_022,
+    55_188_659_117_513_257_062_467_267_217_118_295_137_698_188_065_244_968_500_265_048_394_206_261_417_927
+  ]
+  @domain "halaqa.federation.signed-experiment/draft-2\0"
   @token ~r/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z/
   @digest ~r/\Asha256:[0-9a-f]{64}\z/
   @envelope ~w(schema candidate key_id issued_at expires_at signature)
@@ -21,7 +31,7 @@ defmodule HalaqaSignedDraft do
       fields!(envelope, @envelope, "signed_fields")
 
       require!(
-        envelope["schema"] == "halaqa-federation-signed-experiment/draft-1",
+        envelope["schema"] == "halaqa-federation-signed-experiment/draft-2",
         "signed_schema"
       )
 
@@ -58,6 +68,13 @@ defmodule HalaqaSignedDraft do
           issued::unsigned-big-64, expires::unsigned-big-64,
           byte_size(candidate_bytes)::unsigned-big-32, candidate_bytes::binary>>
 
+      require!(
+        point_encoding_allowed?(public_key) and
+          point_encoding_allowed?(binary_part(signature, 0, 32)) and
+          :binary.decode_unsigned(binary_part(signature, 32, 32), :little) < @scalar_order,
+        "invalid_signature"
+      )
+
       valid = :crypto.verify(:eddsa, :none, transcript, signature, [public_key, :ed25519])
       require!(valid, "invalid_signature")
 
@@ -79,7 +96,7 @@ defmodule HalaqaSignedDraft do
     require!(byte_size(bytes) <= 2_000_000, "corpus_limit")
     corpus = json!(bytes)
     fields!(corpus, ~w(schema scope vectors), "corpus")
-    require!(corpus["schema"] == "halaqa-federation-signed-vectors/draft-1", "corpus")
+    require!(corpus["schema"] == "halaqa-federation-signed-vectors/draft-2", "corpus")
     require!(corpus["scope"] == "offline-signed-test-only", "corpus")
     vectors = corpus["vectors"]
     require!(is_list(vectors) and vectors != [], "corpus")
@@ -224,6 +241,11 @@ defmodule HalaqaSignedDraft do
   defp require!(true, _reason), do: :ok
   defp require!(false, reason), do: refuse!(reason)
   defp refuse!(reason), do: throw({:refused, reason})
+
+  defp point_encoding_allowed?(bytes) do
+    y = band(:binary.decode_unsigned(bytes, :little), bsl(1, 255) - 1)
+    y < @field_prime and y not in @small_order_y
+  end
 
   defp depth?(_, n, _, _) when n > 8 or n < 0, do: false
   defp depth?(<<>>, 0, false, _), do: true

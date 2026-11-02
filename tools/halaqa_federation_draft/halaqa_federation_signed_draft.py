@@ -16,10 +16,19 @@ from halaqa_federation_draft import (
     HASH, MAX_EPOCH, TOKEN, Refused, _constant, _depth, _object, decode,
 )
 
-SCHEMA = "halaqa-federation-signed-experiment/draft-1"
-DOMAIN = b"halaqa.federation.signed-experiment/draft-1\x00"
+SCHEMA = "halaqa-federation-signed-experiment/draft-2"
+DOMAIN = b"halaqa.federation.signed-experiment/draft-2\x00"
 VERDICT = "SIGNATURE_VALID_AUTHORITY_UNVERIFIED"
-CORPUS = "halaqa-federation-signed-vectors/draft-1"
+CORPUS = "halaqa-federation-signed-vectors/draft-2"
+FIELD_PRIME = 2**255 - 19
+SCALAR_ORDER = 2**252 + 27742317777372353535851937790883648493
+# Public compressed-y data from libsodium 1.0.18 ge25519_has_small_order.
+# This is encoding refusal, not an implementation of curve arithmetic.
+SMALL_ORDER_Y = {
+    0, 1, FIELD_PRIME - 1,
+    2707385501144840649318225287225658788936804267575313519463743609750303402022,
+    55188659117513257062467267217118295137698188065244968500265048394206261417927,
+}
 FIELDS = {"schema", "candidate", "key_id", "issued_at", "expires_at", "signature"}
 POLICY_FIELDS = {
     "sender", "recipient", "halaqa_id", "charter_hash", "epoch", "key_id",
@@ -63,6 +72,14 @@ def _policy(policy):
 
 def openssl_verify(public_key, signed_bytes, signature):
     """Use Ed25519 (not Ed25519ph); invoke a fixed program without a shell."""
+    def point_encoding_allowed(point):
+        y = int.from_bytes(point, "little") & (2**255 - 1)
+        return y < FIELD_PRIME and y not in SMALL_ORDER_Y
+
+    if (not point_encoding_allowed(public_key)
+            or not point_encoding_allowed(signature[:32])
+            or int.from_bytes(signature[32:], "little") >= SCALAR_ORDER):
+        return False
     # RFC 8410 Ed25519 SubjectPublicKeyInfo + 32 raw public-key bytes.
     spki = bytes.fromhex("302a300506032b6570032100") + public_key
     try:

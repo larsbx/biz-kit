@@ -1,0 +1,136 @@
+{
+  "schema": "halaqa-offline-merge-verification/1",
+  "executed_at_utc": "2026-11-01T11:02:14.008833+00:00",
+  "pr": 230,
+  "previous_head": "003c2f2b4513d380eedd084181d91327c63f321f",
+  "parent_head": "2e91006bfb2716ff1e70e6f619cf1f0b61165152",
+  "halaqa_revision": "7f677f7f82bd9c2d8f020996dc5352bc59a364af",
+  "scope": "offline-verifier-merge-validation",
+  "unchanged_parent_jobs": [
+    "offline-draft",
+    "independent-elixir",
+    "postgres-receipts",
+    "iroh-direct"
+  ],
+  "transport_tests_executed": false,
+  "authority_verified": false,
+  "production_receiver": false,
+  "hosted_acceptance": "pending",
+  "inputs_sha256": {
+    ".github/workflows/halaqa-federation-draft.yml": "b49a567010ac907d4679ae9d1feb4d967912506160c56748d23545a3c8790a00",
+    "tools/check_halaqa_rust_differential.py": "be1356e980831114f04dbfdbbde71edca810f09037bf932a20bf9ab83d6c983d",
+    "tools/halaqa_signed_draft_rs/Cargo.toml": "28cc1fdd44427825d815644da287fe6dca20ae92873ef8991b786fe31a47f719",
+    "tools/halaqa_signed_draft_rs/Cargo.lock": "b7f196989d9717bdd95c329b1e4db863e821fdfe8f7a6e651935ccbf893cd9f2",
+    "tools/halaqa_signed_draft_rs/src/main.rs": "9512a20f1b0c46dfcbe5af7fa17ebc72170c2f844621749d6219314e196d38af",
+    "tools/halaqa_signed_draft_rs/src/regression_tests.rs": "ff44f1f088334b3a98325750c29f9235c2d806870b644beb6e41cf54ece7ccd5",
+    "tools/halaqa_federation_draft/source-pin.json": "1ba0fe29e75a0e49b8e82b33c1fa675c5e968a9c3fc23f7a25c14358bbdeb3bb",
+    "tools/halaqa_federation_draft/signed-vectors.json": "52d3450403e0c26cee4bfa2c86b5431fe3bc8d8488d15fafee2ecd75d6f8b4bd"
+  },
+  "results": [
+    {
+      "command": [
+        "rustc",
+        "-Vv"
+      ],
+      "exit_code": 0,
+      "stdout": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "tools/halaqa_signed_draft_rs/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_draft_rs/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tools/halaqa_signed_draft_rs/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 19 tests\ntest regression_tests::malformed_encodings_numbers_and_limits_fail_closed ... ok\ntest regression_tests::local_policy_shape_and_types_are_not_remote_claims ... ok\ntest regression_tests::numeric_lexemes_preserve_integer_rules_without_changing_signed_bytes ... ok\ntest regression_tests::modified_payload_with_recomputed_digest_still_fails_signature ... ok\ntest regression_tests::unsigned_probe_records_lone_surrogate_refusal_reason_difference ... ok\ntest regression_tests::fresh_signature_preserves_payload_and_original_candidate ... ok\ntest regression_tests::candidate_whitespace_is_bound_outer_whitespace_is_not ... ok\ntest tests::duplicates_trailing_values_and_depth_fail_closed ... ok\ntest regression_tests::changed_signature_and_wrong_public_key_fail ... ok\ntest regression_tests::remote_authority_claim_cannot_become_a_success ... ok\ntest tests::policy_booleans_and_integers_are_not_interchangeable ... ok\ntest tests::identity_key_and_trivial_signature_are_rejected ... ok\ntest regression_tests::weak_identity_key_and_noncanonical_scalar_are_refused ... ok\ntest regression_tests::correctly_signed_wrong_recipient_epoch_and_identity_are_refused ... ok\ntest tests::signature_and_key_cannot_be_substituted ... ok\ntest regression_tests::revoked_key_and_half_open_lifetime_are_external_test_inputs ... ok\ntest tests::corpus_cannot_claim_authority_or_change_verified_bytes ... ok\ntest regression_tests::pinned_default_cannot_accept_an_altered_corpus ... ok\ntest tests::every_vector_and_exact_transcript_matches ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s\n     Running unittests src/main.rs (tools/halaqa_signed_draft_rs/target/debug/deps/halaqa_signed_draft_conformance-8d9d7a50fda91937)\n"
+    },
+    {
+      "command": [
+        "python3",
+        "tools/check_halaqa_rust_differential.py"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\": false, \"known_disagreements\": [\"lone-surrogate\"], \"production_receiver\": false, \"python_openssl\": {\"lone-surrogate\": \"identifier\", \"negative-zero-epoch\": \"FORMAT_ONLY_UNVERIFIED\", \"overflow-epoch\": \"epoch\", \"weak-identity-key\": \"invalid_signature\"}, \"resolved_from_draft1\": [\"weak-identity-key\"], \"rust_dalek_strict\": {\"lone-surrogate\": \"invalid_json\", \"negative-zero-epoch\": \"FORMAT_ONLY_UNVERIFIED\", \"overflow-epoch\": \"epoch\", \"weak-identity-key\": \"invalid_signature\"}, \"scope\": \"offline-diagnostic-known-disagreements-not-profile-approval\", \"source_revision\": \"7f677f7f82bd9c2d8f020996dc5352bc59a364af\"}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_halaqa_federation_draft.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_missing_openssl_cannot_report_signature_success (test_halaqa_federation_draft.HalaqaFederationPinTests.test_missing_openssl_cannot_report_signature_success) ... ok\ntest_missing_or_extra_source_file_refused (test_halaqa_federation_draft.HalaqaFederationPinTests.test_missing_or_extra_source_file_refused) ... ok\ntest_path_substitution_refused (test_halaqa_federation_draft.HalaqaFederationPinTests.test_path_substitution_refused) ... ok\ntest_pinned_corpus (test_halaqa_federation_draft.HalaqaFederationPinTests.test_pinned_corpus) ... ok\ntest_preloaded_dependency_cannot_replace_pinned_oracle (test_halaqa_federation_draft.HalaqaFederationPinTests.test_preloaded_dependency_cannot_replace_pinned_oracle) ... ok\ntest_scope_amplification_refused (test_halaqa_federation_draft.HalaqaFederationPinTests.test_scope_amplification_refused) ... ok\ntest_source_or_fixture_change_refused_before_execution (test_halaqa_federation_draft.HalaqaFederationPinTests.test_source_or_fixture_change_refused_before_execution) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.182s\n\nOK\n"
+    },
+    {
+      "command": [
+        "elixir",
+        "tools/check_halaqa_signed_draft.exs"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"authority_verified\":false,\"counts\":{\"REFUSED_SIGNED_TEST\":66,\"SIGNATURE_VALID_AUTHORITY_UNVERIFIED\":8},\"implementation\":\"independent-elixir\",\"production_receiver\":false,\"scope\":\"offline-signed-test-only\"}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "elixir",
+        "tools/test_halaqa_signed_draft.exs"
+      ],
+      "exit_code": 0,
+      "stdout": "Running ExUnit with seed: 931081, max_cases: 16\n\n........\nFinished in 0.09 seconds (0.06s on load, 0.03s async, 0.00s sync)\n8 tests, 0 failures\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}
