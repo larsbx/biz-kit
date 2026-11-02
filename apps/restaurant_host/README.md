@@ -45,8 +45,8 @@ it at the legacy eatsbot's locale cache.
 
 ## Not yet
 
-* Production configuration (`config/runtime.exs`): device seeds, pairing
-  secret hashes, menu source, `secret_key_base`, the public host for the
-  websocket origin check, and a Localize cache of the host's own.
+* Granting devices from an operator tool (today: a governance-signed
+  `RestaurantDeviceGrantedV1` appended by hand). Deploying is described in
+  [docs/deploy.md](../../docs/deploy.md#the-restaurant-release).
 * Grant revocation, staff sign-in, cancellation reasons chosen at the board,
   receipt printing, delivery (slice 5) and card payments through Hawala.

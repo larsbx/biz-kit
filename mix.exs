@@ -37,6 +37,17 @@ defmodule BizKit.MixProject do
           ],
           include_erts: true,
           strip_beams: false
+        ],
+        # The rebuilt eatsbot: the ledger that admits every order step and the
+        # cash-only storefront and kitchen board (apps/restaurant_host).
+        restaurant: [
+          applications: [
+            biz_kit_cluster: :permanent,
+            coop_substrate: :permanent,
+            restaurant_host: :permanent
+          ],
+          include_erts: true,
+          strip_beams: false
         ]
       ]
     ]

@@ -11,6 +11,9 @@ on:
       - 'mix.exs'
       - 'mix.lock'
       - 'config/**'
+      - 'scripts/restaurant-release-smoke.sh'
+      - 'scripts/restaurant_release_smoke.exs'
+      - 'config/runtime.exs'
       - '.github/workflows/restaurant-core.yml'
   push:
     branches: [main]
@@ -121,3 +124,35 @@ jobs:
       - name: Storefront, board and orders against the Log
         working-directory: apps/restaurant_host
         run: mix test --no-start --warnings-as-errors
+
+  release-smoke:
+    # The production restaurant release: built, migrated twice, booted, its
+    # storefront and board pairing checked over HTTP, and a pickup order placed
+    # and completed on its own ledger (docs/deploy.md).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install locked dependencies
+        run: MIX_ENV=prod mix deps.get --check-locked --only prod
+      - name: Build, migrate, boot and exercise the release
+        run: scripts/restaurant-release-smoke.sh

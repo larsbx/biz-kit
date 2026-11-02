@@ -1,0 +1,74 @@
+defmodule RestaurantHost.ConfigTest do
+  use ExUnit.Case, async: true
+
+  alias RestaurantHost.{Config, Restaurant}
+
+  @seed :binary.copy(<<7>>, 32)
+  @board_seed :binary.copy(<<9>>, 32)
+
+  defp json(overrides \\ %{}) do
+    Map.merge(
+      %{
+        "chapter" => "chapter-genesis",
+        "merchant" => "shop",
+        "currency" => "USD",
+        "tax_rate" => "0.0825",
+        "menu" => [
+          %{"id" => "margherita", "name" => "Margherita", "sku" => "MARG", "price_minor" => 1250}
+        ],
+        "storefront" => %{"device_id" => "storefront", "key_id" => "k-store"},
+        "boards" => %{
+          "board-1" => %{
+            "device_id" => "board-1",
+            "key_id" => "k-board",
+            "pairing_sha256" => Base.encode16(:crypto.hash(:sha256, "s3cret"), case: :lower)
+          }
+        }
+      },
+      overrides
+    )
+    |> :json.encode()
+    |> IO.iodata_to_binary()
+  end
+
+  defp env,
+    do: %{
+      "RESTAURANT_DEVICE_SEED_STOREFRONT" => Base.encode64(@seed),
+      "RESTAURANT_DEVICE_SEED_BOARD_1" => Base.encode64(@board_seed)
+    }
+
+  test "a restaurant file plus device seeds from the environment builds a restaurant" do
+    assert {:ok, config} = Config.parse(json(), env())
+    r = Restaurant.build(config)
+    assert {r.chapter, r.merchant, r.currency} == {"chapter-genesis", "shop", :USD}
+    assert r.storefront.seed == @seed and r.boards["board-1"].seed == @board_seed
+    assert Restaurant.pair(r, "board-1", "s3cret") == {:ok, "board-1"}
+    assert Restaurant.pair(r, "board-1", "nope") == :error
+  end
+
+  test "a seed never comes from the file, and every device needs one" do
+    assert Config.parse(json(), Map.delete(env(), "RESTAURANT_DEVICE_SEED_BOARD_1")) ==
+             {:error, {:missing_seed, "RESTAURANT_DEVICE_SEED_BOARD_1"}}
+
+    assert Config.parse(json(), %{env() | "RESTAURANT_DEVICE_SEED_STOREFRONT" => "c2hvcnQ="}) ==
+             {:error, {:invalid_seed, "RESTAURANT_DEVICE_SEED_STOREFRONT"}}
+
+    file_seed =
+      json(%{"storefront" => %{"device_id" => "storefront", "key_id" => "k", "seed" => "x"}})
+
+    assert Config.parse(file_seed, env()) == {:error, {:unexpected_field, "storefront", "seed"}}
+  end
+
+  test "malformed files are refused with a reason" do
+    assert Config.parse("{", env()) == {:error, :invalid_json}
+    assert Config.parse(json(%{"currency" => "usd"}), env()) == {:error, {:invalid, "currency"}}
+    assert Config.parse(json(%{"menu" => []}), env()) == {:error, {:invalid, "menu"}}
+    assert Config.parse(json(%{"tax_rate" => "abc"}), env()) == {:error, {:invalid, "tax_rate"}}
+
+    bad_hash = %{
+      "board-1" => %{"device_id" => "board-1", "key_id" => "k", "pairing_sha256" => "zz"}
+    }
+
+    assert Config.parse(json(%{"boards" => bad_hash}), env()) == {:error, {:invalid, "boards"}}
+  end
+end
