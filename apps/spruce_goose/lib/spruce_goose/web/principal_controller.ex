@@ -88,6 +88,7 @@ defmodule SpruceGoose.Web.PrincipalController do
       error -> refuse(conn, error)
     end
   end
+
   # JSON has no tuple keys. Successor selection is an exact, duplicate-free
   # list of scoped principals, not a caller-provided project inventory.
   defp successor_selections(nil), do: {:ok, %{}}
@@ -113,5 +114,4 @@ defmodule SpruceGoose.Web.PrincipalController do
   end
 
   defp successor_selections(_), do: {:error, :bad_request}
-
 end
