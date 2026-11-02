@@ -1,10 +1,12 @@
-name: RestaurantCore kitchen layer
+name: Order core and restaurant layer
 
 on:
   pull_request:
     paths:
+      - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
       - 'apps/commerce_core/**'
+      - 'apps/coop_substrate/**'
       - 'mix.exs'
       - 'mix.lock'
       - 'config/**'
@@ -20,7 +22,7 @@ permissions:
   contents: read
 
 jobs:
-  restaurant-core:
+  pure-layers:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -30,15 +32,54 @@ jobs:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - run: mix deps.get --check-locked
-      - name: Compile kitchen layer
-        working-directory: apps/restaurant_core
-        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Compile the money-free order core and kitchen layer
+        run: |
+          (cd apps/order_core && MIX_ENV=test mix compile --warnings-as-errors)
+          (cd apps/restaurant_core && MIX_ENV=test mix compile --warnings-as-errors)
       - name: Verify format
         run: >-
           MIX_ENV=test mix format --check-formatted
+          apps/order_core/mix.exs
+          apps/order_core/lib/order_core/lifecycle.ex
+          apps/order_core/lib/order_core/placement.ex
+          apps/order_core/test/lifecycle_test.exs
           apps/restaurant_core/mix.exs
           apps/restaurant_core/lib/restaurant_core/kitchen.ex
+          apps/restaurant_core/lib/restaurant_core/admission.ex
           apps/restaurant_core/test/kitchen_safety_test.exs
-      - name: Kitchen conformance against the pinned legacy fixtures
-        working-directory: apps/restaurant_core
-        run: mix test --no-start
+          apps/restaurant_core/test/admission_test.exs
+          apps/coop_substrate/test/restaurant_admission_test.exs
+      - name: Lifecycle properties, kitchen conformance and admission refinement
+        run: |
+          (cd apps/order_core && mix test --no-start)
+          (cd apps/restaurant_core && mix test --no-start)
+
+  substrate-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Signed restaurant admission through the Log (race, authority, replay)
+        working-directory: apps/coop_substrate
+        run: mix test test/restaurant_admission_test.exs test/log_test.exs --warnings-as-errors

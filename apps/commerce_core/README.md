@@ -63,23 +63,19 @@ bound and merchant scoping.
 against the old eatsbot's recorded behaviour, pinned by sha256 to
 `larsbx/eatsbot@15a201e` (rebuild slice 1): all 314 recorded baskets price to the same totals or are refused with the same error term.
 
-**Order and checkout safety.** `CommerceCore.OrderLifecycle` is a pure,
-merchant-neutral order core: a candidate reducer and mathematical history
-replay over a workflow built by `workflow/1` from the merchant's production
-stages (`placed → accepted → s₁ … sₙ → completed`, or `→ dispatched →
-completed | failed` for delivery, cancellable until hand-off). The core owns
-acceptance, hand-off, cancellation, authorization and delivery ownership; a
-layer only names its stages. The restaurant layer is
-[`RestaurantCore.Kitchen`](../restaurant_core/README.md), which carries the
-pinned legacy order fixtures. `test/order_lifecycle_test.exs` proves the rules
-for arbitrary stage lists.
-Host-verified operation grants precede all protected state/revision/history
-inspection. `CommerceCore.Checkout` produces immutable priced order candidates,
-one per cart, with channel-scoped idempotency and a delivery-request marker.
-Both require serialized authenticated host admission; neither is a database or
-production writer. Checkout creates no tracking secrets or transport record.
-Checkout still names the kitchen's non-delivery fulfillments (`pickup`,
-`dine_in`); taking them from the workflow is a later slice.
+**Order and checkout safety.** The money-free order core lives in
+[`order_core`](../order_core/README.md): `OrderCore.Lifecycle` (the
+merchant-neutral lifecycle over a merchant's production stages) and
+`OrderCore.Placement` (one order per cart, channel-scoped idempotency, cart
+ownership and the workflow's fulfillments, with the priced snapshot opaque).
+`CommerceCore.Checkout` is Placement priced by `Pricing`: immutable priced
+order candidates with a delivery-request marker. Host-verified grants precede
+all protected inspection; neither is a database or production writer, and
+checkout creates no tracking secrets or transport record.
+`test/kitchen_checkout_safety_test.exs` replays the 11 pinned legacy checkout
+scenarios through the kitchen workflow (`RestaurantCore.Kitchen.workflow/0`);
+`test/checkout_test.exs` proves checkout offers exactly the workflow's
+fulfillments, for every fulfillment set.
 
 Checkout and lifecycle completion do not accept money. Every checkout candidate
 is `financial_status: :unconfirmed`, including duplicate requests containing a

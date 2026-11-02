@@ -23,9 +23,11 @@ the golden outputs to supply expected input prices.
 
 The three order fixtures pin the kitchen instance of the merchant-neutral
 order core: they live in `apps/restaurant_core/test` and run through
-`RestaurantCore.Kitchen`, which binds `CommerceCore.OrderLifecycle` to the
-`preparing`/`ready` stages. The checkout fixture stays in CommerceCore. The
-core's own properties cover arbitrary stage lists.
+`RestaurantCore.Kitchen`, which binds `OrderCore.Lifecycle` to the
+`preparing`/`ready` stages. The checkout fixture stays in CommerceCore and
+replays through `Checkout.new(Kitchen.workflow(), …)`: checkout offers exactly
+the workflow's fulfillments. The core's own properties cover arbitrary stage
+lists and fulfillment sets.
 
 The companion FulfillmentCore coupling tests cover all 307 coupling records;
 see its README for the independent package and exact safety differences.

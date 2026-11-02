@@ -1,6 +1,7 @@
-defmodule CommerceCore.CheckoutSafetyTest do
+defmodule CommerceCore.KitchenCheckoutSafetyTest do
   use ExUnit.Case, async: true
   alias CommerceCore.{Checkout, Tax}
+  alias RestaurantCore.Kitchen
 
   @path Path.expand("fixtures/eatsbot_characterization/checkout.jsonl", __DIR__)
   @hash "75ab2f968d726b2cdb570490072a5bff4829e92bfca1ec4427ef16b88c3465f8"
@@ -31,7 +32,7 @@ defmodule CommerceCore.CheckoutSafetyTest do
     basket = cart([line("Margherita", 1250, 2), line("Pepperoni", 1400, 1)])
 
     {:ok, state} =
-      Checkout.new("shop", %{
+      Checkout.new(Kitchen.workflow(), "shop", %{
         "pickup" => basket,
         "other" => basket,
         "telegram" => basket,
@@ -194,7 +195,10 @@ defmodule CommerceCore.CheckoutSafetyTest do
              command("other", "k")
            ) == {:error, :forbidden}
 
-    {:ok, blank} = Checkout.new("another-shop", %{"pickup" => cart([line("Pepperoni", 1400, 1)])})
+    {:ok, blank} =
+      Checkout.new(Kitchen.workflow(), "another-shop", %{
+        "pickup" => cart([line("Pepperoni", 1400, 1)])
+      })
 
     assert {:ok, _, _, :accepted} =
              Checkout.apply(blank, %{trusted("pickup") | merchant: "another-shop"}, cmd)

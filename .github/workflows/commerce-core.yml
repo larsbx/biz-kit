@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/commerce_core/**'
+      - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
       - 'apps/eatsbot_core/**'
       - 'apps/eatsbot/**'
@@ -50,10 +51,9 @@ jobs:
           apps/commerce_core/test/eatsbot_characterization_test.exs
           apps/commerce_core/test/catalog_modifiers_test.exs
           apps/commerce_core/test/order_pipeline_test.exs
-          apps/commerce_core/lib/commerce_core/order_lifecycle.ex
           apps/commerce_core/lib/commerce_core/checkout.ex
-          apps/commerce_core/test/order_lifecycle_test.exs
-          apps/commerce_core/test/checkout_safety_test.exs
+          apps/commerce_core/test/kitchen_checkout_safety_test.exs
+          apps/commerce_core/test/checkout_test.exs
           apps/commerce_core/lib/commerce_core/catalog.ex
           apps/commerce_core/lib/commerce_core/catalog_wire.ex
           apps/commerce_core/test/catalog_test.exs
