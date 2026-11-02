@@ -19,7 +19,10 @@ defmodule CoopSubstrate.ChapterProjectsTest do
     tablet = new_member("reviewer")
 
     {:ok, [_, grant]} =
-      Log.append([declare_governance(gov), operator_grant(gov, laptop, "alice")])
+      Log.append([
+        declare_governance(gov),
+        operator_grant(gov, laptop, "alice") | project_owner(gov)
+      ])
 
     {:ok, _} =
       Log.append([

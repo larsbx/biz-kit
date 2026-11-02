@@ -78,8 +78,8 @@ current revision.
 
 ## Decisions
 
-* **Projects have owners.** Request types are adopted per project, by its
-  owner, never by uploading: a catalogue in the store that no owner adopted
+* **Projects have owners** ([project ownership](2026-11-02-project-ownership.md)).
+  Request types are adopted per project, by its owner, never by uploading: a catalogue in the store that no owner adopted
   admits nothing. Without this, whoever can define a Definition of Done could
   also write the template it is checked against, and the fixed signature would
   hold only in name. Governance assigns the owner. Once a project has an owner
@@ -132,10 +132,8 @@ current revision.
   written but not run. There is no CoopSubstrate preparation helper yet that
   stores catalogue YAML and holds an adoption for signing, as
   `CoopSubstrate.Blueprints.prepare/4` does for blueprints.
-* **Ownership elsewhere.** Only typed intake requires an owner. Untyped
-  definitions, task creation and blueprints do not consult it. Offboarding
-  (`TaskPrincipalOffboardedV1`) ends the owner's grants but not their
-  ownership: governance reassigns the project.
+* **Ownership** is specified in [project ownership](2026-11-02-project-ownership.md):
+  owners must be eligible, work needs one, and nothing may orphan a project.
 * **Workflow runs.** Tasks a workflow instantiates are proposed like any
   other, so their proposer must agree to each typed definition. SPEC's
   refinement rule (children inheriting the root's agreement) is not

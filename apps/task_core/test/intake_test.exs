@@ -85,6 +85,7 @@ defmodule TaskCore.IntakeTest do
   @head %{key_id: "head", pubkey: "head-public-key"}
   @lars %{key_id: "lars-phone", pubkey: "lars-public-key"}
   @agent %{key_id: "agent-box", pubkey: "agent-public-key"}
+  @lars_laptop %{key_id: "lars-laptop", pubkey: "lars-laptop-key"}
 
   # -- the catalogue and its templates --------------------------------------
 
@@ -175,6 +176,7 @@ defmodule TaskCore.IntakeTest do
       |> admit!(@head, "TaskOperatorGrantedV1", grant("lars", @lars), "lars-grant")
       |> admit!(@head, "TaskOperatorGrantedV1", grant("agent", @agent), "agent-grant")
       |> admit!(@head, "TaskOperatorGrantedV1", grant("head-as-operator", @head), "head-grant")
+      |> human!("lars")
       |> admit!(@head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "lars"})
       |> step!({:adopt_catalogue, Host.digest(@catalogue), @catalogue})
       |> admit!(@lars, "TaskCreatedV1", %{
@@ -223,7 +225,10 @@ defmodule TaskCore.IntakeTest do
       blank = event(@head, "TaskProjectOwnerAssignedV1", Map.put(@where, "principal_id", " "))
       assert admit(blank, s) == {:error, :empty_task_field}
 
-      s = admit!(s, @head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "agent"})
+      s =
+        human!(s, "agent")
+        |> admit!(@head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "agent"})
+
       assert s.state.projects[scope()].owner == "agent"
     end
 
@@ -240,12 +245,28 @@ defmodule TaskCore.IntakeTest do
       impostor = %{adoption(s, @revised) | signers: [@agent]}
       assert admit(impostor, s) == {:error, :task_operator_key_mismatch}
 
+      # The owner's only grant cannot be revoked (TaskCore.OwnershipTest); with
+      # a second, the revoked one no longer signs.
+      only =
+        event(
+          @head,
+          "TaskOperatorRevokedV1",
+          Map.put(@where, "authorization_event_id", "lars-grant")
+        )
+
+      assert admit(only, s) == {:error, :project_owner_ineligible}
+
       revoked =
-        admit!(s, @head, "TaskOperatorRevokedV1", %{"authorization_event_id" => "lars-grant"})
+        s
+        |> admit!(@head, "TaskOperatorGrantedV1", grant("lars", @lars_laptop), "lars-laptop")
+        |> admit!(@head, "TaskOperatorRevokedV1", %{"authorization_event_id" => "lars-grant"})
 
       assert admit(adoption(revoked, @revised), revoked) == {:error, :task_grant_revoked}
 
-      s = admit!(s, @head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "agent"})
+      s =
+        human!(s, "agent")
+        |> admit!(@head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "agent"})
+
       assert admit(adoption(s, @revised), s) == {:error, :not_project_owner}
       assert admit(adoption(s, @revised, @agent, "agent-grant"), s) == :ok
     end
@@ -383,6 +404,18 @@ defmodule TaskCore.IntakeTest do
   end
 
   # -- helpers ---------------------------------------------------------------
+
+  # Governance declares a principal human: here, the operator named "agent",
+  # so it may own the project.
+  defp human!(s, principal),
+    do:
+      fold!(s, %Event{
+        event_id: "human-#{principal}",
+        chapter_id: @chapter,
+        type: "TaskPrincipalKindDeclaredV1",
+        payload: %{"principal_id" => principal, "kind" => "human"},
+        signers: [@head]
+      })
 
   defp adoption(s, catalogue, signer \\ @lars, grant \\ "lars-grant"),
     do: prepare(s, {:adopt_catalogue, Host.digest(catalogue), catalogue}, signer, grant)

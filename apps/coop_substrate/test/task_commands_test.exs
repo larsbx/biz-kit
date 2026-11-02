@@ -25,7 +25,10 @@ defmodule CoopSubstrate.TaskCommandsTest do
       )
 
     grant = grant(gov, operator)
-    {:ok, _} = Log.append([grant, baseline(gov)])
+
+    {:ok, _} =
+      Log.append(CoopSubstrate.TaskTimingFixtures.project_owner(gov) ++ [grant, baseline(gov)])
+
     %{gov: gov, operator: operator, grant: grant}
   end
 

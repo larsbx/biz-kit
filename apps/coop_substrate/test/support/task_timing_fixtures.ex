@@ -5,7 +5,7 @@ defmodule CoopSubstrate.TaskTimingFixtures do
   pure gate). Every builder returns a signed envelope; nothing is appended.
   """
 
-  import CoopSubstrate.LogCase, only: [signed_event: 3]
+  import CoopSubstrate.LogCase, only: [signed_event: 3, new_member: 1]
 
   @scope %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
 
@@ -58,6 +58,43 @@ defmodule CoopSubstrate.TaskTimingFixtures do
 
   def reviewer_grant(gov, reviewer, principal),
     do: grant(gov, "TaskReviewerGrantedV1", reviewer, principal)
+
+  @doc """
+  A project's accountable owner (`TaskCore.Projects`), which work in a project
+  needs: governance declares `principal` human, grants it its own operator key
+  and assigns it. The owner never signs in these tests, so revoking or
+  offboarding their actors leaves it untouched. Pass `kind: false` for a
+  further project, once the principal is declared in the chapter.
+  """
+  def project_owner(gov, scope \\ @scope, opts \\ []) do
+    principal = Keyword.get(opts, :principal, "owner")
+    key = new_member("operator")
+
+    grant =
+      signed_event(
+        gov,
+        "TaskOperatorGrantedV1",
+        Map.merge(scope, %{
+          "principal_id" => principal,
+          "key_id" => key.signer.key_id,
+          "pubkey" => {:bytes, key.signer.pubkey}
+        })
+      )
+
+    assign =
+      signed_event(gov, "TaskProjectOwnerAssignedV1", Map.put(scope, "principal_id", principal))
+
+    if Keyword.get(opts, :kind, true),
+      do: [
+        signed_event(gov, "TaskPrincipalKindDeclaredV1", %{
+          "principal_id" => principal,
+          "kind" => "human"
+        }),
+        grant,
+        assign
+      ],
+      else: [grant, assign]
+  end
 
   @doc "Governance ends everything `principal` holds in the project."
   def offboard(gov, principal, scope \\ @scope),

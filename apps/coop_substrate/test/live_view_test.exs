@@ -20,7 +20,10 @@ defmodule CoopSubstrate.LiveViewTest do
     laptop = new_member("operator")
 
     {:ok, [_, grant]} =
-      Log.append([declare_governance(gov), operator_grant(gov, laptop, "alice")])
+      Log.append([
+        declare_governance(gov),
+        operator_grant(gov, laptop, "alice") | project_owner(gov)
+      ])
 
     %{gov: gov, laptop: laptop, grant: grant}
   end

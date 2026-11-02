@@ -94,45 +94,112 @@ defmodule TaskCore.Admission do
     }
   end
 
+  @principal_types TaskCore.Projects.principal_types()
+
+  # New work in a project needs an eligible owner first
+  # (docs/architecture/2026-11-02-project-ownership.md).
+  @work ~w(TaskCreatedV1 TaskWorkflowInstantiatedV1 TaskBaselineRecordedV1)
+
   @doc """
   Whether `event` may be appended, given `gate`: `orchestration` (the
   `TaskCore.State`) and `role_keys` (`%{{chapter, role} => %{key_id => pubkey}}`,
   the keys governance declared). `:ok` or `{:error, reason}`.
+
+  An event is also refused if the state it leads to has a project whose
+  owner is not eligible and was before (`check_transition/2`). A host that
+  appends events as one atomic batch may instead set `defer_transition: true`
+  in `gate` for each event, and must then call `check_transition/2` on the
+  states before and after the whole batch, as `check_batch/2` does.
   """
   def check(%{} = env, gate) do
     with :ok <- signer_cardinality(env),
-         :ok <- scope_valid(env) do
-      cond do
-        Map.has_key?(TaskCore.Readiness.event_types(), env.type) ->
-          TaskCore.Readiness.check(env, gate.orchestration, gate.role_keys)
+         :ok <- scope_valid(env),
+         :ok <- check_event(env, gate),
+         :ok <- work(env, gate.orchestration) do
+      if Map.get(gate, :defer_transition, false),
+        do: :ok,
+        else: check_transition(gate.orchestration, State.handle_event(env, gate.orchestration))
+    end
+  end
 
-        Map.has_key?(TaskCore.DoD.event_types(), env.type) ->
-          TaskCore.DoD.check(env, gate.orchestration, gate.role_keys)
+  @doc """
+  Whether `events` may be appended together, as one atomic batch, given
+  `gate`. Each event is checked against the state the ones before it leave;
+  owner eligibility is checked once, on the state after all of them, so a
+  batch may replace an owner and end the old owner's eligibility in either
+  order. `:ok`, `{:error, {index, reason}}` for an event, or
+  `{:error, {:batch, reason}}` for the batch as a whole.
+  """
+  def check_batch(events, gate) when is_list(events) do
+    deferred = Map.put(gate, :defer_transition, true)
 
-        Map.has_key?(TaskCore.Timing.event_types(), env.type) ->
-          TaskCore.Timing.check(env, gate.orchestration, gate.role_keys)
-
-        Map.has_key?(TaskCore.Access.event_types(), env.type) ->
-          TaskCore.Access.check(env, gate.orchestration, gate.role_keys)
-
-        Map.has_key?(TaskCore.AgentRuns.event_types(), env.type) ->
-          TaskCore.AgentRuns.check(env, gate.orchestration)
-
-        Map.has_key?(TaskCore.Hierarchy.event_types(), env.type) ->
-          TaskCore.Hierarchy.check(env, gate.orchestration, gate.role_keys)
-
-        Map.has_key?(TaskCore.Todos.event_types(), env.type) ->
-          TaskCore.Todos.check(env, gate.orchestration, gate.role_keys)
-
-        Map.has_key?(TaskCore.Projects.event_types(), env.type) ->
-          TaskCore.Projects.check(env, gate.orchestration, gate.role_keys)
-
-        env.type in @holder_revocations ->
-          holder_revocation(env, gate)
-
-        true ->
-          check_type(env, gate.orchestration, gate.role_keys)
+    events
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, gate.orchestration}, fn {env, index}, {:ok, state} ->
+      case check(env, %{deferred | orchestration: state}) do
+        :ok -> {:cont, {:ok, State.handle_event(env, state)}}
+        {:error, reason} -> {:halt, {:error, {index, reason}}}
       end
+    end)
+    |> case do
+      {:ok, final} ->
+        case check_transition(gate.orchestration, final) do
+          :ok -> :ok
+          {:error, reason} -> {:error, {:batch, reason}}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Whether the move from `before` to `later` keeps every owned project's owner
+  eligible: no project may have an ineligible owner after that did not have
+  one before. From an admitted ledger, which has none, that is none at all.
+  """
+  def check_transition(before, later) do
+    if TaskCore.Projects.violations(later) -- TaskCore.Projects.violations(before) == [],
+      do: :ok,
+      else: {:error, :project_owner_ineligible}
+  end
+
+  defp work(%{type: type} = env, state) when type in @work,
+    do: TaskCore.Projects.accepts_work(state, State.scope(env))
+
+  defp work(_env, _state), do: :ok
+
+  defp check_event(env, gate) do
+    cond do
+      Map.has_key?(TaskCore.Readiness.event_types(), env.type) ->
+        TaskCore.Readiness.check(env, gate.orchestration, gate.role_keys)
+
+      Map.has_key?(TaskCore.DoD.event_types(), env.type) ->
+        TaskCore.DoD.check(env, gate.orchestration, gate.role_keys)
+
+      Map.has_key?(TaskCore.Timing.event_types(), env.type) ->
+        TaskCore.Timing.check(env, gate.orchestration, gate.role_keys)
+
+      Map.has_key?(TaskCore.Access.event_types(), env.type) ->
+        TaskCore.Access.check(env, gate.orchestration, gate.role_keys)
+
+      Map.has_key?(TaskCore.AgentRuns.event_types(), env.type) ->
+        TaskCore.AgentRuns.check(env, gate.orchestration)
+
+      Map.has_key?(TaskCore.Hierarchy.event_types(), env.type) ->
+        TaskCore.Hierarchy.check(env, gate.orchestration, gate.role_keys)
+
+      Map.has_key?(TaskCore.Todos.event_types(), env.type) ->
+        TaskCore.Todos.check(env, gate.orchestration, gate.role_keys)
+
+      Map.has_key?(TaskCore.Projects.event_types(), env.type) ->
+        TaskCore.Projects.check(env, gate.orchestration, gate.role_keys)
+
+      env.type in @holder_revocations ->
+        holder_revocation(env, gate)
+
+      true ->
+        check_type(env, gate.orchestration, gate.role_keys)
     end
   end
 
@@ -204,6 +271,10 @@ defmodule TaskCore.Admission do
 
   defp signer_cardinality(%{signers: [_signer]}), do: :ok
   defp signer_cardinality(_env), do: {:error, :task_signer_cardinality}
+
+  # A principal's kind is chapter-wide: its events name no tenant or project.
+  defp scope_valid(%{type: type} = env) when type in @principal_types,
+    do: if(segment?(env.chapter_id), do: :ok, else: {:error, :invalid_task_scope})
 
   defp scope_valid(env) do
     fields =

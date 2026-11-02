@@ -15,8 +15,9 @@ defmodule TaskCore do
     * `TaskCore.Admission` and `TaskCore.State`: whether an event may be
       appended, and the fold of those accepted, with the rules of
       `Readiness`, `DoD`, `Timing` and `Delegation`;
-    * `TaskCore.Intake` and `TaskCore.Projects`: the request types a
-      project's owner adopts, which fix the shape of a typed Definition of Done;
+    * `TaskCore.Projects`: each project's one accountable owner, an eligible
+      human, before any work and never orphaned; and `TaskCore.Intake`, the
+      request types the owner adopts, which fix a typed Definition of Done;
     * `TaskCore.Steps` and `TaskCore.Decisions`: the command a person signs;
     * `TaskCore.Host`: the two effects a host supplies.
   """

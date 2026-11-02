@@ -20,7 +20,7 @@ defmodule CoopSubstrate.ChangeFeedTest do
     gov = new_member("governance")
     op = new_member("operator")
     grant = operator_grant(gov, op, "alice")
-    {:ok, _} = Log.append([declare_governance(gov), grant])
+    {:ok, _} = Log.append([declare_governance(gov), grant | project_owner(gov)])
     %{op: op, grant: grant}
   end
 

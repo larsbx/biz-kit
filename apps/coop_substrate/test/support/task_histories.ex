@@ -69,7 +69,8 @@ defmodule CoopSubstrate.TaskHistories do
     }
 
     gate =
-      [declare_governance(gov), world.op_grant, world.agent_grant, world.other_grant]
+      ([declare_governance(gov), world.op_grant, world.agent_grant, world.other_grant] ++
+         project_owner(gov))
       |> Enum.reduce(Gate.init(), fn env, gate -> elem(admit(env, gate), 1) end)
 
     {world, gate}

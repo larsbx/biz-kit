@@ -534,11 +534,15 @@ defmodule CoopSubstrate.Log do
   # the whole batch before persistence; the advanced gate is recomputed from
   # the assigned envelopes only after the append succeeds. (The gate fold
   # never reads log-assigned fields, so folding unassigned envelopes here is
-  # sound.)
+  # sound.) A project's owner must be eligible after the whole batch, not after
+  # each event, so one batch can replace an owner and end the old owner's
+  # eligibility in either order (TaskCore.Admission.check_batch/2); a breach is
+  # reported against the batch's last event.
   defp verify_validity(envelopes, gate) do
     envelopes
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, gate}, fn {env, index}, {:ok, gate} ->
+    |> Enum.reduce_while({:ok, Map.put(gate, :defer_transition, true)}, fn {env, index},
+                                                                           {:ok, gate} ->
       result =
         with :ok <- CoopSubstrate.GroupBuys.live_check(env, gate),
              do: TypeRegistry.validity_check(env, gate)
@@ -549,8 +553,15 @@ defmodule CoopSubstrate.Log do
       end
     end)
     |> case do
-      {:ok, _gate} -> :ok
+      {:ok, final} -> batch_owners(gate, final, length(envelopes) - 1)
       error -> error
+    end
+  end
+
+  defp batch_owners(before, final, last) do
+    case TaskCore.Admission.check_transition(before.orchestration, final.orchestration) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:reject, last, reason}}
     end
   end
 
