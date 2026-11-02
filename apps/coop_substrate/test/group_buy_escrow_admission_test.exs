@@ -1,7 +1,9 @@
 defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
   use CoopSubstrate.LogCase, async: false
+  import CoopSubstrate.LogCase, except: [signed_event: 3, signed_event: 4]
 
   alias CoopSubstrate.{Canonical, GroupBuys, Log}
+  alias CoopSubstrate.GroupBuyClock, as: Clock
   alias CoopSubstrate.Projections.Membership
   alias GroupBuyCore.{Escrow, EscrowProof}
 
@@ -12,7 +14,8 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
   @provider "custodian-one"
 
   setup do
-    now = System.system_time(:second)
+    start_supervised!({Clock, 1_800_000_000_999})
+    now = Clock.system_time(:second)
     gov = new_member("governance")
     seller = new_member("group_seller")
     buyer = new_member("group_buyer")
@@ -81,6 +84,15 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
     {:ok, Map.put(ctx, :authority_id, authority.event_id)}
   end
 
+  defp signed_event(actor, type, payload, attrs \\ []) do
+    CoopSubstrate.LogCase.signed_event(
+      actor,
+      type,
+      payload,
+      Keyword.put_new(attrs, :timestamp_ms, Clock.system_time(:millisecond))
+    )
+  end
+
   defp posted_offer(seller, campaign, now) do
     signed_event(seller, "GroupBuyOfferPostedV1", %{
       "seller_id" => @seller,
@@ -108,7 +120,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
   defp contract(ctx, campaign \\ @campaign, offer_hash \\ nil) do
     buyer_id = Map.get(ctx, :buyer_id, @buyer)
     hash = offer_hash || ctx.offer_hash
-    now = System.system_time(:second)
+    now = Clock.system_time(:second)
 
     buyer_consent =
       signed_event(ctx.buyer, "GroupBuyConsentV1", %{
@@ -178,7 +190,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
 
   defp provider_report(ctx, campaign \\ @campaign, changes \\ %{}) do
     buyer_id = Map.get(ctx, :buyer_id, @buyer)
-    issued_at = System.system_time(:second)
+    issued_at = Clock.system_time(:second)
 
     raw =
       %{
@@ -1035,7 +1047,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
       if op == "reserve" do
         Map.merge(body, %{
           "reservation_id" => "group-reservation-" <> id,
-          "expires_at_ms" => (System.system_time(:second) + 1200) * 1_000
+          "expires_at_ms" => (Clock.system_time(:second) + 1200) * 1_000
         })
       else
         body
@@ -1090,7 +1102,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
         @chapter,
         @seller,
         @campaign,
-        System.system_time(:second)
+        Clock.system_time(:second)
       )
 
     assert ready.contracted_quantity == 5
@@ -1116,7 +1128,7 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
                @chapter,
                @seller,
                @campaign,
-               System.system_time(:second)
+               Clock.system_time(:second)
              )
 
     assert {:ok, replayed} = Log.replay(Membership)
