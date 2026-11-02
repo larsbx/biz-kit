@@ -67,8 +67,7 @@ defmodule ProofBankCore.Schema do
          :ok <- text(:question, value.question),
          :ok <- text(:answer, value.answer) do
       {:ok,
-       %{id: value.id, question: String.trim(value.question),
-         answer: String.trim(value.answer)}}
+       %{id: value.id, question: String.trim(value.question), answer: String.trim(value.answer)}}
     end
   end
 
@@ -78,8 +77,13 @@ defmodule ProofBankCore.Schema do
          :ok <- text(:statement, value.statement),
          :ok <- allowed_kind(value.kind),
          {:ok, refs} <- ref_ids(:answer_ids, value.answer_ids) do
-      {:ok, %{id: value.id, statement: String.trim(value.statement),
-              kind: value.kind, answer_ids: refs}}
+      {:ok,
+       %{
+         id: value.id,
+         statement: String.trim(value.statement),
+         kind: value.kind,
+         answer_ids: refs
+       }}
     end
   end
 
@@ -89,9 +93,14 @@ defmodule ProofBankCore.Schema do
          :ok <- text(:claim, value.claim),
          :ok <- allowed_method(value.method),
          {:ok, refs} <- ref_ids(:requirement_ids, value.requirement_ids) do
-      {:ok, %{id: value.id, claim: String.trim(value.claim),
-              method: value.method, requirement_ids: refs,
-              status: :unverified}}
+      {:ok,
+       %{
+         id: value.id,
+         claim: String.trim(value.claim),
+         method: value.method,
+         requirement_ids: refs,
+         status: :unverified
+       }}
     end
   end
 

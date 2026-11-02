@@ -18,7 +18,7 @@ defmodule ProofBankCore.CheckingPort do
   authorize extension activation or business writes.
   """
   @callback check(candidate_ref :: String.t(), approved_context :: map()) ::
-              {:ok, %{required(:evidence_ref) => String.t(),
-                      required(:profile_digest) => String.t()}}
+              {:ok,
+               %{required(:evidence_ref) => String.t(), required(:profile_digest) => String.t()}}
               | {:error, term()}
 end

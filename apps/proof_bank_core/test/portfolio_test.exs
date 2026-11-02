@@ -34,7 +34,7 @@ defmodule ProofBankCorePortfolioTest do
 
   test "source model references never produce proven status" do
     assert {:ok, baselines} = Portfolio.compile_all()
-    assert Enum.any?(baselines, &(is_binary(&1.portfolio.model_candidate)))
+    assert Enum.any?(baselines, &is_binary(&1.portfolio.model_candidate))
 
     for blueprint <- baselines, blueprint.portfolio.model_candidate != nil do
       assert blueprint.verification_state == :unverified
@@ -46,16 +46,22 @@ defmodule ProofBankCorePortfolioTest do
     assert {:error, :missing_umbrella_apps_directory} =
              Portfolio.audit_repo(Path.join(System.tmp_dir!(), "nonexistent-proof-bank-check"))
 
-    root = Path.join(System.tmp_dir!(), "proof-bank-portfolio-" <> Integer.to_string(System.unique_integer([:positive])))
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "proof-bank-portfolio-" <> Integer.to_string(System.unique_integer([:positive]))
+      )
 
     try do
       File.mkdir_p!(Path.join(root, "apps"))
+
       assert {:error, {:inventory_drift, %{missing_apps: missing, unregistered_apps: []}}} =
                Portfolio.audit_repo(root)
 
       assert "dispatch" in missing
       File.mkdir_p!(Path.join([root, "apps", "unknown_plugin"]))
       File.write!(Path.join([root, "apps", "unknown_plugin", "mix.exs"]), "")
+
       assert {:error, {:inventory_drift, %{unregistered_apps: ["unknown_plugin"]}}} =
                Portfolio.audit_repo(root)
     after

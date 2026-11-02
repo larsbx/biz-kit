@@ -12,16 +12,32 @@ defmodule ProofBankCoreTest do
         %{id: "A-1", question: "Can trips overlap?", answer: "No."}
       ],
       requirements: [
-        %{id: "R-2", statement: "Only dispatcher approval commits.", kind: :behavior,
-          answer_ids: ["A-2"]},
-        %{id: "R-1", statement: "Active driver trips do not overlap.", kind: :invariant,
-          answer_ids: ["A-1"]}
+        %{
+          id: "R-2",
+          statement: "Only dispatcher approval commits.",
+          kind: :behavior,
+          answer_ids: ["A-2"]
+        },
+        %{
+          id: "R-1",
+          statement: "Active driver trips do not overlap.",
+          kind: :invariant,
+          answer_ids: ["A-1"]
+        }
       ],
       obligations: [
-        %{id: "O-2", claim: "Check approval-bound commands.", method: :conformance,
-          requirement_ids: ["R-2"]},
-        %{id: "O-1", claim: "Establish no overlapping active trips.", method: :lean,
-          requirement_ids: ["R-1"]}
+        %{
+          id: "O-2",
+          claim: "Check approval-bound commands.",
+          method: :conformance,
+          requirement_ids: ["R-2"]
+        },
+        %{
+          id: "O-1",
+          claim: "Establish no overlapping active trips.",
+          method: :lean,
+          requirement_ids: ["R-1"]
+        }
       ],
       capabilities: ["dispatch.assignment.read", "dispatch.assignment.plan"]
     }
@@ -34,6 +50,7 @@ defmodule ProofBankCoreTest do
     assert result.activation_state == :inert
     assert Enum.map(result.answers, & &1.id) == ["A-1", "A-2"]
     assert Enum.map(result.obligations, & &1.status) == [:unverified, :unverified]
+
     assert {:ok, ^result} =
              candidate()
              |> Map.update!(:answers, &Enum.reverse/1)
@@ -104,8 +121,10 @@ defmodule ProofBankCoreTest do
 
   test "rejects nonmap, empty IDs and revisions" do
     assert {:error, :expected_map} = ProofBankCore.compile("not a specification")
+
     assert {:error, {:invalid_identifier, ""}} =
              candidate() |> Map.put(:id, "") |> ProofBankCore.compile()
+
     assert {:error, :invalid_revision} =
              candidate() |> Map.put(:revision, 0) |> ProofBankCore.compile()
   end
