@@ -37,7 +37,15 @@ defmodule InventoryCore.BasketTest do
     original = stock()
 
     assert {:ok, candidate} =
-             Basket.plan(original, "restaurant", "kitchen", "pizza-order-1", 3, ingredients(), 2000)
+             Basket.plan(
+               original,
+               "restaurant",
+               "kitchen",
+               "pizza-order-1",
+               3,
+               ingredients(),
+               2000
+             )
 
     assert candidate.kind == :unsigned_inventory_basket
     assert candidate.merchant == "restaurant"
@@ -53,7 +61,15 @@ defmodule InventoryCore.BasketTest do
     original = %{stock() | "dough" => stocked("restaurant", "dough", "grams", 100)}
 
     assert {:error, {"dough", :insufficient_available}} =
-             Basket.plan(original, "restaurant", "kitchen", "pizza-order-2", 1, ingredients(), 2000)
+             Basket.plan(
+               original,
+               "restaurant",
+               "kitchen",
+               "pizza-order-2",
+               1,
+               ingredients(),
+               2000
+             )
 
     assert {:ok, 1000} =
              InventoryCore.available(original["cheese"], "restaurant", "kitchen")
@@ -73,10 +89,26 @@ defmodule InventoryCore.BasketTest do
     assert {:ok, 12} = InventoryCore.Menu.sellable(recipe, original, "restaurant", "kitchen")
 
     assert {:ok, %{commands: [_cheese, _dough]}} =
-             Basket.plan(original, "restaurant", "kitchen", "max-sellable", 12, ingredients(), 500)
+             Basket.plan(
+               original,
+               "restaurant",
+               "kitchen",
+               "max-sellable",
+               12,
+               ingredients(),
+               500
+             )
 
     assert {:error, {"cheese", :insufficient_available}} =
-             Basket.plan(original, "restaurant", "kitchen", "over-sellable", 13, ingredients(), 500)
+             Basket.plan(
+               original,
+               "restaurant",
+               "kitchen",
+               "over-sellable",
+               13,
+               ingredients(),
+               500
+             )
   end
 
   test "supplier repair kit uses the same preflight without restaurant concepts" do
@@ -209,7 +241,15 @@ defmodule InventoryCore.BasketTest do
           {"warehouse", 1, ingredients(), 500}
         ] do
       assert {:error, {"cheese", :idempotency_conflict}} =
-               Basket.plan(stocks, "restaurant", location, "order-3", count, requirements, expires)
+               Basket.plan(
+                 stocks,
+                 "restaurant",
+                 location,
+                 "order-3",
+                 count,
+                 requirements,
+                 expires
+               )
     end
   end
 
