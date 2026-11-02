@@ -86,6 +86,7 @@ defmodule SpruceGoose.Web.Router do
 
     get("/api/v1/chapters/:chapter_id/administrators", AdministratorController, :index)
     get("/api/v1/chapters/:chapter_id/projects", AdministratorController, :projects)
+
     get(
       "/api/v1/chapters/:chapter_id/ownerless_projects",
       ProjectOwnershipController,
