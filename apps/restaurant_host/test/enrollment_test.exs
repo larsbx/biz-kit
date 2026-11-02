@@ -93,6 +93,7 @@ defmodule RestaurantHost.EnrollmentTest do
       assert {:error, :invalid_options} = Enrollment.run(args, io)
     end
   end
+
   test "decoded proposals preserve scope and capabilities with the normalized key" do
     shown = proposal("system", ["checkout"])
     assert {:ok, decoded} = DeviceGrants.decode_details(shown)
@@ -110,5 +111,4 @@ defmodule RestaurantHost.EnrollmentTest do
     refute DeviceGrants.matches?(Map.put(decoded, "chapter_id", "chapter-b"), decoded)
     assert {:error, :unexpected_proposal} = DeviceGrants.decode_details(decoded)
   end
-
 end
