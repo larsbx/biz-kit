@@ -17,6 +17,9 @@ defmodule TaskCore.Steps do
   Execution (docs/architecture/2026-10-19-execution.md):
 
     * start → `TaskStartedV1` (ready → in_progress);
+    * agree to a typed Definition of Done, as the task's proposer →
+      `TaskDoDAgreedV1`, citing the current definition
+      (docs/architecture/2026-11-02-typed-intake.md);
     * submit evidence → `TaskEvidenceSubmittedV2`, citing a custody receipt
       for each criterion of the Definition of Done; the evidence is each
       receipt's digest;
@@ -57,6 +60,7 @@ defmodule TaskCore.Steps do
           | {:queue, String.t()}
           | {:ready, String.t(), %{String.t() => String.t()}}
           | {:start, String.t()}
+          | {:agree_dod, String.t()}
           | {:submit_evidence, String.t(), %{String.t() => String.t()}}
           | {:review, String.t(), String.t(), String.t()}
           | {:complete, String.t(), String.t()}
@@ -72,7 +76,8 @@ defmodule TaskCore.Steps do
 
   # Definition of Done commands predate lifecycle versions: their actor is
   # principal and grant only.
-  @unversioned ~w(TaskEvidenceSubmittedV2 TaskDoDReviewedV1 ArtifactCustodyRecordedV1)
+  @unversioned ~w(TaskDoDAgreedV1 TaskEvidenceSubmittedV2 TaskDoDReviewedV1
+                  ArtifactCustodyRecordedV1)
 
   @spec command(map(), TaskCore.State.scope(), action(), map()) ::
           {:ok, String.t(), map()} | {:error, term()}
@@ -203,6 +208,9 @@ defmodule TaskCore.Steps do
   defp step(_o, _task, {:complete, _, review}),
     do: {:ok, "TaskCompletedV1", %{"review_event_id" => review}}
 
+  defp step(_o, %{dod: %{} = dod}, {:agree_dod, _}),
+    do: {:ok, "TaskDoDAgreedV1", %{"definition_event_id" => dod.event_id}}
+
   defp step(o, %{dod: %{} = dod}, {:submit_evidence, _, receipts}) do
     with {:ok, evidence} <- evidence(o.custody_receipts, receipts) do
       {:ok, "TaskEvidenceSubmittedV2",
@@ -224,6 +232,7 @@ defmodule TaskCore.Steps do
      }}
   end
 
+  defp step(_o, _task, {:agree_dod, _}), do: {:error, {:invalid, :dod_not_defined}}
   defp step(_o, _task, {:submit_evidence, _, _}), do: {:error, {:invalid, :dod_not_defined}}
   defp step(_o, _task, {:review, _, _, _}), do: {:error, {:invalid, :dod_submission_mismatch}}
 
