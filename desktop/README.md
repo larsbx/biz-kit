@@ -181,7 +181,10 @@ session-ready marker before running panel assertions.
 The Desktop workflow runs this acceptance on Linux as well as the frontend and
 Rust checks on Linux, macOS, and Windows. Its native test also reviews and saves
 a real disposable config, checks the backup, and refuses a stale duplicate
-editor without discarding the draft.
+editor without discarding the draft. Linux CI additionally tests a large snapshot
+and refuses a group-writable, service-owned config save if ownership cannot be
+preserved. The `--service-owner-fixture` test flag uses `sudo` only to create a
+disposable root-owned fixture; the actual app runs as the ordinary operator.
 
 Every successful platform job builds installable candidates. Download the
 `biz-kit-<platform>-<exact source SHA>` artifact from that Desktop workflow run.

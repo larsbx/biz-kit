@@ -35,7 +35,7 @@ def until(check, description):
     raise AssertionError(f"Timed out: {description}")
 
 
-def run(binary, session_timeout=60):
+def run(binary, session_timeout=60, service_owner_fixture=False):
     with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp:
         root = Path(tmp)
         fixture = root / "app.json"
@@ -51,6 +51,13 @@ def run(binary, session_timeout=60):
             f"--apply) echo applied > '{applied}'; echo 'apply confirmed';;\n"
             "*) echo 'explicit flag required' >&2; exit 64;;\nesac\n"
         )
+        service_file = root / "service-owned.json"
+        service_original = '{"service":"original"}'
+        if service_owner_fixture:
+            service_file.write_text(service_original)
+            service_file.chmod(0o660)
+            subprocess.run(["sudo", "-n", "chown", f"0:{os.getgid()}", str(service_file)], check=True)
+            assert service_file.stat().st_uid == 0 and os.getuid() != 0, "ownership fixture needs an ordinary editing user"
         config = root / "config" / "biz-kit"
         config.mkdir(parents=True)
         (config / "config.json").write_text(json.dumps({
@@ -226,6 +233,23 @@ def run(binary, session_timeout=60):
                 until(lambda: applied.exists(), "confirmed real apply")
                 assert applied.read_text().strip() == "applied"
                 print("PASS: native script discovery, explicit dry-run, cancelled apply and confirmed apply")
+                def ipc(command, args):
+                    return request("POST", base + "/execute/async", {
+                        "script": "const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(value=>done({ok:true,value}),error=>done({ok:false,error:String(error)}));",
+                        "args": [command, args],
+                    })
+                large = json.dumps({"large": "x" * 100_000})
+                result = ipc("write_config", {"host": "local", "path": str(fixture), "expected": changed, "content": large})
+                assert result["ok"], result
+                assert fixture.read_text() == large, "large snapshot did not reach actual config IPC"
+                print("PASS: native large snapshot transported outside argv")
+                if service_owner_fixture:
+                    result = ipc("write_config", {"host": "local", "path": str(service_file), "expected": service_original, "content": '{"service":"edited"}'})
+                    assert not result["ok"], "service-owned config was replaced with an operator-owned file"
+                    assert service_file.stat().st_uid == 0
+                    assert service_file.read_text() == service_original
+                    print("PASS: native service-owned group-writable config save refused without ownership/content changes")
+
 
 
             except Exception:
@@ -265,5 +289,7 @@ if __name__ == "__main__":
     parser.add_argument("binary", type=lambda s: Path(s).resolve())
     parser.add_argument("--session-timeout", type=float, default=60,
                         help="Bound the native WebDriver handshake (seconds; default: 60).")
+    parser.add_argument("--service-owner-fixture", action="store_true",
+                        help="Also require the Linux CI service-owned file regression (uses sudo only to create the disposable fixture).")
     args = parser.parse_args()
-    run(args.binary, args.session_timeout)
+    run(args.binary, args.session_timeout, args.service_owner_fixture)
