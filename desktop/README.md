@@ -115,8 +115,10 @@ The backend enforces the part that matters rather than trusting the UI:
 - config review and save reject a file changed since opening, retaining the
   unsaved draft; reload the file before reviewing again
 - a per-path lock serializes biz-kit config writers, and a staged replacement
-  preserves the original file's permissions; symbolic-link saves are refused
+  verifies the original file's owner, group and mode before replacement; symbolic-link saves are refused
   so the operator can open the target directly
+- config snapshots travel over process/SSH stdin, allowing large configs without
+  embedding their contents in a shell argument
 
 External editors do not participate in biz-kit's lock. The backend compares
 opened bytes again immediately before replacement, but this is not a filesystem

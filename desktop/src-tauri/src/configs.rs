@@ -103,8 +103,8 @@ pub async fn read_config(host: String, path: String) -> Result<String, String> {
 /// matches the bytes the editor opened; a stale editor must reload first.
 #[tauri::command]
 pub async fn diff_config(host: String, path: String, content: String, expected: String) -> Result<String, String> {
-    let script = config_edit::diff_script(&path, &expected, &content);
-    let out = exec::run(&host, &script).await?;
+    let script = config_edit::diff_script(&path);
+    let out = exec::run_with_input(&host, &script, config_edit::snapshots(&expected, &content)).await?;
     if out.code != 0 {
         return Err(out.stderr.trim().to_string());
     }
@@ -126,8 +126,8 @@ pub async fn write_config(host: String, path: String, content: String, expected:
         serde_json::from_str::<serde_json::Value>(&content)
             .map_err(|e| format!("refusing to write invalid JSON: {e}"))?;
     }
-    let script = config_edit::write_script(&path, &expected, &content);
-    let out = exec::run(&host, &script).await?;
+    let script = config_edit::write_script(&path);
+    let out = exec::run_with_input(&host, &script, config_edit::snapshots(&expected, &content)).await?;
     if out.code != 0 {
         return Err(out.stderr.trim().to_string());
     }

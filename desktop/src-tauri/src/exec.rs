@@ -8,7 +8,7 @@
 use crate::settings::{self, Host};
 use serde::Serialize;
 use std::process::Stdio;
-use tokio::process::Command;
+use tokio::{io::AsyncWriteExt, process::Command};
 
 /// Wrap a string so a POSIX shell sees it as one literal argument.
 /// Paths and unit names reach the shell, so this is not optional.
@@ -71,6 +71,28 @@ pub async fn run(host: &str, script: &str) -> Result<Output, String> {
         .output()
         .await
         .map_err(|e| format!("could not start {}: {e}", argv[0]))?;
+    Ok(Output {
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        code: out.status.code().unwrap_or(-1),
+        command: rendered,
+    })
+}
+
+/// Stream large/sensitive config snapshots over local or SSH stdin rather
+/// than embedding them in argv. Drain both output pipes while writing input.
+pub async fn run_with_input(host: &str, script: &str, input: Vec<u8>) -> Result<Output, String> {
+    let (argv, rendered) = plan_for(host, script)?;
+    let mut child = command(&argv[0]).args(&argv[1..])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().map_err(|e| format!("could not start {}: {e}", argv[0]))?;
+    let mut stdin = child.stdin.take().ok_or("could not open config input")?;
+    let writer = tokio::spawn(async move { stdin.write_all(&input).await });
+    let out = child.wait_with_output().await.map_err(|e| e.to_string())?;
+    let written = writer.await.map_err(|e| e.to_string())?;
+    // A refusal may intentionally exit before reading any snapshots. Preserve
+    // that host error rather than replacing it with a broken-pipe message.
+    if out.status.success() { written.map_err(|e| format!("could not send config snapshots: {e}"))?; }
     Ok(Output {
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),

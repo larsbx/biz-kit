@@ -20,7 +20,7 @@ pub fn base64_encode(data: &[u8]) -> String {
     s
 }
 
-fn staged(path: &str, expected: &str, content: &str) -> String {
+fn staged(path: &str) -> String {
     format!(r#"set -eu
 p={}
 if [ -L "$p" ]; then
@@ -39,25 +39,36 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 work=$(mktemp -d "$p.biz-kit.XXXXXX")
-printf '%s' {} | base64 -d > "$work/expected"
+IFS= read -r expected_b64
+IFS= read -r content_b64
+printf '%s' "$expected_b64" | base64 -d > "$work/expected"
 if ! cmp -s -- "$p" "$work/expected"; then
   echo 'File changed since it was opened. Keep your draft, reload the file and review again.' >&2; exit 74
 fi
 cp -p -- "$p" "$work/new"
-printf '%s' {} | base64 -d > "$work/new"
-"#, quote(path), quote(&base64_encode(expected.as_bytes())), quote(&base64_encode(content.as_bytes())))
+printf '%s' "$content_b64" | base64 -d > "$work/new"
+metadata() {{ stat -c '%u:%g:%a' -- "$1" 2>/dev/null || stat -f '%u:%g:%Lp' "$1"; }}
+if [ "$(metadata "$p")" != "$(metadata "$work/new")" ]; then
+  echo 'Cannot preserve config owner, group and permissions. Save refused; use an account that can preserve them.' >&2; exit 73
+fi
+"#, quote(path))
 }
 
-pub fn diff_script(path: &str, expected: &str, content: &str) -> String {
-    staged(path, expected, content) + r#"
+/// Base64 lines travel over stdin, never in a process argument or environment.
+pub fn snapshots(expected: &str, content: &str) -> Vec<u8> {
+    format!("{}\n{}\n", base64_encode(expected.as_bytes()), base64_encode(content.as_bytes())).into_bytes()
+}
+
+pub fn diff_script(path: &str) -> String {
+    staged(path) + r#"
 rc=0
 diff -u -L "$p (opened)" -L "$p (edited)" "$work/expected" "$work/new" || rc=$?
 [ "$rc" -le 1 ] || exit "$rc"
 "#
 }
 
-pub fn write_script(path: &str, expected: &str, content: &str) -> String {
-    staged(path, expected, content) + r#"
+pub fn write_script(path: &str) -> String {
+    staged(path) + r#"
 backup="$p.bak-$(date +%Y%m%d%H%M%S)-$$"
 cp -p -- "$p" "$backup"
 if ! cmp -s -- "$p" "$work/expected"; then
@@ -82,7 +93,7 @@ mod tests {
     #[cfg(unix)]
     mod host {
         use super::*;
-        use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command, sync::atomic::{AtomicUsize, Ordering}};
+        use std::{fs, io::Write, os::unix::fs::PermissionsExt, path::PathBuf, process::{Command, Stdio}, sync::atomic::{AtomicUsize, Ordering}};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Fixture(PathBuf);
         impl Fixture {
@@ -93,7 +104,17 @@ mod tests {
                 Self(p)
             }
             fn file(&self) -> String { self.0.join("app's config.json").display().to_string() }
-            fn run(&self, script: String) -> std::process::Output { Command::new("sh").arg("-c").arg(script).output().unwrap() }
+            fn run(&self, script: String, expected: &str, content: &str) -> std::process::Output {
+                let mut child = Command::new("sh").arg("-c").arg(script)
+                    .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+                let mut stdin = child.stdin.take().unwrap();
+                let bytes = snapshots(expected, content);
+                let writer = std::thread::spawn(move || stdin.write_all(&bytes));
+                let out = child.wait_with_output().unwrap();
+                let result = writer.join().unwrap();
+                if out.status.success() { result.unwrap(); }
+                out
+            }
         }
         impl Drop for Fixture { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 
@@ -102,11 +123,11 @@ mod tests {
             let f = Fixture::new();
             fs::set_permissions(f.file(), fs::Permissions::from_mode(0o640)).unwrap();
             let content = "changed 'quotes' \"double\"\nUnicode: λ\n";
-            let review = f.run(diff_script(&f.file(), "original\n", content));
+            let review = f.run(diff_script(&f.file()), "original\n", content);
             assert!(review.status.success(), "{:?}", review);
             assert!(String::from_utf8_lossy(&review.stdout).contains("+changed 'quotes'"));
             assert_eq!(fs::read_to_string(f.file()).unwrap(), "original\n");
-            let saved = f.run(write_script(&f.file(), "original\n", content));
+            let saved = f.run(write_script(&f.file()), "original\n", content);
             assert!(saved.status.success(), "{:?}", saved);
             assert_eq!(fs::read_to_string(f.file()).unwrap(), content);
             assert_eq!(fs::metadata(f.file()).unwrap().permissions().mode() & 0o777, 0o640);
@@ -120,8 +141,8 @@ mod tests {
         fn stale_review_and_save_cannot_replace_external_changes() {
             let f = Fixture::new();
             fs::write(f.file(), "external edit").unwrap();
-            for script in [diff_script(&f.file(), "original\n", "draft"), write_script(&f.file(), "original\n", "draft")] {
-                let out = f.run(script);
+            for script in [diff_script(&f.file()), write_script(&f.file())] {
+                let out = f.run(script, "original\n", "draft");
                 assert!(!out.status.success());
                 assert!(String::from_utf8_lossy(&out.stderr).contains("File changed"));
                 assert_eq!(fs::read_to_string(f.file()).unwrap(), "external edit");
@@ -132,16 +153,51 @@ mod tests {
         #[test]
         fn duplicate_editor_must_reload_after_first_save() {
             let f = Fixture::new();
-            assert!(f.run(write_script(&f.file(), "original\n", "first draft")).status.success());
-            assert!(!f.run(write_script(&f.file(), "original\n", "second draft")).status.success());
+            assert!(f.run(write_script(&f.file()), "original\n", "first draft").status.success());
+            assert!(!f.run(write_script(&f.file()), "original\n", "second draft").status.success());
             assert_eq!(fs::read_to_string(f.file()).unwrap(), "first draft");
+        }
+
+        #[test]
+        fn megabyte_snapshots_use_stdin_not_the_command_argument() {
+            let f = Fixture::new();
+            let original = "a".repeat(1_048_576);
+            let content = "b".repeat(1_048_576);
+            fs::write(f.file(), &original).unwrap();
+            let script = write_script(&f.file());
+            assert!(script.len() < 8_192);
+            let out = f.run(script, &original, &content);
+            assert!(out.status.success(), "{:?}", out);
+            assert_eq!(fs::read_to_string(f.file()).unwrap(), content);
+        }
+
+        #[test]
+        fn metadata_copy_failure_refuses_replacement() {
+            let f = Fixture::new();
+            fs::set_permissions(f.file(), fs::Permissions::from_mode(0o640)).unwrap();
+            let bin = f.0.join("bin");
+            fs::create_dir(&bin).unwrap();
+            let cp = bin.join("cp");
+            // Fault injection: copying succeeds but drops original metadata.
+            fs::write(&cp, "#!/bin/sh\n/bin/cp \"$@\" || exit\nfor last; do :; done\nchmod 600 \"$last\"\n").unwrap();
+            fs::set_permissions(&cp, fs::Permissions::from_mode(0o755)).unwrap();
+            let mut child = Command::new("sh").arg("-c").arg(write_script(&f.file()))
+                .env("PATH", format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()))
+                .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+            child.stdin.take().unwrap().write_all(&snapshots("original\n", "draft")).unwrap();
+            let out = child.wait_with_output().unwrap();
+            assert!(!out.status.success());
+            assert!(String::from_utf8_lossy(&out.stderr).contains("Cannot preserve config owner"));
+            assert_eq!(fs::read_to_string(f.file()).unwrap(), "original\n");
+            assert_eq!(fs::metadata(f.file()).unwrap().permissions().mode() & 0o777, 0o640);
+            assert!(!fs::read_dir(&f.0).unwrap().flatten().any(|p| p.file_name().to_string_lossy().contains(".bak-")));
         }
 
         #[test]
         fn held_lock_refuses_a_second_writer_without_changing_file() {
             let f = Fixture::new();
             fs::create_dir(format!("{}.biz-kit-save-lock", f.file())).unwrap();
-            assert!(!f.run(write_script(&f.file(), "original\n", "draft")).status.success());
+            assert!(!f.run(write_script(&f.file()), "original\n", "draft").status.success());
             assert_eq!(fs::read_to_string(f.file()).unwrap(), "original\n");
         }
 
@@ -150,7 +206,7 @@ mod tests {
             let f = Fixture::new();
             let link = f.0.join("link");
             std::os::unix::fs::symlink(f.file(), &link).unwrap();
-            assert!(!f.run(write_script(&link.display().to_string(), "original\n", "draft")).status.success());
+            assert!(!f.run(write_script(&link.display().to_string()), "original\n", "draft").status.success());
             assert!(link.is_symlink());
             assert_eq!(fs::read_to_string(f.file()).unwrap(), "original\n");
         }
