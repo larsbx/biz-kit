@@ -1,6 +1,6 @@
 name = "BizKitEventProofs"
 version = "0.1.0"
-defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory"]
+defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations"]
 
 [[lean_lib]]
 name = "BizKitLeases"
@@ -19,3 +19,6 @@ name = "BizKitOutcomeAdmission"
 
 [[lean_lib]]
 name = "BizKitInventory"
+
+[[lean_lib]]
+name = "BizKitInventoryLocations"

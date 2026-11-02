@@ -1236,4 +1236,92 @@ defmodule CoopSubstrate.GroupBuyEscrowAdmissionTest do
                "warehouse"
              )
   end
+
+  @tag :inventory_refinement
+  test "inventory admission serializes equal-version contenders and recovers the winner", ctx do
+    commands =
+      for id <- ["race-a", "race-b"], do: stock_event(ctx, stock_command("receive", id, 0))
+
+    results =
+      commands
+      |> Task.async_stream(&GroupBuys.submit/1, max_concurrency: 2)
+      |> Enum.map(fn {:ok, r} -> r end)
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+    assert Enum.count(results, &match?({:error, {:reject, 0, :stale_stock_version}}, &1)) == 1
+    key = {@chapter, @seller, "parts", "piece"}
+    stock = Log.gate().group_buys.stock_aggregates[key]
+    assert stock.version == 1
+    assert stock.locations == %{"warehouse" => 5}
+    head = Log.head()
+    restart_log()
+    assert Log.gate().group_buys.stock_aggregates[key] == stock
+    # A new envelope cannot resurrect a command's accepted stock mutation.
+    [winner_id] = Map.keys(stock.seen)
+
+    assert {:error, _} =
+             GroupBuys.submit(stock_event(ctx, stock_command("receive", winner_id, 0)))
+
+    assert Log.head() == head
+    assert Log.gate().group_buys.stock_aggregates[key] == stock
+  end
+
+  @tag :inventory_refinement
+  test "rejected later inventory command rolls back an otherwise admissible prefix durably",
+       ctx do
+    key = {@chapter, @seller, "parts", "piece"}
+    head = Log.head()
+    before = Log.gate().group_buys
+    first = stock_event(ctx, stock_command("receive", "rollback-a", 0))
+    stale = stock_event(ctx, stock_command("receive", "rollback-b", 0))
+    assert {:error, {:reject, 1, :stale_stock_version}} = Log.append([first, stale])
+    assert Log.head() == head
+    assert Log.gate().group_buys == before
+    restart_log()
+    assert Log.head() == head
+    assert Log.gate().group_buys.stock_aggregates[key] == nil
+    # IDs from refused batches are not consumed; a valid retry may use them.
+    assert {:ok, _} = GroupBuys.submit(first)
+    assert Log.gate().group_buys.stock_aggregates[key].version == 1
+  end
+
+  @tag :inventory_refinement
+  test "funded reservation races admit one hold and expired seller authority refuses writes",
+       ctx do
+    bind(ctx)
+    assert {:ok, _} = GroupBuys.submit(pin(ctx))
+    assert {:ok, _} = GroupBuys.submit(evidence(ctx, provider_report(ctx)))
+
+    assert {:ok, _} =
+             GroupBuys.submit(stock_event(ctx, stock_command("receive", "race-stock", 0)))
+
+    contenders =
+      for id <- ["race-hold-a", "race-hold-b"],
+          do: stock_event(ctx, stock_command("reserve", id, 1))
+
+    results =
+      contenders
+      |> Task.async_stream(&GroupBuys.submit/1, max_concurrency: 2)
+      |> Enum.map(fn {:ok, r} -> r end)
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+    assert Enum.count(results, &match?({:error, _}, &1)) == 1
+    key = {@chapter, @seller, "parts", "piece"}
+    stock = Log.gate().group_buys.stock_aggregates[key]
+    assert stock.version == 2
+    assert map_size(stock.reservations) == 1
+    assert {:ok, 0} = InventoryCore.available(stock, @seller, "warehouse")
+    restart_log()
+    assert Log.gate().group_buys.stock_aggregates[key] == stock
+    # The command was constructed while authority was current, then submitted
+    # after its expiry. Admission must read current trusted time/grants.
+    pending = stock_event(ctx, stock_command("receive", "expired-authority", 2))
+    Clock.set((ctx.now + 3601) * 1000)
+    head = Log.head()
+    assert {:error, {:reject, 0, :stale_admission_time}} = GroupBuys.submit(pending)
+    fresh = stock_event(ctx, stock_command("receive", "expired-authority-fresh", 2))
+    assert {:error, {:reject, 0, :unauthorized_stock_seller}} = GroupBuys.submit(fresh)
+    assert Log.head() == head
+    assert Log.gate().group_buys.stock_aggregates[key] == stock
+  end
 end

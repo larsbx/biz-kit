@@ -1,6 +1,10 @@
 # Proof Bank pilot I-1 — InventoryCore arithmetic and proof refinement
 
-**Status: candidate, not yet proved at CI and not a verified implementation.**
+**I-1 integrated in PR #255; implementation/runtime refinement remains unverified.**
+
+The I-2 restricted multi-location follow-up and exact refinement map are in
+[REFINEMENT_V2.md](../../inventory/REFINEMENT_V2.md). The historical I-1 scope
+below remains narrower; see the I-2 evidence register for new verified results.
 
 The first first-party proof target is deliberately narrower than the complete
 InventoryCore application: **one merchant/item/unit and one location** with

@@ -1,0 +1,128 @@
+{
+  "schema": "biz-kit.proof-bank.inventory-evidence.v2",
+  "obligation": "I-2",
+  "issue": 248,
+  "date": "2026-11-02",
+  "base_revision": "1068ac5072d260f1460d942fb330eb091b1419ae",
+  "scope": "two locations; one retained reservation ID per location; canonical six-command fragment",
+  "abstract_build": "passed Lean 4.35.0",
+  "fresh_kernel_replay": "passed_local: BizKitEventProofs, BizKitOutcomeAdmission, BizKitInventory, BizKitInventoryLocations",
+  "axiom_audit": {
+    "status": "passed_local",
+    "new_module_declarations": 246,
+    "allowlist": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "auditor_revision": "46024e005996495c65ef609368e11ab39c4222e3"
+  },
+  "bounded_correspondence": {
+    "status": "passed_local",
+    "traces": 1536,
+    "command_outcomes": 24064,
+    "source": "formal/lean/InventoryFixtures.lean",
+    "nonvacuity": [
+      "two active records",
+      "partial commit",
+      "committed",
+      "released",
+      "expired",
+      "duplicate",
+      "idempotency_conflict",
+      "stale_stock_version",
+      "invalid_expiry"
+    ]
+  },
+  "negative_controls": {
+    "status": "passed_local",
+    "mutants_killed": 3,
+    "failure_kind": "ExUnit.AssertionError, not exception/crash"
+  },
+  "inventory_tests": {
+    "status": "passed_local",
+    "properties": 2,
+    "tests": 34,
+    "failures": 0,
+    "runner": "MIX_ENV=test mix test --no-start --seed 0, staged exact source package"
+  },
+  "authoritative_host": {
+    "path": "CoopSubstrate.GroupBuys.Stock via signed CoopSubstrate.Log/Postgres",
+    "status": "passed_local",
+    "escrow_suite_tests": 26,
+    "new_cases": 3,
+    "failures": 0,
+    "rollback_scope": "admission rejection before append; no injected persistence fault",
+    "runner": "MIX_ENV=test mix test test/group_buy_escrow_admission_test.exs --seed 0; staged exact dependency closure, Postgres 16.15"
+  },
+  "implementation_refinement": "unverified",
+  "production_runtime_safety": "unverified",
+  "automatic_proven_promotion": false,
+  "source_git_blobs": {
+    "apps/inventory_core/lib/inventory_core.ex": "87272d4af62f798f9e11684d8e892dff863e85a9",
+    "apps/inventory_core/test/inventory_core_test.exs": "10a987675b432750b6d46b758a418fd74de4bac9",
+    "formal/lean/BizKitInventoryLocations.lean": "4a17c23007b8592390926f800acee37846440c1f",
+    "formal/lean/InventoryFixtures.lean": "6bc7e7c5c68f415faf8546d9b550e4605a8b92e6",
+    "formal/lean/lean-toolchain": "a6aff065db2882c535684f8c5bcd4f16e9a23915",
+    "formal/lean/check.sh": "d8d247ee7b42008dffada6b613be41b3747aa157",
+    "formal/lean/check_inventory_fixtures.sh": "080a03587fa472f365273edd06ab41cd8cd5f46a",
+    "apps/inventory_core/test/proof_bank_locations_test.exs": "5563171a673ec7a2d59ee1691745e690b7d49f25",
+    "apps/inventory_core/test/fixtures/proof_bank_locations.tsv.gz": "a0e5f09f7381c38cd50e3bc14a5c6a39ec860c9d",
+    "apps/coop_substrate/lib/coop_substrate/group_buys/stock.ex": "98da70ef8e4e9238f798bbad38356f20b13aea28",
+    "apps/coop_substrate/lib/coop_substrate/log.ex": "ddfc3fb8d295a27f4beaedb6c2231f308b73791f",
+    "apps/coop_substrate/test/group_buy_escrow_admission_test.exs": "34eab8318db441e6739b1a350b7db2ee483ed5be"
+  },
+  "obligations_remaining": [
+    "multiple reservation IDs per location and general state domain",
+    "total malformed-state validator and full structural reconciliation",
+    "machine-checked universal Elixir-to-Lean refinement",
+    "general host tenant grants and supported-command contract",
+    "authoritative transfers and cross-aggregate basket atomicity",
+    "persistence/crash fault injection and multi-appender concurrency",
+    "production runtime conformance"
+  ],
+  "verified_code_revision": "63c8e537d39ef7526025d5ff43942c902a8ea273",
+  "quint_inventory_claim": "none: existing Quint models cover other protocols; I-2 uses Lean",
+  "hosted_acceptance": "pending: branch publication and exact-head workflows",
+  "local_runtime_notes": [
+    "Lean archive verified against committed SHA-256 pin",
+    "Sandbox /proc PID mismatch required readlink(/proc/<self-pid>/exe) -> /proc/self/exe compatibility shim; Lean binaries/proofs unchanged",
+    "Host dependencies extracted from cached Hex tarballs after verifying both lockfile checksums; OTP27.3.4, Elixir1.19.0, Rust1.93.0, Postgres16.15; no TLS/integrity bypass"
+  ],
+  "validation_logs": {
+    "lean": {
+      "sha256": "064935e8edfe5273011d4736b3219dc8f4c9aed53c2941f64ad75e0c923b52cd",
+      "summary": [
+        "Lean (version 4.35.0, x86_64-unknown-linux-gnu, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
+        "Lake version 5.0.0-src+eb6cafb (Lean version 4.35.0)",
+        "Build completed successfully (15 jobs).",
+        "replaying BizKitEventProofs with --fresh",
+        "replaying BizKitOutcomeAdmission with --fresh",
+        "replaying BizKitInventory with --fresh",
+        "replaying BizKitInventoryLocations with --fresh",
+        "Lean fixture equality: 24064 command outcomes",
+        "Build completed successfully (6 jobs).",
+        "axiom-audit: audited 33 declaration(s) under 'BizKitLeases'; all within the allowlist [propext, Classical.choice, Quot.sound].",
+        "axiom-audit: audited 38 declaration(s) under 'BizKitBundles'; all within the allowlist [propext, Classical.choice, Quot.sound].",
+        "axiom-audit: audited 186 declaration(s) under 'BizKitDispatch'; all within the allowlist [propext, Classical.choice, Quot.sound].",
+        "axiom-audit: audited 46 declaration(s) under 'BizKitEventProofs'; all within the allowlist [propext, Classical.choice, Quot.sound].",
+        "axiom-audit: audited 160 declaration(s) under 'BizKitOutcomeAdmission'; all within the allowlist [propext, Classical.choice, Quot.sound].",
+        "axiom-audit: audited 69 declaration(s) under 'BizKitInventory'; all within the allowlist [propext, Classical.choice, Quot.sound].",
+        "axiom-audit: audited 246 declaration(s) under 'BizKitInventoryLocations'; all within the allowlist [propext, Classical.choice, Quot.sound]."
+      ]
+    },
+    "inventory": {
+      "sha256": "6d50a9319a8243588b94f147e9c542d043240de914207295714f90d9cf869369",
+      "summary": [
+        "2 properties, 34 tests, 0 failures"
+      ]
+    },
+    "host": {
+      "sha256": "7b668db4d1c64e70a4570832c1d65d69619a1b1f4e1b617018845a8b082b8bd7",
+      "summary": [
+        "26 tests, 0 failures"
+      ]
+    }
+  },
+  "verified_code_revision_kind": "local_git_commit; source_git_blobs bind the published files independently"
+}
