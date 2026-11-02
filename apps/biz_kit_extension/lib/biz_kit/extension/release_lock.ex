@@ -89,7 +89,7 @@ defmodule BizKit.Extension.ReleaseLock do
     ids = Enum.map(catalog, & &1.manifest.id)
 
     cond do
-      Map.keys(pins) |> Enum.sort() != Enum.sort(ids) ->
+      Enum.sort(Map.keys(pins)) != Enum.sort(ids) ->
         {:error, :source_pin_coverage_mismatch}
 
       Enum.any?(pins, fn {_, sha} ->
