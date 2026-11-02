@@ -82,6 +82,9 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
   test "complete succession covers exactly projects actually owned in one chapter" do
     assert Succeed.complete?(details(), @principal, @chapter, successors()) == :ok
 
+    assert {:error, :invalid_chapter_holdings} =
+             Succeed.complete?(Map.put(details(), "principal_id", "mallory"), @principal, @chapter, successors())
+
     assert {:error, _} = Succeed.complete?(details(), @principal, @chapter, %{})
 
     assert {:error, _} =
