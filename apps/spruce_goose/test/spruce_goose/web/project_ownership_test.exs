@@ -92,13 +92,21 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
       %{"tenant_id" => tenant(), "project_id" => "project-2", "principal_id" => "alice"}
     ]
 
-    assert {:error, {409, _}} =
+    assert {:error, {409, missing_json}} =
              Client.sign_batch(
                url,
                governance(w),
                fn _ -> true end,
                %{"chapter_id" => w.chapter}
              )
+
+    assert %{"error" => "successor_required", "projects" => missing} =
+             Jason.decode!(missing_json)
+
+    assert Enum.sort(missing) == [
+             %{"tenant_id" => tenant(), "project_id" => "project-1"},
+             %{"tenant_id" => tenant(), "project_id" => "project-2"}
+           ]
 
     assert {:ok, %{"events" => events}} =
              Client.sign_batch(
