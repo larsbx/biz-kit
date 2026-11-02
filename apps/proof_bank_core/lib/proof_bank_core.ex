@@ -17,8 +17,16 @@ defmodule ProofBankCore do
   @spec compile(term()) :: {:ok, map()} | {:error, term()}
   def compile(candidate) do
     with :ok <-
-           Schema.fields(candidate, [:id, :revision, :title, :idea, :answers,
-                                      :requirements, :obligations, :capabilities]),
+           Schema.fields(candidate, [
+             :id,
+             :revision,
+             :title,
+             :idea,
+             :answers,
+             :requirements,
+             :obligations,
+             :capabilities
+           ]),
          :ok <- Schema.identifier(Map.get(candidate, :id)),
          :ok <- Schema.positive_revision(Map.get(candidate, :revision)),
          :ok <- Schema.text(:title, Map.get(candidate, :title)),
