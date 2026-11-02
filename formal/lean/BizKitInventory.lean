@@ -104,9 +104,9 @@ theorem step_preserves {s t : Stock} (h : Step s t) (hs : Safe s) :
     Safe t := by
   cases h with
   | receive q => exact receive_preserves _ q hs
-  | reserve q success => exact reserve_preserves _ _ q hs success
-  | commit q success => exact commit_preserves _ _ q hs success
-  | release q success => exact release_preserves _ _ q hs success
+  | reserve _ q success => exact reserve_preserves _ _ q hs success
+  | commit _ q success => exact commit_preserves _ _ q hs success
+  | release _ q success => exact release_preserves _ _ q hs success
 
 inductive Reachable : Stock → Prop where
   | empty : Reachable BizKitInventory.empty
