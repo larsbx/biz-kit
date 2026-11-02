@@ -30,7 +30,7 @@ jobs:
       matrix:
         app: [task_core, commerce_core, inventory_core, fulfillment_core, sales_core]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'

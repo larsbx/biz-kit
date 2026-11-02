@@ -26,7 +26,7 @@ jobs:
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with: {elixir-version: "1.19.0", otp-version: "27.3.4"}
       - uses: dtolnay/rust-toolchain@stable

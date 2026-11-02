@@ -52,11 +52,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Restore archive cache (always checksum verified before extraction)
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ runner.temp }}/bizkit-lean-archives
           key: lean-archive-linux-x64-${{ hashFiles('formal/lean/install-toolchain.sh', 'formal/lean/lean-toolchain') }}
@@ -75,10 +75,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Install version-pinned Quint
