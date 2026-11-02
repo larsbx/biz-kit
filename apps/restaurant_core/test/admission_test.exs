@@ -220,6 +220,41 @@ defmodule RestaurantCore.AdmissionTest do
              Map.values(Admission.state(g.restaurant, @ch, "shop", "o1").seen)
   end
 
+  test "the board view joins each order's lifecycle with its signed snapshot" do
+    g = admin_gate()
+    assert Admission.orders(g.restaurant, @ch, "shop") == []
+
+    g =
+      Enum.reduce(
+        [
+          place(device("pos"), %{"order_id" => "o2", "cart_id" => "c2", "idempotency_key" => "k2"}),
+          place(device("pos"), %{"pickup_name" => "Ada"}),
+          step(device("pos"), "accept", 0)
+        ],
+        g,
+        fn e, g -> %{g | restaurant: Admission.fold(e, g)} end
+      )
+
+    assert [first, second] = Admission.orders(g.restaurant, @ch, "shop")
+    assert {first.id, first.state, first.version, first.total} == {"o1", :accepted, 1, 2500}
+    assert first.actions == [:start_preparing, :cancel]
+    assert [%{"name" => "Margherita", "quantity" => 2}] = first.lines
+    assert {second.id, second.state, second.actions} == {"o2", :placed, [:accept, :cancel]}
+    assert second.principal == "ada" and second.fulfillment == :pickup
+    assert {first.pickup_name, second.pickup_name} == {"Ada", nil}
+
+    assert Admission.check(
+             place(device("pos"), %{
+               "order_id" => "o3",
+               "cart_id" => "c3",
+               "idempotency_key" => "k3",
+               "pickup_name" => " "
+             }),
+             g
+           ) ==
+             {:error, :invalid_checkout_command}
+  end
+
   test "a delivery order's hand-off is never an order step" do
     g = admin_gate()
     p = place(device("pos"), %{"fulfillment" => "delivery", "delivery" => %{}})

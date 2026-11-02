@@ -120,6 +120,22 @@ defmodule OrderCore.Lifecycle do
 
   def legal?(workflow, fulfillment, from, to), do: to in next_states(workflow, fulfillment, from)
 
+  @doc """
+  The order actions that can move `order` now, in the order of their target
+  states: legal from its state and not delivery-owned. Who may take them is
+  still `authorized?/3`'s question.
+  """
+  def available_actions(%{actions: actions, states: states} = workflow, %{
+        fulfillment: f,
+        state: s
+      }) do
+    for {action, {to, _}} <-
+          Enum.sort_by(actions, fn {a, {to, _}} -> {Enum.find_index(states, &(&1 == to)), a} end),
+        legal?(workflow, f, s, to),
+        not (f == :delivery and to in @delivery_owned),
+        do: action
+  end
+
   defp admits?(:any, _fulfillment), do: true
   defp admits?(:delivery, fulfillment), do: fulfillment == :delivery
   defp admits?(:not_delivery, fulfillment), do: fulfillment != :delivery
