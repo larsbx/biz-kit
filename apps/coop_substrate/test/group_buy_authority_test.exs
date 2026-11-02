@@ -1,6 +1,8 @@
 defmodule CoopSubstrate.GroupBuyAuthorityTest do
   use CoopSubstrate.LogCase, async: false
+  import CoopSubstrate.LogCase, except: [signed_event: 3, signed_event: 4]
   alias CoopSubstrate.{Canonical, GroupBuys, Log}
+  alias CoopSubstrate.GroupBuyClock, as: Clock
   alias CoopSubstrate.GroupBuys.Cipher
   alias CoopSubstrate.Projections.Membership
   alias CoopSubstrate.Protocol.Envelope
@@ -14,7 +16,8 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
   @key {@ch, @seller, @campaign}
 
   setup do
-    now = System.system_time(:second)
+    start_supervised!({Clock, 1_800_000_000_999})
+    now = Clock.system_time(:second)
     gov = new_member("governance")
     seller = new_member("group_seller")
     buyer = new_member("group_buyer")
@@ -60,6 +63,15 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     {:ok, _} = GroupBuys.submit(posted)
     {:ok, hash} = GroupBuys.terms_hash(posted)
     {:ok, Map.merge(ctx, %{posted: posted, hash: hash})}
+  end
+
+  defp signed_event(actor, type, payload, attrs \\ []) do
+    CoopSubstrate.LogCase.signed_event(
+      actor,
+      type,
+      payload,
+      Keyword.put_new(attrs, :timestamp_ms, Clock.system_time(:millisecond))
+    )
   end
 
   defp member(ctx, id, actor, version \\ 0, active \\ true) do
@@ -135,16 +147,9 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     env
   end
 
-  # Retry only the outer host admission if signing straddles a second boundary.
-  defp submit_consent(ctx, signed_consent, attempts \\ 3) do
-    case GroupBuys.submit(admission(ctx, signed_consent)) do
-      {:error, {:reject, 0, :stale_admission_time}} when attempts > 0 ->
-        submit_consent(ctx, signed_consent, attempts - 1)
-
-      result ->
-        result
-    end
-  end
+  # The fixture holds the signing/appending second fixed. Boundary behavior is
+  # exercised explicitly below, without a retry masking the result under test.
+  defp submit_consent(ctx, signed_consent), do: GroupBuys.submit(admission(ctx, signed_consent))
 
   defp read(ctx, actor, buyer, public) do
     signed_event(actor, "GroupBuyPrivateReadV1", %{
@@ -158,9 +163,9 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
   end
 
   defp rejected(env, reason) do
-    before = Log.head()
+    before = {Log.head(), Log.gate(), Log.read_all()}
     assert {:error, {:reject, 0, ^reason}} = Log.append(env)
-    assert Log.head() == before
+    assert {Log.head(), Log.gate(), Log.read_all()} == before
     assert :ok = Log.verify_chains()
   end
 
@@ -177,7 +182,7 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     assert state.activated == nil
     assert {:ok, _} = GroupBuys.submit(admission(ctx, pledge(ctx, ctx.other, @other, 3, 1)))
     state = Log.gate().group_buys.rounds[@key]
-    assert {:ok, view} = Round.snapshot(state, System.system_time(:second))
+    assert {:ok, view} = Round.snapshot(state, Clock.system_time(:second))
     assert view.contracted_quantity == 5
     assert view.total_due_minor == 45_000
     assert view.group_unit_minor == 9_000
@@ -438,7 +443,7 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
   end
 
   test "a previously admitted offer cannot be used after its deadline", ctx do
-    expires = System.system_time(:second) + 2
+    expires = Clock.system_time(:second) + 2
     campaign = @campaign <> "-short"
     posted = offer(ctx, %{"id" => campaign, "expires_at" => expires})
 
@@ -457,7 +462,7 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
       |> Map.put("command", command)
 
     buyer_consent = signed_event(ctx.buyer, original.type, payload)
-    Process.sleep(max(expires * 1000 - System.system_time(:millisecond), 0) + 10)
+    Clock.set(expires * 1000)
     rejected(admission(ctx, buyer_consent), :stale_closed_or_expired_offer)
     {public, _} = :crypto.generate_key(:ecdh, :x25519)
     request = read(ctx, ctx.buyer, @buyer, public)
@@ -516,6 +521,98 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
 
     rejected(env, :consent_scope_or_policy_mismatch)
     assert {:ok, _} = GroupBuys.submit(admission(ctx, original))
+  end
+
+  test "crossing a second boundary rejects only the outer admission as a genuine no-op", ctx do
+    original = pledge(ctx, ctx.buyer, @buyer, 5, 0)
+    event = admission(ctx, original)
+    assert rem(event.timestamp_ms, 1000) == 999
+    assert :ok = GroupBuys.check(event, Log.gate())
+    before = Log.head()
+
+    Clock.set(event.timestamp_ms + 1)
+    assert :ok = Envelope.verify(event)
+    rejected(event, :stale_admission_time)
+    assert Log.gate().group_buys.consents == %{}
+    assert Log.gate().group_buys.rounds[@key].version == 0
+
+    # Changing a signed timestamp without a new seller signature is invalid.
+    changed = %{event | timestamp_ms: Clock.system_time(:millisecond)}
+    assert {:error, _} = Envelope.verify(changed)
+
+    # Retrying the outer admission keeps the original buyer-signed bytes. Even
+    # the rejected outer event ID remains available: rejection consumed neither
+    # the ID, the consent, the round version nor a ledger position.
+    fresh =
+      signed_event(ctx.seller, event.type, event.payload,
+        event_id: event.event_id,
+        timestamp_ms: Clock.system_time(:millisecond)
+      )
+
+    assert fresh.payload["consent"] ==
+             {:bytes, Canonical.encode!(Envelope.full_record_term(original))}
+
+    assert {:ok, receipt} = GroupBuys.submit(fresh)
+    assert receipt.global_seq == before.global_seq + 1
+    assert receipt.payment == :not_collected
+    assert receipt.inventory == :not_reserved
+    assert receipt.fulfillment == :not_authorized
+    assert Log.gate().group_buys.rounds[@key].version == 1
+    assert Log.gate().group_buys.consents[original.event_id] == event.event_id
+    gate = Log.gate()
+    restart_log()
+    assert Log.gate() == gate
+    assert {:ok, ^gate} = Log.replay(Membership)
+    assert :ok = Log.verify_chains()
+  end
+
+  test "past and future seconds are stale but an earlier millisecond in the current second is valid",
+       ctx do
+    original = pledge(ctx, ctx.buyer, @buyer, 5, 0)
+    event = admission(ctx, original)
+
+    for delta <- [-1000, 1000] do
+      shifted =
+        signed_event(ctx.seller, event.type, event.payload,
+          timestamp_ms: event.timestamp_ms + delta
+        )
+
+      rejected(shifted, :stale_admission_time)
+    end
+
+    # Setup already accepted events at .999. There is no accepted-time
+    # watermark; the contract compares seconds, not increasing milliseconds.
+    same_second =
+      signed_event(ctx.seller, event.type, event.payload, timestamp_ms: ctx.now * 1000)
+
+    assert {:ok, _} = GroupBuys.submit(same_second)
+    assert Log.gate().group_buys.rounds[@key].version == 1
+  end
+
+  test "a rejected batch discards provisional group-buy state and does not consume consent",
+       ctx do
+    original = pledge(ctx, ctx.buyer, @buyer, 2, 0)
+    first = admission(ctx, original)
+    malformed = admission(ctx, consent(ctx, ctx.other, @other, 5))
+    before = {Log.head(), Log.gate(), Log.read_all()}
+
+    assert {:error, {:reject, 1, :invalid_signed_group_buy_command}} =
+             Log.append([first, malformed])
+
+    assert {Log.head(), Log.gate(), Log.read_all()} == before
+    assert :ok = Log.verify_chains()
+    assert {:ok, _} = GroupBuys.submit(first)
+    assert Log.gate().group_buys.rounds[@key].version == 1
+  end
+
+  test "refreshing the outer admission cannot renew expired buyer authority", ctx do
+    original = pledge(ctx, ctx.buyer, @buyer, 5, 0)
+    stale = admission(ctx, original)
+    Clock.set(original.payload["valid_until"] * 1000)
+    rejected(stale, :stale_admission_time)
+    fresh = admission(ctx, original)
+    assert fresh.payload["consent"] == stale.payload["consent"]
+    rejected(fresh, :expired_group_buy_authority)
   end
 
   test "recovery rejects inconsistent transitions, duplicates, credentials and invalid signatures",
