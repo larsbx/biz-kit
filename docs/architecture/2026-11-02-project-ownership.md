@@ -139,6 +139,14 @@ before commit. The chapter offboarding prepare API also accepts a
 duplicate-free `successors` array with tenant, project and principal IDs.
 A graphical owner/successor selector remains outstanding in #265.
 
+For headless administration, `mix coop.owner.backfill CHAPTER TENANT PROJECT PRINCIPAL`
+uses the existing governance seed in `HARNESS_KEYS_DIR` to sign a prepared
+backfill batch over HTTP. It checks exact canonical event types, chapter,
+tenant, project, principal and any supplied operator device before signing.
+Use `--device-key-id KEY --device-pubkey BASE64URL` only if the successor
+has no existing active operator grant. The seed never leaves the client.
+
+
 
 ## Not yet
 
