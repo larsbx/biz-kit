@@ -57,6 +57,20 @@ defmodule CoopSubstrate.OwnerSuccessionTest do
     })
   end
 
+  test "offboarding read reports accountable owner and necessary succession", _w do
+    %{projects: [owned]} = Offboarding.fetch("owner", ["chapter-genesis"])
+    assert owned.accountable_owner == "owner"
+    assert owned.successor_required
+    assert owned.owner_eligible
+
+    %{projects: [other]} = Offboarding.fetch("alice", ["chapter-genesis"])
+    assert other.accountable_owner == "owner"
+    refute other.successor_required
+    assert other.owner_eligible
+
+    assert Offboarding.fetch("owner", ["another-chapter"]).projects == []
+  end
+
   test "a departing owner needs a successor, signed in the same batch", w do
     assert Offboarding.prepare_chapter("owner", "chapter-genesis", w.gov.signer.key_id) ==
              {:error, {:successor_required, [{"tenant-1", "project-1"}]}}
