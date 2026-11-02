@@ -31,6 +31,7 @@ defmodule Dispatch.Operations.Locations do
   alias Dispatch.Accounts.DeviceKeys
   alias Dispatch.Audit.AuditEvent
   alias Dispatch.Fleet.Assignment
+  alias Dispatch.Identity.PrincipalResolution
   alias Dispatch.Operations.{ConsentGrant, LocationSample, StreamRefresh}
 
   @max_batch 100
@@ -53,9 +54,13 @@ defmodule Dispatch.Operations.Locations do
     with :ok <- may_share(actor),
          {:ok, id} <- uuid(assignment_id) do
       with_trip_lock(actor.tenant_id, id, fn ->
-        # Read both the assignment and the current grant after taking the lock.
-        # Completion/cancellation updates this same row before closing grants.
-        with {:ok, assignment} <- own_assignment(actor, id) do
+        # Read the sharer's grant, the assignment and the current consent after
+        # taking the lock: completion/cancellation updates this same row before
+        # closing consents, and a role revoked while this waited must not begin
+        # one (issue #254).
+        with {:ok, actor} <-
+               PrincipalResolution.authorize(actor, "location.share.self", lock: true),
+             {:ok, assignment} <- own_assignment(actor, id) do
           case current_grant(actor, id) do
             nil -> create_grant(actor, assignment)
             grant -> {:ok, grant}
