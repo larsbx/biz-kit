@@ -28,6 +28,23 @@ defmodule DispatchWeb.Plugs.ResolveActor do
     |> PrincipalResolution.actor(requested_assignment(conn))
     |> case do
       {:ok, actor} ->
+        authentication =
+          case conn.assigns do
+            %{bizkit_session: session, bizkit_session_id: token} ->
+              %{
+                subject: subject,
+                expires_at: session_expiry(session.expires_at),
+                session_reference: BizKit.Identity.Sessions.reference(token),
+                session_principal: session.principal,
+                native?: true
+              }
+
+            %{oidc_claims: claims} ->
+              Map.take(claims, [:subject, :expires_at, :session_reference])
+          end
+
+        actor = %{actor | authentication: authentication}
+
         conn
         |> assign(:actor, actor)
         |> assign(:tenant, actor.tenant_id)
@@ -48,6 +65,9 @@ defmodule DispatchWeb.Plugs.ResolveActor do
       [] -> nil
     end
   end
+
+  defp session_expiry(:never), do: nil
+  defp session_expiry(ms) when is_integer(ms), do: DateTime.from_unix!(ms, :millisecond)
 
   # Ambiguity is the one case the client can act on, so it says what to send.
   # The rest collapse to a single code: a caller learns that this request is not

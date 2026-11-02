@@ -209,12 +209,14 @@ defmodule Dispatch.Operations.Board do
         # source state after acquiring it, in the mutation/audit transaction.
         lock_trip!(actor, trip.id)
 
-        with {:ok, trip} <- own_trip(actor, trip.id),
+        with {:ok, actor} <- Dispatch.Access.MutationAuthority.transition(actor),
+             {:ok, trip} <- own_trip(actor, trip.id),
              :ok <- current(trip, expected_version),
              :ok <- permitted(trip.status, action) do
           trip
           |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
-          # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
+          # REVIEWED-UNAUTHORIZED: current selected authority is locked above
+          # through mutation/audit commit; the trip's load is the actor's.
           |> Ash.update(authorize?: false, tenant: actor.tenant_id)
           |> audited(actor, Map.fetch!(@transition_events, action), "assignment", & &1.id)
         end
