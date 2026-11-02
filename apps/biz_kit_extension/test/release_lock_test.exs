@@ -32,7 +32,9 @@ defmodule BizKit.Extension.ReleaseLockTest do
     @impl true
     def manifest do
       BizKit.Extension.ReleaseLockTest.School.manifest()
-      |> Map.update!(:capabilities, &["school.lesson.private" | &1])
+      |> Map.update!(:capabilities, fn capabilities ->
+        ["school.lesson.private" | capabilities]
+      end)
     end
   end
 
