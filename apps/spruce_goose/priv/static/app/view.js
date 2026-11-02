@@ -270,7 +270,7 @@ export const projectsHeld = (found, [chapter, tenant, project]) =>
 // departing principal owns. Every other holding is offboarded but does not
 // need to be reassigned. Never derive a successor from a grant or omit a
 // project just because it has no tasks.
-export function chapterOffboarding(found, chapter, successors = []) {
+export function chapterOffboarding(found, chapter, successors = [], signerKey = null) {
   const projects = found.projects.filter((p) => p.chapter_id === chapter);
   const owned = projects.filter((p) => p.accountable_owner === found.principal_id || p.successor_required);
   const scopeKey = (p) => JSON.stringify([p.tenant_id, p.project_id]);
@@ -298,8 +298,31 @@ export function chapterOffboarding(found, chapter, successors = []) {
     })),
     ...found.keys
       .filter((k) => k.chapter_id === chapter)
+      .sort((a, b) => Number(a.key_id === signerKey) - Number(b.key_id === signerKey))
       .map((k) => ({ type: "RoleKeyRevoked", payload: { role: "governance", key_id: k.key_id } })),
   ];
+}
+
+// Actionable recovery from the signed HTTP APIs. Admission remains authoritative.
+export function ownershipError(code) {
+  return {
+    human_declaration_required: "Governance has not declared this principal human.",
+    active_operator_grant_required: "No active operator grant in this tenant and project. Enrol a device before selecting this person.",
+    holdings_changed: "Project ownership or holdings changed. Look up the person again, choose successors again, then review a fresh batch.",
+    backfill_changed: "This project or its owner's eligibility changed. Refresh ownerless projects and prepare a fresh backfill.",
+    project_already_owned: "This project now has an owner. Refresh the chapter projects before continuing.",
+    successor_required: "Choose an eligible successor for every affected project before offboarding.",
+    unexpected_successor_project: "A selection is outside the affected projects. Look up the person again and select only the listed tenant/project scopes.",
+    project_owner_ineligible: "A selected owner is ineligible. Choose a declared human with an active operator grant in that exact tenant and project.",
+    principal_not_human: "This principal is declared as an agent and cannot own a project. Select a human principal.",
+    operator_device_required: "This person needs an operator grant. Supply their existing device key ID and matching public key, or enrol that device first.",
+    unnecessary_operator_device: "This person already has an operator grant. Leave the optional device fields empty.",
+    invalid_signature: "The governance signature was rejected. Nothing was committed. Check this browser's chapter access and prepare a fresh batch.",
+    unauthorized: "This browser is not authorized for that chapter, or its signed request expired. Reload and check administrator access.",
+    unknown_legacy_project: "No historical project exists in that tenant/project scope. Refresh the chapter project list.",
+    expired: "The prepared batch expired. Refresh the project or person, then review and sign a fresh batch.",
+    cannot_orphan_governance: "Offboarding would remove the last chapter administrator. Enrol another administrator before continuing.",
+  }[code] ?? String(code).replaceAll("_", " ");
 }
 
 // The only acceptable owner-backfill events. The ledger chooses whether a

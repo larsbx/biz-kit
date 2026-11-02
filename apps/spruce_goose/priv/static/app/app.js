@@ -38,6 +38,7 @@ import {
   ownDevices,
   ownRevocation,
   ownerBackfillCommands,
+  ownershipError,
   pendingSuggestions,
   projectSearch,
   projectsHeld,
@@ -95,7 +96,7 @@ async function postJSON(path, body) {
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(ownershipError(json.error ?? `HTTP ${res.status}`));
   return json;
 }
 
@@ -767,7 +768,7 @@ async function governed(method, path, body) {
   const headers = body ? { authorization, "content-type": "application/json" } : { authorization };
   const res = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(ownershipError(json.error ?? `HTTP ${res.status}`));
   return json;
 }
 
@@ -858,7 +859,11 @@ function personInChapter(found, keys) {
     (p) => p.chapter_id === chapterId && (p.accountable_owner === id || p.successor_required),
   );
   const selectors = owned.map((p) => {
-    const input = el("input", { maxLength: 128, placeholder: "Eligible human principal", required: true });
+    const candidates = (p.owner_candidates ?? []).filter((c) => c.eligible && c.principal_id !== id);
+    const input = el("select", { required: true });
+    input.append(el("option", { value: "", textContent: "Choose an eligible human…" }),
+      ...candidates.map((c) => el("option", { value: c.principal_id, textContent: c.principal_id })));
+    input.setAttribute("aria-label", `Successor for ${p.tenant_id} / ${p.project_id}`);
     return {
       project: p,
       input,
@@ -867,6 +872,7 @@ function personInChapter(found, keys) {
         { className: "row" },
         `Successor for ${p.tenant_id} / ${p.project_id}: `,
         input,
+        candidates.length ? null : el("span", { className: "muted", textContent: "No eligible successor. Enrol an operator and declare them human before offboarding." }),
       ),
     };
   });
@@ -881,7 +887,7 @@ function personInChapter(found, keys) {
 
     let expected;
     try {
-      expected = chapterOffboarding(found, chapterId, successors);
+      expected = chapterOffboarding(found, chapterId, successors, keyId);
     } catch (error) {
       return status(error.message, true);
     }
@@ -922,7 +928,8 @@ function personInProject(id, p) {
   const name = `${p.tenant_id} / ${p.project_id}`;
 
   const rows = revocable(p.held).map((h) => {
-    const revoke = el("button", { textContent: "Revoke", disabled: deciding });
+    const lastOwnerGrant = p.accountable_owner === id && h.kind === "operator" && p.held.filter((x) => x.kind === "operator").length === 1;
+    const revoke = el("button", { textContent: "Revoke", disabled: deciding || lastOwnerGrant });
     revoke.onclick = async () => {
       if (!confirm(`Revoke ${id}'s ${h.kind} device “${h.label ?? h.key_id}” in ${name}?`)) return;
       const path = `/api/v1/grants/${encodeURIComponent(h.event_id)}/revocation`;
@@ -936,7 +943,8 @@ function personInProject(id, p) {
     return el("div", { className: "row" }, el("span", { textContent: `${h.kind}: ${h.label ?? "unlabelled"} (key ${h.key_id})` }), revoke);
   });
 
-  const offboard = el("button", { textContent: `Offboard from ${name}`, disabled: deciding });
+  const owner = p.accountable_owner === id;
+  const offboard = el("button", { textContent: `Offboard from ${name}`, disabled: deciding || owner });
   offboard.onclick = async () => {
     if (!confirm(`End everything ${id} holds in ${name}: devices, suggester and reviewer grants, delegations?`)) return;
     const path = `/api/v1/principals/${encodeURIComponent(id)}/offboarding`;
@@ -954,6 +962,7 @@ function personInProject(id, p) {
     el("h4", { textContent: `${name}${p.here ? " (this page)" : ""}` }),
     el("p", { textContent: `${id} holds ${p.held.map((h) => h.kind).join(", ")}.` }),
     ...rows,
+    owner ? el("p", { className: "muted", textContent: "This person owns this project. Use chapter succession below to transfer every affected project in one batch." }) : null,
     el("div", { className: "actions" }, offboard),
   );
 }
@@ -1050,7 +1059,12 @@ function renderProjects() {
       return el(
         "div",
         { className: "row" },
-        el("span", {}, el("strong", { textContent: `${p.tenant_id} / ${p.project_id}` }), ` ${taskSummary(p.tasks)}; ${people}`),
+        el("span", {}, el("strong", { textContent: `${p.tenant_id} / ${p.project_id}` }), ` ${taskSummary(p.tasks)}; ${people}`,
+          el("p", { textContent: p.accountable_owner
+            ? `Accountable owner: ${p.accountable_owner} · ${p.owner_kind ?? "undeclared"} · ${p.owner_eligible ? "eligible" : "ineligible"}`
+            : "No accountable owner — governed backfill required before new work." }),
+          el("p", { className: "muted", textContent: `Available successors: ${(p.owner_candidates ?? []).filter((c) => c.eligible && c.principal_id !== p.accountable_owner).map((c) => c.principal_id).join(", ") || "none"}` }),
+          ...(p.owner_candidates ?? []).filter((c) => !c.eligible).map((c) => el("p", { className: "muted", textContent: `${c.principal_id}: ${c.kind ?? "undeclared"} — ${ownershipError(c.reason)}` }))),
         here
           ? el("span", { className: "muted", textContent: "this page" })
           : el("a", { href: `/app${projectSearch(location.search, p.tenant_id, p.project_id)}`, textContent: "Open" }),
@@ -1101,7 +1115,9 @@ function followChapter(on) {
   feed.addEventListener("changes", (event) => {
     chapterView = applyFrame(chapterView, JSON.parse(event.data));
     renderAdmin();
-    if (shownPerson) showPerson(shownPerson);
+    // Do not discard successor choices or a signed confirmation on a live update.
+    // The guarded append refuses stale choices; the operator can explicitly reload.
+
   });
   // The key was revoked: the server says so before closing. Ask at once
   // where this browser stands.

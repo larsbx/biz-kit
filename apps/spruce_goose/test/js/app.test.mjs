@@ -792,3 +792,15 @@ test("todos: in order, each with what may be done to it; completion waits for th
   assert.deepEqual(nextStep("t1", task(todos), "me", "k-me"), { waiting: "2 open todos" });
   assert.equal(nextStep("t1", task(todos.filter((t) => t.state !== "open")), "me", "k-me").action, "complete");
 });
+
+test('succession places the signing administrator key last and explains rejections', async () => {
+  const { ownershipError } = await import('../../priv/static/app/view.js');
+  const found = { principal_id: 'owner', projects: [], keys: [
+    { chapter_id: 'c', key_id: 'a' }, { chapter_id: 'c', key_id: 'z' },
+  ] };
+  assert.deepEqual(chapterOffboarding(found, 'c', [], 'a').map(c => c.payload.key_id), ['z', 'a']);
+  for (const code of ['holdings_changed', 'backfill_changed', 'invalid_signature', 'project_owner_ineligible', 'operator_device_required', 'unknown_legacy_project']) {
+    assert.ok(ownershipError(code).length > code.length);
+    assert.ok(!ownershipError(code).includes('_'));
+  }
+});

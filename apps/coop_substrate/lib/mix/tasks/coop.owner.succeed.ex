@@ -31,10 +31,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
   def run(args) do
     Mix.Task.run("app.config")
 
-    {opts, positional, invalid} =
-      OptionParser.parse(args,
-        strict: [server: :string, yes: :boolean, successor: :string]
-      )
+    {opts, positional, invalid} = parse_options(args)
 
     unless invalid == [] and length(positional) == 2 do
       Mix.raise(
@@ -63,7 +60,9 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
 
       if opts[:yes] || Mix.shell().yes?("Sign the complete offboarding and succession batch?") do
         url =
-          base <> "/api/v1/principals/" <> Client.segment(principal) <>
+          base <>
+            "/api/v1/principals/" <>
+            Client.segment(principal) <>
             "/chapter_offboarding"
 
         params = %{
@@ -94,6 +93,14 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
       {:error, reason} -> Mix.raise("cannot prepare succession: #{inspect(reason)}")
     end
   end
+
+  @doc """
+  Parse the command-line switches without collapsing repeated `--successor`
+  arguments. Both duplicate detection and multi-project succession depend on
+  preserving the complete original sequence.
+  """
+  def parse_options(args) when is_list(args),
+    do: OptionParser.parse(args, strict: [server: :string, yes: :boolean, successor: :keep])
 
   @doc false
   def parse_successors(items) when is_list(items) do
@@ -127,7 +134,12 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
     do: if(Admission.segment?(s), do: :ok, else: {:error, :invalid_chapter_or_scope})
 
   @doc false
-  def complete?(%{"principal_id" => stated, "projects" => projects}, principal, chapter, successors)
+  def complete?(
+        %{"principal_id" => stated, "projects" => projects},
+        principal,
+        chapter,
+        successors
+      )
       when is_list(projects) and is_map(successors) and stated == principal do
     owned =
       for %{
@@ -146,28 +158,37 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
   def complete?(_, _, _, _), do: {:error, :invalid_chapter_holdings}
 
   @doc false
-  def expected?(cores, %{"projects" => projects, "keys" => keys}, principal, chapter, signer_key, successors)
-      when is_list(cores) and is_list(projects) and is_list(keys) do
+  def expected?(
+        cores,
+        %{"principal_id" => stated, "projects" => projects, "keys" => keys} = details,
+        principal,
+        chapter,
+        signer_key,
+        successors
+      )
+      when is_list(cores) and is_list(projects) and is_list(keys) and stated == principal do
     chapter_projects =
       for %{"chapter_id" => ^chapter} = p <- projects,
           do: p
 
     offboardings =
       for p <- Enum.sort_by(chapter_projects, &{&1["tenant_id"], &1["project_id"]}) do
-        {"TaskPrincipalOffboardedV1", %{
-          "tenant_id" => p["tenant_id"],
-          "project_id" => p["project_id"],
-          "principal_id" => principal
-        }}
+        {"TaskPrincipalOffboardedV1",
+         %{
+           "tenant_id" => p["tenant_id"],
+           "project_id" => p["project_id"],
+           "principal_id" => principal
+         }}
       end
 
     assignments =
       for {{tenant, project}, next} <- Enum.sort(successors) do
-        {"TaskProjectOwnerAssignedV1", %{
-          "tenant_id" => tenant,
-          "project_id" => project,
-          "principal_id" => next
-        }}
+        {"TaskProjectOwnerAssignedV1",
+         %{
+           "tenant_id" => tenant,
+           "project_id" => project,
+           "principal_id" => next
+         }}
       end
 
     revocations =
@@ -185,7 +206,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
         {core["type"], core["payload"], core["chapter_id"]}
       end)
 
-    complete?(%{"projects" => projects}, principal, chapter, successors) == :ok and
+    complete?(details, principal, chapter, successors) == :ok and
       actual ==
         for {type, payload} <- offboardings ++ assignments ++ revocations do
           {type, payload, chapter}

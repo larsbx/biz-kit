@@ -203,3 +203,36 @@ either by the client pre-signing predicate or by authoritative ledger admission.
 The interface does not synthesize a replacement principal or private device
 key. A targeted browser smoke of both flows under actual Chrome remains
 necessary before claiming production-ready administration.
+
+### Operator acceptance and concurrency
+
+The chapter administration feed now carries `accountable_owner`, `owner_kind`,
+`owner_eligible` and `owner_candidates`, derived by `Administrators.projects/2`
+using `TaskCore.Projects.eligible?/3`. Candidates and reasons are scoped to the
+specific chapter, tenant and project; this is a projection, not another owner
+registry. A candidate selected in one project does not qualify in another.
+
+Chapter offboarding offers only currently eligible humans other than the
+person leaving. Every affected project must have a selection before preparing
+the existing governance-held batch. A last owner grant cannot be revoked through
+the isolated grant button; use chapter succession. The atomic batch and TaskCore
+admission remain authoritative, including changes made while a confirmation is
+open. Stale-state, signature, scope and eligibility refusals explain how to
+refresh and prepare a new batch. Live chapter updates do not erase selections
+or silently replace the bytes already displayed for signature.
+
+The ownerless panel reads through the signed chapter API, labels exact tenant
+and project scopes, and verifies every decoded backfill command before signing.
+A missing human declaration and optional operator grant are visible in the
+same confirmation as the owner assignment. Existing principal/device public
+keys are used; original events are never modified. Ownership confers no
+operational authority beyond the explicit grants already recorded.
+
+`Project ownership acceptance` checks out the PR's exact head SHA. It runs the
+TaskCore ownership tests, host succession/backfill/CLI regressions, signed HTTP
+negative controls, pure JS contracts, and a dedicated Chromium test using a
+real enrolled non-extractable governance key. The browser exercises incomplete
+multi-project selection, a holding added during review, a rejected signature,
+complete atomic succession, and historical backfill. Host tests verify no
+partial append, replay refusal, unchanged historical event prefixes and tenant
+isolation. Passing results must be checked at that exact SHA before integration.

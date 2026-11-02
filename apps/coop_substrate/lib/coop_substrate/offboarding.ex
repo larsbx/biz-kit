@@ -71,6 +71,10 @@ defmodule CoopSubstrate.Offboarding do
             accountable_owner: owner,
             successor_required: owner == principal,
             owner_eligible: TaskCore.Projects.eligible_owner?(o, scope),
+            owner_candidates:
+              CoopSubstrate.Administrators.projects(o, chapter)
+              |> Enum.find(&(&1.tenant_id == tenant and &1.project_id == project))
+              |> Map.fetch!(:owner_candidates),
             held: Enum.map(held, &describe(o, principal, &1))
           }
         end),
