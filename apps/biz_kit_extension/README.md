@@ -39,3 +39,14 @@ Manifest/Catalog still enforce ownership, grants and dependency semantics.
 
 See docs/architecture/2026-10-31-extension-v1-first-slice.md for incomplete
 runtime, authorization, external compatibility and migration obligations.
+
+## Staged read-only descriptor registry
+
+`BizKit.Extension.Registry` can hold an ephemeral, initially hidden view of
+statically allowlisted and validated descriptors. `reconcile/2` atomically
+changes *visibility* while enforcing dependencies; invalid requests preserve
+prior state and process restarts hide everything. This is **not** extension
+process activation, durable governance authorization, or a command/ledger gate.
+The OTP app does not automatically start the Registry, and nothing here runs
+SchoolOps or Dispatch in the background. See the
+[registry-stage ADR](../../docs/architecture/2026-11-01-extension-registry-stage.md).
