@@ -60,6 +60,29 @@ defmodule BizKit.Extension.UpgradeTest do
     assert result.added.commands == []
   end
 
+  test "reordered command grants are semantically identical" do
+    base = baseline()
+    grants = ["school_ops.review.perform", "school_ops.workflow.propose"]
+    command = hd(base.commands)
+
+    previous = %{
+      base
+      | requested_grants: grants,
+        commands: [%{command | required_grants: grants}]
+    }
+
+    reordered = %{
+      previous
+      | commands: [%{command | required_grants: Enum.reverse(grants)}]
+    }
+
+    assert {:ok, %{classification: :unchanged, requires_review: false}} =
+             Upgrade.assess(previous, reordered)
+
+    assert {:ok, %{classification: :compatible_additive, requires_review: true}} =
+             Upgrade.assess(previous, %{reordered | version: "1.3.0"})
+  end
+
   test "same-version changes, downgrades, identity swaps and major changes refuse" do
     old = baseline()
 
