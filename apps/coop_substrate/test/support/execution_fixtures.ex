@@ -20,7 +20,7 @@ defmodule CoopSubstrate.ExecutionFixtures do
     bob = new_member("operator")
     carol = new_member("reviewer")
     grants = [operator_grant(gov, alice, "alice"), operator_grant(gov, bob, "bob")]
-    {:ok, _} = Log.append([declare_governance(gov) | grants])
+    {:ok, _} = Log.append([declare_governance(gov) | grants ++ project_owner(gov)])
     {:ok, _} = Log.append(reviewer_grant(gov, carol, "carol"))
 
     for id <- ["task-1", "task-2"],

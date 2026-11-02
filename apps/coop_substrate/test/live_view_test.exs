@@ -19,8 +19,11 @@ defmodule CoopSubstrate.LiveViewTest do
     gov = new_member("governance")
     laptop = new_member("operator")
 
-    {:ok, [_, grant]} =
-      Log.append([declare_governance(gov), operator_grant(gov, laptop, "alice")])
+    {:ok, [_, grant | _owner]} =
+      Log.append([
+        declare_governance(gov),
+        operator_grant(gov, laptop, "alice") | project_owner(gov)
+      ])
 
     %{gov: gov, laptop: laptop, grant: grant}
   end
@@ -97,7 +100,9 @@ defmodule CoopSubstrate.LiveViewTest do
     {:ok, reader} = Feed.authorize_principal("alice", @chapter)
     {:ok, session, frame} = Feed.open(@chapter, 0, reader)
 
-    assert [{"tenant-1/project-1", %{tasks: %{}, people: ["alice"]}}] = changes(frame, :projects)
+    # Alice, and the project's owner (`project_owner/1`).
+    assert [{"tenant-1/project-1", %{tasks: %{}, people: ["alice", "owner"]}}] =
+             changes(frame, :projects)
 
     assert Enum.sort(changes(frame, :administrators)) ==
              Enum.sort([
@@ -113,7 +118,7 @@ defmodule CoopSubstrate.LiveViewTest do
     # So does any change in access, even one that leaves the same people.
     {:ok, [second]} = Log.append(reviewer_grant(w.gov, new_member("reviewer"), "alice"))
     {frame, session} = Feed.advance(session, notified())
-    assert [{_, %{grants: 2, people: ["alice"]}}] = changes(frame, :projects)
+    assert [{_, %{grants: 3, people: ["alice", "owner"]}}] = changes(frame, :projects)
 
     {:ok, _} =
       Log.append(
@@ -125,7 +130,7 @@ defmodule CoopSubstrate.LiveViewTest do
       )
 
     {frame, session} = Feed.advance(session, notified())
-    assert [{_, %{grants: 1}}] = changes(frame, :projects)
+    assert [{_, %{grants: 2}}] = changes(frame, :projects)
 
     # Revoking the reader's key ends the stream, as revoking a grant does.
     {:ok, _} =

@@ -58,7 +58,10 @@ defmodule CoopSubstrate.Tasks.DoDCommandsTest do
         })
       )
 
-    {:ok, _} = Log.append([grant, reviewer_grant, baseline])
+    {:ok, _} =
+      Log.append(
+        CoopSubstrate.TaskTimingFixtures.project_owner(gov) ++ [grant, reviewer_grant, baseline]
+      )
 
     proposal =
       signed_event(

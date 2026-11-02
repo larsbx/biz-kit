@@ -116,7 +116,10 @@ defmodule SpruceGoose.Web.Requests do
     :invalid_label,
     :invalid_role,
     :signature_count,
-    :missing_input
+    :missing_input,
+    :operator_device_required,
+    :unnecessary_operator_device,
+    :invalid_successors
   ]
   @not_found [
     :unknown_command,
@@ -124,9 +127,16 @@ defmodule SpruceGoose.Web.Requests do
     :unknown_code,
     :unknown_device,
     :unknown_grant,
-    :unknown_receipt
+    :unknown_receipt,
+    :unknown_legacy_project
   ]
-  @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named]
+  @unprocessable [
+    :bad_proof,
+    :unknown_governance_key,
+    :digest_mismatch,
+    :not_named,
+    :principal_not_human
+  ]
   @conflict [
     :nothing_to_define,
     :sop_mismatch,
@@ -138,6 +148,9 @@ defmodule SpruceGoose.Web.Requests do
     :grant_already_revoked,
     :nothing_to_offboard,
     :holdings_changed,
+    :backfill_changed,
+    :project_already_owned,
+    :unexpected_successor_project,
     :unknown_role_key,
     :no_submission
   ]
@@ -199,6 +212,23 @@ defmodule SpruceGoose.Web.Requests do
   defp ledger_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp ledger_reason(reason) when is_tuple(reason), do: ledger_reason(elem(reason, 0))
   defp ledger_reason(_reason), do: "refused_by_ledger"
+
+  # Scope information is derived from the chapter's governance ledger and
+  # reaches here only after a signed governance read. Return the missing
+  # projects so a successor-selection form can be completed correctly.
+  def refuse(conn, {:error, {:successor_required, scopes}}) when is_list(scopes) do
+    Logger.info("request refused: successor required for #{length(scopes)} project(s)")
+
+    conn
+    |> put_status(409)
+    |> json(%{
+      error: "successor_required",
+      projects:
+        Enum.map(scopes, fn {tenant, project} ->
+          %{tenant_id: tenant, project_id: project}
+        end)
+    })
+  end
 
   def refuse(conn, {:error, reason}) do
     {status, code} =

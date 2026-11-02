@@ -15,10 +15,22 @@ defmodule TaskCore.DoD do
 
   A reviewer grant may name the device it was enrolled from (`device_label`,
   docs/architecture/2026-10-19-device-enrolment.md).
+
+  Typed intake (docs/architecture/2026-11-02-typed-intake.md):
+
+    * `TaskDoDDefinedV2`, by governance, is a definition whose criteria are
+      exactly a request type's template filled with its parameters
+      (`TaskCore.Intake`), from the catalogue the project's owner adopted
+      (`TaskCore.Projects`), which it cites;
+    * `TaskDoDAgreedV1`, by the operator who proposed the task, agrees to
+      that exact definition with a key other than the one that defined it.
+      A typed definition is queued only once agreed, and a new definition
+      voids the agreement.
   """
   alias TaskCore.State
 
-  @commands ~w(TaskDoDDefinedV1 TaskEvidenceSubmittedV1 TaskEvidenceSubmittedV2 TaskDoDReviewedV1)
+  @commands ~w(TaskDoDDefinedV1 TaskDoDDefinedV2 TaskDoDAgreedV1 TaskEvidenceSubmittedV1
+                TaskEvidenceSubmittedV2 TaskDoDReviewedV1)
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @subject Map.merge(@scope, %{"task_id" => :string, "expected_version" => :int})
   @actor %{"principal_id" => :string, "authorization_event_id" => :string}
@@ -39,6 +51,25 @@ defmodule TaskCore.DoD do
         ),
       "TaskDoDDefinedV1" =>
         spec("governance", "tasks", Map.put(@subject, "criteria", :any), true),
+      "TaskDoDDefinedV2" =>
+        spec(
+          "governance",
+          "tasks",
+          Map.merge(@subject, %{
+            "request_type" => :string,
+            "params" => :any,
+            "catalogue_ref" => :hash,
+            "criteria" => :any
+          }),
+          true
+        ),
+      "TaskDoDAgreedV1" =>
+        spec(
+          "operator",
+          "tasks",
+          Map.merge(Map.merge(@subject, @actor), %{"definition_event_id" => :string}),
+          true
+        ),
       "TaskEvidenceSubmittedV1" =>
         spec(
           "operator",
@@ -153,6 +184,35 @@ defmodule TaskCore.DoD do
          {:ok, _task} <- current_task(env, state),
          :ok <- validate_criteria(p["criteria"]),
          do: :ok
+  end
+
+  def check(%{type: "TaskDoDDefinedV2", payload: p} = env, state, keys) do
+    with :ok <- governance(env, keys),
+         {:ok, _task} <- current_task(env, state),
+         {:ok, catalogue} <- adopted(state, env),
+         {:ok, criteria} <- TaskCore.Intake.instantiate(catalogue, p["request_type"], p["params"]) do
+      if criteria == p["criteria"], do: :ok, else: {:error, :intake_template_mismatch}
+    end
+  end
+
+  # The requester agrees: the operator who proposed the task, with a key other
+  # than the one that defined it, to the current typed definition, once.
+  def check(%{type: "TaskDoDAgreedV1", payload: p} = env, state, _keys) do
+    with {:ok, grant} <-
+           fetch_grant(state.grants, p["authorization_event_id"], :unknown_task_grant),
+         :ok <- authorized(env, grant),
+         {:ok, task} <- current_task(env, state),
+         :ok <- typed(task),
+         :ok <- revision(task, p) do
+      [signer] = env.signers
+
+      cond do
+        task.dod.agreement != nil -> {:error, :dod_already_agreed}
+        proposer(state, env) != p["principal_id"] -> {:error, :dod_agreement_not_requester}
+        signer.pubkey == task.dod.defined_by -> {:error, :dod_agreement_same_key}
+        true -> :ok
+      end
+    end
   end
 
   def check(%{type: "ArtifactCustodyRecordedV1", payload: p} = env, state, _keys) do
@@ -286,10 +346,37 @@ defmodule TaskCore.DoD do
     end
   end
 
-  # A definition is fixed once the task leaves `proposed`; evidence and its
-  # review are of the work once it is under way.
-  defp open_states("TaskDoDDefinedV1"), do: ["proposed"]
+  # A definition, and the requester's agreement to it, are fixed once the task
+  # leaves `proposed`; evidence and its review are of the work once it is under way.
+  defp open_states(type) when type in ~w(TaskDoDDefinedV1 TaskDoDDefinedV2 TaskDoDAgreedV1),
+    do: ["proposed"]
+
   defp open_states(_type), do: ["proposed", "in_progress"]
+
+  defp typed(%{dod: nil}), do: {:error, :dod_not_defined}
+  defp typed(%{dod: %{request_type: _}}), do: :ok
+  defp typed(_task), do: {:error, :dod_not_typed}
+
+  # Who proposed the task: the one `TaskProposedV1` for it, since a task is
+  # proposed once (`TaskCore.TaskLifecycle`).
+  defp proposer(state, env) do
+    key = State.task_key(env)
+
+    Enum.find_value(state.proposals, fn {_id, proposal} ->
+      State.task_key(proposal) == key && proposal.payload["principal_id"]
+    end)
+  end
+
+  # The catalogue the project adopted, which the definition must cite. It was
+  # read and normalized on adoption; a definition reads no store.
+  defp adopted(state, %{payload: p} = env) do
+    ref = p["catalogue_ref"]
+
+    case TaskCore.Projects.catalogue(state, State.scope(env)) do
+      %{digest: ^ref, catalogue: catalogue} -> {:ok, catalogue}
+      _ -> {:error, :intake_catalogue_not_adopted}
+    end
+  end
 
   defp revision(%{dod: nil}, _), do: {:error, :dod_not_defined}
 
@@ -409,7 +496,22 @@ defmodule TaskCore.DoD do
     }
   end
 
+  defp fold_dod(%{type: "TaskDoDDefinedV2", payload: p, signers: [signer]} = env, _, host) do
+    %{env | type: "TaskDoDDefinedV1"}
+    |> fold_dod(nil, host)
+    |> Map.merge(%{
+      request_type: p["request_type"],
+      params: p["params"],
+      catalogue_ref: p["catalogue_ref"],
+      defined_by: signer.pubkey,
+      agreement: nil
+    })
+  end
+
   defp fold_dod(env, dod, _host), do: fold_dod(env, dod)
+
+  defp fold_dod(%{type: "TaskDoDAgreedV1", payload: p} = env, dod),
+    do: %{dod | agreement: %{event_id: env.event_id, principal_id: p["principal_id"]}}
 
   defp fold_dod(
          %{type: "TaskEvidenceSubmittedV1", payload: p, signers: [signer]} = env,

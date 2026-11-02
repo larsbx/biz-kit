@@ -244,6 +244,8 @@ defmodule TaskCore.Readiness do
   # A DoD can only be defined while a task is proposed (`TaskCore.DoD`), so queuing
   # without one would leave the task unable ever to get one.
   defp dod_defined(%{dod: nil}), do: {:error, :dod_not_defined}
+  # A typed definition is queued only once its requester agrees (`TaskCore.DoD`).
+  defp dod_defined(%{dod: %{request_type: _, agreement: nil}}), do: {:error, :dod_not_agreed}
   defp dod_defined(_task), do: :ok
 
   defp definition(task) do

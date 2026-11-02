@@ -79,7 +79,10 @@ defmodule CoopSubstrate.TaskAgentRunIntentsTest do
         })
       )
 
-    {:ok, _} = Log.append([grant, suggester, baseline])
+    {:ok, _} =
+      Log.append(
+        CoopSubstrate.TaskTimingFixtures.project_owner(gov) ++ [grant, suggester, baseline]
+      )
 
     actor = %{
       "principal_id" => "operator-1",

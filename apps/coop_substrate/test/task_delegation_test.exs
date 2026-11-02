@@ -21,7 +21,7 @@ defmodule CoopSubstrate.TaskDelegationTest do
     # Delegated commands are the operator command types, signed by the agent.
     agent = as_role(new_member("operator"), "operator")
     op_grant = operator_grant(gov, op, "alice")
-    {:ok, _} = Log.append([declare_governance(gov)])
+    {:ok, _} = Log.append([declare_governance(gov) | project_owner(gov)])
     {:ok, _} = Log.append([op_grant, create(op, op_grant, "task-1", unscheduled())])
     %{gov: gov, op: op, agent: agent, op_grant: op_grant}
   end

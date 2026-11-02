@@ -51,6 +51,15 @@ defmodule TaskCore.SalvageTest do
       s
       |> fold!(event(@head, "TaskOperatorGrantedV1", grant("teacher", @teacher), "teacher-grant"))
       |> fold!(event(@head, "TaskReviewerGrantedV1", grant("marker", @marker), "marker-grant"))
+      # The project's accountable owner, before any work (TaskCore.Projects).
+      |> fold!(%Event{
+        event_id: "teacher-human",
+        chapter_id: @chapter,
+        type: "TaskPrincipalKindDeclaredV1",
+        payload: %{"principal_id" => "teacher", "kind" => "human"},
+        signers: [@head]
+      })
+      |> fold!(event(@head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "teacher"}))
 
     s =
       Enum.reduce(~w(a b c), s, fn id, acc ->
