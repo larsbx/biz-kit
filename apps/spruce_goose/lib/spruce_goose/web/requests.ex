@@ -12,7 +12,7 @@ defmodule SpruceGoose.Web.Requests do
 
   require Logger
 
-  alias CoopSubstrate.Governance.Read
+  alias CoopSubstrate.Governance.{Authorization, Read}
 
   # The endpoint's parsers have usually read the body already; the router
   # alone (as in tests) leaves it unread.
@@ -155,8 +155,6 @@ defmodule SpruceGoose.Web.Requests do
     :no_submission
   ]
 
-  @fields ~w(key ts nonce sig)
-
   @doc """
   The chapters a request signed by a governance key (`Governance.Read`, an
   `Authorization: CoopGovernance …` header) may act on, or
@@ -164,21 +162,8 @@ defmodule SpruceGoose.Web.Requests do
   """
   def governance_read(conn) do
     with [header] <- get_req_header(conn, "authorization"),
-         "CoopGovernance " <> params <- header,
-         fields = Map.new(Regex.scan(~r/(\w+)="([^"]*)"/, params), fn [_, k, v] -> {k, v} end),
-         true <- Enum.all?(@fields, &Map.has_key?(fields, &1)),
-         {ts, ""} <- Integer.parse(fields["ts"]),
-         {:ok, signature} <- Base.url_decode64(fields["sig"], padding: false) do
-      Read.authorize(
-        %{
-          method: conn.method,
-          path: conn.request_path,
-          timestamp_ms: ts,
-          nonce: fields["nonce"],
-          key_id: fields["key"]
-        },
-        signature
-      )
+         {:ok, request, signature} <- Authorization.parse(header, conn.method, conn.request_path) do
+      Read.authorize(request, signature)
       |> case do
         {:ok, chapters} -> {:ok, chapters}
         {:error, reason} -> {:unauthorized, reason}

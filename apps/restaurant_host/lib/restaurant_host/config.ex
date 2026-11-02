@@ -40,7 +40,8 @@ defmodule RestaurantHost.Config do
          {:ok, tax_rate} <- tax_rate(doc["tax_rate"]),
          {:ok, menu} <- menu(doc["menu"]),
          {:ok, storefront} <- device("storefront", doc["storefront"], env, false),
-         {:ok, boards} <- boards(doc["boards"], env) do
+         {:ok, boards} <- boards(doc["boards"], env),
+         :ok <- distinct_devices(storefront, boards) do
       {:ok,
        %{
          chapter: chapter,
@@ -72,8 +73,11 @@ defmodule RestaurantHost.Config do
 
   defp segment(doc, field) do
     case doc[field] do
-      v when is_binary(v) and byte_size(v) in 1..128 -> {:ok, v}
-      _ -> {:error, {:invalid, field}}
+      v when is_binary(v) ->
+        if RestaurantHost.DeviceGrants.identifier?(v), do: {:ok, v}, else: invalid(field)
+
+      _ ->
+        {:error, {:invalid, field}}
     end
   end
 
@@ -138,7 +142,10 @@ defmodule RestaurantHost.Config do
 
     with :ok <- only(spec, allowed, name),
          true <-
-           Enum.all?(@device, &(is_binary(spec[&1]) and spec[&1] != "")) or
+           Enum.all?(
+             [name | Enum.map(@device, &spec[&1])],
+             &RestaurantHost.DeviceGrants.identifier?/1
+           ) or
              invalid(field(board?, name)),
          {:ok, pairing} <- pairing(spec, board?, name),
          {:ok, seed} <- seed(spec["device_id"], env) do
@@ -181,6 +188,18 @@ defmodule RestaurantHost.Config do
              do: {:ok, seed},
              else: (_ -> {:error, {:invalid_seed, var}})
     end
+  end
+
+  defp distinct_devices(storefront, boards) do
+    devices = [storefront | Map.values(boards)]
+    unique? = fn values -> length(values) == length(Enum.uniq(values)) end
+
+    if unique?.(Enum.map(devices, & &1.device_id)) and
+         unique?.(Enum.map(devices, & &1.key_id)) and
+         unique?.(Enum.map(devices, &seed_var(&1.device_id))) and
+         unique?.(Enum.map(devices, & &1.seed)),
+       do: :ok,
+       else: {:error, :ambiguous_devices}
   end
 
   defp invalid(field), do: {:error, {:invalid, field}}

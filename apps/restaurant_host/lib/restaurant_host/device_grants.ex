@@ -45,40 +45,92 @@ defmodule RestaurantHost.DeviceGrants do
     do: {:ok, d, "system", ["checkout"]}
 
   defp device(%Restaurant{boards: boards}, id) do
-    case Enum.find(Map.values(boards), &(&1.device_id == id)) do
-      nil -> {:error, :unknown_device}
-      board -> {:ok, board, "staff", @board_actions}
-    end
+    Enum.find_value(boards, {:error, :unknown_device}, fn {_board_id, board} ->
+      if board.device_id == id, do: {:ok, board, "staff", @board_actions}
+    end)
   end
 
   @doc "Hold the device's grant for this declared governance key to sign."
   def prepare(%Restaurant{} = r, device_id, governance_key_id) do
     with {:ok, d} <- details(r, device_id),
          {:ok, signer} <- Commands.governance_signer(r.chapter, governance_key_id) do
-      Commands.hold(owner(device_id), r.chapter, d.type, d.payload, signer)
+      Commands.hold(owner(d), r.chapter, d.type, d.payload, signer)
     end
   end
 
   @doc "Submit the governance signature on a held grant; the ledger admits or refuses."
-  def submit(device_id, held_id, signature),
-    do: Commands.submit(owner(device_id), held_id, signature)
+  def submit(%Restaurant{} = r, device_id, held_id, <<_::512>> = signature)
+      when is_binary(held_id) and byte_size(held_id) in 1..128 do
+    with {:ok, d} <- details(r, device_id),
+         do: Commands.submit(owner(d), held_id, signature)
+  end
 
-  defp owner(device_id), do: {:restaurant_device_grant, device_id}
+  def submit(_, _, _, _), do: {:error, :bad_request}
+
+  # Include the chapter, merchant and configured key, so a hold cannot be
+  # submitted through another restaurant or after the device is reconfigured.
+  defp owner(%{chapter_id: chapter, payload: p}) do
+    {:restaurant_device_grant, chapter, p["merchant_id"], p["device_id"], p["key_id"], p["pubkey"]}
+  end
 
   @doc """
   Whether a decoded envelope core is exactly the grant `details` (as the
   host's JSON showed it) describes: type, chapter and every payload field.
   """
-  def grants?(core, %{"chapter_id" => chapter, "type" => @type_name, "payload" => shown}) do
-    with {:ok, pubkey} <- Base.url_decode64(shown["pubkey"] || "", padding: false) do
-      core["type"] == @type_name and core["chapter_id"] == chapter and
-        core["payload"] == Map.put(shown, "pubkey", {:bytes, pubkey})
+  def grants?(core, details) do
+    with {:ok, proposal} <- decode_details(details) do
+      matches?(core, proposal)
     else
       _ -> false
     end
   end
 
-  def grants?(_core, _details), do: false
+  @doc "Compare a decoded envelope with an already validated, immutable proposal."
+  def matches?(
+        core,
+        %{"chapter_id" => chapter, "type" => @type_name, "payload" => payload} = proposal
+      )
+      when is_map(core) and map_size(proposal) == 3 do
+    core["type"] == @type_name and core["chapter_id"] == chapter and core["payload"] == payload
+  end
+
+  def matches?(_, _), do: false
+
+  @doc "Validate and normalize a public proposal, decoding its key exactly once."
+  def decode_details(%{"chapter_id" => ch, "type" => @type_name, "payload" => p} = details)
+      when is_map(p) and map_size(details) == 3 and map_size(p) == 6 do
+    with true <- Enum.all?([ch, p["merchant_id"], p["device_id"], p["key_id"]], &identifier?/1),
+         true <- capabilities?(p["actor"], p["actions"]),
+         {:ok, pubkey} <- public_key(p["pubkey"]) do
+      {:ok, put_in(details, ["payload", "pubkey"], {:bytes, pubkey})}
+    else
+      _ -> {:error, :unexpected_proposal}
+    end
+  end
+
+  def decode_details(_), do: {:error, :unexpected_proposal}
+
+  @doc "Validate the public proposal before displaying or signing it."
+  def valid_details?(details), do: match?({:ok, _}, decode_details(details))
+
+  defp capabilities?("system", ["checkout"]), do: true
+  defp capabilities?("staff", @board_actions), do: true
+  defp capabilities?(_, _), do: false
+
+  @doc "A bounded identifier safe to display and use as a URL segment."
+  def identifier?(value),
+    do:
+      is_binary(value) and byte_size(value) in 1..128 and
+        Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/, value)
+
+  defp public_key(text) when is_binary(text) do
+    case Base.url_decode64(text, padding: false) do
+      {:ok, <<_::256>> = key} -> {:ok, key}
+      _ -> {:error, :unexpected_proposal}
+    end
+  end
+
+  defp public_key(_), do: {:error, :unexpected_proposal}
 
   @doc "`details/2` as JSON: the public key base64url."
   def json(%{payload: payload} = d),

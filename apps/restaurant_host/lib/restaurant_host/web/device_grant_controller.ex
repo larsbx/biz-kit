@@ -7,6 +7,7 @@ defmodule RestaurantHost.Web.DeviceGrantController do
   """
   use Phoenix.Controller, formats: [:json]
 
+  alias CoopSubstrate.Governance.{Authorization, Read}
   alias RestaurantHost.{DeviceGrants, Restaurant}
 
   def show(conn, %{"device" => device}) do
@@ -16,41 +17,66 @@ defmodule RestaurantHost.Web.DeviceGrantController do
     end
   end
 
-  def prepare(conn, %{"device" => device, "governance_key_id" => key_id})
-      when is_binary(key_id) do
-    case DeviceGrants.prepare(Restaurant.current(), device, key_id) do
-      {:ok, held} ->
-        conn
-        |> put_status(201)
-        |> json(%{
-          id: held.id,
-          type: held.type,
-          signing_bytes: Base.url_encode64(held.signing_bytes, padding: false),
-          expires_at: held.expires_at
-        })
+  def prepare(conn, _params) do
+    r = Restaurant.current()
 
-      error ->
-        refuse(conn, error)
+    with %{"device" => device} <- conn.path_params,
+         %{"governance_key_id" => key_id, "chapter_id" => chapter, "merchant_id" => merchant} =
+           body <- conn.body_params,
+         true <- map_size(body) == 3 and DeviceGrants.identifier?(key_id),
+         true <- chapter == r.chapter and merchant == r.merchant,
+         :ok <- authorize(conn, key_id, chapter),
+         {:ok, held} <- DeviceGrants.prepare(r, device, key_id) do
+      conn
+      |> put_status(201)
+      |> json(%{
+        id: held.id,
+        type: held.type,
+        signing_bytes: Base.url_encode64(held.signing_bytes, padding: false),
+        expires_at: held.expires_at
+      })
+    else
+      {:error, _} = error -> refuse(conn, error)
+      _ -> refuse(conn, {:error, :bad_request})
     end
   end
 
-  def prepare(conn, _), do: refuse(conn, {:error, :bad_request})
-
-  def submit(conn, %{"device" => device, "id" => id, "signature" => sig}) when is_binary(sig) do
-    with {:ok, signature} <- Base.url_decode64(sig, padding: false),
-         {:ok, env} <- DeviceGrants.submit(device, id, signature) do
+  def submit(conn, _params) do
+    with %{"device" => device, "id" => id} <- conn.path_params,
+         %{"signature" => sig} = body <- conn.body_params,
+         true <- map_size(body) == 1 and is_binary(sig),
+         {:ok, <<_::512>> = signature} <- Base.url_decode64(sig, padding: false),
+         {:ok, env} <- DeviceGrants.submit(Restaurant.current(), device, id, signature) do
       conn |> put_status(201) |> json(%{event_id: env.event_id, global_seq: env.global_seq})
     else
-      :error -> refuse(conn, {:error, :bad_request})
-      error -> refuse(conn, error)
+      {:error, _} = error -> refuse(conn, error)
+      _ -> refuse(conn, {:error, :bad_request})
     end
   end
 
-  def submit(conn, _), do: refuse(conn, {:error, :bad_request})
+  # Authenticate preparation as well as the final event. Otherwise anyone
+  # knowing the public governance key ID could evict an operator's live holds.
+  defp authorize(conn, key_id, chapter) do
+    with [header] <- get_req_header(conn, "authorization"),
+         {:ok, %{key_id: ^key_id} = request, signature} <-
+           Authorization.parse(header, conn.method, conn.request_path),
+         {:ok, chapters} <- Read.authorize(request, signature),
+         true <- chapter in chapters do
+      :ok
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  defp refuse(conn, {:error, :forbidden}),
+    do: conn |> put_status(403) |> json(%{error: "forbidden"})
 
   defp refuse(conn, {:error, :unknown_device}),
     do: conn |> put_status(404) |> json(%{error: "unknown_device"})
 
   defp refuse(conn, {:error, reason}),
-    do: conn |> put_status(422) |> json(%{error: inspect(reason)})
+    do:
+      conn
+      |> put_status(422)
+      |> json(%{error: if(is_atom(reason), do: Atom.to_string(reason), else: "not_admitted")})
 end
