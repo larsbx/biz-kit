@@ -95,7 +95,10 @@ Upgrading from `hosts.json`: move its array under `"hosts"` in `config.json`.
 
 Nothing that stops, disables, deletes or overwrites happens without a
 confirmation showing the **exact command** — the same string that then runs.
-Scripts default to dry run; `--apply` is a second, separately confirmed click.
+Scripts advertising `--apply` are first invoked with an explicit `--dry-run`;
+`--apply` is a separate confirmed click. Scripts without that split require a
+confirmation showing their exact process arguments before running. Scripts must
+honor their declared flags; the console does not sandbox their behavior.
 
 The backend enforces the part that matters rather than trusting the UI:
 

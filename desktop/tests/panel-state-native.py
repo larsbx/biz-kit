@@ -41,6 +41,16 @@ def run(binary, session_timeout=60):
         fixture = root / "app.json"
         original = '{"token":"original-native-fixture"}'
         fixture.write_text(original)
+        scripts = root / "scripts"
+        scripts.mkdir()
+        applied = root / "script-applied"
+        (scripts / "fixture.sh").write_text(
+            "#!/usr/bin/env bash\n# Native dry-run and apply fixture.\n"
+            "case \"$1\" in\n"
+            "--dry-run) echo 'dry-run confirmed';;\n"
+            f"--apply) echo applied > '{applied}'; echo 'apply confirmed';;\n"
+            "*) echo 'explicit flag required' >&2; exit 64;;\nesac\n"
+        )
         config = root / "config" / "biz-kit"
         config.mkdir(parents=True)
         (config / "config.json").write_text(json.dumps({
@@ -200,6 +210,23 @@ def run(binary, session_timeout=60):
                 assert fixture.read_text() == changed, "stale editor overwrote the saved file"
                 assert js("return window.panels[1].querySelector('textarea').value.includes('stale-draft')"), "stale refusal discarded the draft"
                 print("PASS: native reviewed save, exact backup, stale duplicate refusal and draft retention")
+                click('button[data-panel=scripts]')
+                until(lambda: js("return !!document.querySelector('[data-panel=scripts].tile .card')"), "actual script discovery")
+                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Dry run').click()")
+                until(lambda: js("return document.querySelector('[data-panel=scripts].tile').textContent.includes('dry-run confirmed') && document.querySelector('[data-panel=scripts].tile').textContent.includes('exit 0')"), "explicit dry-run output")
+                assert not applied.exists(), "dry run applied a change"
+                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
+                until(lambda: js("return !!document.querySelector('.modal')"), "apply confirmation")
+                assert js("return document.querySelector('.modal pre').textContent.includes('--apply')")
+                click('.modal .btn:not(.danger)')
+                assert not applied.exists(), "cancelled apply ran the script"
+                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
+                until(lambda: js("return !!document.querySelector('.modal')"), "second apply confirmation")
+                click('.modal .btn.danger')
+                until(lambda: applied.exists(), "confirmed real apply")
+                assert applied.read_text().strip() == "applied"
+                print("PASS: native script discovery, explicit dry-run, cancelled apply and confirmed apply")
+
 
             except Exception:
                 if session:
