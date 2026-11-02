@@ -1,4 +1,4 @@
-defmodule RestaurantCore.KitchenCheckoutSafetyTest do
+defmodule CommerceCore.KitchenCheckoutSafetyTest do
   use ExUnit.Case, async: true
   alias CommerceCore.{Checkout, Tax}
   alias RestaurantCore.Kitchen
@@ -32,7 +32,7 @@ defmodule RestaurantCore.KitchenCheckoutSafetyTest do
     basket = cart([line("Margherita", 1250, 2), line("Pepperoni", 1400, 1)])
 
     {:ok, state} =
-      Kitchen.new_checkout("shop", %{
+      Checkout.new(Kitchen.workflow(), "shop", %{
         "pickup" => basket,
         "other" => basket,
         "telegram" => basket,
@@ -196,7 +196,9 @@ defmodule RestaurantCore.KitchenCheckoutSafetyTest do
            ) == {:error, :forbidden}
 
     {:ok, blank} =
-      Kitchen.new_checkout("another-shop", %{"pickup" => cart([line("Pepperoni", 1400, 1)])})
+      Checkout.new(Kitchen.workflow(), "another-shop", %{
+        "pickup" => cart([line("Pepperoni", 1400, 1)])
+      })
 
     assert {:ok, _, _, :accepted} =
              Checkout.apply(blank, %{trusted("pickup") | merchant: "another-shop"}, cmd)

@@ -1,4 +1,4 @@
-defmodule CommerceCore.OrderLifecycleTest do
+defmodule OrderCore.LifecycleTest do
   @moduledoc """
   The merchant-neutral lifecycle over arbitrary production stages `s₁ … sₙ`
   (n ∈ 0..4). The kitchen instance is pinned against the legacy fixtures in
@@ -7,7 +7,7 @@ defmodule CommerceCore.OrderLifecycleTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias CommerceCore.OrderLifecycle, as: Core
+  alias OrderCore.Lifecycle, as: Core
 
   @fulfillments [:delivery, :pickup, :ship]
   @all_actions ~w(accept dispatch complete fail cancel)a

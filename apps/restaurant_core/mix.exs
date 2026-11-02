@@ -6,7 +6,7 @@ defmodule RestaurantCore.MixProject do
       app: :restaurant_core,
       version: "0.1.0",
       elixir: "~> 1.18",
-      deps: [{:commerce_core, in_umbrella: true}, {:stream_data, "~> 1.1", only: :test}]
+      deps: [{:order_core, in_umbrella: true}, {:stream_data, "~> 1.1", only: :test}]
     ] ++ umbrella_paths()
   end
 

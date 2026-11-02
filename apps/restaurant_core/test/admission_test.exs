@@ -51,6 +51,8 @@ defmodule RestaurantCore.AdmissionTest do
                 "discount_minor" => 0
               }
             ],
+            "subtotal_minor" => 2500,
+            "total_minor" => 2500,
             "adjustments" => %{
               "discount_total" => 0,
               "tax_total" => 0,
@@ -165,7 +167,13 @@ defmodule RestaurantCore.AdmissionTest do
     assert Admission.check(place(device("pos"), %{"fulfillment" => "ship"}), g) ==
              {:error, :invalid_checkout_command}
 
-    assert Admission.check(place(device("pos"), %{"currency" => "XYZ"}), g) ==
+    assert Admission.check(place(device("pos"), %{"currency" => "usd"}), g) ==
+             {:error, :invalid_checkout_command}
+
+    assert Admission.check(place(device("pos"), %{"total_minor" => -1}), g) ==
+             {:error, :invalid_checkout_command}
+
+    assert Admission.check(place(device("pos"), %{"lines" => [%{"unit_minor" => 1}]}), g) ==
              {:error, :invalid_checkout_command}
 
     assert Admission.check(place(device("pos"), %{"fulfillment" => "delivery"}), g) ==

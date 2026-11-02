@@ -1,6 +1,6 @@
 defmodule RestaurantCore.Kitchen do
   @moduledoc """
-  The restaurant order workflow: `CommerceCore.OrderLifecycle` with a kitchen's
+  The restaurant order workflow: `OrderCore.Lifecycle` with a kitchen's
   production stages, `start_preparing → preparing` and `mark_ready → ready`, taken
   by admin or staff, for delivery, pickup and dine-in.
 
@@ -8,13 +8,12 @@ defmodule RestaurantCore.Kitchen do
       ready → dispatched → completed | failed                     (delivery)
       {placed, accepted, preparing, ready} → cancelled
 
-  Checkout offers the same fulfillments (`new_checkout/2`), so every order it
-  places starts this lifecycle. Every rule — authorization first, scope, revision, idempotency, delivery
+  Placement and checkout take this workflow too, so every order they place
+  starts this lifecycle. Every rule — authorization first, scope, revision, idempotency, delivery
   ownership, reasons — is the core's; this layer only names the stages.
   """
 
-  alias CommerceCore.Checkout
-  alias CommerceCore.OrderLifecycle, as: Core
+  alias OrderCore.Lifecycle, as: Core
 
   @workflow Core.workflow!(%{
               fulfillments: [:delivery, :pickup, :dine_in],
@@ -33,7 +32,4 @@ defmodule RestaurantCore.Kitchen do
   def authorized?(trusted, action), do: Core.authorized?(@workflow, trusted, action)
   def apply(state, trusted, command), do: Core.apply(@workflow, state, trusted, command)
   def replay(fulfillment, history), do: Core.replay(@workflow, fulfillment, history)
-
-  @doc "A checkout projection offering the kitchen's fulfillments."
-  def new_checkout(merchant, carts), do: Checkout.new(@workflow, merchant, carts)
 end
