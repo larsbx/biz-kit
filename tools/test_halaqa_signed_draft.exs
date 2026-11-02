@@ -16,7 +16,7 @@ defmodule HalaqaSignedDraftTest do
 
     assert result["counts"] == %{
              "SIGNATURE_VALID_AUTHORITY_UNVERIFIED" => 8,
-             "REFUSED_SIGNED_TEST" => 40
+             "REFUSED_SIGNED_TEST" => 66
            }
 
     refute result["authority_verified"]

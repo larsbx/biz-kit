@@ -36,7 +36,7 @@ class HalaqaFederationPinTests(unittest.TestCase):
         self.assertEqual(result["counts"], {
             "FORMAT_ONLY_UNVERIFIED": 6, "REFUSED_FORMAT": 34})
         self.assertEqual(result["signed_experiment"]["counts"], {
-            "SIGNATURE_VALID_AUTHORITY_UNVERIFIED": 8, "REFUSED_SIGNED_TEST": 40})
+            "SIGNATURE_VALID_AUTHORITY_UNVERIFIED": 8, "REFUSED_SIGNED_TEST": 66})
         self.assertFalse(result["signed_experiment"]["authority_verified"])
 
     def test_source_or_fixture_change_refused_before_execution(self):
