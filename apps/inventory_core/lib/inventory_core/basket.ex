@@ -26,8 +26,15 @@ defmodule InventoryCore.Basket do
   ID within distinct per-item stock aggregates. A trusted admission host
   must additionally enforce globally unique basket IDs where required.
   """
-  @spec plan(map(), String.t(), String.t(), String.t(), pos_integer(), [requirement()],
-          non_neg_integer()) :: {:ok, map()} | {:error, term()}
+  @spec plan(
+          map(),
+          String.t(),
+          String.t(),
+          String.t(),
+          pos_integer(),
+          [requirement()],
+          non_neg_integer()
+        ) :: {:ok, map()} | {:error, term()}
   def plan(stocks, merchant, location, basket_id, count, requirements, expires_at_ms)
       when is_map(stocks) do
     with :ok <- identifiers(merchant, location, basket_id),

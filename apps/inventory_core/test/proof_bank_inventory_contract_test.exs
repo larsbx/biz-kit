@@ -33,6 +33,7 @@ defmodule InventoryCore.ProofBankArithmeticTest do
   test "single-location abstract reserve guard agrees with actual apply for bounded exact integers" do
     for on_hand <- 0..15, requested <- 1..16 do
       stock = initial_stock(on_hand)
+
       reserve =
         command(stock, "hold", :reserve, %{
           location: "shelf",
@@ -50,10 +51,12 @@ defmodule InventoryCore.ProofBankArithmeticTest do
         assert held.version == stock.version + 1
 
         for committed_qty <- 1..requested do
-          commit = command(held, "commit", :commit, %{
-            reservation_id: "hold-id",
-            quantity: committed_qty
-          })
+          commit =
+            command(held, "commit", :commit, %{
+              reservation_id: "hold-id",
+              quantity: committed_qty
+            })
+
           assert {:ok, committed, :accepted} = InventoryCore.apply(held, "merchant", commit)
           assert :ok = InventoryCore.check(committed, "merchant")
           assert committed.locations["shelf"] == on_hand - committed_qty
@@ -77,8 +80,12 @@ defmodule InventoryCore.ProofBankArithmeticTest do
 
     bad =
       command(stock, "over", :reserve, %{
-        location: "shelf", quantity: 3, reservation_id: "r1", expires_at_ms: 100
+        location: "shelf",
+        quantity: 3,
+        reservation_id: "r1",
+        expires_at_ms: 100
       })
+
     assert {:error, :insufficient_available} = InventoryCore.apply(stock, "merchant", bad)
 
     good = %{bad | quantity: 2}
