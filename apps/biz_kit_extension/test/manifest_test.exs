@@ -87,6 +87,9 @@ defmodule BizKit.Extension.ManifestTest do
     assert valid.id == "example"
     assert valid.activation == :manual
     assert {:ok, ^valid} = Manifest.validate(valid)
+
+    # JSON numeric 1.0 is accepted by the V1 check and must be canonicalized.
+    assert {:ok, ^valid} = Manifest.validate(%{Base.manifest() | contract_version: 1.0})
   end
 
   test "unknown fields, invalid versions, duplicate names and foreign writers refuse" do
