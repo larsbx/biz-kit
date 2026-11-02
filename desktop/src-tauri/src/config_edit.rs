@@ -48,7 +48,9 @@ fi
 cp -p -- "$p" "$work/new"
 printf '%s' "$content_b64" | base64 -d > "$work/new"
 metadata() {{ stat -c '%u:%g:%a' -- "$1" 2>/dev/null || stat -f '%u:%g:%Lp' "$1"; }}
-if [ "$(metadata "$p")" != "$(metadata "$work/new")" ]; then
+original_metadata=$(metadata "$p")
+staged_metadata=$(metadata "$work/new")
+if [ -z "$original_metadata" ] || [ "$original_metadata" != "$staged_metadata" ]; then
   echo 'Cannot preserve config owner, group and permissions. Save refused; use an account that can preserve them.' >&2; exit 73
 fi
 "#, quote(path))

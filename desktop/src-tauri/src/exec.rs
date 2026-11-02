@@ -83,6 +83,10 @@ pub async fn run(host: &str, script: &str) -> Result<Output, String> {
 /// than embedding them in argv. Drain both output pipes while writing input.
 pub async fn run_with_input(host: &str, script: &str, input: Vec<u8>) -> Result<Output, String> {
     let (argv, rendered) = plan_for(host, script)?;
+    spawn_with_input(argv, rendered, input).await
+}
+
+async fn spawn_with_input(argv: Vec<String>, rendered: String, input: Vec<u8>) -> Result<Output, String> {
     let mut child = command(&argv[0]).args(&argv[1..])
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
         .spawn().map_err(|e| format!("could not start {}: {e}", argv[0]))?;
@@ -140,4 +144,23 @@ mod tests {
         let p = plan(&host(None), "uptime");
         assert_eq!(p.is_ok(), cfg!(unix));
     }
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn large_stdin_is_streamed_while_output_is_drained() {
+        let argv = vec!["sh".into(), "-c".into(), "wc -c".into()];
+        let result = spawn_with_input(argv, "wc -c".into(), vec![b'x'; 1_048_576]).await.unwrap();
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout.trim(), "1048576");
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn early_refusal_keeps_the_host_error_instead_of_broken_pipe() {
+        let script = "printf 'refused input' >&2; exit 74";
+        let argv = vec!["sh".into(), "-c".into(), script.into()];
+        let result = spawn_with_input(argv, script.into(), vec![b'x'; 1_048_576]).await.unwrap();
+        assert_eq!(result.code, 74);
+        assert_eq!(result.stderr, "refused input");
+    }
+
 }
