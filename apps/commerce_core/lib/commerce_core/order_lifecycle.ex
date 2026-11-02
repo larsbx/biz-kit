@@ -5,6 +5,7 @@ defmodule CommerceCore.OrderLifecycle do
   `trusted` is host-verified context, never request JSON: merchant, order_id,
   principal, actor class, `allowed_actions` and `granted: true` for this order. The
   host must authenticate it, serialize admission and persist the candidate.
+  Home-bound candidates also require the exact `home_id` from `new/3`.
   Authorization precedes inspection of state, history, revision or errors.
   Delivery-owned steps require the separate FulfillmentCore/Dispatch handoff;
   even an administrator cannot dispatch a delivery through an order action.
@@ -12,6 +13,8 @@ defmodule CommerceCore.OrderLifecycle do
 
   `replay/2` checks the mathematical history only, not its provenance or grants.
   """
+
+  alias CommerceCore.Ownership
 
   @states ~w(placed accepted preparing ready dispatched completed cancelled failed)a
   @fulfillments ~w(delivery pickup dine_in)a
@@ -54,6 +57,15 @@ defmodule CommerceCore.OrderLifecycle do
   def next_states(_, _), do: []
   def legal?(fulfillment, from, to), do: to in next_states(fulfillment, from)
 
+  def new(%{home_id: _} = owner, id, fulfillment) do
+    with true <- Ownership.valid?(owner),
+         {:ok, state} <- new(owner.merchant, id, fulfillment) do
+      {:ok, Ownership.stamp(owner, state)}
+    else
+      _ -> {:error, :invalid_order}
+    end
+  end
+
   def new(merchant, id, fulfillment)
       when is_binary(merchant) and byte_size(merchant) > 0 and
              is_binary(id) and byte_size(id) > 0 and fulfillment in @fulfillments do
@@ -95,7 +107,14 @@ defmodule CommerceCore.OrderLifecycle do
     end
   end
 
-  defp scoped?(%{merchant: m, id: id}, %{merchant: m, order_id: id}), do: true
+  defp scoped?(%{home_id: _, id: id} = state, %{order_id: id} = trusted),
+    do: Ownership.check(state, trusted) == :ok
+
+  defp scoped?(%{home_id: _}, _), do: false
+
+  defp scoped?(%{merchant: m, id: id}, %{merchant: m, order_id: id} = trusted),
+    do: not Map.has_key?(trusted, :home_id)
+
   defp scoped?(_, _), do: false
 
   defp apply_authorized(

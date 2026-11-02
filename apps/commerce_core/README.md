@@ -79,3 +79,16 @@ Hawala gateway, followed by downstream persistence; this core exposes no
 financial-acceptance action.
 
 See [the fixture provenance, intentional differences and remaining migration gates](../../docs/architecture/2026-10-31-eatsbot-safety-compatibility.md).
+
+## Home ownership boundary
+
+For home-bound candidates use `%{home_id: "home", merchant: "organization"}`
+as the owner passed to `Catalog.new/1`, `Checkout.new/2` or
+`OrderLifecycle.new/3`. Catalog operations require that same owner; checkout and
+order grants additionally carry `home_id`. Cart snapshots carry owner and
+principal; `Checkout.fetch_cart/3` requires a per-cart `:cart_read` host grant.
+The host must authenticate and revalidate all context and serialize the one
+authoritative writer. Merchant-only constructors are compatibility candidates.
+
+See [Eatsbot ownership audit and PostgreSQL admission gates](../../docs/architecture/2026-11-01-eatsbot-home-isolation-boundary.md).
+These pure guards do not establish legacy resource tenancy or RLS.

@@ -53,6 +53,8 @@ jobs:
           apps/commerce_core/lib/commerce_core/checkout.ex
           apps/commerce_core/test/order_safety_test.exs
           apps/commerce_core/test/checkout_safety_test.exs
+          apps/commerce_core/lib/commerce_core/ownership.ex
+          apps/commerce_core/test/home_isolation_test.exs
           apps/commerce_core/lib/commerce_core/catalog.ex
           apps/commerce_core/lib/commerce_core/catalog_wire.ex
           apps/commerce_core/test/catalog_test.exs
@@ -63,3 +65,10 @@ jobs:
       - name: Test CommerceCore independently of a database
         working-directory: apps/commerce_core
         run: mix test --no-start
+      - name: Test isolated Eatsbot source bridge without starting the legacy runtime
+        working-directory: apps/commerce_core
+        run: >-
+          MIX_ENV=test mix run --no-start --no-compile
+          -r test/test_helper.exs
+          -r ../eatsbot_core/lib/products/catalog_bridge.ex
+          -e 'Code.require_file("../eatsbot/test/eatsbot/products/catalog_bridge_test.exs")'
