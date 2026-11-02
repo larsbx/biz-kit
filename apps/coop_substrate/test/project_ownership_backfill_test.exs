@@ -20,6 +20,7 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
   end
 
   defp o, do: Log.gate().orchestration
+
   defp sign(batch, gov),
     do: Enum.map(batch.commands, &Crypto.sign(&1.signing_bytes, gov.seed))
 
@@ -28,12 +29,16 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
   test "ownerless legacy project is readable but not operational until backfilled", w do
     assert [%{project_id: "project-1", owner: nil}] =
              ProjectOwnership.ownerless("chapter-genesis")
+
     assert ProjectOwnership.ownerless("unrelated-chapter") == []
     assert Projects.accepts_work(o(), @scope) == {:error, :project_has_no_owner}
 
     assert {:ok, batch} =
              ProjectOwnership.prepare_backfill(
-               @scope, "alice", w.gov.signer.key_id, nil
+               @scope,
+               "alice",
+               w.gov.signer.key_id,
+               nil
              )
 
     assert Enum.map(batch.commands, & &1.type) == [
@@ -42,6 +47,7 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
            ]
 
     before = Log.head()
+
     assert {:ok, appended} =
              ProjectOwnership.backfill(@scope, "alice", batch.id, sign(batch, w.gov))
 
@@ -52,17 +58,21 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
     assert Projects.accepts_work(o(), @scope) == :ok
     assert Projects.violations(o()) == []
     assert ProjectOwnership.ownerless("chapter-genesis") == []
+
     assert ProjectOwnership.prepare_backfill(@scope, "alice", w.gov.signer.key_id, nil) ==
              {:error, :project_already_owned}
   end
 
   test "ungranted human needs a real operator device in the same batch", w do
     key = new_member("operator")
+
     assert ProjectOwnership.prepare_backfill(@scope, "bob", w.gov.signer.key_id, nil) ==
              {:error, :operator_device_required}
 
     assert ProjectOwnership.prepare_backfill(
-             @scope, "bob", w.gov.signer.key_id,
+             @scope,
+             "bob",
+             w.gov.signer.key_id,
              %{key_id: key.signer.key_id, pubkey: <<0>>}
            ) == {:error, :operator_device_required}
 
@@ -83,12 +93,19 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
   end
 
   test "agent principals are refused; no silent conversion to human", w do
-    {:ok, [_]} = Log.append(signed_event(w.gov, "TaskPrincipalKindDeclaredV1", %{
-      "principal_id" => "bot", "kind" => "agent"
-    }))
+    {:ok, [_]} =
+      Log.append(
+        signed_event(w.gov, "TaskPrincipalKindDeclaredV1", %{
+          "principal_id" => "bot",
+          "kind" => "agent"
+        })
+      )
 
     assert ProjectOwnership.prepare_backfill(
-             @scope, "bot", w.gov.signer.key_id, device(new_member("operator"))
+             @scope,
+             "bot",
+             w.gov.signer.key_id,
+             device(new_member("operator"))
            ) == {:error, :principal_not_human}
 
     assert Projects.owner(o(), @scope) == nil
@@ -101,7 +118,8 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
     {:ok, _} =
       Log.append([
         signed_event(w.gov, "TaskPrincipalKindDeclaredV1", %{
-          "principal_id" => "alice", "kind" => "human"
+          "principal_id" => "alice",
+          "kind" => "human"
         }),
         signed_event(w.gov, "TaskProjectOwnerAssignedV1", %{
           "tenant_id" => "tenant-1",
@@ -111,13 +129,16 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
       ])
 
     head = Log.head()
+
     assert ProjectOwnership.backfill(@scope, "alice", held.id, sign(held, w.gov)) ==
              {:error, :backfill_changed}
+
     assert Log.head() == head
   end
 
   test "a grant added after preparation invalidates stale backfill", w do
     bob = new_member("operator")
+
     {:ok, held} =
       ProjectOwnership.prepare_backfill(@scope, "bob", w.gov.signer.key_id, device(bob))
 
@@ -126,20 +147,27 @@ defmodule CoopSubstrate.ProjectOwnershipBackfillTest do
 
     assert ProjectOwnership.backfill(@scope, "bob", held.id, sign(held, w.gov)) ==
              {:error, :backfill_changed}
+
     assert Log.head() == head
   end
 
   test "foreign scope, unknown project and unknown governance key are refused", w do
     assert ProjectOwnership.prepare_backfill(
-             {"other-chapter", "tenant-1", "project-1"}, "alice", w.gov.signer.key_id
+             {"other-chapter", "tenant-1", "project-1"},
+             "alice",
+             w.gov.signer.key_id
            ) == {:error, :unknown_legacy_project}
 
     assert ProjectOwnership.prepare_backfill(
-             {"chapter-genesis", "tenant-2", "project-1"}, "alice", w.gov.signer.key_id
+             {"chapter-genesis", "tenant-2", "project-1"},
+             "alice",
+             w.gov.signer.key_id
            ) == {:error, :unknown_legacy_project}
 
     assert ProjectOwnership.prepare_backfill(
-             @scope, "alice", "unknown-governance-key"
+             @scope,
+             "alice",
+             "unknown-governance-key"
            ) == {:error, :unknown_governance_key}
   end
 end
