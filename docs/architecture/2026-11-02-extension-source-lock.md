@@ -14,6 +14,8 @@ The fingerprint is domain-separated and length-delimited, sorting validated
 map keys and top-level unordered descriptor collections. A fixed SchoolOps-like
 fixture has digest `602de6d20b186c21a3ebe76523935e5ffdfcf378d142db3cbe5cbeb53adf539f`,
 independently computed using Python's SHA-256 over the specified tagged bytes.
+The validator canonicalizes an accepted numeric `contract_version: 1.0` to
+integer 1 before hashing, preserving the previously accepted V1 semantics.
 This is a local Elixir V1 encoder, **not** a JSON canonicalization standard.
 
 A source SHA is not itself an attestation that BEAM bytecode matches a Git tree:
