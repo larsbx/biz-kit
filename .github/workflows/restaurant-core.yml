@@ -39,6 +39,8 @@ jobs:
           apps/restaurant_core/mix.exs
           apps/restaurant_core/lib/restaurant_core/kitchen.ex
           apps/restaurant_core/test/kitchen_safety_test.exs
+          apps/restaurant_core/test/kitchen_checkout_safety_test.exs
+          apps/restaurant_core/test/test_helper.exs
       - name: Kitchen conformance against the pinned legacy fixtures
         working-directory: apps/restaurant_core
         run: mix test --no-start

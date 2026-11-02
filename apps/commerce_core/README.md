@@ -71,15 +71,16 @@ completed | failed` for delivery, cancellable until hand-off). The core owns
 acceptance, hand-off, cancellation, authorization and delivery ownership; a
 layer only names its stages. The restaurant layer is
 [`RestaurantCore.Kitchen`](../restaurant_core/README.md), which carries the
-pinned legacy order fixtures. `test/order_lifecycle_test.exs` proves the rules
+pinned legacy order and checkout fixtures. `test/order_lifecycle_test.exs` proves the rules
 for arbitrary stage lists.
 Host-verified operation grants precede all protected state/revision/history
 inspection. `CommerceCore.Checkout` produces immutable priced order candidates,
 one per cart, with channel-scoped idempotency and a delivery-request marker.
 Both require serialized authenticated host admission; neither is a database or
 production writer. Checkout creates no tracking secrets or transport record.
-Checkout still names the kitchen's non-delivery fulfillments (`pickup`,
-`dine_in`); taking them from the workflow is a later slice.
+Checkout offers exactly the workflow's fulfillments (`new/3`), so every order
+it places is one the lifecycle can start; `test/checkout_test.exs` proves that
+for every fulfillment set.
 
 Checkout and lifecycle completion do not accept money. Every checkout candidate
 is `financial_status: :unconfirmed`, including duplicate requests containing a
