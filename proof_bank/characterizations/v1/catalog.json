@@ -1,6 +1,6 @@
 {
   "schema": "biz-kit.proof-bank.characterizations.v1",
-  "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+  "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
   "source_repo": "larsbx/biz-kit",
   "method": "source and test assertions inspected; not an executed conformance run",
   "records": [
@@ -8,7 +8,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "agent_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Agent-neutral profiles, launch/poll/cancel ports, preflight",
       "intended_features": [
@@ -40,7 +40,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "agent_ops_store",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Agent coordinator, tool proxy, workers, event replay and durable cursor",
       "intended_features": [
@@ -73,7 +73,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "barter_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Exact multi-party intent matching, consortium brokerage and exchange previews",
       "intended_features": [
@@ -104,7 +104,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz_kit_cluster",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Distributed singleton ownership, failover and recovery after partitions",
       "intended_features": [
@@ -133,7 +133,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz_kit_composition",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure catalog/stock/price/fulfillment and marketing candidate previews",
       "intended_features": [
@@ -163,7 +163,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz_kit_extension",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Portable ExtensionV1 manifest validation, dependency ordering, inert activation planning",
       "intended_features": [
@@ -195,7 +195,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz_kit_identity",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Principals, provider binding, persistent native sessions and revocation",
       "intended_features": [
@@ -227,7 +227,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz-kit",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "platform",
       "intended_purpose": "Umbrella of composable business domains, with signed admission and extension governance",
       "intended_features": [
@@ -257,7 +257,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "commerce_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Exact Money-valued pricing, rounded tax, catalog and checkout proposals",
       "intended_features": [
@@ -289,7 +289,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "coop_substrate",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Canonical signed append-only business-event ledger, replay and custody",
       "intended_features": [
@@ -320,7 +320,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "dispatch",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "hosted",
       "intended_purpose": "Ash/Phoenix transport authority: scoped roles, fleet, operations board, devices and status events",
       "intended_features": [
@@ -353,7 +353,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "dispatch_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure last-mile states, producer evidence, cancellation and legacy edge characterization",
       "intended_features": [
@@ -385,7 +385,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "eatsbot",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "transitional",
       "intended_purpose": "Legacy Phoenix restaurant orders, carts, deliveries and marketing",
       "intended_features": [
@@ -417,7 +417,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "eatsbot_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "transitional",
       "intended_purpose": "Legacy Ash products/variants/options, carts, orders and deliveries",
       "intended_features": [
@@ -449,7 +449,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "eatsbot_extension_kafka",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "transitional",
       "intended_purpose": "Kafka publication, ack mapping and refusal of ambiguous retry outcomes",
       "intended_features": [
@@ -480,7 +480,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "eatsbot_extension_prometheus",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "transitional",
       "intended_purpose": "PromEx metrics instrumentation and legacy supervisor endpoint",
       "intended_features": [
@@ -509,7 +509,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "eatsbot_extension_telegram_bot",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "transitional",
       "intended_purpose": "Telegram webhook/controller, conversation chains, legacy marketing bridge",
       "intended_features": [
@@ -540,7 +540,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "federation_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure ActivityStreams marketplace and pending subscription wire contracts",
       "intended_features": [
@@ -570,7 +570,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "federation_service",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "hosted",
       "intended_purpose": "Read-only HTTPS explicit-peer discovery, inbox signature checking and durable projection",
       "intended_features": [
@@ -601,7 +601,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "fulfillment_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure commerce-to-transport request, accept/reject, cancellation and proof protocol",
       "intended_features": [
@@ -633,7 +633,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "group_buy_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Member pledges, volume-tier group purchases, binding threshold and escrow-shape previews",
       "intended_features": [
@@ -665,7 +665,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "hawala_capability",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "test_fixture",
       "intended_purpose": "Test-only external Hawala cross-authority replay, journal failure and signed test-port contracts",
       "intended_features": [
@@ -696,7 +696,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "inventory_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure receipt/reservation/release/transfer policy, menu availability and basket preflight",
       "intended_features": [
@@ -719,7 +719,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/inventory_core/lib/inventory_core.ex": "9af124663dcd329861e8ae9037a856e5875c2b4b",
-        "apps/inventory_core/lib/inventory_core/basket.ex": "457d2b106f4b03411d932b34166df1e77c7494f2",
+        "apps/inventory_core/lib/inventory_core/basket.ex": "aebf383bc08699958a231884a5fc44bf55ab478b",
         "apps/inventory_core/test/inventory_core_test.exs": "47bf89ac823c8e7b19bccbf475da1bddbdda0685"
       }
     },
@@ -727,7 +727,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "keel",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Temporal organization/ownership/roles, exact decision quorums and invariant checks",
       "intended_features": [
@@ -758,7 +758,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "marketing_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure confirmed-delivery attribution, touchpoint QR and one-use redemption",
       "intended_features": [
@@ -789,7 +789,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "proof_bank_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Strict interview→requirement→obligation traceability and independent engine ports",
       "intended_features": [
@@ -819,7 +819,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "sales_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "capability",
       "intended_purpose": "Pure CRM pipeline, scoped marketing consent, revocation and candidate audience planning",
       "intended_features": [
@@ -851,7 +851,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "school_ops",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "hosted",
       "intended_purpose": "Grade 2 curriculum catalog and place-value staff readiness TaskCore proposals",
       "intended_features": [
@@ -881,7 +881,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "spruce_goose",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "transitional_authority",
       "intended_purpose": "Postgres/Ash operational orchestration with actor grants, CLI authority and recovery markers",
       "intended_features": [
@@ -912,7 +912,7 @@
       "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "task_core",
       "source_repo": "larsbx/biz-kit",
-      "source_sha": "a98489111a74b395e97f797f0b21e7f53cd95997",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
       "category": "foundation",
       "intended_purpose": "Pure task DAG, lifecycle/DoD/evidence, and signed agent-intent logic",
       "intended_features": [
