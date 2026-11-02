@@ -84,36 +84,104 @@ defmodule CoopSubstrate.Offboarding do
   """
   @spec prepare_chapter(String.t(), String.t(), String.t()) ::
           {:ok, %{id: String.t(), commands: [map()], expires_at: integer()}} | {:error, term()}
-  def prepare_chapter(principal, chapter, governance_key_id) do
-    commands = chapter_commands(Log.gate(), principal, chapter, governance_key_id)
+  def prepare_chapter(principal, chapter, governance_key_id),
+    do: prepare_chapter(principal, chapter, governance_key_id, %{})
 
-    with true <- commands != [] or {:error, :nothing_to_offboard},
+  @doc """
+  Prepare chapter-wide offboarding with atomic project-owner succession.
+
+  `successors` maps `{tenant_id, project_id}` to a replacement human
+  principal. It must cover **exactly** the projects owned by the departing
+  principal; other holdings require no successor. Each successor must hold
+  an eligible operator grant at admission. Ownership assignment is part of
+  the same signed, guarded batch, before any governance-key revocations.
+  """
+  @spec prepare_chapter(String.t(), String.t(), String.t(), map()) ::
+          {:ok, %{id: String.t(), commands: [map()], expires_at: integer()}} | {:error, term()}
+  def prepare_chapter(principal, chapter, governance_key_id, successors)
+      when is_map(successors) do
+    with {:ok, [_ | _] = commands} <-
+           chapter_commands(Log.gate(), principal, chapter, governance_key_id, successors),
          {:ok, signer} <- Commands.governance_signer(chapter, governance_key_id) do
       Commands.hold_batch({:chapter_offboarding, principal}, chapter, commands, signer)
+    else
+      {:ok, []} -> {:error, :nothing_to_offboard}
+      error -> error
     end
   end
 
-  # Everything to end, against the membership projection `gate`: an
-  # offboarding per project the principal holds something in, then their
-  # keys, the signer's own last, so every command before it is signed by a
-  # key still declared.
-  defp chapter_commands(gate, principal, chapter, signer_key_id) do
-    offboardings =
-      for p <- CoopSubstrate.Administrators.projects(gate.orchestration, chapter),
-          principal in p.people,
-          do:
-            {"TaskPrincipalOffboardedV1",
-             %{
-               "tenant_id" => p.tenant_id,
-               "project_id" => p.project_id,
-               "principal_id" => principal
-             }}
+  def prepare_chapter(_principal, _chapter, _governance_key_id, _successors),
+    do: {:error, :invalid_successors}
 
-    revocations =
-      for key_id <- Enum.sort_by(keys(gate, principal, chapter), &(&1 == signer_key_id)),
-          do: {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key_id}}
+  # The ledger's canonical project owner, not an HTTP-provided label,
+  # determines which projects require succession. The project list includes
+  # grants even if they are inactive, and an eligible owner has an active
+  # operator grant, so every owned project appears in this listing.
+  defp chapter_commands(gate, principal, chapter, signer_key_id, successors) do
+    projects = CoopSubstrate.Administrators.projects(gate.orchestration, chapter)
 
-    offboardings ++ revocations
+    owned =
+      projects
+      |> Enum.filter(fn p ->
+        TaskCore.Projects.owner(
+          gate.orchestration,
+          {chapter, p.tenant_id, p.project_id}
+        ) == principal
+      end)
+      |> Enum.map(&{&1.tenant_id, &1.project_id})
+      |> MapSet.new()
+
+    with :ok <- require_successors(owned, successors) do
+      offboardings =
+        for p <- projects,
+            principal in p.people,
+            do:
+              {"TaskPrincipalOffboardedV1",
+               %{
+                 "tenant_id" => p.tenant_id,
+                 "project_id" => p.project_id,
+                 "principal_id" => principal
+               }}
+
+      assignments =
+        for p <- projects,
+            MapSet.member?(owned, {p.tenant_id, p.project_id}),
+            do:
+              {"TaskProjectOwnerAssignedV1",
+               %{
+                 "tenant_id" => p.tenant_id,
+                 "project_id" => p.project_id,
+                 "principal_id" => successors[{p.tenant_id, p.project_id}]
+               }}
+
+      revocations =
+        for key_id <- Enum.sort_by(keys(gate, principal, chapter), &(&1 == signer_key_id)),
+            do: {"RoleKeyRevoked", %{"role" => "governance", "key_id" => key_id}}
+
+      {:ok, offboardings ++ assignments ++ revocations}
+    end
+  end
+
+  defp require_successors(owned, successors) do
+    selected = MapSet.new(Map.keys(successors))
+    missing = MapSet.difference(owned, selected)
+    extra = MapSet.difference(selected, owned)
+
+    cond do
+      MapSet.size(missing) > 0 ->
+        {:error, {:successor_required, missing |> MapSet.to_list() |> Enum.sort()}}
+
+      MapSet.size(extra) > 0 ->
+        {:error, :unexpected_successor_project}
+
+      Enum.any?(successors, fn {_scope, successor} ->
+        not is_binary(successor) or String.trim(successor) == ""
+      end) ->
+        {:error, :invalid_successors}
+
+      true ->
+        :ok
+    end
   end
 
   @doc """
@@ -122,9 +190,20 @@ defmodule CoopSubstrate.Offboarding do
   or key added while it was held refuses it whole (`:holdings_changed`).
   """
   def unchanged(gate, principal, chapter, signer_key_id, commands) do
-    if chapter_commands(gate, principal, chapter, signer_key_id) == commands,
-      do: :ok,
-      else: {:error, :holdings_changed}
+    # Decode the successor selections from the signed commands and recompute
+    # the entire expected batch from *current* ledger state. A changed owner,
+    # new holding, or changed governance key invalidates the held batch.
+    successors =
+      for {"TaskProjectOwnerAssignedV1",
+           %{"tenant_id" => tenant, "project_id" => project, "principal_id" => next}} <-
+            commands,
+          into: %{},
+          do: {{tenant, project}, next}
+
+    case chapter_commands(gate, principal, chapter, signer_key_id, successors) do
+      {:ok, ^commands} -> :ok
+      _ -> {:error, :holdings_changed}
+    end
   end
 
   @doc """
