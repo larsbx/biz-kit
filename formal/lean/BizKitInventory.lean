@@ -50,7 +50,9 @@ def release (s : Stock) (q : Nat) : Option Stock :=
     some { s with held := s.held - q }
   else none
 
-theorem empty_safe : Safe empty := by decide
+theorem empty_safe : Safe empty := by
+  change (0 : Nat) ≤ 0
+  omega
 
 theorem receive_preserves (s : Stock) (q : Nat) (hs : Safe s) :
     Safe (receive s q) := by
@@ -101,10 +103,10 @@ inductive Step : Stock → Stock → Prop where
 theorem step_preserves {s t : Stock} (h : Step s t) (hs : Safe s) :
     Safe t := by
   cases h with
-  | receive s q => exact receive_preserves s q hs
-  | reserve s t q success => exact reserve_preserves s t q hs success
-  | commit s t q success => exact commit_preserves s t q hs success
-  | release s t q success => exact release_preserves s t q hs success
+  | receive q => exact receive_preserves _ q hs
+  | reserve q success => exact reserve_preserves _ _ q hs success
+  | commit q success => exact commit_preserves _ _ q hs success
+  | release q success => exact release_preserves _ _ q hs success
 
 inductive Reachable : Stock → Prop where
   | empty : Reachable BizKitInventory.empty
@@ -120,7 +122,9 @@ def uncheckedReserve (s : Stock) (q : Nat) : Stock :=
   { s with held := s.held + q }
 
 theorem unchecked_reserve_counterexample :
-    ¬ Safe (uncheckedReserve ⟨1, 0⟩ 2) := by decide
+    ¬ Safe (uncheckedReserve ⟨1, 0⟩ 2) := by
+  change ¬ (2 : Nat) ≤ 1
+  omega
 
 /-- Representative boundary fixtures; the Elixir test exercises wider ranges. -/
 example : reserve ⟨5, 0⟩ 6 = none := by decide
