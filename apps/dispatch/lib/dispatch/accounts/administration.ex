@@ -34,7 +34,7 @@ defmodule Dispatch.Accounts.Administration do
   import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access
-  alias Dispatch.Access.{Actor, RoleProfile}
+  alias Dispatch.Access.{Actor, Driving, RoleProfile}
   alias Dispatch.Accounts.{Participant, RoleAssignment, RoleDefinition}
   alias Dispatch.Audit.AuditEvent
   alias Dispatch.Identity.PrincipalResolution
@@ -48,6 +48,7 @@ defmodule Dispatch.Accounts.Administration do
           | :step_up_required
           | :own_assignment
           | :last_administrator
+          | :equipment_not_checked_in
           | :already_granted
           | :stale
 
@@ -105,7 +106,8 @@ defmodule Dispatch.Accounts.Administration do
       with :ok <- recent(authenticated_at, actor.at),
            {:ok, assignment} <- held(actor, assignment_id),
            :ok <- current(assignment, expected_version),
-           :ok <- not_last_administrator(actor, assignment) do
+           :ok <- not_last_administrator(actor, assignment),
+           :ok <- equipment_checked_in(actor, assignment) do
         revoked =
           assignment
           |> Ash.Changeset.for_update(:revoke, %{})
@@ -159,6 +161,20 @@ defmodule Dispatch.Accounts.Administration do
     if administers?.(assignment) and others == [],
       do: {:error, :last_administrator},
       else: :ok
+  end
+
+  # Owner rule (2026-11-02): a driving role ends only once the driver's
+  # equipment is checked in, unless another driving role of theirs stays in
+  # force. `Driving` documents how this serializes with trip activation.
+  defp equipment_checked_in(actor, assignment) do
+    holder = assignment.principal_id
+    org = organization(actor)
+
+    if Driving.drives?(assignment, actor.at) and
+         Driving.equipment_out?(actor.tenant_id, org, holder) and
+         Enum.all?(Driving.roles(actor.tenant_id, org, holder), &(&1.id == assignment.id)),
+       do: {:error, :equipment_not_checked_in},
+       else: :ok
   end
 
   defp participants(actor) do
