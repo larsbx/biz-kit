@@ -1,0 +1,44 @@
+name: RestaurantCore kitchen layer
+
+on:
+  pull_request:
+    paths:
+      - 'apps/restaurant_core/**'
+      - 'apps/commerce_core/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'config/**'
+      - '.github/workflows/restaurant-core.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  restaurant-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile kitchen layer
+        working-directory: apps/restaurant_core
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Verify format
+        run: >-
+          MIX_ENV=test mix format --check-formatted
+          apps/restaurant_core/mix.exs
+          apps/restaurant_core/lib/restaurant_core/kitchen.ex
+          apps/restaurant_core/test/kitchen_safety_test.exs
+      - name: Kitchen conformance against the pinned legacy fixtures
+        working-directory: apps/restaurant_core
+        run: mix test --no-start

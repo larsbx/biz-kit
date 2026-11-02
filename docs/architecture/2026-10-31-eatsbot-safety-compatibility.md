@@ -21,6 +21,12 @@ the golden outputs to supply expected input prices.
 | order_actions | 714 | `c739be36e2c6136077a6e3dd81d242ed2d7fd7189705a4fbcfac680e9e935d26` | Reachability paths, successful next states, operation-role policy and explicit refusal mapping |
 | checkout | 11 | `75ab2f968d726b2cdb570490072a5bff4829e92bfca1ec4427ef16b88c3465f8` | Commercial snapshots, prices, cart completion, delivery-request cardinality, repeats and refusal reasons |
 
+The three order fixtures pin the kitchen instance of the merchant-neutral
+order core: they live in `apps/restaurant_core/test` and run through
+`RestaurantCore.Kitchen`, which binds `CommerceCore.OrderLifecycle` to the
+`preparing`/`ready` stages. The checkout fixture stays in CommerceCore. The
+core's own properties cover arbitrary stage lists.
+
 The companion FulfillmentCore coupling tests cover all 307 coupling records;
 see its README for the independent package and exact safety differences.
 Pricing's 314 and DispatchCore's 132 legacy-delivery records remain under
@@ -77,7 +83,9 @@ MIX_ENV=test mix compile --warnings-as-errors
 mix test --no-start --seed 0
 ```
 
-Repeat from `apps/fulfillment_core` for the companion coupling package. The
+Repeat from `apps/restaurant_core` for the kitchen order fixtures (umbrella
+only: it depends on CommerceCore in the umbrella) and from
+`apps/fulfillment_core` for the companion coupling package. The
 existing portable OTP 26 workflow also consumes both packages independently.
 New source/tests are included in the focused formatting workflows.
 
