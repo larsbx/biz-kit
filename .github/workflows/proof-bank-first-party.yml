@@ -1,0 +1,37 @@
+name: Proof Bank — first-party portfolio audit
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**/mix.exs'
+      - 'apps/proof_bank_core/**'
+      - 'docs/architecture/2026-11-01-proof-bank-first-party.md'
+      - '.github/workflows/proof-bank-first-party.yml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  first-party-portfolio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile, format and run portfolio tests
+        working-directory: apps/proof_bank_core
+        run: |
+          set -eu
+          mix format --check-formatted
+          mix compile --warnings-as-errors
+          mix test --no-start
+      - name: Refuse app inventory drift and print conservative status
+        working-directory: apps/proof_bank_core
+        run: |
+          set -eu
+          mix run -e 'case ProofBankCore.Portfolio.audit_repo("../..") do {:ok, summary} -> IO.inspect(summary, label: "draft portfolio"); {:error, error} -> IO.inspect(error, label: "inventory error"); System.halt(1) end'
