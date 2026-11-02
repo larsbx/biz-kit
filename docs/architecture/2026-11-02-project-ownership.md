@@ -173,3 +173,33 @@ app's Elixir requirement relaxed, and in CI on Elixir 1.19/OTP 27. CoopSubstrate
 and SpruceGoose could not be compiled in the authoring sandbox (Hex
 unreachable); their suites and the release smoke run in the Consolidation
 workflow, and SchoolOps in its own.
+
+
+## Browser administration surface (follow-up PR)
+
+The existing signed-in SpruceGoose `/app` administration section now offers
+two client-side operations, available only to a browser already enrolled with a
+chapter governance key. It does **not** store governance seeds or replace the
+TaskCore admission gate:
+
+* **Chapter offboarding with succession.** When a principal owns projects,
+  the administrator must enter an eligible human successor for every owned
+  `{tenant, project}`. The browser constructs the expected offboarding,
+  owner assignment, and governance-key revocation commands before preparation,
+  verifies **every decoded signed core** against the exact intent, confirms
+  the complete batch, signs on the browser's non-extractable Ed25519 key, and
+  submits all signatures atomically.
+* **Legacy backfill.** An authorized, governance-signed chapter read lists
+  existing ownerless projects. The browser accepts a human principal and, if
+  required, that principal's existing operator-device key ID and public key
+  (the ID must match the public key). It validates the optional human-kind
+  declaration, optional operator grant, and exact owner assignment against
+  the prepared canonical commands before signing. An owner assignment itself
+  never creates permission or proves personhood.
+
+A missing/agent successor, stale project owner, revoked operator grant,
+duplicate selection, wrong chapter/tenant, or changed command is refused
+either by the client pre-signing predicate or by authoritative ledger admission.
+The interface does not synthesize a replacement principal or private device
+key. A targeted browser smoke of both flows under actual Chrome remains
+necessary before claiming production-ready administration.
