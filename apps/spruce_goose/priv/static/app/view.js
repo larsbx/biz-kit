@@ -266,20 +266,80 @@ export const projectsHeld = (found, [chapter, tenant, project]) =>
     .map((p) => ({ ...p, here: p.tenant_id === tenant && p.project_id === project }))
     .sort((a, b) => b.here - a.here);
 
-// Offboarding `found` (`GET /api/v1/principals/:id`) from a whole chapter
-// (docs/architecture/2026-10-19-chapter-offboarding.md): each project they
-// hold something in, and each of their administrator keys there.
-export const chapterOffboarding = (found, chapter) => [
-  ...found.projects
-    .filter((p) => p.chapter_id === chapter)
-    .map((p) => ({
+// Complete successor selections are mandatory for every project the
+// departing principal owns. Every other holding is offboarded but does not
+// need to be reassigned. Never derive a successor from a grant or omit a
+// project just because it has no tasks.
+export function chapterOffboarding(found, chapter, successors = []) {
+  const projects = found.projects.filter((p) => p.chapter_id === chapter);
+  const owned = projects.filter((p) => p.accountable_owner === found.principal_id || p.successor_required);
+  const scopeKey = (p) => JSON.stringify([p.tenant_id, p.project_id]);
+  const selected = new Map();
+
+  for (const p of successors) {
+    if (!p || typeof p.principal_id !== "string" || !p.principal_id.trim())
+      throw new Error("Every successor must name an accountable human principal");
+    const key = scopeKey(p);
+    if (selected.has(key)) throw new Error("Duplicate project successor selection");
+    selected.set(key, p.principal_id.trim());
+  }
+
+  if (selected.size !== owned.length || owned.some((p) => !selected.has(scopeKey(p))))
+    throw new Error("Choose exactly one successor for every project this principal owns");
+
+  return [
+    ...projects.map((p) => ({
       type: "TaskPrincipalOffboardedV1",
       payload: { tenant_id: p.tenant_id, project_id: p.project_id, principal_id: found.principal_id },
     })),
-  ...found.keys
-    .filter((k) => k.chapter_id === chapter)
-    .map((k) => ({ type: "RoleKeyRevoked", payload: { role: "governance", key_id: k.key_id } })),
-];
+    ...owned.map((p) => ({
+      type: "TaskProjectOwnerAssignedV1",
+      payload: { tenant_id: p.tenant_id, project_id: p.project_id, principal_id: selected.get(scopeKey(p)) },
+    })),
+    ...found.keys
+      .filter((k) => k.chapter_id === chapter)
+      .map((k) => ({ type: "RoleKeyRevoked", payload: { role: "governance", key_id: k.key_id } })),
+  ];
+}
+
+// The only acceptable owner-backfill events. The ledger chooses whether a
+// human-kind attestation is needed, but may never insert an agent declaration
+// or an unexpected grant. The browser refuses any batch outside this shape.
+// `operatorDevice` is optional and, when supplied, contains the exact
+// pre-existing key and its verified 32-byte public key (hex in canonical
+// CBOR's byte-string representation).
+export function ownerBackfillCommands({ tenant, project, principal, operatorDevice }, types) {
+  if (!Array.isArray(types) || types.length < 1)
+    throw new Error("No backfill commands were prepared");
+
+  const expected = [
+    ...(types[0] === "TaskPrincipalKindDeclaredV1" ? ["TaskPrincipalKindDeclaredV1"] : []),
+    ...(operatorDevice ? ["TaskOperatorGrantedV1"] : []),
+    "TaskProjectOwnerAssignedV1",
+  ];
+
+  if (types.length !== expected.length || types.some((t, i) => t !== expected[i]))
+    throw new Error("The server prepared unexpected backfill commands");
+
+  const scope = { tenant_id: tenant, project_id: project };
+  return [
+    ...(expected.includes("TaskPrincipalKindDeclaredV1")
+      ? [{ type: "TaskPrincipalKindDeclaredV1", payload: { principal_id: principal, kind: "human" } }]
+      : []),
+    ...(operatorDevice
+      ? [{
+          type: "TaskOperatorGrantedV1",
+          payload: {
+            ...scope,
+            principal_id: principal,
+            key_id: operatorDevice.key_id,
+            pubkey: { __bytes__: operatorDevice.pubkey_hex },
+          },
+        }]
+      : []),
+    { type: "TaskProjectOwnerAssignedV1", payload: { ...scope, principal_id: principal } },
+  ];
+}
 
 // -- own devices (docs/architecture/2026-10-19-own-devices.md) ------------------------
 
