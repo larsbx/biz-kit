@@ -50,3 +50,13 @@ process activation, durable governance authorization, or a command/ledger gate.
 The OTP app does not automatically start the Registry, and nothing here runs
 SchoolOps or Dispatch in the background. See the
 [registry-stage ADR](../../docs/architecture/2026-11-01-extension-registry-stage.md).
+
+## Upgrade compatibility review (portable)
+
+`BizKit.Extension.Upgrade.assess/2` compares canonical V1 manifests
+without executing domain code. It refuses same-version changes, downgrades,
+major version changes and removed/changed existing command, event, projection,
+capability, requested grant and dependency contracts. It reports additions as
+**review-required**, never as granted business authority. It is not an
+installation, migration or executable activation boundary.
+See the [upgrade assessment note](../../docs/architecture/2026-11-02-extension-upgrade-compatibility.md).
