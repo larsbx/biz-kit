@@ -78,6 +78,75 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
     assert {:ok, []} = Client.get_signed(url, governance(w))
   end
 
+  test "chapter offboarding signs both project-successor assignments in one batch", w do
+    append!(
+      event(w, w.gov, "TaskPrincipalKindDeclaredV1", %{
+        "principal_id" => "alice",
+        "kind" => "human"
+      })
+    )
+
+    url = w.base <> "/api/v1/principals/owner/chapter_offboarding"
+    selections = [
+      %{"tenant_id" => tenant(), "project_id" => "project-1", "principal_id" => "alice"},
+      %{"tenant_id" => tenant(), "project_id" => "project-2", "principal_id" => "alice"}
+    ]
+
+    assert {:error, {409, _}} =
+             Client.sign_batch(
+               url,
+               governance(w),
+               fn _ -> true end,
+               %{"chapter_id" => w.chapter}
+             )
+
+    assert {:ok, %{"events" => events}} =
+             Client.sign_batch(
+               url,
+               governance(w),
+               fn cores ->
+                 Enum.map(cores, & &1["type"]) == [
+                   "TaskPrincipalOffboardedV1",
+                   "TaskPrincipalOffboardedV1",
+                   "TaskProjectOwnerAssignedV1",
+                   "TaskProjectOwnerAssignedV1"
+                 ]
+               end,
+               %{"chapter_id" => w.chapter, "successors" => selections}
+             )
+
+    assert length(events) == 4
+    o = Log.gate().orchestration
+
+    for project <- ["project-1", "project-2"] do
+      scope = {w.chapter, tenant(), project}
+      assert Projects.owner(o, scope) == "alice"
+      assert Projects.eligible_owner?(o, scope)
+    end
+
+    assert Projects.violations(o) == []
+  end
+
+  test "duplicate successor selections fail before any signature", w do
+    append!(
+      event(w, w.gov, "TaskPrincipalKindDeclaredV1", %{
+        "principal_id" => "alice",
+        "kind" => "human"
+      })
+    )
+
+    url = w.base <> "/api/v1/principals/owner/chapter_offboarding"
+    selected = %{"tenant_id" => tenant(), "project_id" => "project-1", "principal_id" => "alice"}
+
+    assert {:error, {400, _}} =
+             Client.sign_batch(
+               url,
+               governance(w),
+               fn _ -> true end,
+               %{"chapter_id" => w.chapter, "successors" => [selected, selected]}
+             )
+  end
+
   test "backfill cannot cross a tenant or create a phantom legacy project", w do
     grant!(w, "TaskOperatorGrantedV1", member("operator"), "legacy", "old-project")
     operator = member("operator")
