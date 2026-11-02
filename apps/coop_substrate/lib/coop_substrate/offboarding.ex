@@ -61,10 +61,16 @@ defmodule CoopSubstrate.Offboarding do
         |> Enum.map(&{&1, State.held_by(o, principal, &1)})
         |> Enum.reject(&match?({_, []}, &1))
         |> Enum.map(fn {{chapter, tenant, project}, held} ->
+          scope = {chapter, tenant, project}
+          owner = TaskCore.Projects.owner(o, scope)
+
           %{
             chapter_id: chapter,
             tenant_id: tenant,
             project_id: project,
+            accountable_owner: owner,
+            successor_required: owner == principal,
+            owner_eligible: TaskCore.Projects.eligible_owner?(o, scope),
             held: Enum.map(held, &describe(o, principal, &1))
           }
         end),
