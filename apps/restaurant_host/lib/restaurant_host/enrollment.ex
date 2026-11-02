@@ -116,6 +116,8 @@ defmodule RestaurantHost.Enrollment do
     else
       _ -> {:error, :invalid_options}
     end
+  rescue
+    _ -> {:error, :invalid_options}
   end
 
   defp url(base, device), do: base <> "/api/device-grants/" <> Client.segment(device)

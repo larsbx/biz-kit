@@ -63,6 +63,7 @@ defmodule RestaurantHost.Web.DeviceGrantController do
              header
            ),
          {timestamp, ""} <- Integer.parse(ts),
+         true <- timestamp in 0..9_223_372_036_854_775_807 and byte_size(nonce) in 16..128,
          {:ok, <<_::512>> = signature} <- Base.url_decode64(encoded, padding: false),
          {:ok, chapters} <-
            CoopSubstrate.Governance.Read.authorize(

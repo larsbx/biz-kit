@@ -296,6 +296,15 @@ defmodule RestaurantHost.DeviceGrantsTest do
     head = Log.head()
     assert {201, _} = post(path, body, headers)
     assert {403, _} = post(path, body, headers)
+
+    malformed =
+      String.replace(
+        header,
+        ~s(ts="#{req.timestamp_ms}"),
+        ~s(ts="999999999999999999999999999999")
+      )
+
+    assert {403, _} = post(path, body, [{~c"authorization", String.to_charlist(malformed)}])
     assert Log.head() == head
   end
 
