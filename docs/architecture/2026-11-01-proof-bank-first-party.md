@@ -11,8 +11,8 @@ against Biz-kit itself and every app presently in the umbrella. That gives
 the platform a reproducible dogfood target and exposes the difference between
 business intentions, formal models, runtime contracts and accepted authority.
 
-The `ProofBankCore.Portfolio` module seeds 29 structured candidate blueprints:
-one for the Biz-kit platform and one for each of its 28 app directories
+The `ProofBankCore.Portfolio` module seeds 30 structured candidate blueprints:
+one for the Biz-kit platform and one for each of its 29 app directories
 (including the new ProofBankCore). For each component, the seed records a
 **proposed safety invariant, a reference to its source identity, a proposed
 verification method and a possible existing formal-model lead**.
@@ -25,7 +25,7 @@ No seed is permitted to confer app permissions or publication eligibility.
 
 ## What to do in the workbench
 
-1. **Discover** the platform and all 28 Mix apps; reject missing and unknown
+1. **Discover** the platform and all 29 Mix apps; reject missing and unknown
    apps in CI. The inventory includes transitional/legacy packages so their
    retirement constraints remain visible.
 2. **Interview** the component/domain owner to reconcile each draft invariant
@@ -45,7 +45,7 @@ No seed is permitted to confer app permissions or publication eligibility.
 
 | Priority | Components | First review targets |
 | --- | --- | --- |
-| P0 | `biz-kit`, `biz_kit_identity`, `coop_substrate`, `agent_core`, `agent_ops_store`, `task_core`, `proof_bank_core` | Current grants, exact signed admission, stale/revoked rights, execution boundaries, evidence and acceptance lifecycle |
+| P0 | `biz-kit`, `biz_kit_extension`, `biz_kit_identity`, `coop_substrate`, `agent_core`, `agent_ops_store`, `task_core`, `proof_bank_core` | Current grants, exact signed admission, stale/revoked rights, execution boundaries, evidence and acceptance lifecycle |
 | P0 | `dispatch`, `hawala_capability`, `inventory_core` | Organization boundaries, exclusivity, financial authority separation, concurrent reservations |
 | P1 | `commerce_core`, `fulfillment_core`, `group_buy_core`, `biz_kit_composition`, `dispatch_core`, `barter_core`, `sales_core`, `marketing_core` | Pure invariants, command handoffs, replay and consent semantics |
 | P1 | `school_ops`, `federation_core`, `federation_service`, `keel`, `biz_kit_cluster` | Content provenance, scope, federation and cluster authorization |

@@ -13,7 +13,7 @@ defmodule ProofBankCore.Portfolio do
   @catalog_version "proof-bank.biz-kit-portfolio.v1"
 
   # Source inventory: apps/*/mix.exs at repository main commit
-  # 4c550f01effe1bedba235fa68899e1b435bdde02.
+  # 8465e31244f4c075ad5e6e562a133181e9fe5117.
   # Do not represent these draft statements as current verified guarantees.
   @applications [
     {"agent_core", :foundation, :conformance,
@@ -26,6 +26,8 @@ defmodule ProofBankCore.Portfolio do
      "Cluster coordination must not permit a stale instance to act with revoked command authority."},
     {"biz_kit_composition", :capability, :conformance,
      "Cross-domain previews must never be mistaken for inventory reservations, orders, or fulfillment acceptance."},
+    {"biz_kit_extension", :foundation, :conformance,
+     "A strictly validated extension manifest and inert activation plan may not grant permissions or execute commands."},
     {"biz_kit_identity", :foundation, :conformance,
      "Revoked or expired authentication sessions and grants must not regain protected access."},
     {"commerce_core", :capability, :conformance,
