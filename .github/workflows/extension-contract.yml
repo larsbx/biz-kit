@@ -8,6 +8,7 @@ on:
       - 'apps/dispatch/**'
       - 'docs/contracts/biz-kit-extension-v1.schema.json'
       - 'scripts/check-extension-contract.exs'
+      - 'scripts/check-extension-lock.exs'
       - 'scripts/check-extension-schema.py'
       - '.github/workflows/extension-contract.yml'
       - 'mix.exs'
@@ -49,6 +50,10 @@ jobs:
         run: MIX_ENV=test mix run --no-start contract_test/test_helper.exs
       - name: Verify host allowlist without activating extensions
         run: MIX_ENV=test mix run --no-start scripts/check-extension-contract.exs
+      - name: Verify source-bound release lock against exact checked-out head
+        env:
+          BIZKIT_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: MIX_ENV=test mix run --no-start scripts/check-extension-lock.exs
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -65,8 +70,10 @@ jobs:
           apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex
           apps/biz_kit_extension/lib/biz_kit/extension/catalog.ex
           apps/biz_kit_extension/lib/biz_kit/extension/registry.ex
+          apps/biz_kit_extension/lib/biz_kit/extension/release_lock.ex
           apps/biz_kit_extension/test/manifest_test.exs
           apps/biz_kit_extension/test/registry_test.exs
+          apps/biz_kit_extension/test/release_lock_test.exs
           apps/school_ops/mix.exs
           apps/school_ops/lib/school_ops/extension.ex
           apps/school_ops/test/extension_test.exs
@@ -75,6 +82,7 @@ jobs:
           apps/dispatch/contract_test/test_helper.exs
           apps/dispatch/contract_test/bootstrap_test.exs
           scripts/check-extension-contract.exs
+          scripts/check-extension-lock.exs
 
   portable-contract:
     runs-on: ubuntu-24.04
