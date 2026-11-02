@@ -1,0 +1,51 @@
+name: Proof Bank — executable pure-core conformance probes
+
+on:
+  pull_request:
+    paths:
+      - 'proof_bank/characterizations/**'
+      - '.github/workflows/proof-bank-conformance-probes.yml'
+      - 'apps/**/lib/**'
+      - 'apps/**/test/**'
+      - 'mix.exs'
+      - 'mix.lock'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-pinned-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - agent_core
+          - barter_core
+          - commerce_core
+          - dispatch_core
+          - federation_core
+          - fulfillment_core
+          - group_buy_core
+          - inventory_core
+          - keel
+          - marketing_core
+          - sales_core
+          - task_core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Resolve exact checked-out app dependencies
+        working-directory: apps/${{ matrix.app }}
+        run: mix deps.get
+      - name: Execute existing app-local tests (evidence, not mathematical proof)
+        working-directory: apps/${{ matrix.app }}
+        env:
+          MIX_ENV: test
+        run: mix test --no-start --trace
