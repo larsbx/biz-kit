@@ -1,0 +1,42 @@
+name: Proof Bank — portable core
+
+on:
+  pull_request:
+    paths:
+      - 'apps/proof_bank_core/**'
+      - '.github/workflows/proof-bank-core.yml'
+      - 'mix.exs'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  portable-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile and test in Biz-kit umbrella
+        working-directory: apps/proof_bank_core
+        run: |
+          mix format --check-formatted
+          mix compile --warnings-as-errors
+          mix test --no-start
+      - name: Copy to independent consumer
+        run: |
+          mkdir -p "$RUNNER_TEMP/proof-bank-vendor"
+          cp -R apps/proof_bank_core "$RUNNER_TEMP/proof-bank-vendor/proof_bank_core"
+          cd "$RUNNER_TEMP/proof-bank-vendor/proof_bank_core"
+          mix compile --warnings-as-errors
+          mix test --no-start
+      - name: Reject runtime and network dependencies in the portable core
+        run: |
+          test ! -e apps/proof_bank_core/config
+          test ! -e apps/proof_bank_core/priv/repo
+          ! grep -R -nE '(HTTPoison|Req\\.|Ecto\\.Repo|GenServer\\.start_link|System\\.cmd)' apps/proof_bank_core/lib/

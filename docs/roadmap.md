@@ -1,5 +1,22 @@
 # biz-kit roadmap
 
+## Proof Bank application foundry — 2026-11-01
+
+The [Proof Bank B0 rollout](architecture/2026-11-01-proof-bank-rollout.md)
+introduces a standalone-portable, **inert** `ProofBankCore` that compiles
+structured interview answers, requirements, and pending proof obligations with
+strict references. It does **not** certify mathematical claims, authorize
+extensions, install applications, or create business writers.
+
+The [B0 scaffold PR #236](https://github.com/larsbx/biz-kit/pull/236)
+remains review/CI-gated. The phased implementation issues are:
+[B1 member interviews and approvals #237](https://github.com/larsbx/biz-kit/issues/237),
+[B2 checker and evidence #238](https://github.com/larsbx/biz-kit/issues/238),
+[B3–B4 agent implementations and two-domain conformance #239](https://github.com/larsbx/biz-kit/issues/239),
+and [B5–B6 marketplace and optional GPU #240](https://github.com/larsbx/biz-kit/issues/240).
+Reuse the versioned ExtensionV1 manifest under review in PR #224; do not
+introduce a second extension loader or bypass existing signed admission.
+
 ## Halaqa federation over Iroh — updated 2026-11-01
 
 The [native federation boundary](architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
