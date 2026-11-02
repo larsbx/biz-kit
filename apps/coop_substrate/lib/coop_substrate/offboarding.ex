@@ -53,6 +53,12 @@ defmodule CoopSubstrate.Offboarding do
           uniq: true,
           do: {a.chapter_id, a.tenant_id, a.project_id}
 
+    inventory =
+      for chapter <- chapters,
+          project <- CoopSubstrate.Administrators.projects(o, chapter),
+          into: %{},
+          do: {{chapter, project.tenant_id, project.project_id}, project}
+
     %{
       principal_id: principal,
       projects:
@@ -72,8 +78,8 @@ defmodule CoopSubstrate.Offboarding do
             successor_required: owner == principal,
             owner_eligible: TaskCore.Projects.eligible_owner?(o, scope),
             owner_candidates:
-              CoopSubstrate.Administrators.projects(o, chapter)
-              |> Enum.find(&(&1.tenant_id == tenant and &1.project_id == project))
+              inventory
+              |> Map.fetch!(scope)
               |> Map.fetch!(:owner_candidates),
             held: Enum.map(held, &describe(o, principal, &1))
           }

@@ -51,6 +51,9 @@ const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
     };
     await lookup();
     await choose('project-1');
+    say({ stage: 'selected' });
+    await next(); // unrelated chapter update must preserve this selection
+    if (await page.getByLabel(`Successor for ${tenant} / project-1`, { exact: true }).inputValue() !== 'alice') throw Error('live update erased the successor');
     await offboard();
     await page.locator('#status').filter({ hasText: 'Choose exactly one successor' }).waitFor();
     if (await dialog.isVisible()) throw Error('incomplete selection reached signing');

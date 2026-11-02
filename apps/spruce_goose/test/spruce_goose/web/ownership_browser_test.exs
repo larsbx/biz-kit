@@ -47,6 +47,9 @@ defmodule SpruceGoose.Web.OwnershipBrowserTest do
     {:ok, details} = Approver.fetch(base, code)
     assert {:ok, _} = Approver.approve(base, details, governance(w))
     Port.command(port, "go\n")
+    assert %{"stage" => "selected"} = read!(port)
+    grant!(w, "TaskReviewerGrantedV1", member("reviewer"), "another-reviewer", "project-1")
+    Port.command(port, "go\n")
     assert %{"stage" => "prepared"} = read!(port)
 
     # Change holdings while the browser is showing the exact batch to sign.
