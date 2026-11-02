@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { pending } from "./confirmation.svelte";
 import Page from "../routes/+page.svelte";
 import { PANELS } from "./panels";
 import { serialize } from "./layout";
@@ -32,7 +33,7 @@ beforeEach(() => {
     return [];
   });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { pending.ask = null; cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
 async function start(layout: unknown = storedLeaf()) {
   localStorage.setItem("layout", JSON.stringify(layout));
@@ -129,7 +130,7 @@ describe("mounted panel lifetime", () => {
     await fireEvent.click(button(tile, "Back to editor"));
     expect(editorIn(tile)?.value).toBe(draft(1));
     await fireEvent.click(button(tile, "Review diff"));
-    expect(invoke).toHaveBeenLastCalledWith("diff_config", { host: "local", path: "/fixture/app.json", content: draft(1) });
+    expect(invoke).toHaveBeenLastCalledWith("diff_config", { host: "local", path: "/fixture/app.json", content: draft(1), expected: original });
   });
 
   it.each([false, true])("keeps the editor through pointer resize and cleanup (cancel=%s)", async (cancel) => {
@@ -199,4 +200,46 @@ describe("mounted panel lifetime", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(tileEls.size).toBe(2);
   });
+});
+
+it('requires diff review and sends only the reviewed snapshot with its original version', async () => {
+  const [tile] = await start();
+  await edit(tile, 1);
+  expect((button(tile, 'Save…') as HTMLButtonElement).disabled).toBe(true);
+  await fireEvent.click(button(tile, 'Review diff'));
+  await within(tile).findByText('Pending change');
+  expect((button(tile, 'Save…') as HTMLButtonElement).disabled).toBe(false);
+  await fireEvent.click(button(tile, 'Save…'));
+  expect(screen.getAllByText(/original/).length).toBeGreaterThan(0);
+  await fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+  await vi.waitFor(() => expect(vi.mocked(invoke).mock.calls.some(([c]) => c === 'write_config')).toBe(true));
+  expect(vi.mocked(invoke).mock.calls.find(([c]) => c === 'write_config')?.[1]).toEqual({
+    host: 'local', path: '/fixture/app.json', content: draft(1), expected: original,
+  });
+});
+
+it('requires another review after editing a reviewed draft', async () => {
+  const [tile] = await start();
+  await edit(tile, 1);
+  await fireEvent.click(button(tile, 'Review diff'));
+  await within(tile).findByText('Pending change');
+  await fireEvent.click(button(tile, 'Back to editor'));
+  const editor = within(tile).getByRole('textbox');
+  await fireEvent.input(editor, { target: { value: draft(2) } });
+  expect((button(tile, 'Save…') as HTMLButtonElement).disabled).toBe(true);
+  expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === 'write_config')).toHaveLength(0);
+});
+
+it('keeps the draft and displays an actionable error when review detects a stale file', async () => {
+  const [tile] = await start();
+  const editor = await edit(tile, 1);
+  const normal = vi.mocked(invoke).getMockImplementation()!;
+  vi.mocked(invoke).mockImplementation(async (cmd, args, options) => {
+    if (cmd === 'diff_config') throw new Error('File changed since it was opened. Keep your draft, reload the file and review again.');
+    return normal(cmd, args, options);
+  });
+  await fireEvent.click(button(tile, 'Review diff'));
+  await within(tile).findByText(/File changed since it was opened/);
+  expect(editor.value).toBe(draft(1));
+  expect((button(tile, 'Save…') as HTMLButtonElement).disabled).toBe(true);
 });

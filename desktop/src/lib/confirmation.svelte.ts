@@ -2,7 +2,7 @@
 export type Ask = {
   title: string;
   why?: string;
-  /** The literal command, shown verbatim. Never paraphrase it. */
+  /** The exact command or reviewed diff, shown verbatim. Never paraphrase it. */
   command: string;
   host?: string;
   danger?: boolean;

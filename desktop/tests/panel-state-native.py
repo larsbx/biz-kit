@@ -177,6 +177,30 @@ def run(binary, session_timeout=60):
                 assert js("return localStorage.getItem('layout')") == saved
                 assert fixture.read_text() == original, "unsaved draft changed the real fixture"
                 print("PASS: native Tauri/WebKit config drafts, duplicate panels, split, adjacent close, sidebar, pointer resize, zoom, geometry, storage, restore")
+                # Exercise actual reviewed writes and version guards through the real IPC backend.
+                js("window.panels=[...document.querySelectorAll('[data-panel=configs].tile')];window.panels.forEach(p=>p.querySelector('tbody tr').click())")
+                until(lambda: js("return document.querySelectorAll('textarea.editor').length===2"), "fresh config editors")
+                changed = '{"token":"native-saved"}'
+                js("const e=window.panels[0].querySelector('textarea');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}))", changed)
+                until(lambda: js("return window.panels[0].textContent.includes('unsaved')"), "edited file")
+                assert js("return [...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Save…').disabled"), "save bypassed review"
+                js("[...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Review diff').click()")
+                until(lambda: js("return window.panels[0].textContent.includes('Pending change')"), "actual reviewed diff")
+                js("[...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Save…').click()")
+                until(lambda: js("return !!document.querySelector('.modal')"), "save confirmation")
+                assert js("return document.querySelector('.modal pre').textContent.includes('native-saved')"), "confirmation omitted reviewed diff"
+                click('.modal .btn.danger')
+                until(lambda: fixture.read_text() == changed, "real guarded config write")
+                until(lambda: js("return !document.querySelector('.modal')"), "save completed")
+                backups = list(root.glob("app.json.bak-*"))
+                assert len(backups) == 1 and backups[0].read_text() == original, "backup did not preserve opened bytes"
+                js("const e=window.panels[1].querySelector('textarea');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}))", '{"token":"stale-draft"}')
+                js("[...window.panels[1].querySelectorAll('button')].find(b=>b.textContent==='Review diff').click()")
+                until(lambda: js("return window.panels[1].textContent.includes('File changed since it was opened')"), "duplicate stale editor refusal")
+                assert fixture.read_text() == changed, "stale editor overwrote the saved file"
+                assert js("return window.panels[1].querySelector('textarea').value.includes('stale-draft')"), "stale refusal discarded the draft"
+                print("PASS: native reviewed save, exact backup, stale duplicate refusal and draft retention")
+
             except Exception:
                 if session:
                     try:
