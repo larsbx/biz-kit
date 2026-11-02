@@ -1,0 +1,30 @@
+name: Proof Bank format preview (temporary diagnostic)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/proof_bank_core/**'
+      - 'apps/inventory_core/**'
+      - 'formal/lean/BizKitInventory.lean'
+      - '.github/workflows/proof-bank-format-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Show exact formatter patch without pushing or committing
+        run: |
+          set -eu
+          (cd apps/proof_bank_core && mix format)
+          (cd apps/inventory_core && mix format)
+          git diff --no-ext-diff -- apps/proof_bank_core apps/inventory_core
