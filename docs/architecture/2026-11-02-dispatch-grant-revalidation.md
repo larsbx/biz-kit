@@ -202,3 +202,37 @@ main.
   `LocationsTest` "consent outlives the revocation of the role that began it"
   pins this.
 
+
+## Owner rule: a driver's role ends at equipment check-in (2026-11-02)
+
+Revoking a role that lets its holder drive is allowed only once the driver's
+equipment is checked in. A role drives when it carries `assignment.read.self`,
+the capability Board plans trips with. Dispatch has no check-in record, so
+"checked in" means that **no active trip of the driver's in the organization
+holds a vehicle or trailer**. If a later check-in event is added, it should
+replace this predicate in `Dispatch.Access.Driving.equipment_out?/3`.
+
+- `Administration.revoke/4` refuses with `:equipment_not_checked_in` while the
+  equipment is out, unless another driving role of the driver's stays in force.
+  Roles that do not drive are unaffected.
+- `Board.transition/4` refuses to activate a trip whose driver no longer holds
+  a driving role. Without this, an activation racing a revocation could still
+  leave equipment out with no role behind it.
+- **Serialization.** Revoke locks the driver's open trips `FOR UPDATE` before
+  deciding. Activation holds its trip lock and then locks the driving roles
+  `FOR SHARE`. Whichever commits first, the other sees it. Both take the trip
+  lock before any role row, so they cannot deadlock. Both commit orders are
+  tested.
+- **Evidence.**
+  - At `779af834` (tests only), the six rule cases fail: each is a write that
+    should have been refused and went through.
+  - At `05161366`, the full Dispatch suite gives 2 doctests, 492 tests,
+    0 failures. The concurrency files gave 19/19 on three repeat runs.
+  - Three mutations were each caught: removing the revoke rule (4 failures),
+    removing its `FOR UPDATE` (1) and removing the activation rule (2).
+  - Removing the `FOR SHARE` on driving roles is *not* caught. In the order where
+    it would matter, revoke's trip lock already serializes the pair, so that
+    lock is defence in depth.
+- **Not covered.** The rule applies through `Administration`, the only
+  revocation path the product exposes. The Ash `:revoke` action itself does not
+  enforce it, so system or direct-data revocations bypass it.
