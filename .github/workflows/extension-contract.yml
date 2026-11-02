@@ -1,0 +1,99 @@
+name: ExtensionV1 conformance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/biz_kit_extension/**'
+      - 'apps/school_ops/**'
+      - 'apps/dispatch/**'
+      - 'docs/contracts/biz-kit-extension-v1.schema.json'
+      - 'scripts/check-extension-contract.exs'
+      - 'scripts/check-extension-schema.py'
+      - '.github/workflows/extension-contract.yml'
+      - 'mix.exs'
+      - 'mix.lock'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  host-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify tested revision
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Resolve locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile umbrella
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Core contract tests
+        working-directory: apps/biz_kit_extension
+        run: MIX_ENV=test mix test --no-start
+      - name: SchoolOps reference tests
+        working-directory: apps/school_ops
+        run: MIX_ENV=test mix test --no-start
+      - name: Dispatch reference tests
+        working-directory: apps/dispatch
+        run: MIX_ENV=test mix run --no-start contract_test/test_helper.exs
+      - name: Verify host allowlist without activating extensions
+        run: MIX_ENV=test mix run --no-start scripts/check-extension-contract.exs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify external schema against actual host descriptors
+        run: |
+          python -m pip install jsonschema==4.25.1
+          MIX_ENV=test mix run --no-start scripts/check-extension-contract.exs "$RUNNER_TEMP/extension-manifests.json"
+          python scripts/check-extension-schema.py "$RUNNER_TEMP/extension-manifests.json"
+      - name: Check formatted extension modules
+        run: >-
+          mix format --check-formatted
+          apps/biz_kit_extension/mix.exs
+          apps/biz_kit_extension/lib/biz_kit/extension.ex
+          apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex
+          apps/biz_kit_extension/lib/biz_kit/extension/catalog.ex
+          apps/biz_kit_extension/test/manifest_test.exs
+          apps/school_ops/mix.exs
+          apps/school_ops/lib/school_ops/extension.ex
+          apps/school_ops/test/extension_test.exs
+          apps/dispatch/lib/dispatch/extension.ex
+          apps/dispatch/test/extension_contract_test.exs
+          apps/dispatch/contract_test/test_helper.exs
+          apps/dispatch/contract_test/bootstrap_test.exs
+          scripts/check-extension-contract.exs
+
+  portable-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify tested revision
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Test policy package completely outside the umbrella
+        shell: bash
+        run: |
+          set -eu
+          cp -R apps/biz_kit_extension "$RUNNER_TEMP/biz_kit_extension"
+          cd "$RUNNER_TEMP/biz_kit_extension"
+          MIX_ENV=test mix compile --warnings-as-errors
+          MIX_ENV=test mix test --no-start
