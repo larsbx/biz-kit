@@ -55,22 +55,36 @@ defmodule RestaurantHost.DeviceGrants do
   def prepare(%Restaurant{} = r, device_id, governance_key_id) do
     with {:ok, d} <- details(r, device_id),
          {:ok, signer} <- Commands.governance_signer(r.chapter, governance_key_id) do
-      Commands.hold(owner(device_id), r.chapter, d.type, d.payload, signer)
+      Commands.hold(owner(r, device_id), r.chapter, d.type, d.payload, signer)
     end
   end
 
   @doc "Submit the governance signature on a held grant; the ledger admits or refuses."
-  def submit(device_id, held_id, signature),
-    do: Commands.submit(owner(device_id), held_id, signature)
+  def submit(%Restaurant{} = r, device_id, held_id, <<_::512>> = signature)
+      when is_binary(held_id) and byte_size(held_id) in 1..128 do
+    with {:ok, _} <- details(r, device_id),
+         do: Commands.submit(owner(r, device_id), held_id, signature)
+  end
 
-  defp owner(device_id), do: {:restaurant_device_grant, device_id}
+  def submit(_, _, _, _), do: {:error, :bad_request}
+
+  # Include the chapter, merchant and configured key, so a hold cannot be
+  # submitted through another restaurant or after the device is reconfigured.
+  defp owner(r, device_id) do
+    {:ok, d} = details(r, device_id)
+
+    {:restaurant_device_grant, r.chapter, r.merchant, device_id, d.payload["key_id"],
+     d.payload["pubkey"]}
+  end
 
   @doc """
   Whether a decoded envelope core is exactly the grant `details` (as the
   host's JSON showed it) describes: type, chapter and every payload field.
   """
-  def grants?(core, %{"chapter_id" => chapter, "type" => @type_name, "payload" => shown}) do
-    with {:ok, pubkey} <- Base.url_decode64(shown["pubkey"] || "", padding: false) do
+  def grants?(core, details) when is_map(core) do
+    with true <- valid_details?(details),
+         %{"chapter_id" => chapter, "payload" => shown} <- details,
+         {:ok, pubkey} <- Base.url_decode64(shown["pubkey"], padding: false) do
       core["type"] == @type_name and core["chapter_id"] == chapter and
         core["payload"] == Map.put(shown, "pubkey", {:bytes, pubkey})
     else
@@ -78,7 +92,29 @@ defmodule RestaurantHost.DeviceGrants do
     end
   end
 
-  def grants?(_core, _details), do: false
+  def grants?(_, _), do: false
+
+  @doc "Validate the public proposal before displaying or signing it."
+  def valid_details?(%{"chapter_id" => ch, "type" => @type_name, "payload" => p} = d)
+      when is_map(p) and map_size(d) == 3 and map_size(p) == 6 do
+    Enum.all?([ch, p["merchant_id"], p["device_id"], p["key_id"]], &identifier?/1) and
+      public_key?(p["pubkey"]) and
+      ((p["actor"] == "system" and p["actions"] == ["checkout"]) or
+         (p["actor"] == "staff" and p["actions"] == @board_actions))
+  end
+
+  def valid_details?(_), do: false
+
+  @doc "A bounded identifier safe to display and use as a URL segment."
+  def identifier?(value),
+    do:
+      is_binary(value) and byte_size(value) in 1..128 and
+        Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/, value)
+
+  defp public_key?(text) when is_binary(text),
+    do: match?({:ok, <<_::256>>}, Base.url_decode64(text, padding: false))
+
+  defp public_key?(_), do: false
 
   @doc "`details/2` as JSON: the public key base64url."
   def json(%{payload: payload} = d),
