@@ -161,12 +161,12 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
       "/api/v1/chapters/#{w.chapter}/tenants/tenant-9/projects/old-project" <>
       "/ownership/backfill/bob"
 
-    assert {:error, {409, _}} =
+    assert {:error, {404, _}} =
              Client.sign_batch(foreign, governance(w), fn _ -> true end, params)
 
     missing = backfill_url(w, "missing-project", "bob")
 
-    assert {:error, {409, _}} =
+    assert {:error, {404, _}} =
              Client.sign_batch(missing, governance(w), fn _ -> true end, params)
 
     assert Projects.owner(Log.gate().orchestration, {w.chapter, tenant(), "old-project"}) ==
