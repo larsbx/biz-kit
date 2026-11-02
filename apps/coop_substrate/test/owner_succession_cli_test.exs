@@ -103,6 +103,7 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
     assert positional == [@principal, @chapter]
     assert invalid == []
     assert opts[:yes]
+
     assert Keyword.get_values(opts, :successor) == [
              "tenant-1/project-1=alice",
              "tenant-1/project-2=bob"
@@ -165,7 +166,12 @@ defmodule Mix.Tasks.Coop.Owner.SucceedTest do
            )
 
     refute Succeed.expected?(
-             cores(), details(), "mallory", @chapter, "governance-A", successors()
+             cores(),
+             details(),
+             "mallory",
+             @chapter,
+             "governance-A",
+             successors()
            )
 
     for candidate <- [
