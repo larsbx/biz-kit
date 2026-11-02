@@ -131,8 +131,7 @@ defmodule BizKit.Extension.Upgrade do
          |> Enum.reject(&MapSet.member?(existing, &1))}
       end)
 
-    dependencies =
-      MapSet.new(Enum.map(previous.dependencies, & &1.id))
+    dependencies = MapSet.new(Enum.map(previous.dependencies, & &1.id))
 
     added_dependencies =
       candidate.dependencies
