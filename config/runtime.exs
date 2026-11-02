@@ -178,11 +178,13 @@ end
 # Which apps this boot carries. A release runs this whole file, so each app's
 # production section is gated on the release that ships it (mix.exs); an unset
 # RELEASE_NAME (a Mix run) carries every app. The `orchestration` release has no
-# dispatch, and the `eatsbot` release has only eatsbot.
+# dispatch, the `eatsbot` release has only eatsbot, and the `restaurant` release
+# has only the ledger and the rebuilt eatsbot's host.
 release_name = System.get_env("RELEASE_NAME")
-dispatch_released? = release_name not in ["orchestration", "eatsbot"]
-spruce_goose_released? = release_name != "eatsbot"
+dispatch_released? = release_name not in ["orchestration", "eatsbot", "restaurant"]
+spruce_goose_released? = release_name not in ["eatsbot", "restaurant"]
 eatsbot_released? = release_name in [nil, "eatsbot"]
+restaurant_released? = release_name in [nil, "restaurant"]
 
 if config_env() == :prod and dispatch_released? do
   config :dispatch, Dispatch.Repo,
@@ -507,6 +509,31 @@ if config_env() == :prod do
       hostname: System.get_env("EVENTSTORE_HOST", "localhost"),
       port: String.to_integer(System.get_env("EVENTSTORE_PORT", "5432"))
   end
+end
+
+# ── restaurant_host (the rebuilt eatsbot) ───────────────────────────────────
+# Its own variables, so the restaurant never shares Dispatch's URL or secret.
+# RESTAURANT_CONFIG_FILE names the restaurant file (RestaurantHost.Config);
+# each device's seed is read from RESTAURANT_DEVICE_SEED_<DEVICE_ID> when the
+# host boots, which refuses to start on any invalid setting.
+if config_env() == :prod and restaurant_released? do
+  %URI{host: host, scheme: scheme, port: port} =
+    URI.parse(require_env.("RESTAURANT_PUBLIC_BASE_URL"))
+
+  # The websocket origin check compares against this URL's host.
+  config :restaurant_host, RestaurantHost.Web.Endpoint,
+    url: [host: host, scheme: scheme, port: port || 443],
+    http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: integer_env.("RESTAURANT_PORT", 4070)],
+    secret_key_base: require_env.("RESTAURANT_SECRET_KEY_BASE"),
+    server: true
+
+  config :restaurant_host, :restaurant_file, require_env.("RESTAURANT_CONFIG_FILE")
+end
+
+# The shared config points Localize at the legacy eatsbot's locale cache, which
+# the restaurant release does not carry; Money then uses the bundled locale.
+if release_name == "restaurant" do
+  config :localize, otp_app: :localize
 end
 
 # ── biz_kit_identity ────────────────────────────────────────────────────────

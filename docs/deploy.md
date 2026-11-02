@@ -13,6 +13,7 @@ Date: 2026-10-20. The shortest path to a running deployment.
 | `orchestration` | the ledger (`coop_substrate`), identity, cluster, SpruceGoose (web view, API, CLI service) | the settings below are set |
 | `biz_kit` | all of the above, plus `dispatch` and `keel` | dispatch's integrations are configured too |
 | `eatsbot` | `eatsbot` and its `eatsbot_*` siblings | `DATABASE_URL`, `SECRET_KEY_BASE`, `GEOCODING_TOKEN`, `TOKEN_SIGNING_SECRET` are set |
+| `restaurant` | the ledger and the rebuilt eatsbot's host (`restaurant_host`) | the [restaurant settings](#the-restaurant-release) are set |
 
 `eatsbot` is built from its own directory, so it compiles only eatsbot and its
 siblings: `docker build -f apps/eatsbot/Dockerfile .` from the repository root.
@@ -81,6 +82,50 @@ at `SYSTEMWIDE_SOP_PATH` and checks it at boot against the digest in
 `apps/spruce_goose/priv/constitution/adopted.json`. The ledger does not read
 the file: each task's readiness definition names its SOP by digest.
 
+## The restaurant release
+
+The rebuilt eatsbot: a cash-only storefront and kitchen board whose every
+order step is a device-signed event admitted by the ledger. It has no database
+of its own, only the ledger's event store, and it never shares Dispatch's or
+SpruceGoose's settings: `runtime.exs` skips their sections for it.
+
+```sh
+MIX_ENV=prod mix release restaurant
+bin/restaurant eval "RestaurantHost.ReleaseTasks.migrate()"   # initializes the ledger; idempotent
+bin/restaurant daemon
+```
+
+| Variable | For |
+| --- | --- |
+| `RESTAURANT_PUBLIC_BASE_URL` | the public URL; the live pages' websocket origin check compares against its host |
+| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | the signed session that holds a paired board |
+| `RESTAURANT_PORT` (default `4070`) | the listening port, behind a TLS-terminating proxy |
+| `RESTAURANT_CONFIG_FILE` | the restaurant file (below) |
+| `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` | each device's 32-byte signing seed, base64; `<DEVICE_ID>` upper-cased with other characters as `_` |
+| `EVENTSTORE_*` | the ledger, as above |
+
+The restaurant file names the ledger chapter, merchant, currency, tax rate,
+menu and devices. It holds no secret: seeds come only from the environment, and
+a board's pairing secret only as its SHA-256.
+
+```json
+{
+  "chapter": "chapter-genesis",
+  "merchant": "shop",
+  "currency": "USD",
+  "tax_rate": "0.0825",
+  "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
+  "storefront": {"device_id": "storefront", "key_id": "k-store"},
+  "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "<hex>"}}
+}
+```
+
+The host validates all of it at boot (`RestaurantHost.Config`) and refuses to
+start on any error. Each device's key must also be granted on the ledger by
+the chapter's governance key (`RestaurantDeviceGrantedV1`: the storefront
+`checkout`, a board its kitchen steps); until then the ledger refuses what it
+signs. Pair a board by opening `/board/pair/<board>/<secret>` on it once.
+
 ## Testing a deployment
 
 `scripts/release-smoke.sh` is what the `release-smoke` CI job runs, and it
@@ -96,6 +141,11 @@ The script signs task commands on the release's own ledger and checks:
 - a predecessor cycle refused;
 - SOP versions that never go back;
 - replay reproducing the state that admission saw.
+
+`scripts/restaurant-release-smoke.sh` does the same for the `restaurant`
+release (the `release-smoke` job of `restaurant-core.yml`): build, migrate
+twice, boot, check the storefront and board pairing over HTTP, then place and
+complete a pickup order on the release's own ledger in a fresh chapter.
 
 ## What this does not cover
 
