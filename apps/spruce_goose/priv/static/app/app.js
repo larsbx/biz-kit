@@ -830,6 +830,8 @@ async function lookUpRequest(event) {
 
 // The person shown, if any: the chapter's frames show them afresh.
 let shownPerson = null;
+let personRead = 0;
+const successorChoices = new Map();
 
 function lookUpPerson(event) {
   event.preventDefault();
@@ -837,13 +839,16 @@ function lookUpPerson(event) {
 }
 
 async function showPerson(id) {
+  if (shownPerson !== id) successorChoices.clear();
   shownPerson = id;
+  const read = ++personRead;
   let found;
   try {
     found = await governed("GET", `/api/v1/principals/${encodeURIComponent(id)}`);
   } catch (e) {
     return $("person-details").replaceChildren(el("p", { className: "status error", textContent: e.message.replaceAll("_", " ") }));
   }
+  if (read !== personRead || found.principal_id !== id) return;
   const projects = projectsHeld(found, scope);
   const keys = found.keys.filter((k) => k.chapter_id === chapterId);
   if (!projects.length && !keys.length)
@@ -864,6 +869,11 @@ function personInChapter(found, keys) {
     input.append(el("option", { value: "", textContent: "Choose an eligible human…" }),
       ...candidates.map((c) => el("option", { value: c.principal_id, textContent: c.principal_id })));
     input.setAttribute("aria-label", `Successor for ${p.tenant_id} / ${p.project_id}`);
+    const choiceKey = JSON.stringify([id, chapterId, p.tenant_id, p.project_id]);
+    const selected = successorChoices.get(choiceKey);
+    if (candidates.some((c) => c.principal_id === selected)) input.value = selected;
+    else successorChoices.delete(choiceKey);
+    input.onchange = () => successorChoices.set(choiceKey, input.value);
     return {
       project: p,
       input,
@@ -1115,8 +1125,9 @@ function followChapter(on) {
   feed.addEventListener("changes", (event) => {
     chapterView = applyFrame(chapterView, JSON.parse(event.data));
     renderAdmin();
-    // Do not discard successor choices or a signed confirmation on a live update.
-    // The guarded append refuses stale choices; the operator can explicitly reload.
+    // Reconcile changed holdings while retaining choices that remain eligible.
+    // Never replace the intent behind an open signing confirmation.
+    if (shownPerson && !deciding) showPerson(shownPerson);
 
   });
   // The key was revoked: the server says so before closing. Ask at once

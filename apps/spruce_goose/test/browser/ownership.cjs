@@ -53,6 +53,7 @@ const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
     await choose('project-1');
     say({ stage: 'selected' });
     await next(); // unrelated chapter update must preserve this selection
+    await page.locator('#projects .row').filter({ hasText: `${tenant} / project-1` }).filter({ hasText: '4 people' }).waitFor();
     if (await page.getByLabel(`Successor for ${tenant} / project-1`, { exact: true }).inputValue() !== 'alice') throw Error('live update erased the successor');
     await offboard();
     await page.locator('#status').filter({ hasText: 'Choose exactly one successor' }).waitFor();
