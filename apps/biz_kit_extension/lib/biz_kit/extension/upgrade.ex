@@ -22,6 +22,7 @@ defmodule BizKit.Extension.Upgrade do
          {:ok, candidate} <- Manifest.validate(next),
          :ok <- id_unchanged(previous, candidate),
          :ok <- version_compatible(previous, candidate),
+         :ok <- execution_mode_unchanged(previous, candidate),
          :ok <- no_contract_removals(previous, candidate),
          :ok <- dependencies_preserved(previous, candidate),
          :ok <- no_list_removals(previous, candidate) do
@@ -58,6 +59,16 @@ defmodule BizKit.Extension.Upgrade do
 
       true ->
         :ok
+    end
+  end
+
+  defp execution_mode_unchanged(previous, candidate) do
+    if previous.deployment == candidate.deployment and
+         previous.activation == candidate.activation and
+         previous.health == candidate.health do
+      :ok
+    else
+      {:error, :execution_contract_changed}
     end
   end
 
