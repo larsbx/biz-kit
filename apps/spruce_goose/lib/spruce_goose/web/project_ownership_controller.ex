@@ -4,9 +4,9 @@ defmodule SpruceGoose.Web.ProjectOwnershipController do
 
   GET /api/v1/chapters/:chapter_id/ownerless_projects
       -> existing projects with tasks or grants but no accountable owner
-  POST /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill
+  POST /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:principal_id
       -> governance-held signed batch with required owner-kind and grant events
-  POST /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:held_id
+  POST /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:principal_id/:held_id
       -> append the signed batch after revalidating authoritative ledger state
 
   An eligible operator key is supplied by the principal/device when needed.
@@ -29,11 +29,11 @@ defmodule SpruceGoose.Web.ProjectOwnershipController do
   def prepare(conn, %{
         "chapter_id" => chapter,
         "tenant_id" => tenant,
-        "project_id" => project
+        "project_id" => project,
+        "principal_id" => principal
       }) do
     with :ok <- governing(conn, chapter),
          {:ok, body} <- json_body(conn),
-         {:ok, principal} <- string(body["principal_id"]),
          {:ok, governance_key} <- string(body["governance_key_id"]),
          {:ok, device} <- device(body["operator_device"]),
          {:ok, held} <-
@@ -54,10 +54,10 @@ defmodule SpruceGoose.Web.ProjectOwnershipController do
         "chapter_id" => chapter,
         "tenant_id" => tenant,
         "project_id" => project,
+        "principal_id" => principal,
         "held_id" => id
       }) do
     with {:ok, body} <- json_body(conn),
-         {:ok, principal} <- string(body["principal_id"]),
          {:ok, signatures} <- bytes(body["signatures"]),
          {:ok, envs} <-
            ProjectOwnership.backfill({chapter, tenant, project}, principal, id, signatures) do
