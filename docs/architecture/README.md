@@ -21,6 +21,9 @@ domain views. The imported histories and existing identifiers remain intact.
   with R0–R6 source inventory, migration, authorization, cutover and archive gates.
 - [ExtensionV1 semantic upgrade assessment — 2026-11-02](2026-11-02-extension-upgrade-compatibility.md):
   fail-closed V1 compatibility and review-required changes; no deployment approval.
+- [ExtensionV1 source-pinned release lock — 2026-11-02](2026-11-02-extension-source-lock.md):
+  deterministic exact-source and manifest fingerprints for trusted build
+  preflight; not executable activation or signed deployment authority.
 - [ExtensionV1 staged read-only registry — 2026-11-01](2026-11-01-extension-registry-stage.md):
   ephemeral validated descriptor visibility, atomic dependency-safe view
   reconciliation and fail-closed restart; no runtime execution or grants.

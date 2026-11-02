@@ -20,8 +20,8 @@ without a version bump.
 
 This intentionally does not run migrations, start or stop domain applications,
 update the registry, verify signed current approvals, compare database records,
-or admit events. The separately staged ReleaseLock PR #260 provides source
-and manifest fingerprints; neither result is deployment authorization.
+or admit events. Merged ReleaseLock PR #260 provides source and manifest fingerprints;
+neither result is deployment authorization.
 SchoolOps and Dispatch's existing operational authorities remain unchanged.
 
 Next: a trusted build/host process must check the reviewed release lock, actual

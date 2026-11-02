@@ -18,8 +18,8 @@ defmodule BizKit.Extension.Upgrade do
 
   @spec assess(term(), term()) :: {:ok, map()} | {:error, term()}
   def assess(old, next) do
-    with {:ok, previous} <- validated(old),
-         {:ok, candidate} <- validated(next),
+    with {:ok, previous} <- Manifest.validate(old),
+         {:ok, candidate} <- Manifest.validate(next),
          :ok <- id_unchanged(previous, candidate),
          :ok <- version_compatible(previous, candidate),
          :ok <- execution_mode_unchanged(previous, candidate),
@@ -37,20 +37,6 @@ defmodule BizKit.Extension.Upgrade do
          requires_review: previous != candidate,
          added: changes
        }}
-    end
-  end
-
-  # Required grant sets have no meaningful ordering. The shared V1
-  # validator guarantees uniqueness, but does not currently canonicalize
-  # the order *inside* each command. Compare normalized contracts instead.
-  defp validated(manifest) do
-    with {:ok, normalized} <- Manifest.validate(manifest) do
-      commands =
-        Enum.map(normalized.commands, fn command ->
-          %{command | required_grants: Enum.sort(command.required_grants)}
-        end)
-
-      {:ok, %{normalized | contract_version: 1, commands: commands}}
     end
   end
 

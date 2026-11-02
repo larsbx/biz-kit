@@ -51,6 +51,21 @@ The OTP app does not automatically start the Registry, and nothing here runs
 SchoolOps or Dispatch in the background. See the
 [registry-stage ADR](../../docs/architecture/2026-11-01-extension-registry-stage.md).
 
+## Reviewed source-locked release descriptors
+
+`BizKit.Extension.ReleaseLock.build/2` computes a domain-separated SHA-256
+fingerprint of validated ExtensionV1 manifests and binds it to an explicitly
+supplied full Git source commit for each compiled module. `verify/3`
+refuses source drift, unchanged-version manifest changes, incomplete pin sets,
+unknown modules and dependency incompatibilities. The exact-head CI helper
+uses the verified checkout SHA for both host reference descriptors.
+
+This is a reproducibility *preflight*, not source artifact attestation, durable
+governance approval, extension execution or signed business admission. The
+trusted host must independently attest its checkout/build and obtain current
+governance approval before enabling real behavior. See the
+[release-lock design](../../docs/architecture/2026-11-02-extension-source-lock.md).
+
 ## Upgrade compatibility review (portable)
 
 `BizKit.Extension.Upgrade.assess/2` compares canonical V1 manifests
