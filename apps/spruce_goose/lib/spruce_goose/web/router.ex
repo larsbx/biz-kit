@@ -86,6 +86,23 @@ defmodule SpruceGoose.Web.Router do
 
     get("/api/v1/chapters/:chapter_id/administrators", AdministratorController, :index)
     get("/api/v1/chapters/:chapter_id/projects", AdministratorController, :projects)
+    get(
+      "/api/v1/chapters/:chapter_id/ownerless_projects",
+      ProjectOwnershipController,
+      :index
+    )
+
+    post(
+      "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill",
+      ProjectOwnershipController,
+      :prepare
+    )
+
+    post(
+      "/api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:held_id",
+      ProjectOwnershipController,
+      :backfill
+    )
 
     post(
       "/api/v1/chapters/:chapter_id/administrators/:key_id/revocation",
