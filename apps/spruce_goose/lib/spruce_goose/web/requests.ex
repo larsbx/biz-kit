@@ -130,7 +130,13 @@ defmodule SpruceGoose.Web.Requests do
     :unknown_receipt,
     :unknown_legacy_project
   ]
-  @unprocessable [:bad_proof, :unknown_governance_key, :digest_mismatch, :not_named, :principal_not_human]
+  @unprocessable [
+    :bad_proof,
+    :unknown_governance_key,
+    :digest_mismatch,
+    :not_named,
+    :principal_not_human
+  ]
   @conflict [
     :nothing_to_define,
     :sop_mismatch,
@@ -217,9 +223,10 @@ defmodule SpruceGoose.Web.Requests do
     |> put_status(409)
     |> json(%{
       error: "successor_required",
-      projects: Enum.map(scopes, fn {tenant, project} ->
-        %{tenant_id: tenant, project_id: project}
-      end)
+      projects:
+        Enum.map(scopes, fn {tenant, project} ->
+          %{tenant_id: tenant, project_id: project}
+        end)
     })
   end
 
