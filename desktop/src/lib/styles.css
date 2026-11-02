@@ -70,7 +70,16 @@ body {
   background: var(--panel); border-right: 1px solid var(--line);
   display: flex; flex-direction: column; padding: .8rem 0;
 }
-.brand { padding: .3rem 1.1rem .9rem; font-weight: 600; font-size: 1.08rem; letter-spacing: .3px; }
+.brand { padding: .3rem .6rem .9rem; display: flex; align-items: flex-start; gap: .5rem; font-weight: 600; font-size: 1.08rem; letter-spacing: .3px; }
+.brand-text { min-width: 0; padding-top: .1rem; }
+.side-toggle { flex: 0 0 auto; }
+/* Ctrl+B: the sidebar shrinks to a rail of icons, so panels keep their shortcuts and state. */
+.side.rail { width: 3.4rem; flex-basis: 3.4rem; }
+.side.rail .nav { padding: 0 .4rem; }
+.side.rail .group { font-size: 0; padding: .4rem 0; border-top: 1px solid var(--line); margin-top: .4rem; }
+.side.rail .group:first-child { border-top: 0; margin-top: 0; }
+.side.rail .entry { justify-content: center; padding: .55rem 0; }
+.side.rail .entry .text, .side.rail .entry .state, .side.rail .entry kbd { display: none; }
 .brand small { display: block; color: var(--dim); font-weight: 400; font-size: .85rem; }
 .nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 .6rem; min-height: 0; overflow-y: auto; }
 .nav .group {

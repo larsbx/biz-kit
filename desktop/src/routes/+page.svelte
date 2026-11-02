@@ -6,7 +6,7 @@
   import Icon from "#lib/Icon.svelte";
   import Tiles from "#lib/Tiles.svelte";
   import { PRESETS, currentPreset, leaves, retainPanels } from "#lib/layout.js";
-  import { addPanel, restoreLayout, saveLayout, tiling } from "#lib/tiling.svelte.js";
+  import { addPanel, restoreLayout, saveLayout, sidebar, tiling, toggleSidebar } from "#lib/tiling.svelte.js";
   import { DEFAULTS, FONT, prefs, setFontSize } from "#lib/prefs.svelte.js";
   import { pending } from "#lib/confirmation.svelte.js";
 
@@ -41,7 +41,9 @@
       return;
     }
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-    if (e.key === ",") {
+    if (e.key === "b" || e.key === "B") {
+      toggleSidebar();
+    } else if (e.key === ",") {
       addPanel("settings");
     } else if (/^[1-9]$/.test(e.key) && ordered[Number(e.key) - 1]) {
       addPanel(ordered[Number(e.key) - 1].id);
@@ -80,10 +82,19 @@
 {/snippet}
 
 <div class="app">
-  <aside class="side">
+  <aside class={"side" + (sidebar.hidden ? " rail" : "")}>
     <div class="brand">
-      biz-kit
-      <small class="trunc">{info?.hosts.map((h) => h.name).join(" · ")}</small>
+      <button class="icon-btn side-toggle" onclick={toggleSidebar} aria-expanded={!sidebar.hidden}
+        title={sidebar.hidden ? "Show sidebar (Ctrl+B)" : "Hide sidebar (Ctrl+B)"}
+        aria-label={sidebar.hidden ? "Show sidebar" : "Hide sidebar"}>
+        <Icon name="sidebar" />
+      </button>
+      {#if !sidebar.hidden}
+        <span class="brand-text">
+          biz-kit
+          <small class="trunc">{info?.hosts.map((h) => h.name).join(" · ")}</small>
+        </span>
+      {/if}
     </div>
     <nav class="nav" aria-label="Panels">
       {#each GROUPS as g (g)}
@@ -100,9 +111,11 @@
       {/each}
       <div class="nav-foot">{@render entry(settings)}</div>
     </nav>
-    <div class="side-foot trunc" title={info?.configPath}>
-      {info ? `${info.hosts.length} hosts · ${info.configPath}` : ""}
-    </div>
+    {#if !sidebar.hidden}
+      <div class="side-foot trunc" title={info?.configPath}>
+        {info ? `${info.hosts.length} hosts · ${info.configPath}` : ""}
+      </div>
+    {/if}
   </aside>
   <main class="main tiles">
     {#if err}

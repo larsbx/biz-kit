@@ -64,3 +64,13 @@ export function addPanel(p: string) {
   tiling.zoomed = null;
   tiling.root = splitLeaf(tiling.root, best.l.id, best.w >= best.h ? "h" : "v", p);
 }
+
+const SIDEBAR_KEY = "sidebar";
+
+/** Whether the sidebar is collapsed to a rail, so the tiles get the width (Ctrl+B). */
+export const sidebar = $state({ hidden: localStorage.getItem(SIDEBAR_KEY) === "hidden" });
+
+export function toggleSidebar() {
+  sidebar.hidden = !sidebar.hidden;
+  try { localStorage.setItem(SIDEBAR_KEY, sidebar.hidden ? "hidden" : "shown"); } catch { /* a nicety */ }
+}

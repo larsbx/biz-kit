@@ -21,6 +21,7 @@
     zoom: ["M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"],
     restore: ["M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"],
     close: ["M6 6l12 12M18 6L6 18"],
+    sidebar: ["M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M9 3v18"],
   } satisfies Record<string, string[]>;
 
   export type IconName = keyof typeof PATHS;

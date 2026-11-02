@@ -19,7 +19,7 @@ no agent on the far side, nothing listening on a port.
 | **Dispatch** | the carrier's dispatch board over dispatch's `/v1/operations`: create loads, add stops, plan trips with a driver and equipment, and start, complete or cancel them |
 | **Settings** | theme (dark, light, high contrast, or match the OS) and text size; stored per machine in the webview, not in `config.json` |
 
-**Tiles:** panels sit side by side in tiles, as in the Crew Deck. Every tile header has a panel picker, split right, split down, zoom (fill the window; `Esc` restores, the other tiles keep their state) and close. Drag the gap between tiles to resize, double-click it to even it out, or focus it and use the arrow keys. A sidebar panel is added as a tile by splitting the largest one, or highlighted if it is already open; the same panel can be open twice, e.g. Services on two hosts. **Layouts** in the sidebar are presets (Overview, Operate, Everything, Dispatch desk, Single), and the one the tiles still match is marked. The layout is remembered.
+**Tiles:** panels sit side by side in tiles, as in the Crew Deck. Every tile header has a panel picker, split right, split down, zoom (fill the window; `Esc` restores, the other tiles keep their state) and close. Drag the gap between tiles to resize, double-click it to even it out, or focus it and use the arrow keys. A sidebar panel is added as a tile by splitting the largest one, or highlighted if it is already open; the same panel can be open twice, e.g. Services on two hosts. **Layouts** in the sidebar are presets (Overview, Operate, Everything, Dispatch desk, Single), and the one the tiles still match is marked. The layout is remembered. `Ctrl+B` (or the button above the panel list) folds the sidebar to a rail of icons so the tiles get the width; that is remembered too.
 
 **Navigation:** panels are grouped by what they act on, with a one-line hint under each and ● open / + add. `Ctrl` `1`–`5` adds or highlights a panel, `Ctrl` `,` opens Settings, and `Ctrl` `+`/`-`/`0` change or reset the text size.
 
@@ -152,6 +152,13 @@ cargo install tauri-driver --version 2.0.4 --locked
 npm run tauri build -- --debug --no-bundle
 xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit
 ```
+
+On headless CI, run the acceptance command under `dbus-run-session --` with
+`LIBGL_ALWAYS_SOFTWARE=1`, `WEBKIT_DISABLE_DMABUF_RENDERER=1`,
+`WEBKIT_DISABLE_COMPOSITING_MODE=1`, and `NO_AT_BRIDGE=1`. These are test-runner
+settings for Xvfb; the application keeps its normal graphics configuration.
+The native handshake has a bounded 60-second timeout and prints a separate
+session-ready marker before running panel assertions.
 
 The Desktop workflow runs this acceptance on Linux as well as the frontend and
 Rust checks on Linux, macOS, and Windows.

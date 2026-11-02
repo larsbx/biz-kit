@@ -72,3 +72,7 @@ priv/static/js/maps/   the only first-party portal JavaScript (§26.1)
 ## Android Slice 1 integration
 
 See [the native identity and device integration contract](../../docs/architecture/2026-10-21-android-dispatch-identity.md) for the existing identity/provider handoff, explicit account links, governance device approval, signed event admission and acceptance lanes.
+
+Dispatch.Extension is a nonmutating ExtensionV1 reference descriptor. Existing
+server authorization and transport ownership remain unchanged. See the
+[extension contract](../../docs/architecture/2026-10-31-extension-v1-first-slice.md).

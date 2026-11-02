@@ -35,3 +35,10 @@ active reservations. An item with no requirements is `:unlimited`.
 `eighty_sixed?/4` is true when none can be sold, and fails closed when
 availability cannot be computed. A property checks that the sellable count's
 worth of every requirement can be reserved and one more unit's cannot.
+
+**Basket-level preflight.** `InventoryCore.Basket.plan/7` proposes all
+ingredient/part holds together and refuses the whole candidate if any one
+stock aggregate fails. It does not persist state: hosts must atomically
+validate and admit the complete basket with serialized stock locks, signed
+authority, and one durable idempotency record before describing it as held.
+See [the acceptance boundary](../../docs/architecture/2026-11-01-basket-stock-preflight.md).
