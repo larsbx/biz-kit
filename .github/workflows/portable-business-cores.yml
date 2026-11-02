@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - 'apps/task_core/**'
+      - 'apps/order_core/**'
       - 'apps/commerce_core/**'
+      - 'apps/restaurant_core/**'
       - 'apps/inventory_core/**'
       - 'apps/fulfillment_core/**'
       - 'apps/sales_core/**'
@@ -28,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [task_core, commerce_core, inventory_core, fulfillment_core, sales_core]
+        app: [task_core, order_core, commerce_core, inventory_core, fulfillment_core, sales_core]
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -41,6 +43,10 @@ jobs:
           set -eu
           mkdir -p "$RUNNER_TEMP/business-core-vendor"
           cp -R "apps/${{ matrix.app }}" "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
+          # In-umbrella sibling dependencies resolve as ../<app> outside it too.
+          for sibling in order_core restaurant_core; do
+            [ -d "$RUNNER_TEMP/business-core-vendor/$sibling" ] || cp -R "apps/$sibling" "$RUNNER_TEMP/business-core-vendor/"
+          done
       - name: Resolve the package's own dependencies and compile
         shell: bash
         run: |

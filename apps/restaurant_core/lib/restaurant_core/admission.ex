@@ -9,16 +9,19 @@ defmodule RestaurantCore.Admission do
     * `RestaurantDeviceGrantedV1`, signed by a declared governance key, binds a
       device key to a merchant, an actor class and its allowed actions.
     * `RestaurantOrderPlacedV1`, signed by a device granted `checkout`, runs
-      `CommerceCore.Checkout` over the kitchen workflow and starts the order.
+      `OrderCore.Placement` over the kitchen workflow and starts the order. The
+      device prices the order (`CommerceCore.Checkout`) before signing; the
+      snapshot is recorded in integer minor units and checked for shape only.
     * `RestaurantOrderStepV1`, signed by a granted device, runs
       `RestaurantCore.Kitchen.apply/3`.
 
   The trusted context is derived from the grant, never from the payload, and
   the outcome is exactly the reducers' outcome (`admit/3` serves both check and
   fold). Every event is a business fact: none asserts payment or settlement.
+  Money is Hawala's: nothing here computes, accepts or settles an amount.
   """
 
-  alias CommerceCore.Checkout
+  alias OrderCore.Placement
   alias RestaurantCore.Kitchen
 
   @grant "RestaurantDeviceGrantedV1"
@@ -28,7 +31,7 @@ defmodule RestaurantCore.Admission do
 
   @actors Map.new(~w(admin staff system)a, &{Atom.to_string(&1), &1})
   @actions Map.new([:checkout | Map.keys(Kitchen.workflow().actions)], &{Atom.to_string(&1), &1})
-  @channels Map.new(Checkout.channels(), &{Atom.to_string(&1), &1})
+  @channels Map.new(Placement.channels(), &{Atom.to_string(&1), &1})
   @fulfillments Map.new(Kitchen.workflow().fulfillments, &{Atom.to_string(&1), &1})
   @adjustments Map.new(~w(discount_total tax_total delivery_fee tip)a, &{Atom.to_string(&1), &1})
 
@@ -58,7 +61,9 @@ defmodule RestaurantCore.Admission do
             "fulfillment" => :string,
             "currency" => :string,
             "lines" => :any,
-            "adjustments" => :any
+            "adjustments" => :any,
+            "subtotal_minor" => :int,
+            "total_minor" => :int
           },
           %{"delivery" => :any}
         ),
@@ -124,7 +129,7 @@ defmodule RestaurantCore.Admission do
 
   defp admit_one(%{type: @placed, chapter_id: ch, payload: p} = env, _keys, state) do
     with {:ok, _grant} <- device(env, state, :checkout),
-         {:ok, cmd, cart} <- decode_checkout(p),
+         {:ok, cmd, cart, snapshot} <- decode_checkout(p),
          {:ok, merchant} <- merchant(state, ch, p["merchant_id"]),
          :ok <-
            if(Map.has_key?(merchant.orders, p["order_id"]),
@@ -142,7 +147,8 @@ defmodule RestaurantCore.Admission do
            merchant: p["merchant_id"],
            cart_id: cmd.cart_id
          },
-         {:ok, checkout} <- placed(Checkout.apply(projection, trusted, cmd), merchant, cmd),
+         {:ok, checkout} <-
+           placed(Placement.apply(projection, trusted, cmd, snapshot), merchant, cmd),
          {:ok, order} <- Kitchen.new(p["merchant_id"], p["order_id"], cmd.fulfillment) do
       {:ok,
        put_in(state, [:merchants, {ch, p["merchant_id"]}], %{
@@ -207,7 +213,7 @@ defmodule RestaurantCore.Admission do
   defp merchant(state, ch, m) do
     case get_in(state, [:merchants, {ch, m}]) do
       nil ->
-        with {:ok, checkout} <- Kitchen.new_checkout(m, %{}),
+        with {:ok, checkout} <- Placement.new(Kitchen.workflow(), m, %{}),
              do: {:ok, %{checkout: checkout, orders: %{}, index: %{}}}
 
       merchant ->
@@ -247,9 +253,10 @@ defmodule RestaurantCore.Admission do
   defp decode_checkout(p) do
     with {:ok, channel} <- lookup(@channels, p["channel"]),
          {:ok, fulfillment} <- lookup(@fulfillments, p["fulfillment"]),
-         {:ok, currency} <- currency(p["currency"]),
-         {:ok, lines} <- lines(p["lines"], currency),
-         {:ok, adjustments} <- adjustments(p["adjustments"], currency) do
+         true <- currency?(p["currency"]),
+         true <- lines?(p["lines"]),
+         {:ok, adjustments} <- adjustments(p["adjustments"]),
+         true <- Enum.all?([p["subtotal_minor"], p["total_minor"]], &minor?/1) do
       cmd =
         %{
           cart_id: p["cart_id"],
@@ -262,50 +269,53 @@ defmodule RestaurantCore.Admission do
           &if(Map.has_key?(p, "delivery"), do: Map.put(&1, :delivery, p["delivery"]), else: &1)
         )
 
-      cart = %{principal: p["principal_id"], status: :active, currency: currency, lines: lines}
-      {:ok, cmd, cart}
+      cart = %{
+        principal: p["principal_id"],
+        status: :active,
+        currency: p["currency"],
+        lines: p["lines"]
+      }
+
+      snapshot = fn _cart, _cmd ->
+        {:ok,
+         %{
+           lines: p["lines"],
+           subtotal: p["subtotal_minor"],
+           total: p["total_minor"],
+           adjustments: adjustments
+         }}
+      end
+
+      {:ok, cmd, cart, snapshot}
     else
       _ -> {:error, :invalid_checkout_command}
     end
   end
 
-  defp currency(code) when is_binary(code) do
-    case Money.validate_currency(code) do
-      {:ok, currency} -> {:ok, currency}
-      _ -> :error
-    end
-  end
+  defp currency?(code), do: is_binary(code) and Regex.match?(~r/\A[A-Z]{3}\z/, code)
+  defp minor?(n), do: is_integer(n) and n >= 0
 
-  defp currency(_), do: :error
+  defp lines?(lines) when is_list(lines),
+    do:
+      Enum.all?(
+        lines,
+        &match?(
+          %{"unit_minor" => u, "quantity" => q, "discount_minor" => d}
+          when is_integer(u) and is_integer(q) and q > 0 and is_integer(d),
+          &1
+        )
+      )
 
-  defp lines(lines, currency) when is_list(lines) do
-    Enum.reduce_while(lines, {:ok, []}, fn
-      %{"unit_minor" => u, "quantity" => q, "discount_minor" => d} = l, {:ok, acc}
-      when is_integer(u) and is_integer(q) and is_integer(d) ->
-        line = %{
-          name: l["name"],
-          unit_price: Money.from_integer(u, currency),
-          quantity: q,
-          discount: Money.from_integer(d, currency)
-        }
+  defp lines?(_), do: false
 
-        {:cont, {:ok, acc ++ [line]}}
-
-      _, _ ->
-        {:halt, :error}
-    end)
-  end
-
-  defp lines(_, _), do: :error
-
-  defp adjustments(%{} = a, currency) do
+  defp adjustments(%{} = a) do
     if Enum.sort(Map.keys(a)) == Enum.sort(Map.keys(@adjustments)) and
-         Enum.all?(Map.values(a), &is_integer/1),
-       do: {:ok, Map.new(a, fn {k, v} -> {@adjustments[k], Money.from_integer(v, currency)} end)},
+         Enum.all?(Map.values(a), &minor?/1),
+       do: {:ok, Map.new(a, fn {k, v} -> {@adjustments[k], v} end)},
        else: :error
   end
 
-  defp adjustments(_, _), do: :error
+  defp adjustments(_), do: :error
 
   defp lookup(table, key) when is_binary(key), do: Map.fetch(table, key)
   defp lookup(_, _), do: :error

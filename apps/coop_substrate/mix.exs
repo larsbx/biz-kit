@@ -34,6 +34,8 @@ defmodule CoopSubstrate.MixProject do
       {:biz_kit_cluster, in_umbrella: true},
       # The task lifecycle the ledger admits, shared with any other host.
       {:task_core, in_umbrella: true},
+      # The restaurant order lifecycle the ledger admits (eatsbot rebuild).
+      {:restaurant_core, in_umbrella: true},
       # Cross-boundary signed replay acceptance; no production dependency.
       {:agent_ops_store, in_umbrella: true, only: :test},
       {:federation_service, in_umbrella: true, only: :test},

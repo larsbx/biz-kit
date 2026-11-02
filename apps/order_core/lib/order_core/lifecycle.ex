@@ -1,4 +1,4 @@
-defmodule CommerceCore.OrderLifecycle do
+defmodule OrderCore.Lifecycle do
   @moduledoc """
   Merchant-neutral order lifecycle and authorized candidate reducer (I₃/I₆).
 

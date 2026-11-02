@@ -111,6 +111,7 @@ defmodule CoopSubstrate.Protocol.Validity do
   # Every registered task type routes to the task gate; deriving the list from
   # the registration keeps a new type from being registered but left unchecked.
   @task_types Map.keys(TaskCore.Admission.event_types())
+  @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
@@ -124,6 +125,10 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @task_types do
     TaskCore.Admission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @restaurant_types do
+    RestaurantCore.Admission.check(env, gate)
   end
 
   defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do
