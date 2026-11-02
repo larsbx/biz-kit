@@ -69,35 +69,23 @@ defmodule BizKit.Extension.UpgradeTest do
     assert {:error, :version_downgrade} =
              Upgrade.assess(old, %{old | version: "1.1.9"})
 
-    other =
+    other = %{
       old
-      |> Map.put(:id, "dispatch")
-      |> Map.update!(:capabilities, &Enum.map(&1, fn name -> String.replace_prefix(name, "school_ops.", "dispatch.") end))
-      |> Map.update!(:requested_grants, &Enum.map(&1, fn name -> String.replace_prefix(name, "school_ops.", "dispatch.") end))
-      |> Map.update!(:commands, fn commands ->
-        Enum.map(commands, fn command ->
+      | id: "dispatch",
+        capabilities: ["dispatch.course.read"],
+        requested_grants: ["dispatch.workflow.propose"],
+        commands: [
           %{
-            command
-            | name: String.replace_prefix(command.name, "school_ops.", "dispatch."),
-              writer: "dispatch",
-              required_grants: ["dispatch.workflow.propose"]
+            name: "dispatch.workflow.propose",
+            writer: "dispatch",
+            required_grants: ["dispatch.workflow.propose"]
           }
-        end)
-      end)
-      |> Map.update!(:events, fn events ->
-        Enum.map(events, fn event ->
-          %{event | name: String.replace_prefix(event.name, "school_ops.", "dispatch."), writer: "dispatch"}
-        end)
-      end)
-      |> Map.update!(:projections, fn projections ->
-        Enum.map(projections, fn projection ->
-          %{
-            projection
-            | name: String.replace_prefix(projection.name, "school_ops.", "dispatch."),
-              source_event: String.replace_prefix(projection.source_event, "school_ops.", "dispatch.")
-          }
-        end)
-      end)
+        ],
+        events: [%{name: "dispatch.workflow.proposed", writer: "dispatch"}],
+        projections: [
+          %{name: "dispatch.workflow_view", source_event: "dispatch.workflow.proposed"}
+        ]
+    }
 
     assert {:error, :extension_identity_changed} = Upgrade.assess(old, other)
 
