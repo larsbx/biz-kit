@@ -115,12 +115,49 @@ governance backfills them with one batch per project:
 Backfill adds facts and rewrites no history: replay of the old events
 yields the same tasks.
 
+The server-side backfill implementation in the stacked successor branch is
+`CoopSubstrate.ProjectOwnership`:
+
+* `ownerless(chapter)` lists only existing projects with historical tasks or
+  grants and no owner, without mutating the ledger.
+* `prepare_backfill({chapter, tenant, project}, principal, governance_key_id, device)`
+  prepares the missing human-kind declaration (unless already declared),
+  an operator-device grant (unless already held), and an owner assignment.
+  The key and public key must be supplied by the administrator/device; no
+  device is created or silently inferred. Agent principals are refused.
+* `backfill(scope, principal, held_id, signatures)` attaches a governance
+  signature to every command. Its admission guard recomputes the exact
+  expected batch against current state, so an intervening assignment or
+  grant cannot be overwritten by a stale held request.
+
+The signed HTTP interface now exposes
+`GET /api/v1/chapters/:chapter_id/ownerless_projects` and
+`POST /api/v1/chapters/:chapter_id/tenants/:tenant_id/projects/:project_id/ownership/backfill/:principal_id`
+(with a `/:held_id` submission route). Governance must authorize the
+read and preparation, and each prepared command's canonical core is signed
+before commit. The chapter offboarding prepare API also accepts a
+duplicate-free `successors` array with tenant, project and principal IDs.
+A graphical owner/successor selector remains outstanding in #265.
+
+For headless administration, `mix coop.owner.backfill CHAPTER TENANT PROJECT PRINCIPAL`
+uses the existing governance seed in `HARNESS_KEYS_DIR` to sign a prepared
+backfill batch over HTTP. It checks exact canonical event types, chapter,
+tenant, project, principal and any supplied operator device before signing.
+Use `--device-key-id KEY --device-pubkey BASE64URL` only if the successor
+has no existing active operator grant. The seed never leaves the client.
+
+
+
 ## Not yet
 
-* **Administration views.** Chapter offboarding (`Offboarding`) now refuses to
-  offboard a project's owner unless the batch also reassigns the project. The
-  administration page cannot yet add a successor to that batch, so it shows
-  the refusal. A follow-up adds successor selection.
+* **Administration views.** The server-side chapter offboarding interface
+  now supports `Offboarding.prepare_chapter/4`, with a map from
+  `{tenant_id, project_id}` to eligible successor principals. It requires
+  one successor for *every* project still owned by the departing principal,
+  produces one governance-signed atomic batch, and rechecks selections
+  against current owner/holdings state at admission. The administration
+  page/client does not yet expose successor selection or legacy backfill;
+  that remains tracked in issue #265.
 * **Stewards and an explicit project lifecycle** (draft, active, archived) are
   deferred until a rule needs them.
 * **Model check.** The Quint models (`apps/task_core/spec`) do not include

@@ -60,7 +60,8 @@ defmodule SpruceGoose.Web.PrincipalController do
          {:ok, key_id} <- string(body["governance_key_id"]),
          {:ok, chapter} <- string(body["chapter_id"]),
          true <- chapter in chapters or {:unauthorized, :not_governance},
-         {:ok, batch} <- Offboarding.prepare_chapter(id, chapter, key_id) do
+         {:ok, successors} <- successor_selections(body["successors"]),
+         {:ok, batch} <- Offboarding.prepare_chapter(id, chapter, key_id, successors) do
       held_batch(conn, batch)
     else
       {:unauthorized, reason} -> unauthorized(conn, reason)
@@ -87,4 +88,30 @@ defmodule SpruceGoose.Web.PrincipalController do
       error -> refuse(conn, error)
     end
   end
+
+  # JSON has no tuple keys. Successor selection is an exact, duplicate-free
+  # list of scoped principals, not a caller-provided project inventory.
+  defp successor_selections(nil), do: {:ok, %{}}
+
+  defp successor_selections(rows) when is_list(rows) do
+    Enum.reduce_while(rows, {:ok, %{}}, fn row, {:ok, selected} ->
+      case row do
+        %{"tenant_id" => tenant, "project_id" => project, "principal_id" => principal}
+        when map_size(row) == 3 and is_binary(tenant) and is_binary(project) and
+               is_binary(principal) ->
+          scope = {tenant, project}
+
+          if Map.has_key?(selected, scope) do
+            {:halt, {:error, :bad_request}}
+          else
+            {:cont, {:ok, Map.put(selected, scope, principal)}}
+          end
+
+        _ ->
+          {:halt, {:error, :bad_request}}
+      end
+    end)
+  end
+
+  defp successor_selections(_), do: {:error, :bad_request}
 end
