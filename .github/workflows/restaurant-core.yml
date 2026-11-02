@@ -1,4 +1,4 @@
-name: Order core and restaurant layer
+name: Order core, restaurant layer and host
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
       - 'apps/restaurant_core/**'
       - 'apps/commerce_core/**'
       - 'apps/coop_substrate/**'
+      - 'apps/restaurant_host/**'
       - 'mix.exs'
       - 'mix.lock'
       - 'config/**'
@@ -83,3 +84,40 @@ jobs:
       - name: Signed restaurant admission through the Log (race, authority, replay)
         working-directory: apps/coop_substrate
         run: mix test test/restaurant_admission_test.exs test/log_test.exs --warnings-as-errors
+
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - name: Compile the host
+        working-directory: apps/restaurant_host
+        run: mix compile --warnings-as-errors
+      - name: Verify format
+        run: mix format --check-formatted apps/restaurant_host/mix.exs "apps/restaurant_host/{config,lib,test}/**/*.{ex,exs}"
+      # Slice 4's gate: a pickup order placed on the web, then accepted,
+      # prepared and completed on the kitchen board, through the signed Log.
+      - name: Storefront, board and orders against the Log
+        working-directory: apps/restaurant_host
+        run: mix test --no-start --warnings-as-errors
