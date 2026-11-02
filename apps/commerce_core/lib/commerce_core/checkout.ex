@@ -17,10 +17,15 @@ defmodule CommerceCore.Checkout do
 
   alias CommerceCore.Pricing
 
-  def new(merchant, carts) when is_binary(merchant) and byte_size(merchant) > 0 and is_map(carts),
-    do: {:ok, %{merchant: merchant, carts: carts, orders: %{}}}
+  @doc """
+  A projection for one merchant. The workflow (`OrderLifecycle.workflow/1`) names
+  the fulfillments checkout offers, so every placed order can start its lifecycle.
+  """
+  def new(%{fulfillments: [_ | _] = fulfillments}, merchant, carts)
+      when is_binary(merchant) and byte_size(merchant) > 0 and is_map(carts),
+      do: {:ok, %{merchant: merchant, fulfillments: fulfillments, carts: carts, orders: %{}}}
 
-  def new(_, _), do: {:error, :invalid_checkout_projection}
+  def new(_, _, _), do: {:error, :invalid_checkout_projection}
 
   @doc "Authorize before inspecting cart existence, status, prices or idempotency history."
   def apply(state, trusted, command) do
@@ -72,7 +77,7 @@ defmodule CommerceCore.Checkout do
   defp place(_, nil, _, _), do: {:error, :unknown_cart}
 
   defp place(state, cart, trusted, %{adjustments: adjustments} = cmd) do
-    with :ok <- fulfillment(cmd),
+    with :ok <- fulfillment(state.fulfillments, cmd),
          :ok <- active(cart),
          :ok <- adjustments(adjustments),
          {:ok, priced} <- Pricing.price(cart.currency, cart.lines, cmd.adjustments) do
@@ -116,10 +121,15 @@ defmodule CommerceCore.Checkout do
 
   defp adjustments(_), do: {:error, :invalid_adjustments}
 
-  defp fulfillment(%{fulfillment: :delivery, delivery: details}) when is_map(details), do: :ok
-  defp fulfillment(%{fulfillment: :delivery}), do: {:error, :delivery_required}
-  defp fulfillment(%{fulfillment: f}) when f in [:pickup, :dine_in], do: :ok
-  defp fulfillment(_), do: {:error, :invalid_fulfillment}
+  defp fulfillment(offered, %{fulfillment: f} = cmd) do
+    cond do
+      f not in offered -> {:error, :invalid_fulfillment}
+      f == :delivery and not is_map(Map.get(cmd, :delivery)) -> {:error, :delivery_required}
+      true -> :ok
+    end
+  end
+
+  defp fulfillment(_, _), do: {:error, :invalid_fulfillment}
 
   defp active(%{status: :active, lines: [_ | _]}), do: :ok
   defp active(%{status: :active}), do: {:error, :empty_cart}

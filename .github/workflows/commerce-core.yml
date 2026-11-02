@@ -53,7 +53,7 @@ jobs:
           apps/commerce_core/lib/commerce_core/order_lifecycle.ex
           apps/commerce_core/lib/commerce_core/checkout.ex
           apps/commerce_core/test/order_lifecycle_test.exs
-          apps/commerce_core/test/checkout_safety_test.exs
+          apps/commerce_core/test/checkout_test.exs
           apps/commerce_core/lib/commerce_core/catalog.ex
           apps/commerce_core/lib/commerce_core/catalog_wire.ex
           apps/commerce_core/test/catalog_test.exs
