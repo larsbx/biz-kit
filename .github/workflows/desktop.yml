@@ -63,12 +63,12 @@ jobs:
       - name: Test the backend
         working-directory: desktop/src-tauri
         run: cargo test --locked
-      - name: Build native acceptance tools and app
+      - name: Install native acceptance driver
         if: runner.os == 'Linux'
-        run: |
-          cargo install tauri-driver --version 2.0.4 --locked
-          npm run tauri build -- --debug --no-bundle
-      - name: Native Tauri panel acceptance
+        run: cargo install tauri-driver --version 2.0.4 --locked
+      - name: Build installable candidate
+        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} ${{ matrix.args }}
+      - name: Native Tauri release acceptance
         if: runner.os == 'Linux'
         env:
           # Xvfb has no hardware compositor. Keep these overrides in CI only.
@@ -76,10 +76,8 @@ jobs:
           WEBKIT_DISABLE_DMABUF_RENDERER: '1'
           WEBKIT_DISABLE_COMPOSITING_MODE: '1'
           NO_AT_BRIDGE: '1'
-        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/debug/biz-kit --service-owner-fixture
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/release/biz-kit --service-owner-fixture
 
-      - name: Build installable candidate
-        run: npm run tauri build -- --ci --bundles ${{ matrix.bundles }} ${{ matrix.args }}
       - name: Collect exact-source installers and checksums
         shell: bash
         run: >-

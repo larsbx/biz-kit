@@ -178,7 +178,8 @@ settings for Xvfb; the application keeps its normal graphics configuration.
 The native handshake has a bounded 60-second timeout and prints a separate
 session-ready marker before running panel assertions.
 
-The Desktop workflow runs this acceptance on Linux as well as the frontend and
+The Desktop workflow runs this acceptance on the packaged Linux release binary,
+after bundling and before uploading candidates, as well as the frontend and
 Rust checks on Linux, macOS, and Windows. Its native test also reviews and saves
 a real disposable config, checks the backup, and refuses a stale duplicate
 editor without discarding the draft. Linux CI additionally tests a large snapshot
