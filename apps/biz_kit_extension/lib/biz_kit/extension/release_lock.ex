@@ -7,9 +7,10 @@ defmodule BizKit.Extension.ReleaseLock do
   and authenticated by a separate trusted build/deployment host: this module
   cannot prove that a SHA belongs to the loaded BEAM code or grant activation.
 
-  All operations are pure except computing a SHA-256 digest. No domain modules
-  are started, no extension callback is executed after catalog construction,
-  and no grant, deployment approval, event or migration is written.
+  Fingerprinting is pure apart from SHA-256; catalog construction calls the
+  manifest callbacks of the *trusted* modules provided by the host. No domain
+  applications are started by this module, and no grant, deployment approval,
+  event or migration is written by it.
   """
 
   alias BizKit.Extension.{Catalog, Manifest}
