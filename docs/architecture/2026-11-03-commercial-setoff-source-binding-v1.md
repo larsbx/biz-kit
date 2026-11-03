@@ -157,3 +157,30 @@ additional controls exist and receive independent review.
 
 Related: #290 (open P0 audit), #291 (V1.1 implementation),
 `docs/architecture/2026-11-03-ledger-first-commercial-clearing.md`.
+
+## Signed local source-history extraction (increment 2)
+
+`CoopSubstrate.CommercialSetoffSources.snapshot/4` now offers a read-only
+snapshot for a **single local canonical business log**. It enumerates open
+mutual obligations in the current serialized Membership gate, reads each
+source-owned `ObligationRecorded` stream, independently checks the stored
+Ed25519 envelope signatures, extracts its full-record hash and stream
+revision, and rechecks that the Log head did not advance while collecting
+those records. It returns the same gate and exact source terms for
+`CommercialSetoffProof.prepare/8` without inventing source hashes.
+
+This increment rejects any source with more than one event (including
+assignment out and back), because the V1 current-obligation projection
+does not retain the provenance chain of changed debtors. It also refuses
+one-way, absent, or excessive source sets; substituted same-value
+obligations receive different source IDs and hashes. Negative controls
+exercise real signed Log streams, changed source sets, and restart replay.
+
+**Limitations:** checking signature validity on an accepted business event
+does not establish invoice authenticity, trade performance, agency authority
+or legally effective release. Per-stream reads and a stable-head observation
+are not a serialized reservation, financial commit, full log-chain audit,
+or an independently administered foreign node verification. Source revision
+coverage excludes assigned obligations until their complete signed lineage
+can be validated. The helper is inert and cannot authorize or submit a
+`NettingExecuted` event; the legacy aggregate-signed bypass is unchanged.
