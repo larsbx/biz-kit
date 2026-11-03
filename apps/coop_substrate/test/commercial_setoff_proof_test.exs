@@ -287,4 +287,34 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
     assert {:error, :stale_or_substituted_source_binding} =
              verify(ctx, proof: tampered)
   end
+  test "source-level replay model blocks a second intent with different nonce", ctx do
+    assert {:ok, second_intent} = prepare(ctx, nil, nil, "SET-2")
+    second_signatures = sign(second_intent, ctx)
+
+    assert {:ok, _} =
+             Proof.verify(
+               second_intent,
+               Log.gate(),
+               ctx.sources,
+               ctx.grants,
+               second_signatures
+             )
+
+    # Models a durable fence from a prior setoff even if the new event ID,
+    # intent ID and signatures are distinct. No real admission occurs here.
+    spent = MapSet.new([{:source, @chapter, "OB-1", 1}])
+
+    assert {:error, :source_already_spent} =
+             Proof.verify(
+               second_intent,
+               Log.gate(),
+               ctx.sources,
+               ctx.grants,
+               second_signatures,
+               spent
+             )
+
+    assert %{open: true} = Log.gate().obligations[{@chapter, "OB-1"}]
+  end
+
 end
