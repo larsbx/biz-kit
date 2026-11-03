@@ -324,11 +324,24 @@ defmodule CoopSubstrate.CommercialSetoffProof do
   defp evidence_input(_), do: %{}
 
   defp check_spent(body, digest, spent) do
-    if MapSet.member?(spent, digest) or
-         MapSet.member?(spent, {body["chapter_id"], body["intent_id"]}) do
-      {:error, :replayed_intent}
-    else
-      :ok
+    chapter = body["chapter_id"]
+
+    cond do
+      MapSet.member?(spent, digest) or MapSet.member?(spent, {chapter, body["intent_id"]}) ->
+        {:error, :replayed_intent}
+
+      is_list(body["sources"]) and
+          Enum.any?(body["sources"], fn source ->
+            is_map(source) and
+              MapSet.member?(
+                spent,
+                {:source, chapter, source["obligation_id"], source["revision"]}
+              )
+          end) ->
+        {:error, :source_already_spent}
+
+      true ->
+        :ok
     end
   end
 
