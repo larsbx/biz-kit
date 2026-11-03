@@ -1,0 +1,82 @@
+name: Commercial ledger-first clearing acceptance
+
+on:
+  pull_request:
+    paths:
+      - "apps/barter_core/**"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
+      - "apps/coop_substrate/test/commercial_setoff_test.exs"
+      - "docs/architecture/2026-11-03-ledger-first-commercial-clearing.md"
+      - ".github/workflows/commercial-clearing-acceptance.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/barter_core/**"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
+      - "apps/coop_substrate/test/commercial_setoff_test.exs"
+      - "docs/architecture/2026-11-03-ledger-first-commercial-clearing.md"
+      - ".github/workflows/commercial-clearing-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pure-cycle-proposals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Exact currency-partitioned pure clearing and negative controls
+        working-directory: apps/barter_core
+        run: mix test
+      - name: Exact formatting
+        working-directory: apps/barter_core
+        run: mix format --check-formatted "lib/**/*.ex" "test/**/*.exs"
+
+  bilateral-signed-ledger:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Install exact locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile umbrella and require no warnings
+        run: mix compile --warnings-as-errors
+      - name: Check targeted file formatting
+        run: >-
+          mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex
+          apps/coop_substrate/test/commercial_setoff_test.exs
+      - name: Signed bilateral source, admission, replay and restart controls
+        working-directory: apps/coop_substrate
+        run: >-
+          mix test
+          test/commercial_setoff_test.exs
+          test/netting_execution_test.exs
+          test/obligation_rail_test.exs

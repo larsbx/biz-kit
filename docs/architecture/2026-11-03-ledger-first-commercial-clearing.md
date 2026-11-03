@@ -164,3 +164,36 @@ No state transition here releases debt, issues regulated credits, transfers
 funds, performs financial clearance, verifies bank settlement, authenticates
 foreign authorities, creates a corporation, or certifies compliance with any
 federal/state/foreign financial law.
+
+## V1.1: existing signed bilateral rail and FX-safe totals
+
+The canonical business log already has `ObligationRecorded`,
+`NettingExecuted`, `Finance.compute/3`, dual-party Ed25519 signatures
+and serialized append-time netting recalculation. The new
+`CoopSubstrate.CommercialSetoff.prepare/6` constructs only an **unsigned**
+`NettingExecuted` proposal from current registered keys and current
+obligations in the canonical Log gate. It does not sign, append, grant
+financial authority or release a debt.
+
+Existing Log admission can then accept a separately dual-signed event,
+recompute its bilateral figures against current obligations, reject stale
+terms and old keys, and durably close the pair's existing obligations
+while recording one exact residual. Restart and replay must reconstruct
+the same business state.
+
+**Critical limitation:** the existing signed event encodes aggregate
+netting figures, not exact source obligation IDs, trade-performance
+evidence or legally effective discharge contracts. The proposed UI
+source-ID list is **not in the signed envelope**. Existing member
+registration is not proof of corporate agency or consent under foreign
+law. Technical append acceptance is not legal clearance; the P0 source
+provenance, contracting, sanctions and regulatory gates remain open.
+
+`BarterCore.LedgerFirstClearing` now reports independent
+`totals_by_currency` and never adds minor units from different
+currencies. Legacy aggregate scalar totals are `nil` for a mixed
+currency plan, populated only for zero/single currency. No FX occurs.
+
+This increment reuses the existing signed business writer and leaves
+Hawala financial custody, native postings and actual payment settlement
+under `larsbx/hawala-core`. It adds no automated payment endpoint.

@@ -34,7 +34,7 @@ defmodule BarterCore.LedgerFirstClearing do
       when is_list(obligations) and is_integer(now) and now >= 0 and is_list(opts) do
     with :ok <- validate(obligations, now),
          :ok <- check_budget(obligations, opts),
-         {:ok, original} <- safe_sum(Enum.map(obligations, & &1.amount_minor)) do
+         :ok <- check_currency_totals(obligations) do
       snapshot = Enum.sort_by(obligations, & &1.id)
 
       {cycles, residuals} =
@@ -48,12 +48,53 @@ defmodule BarterCore.LedgerFirstClearing do
 
       source_index = Map.new(snapshot, &{&1.id, &1})
       journals = journal_intents(cycles, source_index)
-      cleared = Enum.sum(Enum.map(cycles, &(&1.amount_minor * length(&1.obligation_ids))))
-      remaining = Enum.sum(Enum.map(residuals, & &1.amount_minor))
 
-      if cleared + remaining != original do
+      totals_by_currency =
+        snapshot
+        |> Enum.group_by(& &1.currency)
+        |> Enum.sort_by(&elem(&1, 0))
+        |> Enum.map(fn {currency, sources} ->
+          original = Enum.sum(Enum.map(sources, & &1.amount_minor))
+
+          cleared =
+            cycles
+            |> Enum.filter(&(&1.currency == currency))
+            |> Enum.map(&(&1.amount_minor * length(&1.obligation_ids)))
+            |> Enum.sum()
+
+          remaining =
+            residuals
+            |> Enum.filter(&(&1.currency == currency))
+            |> Enum.map(& &1.amount_minor)
+            |> Enum.sum()
+
+          %{
+            currency: currency,
+            original_minor: original,
+            proposed_reduction_minor: cleared,
+            residual_minor: remaining
+          }
+        end)
+
+      if Enum.any?(totals_by_currency, fn t ->
+           t.original_minor != t.proposed_reduction_minor + t.residual_minor
+         end) do
         {:error, :conservation_failure}
       else
+        # Summing minor units of USD, EUR, etc. would fabricate a value:
+        # the legacy scalar fields are populated only for a single currency.
+        scalar =
+          case totals_by_currency do
+            [] ->
+              %{original_minor: 0, proposed_reduction_minor: 0, residual_minor: 0}
+
+            [one] ->
+              Map.take(one, [:original_minor, :proposed_reduction_minor, :residual_minor])
+
+            _ ->
+              %{original_minor: nil, proposed_reduction_minor: nil, residual_minor: nil}
+          end
+
         hash_fields =
           [@schema, Integer.to_string(now)] ++
             Enum.flat_map(snapshot, &source_fields/1) ++
@@ -67,9 +108,11 @@ defmodule BarterCore.LedgerFirstClearing do
            cycles: cycles,
            residuals: residuals,
            journal_intents: journals,
-           original_minor: original,
-           proposed_reduction_minor: cleared,
-           residual_minor: remaining,
+           original_minor: scalar.original_minor,
+           proposed_reduction_minor: scalar.proposed_reduction_minor,
+           residual_minor: scalar.residual_minor,
+           totals_by_currency: totals_by_currency,
+           totals_scope: :per_currency_no_fx,
            status: :unadmitted_preview_only,
            authority: :host_assertions_unverified,
            discharge: :requires_contract_consent_and_legal_effect,
@@ -145,9 +188,16 @@ defmodule BarterCore.LedgerFirstClearing do
     end
   end
 
-  defp safe_sum(amounts) do
-    amount = Enum.sum(amounts)
-    if amount <= @maximum, do: {:ok, amount}, else: {:error, :amount_overflow}
+  defp check_currency_totals(obligations) do
+    if obligations
+       |> Enum.group_by(& &1.currency)
+       |> Enum.any?(fn {_currency, entries} ->
+         Enum.sum(Enum.map(entries, & &1.amount_minor)) > @maximum
+       end) do
+      {:error, :amount_overflow}
+    else
+      :ok
+    end
   end
 
   defp clear_cycles(edges, collected) do
