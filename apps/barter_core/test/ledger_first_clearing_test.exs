@@ -101,8 +101,18 @@ defmodule BarterCore.LedgerFirstClearingTest do
     assert plan.totals_scope == :per_currency_no_fx
 
     assert plan.totals_by_currency == [
-             %{currency: "EUR", original_minor: 100, proposed_reduction_minor: 0, residual_minor: 100},
-             %{currency: "USD", original_minor: 100, proposed_reduction_minor: 0, residual_minor: 100}
+             %{
+               currency: "EUR",
+               original_minor: 100,
+               proposed_reduction_minor: 0,
+               residual_minor: 100
+             },
+             %{
+               currency: "USD",
+               original_minor: 100,
+               proposed_reduction_minor: 0,
+               residual_minor: 100
+             }
            ]
 
     assert {:ok, ^plan} = Clearing.verify_plan(plan, @now)
