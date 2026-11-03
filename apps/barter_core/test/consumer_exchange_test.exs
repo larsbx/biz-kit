@@ -104,7 +104,10 @@ defmodule BarterCore.ConsumerExchangeTest do
 
     assert {:error, :unverified_intermediary} =
              Exchange.preview(
-               %{consignment() | broker: %{broker() | agent: %{broker().agent | grant_state: :revoked}}},
+               %{
+                 consignment()
+                 | broker: %{broker() | agent: %{broker().agent | grant_state: :revoked}}
+               },
                @now
              )
   end
