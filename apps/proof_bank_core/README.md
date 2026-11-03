@@ -61,7 +61,7 @@ tenant/project scoping, immutable revisions and evidence custody at the host.
 ## First-party Dispatch correspondence pilot (proposal)
 
 The first applied Proof Bank review packet is
-`ProofBankCore.DispatchPilot.compile/0`. It traces four named abstract Lean
+`ProofBankCore.DispatchPilot.compile/0`. It traces five named abstract Lean
 trip-transition theorems to selected real Dispatch integration tests and a
 **separate conformance-only** obligation for grant revocation under contention.
 Neither textual test anchors nor passing isolated tests imply that the Elixir
