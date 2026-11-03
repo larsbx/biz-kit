@@ -42,7 +42,8 @@ defmodule BarterCore.LedgerFirstClearingTest do
     assert plan.financial_settlement == :none
     assert plan.optimization == :deterministic_cycle_heuristic_not_global_optimum
 
-    for {{actor, currency}, postings} <- Enum.group_by(plan.journal_intents, &{&1.actor, &1.currency}) do
+    for {{actor, currency}, postings} <-
+          Enum.group_by(plan.journal_intents, &{&1.actor, &1.currency}) do
       assert is_binary(actor) and currency == "USD"
 
       debit = postings |> Enum.filter(&(&1.side == :debit)) |> Enum.sum_by(& &1.amount_minor)
@@ -51,11 +52,13 @@ defmodule BarterCore.LedgerFirstClearingTest do
       assert Enum.all?(postings, &(&1.status == :unadmitted_preview))
 
       clearing_debit =
-        postings |> Enum.filter(&(&1.account == :clearing_control and &1.side == :debit))
+        postings
+        |> Enum.filter(&(&1.account == :clearing_control and &1.side == :debit))
         |> Enum.sum_by(& &1.amount_minor)
 
       clearing_credit =
-        postings |> Enum.filter(&(&1.account == :clearing_control and &1.side == :credit))
+        postings
+        |> Enum.filter(&(&1.account == :clearing_control and &1.side == :credit))
         |> Enum.sum_by(& &1.amount_minor)
 
       assert clearing_debit == clearing_credit
@@ -103,6 +106,7 @@ defmodule BarterCore.LedgerFirstClearingTest do
     ]
 
     assert {:ok, plan} = Clearing.propose(input, @now)
+
     assert {:error, :invalid_clearing_plan} =
              Clearing.verify_plan(%{plan | proposed_reduction_minor: 100}, @now)
 
@@ -139,6 +143,7 @@ defmodule BarterCore.LedgerFirstClearingTest do
 
   test "overflow and bounded computational work fail closed" do
     max = 9_007_199_254_740_991
+
     assert {:error, :amount_overflow} =
              Clearing.propose([debt("ab", "a", "b", max), debt("bc", "b", "c", 1)], @now)
 
