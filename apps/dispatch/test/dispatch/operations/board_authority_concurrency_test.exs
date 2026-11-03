@@ -50,18 +50,7 @@ defmodule Dispatch.Operations.BoardAuthorityConcurrencyTest do
     test "removing the capability from the role definition denies it", ctx do
       # No Ash action may change a used definition's authority (Section 23.3);
       # a data migration is the one path that can, so the test takes it.
-      revoke_capability = fn ->
-        Repo.query!(
-          """
-          UPDATE role_definitions
-          SET capabilities_json = array_remove(capabilities_json, 'assignment.update.status')
-          WHERE id = $1
-          """,
-          [Ecto.UUID.dump!(ctx.grant.role_definition_id)]
-        )
-      end
-
-      assert {:error, :forbidden} = interleaved(ctx, revoke_capability)
+      assert {:error, :forbidden} = interleaved(ctx, fn -> remove_capability(ctx) end)
       assert_unchanged(ctx)
     end
 
@@ -123,6 +112,18 @@ defmodule Dispatch.Operations.BoardAuthorityConcurrencyTest do
     end
   end
 
+  describe "the transition takes the selected grant lock first" do
+    test "revocation waits for the transition commit and denies the next write", ctx do
+      change = fn -> Fixtures.revoke(ctx.org.id, ctx.grant) end
+
+      assert_grant_change_waits(ctx, change)
+    end
+
+    test "a role definition update waits for the transition commit and denies the next write", ctx do
+      assert_grant_change_waits(ctx, fn -> remove_capability(ctx) end)
+    end
+  end
+
   describe "a stale actor snapshot" do
     test "a grant revoked before the call is refused", ctx do
       Fixtures.revoke(ctx.org.id, ctx.grant)
@@ -175,6 +176,63 @@ defmodule Dispatch.Operations.BoardAuthorityConcurrencyTest do
       assert %{rows: [[0]]} = count("stops", ctx)
       assert %{rows: [[1]]} = count("assignments", ctx)
     end
+  end
+
+  defp remove_capability(ctx) do
+    assert %{num_rows: 1} =
+             Repo.query!(
+               """
+               UPDATE role_definitions
+               SET capabilities_json = array_remove(capabilities_json, 'assignment.update.status')
+               WHERE id = $1
+               """,
+               [Ecto.UUID.dump!(ctx.grant.role_definition_id)]
+             )
+  end
+
+  defp assert_grant_change_waits(ctx, change) do
+    parent = self()
+
+    holder =
+      session(fn ->
+        Repo.transaction(fn ->
+          assert {:ok, _} = Board.transition(ctx.actor, ctx.trip.id, "activate", ctx.trip.version)
+          send(parent, {:transition_pending, backend()})
+          receive do: (:commit -> :ok)
+        end)
+      end)
+
+    assert_receive {:transition_pending, holder_backend}, 5_000
+
+    writer =
+      session(fn ->
+        send(parent, {:grant_writer, backend()})
+        change.()
+      end)
+
+    try do
+      assert_receive {:grant_writer, writer_backend}, 5_000
+      assert waiting_on?(holder_backend), "the grant writer must wait for the transition"
+      assert %{rows: [[true]]} =
+               Repo.query!("SELECT $1 = ANY(pg_blocking_pids($2))", [
+                 holder_backend,
+                 writer_backend
+               ])
+
+      # An independent reader sees neither half of the uncommitted write.
+      assert_unchanged(ctx)
+    after
+      send(holder.pid, :commit)
+    end
+
+    assert {:ok, :ok} = Task.await(holder, 10_000)
+    Task.await(writer, 10_000)
+    assert_moved(ctx)
+
+    assert {:error, :forbidden} =
+             Board.transition(ctx.actor, ctx.trip.id, "complete", ctx.trip.version + 1)
+
+    assert_moved(ctx)
   end
 
   # Replaces the setup grant with one shaped by `opts`; only one active grant of
