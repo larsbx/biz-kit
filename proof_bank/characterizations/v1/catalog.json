@@ -843,7 +843,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "acc46b3453aaa1b39d17d5d239c2076389157b57",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "adc7fb24a1daadb64b5cdfd4e6be85fee79bf32b",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -1056,6 +1056,7 @@
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs",
         "apps/inventory_core/lib/inventory_core.ex",
         "apps/inventory_core/test/inventory_core_test.exs",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex",
         "apps/task_core/lib/task_core/admission.ex",
         "mix.exs"
       ],
