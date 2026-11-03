@@ -135,7 +135,7 @@ defmodule CoopSubstrate.CommercialSetoff do
 
   defp eligible_report(_), do: {:error, :nothing_to_net}
 
-  defp residual_payload(obligations, chapter, nil, nil), do: {:ok, %{}}
+  defp residual_payload(_obligations, _chapter, nil, nil), do: {:ok, %{}}
 
   defp residual_payload(obligations, chapter, {debtor, creditor, amount}, residual_id)
        when is_binary(residual_id) and byte_size(residual_id) > 0 and
