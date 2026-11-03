@@ -7,6 +7,11 @@ on:
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
+      - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
+      - 'apps/dispatch/test/support/**'
+      - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
+      - 'apps/dispatch/lib/dispatch/identity/tokens/**'
+      - 'apps/biz_kit_identity/**'
       - 'formal/lean/**'
       - 'formal/quint/**'
       - '.github/workflows/proof-bank-dispatch-pilot.yml'
@@ -18,6 +23,11 @@ on:
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
+      - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
+      - 'apps/dispatch/test/support/**'
+      - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
+      - 'apps/dispatch/lib/dispatch/identity/tokens/**'
+      - 'apps/biz_kit_identity/**'
       - 'formal/lean/**'
       - 'formal/quint/**'
       - '.github/workflows/proof-bank-dispatch-pilot.yml'
@@ -39,7 +49,12 @@ jobs:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - name: Record exact revision
-        run: git rev-parse HEAD
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          revision=$(git rev-parse HEAD)
+          echo "Dispatch Proof Bank revision: $revision"
+          test "$revision" = "$EXPECTED_REVISION"
       - name: Compile and test portable review packet
         working-directory: apps/proof_bank_core
         run: |
@@ -59,7 +74,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Record exact revision
-        run: git rev-parse HEAD
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          revision=$(git rev-parse HEAD)
+          echo "Dispatch Proof Bank revision: $revision"
+          test "$revision" = "$EXPECTED_REVISION"
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ runner.temp }}/bizkit-lean-archives
@@ -101,7 +121,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Record exact revision
-        run: git rev-parse HEAD
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          revision=$(git rev-parse HEAD)
+          echo "Dispatch Proof Bank revision: $revision"
+          test "$revision" = "$EXPECTED_REVISION"
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -119,4 +144,8 @@ jobs:
       - name: Transition, concurrency and grant revocation integration tests
         working-directory: apps/dispatch
         run: |
-          mix test --include integration             test/dispatch/operations/board_test.exs             test/dispatch/operations/board_concurrency_test.exs             test/dispatch/operations/board_authority_concurrency_test.exs
+          mix test --include integration \
+            test/dispatch/operations/board_test.exs \
+            test/dispatch/operations/board_concurrency_test.exs \
+            test/dispatch/operations/board_authority_concurrency_test.exs \
+            test/dispatch_web/operations_controller_test.exs

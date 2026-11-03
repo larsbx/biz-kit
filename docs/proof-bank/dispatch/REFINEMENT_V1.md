@@ -77,3 +77,76 @@ change-detection layers.
 
 This PR introduces **no deployment, permissions, financial authority,
 business writes or marketplace activation**.
+
+## Proposed correspondence at the committed transaction boundary
+
+Source audit baseline: main `a6253c5e1fd34404845f5d6d1bdbfed44db6dccf`
+(PR #292 merge). At the initial follow-up inspection, run
+[41658597995](https://github.com/larsbx/biz-kit/actions/runs/41658597995)
+reported formal, runtime, and portable-linkage queued. The rows below
+distinguish source inspection and test coverage from execution results.
+
+Project the state of one committed trip and its load. Use an injective ID
+encoding for organization equality within the selected tenant. The tentative
+linearization point for a successful operation is the outer PostgreSQL
+commit. A snapshot taken inside that transaction can witness the pre-state
+after locking, but its changes do not yet count as committed events.
+
+| Obligation | Runtime projection and guard | Abstract result and runtime coverage |
+| --- | --- | --- |
+| D-ORG | Board derives the selected organization from the role. Tenant-scoped Assignment lookup follows `load_id`; the load carrier must match the selected organization. Compare organization IDs after tenant scoping. | Lean refuses differing organizations. BoardTest exercises a foreign trip. Tenant scope and organization equality are distinct runtime checks. |
+| D-STALE | `assignments.version` maps to a natural number; `nil` maps to `none` and a valid integer to `some`. Board rereads after the trip row lock and Ash applies its optimistic lock. | Lean refuses mismatching explicit versions. Board tests cover stale retry, queued reread, and competing same-version cancellations. |
+| D-TERMINAL | Map `PLANNED/ACTIVE/COMPLETED/CANCELLED` to the corresponding Lean constructors. Board and Ash guard action source. `endPresent` is timestamp presence. `terminalWritten` is projected from committed terminal transition history. | Lean refuses transitions from terminal states. Board tests exercise the transition table and a queued update against the committed terminal state. |
+| D-VERSION | Successful Ash updates increment the version on the same row. Model exactly one increment per committed transition within the representable database range. | Lean proves the increment for abstract commit. Board tests check one increment after competing writes and no increment on rollback. |
+| D-AUDIT | Filter committed audit rows by tenant, trip subject and the three transition event types. Map `assignment.activated/completed/cancelled` to their actions in trip commit order. | Lean proves one append per abstract commit. Board tests inspect lifecycle rows, winning event type, selected assignment ID, invisibility before commit and absence after forced rollback. A durable reconstruction of commit order across all writers remains open. |
+| D-GRANT | Compare selected assignment ID, principal type and ID, tenant and organization. After the trip lock, `authorize/3` share-locks the assignment and definition and, for a person, participant and user. It rereads the interval, standing and capability at server time. Audit uses that fresh actor. | Authorization is a precondition of the Lean transition. PostgreSQL witnesses cover a revocation or capability change committing first, the writer waiting when Board locks first, and a subsequent denial. The HTTP test exercises an already-expired Biz-kit bearer session with a current grant and a live-session control. |
+
+Lean admits a state change only by organization, source state and optional
+version, once the actor is admitted. Runtime can additionally refuse for an
+invalid session at entry, unavailable records, a missing driving role on
+activation, Ash/database errors or other boundary conditions. The candidate
+correspondence is one-way for successful **commits**, with failed or rolled
+back database attempts leaving the projected state unchanged. The HTTP or
+Board response is a separate observation. In particular, Board reloads the
+load after the mutation transaction, so response failure alone cannot be used
+as evidence of rollback.
+
+## Remaining proof and acceptance work
+
+- Review the projection and show every supported writer preserves it. Justify
+  the SQL isolation and lock assumptions, including concurrent edits of the
+  load organization, lock cycles, retries and related write paths.
+- Decide the semantics for a source session or time-bounded grant that expires
+  after admission while a write is blocked. HTTP authentication precedes Board,
+  and the Board transaction receives no source-session credential. Row locks
+  serialize database edits but do not freeze a clock. The expiry case in this
+  suite is at request entry.
+- Establish the durable audit history projection and atomicity across all
+  supported write paths. The rollback control exercises one concrete path.
+- Global driver exclusivity across trips, writers and tenants remains
+  **unverified**. Give it its own invariant, authority scope, and adversarial
+  two-trip PostgreSQL cases.
+- Record exact-head hosted outcomes before acceptance. The Proof Bank packet
+  remains unverified, and marketplace release remains gated by #242.
+
+## Reproduce the focused evidence
+
+Check out the exact review SHA in a clean worktree and record
+`git rev-parse HEAD`. Use the workflow's pinned toolchains, locked dependencies
+and PostGIS 16 service with the EventStore and Dispatch setup steps. From the
+repository root:
+
+```sh
+bash formal/lean/check.sh
+bash formal/quint/check.sh
+cd apps/dispatch
+MIX_ENV=test mix test --include integration \
+  test/dispatch/operations/board_test.exs \
+  test/dispatch/operations/board_concurrency_test.exs \
+  test/dispatch/operations/board_authority_concurrency_test.exs \
+  test/dispatch_web/operations_controller_test.exs
+```
+
+The forced outer rollback and the expired credential paired with a live
+credential are runtime negative controls. The existing Quint counterexample
+controls exercise model sensitivity separately.

@@ -6,7 +6,7 @@ defmodule DispatchWeb.OperationsControllerTest do
   import Plug.Conn
   import Plug.Test
 
-  alias Dispatch.Support.Fixtures
+  alias Dispatch.Support.{Fixtures, PortalIdentity}
   alias Dispatch.Support.Tokens.StaticVerifier
 
   @moduletag :integration
@@ -26,6 +26,8 @@ defmodule DispatchWeb.OperationsControllerTest do
 
     %{
       actor: actor,
+      org: org,
+      desk: desk,
       driver: driver,
       token: StaticVerifier.token_for(desk.oidc_subject),
       driver_token: StaticVerifier.token_for(field.oidc_subject)
@@ -79,6 +81,40 @@ defmodule DispatchWeb.OperationsControllerTest do
 
     assert %{"drivers" => [%{"public_name" => "Dana"}]} =
              decoded(call(:get, "/v1/operations/fleet", ctx.token))
+  end
+
+  test "an expired Biz-kit session cannot move a trip even with a current role", ctx do
+    :ok = PortalIdentity.setup()
+    trip = Fixtures.assignment_record(ctx.org.id, ctx.org, ctx.driver)
+    path = "/v1/operations/trips/#{trip.id}/transitions"
+    params = %{"action" => "activate", "expected_version" => trip.version}
+    ttl = Application.fetch_env(:biz_kit_identity, :session_ttl_ms)
+
+    on_exit(fn ->
+      case ttl do
+        {:ok, previous} -> Application.put_env(:biz_kit_identity, :session_ttl_ms, previous)
+        :error -> Application.delete_env(:biz_kit_identity, :session_ttl_ms)
+      end
+    end)
+
+    Application.put_env(:biz_kit_identity, :session_ttl_ms, 60_000)
+    live = PortalIdentity.token_for(ctx.desk.oidc_subject)
+    Application.put_env(:biz_kit_identity, :session_ttl_ms, -1)
+    expired = PortalIdentity.token_for(ctx.desk.oidc_subject)
+
+    refused = call(:post, path, expired, params)
+    assert {refused.status, decoded(refused)["code"]} == {401, "UNAUTHENTICATED"}
+
+    unchanged = Ash.get!(Dispatch.Fleet.Assignment, trip.id, authorize?: false, tenant: ctx.org.id)
+    assert {unchanged.status, unchanged.version} == {:PLANNED, trip.version}
+
+    assert %{rows: []} =
+             Dispatch.Repo.query!(
+               "SELECT id FROM audit_events WHERE tenant_id = $1 AND subject_id = $2",
+               [Ecto.UUID.dump!(ctx.org.id), Ecto.UUID.dump!(trip.id)]
+             )
+
+    assert call(:post, path, live, params).status == 200
   end
 
   test "a retried create under one Idempotency-Key makes one load", ctx do
