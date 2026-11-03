@@ -1,0 +1,85 @@
+name: Project ownership acceptance
+on:
+  pull_request:
+    paths:
+      - 'apps/task_core/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/spruce_goose/**'
+      - '.github/workflows/project-ownership-acceptance.yml'
+  push:
+    branches: [main]
+concurrency:
+  group: ownership-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+jobs:
+  ownership-host-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Report exact acceptance revision
+        run: git rev-parse HEAD
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get --check-locked
+      - run: mix compile --warnings-as-errors
+      - name: Check ownership Elixir formatting
+        run: >-
+          mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/administrators.ex
+          apps/coop_substrate/lib/coop_substrate/offboarding.ex
+          apps/coop_substrate/lib/coop_substrate/project_ownership.ex
+          apps/coop_substrate/lib/mix/tasks/coop.owner.succeed.ex
+          apps/coop_substrate/test/owner_succession_cli_test.exs
+          apps/coop_substrate/test/owner_succession_test.exs
+          apps/coop_substrate/test/project_ownership_backfill_test.exs
+          apps/coop_substrate/test/chapter_projects_test.exs
+          apps/spruce_goose/test/spruce_goose/web/project_ownership_test.exs
+          apps/spruce_goose/test/spruce_goose/web/ownership_browser_test.exs
+      - name: TaskCore ownership invariants
+        working-directory: apps/task_core
+        run: mix test test/ownership_test.exs
+      - name: Host succession, legacy backfill and CLI regressions
+        working-directory: apps/coop_substrate
+        run: >-
+          mix test test/owner_succession_test.exs test/project_ownership_backfill_test.exs
+          test/owner_succession_cli_test.exs test/owner_backfill_cli_test.exs
+          test/chapter_projects_test.exs
+      - name: Create and migrate orchestration database
+        working-directory: apps/spruce_goose
+        run: mix ecto.create && mix ecto.migrate
+      - name: Signed ownership HTTP acceptance
+        working-directory: apps/spruce_goose
+        run: mix test test/spruce_goose/web/project_ownership_test.exs test/spruce_goose/web/administration_test.exs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pure browser contracts
+        run: node --test apps/spruce_goose/test/js/*.test.mjs
+      - name: Install pinned browser
+        run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Real governance browser acceptance
+        working-directory: apps/spruce_goose
+        run: mix test test/spruce_goose/web/ownership_browser_test.exs --only browser

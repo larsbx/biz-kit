@@ -184,4 +184,101 @@ defmodule SpruceGoose.Web.ProjectOwnershipTest do
     assert Projects.owner(Log.gate().orchestration, {w.chapter, tenant(), "old-project"}) ==
              nil
   end
+
+  defp submit_batch(path, held, signer) do
+    signatures =
+      Enum.map(held.commands, fn command ->
+        command.signing_bytes
+        |> CoopSubstrate.Crypto.sign(signer.seed)
+        |> Base.url_encode64(padding: false)
+      end)
+
+    call(
+      :post,
+      path <> "/" <> held.id,
+      [{"content-type", "application/json"}],
+      Jason.encode!(%{signatures: signatures})
+    )
+  end
+
+  defp human_alice(w) do
+    append!(
+      event(w, w.gov, "TaskPrincipalKindDeclaredV1", %{
+        "principal_id" => "alice",
+        "kind" => "human"
+      })
+    )
+  end
+
+  defp prepare_succession(w) do
+    CoopSubstrate.Offboarding.prepare_chapter("owner", w.chapter, w.gov.signer.key_id, %{
+      {tenant(), "project-1"} => "alice",
+      {tenant(), "project-2"} => "alice"
+    })
+  end
+
+  test "signed HTTP rejects a stale successor grant and wrong signatures without any partial append",
+       w do
+    human_alice(w)
+    {:ok, held} = prepare_succession(w)
+    path = "/api/v1/principals/owner/chapter_offboarding"
+    head = Log.head()
+    wrong = member("governance")
+    assert submit_batch(path, held, wrong).status == 422
+    assert Log.head() == head
+    assert Projects.owner(Log.gate().orchestration, {w.chapter, tenant(), "project-1"}) == "owner"
+
+    # A previously eligible successor loses their operator grant after review.
+    {:ok, held} = prepare_succession(w)
+    revoke!(w, "TaskOperatorRevokedV1", w.op_grant)
+    head = Log.head()
+    refused = submit_batch(path, held, w.gov)
+    assert refused.status == 409
+    assert refused.resp_body =~ "project_owner_ineligible"
+    assert Log.head() == head
+    assert Projects.owner(Log.gate().orchestration, {w.chapter, tenant(), "project-2"}) == "owner"
+  end
+
+  test "HTTP batch scopes are bound and a committed batch cannot replay or rewrite history", w do
+    human_alice(w)
+    {:ok, held} = prepare_succession(w)
+    head = Log.head()
+    foreign = "/api/v1/principals/not-the-owner/chapter_offboarding"
+    assert submit_batch(foreign, held, w.gov).status == 404
+    assert Log.head() == head
+    {:ok, history} = Log.read_all(from: 1)
+    path = "/api/v1/principals/owner/chapter_offboarding"
+    assert submit_batch(path, held, w.gov).status == 201
+    head = Log.head()
+    assert submit_batch(path, held, w.gov).status == 404
+    assert Log.head() == head
+    {:ok, after_events} = Log.read_all(from: 1)
+    assert Enum.take(after_events, length(history)) == history
+    assert length(after_events) == length(history) + 4
+  end
+
+  test "project display uses TaskCore eligibility inside each tenant boundary", w do
+    human_alice(w)
+
+    grant!(w, "TaskOperatorGrantedV1", member("operator"), "alice", "same-name", %{
+      "tenant_id" => "tenant-2"
+    })
+
+    url = w.base <> "/api/v1/chapters/#{w.chapter}/projects"
+    {:ok, projects} = Client.get_signed(url, governance(w))
+    p = Enum.find(projects, &(&1["project_id"] == "project-1"))
+    assert p["accountable_owner"] == "owner"
+    assert p["owner_kind"] == "human"
+    assert p["owner_eligible"]
+
+    assert %{"principal_id" => "alice", "kind" => "human", "eligible" => true} in Enum.map(
+             p["owner_candidates"],
+             &Map.take(&1, ["principal_id", "kind", "eligible"])
+           )
+
+    refute Enum.any?(p["owner_candidates"], &(&1["principal_id"] == "bot" and &1["eligible"]))
+    foreign = Enum.find(projects, &(&1["tenant_id"] == "tenant-2"))
+    assert foreign["accountable_owner"] == nil
+    assert Enum.map(foreign["owner_candidates"], & &1["principal_id"]) == ["alice"]
+  end
 end

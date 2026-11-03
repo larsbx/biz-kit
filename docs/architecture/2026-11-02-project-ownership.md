@@ -173,3 +173,66 @@ app's Elixir requirement relaxed, and in CI on Elixir 1.19/OTP 27. CoopSubstrate
 and SpruceGoose could not be compiled in the authoring sandbox (Hex
 unreachable); their suites and the release smoke run in the Consolidation
 workflow, and SchoolOps in its own.
+
+
+## Browser administration surface (follow-up PR)
+
+The existing signed-in SpruceGoose `/app` administration section now offers
+two client-side operations, available only to a browser already enrolled with a
+chapter governance key. It does **not** store governance seeds or replace the
+TaskCore admission gate:
+
+* **Chapter offboarding with succession.** When a principal owns projects,
+  the administrator must enter an eligible human successor for every owned
+  `{tenant, project}`. The browser constructs the expected offboarding,
+  owner assignment, and governance-key revocation commands before preparation,
+  verifies **every decoded signed core** against the exact intent, confirms
+  the complete batch, signs on the browser's non-extractable Ed25519 key, and
+  submits all signatures atomically.
+* **Legacy backfill.** An authorized, governance-signed chapter read lists
+  existing ownerless projects. The browser accepts a human principal and, if
+  required, that principal's existing operator-device key ID and public key
+  (the ID must match the public key). It validates the optional human-kind
+  declaration, optional operator grant, and exact owner assignment against
+  the prepared canonical commands before signing. An owner assignment itself
+  never creates permission or proves personhood.
+
+A missing/agent successor, stale project owner, revoked operator grant,
+duplicate selection, wrong chapter/tenant, or changed command is refused
+either by the client pre-signing predicate or by authoritative ledger admission.
+The interface does not synthesize a replacement principal or private device
+key. A targeted browser smoke of both flows under actual Chrome remains
+necessary before claiming production-ready administration.
+
+### Operator acceptance and concurrency
+
+The chapter administration feed now carries `accountable_owner`, `owner_kind`,
+`owner_eligible` and `owner_candidates`, derived by `Administrators.projects/2`
+using `TaskCore.Projects.eligible?/3`. Candidates and reasons are scoped to the
+specific chapter, tenant and project; this is a projection, not another owner
+registry. A candidate selected in one project does not qualify in another.
+
+Chapter offboarding offers only currently eligible humans other than the
+person leaving. Every affected project must have a selection before preparing
+the existing governance-held batch. A last owner grant cannot be revoked through
+the isolated grant button; use chapter succession. The atomic batch and TaskCore
+admission remain authoritative, including changes made while a confirmation is
+open. Stale-state, signature, scope and eligibility refusals explain how to
+refresh and prepare a new batch. Live chapter updates do not erase selections
+or silently replace the bytes already displayed for signature.
+
+The ownerless panel reads through the signed chapter API, labels exact tenant
+and project scopes, and verifies every decoded backfill command before signing.
+A missing human declaration and optional operator grant are visible in the
+same confirmation as the owner assignment. Existing principal/device public
+keys are used; original events are never modified. Ownership confers no
+operational authority beyond the explicit grants already recorded.
+
+`Project ownership acceptance` checks out the PR's exact head SHA. It runs the
+TaskCore ownership tests, host succession/backfill/CLI regressions, signed HTTP
+negative controls, pure JS contracts, and a dedicated Chromium test using a
+real enrolled non-extractable governance key. The browser exercises incomplete
+multi-project selection, a holding added during review, a rejected signature,
+complete atomic succession, and historical backfill. Host tests verify no
+partial append, replay refusal, unchanged historical event prefixes and tenant
+isolation. Passing results must be checked at that exact SHA before integration.

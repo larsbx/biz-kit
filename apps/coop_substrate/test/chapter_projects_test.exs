@@ -42,7 +42,10 @@ defmodule CoopSubstrate.ChapterProjectsTest do
     {:ok, _} =
       Log.append(offboard(gov, "bob", %{"tenant_id" => "tenant-1", "project_id" => "project-2"}))
 
-    assert Administrators.projects("chapter-genesis") == [
+    assert Enum.map(
+             Administrators.projects("chapter-genesis"),
+             &Map.take(&1, [:tenant_id, :project_id, :tasks, :grants, :people])
+           ) == [
              %{
                tenant_id: "tenant-1",
                project_id: "project-1",
