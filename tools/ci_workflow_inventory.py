@@ -44,6 +44,19 @@ def inspect_workflow(path: Path) -> dict:
     paths: list[str] = []
     has_filter = False
     unknown = []
+    # This is a deliberately narrow, fail-closed subset of Actions trigger YAML.
+    # An unknown entry anywhere below "on:" must never imply an event is absent.
+    event_fields = {
+        "pull_request": {"paths", "paths-ignore", "branches", "branches-ignore", "types"},
+        "push": {"paths", "paths-ignore", "branches", "branches-ignore", "tags", "tags-ignore"},
+        "workflow_run": {"workflows", "types", "branches", "branches-ignore"},
+        "workflow_dispatch": {"inputs"},
+        "schedule": set(),
+    }
+    list_fields = {"paths", "paths-ignore", "branches", "branches-ignore",
+                   "tags", "tags-ignore", "types", "workflows"}
+    current_input = None
+    current_input_field = None
     for line in block:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -53,13 +66,23 @@ def inspect_workflow(path: Path) -> dict:
             key = match["key"]
             value = match["value"].strip()
             if depth == 2:
+                if key not in event_fields:
+                    unknown.append(f"unsupported trigger event: {key}")
+                if key in events:
+                    unknown.append(f"duplicate trigger event: {key}")
                 if value and not value.startswith("#"):
                     unknown.append(f"inline event definition: {key}")
                 events.append(key)
                 current_event = key
                 current_field = None
+                current_input = None
+                current_input_field = None
             elif depth == 4:
-                current_field = key if current_event == "pull_request" else None
+                if current_event not in event_fields or key not in event_fields[current_event]:
+                    unknown.append(f"unsupported trigger field: {key}")
+                current_field = key
+                current_input = None
+                current_input_field = None
                 if current_event == "pull_request" and key in ("paths", "paths-ignore"):
                     has_filter = True
                     if value and not value.startswith("#"):
@@ -71,22 +94,40 @@ def inspect_workflow(path: Path) -> dict:
                             paths.extend(inline)
                         except (ValueError, SyntaxError):
                             unknown.append(f"unsupported inline path filter: {key}")
-            elif depth < 2:
-                unknown.append("unsupported nesting")
-            continue
-        item = SEQUENCE.match(line)
-        if item and current_event == "pull_request" and current_field in ("paths", "paths-ignore"):
-            # A quoted glob is treated as a string; this parser makes no
-            # claims about YAML escapes, anchors or explicit tags.
-            value = strip_scalar(item.group(1).split(" #", 1)[0])
-            if not value or value.startswith(("!", "&", "*", "{", "[")):
-                unknown.append("unsupported path filter entry")
+            elif (depth == 6 and current_event == "workflow_dispatch"
+                  and current_field == "inputs" and not value):
+                current_input = key
+                current_input_field = None
+            elif (depth == 8 and current_event == "workflow_dispatch"
+                  and current_field == "inputs" and current_input is not None
+                  and key in {"description", "required", "type", "default", "options"}):
+                current_input_field = key
             else:
-                paths.append(value)
-        elif current_event == "pull_request":
-            # We do not need to decode nested jobs/steps, but any strange
-            # shape under PR triggers invalidates claimed filter coverage.
-            unknown.append("unsupported pull_request trigger structure")
+                unknown.append("unsupported trigger key or nesting")
+            continue
+
+        item = SEQUENCE.fullmatch(line)
+        if item:
+            depth = len(line) - len(line.lstrip(" "))
+            entry = item.group(1)
+            if current_event == "schedule" and depth == 4 and re.fullmatch(r"cron:\\s*.+", entry):
+                continue
+            if (depth == 6 and current_event in event_fields
+                and current_field in list_fields):
+                value = strip_scalar(entry.split(" #", 1)[0])
+                if not value or value.startswith(("&", "*", "{", "[")):
+                    unknown.append("unsupported trigger list entry")
+                elif current_event == "pull_request" and current_field in ("paths", "paths-ignore"):
+                    if value.startswith("!"):
+                        unknown.append("unsupported path filter entry")
+                    else:
+                        paths.append(value)
+                continue
+            if (depth == 10 and current_event == "workflow_dispatch"
+                and current_field == "inputs" and current_input is not None
+                and current_input_field == "options" and entry.strip()):
+                continue
+        unknown.append("unsupported trigger structure")
     if unknown:
         return {
             "workflow": path.name, "status": "unknown",
