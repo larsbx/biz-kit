@@ -8,7 +8,6 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
 
   alias CoopSubstrate.CommercialSetoffProof
   alias CoopSubstrate.CommercialSetoffSources
-  alias CoopSubstrate.Crypto
   alias CoopSubstrate.Log
   alias CoopSubstrate.Protocol.Envelope
 
