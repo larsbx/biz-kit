@@ -45,6 +45,7 @@ defmodule CoopSubstrate.CommercialSetoffProof do
          {:ok, entries, a_to_b, b_to_a} <- normalize_sources(sources, a, b, denomination),
          :ok <- match_current_gate(gate, chapter, a, b, denomination, entries),
          {:ok, authorities} <- current_authorities(gate, chapter, [a, b], grants),
+         :ok <- distinct_authorities(authorities),
          {:ok, legal} <- legal_refs(evidence) do
       body = %{
         "version" => 1,
@@ -276,6 +277,22 @@ defmodule CoopSubstrate.CommercialSetoffProof do
   end
 
   defp current_authorities(_, _, _, _), do: {:error, :invalid_authority_registry}
+
+  # Two signer records are insufficient if they designate the same public key,
+  # key ID, or agency-grant reference. This tests key distinctness, NOT real
+  # corporate independence, which must come from an authenticated grant issuer.
+  defp distinct_authorities(authorities) do
+    keys = Enum.map(authorities, & &1["key_id"])
+    pubkeys = Enum.map(authorities, & &1["pubkey"])
+    grants = Enum.map(authorities, & &1["grant_digest"])
+
+    if Enum.uniq(keys) == keys and Enum.uniq(pubkeys) == pubkeys and
+         Enum.uniq(grants) == grants do
+      :ok
+    else
+      {:error, :not_independent_authorities}
+    end
+  end
 
   defp legal_refs(%{} = evidence) do
     if Enum.sort(Map.keys(evidence)) == @evidence_fields and
