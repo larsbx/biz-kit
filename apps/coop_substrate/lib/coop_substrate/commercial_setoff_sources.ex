@@ -62,6 +62,53 @@ defmodule CoopSubstrate.CommercialSetoffSources do
 
   def snapshot(_, _, _, _), do: {:error, :invalid_request}
 
+  @doc """
+  Read-only verification against freshly authenticated local source history.
+
+  Never accept caller-supplied source rows as a substitute for the canonical
+  local business log when checking source-binding. This operation re-reads
+  signed sources and checks that the observed head remains unchanged through
+  verification. A later concurrent append remains possible: this is NOT
+  an admission fence, source reservation or legally effective discharge.
+
+  Agency grants and legal references remain independently unverified; neither
+  keys nor signatures establish a participant's authority to bind an entity.
+  """
+  def verify_local(proof, grants, signatures, spent \\ MapSet.new(), server \\ Log.server())
+
+  def verify_local(%{body: %{} = body} = proof, grants, signatures, spent, server) do
+    with {:ok, %{observed_head: head} = snapshot} <-
+           snapshot(
+             body["chapter_id"],
+             {body["party_a"], body["party_b"]},
+             body["denomination"],
+             server
+           ),
+         {:ok, result} <-
+           CoopSubstrate.CommercialSetoffProof.verify(
+             proof,
+             snapshot.gate,
+             snapshot.sources,
+             grants,
+             signatures,
+             spent
+           ),
+         ^head <- Log.head(server) do
+      {:ok,
+       Map.merge(result, %{
+         source_status: :locally_signed_business_history,
+         observed_head: head,
+         agency_status: :unverified,
+         legal_status: :unverified
+       })}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :concurrent_ledger_change}
+    end
+  end
+
+  def verify_local(_, _, _, _, _), do: {:error, :invalid_verification_request}
+
   defp current_rows(%{obligations: obligations}, chapter, {a, b}, denomination)
        when is_map(obligations) do
     rows =
