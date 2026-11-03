@@ -84,7 +84,9 @@ defmodule BarterCore.LedgerFirstClearing do
   def propose(_, _, _), do: {:error, :invalid_obligations}
 
   @doc "Recompute an exact proposal; changed obligations, cycles or entries fail."
-  def verify_plan(%{obligations: obligations} = candidate, now, opts \\ []) do
+  def verify_plan(candidate, now, opts \\ [])
+
+  def verify_plan(%{obligations: obligations} = candidate, now, opts) do
     case propose(obligations, now, opts) do
       {:ok, ^candidate} -> {:ok, candidate}
       _ -> {:error, :invalid_clearing_plan}
@@ -130,9 +132,9 @@ defmodule BarterCore.LedgerFirstClearing do
 
     cond do
       not Keyword.keyword?(opts) or
-          Enum.any?(Keyword.keys(opts), &(&1 != :work_budget)) or
-          length(Keyword.keys(opts)) > 1 or
-          not is_integer(budget) or budget <= 0 ->
+        Enum.any?(Keyword.keys(opts), &(&1 != :work_budget)) or
+        length(Keyword.keys(opts)) > 1 or
+        not is_integer(budget) or budget <= 0 ->
         {:error, :invalid_options}
 
       n * n * n * n > budget ->
@@ -215,8 +217,7 @@ defmodule BarterCore.LedgerFirstClearing do
 
               true ->
                 {:cont,
-                 {:queue.in({edge.creditor, route}, q), MapSet.put(seen, edge.creditor),
-                  nil}}
+                 {:queue.in({edge.creditor, route}, q), MapSet.put(seen, edge.creditor), nil}}
             end
           end)
 
@@ -237,10 +238,42 @@ defmodule BarterCore.LedgerFirstClearing do
         amount = cycle.amount_minor
 
         [
-          posting(source.debtor, source.currency, obligation_id, cycle_index, :accounts_payable, :debit, amount),
-          posting(source.debtor, source.currency, obligation_id, cycle_index, :clearing_control, :credit, amount),
-          posting(source.creditor, source.currency, obligation_id, cycle_index, :clearing_control, :debit, amount),
-          posting(source.creditor, source.currency, obligation_id, cycle_index, :accounts_receivable, :credit, amount)
+          posting(
+            source.debtor,
+            source.currency,
+            obligation_id,
+            cycle_index,
+            :accounts_payable,
+            :debit,
+            amount
+          ),
+          posting(
+            source.debtor,
+            source.currency,
+            obligation_id,
+            cycle_index,
+            :clearing_control,
+            :credit,
+            amount
+          ),
+          posting(
+            source.creditor,
+            source.currency,
+            obligation_id,
+            cycle_index,
+            :clearing_control,
+            :debit,
+            amount
+          ),
+          posting(
+            source.creditor,
+            source.currency,
+            obligation_id,
+            cycle_index,
+            :accounts_receivable,
+            :credit,
+            amount
+          )
         ]
       end)
     end)
@@ -264,10 +297,14 @@ defmodule BarterCore.LedgerFirstClearing do
 
   defp source_fields(o) do
     [
-      o.id, o.debtor, o.creditor, o.currency,
+      o.id,
+      o.debtor,
+      o.creditor,
+      o.currency,
       Integer.to_string(o.amount_minor),
       Integer.to_string(o.revision),
-      o.evidence_ref, Integer.to_string(o.valid_until),
+      o.evidence_ref,
+      Integer.to_string(o.valid_until),
       Atom.to_string(o.status)
     ]
   end
