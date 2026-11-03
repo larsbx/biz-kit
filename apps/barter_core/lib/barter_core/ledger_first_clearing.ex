@@ -48,6 +48,7 @@ defmodule BarterCore.LedgerFirstClearing do
 
       source_index = Map.new(snapshot, &{&1.id, &1})
       journals = journal_intents(cycles, source_index)
+
       totals_by_currency =
         snapshot
         |> Enum.group_by(& &1.currency)
