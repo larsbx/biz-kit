@@ -3,15 +3,15 @@ defmodule ProofBankCore.DispatchPilotTest do
 
   alias ProofBankCore.DispatchPilot
 
-  test "compiles five traceable, inert and unverified first-party obligations" do
+  test "compiles six traceable, inert and unverified first-party obligations" do
     assert {:ok, packet} = DispatchPilot.compile()
     assert packet.blueprint.id == "dispatch-transition-current-grant"
     assert packet.blueprint.verification_state == :unverified
     assert packet.blueprint.activation_state == :inert
     assert packet.review_state == :needs_owner_review
     assert packet.activation_state == :inert
-    assert length(packet.blueprint.obligations) == 5
-    assert length(packet.correspondence) == 5
+    assert length(packet.blueprint.obligations) == 6
+    assert length(packet.correspondence) == 6
 
     for item <- packet.correspondence do
       assert item.formal_check == :not_executed
@@ -19,7 +19,7 @@ defmodule ProofBankCore.DispatchPilotTest do
       assert item.implementation_refinement == :not_established
     end
 
-    assert Enum.count(packet.correspondence, &(&1.method == :lean)) == 4
+    assert Enum.count(packet.correspondence, &(&1.method == :lean)) == 5
     assert Enum.count(packet.correspondence, &(&1.method == :conformance)) == 1
   end
 
