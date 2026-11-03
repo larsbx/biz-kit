@@ -197,4 +197,117 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     assert {:error, :no_bilateral_sources} = snapshot()
     assert :ok = Log.verify_chains()
   end
+  test "local consent verifier reloads authenticated sources rather than trusting caller records", ctx do
+    pair!(ctx)
+    assert {:ok, current} = snapshot()
+
+    assert {:ok, proof} =
+             CommercialSetoffProof.prepare(
+               current.gate,
+               @chapter,
+               {"M-alice", "M-bob"},
+               "USD",
+               current.sources,
+               "CONSENT-1",
+               grants(ctx),
+               evidence()
+             )
+
+    signature_a = :crypto.sign(:eddsa, :none, proof.signing_bytes, [ctx.alice.seed, :ed25519])
+    signature_b = :crypto.sign(:eddsa, :none, proof.signing_bytes, [ctx.bob.seed, :ed25519])
+
+    signed = %{
+      "M-alice" => %{key_id: ctx.alice.signer.key_id, signature: signature_a},
+      "M-bob" => %{key_id: ctx.bob.signer.key_id, signature: signature_b}
+    }
+
+    assert {:ok, verified} =
+             CommercialSetoffSources.verify_local(proof, grants(ctx), signed)
+
+    assert verified.admission == :not_authorized
+    assert verified.legally_effective_discharge == :not_verified
+    assert verified.source_status == :locally_signed_business_history
+    assert verified.agency_status == :unverified
+    assert verified.legal_status == :unverified
+    assert verified.observed_head == Log.head()
+
+    assert {:error, :two_independent_consents_required} =
+             CommercialSetoffSources.verify_local(
+               proof,
+               grants(ctx),
+               Map.delete(signed, "M-bob")
+             )
+
+    {:ok, [_]} =
+      Log.append(
+        multi_signed_event(
+          [role(ctx.bob, "debtor"), role(ctx.alice, "creditor")],
+          "ObligationDischarged",
+          %{"obligation_id" => "OB-2"}
+        )
+      )
+
+    record!(ctx.bob, ctx.alice, "OB-3", "M-bob", "M-alice", 60)
+
+    # Even with identical totals, the exact signed source commitment is stale.
+    assert {:error, :stale_or_substituted_source_binding} =
+             CommercialSetoffSources.verify_local(proof, grants(ctx), signed)
+
+    assert :ok = Log.verify_chains()
+  end
+
+  test "local consent verification rejects non-original revisions and revoked synthetic grants", ctx do
+    pair!(ctx)
+    {:ok, current} = snapshot()
+
+    assert {:ok, proof} =
+             CommercialSetoffProof.prepare(
+               current.gate,
+               @chapter,
+               {"M-alice", "M-bob"},
+               "USD",
+               current.sources,
+               "CONSENT-2",
+               grants(ctx),
+               evidence()
+             )
+
+    signed = %{
+      "M-alice" => %{
+        key_id: ctx.alice.signer.key_id,
+        signature: :crypto.sign(:eddsa, :none, proof.signing_bytes, [ctx.alice.seed, :ed25519])
+      },
+      "M-bob" => %{
+        key_id: ctx.bob.signer.key_id,
+        signature: :crypto.sign(:eddsa, :none, proof.signing_bytes, [ctx.bob.seed, :ed25519])
+      }
+    }
+
+    inactive = put_in(grants(ctx), ["M-bob", :active], false)
+
+    assert {:error, {:authority_inactive, "M-bob"}} =
+             CommercialSetoffSources.verify_local(proof, inactive, signed)
+
+    {:ok, [_]} =
+      Log.append(
+        multi_signed_event(
+          [role(ctx.alice, "assignor"), role(ctx.carol, "assignee")],
+          "ObligationAssigned",
+          %{"obligation_id" => "OB-1", "new_debtor_id" => "M-carol"}
+        )
+      )
+
+    {:ok, [_]} =
+      Log.append(
+        multi_signed_event(
+          [role(ctx.carol, "assignor"), role(ctx.alice, "assignee")],
+          "ObligationAssigned",
+          %{"obligation_id" => "OB-1", "new_debtor_id" => "M-alice"}
+        )
+      )
+
+    assert {:error, {:unsupported_source_history, "OB-1"}} =
+             CommercialSetoffSources.verify_local(proof, grants(ctx), signed)
+  end
+
 end
