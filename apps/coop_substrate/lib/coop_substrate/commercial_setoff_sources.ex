@@ -27,8 +27,8 @@ defmodule CoopSubstrate.CommercialSetoffSources do
   single-node signed ledger. The caller must use the same returned gate
   and source terms to construct an inert proof proposal.
 
-  A concurrent writer, non-original obligation history, absent source,
-  invalid signature, or inconsistent current fold fails closed.
+  A concurrent writer, failed global hash-chain audit, non-original source
+  history, absent source, invalid signature, or inconsistent fold fails closed.
   """
   def snapshot(chapter, {a, b}, denomination, server \\ Log.server())
 
@@ -39,7 +39,8 @@ defmodule CoopSubstrate.CommercialSetoffSources do
     head_before = Log.head(server)
     gate = Log.gate(server)
 
-    with {:ok, rows} <- current_rows(gate, chapter, {a, b}, denomination),
+    with :ok <- Log.verify_chains(),
+         {:ok, rows} <- current_rows(gate, chapter, {a, b}, denomination),
          {:ok, sources} <- source_terms(rows, chapter),
          ^head_before <- Log.head(server) do
       {:ok,
