@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Validate 29 candidate source dossiers (NOT implementation conformance)
+      - name: Validate 32 candidate source dossiers (NOT implementation conformance)
         run: python3 scripts/proof_bank_characterization_audit.py
       - name: Test audit refuses missing apps and falsely promoted results
         run: python3 -m unittest discover -s scripts/tests -p 'test_proof_bank_characterization_audit.py' -v

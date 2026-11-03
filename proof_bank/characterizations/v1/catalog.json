@@ -186,9 +186,9 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex": "9dc8412cd791b76b0d92feba762fd6fe95dbaca7",
+        "apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex": "76a55939eaf032b57a003439eb987a6b58899360",
         "apps/biz_kit_extension/lib/biz_kit/extension/catalog.ex": "614e026e01c8f2885aad3a035823bf7d7ac89d92",
-        "apps/biz_kit_extension/test/manifest_test.exs": "5bfd1b6414391f644afff87d3256463d8bb058cf"
+        "apps/biz_kit_extension/test/manifest_test.exs": "80273ad8947999e1d68dd8dce8262dcca9c8b8a2"
       }
     },
     {
@@ -249,7 +249,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "49ab077f97bdfd9e9be1634125759ea8f177a5b9",
+        "mix.exs": "e2f099b45d8c932ab137c293738a3e1028651e90",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -269,7 +269,7 @@
         "apps/commerce_core/lib/commerce_core/pricing.ex",
         "apps/commerce_core/lib/commerce_core/tax.ex"
       ],
-      "observed_test_path": "apps/commerce_core/test/checkout_safety_test.exs",
+      "observed_test_path": "apps/commerce_core/test/kitchen_checkout_safety_test.exs",
       "audit_finding": "No payment, refund or authoritative tax jurisdiction determination in pure kernel",
       "first_formal_obligation": "Currency totals and tax component shares conserve exact minor units",
       "first_formal_layer": "L1",
@@ -282,7 +282,7 @@
       "evidence_git_blobs": {
         "apps/commerce_core/lib/commerce_core/pricing.ex": "7dfb9a672008075e16a46104ca306fb5e68a08f9",
         "apps/commerce_core/lib/commerce_core/tax.ex": "9d1a2b861fb416c97f3e8944b7f85a5eccb625d8",
-        "apps/commerce_core/test/checkout_safety_test.exs": "e6a1cfdda0dbbd3e7235667043bbd81985aaa07b"
+        "apps/commerce_core/test/kitchen_checkout_safety_test.exs": "b974b920f1b5d07efe3b9acf943643858a0c713c"
       }
     },
     {
@@ -345,8 +345,8 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
-        "apps/dispatch/lib/dispatch/operations/board.ex": "bb9f0c38ba809d1c8d444824008e3266ea70d19e",
-        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "a5aa3b65df8278f055e1a788c471756280eed99e"
+        "apps/dispatch/lib/dispatch/operations/board.ex": "9b39439c521ec723625f31f28d02f4770e18061d",
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48f8c6a250ca8ba02b6cb60cc411c67bb777eeb3"
       }
     },
     {
@@ -718,9 +718,9 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/inventory_core/lib/inventory_core.ex": "9af124663dcd329861e8ae9037a856e5875c2b4b",
+        "apps/inventory_core/lib/inventory_core.ex": "87272d4af62f798f9e11684d8e892dff863e85a9",
         "apps/inventory_core/lib/inventory_core/basket.ex": "aebf383bc08699958a231884a5fc44bf55ab478b",
-        "apps/inventory_core/test/inventory_core_test.exs": "47bf89ac823c8e7b19bccbf475da1bddbdda0685"
+        "apps/inventory_core/test/inventory_core_test.exs": "d14b4cffd4e1a797a06018224f4674c5abe989a2"
       }
     },
     {
@@ -787,6 +787,38 @@
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "order_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Merchant-neutral order lifecycle and authorized candidate reducer",
+      "intended_features": [
+        "Order lifecycle",
+        "Authorized placement"
+      ],
+      "observed_code_paths": [
+        "apps/order_core/lib/order_core/lifecycle.ex",
+        "apps/order_core/lib/order_core/placement.ex"
+      ],
+      "observed_test_path": "apps/order_core/test/lifecycle_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "Authorization precedes state inspection, and no lifecycle state asserts payment or settlement",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "evidence_git_blobs": {
+        "apps/order_core/lib/order_core/lifecycle.ex": "c111f79024681197d1b657cb89790d7ec4cdef8d",
+        "apps/order_core/lib/order_core/placement.ex": "71e54ff747f2c21522115151e508e6300cf05724",
+        "apps/order_core/test/lifecycle_test.exs": "dce86fddaa3ff649f2f081057c9e96678f400f27"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "proof_bank_core",
       "source_repo": "larsbx/biz-kit",
       "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
@@ -813,6 +845,71 @@
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
         "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "acc46b3453aaa1b39d17d5d239c2076389157b57",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "restaurant_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Kitchen workflow and pure admission of signed restaurant events",
+      "intended_features": [
+        "Kitchen workflow",
+        "Signed restaurant event admission"
+      ],
+      "observed_code_paths": [
+        "apps/restaurant_core/lib/restaurant_core/admission.ex",
+        "apps/restaurant_core/lib/restaurant_core/kitchen.ex"
+      ],
+      "observed_test_path": "apps/restaurant_core/test/admission_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "A restaurant event is admitted only when signed by a device a governance grant authorized for that action",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "evidence_git_blobs": {
+        "apps/restaurant_core/lib/restaurant_core/admission.ex": "04a1de89eb31a407177091458fc7cf20e6fa5d74",
+        "apps/restaurant_core/lib/restaurant_core/kitchen.ex": "3e6118cdcf95d5486880d21dd5c33b118592482f",
+        "apps/restaurant_core/test/admission_test.exs": "6bb241ecf1d7f37edacce0940d64a8dfdbb33108"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "restaurant_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Restaurant storefront, kitchen board and device grants over the signed Log",
+      "intended_features": [
+        "Storefront",
+        "Kitchen board",
+        "Governance-signed device grants"
+      ],
+      "observed_code_paths": [
+        "apps/restaurant_host/lib/restaurant_host/device_grants.ex",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex"
+      ],
+      "observed_test_path": "apps/restaurant_host/test/device_grants_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "The host obtains a governance signature only on the grant it showed, and the governance seed never leaves the administrator",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "evidence_git_blobs": {
+        "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "f9579a3911e3a28ac76c39603b12f037a1a5532f",
+        "apps/restaurant_host/test/device_grants_test.exs": "1d7c4902612759051c5ff7ff2571aad4cbc2ae3e"
       }
     },
     {
@@ -935,10 +1032,37 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/task_core/lib/task_core/admission.ex": "d4e8c8852c89676f0eaa58e0facdf4efddb248c5",
+        "apps/task_core/lib/task_core/admission.ex": "fde86025a69bae06969fcc1e6c27dd0ef13b5b9a",
         "apps/task_core/lib/task_core/agent_runs.ex": "e2cea02be4c1e7f2d28e829d1eb09c85e7b45844",
         "apps/task_core/test/agent_runs_test.exs": "74e16f5dc07bac66e82a9a72a6452560c09a7f19"
       }
+    }
+  ],
+  "evidence_refreshes": [
+    {
+      "at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "date": "2026-11-03",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "order_core",
+        "restaurant_core",
+        "restaurant_host"
+      ],
+      "refreshed_paths": [
+        "apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex",
+        "apps/biz_kit_extension/test/manifest_test.exs",
+        "apps/commerce_core/test/kitchen_checkout_safety_test.exs",
+        "apps/dispatch/lib/dispatch/operations/board.ex",
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs",
+        "apps/inventory_core/lib/inventory_core.ex",
+        "apps/inventory_core/test/inventory_core_test.exs",
+        "apps/task_core/lib/task_core/admission.ex",
+        "mix.exs"
+      ],
+      "renamed": {
+        "apps/commerce_core/test/checkout_safety_test.exs": "apps/commerce_core/test/kitchen_checkout_safety_test.exs"
+      },
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
     }
   ]
 }
