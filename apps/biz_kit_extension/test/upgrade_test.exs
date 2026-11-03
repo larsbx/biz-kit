@@ -131,8 +131,7 @@ defmodule BizKit.Extension.UpgradeTest do
             }
           ]
         ] do
-      assert {:error,
-              {:removed_or_changed_contract, :commands, "school_ops.workflow.propose"}} =
+      assert {:error, {:removed_or_changed_contract, :commands, "school_ops.workflow.propose"}} =
                Upgrade.assess(old, %{old | version: "1.3.0", commands: commands})
     end
   end
@@ -143,8 +142,7 @@ defmodule BizKit.Extension.UpgradeTest do
     assert {:error, {:removed_or_changed_contract, :events, "school_ops.workflow.proposed"}} =
              Upgrade.assess(old, %{old | version: "1.3.0", events: []})
 
-    assert {:error,
-            {:removed_or_changed_contract, :projections, "school_ops.workflow_view"}} =
+    assert {:error, {:removed_or_changed_contract, :projections, "school_ops.workflow_view"}} =
              Upgrade.assess(old, %{old | version: "1.3.0", projections: []})
 
     assert {:error, {:removed_or_changed_dependency, "task_adapter"}} =
@@ -173,6 +171,7 @@ defmodule BizKit.Extension.UpgradeTest do
 
   test "refuse malformed inputs instead of using loosely typed manifest data" do
     assert {:error, {:invalid_field, :manifest}} = Upgrade.assess(nil, baseline())
+
     assert {:error, {:invalid_fields, :manifest}} =
              Upgrade.assess(baseline(), Map.put(baseline(), :unexpected, true))
   end

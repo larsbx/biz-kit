@@ -64,6 +64,14 @@ defmodule ProofBankCore.Portfolio do
      "Ownership and operator relationships must not grant access beyond current authorized scope."},
     {"marketing_core", :capability, :conformance,
      "Marketing attribution and promotions must not circumvent current consent or independently commit money."},
+    # Registered without review by owner decision (2026-11-03); characterize
+    # order_core, restaurant_core and restaurant_host at the next milestone.
+    {"order_core", :capability, :conformance,
+     "Order authorization must precede state inspection, and no lifecycle state may assert payment or settlement."},
+    {"restaurant_core", :capability, :conformance,
+     "A restaurant event must be admitted only when signed by a device a governance grant authorized for that action."},
+    {"restaurant_host", :hosted, :conformance,
+     "The host must obtain a governance signature only on the device grant it showed."},
     {"sales_core", :capability, :conformance,
      "Withdrawal of marketing consent must prevent future actions under superseded consent."},
     {"school_ops", :hosted, :conformance,
