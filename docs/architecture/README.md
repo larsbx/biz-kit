@@ -19,6 +19,8 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
   proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
   with R0–R6 source inventory, migration, authorization, cutover and archive gates.
+- [ExtensionV1 semantic upgrade assessment — 2026-11-02](2026-11-02-extension-upgrade-compatibility.md):
+  fail-closed V1 compatibility and review-required changes; no deployment approval.
 - [ExtensionV1 source-pinned release lock — 2026-11-02](2026-11-02-extension-source-lock.md):
   deterministic exact-source and manifest fingerprints for trusted build
   preflight; not executable activation or signed deployment authority.

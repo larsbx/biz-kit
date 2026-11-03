@@ -13,8 +13,6 @@ defmodule SpruceGoose.ReleaseTasks do
   blocked by an endpoint that will not bind or a check in another subsystem.
   """
 
-  @event_stores [CoopSubstrate.EventStore, CoopSubstrate.Records]
-
   @doc "Initialize the event stores and apply all pending migrations."
   @spec migrate() :: :ok
   def migrate do
@@ -22,12 +20,7 @@ defmodule SpruceGoose.ReleaseTasks do
     {:ok, _} = Application.ensure_all_started(:postgrex)
     {:ok, _} = Application.ensure_all_started(:ecto_sql)
 
-    for store <- @event_stores do
-      config = EventStore.Config.parsed(store, :coop_substrate)
-      # Each raises on failure; an existing database or schema is left as is.
-      EventStore.Tasks.Create.exec(config, quiet: true)
-      EventStore.Tasks.Init.exec(config, quiet: true)
-    end
+    :ok = CoopSubstrate.ReleaseTasks.init_event_stores()
 
     for repo <- Application.fetch_env!(:spruce_goose, :ecto_repos) do
       :ok = created(repo.__adapter__().storage_up(repo.config()))

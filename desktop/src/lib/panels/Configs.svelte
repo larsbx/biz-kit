@@ -15,12 +15,13 @@
   let orig = $state("");
   let text = $state("");
   let diff = $state<string | null>(null);
+  let reviewed = $state<{ file: ConfigEntry; expected: string; content: string; diff: string } | null>(null);
   let busy = $state(false);
   let err = $state<string | null>(null);
 
   async function load(h = host) {
     if (!h) return;
-    busy = true; err = null; open = null; diff = null;
+    busy = true; err = null; open = null; diff = null; reviewed = null;
     try { items = await listConfigs(h); }
     catch (e) { err = String(e); items = []; }
     finally { busy = false; }
@@ -28,7 +29,7 @@
   $effect(() => { load(host); });
 
   async function openFile(c: ConfigEntry) {
-    busy = true; err = null; diff = null;
+    busy = true; err = null; diff = null; reviewed = null;
     try {
       const s = await readConfig(c.host, c.path);
       orig = s; text = s; open = c;
@@ -39,24 +40,34 @@
   async function review() {
     if (!open) return;
     busy = true; err = null;
-    try { diff = await diffConfig(open.host, open.path, text); }
+    const file = open, expected = orig, content = text;
+    reviewed = null;
+    try {
+      const result = await diffConfig(file.host, file.path, content, expected);
+      if (open === file && text === content && orig === expected) {
+        diff = result;
+        reviewed = { file, expected, content, diff: result };
+      }
+    }
     catch (e) { err = String(e); }
     finally { busy = false; }
   }
 
   function save() {
-    const file = open;
-    if (!file) return;
+    const change = reviewed;
+    if (!change || !open || open.protected || change.file !== open || change.content !== text || change.expected !== orig) return;
+    const { file } = change;
     confirm({
-      title: `Overwrite ${file.path}?`,
-      why: "A timestamped .bak copy is written first. JSON files are validated before the write.",
-      command: `# on ${file.host}\ncp -a ${file.path} ${file.path}.bak-<timestamp>\n# then replace with your edited contents`,
+      title: `Save reviewed changes to ${file.path}?`,
+      why: "The file must still match the version you opened. A backup is preserved before replacement.",
+      command: change.diff,
       host: file.host,
       danger: true,
       run: async () => {
-        await writeConfig(file.host, file.path, text);
-        orig = text;
+        await writeConfig(file.host, file.path, change.content, change.expected);
+        orig = change.content;
         diff = null;
+        reviewed = null;
         await load();
       },
     });
@@ -80,8 +91,8 @@
     {#if open.protected}<span class="pill">read-only</span>{/if}
     {#if dirty}<span class="pill warn">unsaved</span>{/if}
     <button class="btn" onclick={review} disabled={busy || !dirty}>Review diff</button>
-    <button class="btn danger" onclick={save} disabled={busy || !dirty || open.protected}>Save…</button>
-    <button class="btn" onclick={() => { open = null; diff = null; }} disabled={busy}>Close</button>
+    <button class="btn danger" onclick={save} disabled={busy || !dirty || open.protected || !reviewed || reviewed.content !== text}>Save…</button>
+    <button class="btn" onclick={() => { open = null; diff = null; reviewed = null; }} disabled={busy}>Close</button>
   {:else}
     <button class="btn" onclick={() => load()} disabled={busy}>Refresh</button>
   {/if}

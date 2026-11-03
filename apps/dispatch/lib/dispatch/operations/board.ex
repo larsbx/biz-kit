@@ -20,7 +20,7 @@ defmodule Dispatch.Operations.Board do
 
   require Ash.Query
 
-  alias Dispatch.Access.Actor
+  alias Dispatch.Access.{Actor, Driving}
   alias Dispatch.Accounts.{Participant, RoleAssignment}
   alias Dispatch.Audit.AuditEvent
   alias Dispatch.Fleet.{Assignment, Load, Stop, Trailer, Vehicle}
@@ -213,7 +213,8 @@ defmodule Dispatch.Operations.Board do
       transaction(actor, "assignment.update.status", lock, fn actor ->
         with {:ok, trip} <- own_trip(actor, trip.id),
              :ok <- current(trip, expected_version),
-             :ok <- permitted(trip.status, action) do
+             :ok <- permitted(trip.status, action),
+             :ok <- driver_in_force(actor, trip, action) do
           trip
           |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
           # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
@@ -301,7 +302,7 @@ defmodule Dispatch.Operations.Board do
       |> Ash.Query.load(:role_definition)
       # REVIEWED-UNAUTHORIZED: the organization's own roster, for its dispatcher.
       |> Ash.read!(authorize?: false, tenant: actor.tenant_id)
-      |> Enum.filter(&Dispatch.Access.can?(&1, "assignment.read.self", actor.at))
+      |> Enum.filter(&Driving.drives?(&1, actor.at))
       |> Map.new(&{&1.principal_id, &1})
 
     Participant
@@ -352,6 +353,19 @@ defmodule Dispatch.Operations.Board do
 
   defp permitted(status, action),
     do: {:error, {:invalid, "cannot #{action} a #{status} trip"}}
+
+  # Equipment goes out only with a driver who holds a driving role, so a role
+  # revoked once the equipment is checked in stays revoked (`Driving`).
+  defp driver_in_force(actor, trip, :activate) do
+    case Driving.roles(actor.tenant_id, organization(actor), trip.operator_participant_id,
+           lock: true
+         ) do
+      [] -> {:error, {:invalid, "the driver no longer holds a driving role"}}
+      _held -> :ok
+    end
+  end
+
+  defp driver_in_force(_actor, _trip, _action), do: :ok
 
   defp lock_trip!(actor, id) do
     from(a in "assignments",

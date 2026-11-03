@@ -26,12 +26,12 @@
     tick().then(() => { if (outEl) outEl.scrollTop = outEl.scrollHeight; });
   });
 
-  function start(s: Script, apply: boolean) {
+  function start(s: Script, args: string[]) {
     sel = s;
     lines = [];
     running = true;
     err = null;
-    runScript(s.path, apply ? ["--apply"] : [], (l) => {
+    runScript(s.path, args, (l) => {
       lines.push(l);
       if (l.kind === "done") running = false;
     }).catch((e) => { err = String(e); running = false; });
@@ -41,9 +41,20 @@
     confirm({
       title: `Run ${s.name} with --apply?`,
       why: "This makes real changes. The dry run shows exactly what it would do.",
-      command: `${s.interpreter} ${s.path} --apply`,
+      command: JSON.stringify([s.interpreter, s.path, "--apply"]),
       danger: true,
-      run: async () => start(s, true),
+      run: async () => start(s, ["--apply"]),
+    });
+  }
+
+  function onRun(s: Script) {
+    if (s.hasApply) return start(s, ["--dry-run"]);
+    confirm({
+      title: `Run ${s.name}?`,
+      why: "This script has no declared dry-run/apply split. Review its process arguments before running it.",
+      command: JSON.stringify([s.interpreter, s.path]),
+      danger: true,
+      run: async () => start(s, []),
     });
   }
 
@@ -65,7 +76,7 @@
         <h3 class="mono" style="font-size: .92rem">{s.name}</h3>
         <div class="sub">{s.summary || "—"}</div>
         <div class="row">
-          <button class="btn" disabled={running} onclick={() => start(s, false)}>{s.hasApply ? "Dry run" : "Run"}</button>
+          <button class="btn" disabled={running} onclick={() => onRun(s)}>{s.hasApply ? "Dry run" : "Run"}</button>
           {#if s.hasApply}
             <button class="btn danger" disabled={running} onclick={() => onApply(s)}>Apply</button>
           {/if}

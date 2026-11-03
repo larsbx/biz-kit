@@ -67,10 +67,10 @@ export const listConfigs = (host: string) => invoke<ConfigEntry[]>("list_configs
 
 export const readConfig = (host: string, path: string) =>
   invoke<string>("read_config", { host, path });
-export const diffConfig = (host: string, path: string, content: string) =>
-  invoke<string>("diff_config", { host, path, content });
-export const writeConfig = (host: string, path: string, content: string) =>
-  invoke<string>("write_config", { host, path, content });
+export const diffConfig = (host: string, path: string, content: string, expected: string) =>
+  invoke<string>("diff_config", { host, path, content, expected });
+export const writeConfig = (host: string, path: string, content: string, expected: string) =>
+  invoke<string>("write_config", { host, path, content, expected });
 
 export const unitActionScript = (scope: string, unit: string, action: string) =>
   invoke<string>("unit_action_script", { scope, unit, action });

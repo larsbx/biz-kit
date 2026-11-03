@@ -188,6 +188,32 @@ defmodule OrderCore.LifecycleTest do
              {:error, :idempotency_conflict}
   end
 
+  property "available actions are exactly the commands an admin could take now" do
+    check all(
+            ids <- stages(),
+            f <- member_of(@fulfillments),
+            walk <- list_of(integer(0..20), max_length: 8)
+          ) do
+      w = Core.workflow!(definition(ids))
+      actions = Enum.sort(Map.keys(w.actions))
+      admin = trusted(:admin, actions)
+      {:ok, order} = Core.new(w, "m", "o", f)
+
+      order =
+        Enum.reduce(walk, order, fn i, o ->
+          case Core.apply(w, o, admin, cmd(Enum.at(actions, rem(i, length(actions))), o.version)) do
+            {:ok, next, :accepted} -> next
+            _ -> o
+          end
+        end)
+
+      for a <- actions do
+        accepted = match?({:ok, _, :accepted}, Core.apply(w, order, admin, cmd(a, order.version)))
+        assert a in Core.available_actions(w, order) == accepted
+      end
+    end
+  end
+
   test "a retail workflow: picking and packing, then hand-off" do
     w =
       Core.workflow!(%{

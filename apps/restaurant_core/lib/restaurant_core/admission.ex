@@ -65,7 +65,7 @@ defmodule RestaurantCore.Admission do
             "subtotal_minor" => :int,
             "total_minor" => :int
           },
-          %{"delivery" => :any}
+          %{"delivery" => :any, "pickup_name" => :string}
         ),
       @step =>
         spec(
@@ -109,6 +109,44 @@ defmodule RestaurantCore.Admission do
   def state(state, chapter, merchant, order_id),
     do: get_in(state, [:merchants, {chapter, merchant}, :orders, order_id])
 
+  @doc """
+  A merchant's orders, oldest first by id: each order's lifecycle (`state`,
+  `version`, the `actions` it can take now) joined with its signed snapshot.
+  """
+  def orders(state, chapter, merchant) do
+    case get_in(state, [:merchants, {chapter, merchant}]) do
+      nil ->
+        []
+
+      %{checkout: %{orders: placed}, orders: orders, index: index, details: details} ->
+        index
+        |> Enum.map(fn {key, id} ->
+          order = Map.fetch!(orders, id)
+
+          placed
+          |> Map.fetch!(key)
+          |> Map.take([
+            :principal,
+            :channel,
+            :fulfillment,
+            :currency,
+            :lines,
+            :subtotal,
+            :total,
+            :adjustments
+          ])
+          |> Map.merge(%{
+            id: id,
+            state: order.state,
+            version: order.version,
+            actions: Kitchen.available_actions(order)
+          })
+          |> Map.merge(Map.fetch!(details, id))
+        end)
+        |> Enum.sort_by(& &1.id)
+    end
+  end
+
   @spec admit(map(), map(), map()) :: {:ok, map()} | {:error, term()}
   def admit(%{signers: [_]} = env, keys, state), do: admit_one(env, keys, state)
   def admit(_, _, _), do: {:error, :restaurant_signer_cardinality}
@@ -130,6 +168,7 @@ defmodule RestaurantCore.Admission do
   defp admit_one(%{type: @placed, chapter_id: ch, payload: p} = env, _keys, state) do
     with {:ok, _grant} <- device(env, state, :checkout),
          {:ok, cmd, cart, snapshot} <- decode_checkout(p),
+         true <- name?(Map.get(p, "pickup_name")) or {:error, :invalid_checkout_command},
          {:ok, merchant} <- merchant(state, ch, p["merchant_id"]),
          :ok <-
            if(Map.has_key?(merchant.orders, p["order_id"]),
@@ -154,6 +193,7 @@ defmodule RestaurantCore.Admission do
        put_in(state, [:merchants, {ch, p["merchant_id"]}], %{
          checkout: checkout,
          orders: Map.put(merchant.orders, p["order_id"], order),
+         details: Map.put(merchant.details, p["order_id"], %{pickup_name: p["pickup_name"]}),
          index: Map.put(merchant.index, {cmd.channel, cmd.idempotency_key}, p["order_id"])
        })}
     end
@@ -214,7 +254,7 @@ defmodule RestaurantCore.Admission do
     case get_in(state, [:merchants, {ch, m}]) do
       nil ->
         with {:ok, checkout} <- Placement.new(Kitchen.workflow(), m, %{}),
-             do: {:ok, %{checkout: checkout, orders: %{}, index: %{}}}
+             do: {:ok, %{checkout: checkout, orders: %{}, index: %{}, details: %{}}}
 
       merchant ->
         {:ok, merchant}
@@ -291,6 +331,9 @@ defmodule RestaurantCore.Admission do
       _ -> {:error, :invalid_checkout_command}
     end
   end
+
+  defp name?(nil), do: true
+  defp name?(name), do: is_binary(name) and String.length(String.trim(name)) in 1..80
 
   defp currency?(code), do: is_binary(code) and Regex.match?(~r/\A[A-Z]{3}\z/, code)
   defp minor?(n), do: is_integer(n) and n >= 0

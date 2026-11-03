@@ -285,7 +285,8 @@ async function signIn(browser, subject) {
     // The chapter's other project is listed, with a link to open it
     // (docs/architecture/2026-10-19-chapter-projects.md).
     const listed = admin.locator("#projects .row").filter({ hasText: "project-2" });
-    await listed.getByText("1 open; 2 people").waitFor();
+    // The accountable owner also holds an operator grant in this project.
+    await listed.getByText("1 open; 3 people").waitFor();
     const href = await listed.getByRole("link", { name: "Open" }).getAttribute("href");
     if (new URLSearchParams(href.split("?")[1]).get("project") !== "project-2") throw new Error(`unexpected link: ${href}`);
 
@@ -316,8 +317,8 @@ async function signIn(browser, subject) {
     await admin.locator("#confirm").waitFor({ state: "hidden" });
     await admin.locator("#person-details").getByText("holds nothing in this chapter").waitFor();
     await reviewerAdmin.waitFor({ state: "detached", ...live });
-    // The projects card follows: only the project's own operator is left.
-    await listed.getByText("1 open; 1 person").waitFor();
+    // The projects card follows: the project's operator and accountable owner remain.
+    await listed.getByText("1 open; 2 people").waitFor();
     // The reviewer's own page follows from its feed: its device is gone,
     // and it no longer offers to review.
     await reviewer.locator("#devices .row").waitFor({ state: "detached", ...live });

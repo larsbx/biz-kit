@@ -15,7 +15,7 @@ no agent on the far side, nothing listening on a port.
 | **Health** | disk, memory, swap, load, failed units and your own checks — hosts are probed in parallel so one unreachable host doesn't stall the rest |
 | **Services** | every systemd unit, user *and* system scope, on each host; start/stop/restart/enable/disable |
 | **Scripts** | discovers `*.sh` and `*.py` in the scripts directory and runs them locally with live output and a dry-run/apply split |
-| **Configs** | browse and edit the files matched by your config patterns, with a diff before every save |
+| **Configs** | browse and edit matched files, review the exact diff, and save only if the opened version is still current |
 | **Dispatch** | the carrier's dispatch board over dispatch's `/v1/operations`: create loads, add stops, plan trips with a driver and equipment, and start, complete or cancel them |
 | **Settings** | theme (dark, light, high contrast, or match the OS) and text size; stored per machine in the webview, not in `config.json` |
 
@@ -95,7 +95,10 @@ Upgrading from `hosts.json`: move its array under `"hosts"` in `config.json`.
 
 Nothing that stops, disables, deletes or overwrites happens without a
 confirmation showing the **exact command** — the same string that then runs.
-Scripts default to dry run; `--apply` is a second, separately confirmed click.
+Scripts advertising `--apply` are first invoked with an explicit `--dry-run`;
+`--apply` is a separate confirmed click. Scripts without that split require a
+confirmation showing their exact process arguments before running. Scripts must
+honor their declared flags; the console does not sandbox their behavior.
 
 The backend enforces the part that matters rather than trusting the UI:
 
@@ -107,6 +110,21 @@ The backend enforces the part that matters rather than trusting the UI:
   with no argument other than `--apply` / `--dry-run`
 - `write_config` refuses protected paths and validates `.json` before writing
 - every config write leaves a timestamped `.bak` beside the original
+- Save is enabled only after reviewing the current draft's diff; confirmation
+  captures that reviewed draft and its opened version
+- config review and save reject a file changed since opening, retaining the
+  unsaved draft; reload the file before reviewing again
+- a per-path lock serializes biz-kit config writers, and a staged replacement
+  verifies the original file's owner, group and mode before replacement; symbolic-link saves are refused
+  so the operator can open the target directly
+- config snapshots travel over process/SSH stdin, allowing large configs without
+  embedding their contents in a shell argument
+
+External editors do not participate in biz-kit's lock. The backend compares
+opened bytes again immediately before replacement, but this is not a filesystem
+transaction with unrelated processes. An interrupted process can leave a
+`<config path>.biz-kit-save-lock` directory; remove it only after confirming no
+biz-kit save is running.
 
 ## Extending
 
@@ -160,8 +178,26 @@ settings for Xvfb; the application keeps its normal graphics configuration.
 The native handshake has a bounded 60-second timeout and prints a separate
 session-ready marker before running panel assertions.
 
-The Desktop workflow runs this acceptance on Linux as well as the frontend and
-Rust checks on Linux, macOS, and Windows.
+The Desktop workflow runs this acceptance on the packaged Linux release binary,
+after bundling and before uploading candidates, as well as the frontend and
+Rust checks on Linux, macOS, and Windows. Its native test also reviews and saves
+a real disposable config, checks the backup, and refuses a stale duplicate
+editor without discarding the draft. Linux CI additionally tests a large snapshot
+and refuses a group-writable, service-owned config save if ownership cannot be
+preserved. The `--service-owner-fixture` test flag uses `sudo` only to create a
+disposable root-owned fixture; the actual app runs as the ordinary operator.
+
+Every successful platform job builds installable candidates. Download the
+`biz-kit-<platform>-<exact source SHA>` artifact from that Desktop workflow run.
+Linux contains `.deb`, `.rpm`, and `.AppImage`; macOS contains a universal `.dmg`;
+Windows contains `.msi` and NSIS `.exe`. Each archive includes `provenance.json`
+and `SHA256SUMS` for the actual bytes. These are candidate builds without
+configured distribution signing; an artifact from one successful platform does
+not mean the other platform jobs passed. Release publication still follows the
+existing tagged draft-release process.
+
+`python -m unittest discover -s tests -p 'test_*.py'` checks that incomplete,
+empty, or stale installer sets cannot be uploaded as complete candidates.
 
 `tauri build` produces `.deb`, `.rpm` and AppImage on Linux, `.app` and `.dmg`
 on macOS, and `.msi` and NSIS `.exe` on Windows, under

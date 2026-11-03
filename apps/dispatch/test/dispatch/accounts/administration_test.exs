@@ -8,6 +8,7 @@ defmodule Dispatch.Accounts.AdministrationTest do
   alias Dispatch.Access.Actor
   alias Dispatch.Accounts.{Administration, RoleAssignment}
   alias Dispatch.Audit.AuditEvent
+  alias Dispatch.Fleet.{Trailer, Vehicle}
   alias Dispatch.Support.Fixtures
 
   @moduletag :integration
@@ -194,6 +195,95 @@ defmodule Dispatch.Accounts.AdministrationTest do
 
       assert Administration.revoke(ctx.actor, own.id, own.version, ctx.now) ==
                {:error, :last_administrator}
+    end
+  end
+
+  # Owner rule (2026-11-02): a driver's role ends only once their equipment is
+  # checked in, i.e. no active trip of theirs in the organization holds a vehicle
+  # or trailer.
+  describe "a driver's equipment" do
+    setup ctx do
+      role =
+        Fixtures.assignment(ctx.tenant, ctx.carrier, ctx.driver, "DRIVER",
+          definition: ctx.definitions["DRIVER"]
+        )
+
+      %{driver_role: role}
+    end
+
+    defp trip(ctx, status, equipment) do
+      opts =
+        Enum.map(equipment, fn
+          Vehicle -> {:vehicle_id, Fixtures.equipment(ctx.tenant, ctx.carrier, Vehicle).id}
+          Trailer -> {:trailer_id, Fixtures.equipment(ctx.tenant, ctx.carrier, Trailer).id}
+        end)
+
+      planned = Fixtures.assignment_record(ctx.tenant, ctx.carrier, ctx.driver, opts)
+
+      Enum.reduce(status, planned, fn action, trip ->
+        trip
+        |> Ash.Changeset.for_update(action, %{})
+        |> Ash.update!(authorize?: false, tenant: ctx.tenant)
+      end)
+    end
+
+    defp revoke_driver(ctx),
+      do: Administration.revoke(ctx.actor, ctx.driver_role.id, ctx.driver_role.version, ctx.now)
+
+    for equipment <- [[Vehicle], [Trailer], [Vehicle, Trailer]] do
+      @equipment equipment
+      test "is refused while an active trip holds #{inspect(equipment)}", ctx do
+        trip(ctx, [:activate], @equipment)
+
+        assert revoke_driver(ctx) == {:error, :equipment_not_checked_in}
+        assert active?(ctx, ctx.driver_role)
+      end
+    end
+
+    test "is allowed once that trip completes", ctx do
+      trip(ctx, [:activate, :complete], [Vehicle])
+      assert {:ok, %RoleAssignment{status: :REVOKED}} = revoke_driver(ctx)
+    end
+
+    test "is allowed when the active trip holds no equipment, or a planned one does", ctx do
+      trip(ctx, [:activate], [])
+      trip(ctx, [], [Vehicle, Trailer])
+      assert {:ok, %RoleAssignment{status: :REVOKED}} = revoke_driver(ctx)
+    end
+
+    test "is allowed while another driving role of theirs stays in force", ctx do
+      trip(ctx, [:activate], [Vehicle])
+      {:ok, manifest} = Dispatch.Access.SeedManifest.fetch("DRIVER")
+
+      relief =
+        Dispatch.Accounts.RoleDefinition
+        |> Ash.Changeset.for_create(:seed, %{
+          tenant_id: ctx.tenant,
+          key: "RELIEF_DRIVER",
+          label: "Relief driver",
+          capabilities_json: manifest.capabilities,
+          constraints_json: manifest.constraints,
+          profile_module: inspect(manifest.profile_module)
+        })
+        |> Ash.create!(authorize?: false, tenant: ctx.tenant)
+
+      _other =
+        Fixtures.assignment(ctx.tenant, ctx.carrier, ctx.driver, "DRIVER", definition: relief)
+
+      assert {:ok, %RoleAssignment{status: :REVOKED}} = revoke_driver(ctx)
+    end
+
+    test "does not hold back a role that does not drive", ctx do
+      trip(ctx, [:activate], [Vehicle])
+      {:ok, desk} = grant(ctx, ctx.driver, "DISPATCHER")
+
+      assert {:ok, %RoleAssignment{status: :REVOKED}} =
+               Administration.revoke(ctx.actor, desk.id, desk.version, ctx.now)
+    end
+
+    defp active?(ctx, assignment) do
+      Ash.get!(RoleAssignment, assignment.id, authorize?: false, tenant: ctx.tenant).status ==
+        :ACTIVE
     end
   end
 end
