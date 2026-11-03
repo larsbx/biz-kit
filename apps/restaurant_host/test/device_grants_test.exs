@@ -217,18 +217,23 @@ defmodule RestaurantHost.DeviceGrantsTest do
       {r.chapter, gov, Map.put(details.payload, "seed", "forbidden")}
     ]
 
+    # A payload the type schema refuses never becomes an envelope; every other
+    # attempt is signed and refused by the Log.
     for {chapter, signer, payload} <- attempts do
-      {:ok, env} =
-        CoopSubstrate.Protocol.Envelope.new(%{
-          chapter_id: chapter,
-          type: details.type,
-          payload: payload,
-          signers: [Map.take(signer, [:role, :key_id, :pubkey])],
-          timestamp_ms: System.system_time(:millisecond)
-        })
-
-      {:ok, env} = CoopSubstrate.Protocol.Envelope.sign(env, signer.key_id, signer.seed)
-      assert {:error, _} = Log.append(env)
+      assert {:error, _} =
+               with(
+                 {:ok, env} <-
+                   CoopSubstrate.Protocol.Envelope.new(%{
+                     chapter_id: chapter,
+                     type: details.type,
+                     payload: payload,
+                     signers: [Map.take(signer, [:role, :key_id, :pubkey])],
+                     timestamp_ms: System.system_time(:millisecond)
+                   }),
+                 {:ok, env} <-
+                   CoopSubstrate.Protocol.Envelope.sign(env, signer.key_id, signer.seed),
+                 do: Log.append(env)
+               )
     end
 
     assert Log.head() == head
