@@ -96,7 +96,16 @@ defmodule BarterCore.LedgerFirstClearingTest do
 
     assert {:ok, plan} = Clearing.propose(input, @now)
     assert plan.cycles == []
-    assert plan.original_minor == plan.residual_minor
+    assert plan.original_minor == nil
+    assert plan.residual_minor == nil
+    assert plan.totals_scope == :per_currency_no_fx
+
+    assert plan.totals_by_currency == [
+             %{currency: "EUR", original_minor: 100, proposed_reduction_minor: 0, residual_minor: 100},
+             %{currency: "USD", original_minor: 100, proposed_reduction_minor: 0, residual_minor: 100}
+           ]
+
+    assert {:ok, ^plan} = Clearing.verify_plan(plan, @now)
   end
 
   test "snapshot, journals and graph are bound against tampering" do
