@@ -163,8 +163,9 @@ Related: #290 (open P0 audit), #291 (V1.1 implementation),
 `CoopSubstrate.CommercialSetoffSources.snapshot/4` now offers a read-only
 snapshot for a **single local canonical business log**. It enumerates open
 mutual obligations in the current serialized Membership gate, reads each
-source-owned `ObligationRecorded` stream, independently checks the stored
-Ed25519 envelope signatures, extracts its full-record hash and stream
+source-owned `ObligationRecorded` stream, audits the entire local signed
+Log hash-chain using `Log.verify_chains/0`, checks each original envelope's
+Ed25519 signatures, extracts its full-record hash and stream
 revision, and rechecks that the Log head did not advance while collecting
 those records. It returns the same gate and exact source terms for
 `CommercialSetoffProof.prepare/8` without inventing source hashes.
@@ -178,9 +179,9 @@ exercise real signed Log streams, changed source sets, and restart replay.
 
 **Limitations:** checking signature validity on an accepted business event
 does not establish invoice authenticity, trade performance, agency authority
-or legally effective release. Per-stream reads and a stable-head observation
-are not a serialized reservation, financial commit, full log-chain audit,
-or an independently administered foreign node verification. Source revision
+or legally effective release. The local full-chain audit and stable-head observation
+are not a serialized reservation, financial commit, or independently
+administered foreign-node verification. Source revision
 coverage excludes assigned obligations until their complete signed lineage
 can be validated. The helper is inert and cannot authorize or submit a
 `NettingExecuted` event; the legacy aggregate-signed bypass is unchanged.
