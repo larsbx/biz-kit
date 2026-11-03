@@ -18,10 +18,27 @@ defmodule BarterCore.BusinessParticipation do
   @schema "bizkit.barter.business-participation-preflight.v1"
   @business_keys ~w(business_id business_kind registration_ref registration_revision registration_valid_until registration_state sanctions_state)a
   @agent_keys ~w(principal_id business_id grant_ref grant_revision grant_state scopes expires_at)a
-  @business_kinds [:registered_company, :registered_cooperative, :registered_partnership, :registered_sole_proprietorship]
-  @trade_scopes [:publish_supply, :publish_need, :negotiate_trade, :approve_trade, :approve_clearing, :confirm_fulfillment]
+  @business_kinds [
+    :registered_company,
+    :registered_cooperative,
+    :registered_partnership,
+    :registered_sole_proprietorship
+  ]
+  @trade_scopes [
+    :publish_supply,
+    :publish_need,
+    :negotiate_trade,
+    :approve_trade,
+    :approve_clearing,
+    :confirm_fulfillment
+  ]
   @cross_border_scopes [:cross_border_reciprocal_fulfillment]
-  @financial_scopes [:issue_transferable_credit, :send_money, :cash_payout, :instruct_third_party_value_transfer]
+  @financial_scopes [
+    :issue_transferable_credit,
+    :send_money,
+    :cash_payout,
+    :instruct_third_party_value_transfer
+  ]
   @all_scopes @trade_scopes ++ @cross_border_scopes
 
   @doc """
