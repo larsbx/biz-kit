@@ -35,3 +35,46 @@ class AuditTest(unittest.TestCase):
                 **data, "records": [dict(base,id="foo",evidence_git_blobs={"apps/foo/mix.exs":"0"*40}),data["records"][1]]
             })))
             self.assertIn("missing/unsafe", str(module.audit(root, {**data, "records": [dict(base,id="foo", observed_code_paths=["../secret"]), data["records"][1]]})))
+
+class RefreshTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = TemporaryDirectory()
+        self.root = root = Path(self.dir.name)
+        (root / "apps/foo").mkdir(parents=True)
+        (root / "apps/foo/mix.exs").write_text("foo")
+        (root / "mix.exs").write_text("umbrella")
+        base = dict(schema="biz-kit.proof-bank.characterization.v1", source_sha="sha",
+                    intended_purpose="test", first_formal_obligation="test", first_formal_layer="L1",
+                    **module.STATES)
+        self.data = dict(schema=module.SCHEMA, source_sha="sha", records=[
+            dict(base, id="foo", observed_code_paths=["apps/foo/mix.exs"],
+                 evidence_git_blobs={"apps/foo/mix.exs": module.git_blob(root / "apps/foo/mix.exs")}),
+            dict(base, id="biz-kit", observed_code_paths=["mix.exs"],
+                 evidence_git_blobs={"mix.exs": module.git_blob(root / "mix.exs")})])
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_refresh_repins_changed_bytes_and_logs_it(self):
+        (self.root / "apps/foo/mix.exs").write_text("foo, edited")
+        self.assertIn("changed source/test bytes", str(module.audit(self.root, self.data)))
+        refreshed = module.refresh(self.root, self.data, "abc123", "2026-11-03")
+        self.assertEqual([], module.audit(self.root, refreshed))
+        [entry] = refreshed["evidence_refreshes"]
+        self.assertEqual(("abc123", "2026-11-03", ["apps/foo/mix.exs"]),
+                         (entry["at_sha"], entry["date"], entry["refreshed_paths"]))
+        self.assertEqual("sha", refreshed["source_sha"], "a refresh is not a re-characterization")
+        self.assertNotIn("evidence_refreshes", self.data, "the input is not mutated")
+
+    def test_refresh_without_changes_is_identity(self):
+        self.assertEqual(self.data, module.refresh(self.root, self.data, "abc123", "2026-11-03"))
+
+    def test_refresh_never_hides_drift_missing_paths_or_promotion(self):
+        (self.root / "apps/bar").mkdir()
+        (self.root / "apps/bar/mix.exs").write_text("bar")
+        promoted = dict(self.data["records"][0], proof_status="proven",
+                        observed_code_paths=["apps/foo/gone.ex"], evidence_git_blobs={"apps/foo/gone.ex": "0" * 40})
+        data = {**self.data, "records": [promoted, self.data["records"][1]]}
+        problems = str(module.audit(self.root, module.refresh(self.root, data, "abc123", "2026-11-03")))
+        for kept in ("app drift", "invalid status", "missing/unsafe"):
+            self.assertIn(kept, problems)
