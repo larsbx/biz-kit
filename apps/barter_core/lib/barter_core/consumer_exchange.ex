@@ -185,24 +185,43 @@ defmodule BarterCore.ConsumerExchange do
   end
 
   defp participant_fields(%{kind: :individual} = p) do
-    [Atom.to_string(p.kind), p.principal_id, Atom.to_string(p.verification),
-     Atom.to_string(p.age_status), p.country, Integer.to_string(p.expires_at)]
+    [
+      Atom.to_string(p.kind),
+      p.principal_id,
+      Atom.to_string(p.verification),
+      Atom.to_string(p.age_status),
+      p.country,
+      Integer.to_string(p.expires_at)
+    ]
   end
 
   defp participant_fields(%{kind: :business} = b) do
-    [Atom.to_string(b.kind), b.business_id, Atom.to_string(b.verification),
-     b.country, Integer.to_string(b.expires_at)]
+    [
+      Atom.to_string(b.kind),
+      b.business_id,
+      Atom.to_string(b.verification),
+      b.country,
+      Integer.to_string(b.expires_at)
+    ]
   end
 
   defp broker_fields(nil), do: ["no_broker"]
 
   defp broker_fields(b) do
     participant_fields(b.business) ++
-      [b.agent.principal_id, b.agent.business_id, b.agent.grant_ref,
-       Integer.to_string(b.agent.grant_revision), Atom.to_string(b.agent.grant_state),
-       Atom.to_string(@consignment_scope), Integer.to_string(b.agent.expires_at),
-       b.seller_consent_ref, Integer.to_string(b.seller_consent_revision),
-       b.terms_hash, Integer.to_string(b.expires_at)]
+      [
+        b.agent.principal_id,
+        b.agent.business_id,
+        b.agent.grant_ref,
+        Integer.to_string(b.agent.grant_revision),
+        Atom.to_string(b.agent.grant_state),
+        Atom.to_string(@consignment_scope),
+        Integer.to_string(b.agent.expires_at),
+        b.seller_consent_ref,
+        Integer.to_string(b.seller_consent_revision),
+        b.terms_hash,
+        Integer.to_string(b.expires_at)
+      ]
   end
 
   defp participant_id(%{kind: :individual, principal_id: id}), do: id
