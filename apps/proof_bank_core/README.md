@@ -58,6 +58,34 @@ Do not deserialize untrusted JSON into arbitrary atoms. A future adapter must
 enforce an allowlisted schema and canonical encoding, with signed approvals,
 tenant/project scoping, immutable revisions and evidence custody at the host.
 
+## First-party Dispatch correspondence pilot (proposal)
+
+The first applied Proof Bank review packet is
+`ProofBankCore.DispatchPilot.compile/0`. It traces four named abstract Lean
+trip-transition theorems to selected real Dispatch integration tests and a
+**separate conformance-only** obligation for grant revocation under contention.
+Neither textual test anchors nor passing isolated tests imply that the Elixir
+implementation has been formally proved to refine the Lean model.
+
+From the Biz-kit umbrella checkout:
+
+```sh
+cd apps/proof_bank_core
+mix test --no-start
+mix run --no-start -e 'IO.inspect(ProofBankCore.DispatchPilot.audit_sources("../.."))'
+mix run --no-start -e 'IO.inspect(ProofBankCore.DispatchPilot.compile())'
+```
+
+The source audit checks **presence only**. The independent exact-head
+Lean/Quint, PostgreSQL and portability lanes are in
+`.github/workflows/proof-bank-dispatch-pilot.yml`. All emitted claims remain
+unverified, all implementation refinement remains not established, and
+extension activation remains inert. In particular, driver exclusivity is
+**not** proved by the transition model.
+
+See [the Dispatch refinement workpaper](../../docs/proof-bank/dispatch/REFINEMENT_V1.md)
+and [internal-first acceptance issue #242](https://github.com/larsbx/biz-kit/issues/242).
+
 ## Engine boundaries
 
 `ProofBankCore.ConstructionPort` returns **candidates**.
