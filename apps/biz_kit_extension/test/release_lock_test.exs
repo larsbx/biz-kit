@@ -71,8 +71,10 @@ defmodule BizKit.Extension.ReleaseLockTest do
   test "canonical manifest digest is independent of normalized top-level ordering" do
     school = School.manifest()
     assert {:ok, expected} = ReleaseLock.fingerprint(school)
+
     assert {:ok, ^expected} =
              ReleaseLock.fingerprint(%{school | contract_version: 1.0})
+
     assert expected ==
              "602de6d20b186c21a3ebe76523935e5ffdfcf378d142db3cbe5cbeb53adf539f"
 

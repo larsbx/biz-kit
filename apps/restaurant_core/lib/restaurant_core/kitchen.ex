@@ -28,6 +28,7 @@ defmodule RestaurantCore.Kitchen do
   defdelegate terminal?(state), to: Core
   def next_states(fulfillment, from), do: Core.next_states(@workflow, fulfillment, from)
   def legal?(fulfillment, from, to), do: Core.legal?(@workflow, fulfillment, from, to)
+  def available_actions(order), do: Core.available_actions(@workflow, order)
   def new(merchant, id, fulfillment), do: Core.new(@workflow, merchant, id, fulfillment)
   def authorized?(trusted, action), do: Core.authorized?(@workflow, trusted, action)
   def apply(state, trusted, command), do: Core.apply(@workflow, state, trusted, command)
