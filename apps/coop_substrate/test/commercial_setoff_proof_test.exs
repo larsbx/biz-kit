@@ -194,6 +194,32 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
              verify(ctx, grants: new_ref)
   end
 
+  test "two actor labels cannot reuse one grant, key ID or public key", ctx do
+    same_grant =
+      put_in(ctx.grants, ["M-bob", :digest], ctx.grants["M-alice"].digest)
+
+    assert {:error, :not_independent_authorities} = prepare(ctx, nil, same_grant)
+
+    # Synthetic gate mutation tests the pure contract: real Log append cannot
+    # be bypassed with this altered map, and this is not a registered agency.
+    gate = Log.gate()
+    alice_key = gate.members[{@chapter, "M-alice"}]
+    forged_gate = put_in(gate, [:members, {@chapter, "M-bob"}], alice_key)
+    forged_grants = put_in(ctx.grants, ["M-bob", :key_id], alice_key.key_id)
+
+    assert {:error, :not_independent_authorities} =
+             Proof.prepare(
+               forged_gate,
+               @chapter,
+               {"M-alice", "M-bob"},
+               "USD",
+               ctx.sources,
+               "SET-1",
+               forged_grants,
+               ctx.evidence
+             )
+  end
+
   test "rejects a rotated member key even though the old signature is valid Ed25519", ctx do
     replacement = new_member("member")
 
