@@ -14,7 +14,8 @@ These come from a review of v0.3 against `main` at `5cf60d3`.
 | `{id, description, oracle}` added to the criterion grammar, with no rule given | A **typed criteria rule** used only by V2 and catalogues. V1 keeps exactly two keys (§3.1). New obligation EXB-9a | `TaskCore.DoD.validate_criteria/1` requires `map_size(c) == 2` (`dod.ex:133`), so v0.3's shape is refused today. Widening that shared rule would let a `TaskDoDDefinedV1` carry an oracle that V1 completion ignores |
 | `discriminating(ω)` defined over the *last* witness result | **The first non-error witness result for each ⟨ω, digest⟩ is final.** `discriminating` can only change from false to true. Withdrawing h(ω) is final (§3.2) | A later result could flip J3a after adoption, which is checked only once. Witnesses and verdicts now follow one slot rule |
 | Oracle determinism was implicit | **Premise P-DET** (§3.3), with risk **R7, flaky ω** | First-wins slots make the result depend on arrival order unless ω is a function. J3a cannot detect flakiness |
-| EXB-5: "held by a declared agent" | The signer must be a declared `agent` **when it signs**, not only when granted (§3.2, EXB-5) | A principal-kind declaration can be retracted (`projects.ex:226`), and principals can be offboarded |
+| EXB-5: "held by a declared agent" | The signer must be a declared `agent` **when it signs**, not only when granted. **Chapter offboarding revokes executor grants** in its batch (§3.2–3.3, EXB-5) | A principal-kind declaration can be retracted (`projects.ex:226`). Offboarding is per project (`TaskPrincipalOffboardedV1` ends only grants scoped to exactly that project, `State.held_by/3`), so on its own it would leave a chapter-scoped grant standing |
+| Execution path and proof method left implicit | The executor is **not** a TaskAgentRun, so lease fencing (B4) is not required. A Quint model of the verdict gate, with a negative control, is added to discharge (§3.3–3.4) | `agent_runs.ex` already has leased runs, and reviewers will ask. The repo's convention pairs random walks with bounded models (`apps/task_core/spec/*.qnt`, `formal/quint/*_bug.qnt`) |
 | "Run ω@h from the bank" | **ProofBankCore catalogues candidates and admits nothing.** `TaskOracleRegisteredV1` is the only act that admits an oracle. ω's bytes live in custody under h(ω) (§1, §3.3) | `ProofBankCore.Portfolio` uses the same method enum, and its seeds are explicitly inert. Without this rule there would be two banks, and ω's source would be unconstrained |
 
 ### 0.1 Carried from v0.3 (changes from v0.2)
@@ -95,7 +96,7 @@ The criteria are already hashed into `definition_ref` (`dod.ex:493`, `host.hash(
 
 All are new types except where marked. Replay of existing ledgers is unchanged.
 
-**Executor signer** := the signer's principal holds an active chapter executor grant **and**, at the event's admission, `TaskCore.Projects.kind(state, chapter, principal) == "agent"` and the principal is not offboarded. The kind is evaluated when the event is signed, not when the grant was issued.
+**Executor signer** := the signer's principal holds an active chapter executor grant **and**, at the event's admission, `TaskCore.Projects.kind(state, chapter, principal) == "agent"`. The kind is evaluated when the event is admitted, not when the grant was issued.
 
 **Slot rule** (applies to witnesses and verdicts): the first `pass` or `fail` result for a slot is final, and any later non-error result for that slot is refused (`:oracle_result_recorded`). An `error` result fills no slot, so it can be retried.
 
@@ -103,7 +104,7 @@ All are new types except where marked. Replay of existing ledgers is unchanged.
 |---|---|---|---|
 | `TaskOracleRegisteredV1` | governance; chapter-scoped (`<chapter>/task_oracles`) | `oracle` well-formed; **ω's artifact is custody-verified under digest `oracle`**; `method ∈ {conformance, lean, quint}`; `witness_pass ≠ witness_fail`, both custody-verified digests; **h(ω) never registered in this chapter** | ω is in the chapter's bank, with its two witnesses. `source` (optional, free text) may cite a ProofBankCore candidate; it grants nothing |
 | `TaskOracleWithdrawnV1` | governance; chapter-scoped | registered, not withdrawn | New adoptions may not cite ω. **Definitions already pinning it keep it.** Withdrawal is final for h(ω). A corrected ω is a new artifact with a new hash |
-| `TaskExecutorGrantedV1` / `…RevokedV1` | governance; chapter-scoped | grant: principal declared kind `agent` | The key may sign witness results and verdicts in the chapter, while it remains an executor signer |
+| `TaskExecutorGrantedV1` / `…RevokedV1` | governance; chapter-scoped | grant: principal declared kind `agent`; revoke: grant active | The key may sign witness results and verdicts in the chapter, while it remains an executor signer. Revocation is also emitted by chapter offboarding (§3.3) |
 | `TaskOracleWitnessedV1` | executor signer | ω registered; `digest` is one of ω's two witnesses; `result ∈ {pass, fail, error}`; slot ⟨ω, digest⟩ free | `discriminating(ω) :⟺ rec(ω, witness_pass) = pass ∧ rec(ω, witness_fail) = fail`, where `rec` is the recorded (first non-error) result. Because slots are final, `discriminating` only changes from false to true |
 | `TaskPrestateRecordedV1` | the proposing operator | τ proposed; digest custody-verified; τ not yet agreed | pre(τ) := digest. Recording it again before agreement replaces it |
 | `TaskVerdictRecordedV1` | executor signer | τ's current `definition_ref`; `criterion` has `oracle = ω`; `phase = pre` ⇒ input = pre(τ); `phase = post` ⇒ input = `evidence[criterion]` of the cited current submission; slot ⟨definition_ref, criterion, phase, input⟩ free | Recorded |
@@ -118,7 +119,9 @@ All are new types except where marked. Replay of existing ledgers is unchanged.
 - **P-DET, oracle determinism (premise).** ω is a function: `eval(ω, x)` depends only on (h(ω), x) and returns the same `pass`/`fail` on every run. `error` is the only permitted nondeterminism, for infrastructure failure. The kernel cannot check this premise. It is why first-wins slots are sound: under P-DET, arrival order between executor instances does not matter. An executor that sees two runs disagree, on any input, must report it. Governance's remedy is `TaskOracleWithdrawnV1` (R7).
 - **ProofBankCore proposes; registration admits.** ProofBankCore's portfolio uses the same method vocabulary (`:conformance | :lean | :quint`), but its seeds are `inert` and confer nothing. Registration copies no ProofBankCore state. It cites the candidate in `source` at most. The executor resolves ω **only** from custody by h(ω), and refuses on a hash mismatch. There is no second, executor-side bank.
 - **Chapter-scoped executor grant.** The bank and witnesses are chapter-wide, so their evaluator is too. Feed authorization gains one clause: an active executor grant reads every project feed of its chapter. This extends the chapter view `CoopSubstrate.Feed` already serves to administrators, and it is the only CoopSubstrate access change.
-- **The executor must be a declared agent, at signing time.** A human key signing verdicts would be a reviewer in disguise. Review already exists and stays a separate grant. Retracting the kind, or offboarding the principal, stops new results immediately, even before the grant is revoked.
+- **The executor must be a declared agent, at signing time.** A human key signing verdicts would be a reviewer in disguise. Review already exists and stays a separate grant. Retracting the kind stops new results immediately, even before the grant is revoked.
+- **Offboarding reaches the executor grant through the chapter, not the project.** `TaskPrincipalOffboardedV1` stays project-scoped and does not touch a chapter-scoped grant: `State.held_by/3` matches exact project scope, and that is kept. Instead, `CoopSubstrate.Offboarding.prepare_chapter/3` adds one `TaskExecutorRevokedV1` per active executor grant of the principal to its all-or-none batch. It must also do so when the principal holds nothing in any project, which today would otherwise end in `:nothing_to_offboard` with nothing emitted.
+- **The executor is not a TaskAgentRun.** It does not use `TaskCore.AgentRuns` or the AgentCore execution port, so lease fencing (B4) is not required. Idempotency comes from the ledger slot (EXB-8). Running ω twice has no external side effect, and P-DET makes the second result redundant.
 - **Pre-state is fixed by the requester, not the executor.** Otherwise the executor could pick an input that makes J3b pass.
 - **No upward discharge by construction.** A verdict names its `task_id` and `definition_ref`, so a subtask's verdict cannot match a parent criterion (INV-D11).
 - **Closure is monotone.** A failing post verdict on a *completed* task does not reopen it. It is refused, because the submission is no longer current. A post-close violation is evidence about the product, and P3 mints the `regression` proposal (D10).
@@ -132,7 +135,7 @@ All are new types except where marked. Replay of existing ledgers is unchanged.
 | EXB-2 | No catalogue citing a non-discriminating, unregistered or withdrawn ω is adopted | INV-D3 (J3a) |
 | EXB-3 | No typed task with an oracle criterion is queued unless every pre verdict is `fail` on the requester's pre-state | INV-D3 (J3b), D9 |
 | EXB-4 | No task with oracle criteria completes without a `pass` post verdict per criterion on the evidence it completes with | INV-D5 |
-| EXB-5 | Only an executor signer signs witness results or verdicts: an active chapter grant, held by a principal declared `agent` and not offboarded **when the event is admitted**. Revoking the grant, retracting the kind or offboarding the principal stops new results and keeps past ones | R3 |
+| EXB-5 | Only an executor signer signs witness results or verdicts: an active chapter grant, held by a principal declared `agent` **when the event is admitted**. Revoking the grant or retracting the kind stops new results and keeps past ones. Chapter offboarding revokes every executor grant of the principal, including for a principal that holds nothing in any project. Project offboarding alone does not | R3 |
 | EXB-6 | A subtask's verdicts never discharge its parent | INV-D11 |
 | EXB-7 | Completion is monotone under trace extension | INV-D10 |
 | EXB-8 | A duplicate non-error result (verdict or witness) for a filled slot is refused; `error` is retryable | replay safety |
@@ -140,7 +143,9 @@ All are new types except where marked. Replay of existing ledgers is unchanged.
 | EXB-9a | A `TaskDoDDefinedV1` whose criteria carry an `oracle` key is refused (`:invalid_dod_criteria`). So is a catalogue whose `oracle` contains a hole, or is not 64 lowercase hex characters | compatibility, §3.1 |
 | EXB-10 | `discriminating(ω)` only changes from false to true under trace extension. A withdrawn h(ω) is never registered again | J3a stability |
 
-Discharge follows the pattern used for ownership. A seeded random walk covers registrations, withdrawals, witness results, grants, revocations, **kind declarations and retractions, offboardings**, redefinitions, verdicts in both phases and completions. It asserts EXB-1, EXB-3, EXB-4, EXB-5, EXB-7 and EXB-10 in every admitted state, plus non-vacuity statistics. Then hand-made mutants per guard. They must include one that reads the kind at grant time, one that lets the last witness result win, and one that widens `validate_criteria/1`.
+Discharge follows the pattern used for ownership. A seeded random walk covers registrations, withdrawals, witness results, grants, revocations, **kind declarations and retractions, project and chapter offboardings**, redefinitions, verdicts in both phases and completions. It asserts EXB-1, EXB-3, EXB-4, EXB-5, EXB-7 and EXB-10 in every admitted state, plus non-vacuity statistics. Then hand-made mutants per guard. They must include one that reads the kind at grant time, one that lets the last witness result win, one that widens `validate_criteria/1`, and one where chapter offboarding omits executor revocations.
+
+In addition, as bounded corroboration in the repo's convention: extend `apps/task_core/spec/task_definitions.qnt` with registration, witness slots, verdict slots and the queue and completion guards, checking EXB-3, EXB-4, EXB-7 and EXB-10. Add a negative control, `verdict_gate_bug.qnt`, in which completion ignores a failing post verdict and which must violate EXB-4. Like the existing models, this establishes the guard's design, not a refinement of the Elixir code.
 
 ### 3.5 Swarm side (minimal)
 
@@ -153,7 +158,7 @@ Discharge follows the pattern used for ownership. A seeded random walk covers re
 
 Deadlines and on-time (D13, moved to P5) · defeaters and renegotiation · `pro` guards beyond the J3b hint · regression minting (P3) · in-kernel native ω (deferred carve-out; revisit if P2 shows round-trip latency hurts) · κ constants · kernel-side detection of nondeterministic ω.
 
-**Exit:** EXB-1..10 and EXB-9a green in CI at an exact head, TaskCore and SchoolOps regressions green, and one task end to end on dev: upload ω and its witnesses → register ω → witness both → adopt → propose → pre-state → define → pre fail → agree → queue → start → evidence → post pass → review → complete.
+**Exit:** EXB-1..10 and EXB-9a green in CI at an exact head, the verdict-gate Quint model passing with its negative control failing, TaskCore and SchoolOps regressions green, and one task end to end on dev: upload ω and its witnesses → register ω → witness both → adopt → propose → pre-state → define → pre fail → agree → queue → start → evidence → post pass → review → complete.
 
 ---
 
@@ -168,7 +173,7 @@ Unchanged from v0.3, with these adjustments:
 
 ## Risks (changes only)
 
-- **R3 Executor key compromise** is now bounded by grant revocation and kind retraction. Both are governance-controlled and attributable. A compromised key can certify a bad ω only through witness results, and adoption still needs the owner's act. It can pass bad evidence only up to the accepting human review, which P1 retains.
+- **R3 Executor key compromise** is now bounded by grant revocation, kind retraction and chapter offboarding. Both are governance-controlled and attributable. A compromised key can certify a bad ω only through witness results, and adoption still needs the owner's act. It can pass bad evidence only up to the accepting human review, which P1 retains.
 - **R6 Executor liveness.** If the executor is down, typed intake stalls at queue and completion. Nothing unsafe is admitted. P2 measures it.
 - **R7 Flaky ω** (new). An ω that violates P-DET can pass J3a on a lucky run and give verdicts that depend on arrival order. Mitigations: final slots make each recorded result stable and attributable; executors report disagreements; P2 samples re-runs; governance withdraws h(ω), and a corrected ω gets a new hash. Residual: verdicts recorded before withdrawal stand, and definitions already pinning ω keep it. Each such definition must be redefined by hand.
 
