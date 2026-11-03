@@ -48,8 +48,16 @@ defmodule ProofBankCore.DispatchPilot do
       witness: "follows the transition table"
     },
     %{
+      id: "D-VERSION",
+      statement: "An abstract trip commit increments the version by exactly one.",
+      method: :lean,
+      theorem: "commit_increments_version",
+      test: @board_test,
+      witness: "a transition increments the version and rejects a stale retry"
+    },
+    %{
       id: "D-AUDIT",
-      statement: "A successful abstract transition increments its version and appends an audit entry.",
+      statement: "An abstract trip commit appends exactly one audit event.",
       method: :lean,
       theorem: "commit_appends_exactly_one_audit",
       test: @board_test,
