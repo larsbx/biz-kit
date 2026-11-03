@@ -1,7 +1,7 @@
 # Commercial bilateral setoff: source-bound verification contract V1
 
-Status: **inert verification-contract increment**, 2026-11-03. Depends on
-commercial clearing V1.1 PR #291 and the open audit in issue #290.
+Status: **inert verification-contract increment**, 2026-11-03. Builds on
+merged commercial clearing V1.1 PR #291. Acceptance audit #290 remains open.
 
 ## Existing authority and the source-binding gap
 
@@ -185,3 +185,32 @@ administered foreign-node verification. Source revision
 coverage excludes assigned obligations until their complete signed lineage
 can be validated. The helper is inert and cannot authorize or submit a
 `NettingExecuted` event; the legacy aggregate-signed bypass is unchanged.
+
+## Fresh local signed consent checks (increment 3)
+
+`CommercialSetoffSources.verify_local/5` now re-reads the current canonical
+source-owning business log and verifies the exact signed source commitment
+against it, rather than accepting caller-supplied source IDs, revision numbers
+or event hashes. It composes `snapshot/4` with
+`CommercialSetoffProof.verify/6`, validates the two current-key consents,
+and checks the observed Log head remains stable through the read-only check.
+
+The returned status is **inert cryptographic verification only**.
+`source_status: :locally_signed_business_history` does not mean a customer
+invoice, contractual agreement, corporate grant or legal effective discharge
+has been verified. `agency_status` and `legal_status` remain
+`:unverified`. A concurrent append after verification can invalidate the
+result. **Never reuse this result as a serialized admission decision.**
+
+The pure verifier's optional `spent` set now also models consumed
+`{:source, chapter_id, source_obligation_id, revision}` tuples. This
+reproducibly rejects using the same modelled source in two separate clearing
+intents, but has **no persistent transactional force**. A future local
+append gate must maintain source-level and intent-level uniqueness in its
+durable, serialized business history. This cannot by itself support live
+commercial clearing.
+
+New local-verifier negative tests check stale signatures, revoked synthetic
+grants, same-total source substitution and assignment-out-and-back.
+Code is pending exact-head hosted CI; no passing CI or legal admissibility
+is inferred.
