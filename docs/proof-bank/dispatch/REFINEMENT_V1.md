@@ -18,13 +18,14 @@ selected role inside the write transaction. It does not supply an Elixir-to-Lean
 refinement theorem. Issue #254 is closed on the strength of the described
 runtime repair, not a formal proof badge.
 
-## Scope: five obligations, two kinds of evidence
+## Scope: six obligations, two kinds of evidence
 
 | Obligation | Abstract theorem or method | Actual runtime witness |
 | --- | --- | --- |
 | D-ORG | `BizKitDispatch.foreign_organization_refused` | `BoardTest`: foreign trip refused |
 | D-STALE | `BizKitDispatch.stale_version_refused` | `BoardTest`: stale retry refused |
 | D-TERMINAL | `BizKitDispatch.terminal_states_refused` | `BoardTest`: transition table; `BoardConcurrencyTest`: queued transition |
+| D-VERSION | `BizKitDispatch.commit_increments_version` | `BoardTest`: version increment and stale retry |
 | D-AUDIT | `BizKitDispatch.commit_appends_exactly_one_audit` | `BoardTest`: lifecycle audit |
 | D-GRANT | **No Lean theorem; runtime conformance** | `BoardAuthorityConcurrencyTest`: selected grant revoked while trip row locked |
 
