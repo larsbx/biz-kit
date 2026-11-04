@@ -1,11 +1,11 @@
 name: Ash authentication dependency resolution
 on:
-  push:
-    branches: [security/ash-authentication-rc16]
+  pull_request:
 permissions:
   contents: read
 jobs:
   resolve:
+    if: github.head_ref == 'security/ash-authentication-rc16'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
