@@ -30,7 +30,7 @@ defmodule CoopSubstrate.CommercialSetoffSources do
   A concurrent writer, failed global hash-chain audit, non-original source
   history, absent source, invalid signature, or inconsistent fold fails closed.
   """
-  def snapshot(chapter, {a, b}, denomination, server \\ Log.server())
+  def snapshot(chapter, pair, denomination, server \\ Log.server())
 
   def snapshot(chapter, {a, b}, denomination, server)
       when is_binary(chapter) and chapter != "" and
