@@ -157,5 +157,7 @@ controls exercise model sensitivity separately.
 per-tenant partial-index invariant separately from proposed mixed-profile and
 global-user invariants. Its independently committed two-trip acceptance suite
 covers both contender orders, commit/rollback, terminal slot release and
-non-Board writers. Runtime execution is pending; the accompanying profile
-binding patch is unapplied. No verification status is promoted.
+non-Board writers. At `f04dee64`, hosted formal/linkage jobs passed but runtime
+tests were skipped after a prerequisite CommercialSetoff compilation failure.
+The review branch repairs that declaration; its new runtime outcome is pending.
+The accompanying profile-binding patch is unapplied. No verification status is promoted.

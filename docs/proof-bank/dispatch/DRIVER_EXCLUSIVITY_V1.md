@@ -2,7 +2,8 @@
 
 Source baseline: `fd0e5cc20335ab58e5ccd3f39463c63897c4d585` (main inspected
 2026-11-05). Status: source audit and executable acceptance candidates;
-**PostgreSQL execution pending; no new formal theorem or refinement claim**.
+**PostgreSQL execution blocked before test admission at `f04dee64`;
+no new formal theorem or refinement claim**. See the pinned execution receipt below.
 No operational code or migration is changed by this review packet.
 
 ## Exact-source findings
@@ -156,3 +157,30 @@ A bounded two-trip/two-tenant search should refute any version lacking the
 global guard. Such a model would still not prove Ash/SQL refinement, index
 installation, authority provenance, fairness, deadlock freedom, durable audit
 ordering or correspondence across all writers. Keep #296 open.
+
+
+## Execution receipt: 2026-11-05 continuation
+
+[Hosted run 41977191093](https://github.com/larsbx/biz-kit/actions/runs/41977191093)
+checked out exact source `f04dee6446b17cc0f8b5cc25bb23f6d8e3c67218`.
+
+| Job | Observed result | What this establishes |
+| --- | --- | --- |
+| Formal (127078680813) | Success: Lean kernel replay/axiom audit and Quint bounded checks/negative controls | Existing individual-trip models replayed. No global-exclusivity theorem was added. |
+| Portable linkage (127078680901) | Success | Existing portable review packet compiled, tested and found its source anchors. |
+| Runtime (127078680995) | Failed at EventStore initialization compilation; database setup and integration tests skipped | No driver-exclusivity runtime result. PostgreSQL container startup and locked dependency installation succeeded. |
+
+The compiler rejected `CommercialSetoff.prepare/6`'s bodyless default-argument
+head because it contained `{a, b}` instead of a variable. The continuation
+changes only that declaration to `pair`; the guarded implementation clause
+still matches `{a, b}` and the fallback still refuses malformed requests.
+This is a prerequisite compile repair, not an assignment policy correction.
+The production exclusivity patch remains unapplied.
+
+Local validation compiled the actual corrected module using a minimal Log
+stub and exercised malformed-pair fallback through both prepare/5 and
+prepare/6. This is an isolated compiler/API check: it does not exercise the
+canonical Log, financial behavior, Ash, PostgreSQL or the concurrency suite.
+A fresh hosted exact-source run is required after this compile repair;
+previous formal/linkage success must not be relabelled as success at a later
+revision. Keep runtime evidence pending and #296 open until tests execute.
