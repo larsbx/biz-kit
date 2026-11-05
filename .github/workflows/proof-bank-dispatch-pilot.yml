@@ -5,6 +5,10 @@ on:
     paths:
       - 'apps/proof_bank_core/**'
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
+      - 'apps/dispatch/lib/dispatch/fleet/**'
+      - 'apps/dispatch/lib/dispatch/access/driving.ex'
+      - 'apps/dispatch/lib/dispatch/accounts/participant.ex'
+      - 'apps/dispatch/priv/repo/migrations/**'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
@@ -21,6 +25,10 @@ on:
     paths:
       - 'apps/proof_bank_core/**'
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
+      - 'apps/dispatch/lib/dispatch/fleet/**'
+      - 'apps/dispatch/lib/dispatch/access/driving.ex'
+      - 'apps/dispatch/lib/dispatch/accounts/participant.ex'
+      - 'apps/dispatch/priv/repo/migrations/**'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
@@ -147,5 +155,6 @@ jobs:
           mix test --include integration \
             test/dispatch/operations/board_test.exs \
             test/dispatch/operations/board_concurrency_test.exs \
+            test/dispatch/operations/board_driver_exclusivity_test.exs \
             test/dispatch/operations/board_authority_concurrency_test.exs \
             test/dispatch_web/operations_controller_test.exs

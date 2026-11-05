@@ -150,3 +150,12 @@ MIX_ENV=test mix test --include integration \
 The forced outer rollback and the expired credential paired with a live
 credential are runtime negative controls. The existing Quint counterexample
 controls exercise model sensitivity separately.
+
+## Driver-exclusivity review packet (#296)
+
+[DRIVER_EXCLUSIVITY_V1.md](DRIVER_EXCLUSIVITY_V1.md) defines the present
+per-tenant partial-index invariant separately from proposed mixed-profile and
+global-user invariants. Its independently committed two-trip acceptance suite
+covers both contender orders, commit/rollback, terminal slot release and
+non-Board writers. Runtime execution is pending; the accompanying profile
+binding patch is unapplied. No verification status is promoted.
