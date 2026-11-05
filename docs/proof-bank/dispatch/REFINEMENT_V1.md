@@ -123,9 +123,10 @@ as evidence of rollback.
   suite is at request entry.
 - Establish the durable audit history projection and atomicity across all
   supported write paths. The rollback control exercises one concrete path.
-- Global driver exclusivity across trips, writers and tenants remains
-  **unverified**. Give it its own invariant, authority scope, and adversarial
-  two-trip PostgreSQL cases.
+- Global driver exclusivity across all trips, writers and tenants is **not
+  established**. PR #312 defines E1/E2/E3 and supplies adversarial PostgreSQL
+  cases; at `21923592`, they pass while the stronger global-user and profile
+  binding assertions are refuted. See the review packet and pinned receipts.
 - Record exact-head hosted outcomes before acceptance. The Proof Bank packet
   remains unverified, and marketplace release remains gated by #242.
 
@@ -159,7 +160,9 @@ global-user invariants. Its independently committed two-trip acceptance suite
 covers both contender orders, commit/rollback, terminal slot release and
 non-Board writers. At `f04dee64`, hosted formal/linkage jobs passed but runtime
 tests were skipped after a prerequisite CommercialSetoff compilation failure.
-The review branch repairs that declaration; its new runtime outcome is pending.
+After that repair, run 42110873119 at `21923592` passed all three jobs,
+including 61 runtime tests with zero failures and both assertion-specific
+limitation controls. The hosted receipt is pinned to that source revision.
 The accompanying profile-binding patch is unapplied. No verification status is promoted.
 
 The [global exclusivity Lean/Quint layer](FORMAL_EXCLUSIVITY_V1.md) proves

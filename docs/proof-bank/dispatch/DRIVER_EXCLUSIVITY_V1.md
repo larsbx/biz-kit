@@ -1,9 +1,9 @@
 # Driver exclusivity: review proposal for #296
 
 Source baseline: `fd0e5cc20335ab58e5ccd3f39463c63897c4d585` (main inspected
-2026-11-05). Status: source audit and executable acceptance candidates;
-**PostgreSQL execution blocked before test admission at `f04dee64`;
-no new formal theorem or refinement claim**. See the pinned execution receipt below.
+2026-11-05). Status: **hosted model and runtime evidence passed at `21923592`;
+E2/E3 remain proposals and no implementation refinement is proved**.
+See the pinned execution receipts below.
 No operational code or migration is changed by this review packet.
 
 ## Exact-source findings
@@ -106,10 +106,11 @@ DISPATCH_ASSERT_BOUND_DRIVER_PROFILE=1 MIX_ENV=test mix test --include integrati
 ```
 
 The normal suite characterizes current behavior, including limitations; green
-does not accept E2 or E3. The switches are separate review probes. This is not
-a claim of having executed these tests. Local Elixir syntax/format and diff
-checks passed; the clean local checkout lacks locked compiled dependencies
-and a usable PostgreSQL service. Hosted exact-head execution is required.
+does not accept E2 or E3. The switches are separate review probes. At `21923592`, the hosted ordinary suite executed all 14 exclusivity cases
+within 61 integration tests, with zero failures. The two stronger-policy
+probes produced their required assertion failures. These outcomes apply to
+the disposable PostgreSQL/PostGIS CI database, not an inspected production
+database. See the pinned hosted receipt for source and job identifiers.
 The workflow now includes this file and triggers on fleet schema, migrations,
 Driving and Participant changes as well as existing authority paths.
 
@@ -183,7 +184,8 @@ prepare/6. This is an isolated compiler/API check: it does not exercise the
 canonical Log, financial behavior, Ash, PostgreSQL or the concurrency suite.
 A fresh hosted exact-source run is required after this compile repair;
 previous formal/linkage success must not be relabelled as success at a later
-revision. Keep runtime evidence pending and #296 open until tests execute.
+revision. This earlier failure is superseded by the successful `21923592` run below;
+keep #296 open for the remaining policy and correspondence work.
 
 
 ### Automated refutation controls
@@ -201,7 +203,8 @@ normal positive acceptance and retire the corresponding expected-red control.
 Local runner self-checks used a synthetic `mix` command to confirm acceptance
 of the intended assertion result and rejection of startup errors, unrelated
 assertions and unexpected success. These self-checks validate only the shell
-runner; the real PostgreSQL probes remain pending hosted execution.
+runner; the real PostgreSQL probes subsequently executed successfully at `21923592`,
+as recorded below.
 
 ## Implemented abstract verification layer
 
@@ -211,3 +214,29 @@ proofs and finite counterexample controls. Its assumptions and local replay
 receipt are separate from the PostgreSQL results and from owner acceptance of
 E2/E3. The individual-trip model and operational exclusivity behavior remain
 unchanged; no implementation refinement theorem is claimed.
+
+
+## Hosted model/runtime evidence at `21923592`
+
+[Run 42110873119](https://github.com/larsbx/biz-kit/actions/runs/42110873119)
+ran the literal source revision `2192359288daab6291798619586f12b37e6b3f78`.
+Formal (127537766923), portable-linkage (127537767353) and runtime
+(127537767576) jobs all passed. The ordinary integration suite reported
+**61 tests, zero failures**, including all 14 driver-exclusivity cases.
+The stronger global-user and bound-profile runs each reported 14 tests with
+one expected failure; the wrapper matched the specific assertion in each case.
+
+Thus the supplied PostgreSQL cases now observe index arbitration for distinct
+trips, commit/rollback, terminal slot release and non-Board writers. They also
+observe the two-tenant shared account committing both ACTIVE trips and the
+conditional unrelated-profile path relaxing the stored flag. These are
+current-behavior witnesses; passing CI does not establish E2/E3 or deploy a
+correction. The stronger probes intentionally remain red inside a runner that
+recognizes the required failures. See
+[the machine-readable hosted receipt](hosted_exclusivity_receipt_21923592.json).
+
+This evidence does not establish every writer/isolation interleaving,
+production constraint installation, authority/identity stability or the full
+refinement claim. The later abstract admission-function linkage extension is
+locally rechecked separately; success at `21923592` is not relabelled as a
+hosted success at a subsequent source revision.

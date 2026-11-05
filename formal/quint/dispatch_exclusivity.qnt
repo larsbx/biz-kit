@@ -48,6 +48,15 @@ module dispatch_exclusivity {
     scenario' = scenario, policy' = policy, refusals' = refusals, rollbacks' = rollbacks,
   }
 
+  // A caller can supply an incorrect expected version even while the source
+  // remains PLANNED and no conflicting assignment exists.
+  action mismatchedBegin(t) = all {
+    status.get(t) == "PLANNED", not(pending.contains(t)), available(policy, t),
+    pending' = pending.union(Set(t)), snapshot' = snapshot.set(t, version.get(t) + 1),
+    status' = status, version' = version, audits' = audits,
+    scenario' = scenario, policy' = policy, refusals' = refusals, rollbacks' = rollbacks,
+  }
+
   action activate(t, k, recheck) = all {
     pending.contains(t), status.get(t) == "PLANNED", snapshot.get(t) == version.get(t),
     not(recheck) or available(k, t),
@@ -84,7 +93,7 @@ module dispatch_exclusivity {
   }
   action step = {
     nondet t = IDS.oneOf()
-    any { begin(t, policy), activate(t, policy, true), finish(t, "COMPLETED"),
+    any { begin(t, policy), mismatchedBegin(t), activate(t, policy, true), finish(t, "COMPLETED"),
       finish(t, "CANCELLED"), abort(t, false), reject(t), tick }
   }
   // Two deliberately weaker protocols: existing E1 guard; preflight-only guard.
@@ -109,6 +118,14 @@ module dispatch_exclusivity {
   run conflictingCommitTest = initCase(0, 3)
     .then(begin(0, 3)).then(begin(1, 3)).then(activate(0, 3, true))
     .then(reject(1)).then(all { tick, assert(safety and refusals == 1 and version.get(1) == 0) })
+  run mismatchedVersionWhilePlannedTest = initCase(0, 3)
+    .then(mismatchedBegin(0)).then(reject(0))
+    .then(all { tick, assert(safety and status.get(0) == "PLANNED" and version.get(0) == 0
+      and audits.get(0) == 0 and refusals == 1) })
+  run oppositeCommitOrderTest = initCase(0, 3)
+    .then(begin(0, 3)).then(begin(1, 3)).then(activate(1, 3, true))
+    .then(reject(0)).then(all { tick, assert(safety and status.get(1) == "ACTIVE"
+      and status.get(0) == "PLANNED" and version.get(0) == 0 and refusals == 1) })
   run rollbackTest = initCase(0, 3).then(begin(0, 3)).then(abort(0, false))
     .then(all { tick, assert(status.get(0) == "PLANNED" and version.get(0) == 0 and audits.get(0) == 0) })
     .then(begin(1, 3)).then(activate(1, 3, true)).then(all { tick, assert(safety) })

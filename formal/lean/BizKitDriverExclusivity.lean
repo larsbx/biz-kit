@@ -118,6 +118,64 @@ noncomputable def activateAttempt (R : Nat → Nat → Prop) (s : State) (t expe
   exact if s.status t = .planned ∧ expected = s.version t ∧ Available R s t
     then some (commit s t .active) else none
 
+/-- Every successful admission is a transition of the relation used in the preservation proof. -/
+theorem accepted_activation_is_step (R) (s result : State) (t expected : Nat)
+    (accepted : activateAttempt R s t expected = some result) : Step R s result := by
+  classical
+  unfold activateAttempt at accepted
+  split at accepted
+  next guard =>
+    have same : commit s t .active = result := Option.some.inj accepted
+    rw [← same]
+    exact Step.activate s t guard.1 guard.2.1 guard.2.2
+  next => cases accepted
+
+theorem accepted_activation_safe (R) (s result : State) (t expected : Nat)
+    (safe : Safe R s) (accepted : activateAttempt R s t expected = some result) :
+    Safe R result :=
+  step_preserves R s result safe (accepted_activation_is_step R s result t expected accepted)
+
+/-- Refusal returns the old committed state, rather than a partly updated record. -/
+noncomputable def applyActivation (R : Nat → Nat → Prop) (s : State) (t expected : Nat) : State :=
+  (activateAttempt R s t expected).getD s
+
+theorem activation_attempt_is_step (R) (s : State) (t expected : Nat) :
+    Step R s (applyActivation R s t expected) := by
+  cases outcome : activateAttempt R s t expected with
+  | none =>
+    simp only [applyActivation, outcome, Option.getD_none]
+    exact Step.abort s
+  | some result =>
+    simp only [applyActivation, outcome, Option.getD_some]
+    exact accepted_activation_is_step R s result t expected outcome
+
+theorem every_activation_attempt_safe (R) (s : State) (t expected : Nat) (safe : Safe R s) :
+    Safe R (applyActivation R s t expected) :=
+  step_preserves R s _ safe (activation_attempt_is_step R s t expected)
+
+def AuditAligned (s : State) : Prop := ∀ i, s.audits i = s.version i
+
+theorem commit_audit_aligned (s : State) (t : Nat) (target : Status)
+    (aligned : AuditAligned s) : AuditAligned (commit s t target) := by
+  intro i
+  by_cases selected : i = t
+  · subst i
+    simp [commit, aligned t]
+  · simp [commit, selected, aligned i]
+
+theorem step_audit_aligned (R) (s result : State) (aligned : AuditAligned s)
+    (transition : Step R s result) : AuditAligned result := by
+  cases transition with
+  | activate _ t _ _ _ => exact commit_audit_aligned s t .active aligned
+  | complete _ t _ _ => exact commit_audit_aligned s t .completed aligned
+  | cancel _ t _ _ => exact commit_audit_aligned s t .cancelled aligned
+  | abort => exact aligned
+
+theorem reachable_audit_aligned (R) (s : State) (reachable : Reachable R s) : AuditAligned s := by
+  induction reachable with
+  | init => intro i; rfl
+  | next _ transition ih => exact step_audit_aligned R _ _ ih transition
+
 theorem stale_activation_refused (R) (s : State) (t expected : Nat)
     (stale : expected ≠ s.version t) : activateAttempt R s t expected = none := by
   classical
@@ -153,6 +211,8 @@ theorem unchecked_competing_commits_unsafe :
   have bad := h 0 1 (by decide) (by simp [commit]) (by simp [commit])
   exact bad (by simp [conflict, sameDriver, E1, driver])
 
+#print axioms every_activation_attempt_safe
+#print axioms reachable_audit_aligned
 #print axioms stale_activation_refused
 #print axioms conflicting_activation_refused
 #print axioms reachable_safe

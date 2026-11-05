@@ -1,11 +1,11 @@
 {
-  "status": "local-model-replay-passed-hosted-head-pending",
-  "base_revision": "663f864f70d917fd3622f99dfe974a94461d0813",
+  "status": "local-extension-replay-passed-prior-head-hosted-passed-new-head-pending",
+  "base_revision": "2192359288daab6291798619586f12b37e6b3f78",
   "source_sha256": {
-    "formal/lean/BizKitDriverExclusivity.lean": "b06793698f506c0bc33bd8a55035f3fbaac269e8150c68c15c1dd05a431267be",
+    "formal/lean/BizKitDriverExclusivity.lean": "4b8216ce5fc7ce0853550c38951a7caf6b311494a46c9f093f3bb4a6223bbdba",
     "formal/lean/lakefile.toml": "7967f2fd92855863a104c26a869503cf44809263d497d75eb2fbbc6ae8d96664",
     "formal/lean/check.sh": "dd0cf0a23197600038fc85ef03fb00219038d57483468c12ce8bf73ace77b078",
-    "formal/quint/dispatch_exclusivity.qnt": "9e09f2def194dd8564ab1c38e97fdd5d185b9d890ec76cce6ab81e0a7b9d2b0c",
+    "formal/quint/dispatch_exclusivity.qnt": "6224689e06bf8db68651d93add0c736ba2a758b42862ba2ac82aa1a5252b4089",
     "formal/quint/check_dispatch_exclusivity.sh": "ab3d3d0595332a2f9bb86157afbc4333ce02644791c2f56e462c7ab0a005962b",
     "formal/quint/check.sh": "9d54266ddd1d742aca1e7579cafd15a6286a79b5128f9b2c4159e4515d617acd"
   },
@@ -16,7 +16,7 @@
     "build": "passed",
     "fresh_kernel_replay": "passed",
     "axiom_audit_revision": "46024e005996495c65ef609368e11ab39c4222e3",
-    "audited_declarations": 104,
+    "audited_declarations": 114,
     "axiom_allowlist": [
       "propext",
       "Classical.choice",
@@ -30,7 +30,7 @@
     "rust_evaluator_version": "0.6.0",
     "apalache_version": "0.56.1",
     "typecheck": "passed",
-    "directed_tests_passed": 9,
+    "directed_tests_passed": 11,
     "safe_sampling": {
       "samples": 3000,
       "max_steps": 25,
@@ -49,9 +49,10 @@
   "claims_excluded": [
     "Elixir/Ash/PostgreSQL refinement",
     "deployed database invariant",
-    "runtime test success",
+    "runtime test success at the subsequent formal extension revision",
     "owner approval of E2/E3",
     "authority and identity provenance",
     "liveness or deadlock freedom"
-  ]
+  ],
+  "hosted_baseline_receipt": "hosted_exclusivity_receipt_21923592.json"
 }

@@ -29,6 +29,13 @@ Theorems include:
   `step_preserves`, `reachable_safe`: an atomic commit protocol preserves
   global exclusivity for every fixed incompatibility relation. This is an
   unbounded induction on abstract committed transitions, not bounded sampling.
+- `accepted_activation_is_step`, `activation_attempt_is_step`,
+  `accepted_activation_safe`, `every_activation_attempt_safe`: connect the
+  admission function and its total refusal-as-no-op wrapper to the transition
+  relation, proving preservation for accepted and rejected attempts.
+- `commit_audit_aligned`, `step_audit_aligned`, `reachable_audit_aligned`:
+  version/audit-count equality over every reachable abstract state. This is
+  bookkeeping equality, not proof of persisted audit records.
 - `commit_increments`, `unrelated_unchanged`: selected-trip version/audit
   increments and preservation of the other trips' fields.
 - `stale_activation_refused`, `conflicting_activation_refused`: the abstract
@@ -61,7 +68,8 @@ can roll back; cancellation after begin supplies a stale-version refusal case.
 Identity metadata remains fixed. These are atomic model actions, not models of
 PostgreSQL's internal lock manager or uncommitted index tuples.
 
-Nine directed tests cover competing commits, rollback, completion/cancellation
+Eleven directed tests cover competing commits in both winner orders,
+incorrect caller-supplied versions while still PLANNED, rollback, completion/cancellation
 slot release, stale versions, permitted concurrent profiles, mixed-profile and
 cross-tenant scope counterexamples, and the unchecked snapshot race. Safe
 sampling checks `safety` (selected exclusivity plus audit/version equality).
@@ -110,3 +118,27 @@ privileged predicate/identity mutation. No theorem here proves those runtime
 assumptions. Duplicate accounts for one human, planned time-window scheduling,
 identity changes/re-enrolment during a trip, consent lifetimes and cross-system
 assignments require additional specification and evidence. Keep #296 open.
+
+
+## Hosted baseline and subsequent local extension
+
+At source `2192359288daab6291798619586f12b37e6b3f78`, hosted run
+[42110873119](https://github.com/larsbx/biz-kit/actions/runs/42110873119)
+passed formal, portable and runtime jobs. That formal module had 104 audited
+declarations and nine Quint tests. The [hosted receipt](hosted_exclusivity_receipt_21923592.json)
+also records 61 passing integration tests and the two expected policy-probe
+failures. It establishes no E2/E3 implementation or refinement theorem.
+
+The subsequent local extension links successful/total activation attempts to
+`Step`, proves reachable audit/version equality, and adds isolated mismatched
+version and reversed-winner tests. Its local receipt has updated source hashes;
+new hosted evidence is pending. The older hosted result remains pinned to its
+original source and counts.
+
+
+Local extension validation completed: Lean build and fresh kernel replay passed;
+axiom-audit accepted 114 declarations under the existing allowlist. Quint
+passed all 11 directed tests, 3,000 sampled 25-step traces, bounded checking
+through depth 8, and both required weaker-protocol refutations. These counts
+belong to the source hashes in the updated local receipt; they do not replace
+the hosted baseline's counts of 104 declarations and nine directed tests.
