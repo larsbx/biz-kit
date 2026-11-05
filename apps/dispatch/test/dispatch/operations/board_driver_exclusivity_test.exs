@@ -133,28 +133,44 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
 
     parent = self()
     holder = held(ctx, ctx.a, "activate", 0, parent)
-    assert_receive {:holding_exclusive, _pid}, 5_000
-
-    try do
-      # Must finish while the first tenant still holds its uncommitted write.
-      assert {:ok, _} =
-               Task.await(
-                 session(fn ->
-                   Board.transition(other_actor, other_trip.id, "activate", 0)
-                 end),
-                 5_000
-               )
-    after
-      send(holder.pid, :commit)
-    end
-
-    assert {:ok, :committed} = Task.await(holder, 10_000)
-    assert_state(ctx.a, :ACTIVE, 1)
-    assert_state(other_trip, :ACTIVE, 1)
+    assert_receive {:holding_exclusive, pid}, 5_000
 
     if System.get_env("DISPATCH_ASSERT_GLOBAL_DRIVER_EXCLUSIVITY") == "1" do
-      flunk("proposed acceptance: one global user committed two ACTIVE exclusive trips")
+      contender =
+        session(fn ->
+          send(parent, {:exclusive_contender, backend()})
+          Board.transition(other_actor, other_trip.id, "activate", 0)
+        end)
+
+      try do
+        assert_contender_waits(pid)
+      after
+        send(holder.pid, :commit)
+      end
+
+      assert {:ok, :committed} = Task.await(holder, 10_000)
+      assert {:error, {:invalid, _}} = Task.await(contender, 10_000)
+      assert_state(other_trip, :PLANNED, 0)
+      assert audits(other_trip) == 0
+    else
+      try do
+        # Current tenant scope: completes while the first write is uncommitted.
+        assert {:ok, _} =
+                 Task.await(
+                   session(fn ->
+                     Board.transition(other_actor, other_trip.id, "activate", 0)
+                   end),
+                   5_000
+                 )
+      after
+        send(holder.pid, :commit)
+      end
+
+      assert {:ok, :committed} = Task.await(holder, 10_000)
+      assert_state(other_trip, :ACTIVE, 1)
     end
+
+    assert_state(ctx.a, :ACTIVE, 1)
   end
 
   test "a different participant's concurrent profile can currently relax a DRIVER trip", ctx do
@@ -193,6 +209,11 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
     if System.get_env("DISPATCH_ASSERT_BOUND_DRIVER_PROFILE") == "1" do
       assert trip.operator_exclusive,
              "proposed acceptance: another participant's role must not relax exclusivity"
+
+      assert {:ok, _} = Board.transition(ctx.actor, ctx.a.id, "activate", 0)
+      assert {:error, {:invalid, _}} = Board.transition(ctx.actor, trip.id, "activate", 0)
+      assert_state(trip, :PLANNED, 0)
+      assert audits(trip) == 0
     else
       refute trip.operator_exclusive
       assert {:ok, _} = Board.transition(ctx.actor, ctx.a.id, "activate", 0)
