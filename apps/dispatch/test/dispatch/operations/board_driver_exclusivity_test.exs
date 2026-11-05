@@ -119,6 +119,7 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
     assert audits(ctx.b) == 0
   end
 
+  @tag :global_driver_boundary
   test "one global user can currently activate in two tenants (scope witness)", ctx do
     other = Fixtures.carrier()
     %{participant: other_driver} = Fixtures.person(other.id, other, user: ctx.driver_user)
@@ -173,6 +174,7 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
     assert_state(ctx.a, :ACTIVE, 1)
   end
 
+  @tag :operator_profile_boundary
   test "a different participant's concurrent profile can currently relax a DRIVER trip", ctx do
     %{user: user, participant: courier} = Fixtures.person(ctx.org.id, ctx.org)
     {:ok, manifest} = Dispatch.Access.SeedManifest.fetch("DRIVER")

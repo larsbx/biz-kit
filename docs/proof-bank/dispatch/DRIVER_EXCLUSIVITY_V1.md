@@ -184,3 +184,21 @@ canonical Log, financial behavior, Ash, PostgreSQL or the concurrency suite.
 A fresh hosted exact-source run is required after this compile repair;
 previous formal/linkage success must not be relabelled as success at a later
 revision. Keep runtime evidence pending and #296 open until tests execute.
+
+
+### Automated refutation controls
+
+The two boundary witnesses have separate ExUnit tags. After the normal
+integration suite succeeds, CI invokes
+`scripts/dispatch/check-exclusivity-controls.sh` from `apps/dispatch`.
+Each selected proposed requirement must produce ExUnit exit 2, exactly one
+failure, and its specific exclusivity assertion text. A startup failure,
+an unrelated assertion or an unexpectedly passing requirement fails this
+control runner. This records current limitations; it does not adopt either
+proposed policy. When a reviewed repair is implemented, promote its probe to
+normal positive acceptance and retire the corresponding expected-red control.
+
+Local runner self-checks used a synthetic `mix` command to confirm acceptance
+of the intended assertion result and rejection of startup errors, unrelated
+assertions and unexpected success. These self-checks validate only the shell
+runner; the real PostgreSQL probes remain pending hosted execution.

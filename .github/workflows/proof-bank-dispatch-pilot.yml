@@ -13,6 +13,7 @@ on:
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
+      - 'scripts/dispatch/check-exclusivity-controls.sh'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -33,6 +34,7 @@ on:
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
+      - 'scripts/dispatch/check-exclusivity-controls.sh'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -158,3 +160,6 @@ jobs:
             test/dispatch/operations/board_driver_exclusivity_test.exs \
             test/dispatch/operations/board_authority_concurrency_test.exs \
             test/dispatch_web/operations_controller_test.exs
+      - name: Require the two proposed exclusivity controls to refute current behavior
+        working-directory: apps/dispatch
+        run: bash ../../scripts/dispatch/check-exclusivity-controls.sh
