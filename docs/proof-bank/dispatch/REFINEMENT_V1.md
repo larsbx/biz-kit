@@ -161,3 +161,8 @@ non-Board writers. At `f04dee64`, hosted formal/linkage jobs passed but runtime
 tests were skipped after a prerequisite CommercialSetoff compilation failure.
 The review branch repairs that declaration; its new runtime outcome is pending.
 The accompanying profile-binding patch is unapplied. No verification status is promoted.
+
+The [global exclusivity Lean/Quint layer](FORMAL_EXCLUSIVITY_V1.md) proves
+preservation under an abstract commit-time guard and refutes weaker guard
+models. Identity binding, authority and atomic database correspondence remain
+assumptions; these results do not close the runtime or refinement obligations.

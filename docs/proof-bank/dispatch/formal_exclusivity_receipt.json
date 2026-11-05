@@ -1,0 +1,57 @@
+{
+  "status": "local-model-replay-passed-hosted-head-pending",
+  "base_revision": "663f864f70d917fd3622f99dfe974a94461d0813",
+  "source_sha256": {
+    "formal/lean/BizKitDriverExclusivity.lean": "b06793698f506c0bc33bd8a55035f3fbaac269e8150c68c15c1dd05a431267be",
+    "formal/lean/lakefile.toml": "7967f2fd92855863a104c26a869503cf44809263d497d75eb2fbbc6ae8d96664",
+    "formal/lean/check.sh": "dd0cf0a23197600038fc85ef03fb00219038d57483468c12ce8bf73ace77b078",
+    "formal/quint/dispatch_exclusivity.qnt": "9e09f2def194dd8564ab1c38e97fdd5d185b9d890ec76cce6ab81e0a7b9d2b0c",
+    "formal/quint/check_dispatch_exclusivity.sh": "ab3d3d0595332a2f9bb86157afbc4333ce02644791c2f56e462c7ab0a005962b",
+    "formal/quint/check.sh": "9d54266ddd1d742aca1e7579cafd15a6286a79b5128f9b2c4159e4515d617acd"
+  },
+  "lean": {
+    "version": "4.35.0",
+    "archive_sha256": "7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d",
+    "target": "BizKitDriverExclusivity",
+    "build": "passed",
+    "fresh_kernel_replay": "passed",
+    "axiom_audit_revision": "46024e005996495c65ef609368e11ab39c4222e3",
+    "audited_declarations": 104,
+    "axiom_allowlist": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "axiom_audit": "passed",
+    "environment_note": "Self-executable readlink compatibility shim; no kernel or proof-source change."
+  },
+  "quint": {
+    "version": "0.32.0",
+    "rust_evaluator_version": "0.6.0",
+    "apalache_version": "0.56.1",
+    "typecheck": "passed",
+    "directed_tests_passed": 9,
+    "safe_sampling": {
+      "samples": 3000,
+      "max_steps": 25,
+      "seed": 1,
+      "result": "no invariant violation found"
+    },
+    "bounded_check": {
+      "max_steps": 8,
+      "result": "NoError"
+    },
+    "negative_controls": {
+      "snapshotStep/safety": "invariant violation found",
+      "tenantStep/globalSafety": "invariant violation found"
+    }
+  },
+  "claims_excluded": [
+    "Elixir/Ash/PostgreSQL refinement",
+    "deployed database invariant",
+    "runtime test success",
+    "owner approval of E2/E3",
+    "authority and identity provenance",
+    "liveness or deadlock freedom"
+  ]
+}

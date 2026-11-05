@@ -202,3 +202,12 @@ Local runner self-checks used a synthetic `mix` command to confirm acceptance
 of the intended assertion result and rejection of startup errors, unrelated
 assertions and unexpected success. These self-checks validate only the shell
 runner; the real PostgreSQL probes remain pending hosted execution.
+
+## Implemented abstract verification layer
+
+The separate [Lean/Quint testbank](FORMAL_EXCLUSIVITY_V1.md) now implements the
+fixed-identity abstract model proposed above, with committed-state preservation
+proofs and finite counterexample controls. Its assumptions and local replay
+receipt are separate from the PostgreSQL results and from owner acceptance of
+E2/E3. The individual-trip model and operational exclusivity behavior remain
+unchanged; no implementation refinement theorem is claimed.
