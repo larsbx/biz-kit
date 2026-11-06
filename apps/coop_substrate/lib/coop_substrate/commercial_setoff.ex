@@ -30,7 +30,7 @@ defmodule CoopSubstrate.CommercialSetoff do
 
   This function never appends, signs or performs a financial operation.
   """
-  def prepare(chapter, {a, b}, denomination, residual_id, timestamp_ms, server \\ Log.server())
+  def prepare(chapter, pair, denomination, residual_id, timestamp_ms, server \\ Log.server())
 
   def prepare(chapter, {a, b}, denomination, residual_id, timestamp_ms, server)
       when is_binary(chapter) and byte_size(chapter) > 0 and
