@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'tools/merchant_pilot/**'
+      - 'formal/lean/install-toolchain.sh'
+      - 'formal/lean/lean-toolchain'
       - '.github/workflows/merchant-pilot-intake.yml'
   push:
     branches: [main]
     paths:
       - 'tools/merchant_pilot/**'
+      - 'formal/lean/install-toolchain.sh'
+      - 'formal/lean/lean-toolchain'
       - '.github/workflows/merchant-pilot-intake.yml'
   workflow_dispatch:
 permissions:
@@ -41,3 +45,39 @@ jobs:
         env:
           NODE_PATH: ${{ runner.temp }}/pilot-browser/node_modules
         run: node tools/merchant_pilot/test_intake_form.cjs
+  lean-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install digest-verified repository-pinned Lean
+        run: bash formal/lean/install-toolchain.sh "$RUNNER_TEMP/merchant-lean"
+      - name: Kernel proofs, actual-exporter cases, axiom audit and negative controls
+        run: >-
+          python3 tools/merchant_pilot/formal/check_lean.py
+          --lean "$RUNNER_TEMP/merchant-lean/bin/lean"
+          --leanchecker "$RUNNER_TEMP/merchant-lean/bin/leanchecker"
+  quint-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Install pinned Quint in isolated tools directory
+        run: npm install --prefix "$RUNNER_TEMP/merchant-quint" --no-audit --no-fund @informalsystems/quint@0.32.0
+      - name: Scenarios, mutation witnesses, seeded simulation, Python conformance and bounded model checking
+        run: >-
+          python3 tools/merchant_pilot/formal/check_quint.py
+          --quint "$RUNNER_TEMP/merchant-quint/node_modules/.bin/quint" --verify

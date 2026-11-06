@@ -59,3 +59,8 @@ records for online source-owner review; it has no collection endpoint. `intake_e
 approved source extracts to this unchanged v1 contract and a private provenance manifest. Unknown
 costs remain unknown; stale/lost source coverage refuses export. `intake.synthetic.json` is synthetic
 replay material only. Scope, category and participants still need owner approval before live collection.
+
+[Lean and Quint coverage](formal/README.md) adds mathematical export-rule proofs, a bounded
+quote/evidence lifecycle model, deliberate unsafe variants, and finite conformance checks against
+actual Python exports. The coverage table distinguishes model guarantees from runtime tests and
+source-owner assumptions. Run the formal scripts on synthetic data before pilot activation.

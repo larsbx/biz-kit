@@ -186,3 +186,8 @@ mobile/desktop overflow, browser errors and absence of remote requests. Run it w
 in your test environment (`node tools/merchant_pilot/test_intake_form.cjs`). These browser checks do
 not establish accessibility or privacy of the eventual authenticated online host; rehearse that host
 separately with its actual access and retention controls.
+
+[Formal coverage](formal/README.md) specifies qualification, observation windows, quote revision
+binding, unknown evidence, refunds and role margins in Lean and Quint. Its server runners include
+actual-exporter conformance examples and mutation witnesses. It is not an end-to-end proof of the
+Python implementation, source authenticity or actual commercial evidence.
