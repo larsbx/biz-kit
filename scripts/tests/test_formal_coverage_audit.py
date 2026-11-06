@@ -113,3 +113,37 @@ class AuditTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BaseRefTest(unittest.TestCase):
+    def setUp(self):
+        import subprocess
+        self.dir = TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        self.git = lambda *a: subprocess.run(["git", "-C", str(self.root), *a], check=True,
+                                             capture_output=True, text=True)
+        self.git("init", "-q")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "bootstrap")
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_invalid_ref_fails_closed(self):
+        base, problem = module.load_base(self.root, "refs/does-not-exist")
+        self.assertIsNone(base)
+        self.assertIn("cannot resolve ratchet base refs/does-not-exist", problem)
+
+    def test_existing_commit_without_coverage_is_bootstrap(self):
+        self.assertEqual((None, None), module.load_base(self.root, "HEAD"))
+
+    def test_existing_coverage_is_loaded_and_bad_json_fails(self):
+        (self.root / "formal").mkdir()
+        (self.root / "formal/coverage.json").write_text('{"uncovered": ["a"]}')
+        self.git("add", ".")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "cov")
+        self.assertEqual(({"uncovered": ["a"]}, None), module.load_base(self.root, "HEAD"))
+        (self.root / "formal/coverage.json").write_text("{not json")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "bad")
+        base, problem = module.load_base(self.root, "HEAD")
+        self.assertIsNone(base)
+        self.assertIn("unreadable ratchet base", problem)

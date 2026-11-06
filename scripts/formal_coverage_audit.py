@@ -107,6 +107,21 @@ def quint_checks(coverage):
     return sorted(seen)
 
 
+def load_base(root, ref):
+    """(base coverage or None, problem or None). Fails closed: an unresolvable
+    ref or an unreadable file is a problem; only an existing commit that has no
+    coverage file yet is the bootstrap case (no ratchet)."""
+    git = lambda *a: subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True)
+    if git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode != 0:
+        return None, f"cannot resolve ratchet base {ref}"
+    if git("cat-file", "-e", f"{ref}:{COVERAGE}").returncode != 0:
+        return None, None
+    try:
+        return json.loads(git("show", f"{ref}:{COVERAGE}").stdout), None
+    except json.JSONDecodeError as error:
+        return None, f"unreadable ratchet base {ref}:{COVERAGE}: {error}"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=str(Path(__file__).resolve().parents[1]))
@@ -120,16 +135,14 @@ def main():
             print(*check)
         return 0
     catalog_ids = [r["id"] for r in json.loads((root / CATALOG).read_text(encoding="utf-8"))["records"]]
-    base = None
-    if args.base_ref:
-        shown = subprocess.run(["git", "-C", str(root), "show", f"{args.base_ref}:{COVERAGE}"],
-                               capture_output=True, text=True)
-        base = json.loads(shown.stdout) if shown.returncode == 0 else None
-    problems = audit(root, catalog_ids, coverage, base)
+    base, base_problem = load_base(root, args.base_ref) if args.base_ref else (None, None)
+    problems = ([base_problem] if base_problem else []) + audit(root, catalog_ids, coverage, base)
     done, total = ratio(coverage, catalog_ids)
     print(json.dumps({"covered": done, "catalog": total, "percent": round(100 * done / total, 1),
                       "uncovered": sorted(coverage.get("uncovered", [])),
-                      "ratchet_base": args.base_ref if base is not None else None,
+                      "ratchet": {"base": args.base_ref,
+                                  "mode": "enforced" if base is not None else
+                                  ("bootstrap" if args.base_ref and not base_problem else "off")},
                       "refinement_claimed": False, "problems": problems}, indent=2))
     return 1 if problems else 0
 
