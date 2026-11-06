@@ -66,7 +66,7 @@ defmodule Dispatch.Support.ConcurrentSessions do
     tenant = Ecto.UUID.dump!(org.id)
 
     for table <- ~w(outbox_events audit_events consent_grants stops assignments loads
-                    role_assignments role_definitions participants) do
+                    vehicles trailers role_assignments role_definitions participants) do
       Repo.query!("DELETE FROM #{table} WHERE tenant_id = $1", [tenant])
     end
 
