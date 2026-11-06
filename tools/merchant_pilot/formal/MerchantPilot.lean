@@ -40,14 +40,14 @@ inductive Bucket where
 def early (qualified : Nat) (withdrawal : Option Nat) (window : Nat) : Bool :=
   match withdrawal with
   | none => false
-  | some at => decide (at < qualified + window)
+  | some instant => decide (instant < qualified + window)
 
 def bucket (qualified now : Nat) (withdrawal : Option Nat) (window : Nat) : Bucket :=
   if early qualified withdrawal window then .earlyWithdrawal
   else if qualified + window ≤ now then .mature else .incomplete
 
-theorem early_never_denominator (q now w at : Nat) (h : at < q + w) :
-    bucket q now (some at) w = .earlyWithdrawal := by
+theorem early_never_denominator (q now w instant : Nat) (h : instant < q + w) :
+    bucket q now (some instant) w = .earlyWithdrawal := by
   simp [bucket, early, h]
 
 theorem recent_never_denominator (q now w : Nat) (endAt : Option Nat)
@@ -68,47 +68,47 @@ structure Quote where
   qualified : Bool
   deriving DecidableEq, Repr
 
-def beforeEnd (endAt : Option Nat) (at : Nat) : Prop :=
-  match endAt with | none => True | some t => at < t
-instance (e : Option Nat) (at : Nat) : Decidable (beforeEnd e at) := by
+def beforeEnd (endAt : Option Nat) (instant : Nat) : Prop :=
+  match endAt with | none => True | some t => instant < t
+instance (e : Option Nat) (instant : Nat) : Decidable (beforeEnd e instant) := by
   cases e <;> unfold beforeEnd <;> infer_instance
 
-def Actionable (q : Quote) (requestEnd : Option Nat) (at : Nat) : Prop :=
-  q.qualified = true ∧ q.issued ≤ at ∧ at < q.expires ∧
-  beforeEnd q.withdrawn at ∧ beforeEnd requestEnd at
-instance (q : Quote) (e : Option Nat) (at : Nat) : Decidable (Actionable q e at) := by
+def Actionable (q : Quote) (requestEnd : Option Nat) (instant : Nat) : Prop :=
+  q.qualified = true ∧ q.issued ≤ instant ∧ instant < q.expires ∧
+  beforeEnd q.withdrawn instant ∧ beforeEnd requestEnd instant
+instance (q : Quote) (e : Option Nat) (instant : Nat) : Decidable (Actionable q e instant) := by
   unfold Actionable
   infer_instance
 
-def acceptanceAllowed (q : Quote) (bound : RevisionKey) (e : Option Nat) (at : Nat)
-    (revalidated : Bool) : Bool := decide (bound = q.key ∧ Actionable q e at ∧ revalidated = true)
+def acceptanceAllowed (q : Quote) (bound : RevisionKey) (e : Option Nat) (instant : Nat)
+    (revalidated : Bool) : Bool := decide (bound = q.key ∧ Actionable q e instant ∧ revalidated = true)
 
 theorem acceptance_exact_revision (q : Quote) (bound : RevisionKey) (e : Option Nat)
-    (at : Nat) (rv : Bool) (h : acceptanceAllowed q bound e at rv = true) :
-    bound = q.key ∧ Actionable q e at ∧ rv = true := by
+    (instant : Nat) (rv : Bool) (h : acceptanceAllowed q bound e instant rv = true) :
+    bound = q.key ∧ Actionable q e instant ∧ rv = true := by
   exact of_decide_eq_true h
 
-theorem expiry_rejected (q : Quote) (key : RevisionKey) (e : Option Nat) (at : Nat)
-    (rv : Bool) (h : q.expires ≤ at) : acceptanceAllowed q key e at rv = false := by
+theorem expiry_rejected (q : Quote) (key : RevisionKey) (e : Option Nat) (instant : Nat)
+    (rv : Bool) (h : q.expires ≤ instant) : acceptanceAllowed q key e instant rv = false := by
   simp only [acceptanceAllowed, decide_eq_false_iff_not]
   intro valid
   have := valid.2.1.2.2.1
   omega
 
-theorem withdrawal_rejected (q : Quote) (key : RevisionKey) (e : Option Nat) (at endAt : Nat)
-    (rv : Bool) (hw : q.withdrawn = some endAt) (h : endAt ≤ at) :
-    acceptanceAllowed q key e at rv = false := by
+theorem withdrawal_rejected (q : Quote) (key : RevisionKey) (e : Option Nat) (instant endAt : Nat)
+    (rv : Bool) (hw : q.withdrawn = some endAt) (h : endAt ≤ instant) :
+    acceptanceAllowed q key e instant rv = false := by
   simp only [acceptanceAllowed, decide_eq_false_iff_not]
   intro valid
   have stop := valid.2.1.2.2.2.1
   simp [beforeEnd, hw] at stop
   omega
 
-def supersede (q : Quote) (at : Nat) : Quote :=
-  {q with withdrawn := some (match q.withdrawn with | none => at | some old => min old at)}
+def supersede (q : Quote) (instant : Nat) : Quote :=
+  {q with withdrawn := some (match q.withdrawn with | none => instant | some old => min old instant)}
 
-theorem supersession_never_extends (q : Quote) (issued at : Nat) (e : Option Nat)
-    (h : Actionable (supersede q issued) e at) : Actionable q e at := by
+theorem supersession_never_extends (q : Quote) (issued instant : Nat) (e : Option Nat)
+    (h : Actionable (supersede q issued) e instant) : Actionable q e instant := by
   rcases h with ⟨qualified, started, expires, stop, requestStop⟩
   refine ⟨qualified, started, expires, ?_, requestStop⟩
   cases hw : q.withdrawn with
@@ -118,8 +118,14 @@ theorem supersession_never_extends (q : Quote) (issued at : Nat) (e : Option Nat
     simp [beforeEnd, hw]
     omega
 
+def sumInputs : List (Option Int) → Option Int
+  | [] => some 0
+  | x :: xs => match x, sumInputs xs with
+    | some a, some b => some (a + b)
+    | _, _ => none
+
 def pool (complete : Bool) (items : List (Option Int)) : Option Int :=
-  if complete then items.foldr (fun x acc => do return (← x) + (← acc)) (some 0) else none
+  if complete then sumInputs items else none
 
 theorem incomplete_cost_unknown (items : List (Option Int)) : pool false items = none := by
   rfl
@@ -130,13 +136,12 @@ theorem unknown_expense_unknown (xs : List (Option Int)) (h : none ∈ xs) : poo
   induction xs with
   | nil => simp at h
   | cons x xs ih =>
-    simp only [List.mem_cons] at h
+    simp only [List.mem_cons] instant h
     rcases h with hx | ht
-    · subst x; simp [pool]
-    · have tail := ih ht
-      have tailFold : xs.foldr (fun x acc => do return (← x) + (← acc)) (some 0) = none := by
-        simpa [pool] using tail
-      cases x <;> simp [pool, tailFold]
+    · subst x; simp [pool, sumInputs]
+    · have tail : sumInputs xs = none := by simpa [pool] using ih ht
+      cases x <;> simp [pool, sumInputs, tail]
+
 
 structure Margins where
   merchant : Int
@@ -186,7 +191,7 @@ def cohortMargin (closed : Bool) (orders : List (Option Int)) (unallocated : Opt
 
 theorem unknown_unallocated_withholds (closed : Bool) (xs : List (Option Int)) :
     cohortMargin closed xs none = none := by
-  cases closed <;> simp [cohortMargin]; cases pool true xs <;> rfl
+  cases closed <;> simp [cohortMargin]
 
 theorem missing_order_withholds (closed : Bool) (xs : List (Option Int)) (overhead : Option Int)
     (missing : none ∈ xs) : cohortMargin closed xs overhead = none := by
