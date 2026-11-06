@@ -227,6 +227,9 @@ refused snapshot mutation. Its configured acceptance explores 3,000 seeded
 traces of up to 25 steps and bounded verification through eight steps. The
 checker requires an explicit completed verification result; successful checker
 startup alone is not counted as verification.
+The models' `audits` counter counts lifecycle transitions, excluding Board's
+separate `assignment.planned` event. The audit/version invariant therefore is
+not an equality between version and all persisted assignment audit rows.
 Deliberately broken model controls must produce an invariant violation, not a
 parse error or an execution failure. The five controls remove mixed-mode
 protection, global identity scope, commit-time conflict rechecking, snapshot

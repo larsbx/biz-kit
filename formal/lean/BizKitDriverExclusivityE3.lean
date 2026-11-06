@@ -8,6 +8,10 @@ particular, a staged cancellation/completion has not yet released occupancy.
 These theorems do not establish refinement of Elixir/Ash/PostgreSQL, authorization,
 lock ordering, fairness, or liveness. PostgreSQL acceptance supplies separate
 implementation evidence for the modeled admission/commit boundaries.
+
+The inherited `State.audits` counter models lifecycle status-transition events
+after planning. It excludes Board.plan's separate `assignment.planned` event at
+version 0; it is not a count of all persisted AuditEvent rows.
 -/
 namespace BizKitDriverExclusivityE3
 

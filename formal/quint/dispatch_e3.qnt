@@ -4,6 +4,9 @@
 // 4 is exclusive with the same tenant/participant as 0.
 // Identities are trusted inputs; commits are atomic. This is not a refinement
 // proof of Elixir/Ash/PostgreSQL, authorization, locks, fairness or liveness.
+// The audits counter models lifecycle status-transition events after planning.
+// It excludes Board.plan's separate assignment.planned event at version 0 and
+// is not a count of all persisted AuditEvent rows.
 module dispatch_e3 {
   pure val IDS = Set(0, 1, 2, 3, 4)
   pure def trusted(t) = {
