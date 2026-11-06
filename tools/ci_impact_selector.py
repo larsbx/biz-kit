@@ -170,7 +170,8 @@ def dependents(graph: dict[str, list[str]], changed: set[str]) -> list[str]:
 
 
 def plan(root: Path, policy: dict, head: str, event: str,
-         paths: list[str] | None = None, force_full: bool = False) -> dict:
+         paths: list[str] | None = None, force_full: bool = False,
+         base_sha: str | None = None) -> dict:
     valid_sha(head)
     if event not in ("pull_request", "push", "merge_group", "schedule", "workflow_dispatch"):
         raise EvidenceError("unsupported workflow event")
@@ -225,6 +226,7 @@ def plan(root: Path, policy: dict, head: str, event: str,
         "schema": SCHEMA,
         "authority": "advisory-no-skip-no-required-check",
         "head_sha": head,
+        "base_sha": base_sha,
         "event": event,
         "mode": mode,
         "changed_paths": paths if paths is not None else [],
@@ -271,7 +273,8 @@ def main() -> int:
             if not args.base:
                 raise EvidenceError("PR requires explicit base SHA")
             paths = changed_paths(root, args.base, args.head)
-            output = plan(root, policy, args.head, args.event, paths=paths)
+            output = plan(root, policy, args.head, args.event, paths=paths,
+                          base_sha=valid_sha(args.base))
         output["receipt_sha256"] = digest(output)
         rendered = json.dumps(output, sort_keys=True, indent=2) + "\n"
         Path(args.output).write_text(rendered, encoding="utf-8")
