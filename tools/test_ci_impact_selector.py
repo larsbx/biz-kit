@@ -175,6 +175,27 @@ class ImpactTests(unittest.TestCase):
             with self.assertRaises(module.EvidenceError):
                 module.changed_paths(self.root, BASE, HEAD)
 
+    def test_cli_receipt_is_bound_to_exact_base_and_head(self):
+        import contextlib
+        import io
+        outfile = self.root / "impact.json"
+        with patch.object(module.subprocess, "check_output",
+                          side_effect=[(HEAD + "\n").encode(),
+                                       b"M\x00apps/inventory_core/lib/inventory.ex\x00"]):
+            with patch.object(sys, "argv", ["ci-impact-selector",
+                                           "--root", str(self.root),
+                                           "--event", "pull_request",
+                                           "--base", BASE,
+                                           "--head", HEAD,
+                                           "--output", str(outfile)]):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(module.main(), 0)
+        receipt = json.loads(outfile.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["base_sha"], BASE)
+        self.assertEqual(receipt["head_sha"], HEAD)
+        checksum = receipt.pop("receipt_sha256")
+        self.assertEqual(checksum, module.digest(receipt))
+
     def test_current_umbrella_reverse_edges_and_sensitive_fallback(self):
         # Exercise the real repository rather than relying only on toy fixtures.
         graph = module.umbrella_graph(ROOT)
