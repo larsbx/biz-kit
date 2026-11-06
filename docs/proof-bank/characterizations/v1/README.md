@@ -10,6 +10,14 @@ Source revision: `a98489111a74b395e97f797f0b21e7f53cd95997` (draft stacked PR #2
 4. **Behavior conformance:** run tests, adversarial counterexamples, concurrency/race cases, external dependencies and independent oracles.
 5. **Formal verification:** formalize only a reviewed behavioral contract; bind precise assumptions, proof checker version, implementation refinement, and deployed authority.
 
+## Refreshing pins (until the next characterization milestone)
+
+Every evidence file's git blob is pinned, so a change to one fails `static-source-audit`. By owner decision (2026-11-03), until the next characterization milestone the author of the change refreshes the pins instead of re-characterizing:
+
+    python3 scripts/proof_bank_characterization_audit.py --refresh
+
+This re-pins only existing files whose bytes changed, and appends an `evidence_refreshes` entry to the catalog: the commit it ran on, the date and the paths. `source_sha` and every status stay as they were. App drift, missing or unsafe paths and promoted statuses still fail afterwards. A refreshed pin records that the bytes changed, **not** that anyone re-inspected them.
+
 **Do not infer conformance from a model file, an app folder, a coverage percentage, a test filename, or a CI job in queued status.**
 
 ## All application characterizations

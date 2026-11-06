@@ -346,7 +346,7 @@
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
         "apps/dispatch/lib/dispatch/operations/board.ex": "9b39439c521ec723625f31f28d02f4770e18061d",
-        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48f8c6a250ca8ba02b6cb60cc411c67bb777eeb3"
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
       }
     },
     {
@@ -1063,6 +1063,17 @@
       "renamed": {
         "apps/commerce_core/test/checkout_safety_test.exs": "apps/commerce_core/test/kitchen_checkout_safety_test.exs"
       },
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "f1b5cd8d4bed8719edd7899f3478dbaf854520e8",
+      "date": "2026-11-03",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs"
+      ],
+      "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
     }
   ]
