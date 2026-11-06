@@ -42,7 +42,11 @@ the refresh before requesting acceptance; rerunning without changes is a no-op.
 - Dispatch: [state and authority correspondence](dispatch/REFINEMENT_V1.md).
   Global driver exclusivity is separately tracked in
   [#296](https://github.com/larsbx/biz-kit/issues/296).
-- Lean checking rebuilds inspected sources, replays with Lean's kernel and audits
+- Research exchange: [executable verification core](research-exchange/README.md)
+  for one prefunded reward slot and one compute reservation. Its isolated Lean,
+  Quint and differential-test profile is separate from production server,
+  database, identity and worker-runtime acceptance.
+- Inventory and Dispatch Lean checking rebuilds inspected sources, replays with Lean's kernel and audits
   allowed axioms. Fresh replay uses the same kernel implementation; complete
   implementation refinement and an independently implemented checker are separate
   obligations.

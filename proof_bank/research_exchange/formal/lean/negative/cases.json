@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "id": "stale-generation-cannot-submit",
+      "file": "negative/StaleGenerationAllowed.lean",
+      "mode": "compile_rejection",
+      "required_pattern": "proved that the proposition"
+    },
+    {
+      "id": "untrusted-evidence-cannot-pay",
+      "file": "negative/UntrustedAcceptance.lean",
+      "mode": "compile_rejection",
+      "required_pattern": "proved that the proposition"
+    },
+    {
+      "id": "cancellation-cannot-refund-before-stop",
+      "file": "negative/PrematureRefund.lean",
+      "mode": "compile_rejection",
+      "required_pattern": "proved that the proposition"
+    },
+    {
+      "id": "custom-axiom-is-rejected",
+      "file": "negative/AxiomBypass.lean",
+      "mode": "axiom_rejection",
+      "target": "ResearchExchange.Negative.unproved",
+      "required_pattern": "injected"
+    }
+  ]
+}
