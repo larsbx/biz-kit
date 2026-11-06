@@ -150,6 +150,7 @@ defmodule SpruceGoose.Web.Requests do
     :holdings_changed,
     :backfill_changed,
     :project_already_owned,
+    :project_owner_ineligible,
     :unexpected_successor_project,
     :unknown_role_key,
     :no_submission

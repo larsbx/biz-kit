@@ -24,7 +24,10 @@ defmodule SpruceGoose.UmbrellaRuntime do
       {"APPLICATION_ENCRYPTION_KEY_ID", "test-key"},
       {"DIAGNOSTICS_TOKEN", "test-token"},
       # eatsbot's; its SECRET_KEY_BASE and DATABASE_URL are shared with the above.
-      {"GEOCODING_TOKEN", "test-geocoding-token"}
+      {"GEOCODING_TOKEN", "test-geocoding-token"},
+      {"RESTAURANT_PUBLIC_BASE_URL", "https://restaurant.invalid"},
+      {"RESTAURANT_SECRET_KEY_BASE", String.duplicate("r", 64)},
+      {"RESTAURANT_CONFIG_FILE", "/tmp/restaurant-runtime-test.exs"}
     ]
   end
 end
