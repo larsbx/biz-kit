@@ -1,0 +1,55 @@
+{
+  "schema": "biz-kit.formal-coverage.v1",
+  "meaning": "Each covered app has a checked Lean theorem or Quint invariant stating its catalogued first_formal_obligation. Not a refinement claim.",
+  "covered": {
+    "inventory_core": [
+      {
+        "lean": "BizKitInventory",
+        "theorem": "reachable_safe",
+        "note": "Every state reachable by interleaved receive/reserve/commit/release keeps held <= onHand."
+      }
+    ],
+    "agent_ops_store": [
+      {
+        "quint": "formal/quint/lease_fencing.qnt",
+        "invariant": "singleExternalLaunch",
+        "witness": "noLaunchWitness",
+        "max_steps": 6,
+        "note": "Competing and stale lease holders launch the external effect at most once."
+      }
+    ]
+  },
+  "uncovered": [
+    "agent_core",
+    "barter_core",
+    "biz-kit",
+    "biz_kit_cluster",
+    "biz_kit_composition",
+    "biz_kit_extension",
+    "biz_kit_identity",
+    "commerce_core",
+    "coop_substrate",
+    "dispatch",
+    "dispatch_core",
+    "eatsbot",
+    "eatsbot_core",
+    "eatsbot_extension_kafka",
+    "eatsbot_extension_prometheus",
+    "eatsbot_extension_telegram_bot",
+    "federation_core",
+    "federation_service",
+    "fulfillment_core",
+    "group_buy_core",
+    "hawala_capability",
+    "keel",
+    "marketing_core",
+    "order_core",
+    "proof_bank_core",
+    "restaurant_core",
+    "restaurant_host",
+    "sales_core",
+    "school_ops",
+    "spruce_goose",
+    "task_core"
+  ]
+}
