@@ -63,7 +63,14 @@ defmodule CoopSubstrate.CommercialSetoff do
 
   def from_gate(_, _, _, _, _, _), do: {:error, :invalid_request}
 
-  defp build(%{members: members, obligations: obligations}, chapter, {a, b}, denomination, residual_id, at) do
+  defp build(
+         %{members: members, obligations: obligations},
+         chapter,
+         {a, b},
+         denomination,
+         residual_id,
+         at
+       ) do
     report =
       obligations
       |> Finance.compute(chapter, {a, b})
