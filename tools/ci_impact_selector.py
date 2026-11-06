@@ -203,6 +203,8 @@ def plan(root: Path, policy: dict, head: str, event: str,
                 if not direct.issubset(graph):
                     raise EvidenceError("unknown application")
                 closure = dependents(graph, direct)
+                if not set(closure).issubset(policy["safe_app_roots"]):
+                    raise EvidenceError("sensitive consumer outside reviewed pure-app set")
                 # Application dependencies alone cannot establish full runtime
                 # or cross-repository closure. This output stays advisory.
                 selected = {
