@@ -1,0 +1,50 @@
+{
+  "source_revision": "e1d81bfa8311bd401add967ae7b6db7a9d30d440",
+  "run_id": 42113640384,
+  "run_url": "https://github.com/larsbx/biz-kit/actions/runs/42113640384",
+  "jobs": {
+    "formal": {
+      "id": 127547418714,
+      "result": "success",
+      "axiom_audit_declarations": 114,
+      "quint_directed_tests": 11,
+      "sampling": {
+        "samples": 3000,
+        "max_steps": 25,
+        "seed": 1
+      },
+      "bounded_depth": 8,
+      "negative_controls": [
+        "snapshotStep/safety",
+        "tenantStep/globalSafety"
+      ]
+    },
+    "portable_linkage": {
+      "id": 127547419212,
+      "result": "success"
+    },
+    "runtime": {
+      "id": 127547419254,
+      "result": "success",
+      "ordinary_tests": 61,
+      "ordinary_failures": 0,
+      "exclusivity_cases": 14,
+      "global_driver_boundary": {
+        "tests": 14,
+        "expected_failures": 1,
+        "runner_result": "confirmed"
+      },
+      "operator_profile_boundary": {
+        "tests": 14,
+        "expected_failures": 1,
+        "runner_result": "confirmed"
+      }
+    }
+  },
+  "interpretation": {
+    "model": "Admission-function linkage, reachable safety and audit-count/version equality accepted under documented abstract assumptions.",
+    "runtime": "Current baseline behavior observed in supplied PostgreSQL cases; E2/E3 and profile provenance limitations remain.",
+    "candidate_profile_patch": "Unapplied. The later review-only patched-source experiment is not part of this run.",
+    "refinement": "Not proved."
+  }
+}
