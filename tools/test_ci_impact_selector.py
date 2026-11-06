@@ -175,6 +175,20 @@ class ImpactTests(unittest.TestCase):
             with self.assertRaises(module.EvidenceError):
                 module.changed_paths(self.root, BASE, HEAD)
 
+    def test_current_umbrella_reverse_edges_and_sensitive_fallback(self):
+        # Exercise the real repository rather than relying only on toy fixtures.
+        graph = module.umbrella_graph(ROOT)
+        self.assertGreaterEqual(len(graph), 32)
+        self.assertIn("biz_kit_composition", module.dependents(graph, {"sales_core"}))
+        policy = module.read_policy(ROOT)
+        sales = module.plan(ROOT, policy, HEAD, "pull_request",
+                            paths=["apps/sales_core/lib/sales_core.ex"])
+        self.assertEqual(sales["mode"], "focused_advisory")
+        self.assertIn("biz_kit_composition", sales["dependent_apps"])
+        inventory = module.plan(ROOT, policy, HEAD, "pull_request",
+                                paths=["apps/inventory_core/lib/inventory_core.ex"])
+        self.assertEqual(inventory["mode"], "full_fallback")
+
     def test_policy_and_graph_receipts_are_stable(self):
         first = self.compute(["apps/inventory_core/test/one_test.exs"])
         second = self.compute(["apps/inventory_core/test/one_test.exs"])
