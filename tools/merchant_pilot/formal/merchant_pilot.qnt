@@ -155,4 +155,11 @@ module merchant_pilot {
     .then(all {idle, assert(not(safety))})
   run mutationDuplicateTest = init.then(duplicate).then(duplicateDenominator)
     .then(all {idle, assert(not(safety))})
+
+  run sevenDayBoundaryTest = init.then(qualify).then(issue).then(6.reps(_ => tick))
+    .then(all {idle, assert(report.denominator == 1 and report.matched == 1 and safety)})
+  run earlyWithdrawalCohortTest = init.then(qualify).then(issue).then(revoke).then(5.reps(_ => tick))
+    .then(all {idle, assert(report.denominator == 0 and report.requests == 1 and safety)})
+  run historicalQuoteMatchTest = init.then(qualify).then(issue).then(withdraw).then(5.reps(_ => tick))
+    .then(all {idle, assert(report.denominator == 1 and report.matched == 1 and safety)})
 }

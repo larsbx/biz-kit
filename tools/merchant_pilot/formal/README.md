@@ -22,21 +22,24 @@ bash formal/lean/install-toolchain.sh /tmp/merchant-lean
 python3 tools/merchant_pilot/formal/check_lean.py \
   --lean /tmp/merchant-lean/bin/lean --leanchecker /tmp/merchant-lean/bin/leanchecker
 npm install --prefix /tmp/merchant-quint --no-audit --no-fund @informalsystems/quint@0.32.0
-python3 tools/merchant_pilot/formal/check_quint.py \
+bash tools/merchant_pilot/formal/install_apalache.sh /tmp/merchant-quint-home
+QUINT_HOME=/tmp/merchant-quint-home python3 tools/merchant_pilot/formal/check_quint.py \
   --quint /tmp/merchant-quint/node_modules/.bin/quint --verify
 python3 -m unittest discover -s tools/merchant_pilot -v
 ```
 
 Use a new installation directory, or reuse an already verified installation explicitly. The installer
-checks the committed release archive digest. The Lean runner kernel-checks the model, replays its
+checks the committed release archive digest. The Apalache installer likewise checks the official
+v0.56.1 release asset digest and extracts without restoring archive ownership, including in root/container
+environments. Its `QUINT_HOME` is separate from the npm tools directory. The Lean runner kernel-checks the model, replays its
 imported environment with `leanchecker --fresh`, generates 147 examples against the actual Python
 exporter/scorecard, and audits transitive axioms of every named theorem. Only the standard
 `propext`, `Classical.choice`, `Quot.sound` are permitted. False full-refund arithmetic and mixed-currency
 addition must fail compilation. No admitted proof or native decision oracle is permitted.
 
-The Quint runner typechecks the model, runs nine safe scenarios and five deliberate mutation
+The Quint runner typechecks the model, runs twelve safe scenarios and five deliberate mutation
 witnesses, explores 3,000 seeded traces of up to 25 steps, and separately emits 100 seeded simulator
-traces plus the nine safe scenario traces. `replay_quint.py` reconstructs intake bundles from every
+traces plus the twelve safe scenario traces. `replay_quint.py` reconstructs intake bundles from every
 emitted state and compares actual acceptance, request denominators and all three role/currency cohort
 margins to the model projection. A fixed extra canonical request exists only to represent duplicates;
 its explicitly documented contribution is removed from the comparison. Stale coverage must produce

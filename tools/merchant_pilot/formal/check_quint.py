@@ -35,8 +35,8 @@ def main():
              '--max-samples=100', '--max-steps=25', '--seed=2', '--n-traces=100',
              '--out-itf=' + str(root / 'trace-{seq}.itf.json'), '--verbosity=1'])
         traces = sorted(root.glob('*.itf.json'))
-        if len(traces) != 109:
-            raise RuntimeError('expected 100 simulator traces and nine scenario traces')
+        if len(traces) != 112:
+            raise RuntimeError('expected 100 simulator traces and twelve scenario traces')
         run([sys.executable, str(HERE / 'replay_quint.py'), *map(str, traces)])
     if args.verify:
         run([quint, 'verify', spec, '--invariant=safety', '--max-steps=8'])

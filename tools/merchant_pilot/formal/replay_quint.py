@@ -118,6 +118,8 @@ def decode(value):
 
 
 def main():
+    if not __debug__:
+        raise RuntimeError('Run conformance checks without Python optimization; assertions must be enabled.')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('traces', nargs='+', type=Path)
     args = parser.parse_args()
