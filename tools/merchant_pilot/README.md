@@ -1,13 +1,20 @@
 # Merchant procurement pilot scorecard
 
-This offline reader implements the measurement definitions in [draft PR #309](https://github.com/larsbx/biz-kit/pull/309) and [issue #308](https://github.com/larsbx/biz-kit/issues/308) for one metro and one product category. Run it from the repository root with Python 3.11+ and the standard library.
+This offline reader implements the measurement definitions in [draft PR #309](https://github.com/larsbx/biz-kit/pull/309) and [issue #308](https://github.com/larsbx/biz-kit/issues/308) for one metro and one product category. Run it from the repository root with Elixir 1.19 / Erlang OTP 27.
 
 ```sh
-python3 tools/merchant_pilot/scorecard.py tools/merchant_pilot/synthetic.json
-python3 -m unittest discover -s tools/merchant_pilot -v
+elixir tools/merchant_pilot/cli.exs score tools/merchant_pilot/synthetic.json
+elixir tools/merchant_pilot/test.exs
 ```
 
 The fixture is entirely synthetic. The report labels its source as `synthetic` or `observed` and reports exact numerator and denominator counts. A zero denominator means the rate is undefined. Apply the proposed gates only after reviewing sample size, censoring, selection bias, and the completeness of costs and follow-up. The calculator emits measurements and coverage, without an automatic pilot verdict.
+
+The implementation lives in `apps/commerce_core/lib/commerce_core/merchant_pilot/`.
+`CommerceCore.MerchantPilot.score/2`, `export/1` and `assemble/2` provide tagged results to
+application callers. The standalone Elixir entry point loads these exact source modules and starts
+no application or ledger. From the CommerceCore project the same boundary is available as
+`mix commerce.pilot score SNAPSHOT` or `mix commerce.pilot export INTAKE NEW_DIRECTORY`.
+The offline JSON codec requires OTP 27+ and rejects duplicate object keys before validation.
 
 ## Prepare a private snapshot
 
@@ -55,12 +62,23 @@ The scorecard has no transaction, payment, custody, settlement, auction or barte
 
 [INTAKE.md](INTAKE.md) defines the approved-online-source workflow, accessible form groups,
 strict source records, provenance and consent rules. [intake.html](intake.html) prepares coordinator
-records for online source-owner review; it has no collection endpoint. `intake_export.py` projects
+records for online source-owner review; it has no collection endpoint. `CommerceCore.MerchantPilot.Intake` projects
 approved source extracts to this unchanged v1 contract and a private provenance manifest. Unknown
 costs remain unknown; stale/lost source coverage refuses export. `intake.synthetic.json` is synthetic
 replay material only. Scope, category and participants still need owner approval before live collection.
 
 [Lean and Quint coverage](formal/README.md) adds mathematical export-rule proofs, a bounded
 quote/evidence lifecycle model, deliberate unsafe variants, and finite conformance checks against
-actual Python exports. The coverage table distinguishes model guarantees from runtime tests and
+actual Elixir exports. The coverage table distinguishes model guarantees from runtime tests and
 source-owner assumptions. Run the formal scripts on synthetic data before pilot activation.
+
+## Elixir port validation
+
+`parity.synthetic.json` freezes the pre-port synthetic report and canonical snapshot/provenance hashes
+at reference revision `7de755e31e5b9bed8fec04ca7b32fa77964961cb`. Before removing the former implementation,
+5,798 generated valid and malformed cases were compared. All contract-conforming results matched;
+the sole difference was intentional rejection of a Boolean superseded-revision value previously
+accepted as integer 1. Revision links now explicitly require positive integers and reject floats too.
+The 23 ExUnit tests cover the preserved measurement, privacy, identity, refund, missing-cost and
+observation controls. The Lean/Quint harnesses execute the Elixir modules directly; the pilot has no
+Python runtime or verification dependency. All fixtures and comparisons are synthetic.

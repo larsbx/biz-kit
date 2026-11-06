@@ -1,6 +1,6 @@
 import Std.Tactic
 
-/-! Specification of the pilot's measurement/export rules, not a proof of Python,
+/-! Specification of the pilot's measurement/export rules, not a proof of Elixir,
 JSON parsing, source truth, source authentication, hash injectivity or live authorization.
 All time units are whole seconds from a common epoch; amounts use signed integers.
 No axioms, sorry, native_decide or floating-point arithmetic are introduced. -/
@@ -203,7 +203,7 @@ theorem stale_source_rejected (cutoff head : Nat) (rest : List Nat) (stale : hea
     coverageComplete cutoff (head :: rest) = false := by
   simp [coverageComplete, Nat.not_le.mpr stale]
 
--- Typed currencies prevent mixing buckets in this model. Python checks the runtime labels.
+-- Typed currencies prevent mixing buckets in this model. Elixir checks the runtime labels.
 inductive Currency where | USD | JPY deriving DecidableEq, Repr
 structure Amount (currency : Currency) where
   minor : Int

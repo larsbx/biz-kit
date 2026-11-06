@@ -131,13 +131,13 @@ integrations, follow the example plus these rules:
 
 ## Reproduce an export
 
-Requires Python 3.11+ standard library. No services or credentials are needed.
+Requires Elixir 1.19 / Erlang OTP 27. No services or credentials are needed.
 
 ```sh
-python3 -m unittest discover -s tools/merchant_pilot -v
-python3 tools/merchant_pilot/intake_export.py \
+elixir tools/merchant_pilot/test.exs
+elixir tools/merchant_pilot/cli.exs export \
   tools/merchant_pilot/intake.synthetic.json /tmp/merchant-synthetic-export
-python3 tools/merchant_pilot/scorecard.py \
+elixir tools/merchant_pilot/cli.exs score \
   /tmp/merchant-synthetic-export/snapshot.json
 ```
 
@@ -146,10 +146,10 @@ For separate source-owned record extracts, put approved files in a private direc
 Maintain an export control JSON with the six control keys listed above, without collection arrays:
 
 ```sh
-python3 tools/merchant_pilot/intake_export.py \
+elixir tools/merchant_pilot/cli.exs export \
   /private/pilot/control.json /private/pilot/reports/cohort-001 \
   --records /private/pilot/approved-source-extracts
-python3 tools/merchant_pilot/scorecard.py \
+elixir tools/merchant_pilot/cli.exs score \
   /private/pilot/reports/cohort-001/snapshot.json > /private/pilot/cohort-001-report.json
 ```
 
@@ -190,4 +190,4 @@ separately with its actual access and retention controls.
 [Formal coverage](formal/README.md) specifies qualification, observation windows, quote revision
 binding, unknown evidence, refunds and role margins in Lean and Quint. Its server runners include
 actual-exporter conformance examples and mutation witnesses. It is not an end-to-end proof of the
-Python implementation, source authenticity or actual commercial evidence.
+Elixir implementation, source authenticity or actual commercial evidence.
