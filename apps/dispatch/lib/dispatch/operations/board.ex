@@ -167,26 +167,30 @@ defmodule Dispatch.Operations.Board do
   def plan(%Actor{} = actor, load_id, params) do
     with {:ok, actor} <- authorized(actor, "assignment.plan"),
          {:ok, load} <- own_load(actor, load_id),
-         {:ok, driver} <- own_driver(actor, params["operator_participant_id"]),
+         {:ok, driver} <- own_driver(actor, params["operator_participant_id"], load.id),
          {:ok, vehicle_id} <- own_equipment(actor, Vehicle, params["vehicle_id"]),
          {:ok, trailer_id} <- own_equipment(actor, Trailer, params["trailer_id"]) do
-      transaction(actor, "assignment.plan", fn actor ->
-        Assignment
-        |> Ash.Changeset.for_create(:plan, %{
-          tenant_id: actor.tenant_id,
-          load_id: load.id,
-          operator_participant_id: driver.participant.id,
-          # The driver's own role decides exclusivity; see DeriveOperatorExclusivity.
-          operator_role_assignment_id: driver.role_assignment.id,
-          vehicle_id: vehicle_id,
-          trailer_id: trailer_id,
-          starts_at: params["starts_at"] || actor.at,
-          ends_at: params["ends_at"]
-        })
-        # REVIEWED-UNAUTHORIZED: authorized above; load, driver and equipment
-        # were each confirmed to be the actor's organization's.
-        |> Ash.create(authorize?: false, tenant: actor.tenant_id)
-        |> audited(actor, "assignment.planned", "assignment", & &1.id)
+      lock = fn -> lock_load!(actor, load.id) end
+
+      transaction(actor, "assignment.plan", lock, fn actor ->
+        with {:ok, load} <- own_load(actor, load.id) do
+          Assignment
+          |> Ash.Changeset.for_create(:plan, %{
+            tenant_id: actor.tenant_id,
+            load_id: load.id,
+            operator_participant_id: driver.participant.id,
+            # The driver's own role decides exclusivity; see DeriveOperatorExclusivity.
+            operator_role_assignment_id: driver.role_assignment.id,
+            vehicle_id: vehicle_id,
+            trailer_id: trailer_id,
+            starts_at: params["starts_at"] || actor.at,
+            ends_at: params["ends_at"]
+          })
+          # REVIEWED-UNAUTHORIZED: actor and load ownership revalidated under
+          # locks; the resource also locks and binds the driver's policy.
+          |> Ash.create(authorize?: false, tenant: actor.tenant_id)
+          |> audited(actor, "assignment.planned", "assignment", & &1.id)
+        end
       end)
       |> then(fn
         {:ok, _trip} -> load(actor, load.id)
@@ -208,7 +212,10 @@ defmodule Dispatch.Operations.Board do
       # Ordinary UPDATEs take this lock too. After acquiring it, re-read the
       # grant, then ownership, version and source state, in the mutation/audit
       # transaction.
-      lock = fn -> lock_trip!(actor, trip.id) end
+      lock = fn ->
+        lock_trip!(actor, trip.id)
+        lock_load!(actor, trip.load_id)
+      end
 
       transaction(actor, "assignment.update.status", lock, fn actor ->
         with {:ok, trip} <- own_trip(actor, trip.id),
@@ -232,9 +239,9 @@ defmodule Dispatch.Operations.Board do
   defp can(actor, capability),
     do: if(Actor.can?(actor, capability), do: :ok, else: {:error, :forbidden})
 
-  # A write is authorized by the grant as committed, never by the snapshot it
-  # was called with (issue #254): checked fresh on entry, then again under
-  # `FOR SHARE` in the mutation's transaction, after any other lock it waits on.
+  # Read current authority on entry and again under `FOR SHARE` after the
+  # trip/load locks (issue #254). Database grant changes are ordered around the
+  # transaction; wall-clock expiry during a later occupancy wait is not frozen.
   defp authorized(actor, capability, opts \\ []),
     do: PrincipalResolution.authorize(actor, capability, opts)
 
@@ -267,8 +274,8 @@ defmodule Dispatch.Operations.Board do
 
   defp own_trip(_actor, _id), do: {:error, :not_found}
 
-  defp own_driver(actor, id) do
-    case Enum.find(drivers(actor), &(&1.participant.id == id)) do
+  defp own_driver(actor, id, load_id) do
+    case Enum.find(drivers(actor, load_id), &(&1.participant.id == id)) do
       nil -> {:error, {:invalid, "operator_participant_id is not a driver of this organization"}}
       driver -> {:ok, driver}
     end
@@ -292,7 +299,7 @@ defmodule Dispatch.Operations.Board do
   # Drivers: the organization's active participants holding an active role
   # whose profile drives (`assignment.read.self`), paired with that role, which
   # planning needs to derive exclusivity.
-  defp drivers(actor) do
+  defp drivers(actor, load_id \\ nil) do
     held =
       RoleAssignment
       |> Ash.Query.for_read(:active, %{at: actor.at})
@@ -302,8 +309,12 @@ defmodule Dispatch.Operations.Board do
       |> Ash.Query.load(:role_definition)
       # REVIEWED-UNAUTHORIZED: the organization's own roster, for its dispatcher.
       |> Ash.read!(authorize?: false, tenant: actor.tenant_id)
-      |> Enum.filter(&Driving.drives?(&1, actor.at))
-      |> Map.new(&{&1.principal_id, &1})
+      |> Enum.filter(&(&1.role_definition.status == :ACTIVE and Driving.drives?(&1, actor.at)))
+      |> Enum.filter(&planning_source?(&1, load_id, actor.at))
+      # Prefer an exclusive grant if the roster contains several applicable
+      # profiles. Sorting makes the chosen source stable, never Map.new order.
+      |> Enum.sort_by(&{not Dispatch.Fleet.OperatorPolicy.exclusive?(&1), &1.id})
+      |> Enum.reduce(%{}, fn role, held -> Map.put_new(held, role.principal_id, role) end)
 
     Participant
     |> Ash.Query.filter(home_organization_id == ^organization(actor) and status == :ACTIVE)
@@ -317,6 +328,26 @@ defmodule Dispatch.Operations.Board do
       end
     end)
   end
+
+  # Roster selection is provisional. Validate the selected source again under
+  # transaction locks in OperatorPolicy; this filter only prevents an unrelated
+  # restrictive grant from hiding a valid source for the requested load.
+  defp planning_source?(_role, nil, _at), do: true
+
+  defp planning_source?(%{scope_type: scope}, _load_id, _at)
+       when scope in [:SELF, :ORGANIZATION],
+       do: true
+
+  defp planning_source?(%{scope_type: :LOAD} = role, load_id, at) do
+    Dispatch.Access.Party.permits?(role, Driving.capability(), {:LOAD, load_id},
+      at: at,
+      relationships: :CARRIER
+    )
+  end
+
+  # A stop grant cannot operate a load; an existing assignment-scoped grant
+  # cannot name the new assignment this action is about to allocate.
+  defp planning_source?(_role, _load_id, _at), do: false
 
   defp equipment(actor, resource) do
     resource
@@ -354,14 +385,11 @@ defmodule Dispatch.Operations.Board do
   defp permitted(status, action),
     do: {:error, {:invalid, "cannot #{action} a #{status} trip"}}
 
-  # Equipment goes out only with a driver who holds a driving role, so a role
-  # revoked once the equipment is checked in stays revoked (`Driving`).
-  defp driver_in_force(actor, trip, :activate) do
-    case Driving.roles(actor.tenant_id, organization(actor), trip.operator_participant_id,
-           lock: true
-         ) do
-      [] -> {:error, {:invalid, "the driver no longer holds a driving role"}}
-      _held -> :ok
+  # Trip is locked before policy source locks, matching equipment revocation.
+  defp driver_in_force(_actor, trip, :activate) do
+    case Dispatch.Fleet.OperatorPolicy.activation(trip) do
+      :ok -> :ok
+      {:error, message} -> {:error, {:invalid, message}}
     end
   end
 
@@ -372,6 +400,15 @@ defmodule Dispatch.Operations.Board do
       where: a.id == type(^id, :binary_id) and a.tenant_id == type(^actor.tenant_id, :binary_id),
       select: a.id,
       lock: "FOR UPDATE"
+    )
+    |> Dispatch.Repo.one()
+  end
+
+  defp lock_load!(actor, id) do
+    from(l in "loads",
+      where: l.id == type(^id, :binary_id) and l.tenant_id == type(^actor.tenant_id, :binary_id),
+      select: l.id,
+      lock: "FOR SHARE"
     )
     |> Dispatch.Repo.one()
   end
@@ -403,8 +440,8 @@ defmodule Dispatch.Operations.Board do
     Dispatch.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))", [key])
   end
 
-  # Runs `fun` as the actor it is authorized as once `lock` is held, so the
-  # mutation and its audit event commit under the grant as it then stands.
+  # Runs `fun` as the freshly authorized actor once `lock` is held. The
+  # mutation and audit share a transaction and authority-row locks.
   defp transaction(actor, capability, lock \\ fn -> :ok end, fun) do
     Dispatch.Repo.transaction(fn ->
       lock.()
@@ -456,16 +493,22 @@ defmodule Dispatch.Operations.Board do
     message = Exception.message(error)
 
     cond do
-      message =~ "STALE_VERSION" -> :stale
-      message =~ "one_active" or message =~ "unique" -> {:invalid, conflict(message)}
-      true -> {:invalid, first_line(message)}
+      message =~ "STALE_VERSION" ->
+        :stale
+
+      message =~ "one_active" or message =~ "unique" or
+          message =~ "the driver is unavailable for this assignment" ->
+        {:invalid, conflict(message)}
+
+      true ->
+        {:invalid, first_line(message)}
     end
   end
 
   defp refusal(other), do: {:invalid, first_line(inspect(other))}
 
   defp conflict(_message),
-    do: "the driver already has an active trip; complete or cancel it first"
+    do: "the driver is unavailable for this assignment"
 
   defp first_line(message) do
     message
