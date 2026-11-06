@@ -21,3 +21,6 @@ for control in 'snapshotStep safety' 'tenantStep globalSafety'; do
   fi
   echo "Refuted $step/$invariant (model counterexample only)"
 done
+
+# Additional E3 scenarios use five dynamically planned assignment IDs and two Users.
+bash check_dispatch_e3.sh

@@ -40,6 +40,28 @@ trap 'exit 143' TERM
 
 query() { "${psql_cmd[@]}" -qAt -d "$current_db" -c "$1"; }
 run_file() { "${psql_cmd[@]}" -q -d "$current_db" -f "$1"; }
+retire_pid() {
+  local retired=$1 pid
+  local pending=()
+  for pid in "${background_pids[@]}"; do
+    if [[ "$pid" != "$retired" ]]; then pending+=("$pid"); fi
+  done
+  background_pids=("${pending[@]}")
+}
+schema_fingerprint() {
+  query "SELECT md5(coalesce(jsonb_agg(jsonb_build_object(
+    'table', c.relname,
+    'columns', (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.attnum)
+      FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0),
+    'constraints', (SELECT jsonb_agg(to_jsonb(k) ORDER BY k.oid)
+      FROM pg_constraint k WHERE k.conrelid = c.oid),
+    'indexes', (SELECT jsonb_agg(to_jsonb(i) ORDER BY i.indexrelid)
+      FROM pg_index i WHERE i.indrelid = c.oid),
+    'triggers', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.oid)
+      FROM pg_trigger t WHERE t.tgrelid = c.oid)
+    ) ORDER BY c.relname)::text, '[]'))
+    FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'"
+}
 new_fixture() {
   db_counter=$((db_counter + 1))
   current_db="${db_prefix}_${db_counter}"
@@ -56,8 +78,9 @@ legacy_insert() {
       id, $mode, '$status', '2026-11-06' FROM participants WHERE id = e3_uuid($participant)" >/dev/null
 }
 expect_preflight_failure() {
-  local label=$1 expected=$2 before after
+  local label=$1 expected=$2 before after schema_before schema_after
   before=$(query "SELECT md5(coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.id)::text, '[]')) FROM assignments a")
+  schema_before=$(schema_fingerprint)
   if "${psql_cmd[@]}" -q -d "$current_db" --single-transaction -f "$sql_dir/up.sql" \
       >"$work_dir/preflight.log" 2>&1; then
     echo "FAIL: $label migration unexpectedly succeeded" >&2
@@ -70,10 +93,31 @@ expect_preflight_failure() {
   fi
   after=$(query "SELECT md5(coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.id)::text, '[]')) FROM assignments a")
   [[ "$before" == "$after" ]] || { echo "FAIL: $label changed baseline rows" >&2; exit 1; }
+  schema_after=$(schema_fingerprint)
+  [[ "$schema_before" == "$schema_after" ]] ||
+    { echo "FAIL: $label changed baseline table schema" >&2; exit 1; }
   [[ $(query "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'assignments' AND column_name = 'operator_user_id'") == 0 ]] ||
     { echo "FAIL: $label did not roll back schema changes" >&2; exit 1; }
   echo "PASS: $label refuses migration atomically"
 }
+
+new_fixture
+if [[ $(query "SELECT EXISTS (SELECT 1 FROM pg_available_extension_versions
+    WHERE name = 'btree_gist' AND version = '1.6')") != t ]]; then
+  echo 'FAIL: btree_gist 1.6 is unavailable; cannot exercise refusal without an upgrade' >&2
+  query "SELECT name, version FROM pg_available_extension_versions WHERE name = 'btree_gist' ORDER BY version" >&2
+  exit 1
+fi
+query "CREATE EXTENSION btree_gist WITH SCHEMA public VERSION '1.6'" >/dev/null
+[[ $(query "SELECT extversion FROM pg_extension WHERE extname = 'btree_gist'") == 1.6 ]] ||
+  { echo 'FAIL: btree_gist 1.6 fixture was not installed exactly' >&2; exit 1; }
+legacy_insert 100 11 true PLANNED
+legacy_insert 101 12 false CANCELLED
+expect_preflight_failure 'existing btree_gist 1.6 capability' \
+  'E3 requires visible btree_gist UUID equality and Boolean inequality operator classes (installed version: 1.6)'
+[[ $(query "SELECT extversion FROM pg_extension WHERE extname = 'btree_gist'") == 1.6 ]] ||
+  { echo 'FAIL: refused migration upgraded btree_gist 1.6' >&2; exit 1; }
+echo 'PASS: refused migration leaves existing btree_gist at version 1.6'
 
 new_fixture
 query "INSERT INTO assignments (id, tenant_id, load_id, operator_participant_id, starts_at)
@@ -125,6 +169,7 @@ wait_for() {
 race() {
   local label=$1 first_sql=$2 second_sql=$3 finish=$4 expected_state=$5 active_count=$6
   local first_pid second_pid writer_fd first_app second_app fifo log_first log_second
+  local first_result=0 second_result=0
   race_counter=$((race_counter + 1))
   first_app="e3_first_${BASHPID}_${race_counter}"
   second_app="e3_second_${BASHPID}_${race_counter}"
@@ -156,16 +201,19 @@ race() {
 
   printf '%s;\n' "$finish" >&"$writer_fd"
   exec {writer_fd}>&-
-  if ! wait "$first_pid"; then cat "$log_first" >&2; echo "FAIL: $label first transaction" >&2; exit 1; fi
+  wait "$first_pid" || first_result=$?
+  retire_pid "$first_pid"
+  if [[ "$first_result" != 0 ]]; then cat "$log_first" >&2; echo "FAIL: $label first transaction" >&2; exit 1; fi
+  wait "$second_pid" || second_result=$?
+  retire_pid "$second_pid"
   if [[ "$expected_state" == success || "$expected_state" == coexist ]]; then
-    if ! wait "$second_pid"; then cat "$log_second" >&2; echo "FAIL: $label second transaction" >&2; exit 1; fi
+    if [[ "$second_result" != 0 ]]; then cat "$log_second" >&2; echo "FAIL: $label second transaction" >&2; exit 1; fi
   else
-    if wait "$second_pid"; then echo "FAIL: $label conflicting second transaction committed" >&2; exit 1; fi
+    if [[ "$second_result" == 0 ]]; then echo "FAIL: $label conflicting second transaction committed" >&2; exit 1; fi
     if ! grep -Fq "$expected_state" "$log_second"; then
       cat "$log_second" >&2; echo "FAIL: $label wrong failure state" >&2; exit 1
     fi
   fi
-  background_pids=()
   [[ $(query "SELECT count(*) FROM assignments WHERE status = 'ACTIVE'") == "$active_count" ]] ||
     { echo "FAIL: $label unexpected ACTIVE count" >&2; exit 1; }
   [[ $(query "SELECT NOT EXISTS (SELECT operator_user_id FROM assignments WHERE status = 'ACTIVE' GROUP BY operator_user_id HAVING count(*) > 1 AND bool_or(operator_exclusive))") == t ]] ||

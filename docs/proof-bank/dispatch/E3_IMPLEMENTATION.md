@@ -181,7 +181,10 @@ approved substitute for Board's actor authorization and audit contract. New
 imports, jobs, bulk writers or administrative repair paths must explicitly use
 Board or implement and test an equivalent reviewed boundary. Privileged ability
 to drop constraints, disable triggers, or forge stored source provenance is not
-part of the claimed protection.
+part of the claimed protection. Raw DELETE/TRUNCATE and privileged repair are
+also outside the supported lifecycle: they can remove occupancy without a
+Board completion/cancellation or its audit, and are not exposed as assignment
+actions.
 
 Locks order database mutations to identity and authority relative to admission.
 They do not freeze the clock. A grant can expire while an activation waits on an
@@ -210,11 +213,24 @@ created disposable databases.
 
 The Lean extension connects the Boolean SQL decomposition to the E3 conflict
 relation, records the participant/User consistency premise for E3 implying E2,
-and models fresh assignment insertion with immutable snapshots. The Quint
-extension adds enough trips and Users to distinguish C+C+X from unrelated-user
-work and checks staged terminal commit/rollback and refused snapshot mutation.
+and models fresh assignment insertion with immutable snapshots. Its accepted
+activation and terminal-release operations preserve the abstract safety and
+assignment-existence invariants. Staged release validates presence, source
+status and expected version; it keeps committed occupancy until atomic commit.
+The pending-release Lean wrapper is a single-transaction abstraction, not a
+model of intervening PostgreSQL transactions.
+
+The Quint extension uses exactly five assignment IDs, two Users, two tenants
+and four participants to distinguish C+C+X from unrelated-user work. It has 16
+directed tests and checks staged terminal commit/rollback, stale versions and
+refused snapshot mutation. Its configured acceptance explores 3,000 seeded
+traces of up to 25 steps and bounded verification through eight steps. The
+checker requires an explicit completed verification result; successful checker
+startup alone is not counted as verification.
 Deliberately broken model controls must produce an invariant violation, not a
-parse error or an execution failure.
+parse error or an execution failure. The five controls remove mixed-mode
+protection, global identity scope, commit-time conflict rechecking, snapshot
+immutability, or commit-only release respectively.
 
 These are complementary evidence. Lean proves the stated abstract propositions
 under its explicit premises. Quint explores a finite abstraction. PostgreSQL

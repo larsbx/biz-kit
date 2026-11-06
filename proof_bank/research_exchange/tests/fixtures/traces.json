@@ -1,0 +1,49 @@
+[
+  {
+    "name": "delayed acceptance pays once",
+    "request": {
+      "kind": "reward",
+      "config": {"expected": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "reward": 5, "workerA": 10, "workerB": 20},
+      "state": {"now": 0, "generation": 0, "owner": 10, "expires": 0, "phase": "open", "candidate": null, "payouts": 0, "funder": 7, "escrow": 5, "balanceA": 0, "balanceB": 0},
+      "actions": [
+        {"type": "lease", "worker": 10, "deadline": 2},
+        {"type": "submit", "worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7},
+        {"type": "tick", "delta": 100},
+        {"type": "accept", "trusted": true, "evidence": {"worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7, "submittedAt": 0, "leaseExpires": 2}},
+        {"type": "accept", "trusted": true, "evidence": {"worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7, "submittedAt": 0, "leaseExpires": 2}}
+      ]
+    },
+    "expected": {"states": [
+      {"now": 0, "generation": 0, "owner": 10, "expires": 0, "phase": "open", "candidate": null, "payouts": 0, "funder": 7, "escrow": 5, "balanceA": 0, "balanceB": 0},
+      {"now": 0, "generation": 1, "owner": 10, "expires": 2, "phase": "leased", "candidate": null, "payouts": 0, "funder": 7, "escrow": 5, "balanceA": 0, "balanceB": 0},
+      {"now": 0, "generation": 1, "owner": 10, "expires": 2, "phase": "submitted", "candidate": {"worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7, "submittedAt": 0, "leaseExpires": 2}, "payouts": 0, "funder": 7, "escrow": 5, "balanceA": 0, "balanceB": 0},
+      {"now": 100, "generation": 1, "owner": 10, "expires": 2, "phase": "submitted", "candidate": {"worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7, "submittedAt": 0, "leaseExpires": 2}, "payouts": 0, "funder": 7, "escrow": 5, "balanceA": 0, "balanceB": 0},
+      {"now": 100, "generation": 1, "owner": 10, "expires": 2, "phase": "accepted", "candidate": {"worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7, "submittedAt": 0, "leaseExpires": 2}, "payouts": 1, "funder": 7, "escrow": 0, "balanceA": 5, "balanceB": 0},
+      {"now": 100, "generation": 1, "owner": 10, "expires": 2, "phase": "accepted", "candidate": {"worker": 10, "generation": 1, "binding": {"target": 1, "input": 2, "environment": 3, "policy": 4}, "artifact": 7, "submittedAt": 0, "leaseExpires": 2}, "payouts": 1, "funder": 7, "escrow": 0, "balanceA": 5, "balanceB": 0}
+    ]}
+  },
+  {
+    "name": "cancel retains hold until confirmed stop and settlement",
+    "request": {
+      "kind": "reservation",
+      "state": {"phase": "idle", "available": 10, "held": 0, "spent": 0},
+      "actions": [
+        {"type": "reserve", "cap": 6}, {"type": "start"}, {"type": "cancel"},
+        {"type": "settle", "cost": 3}, {"type": "stop", "trusted": false},
+        {"type": "stop", "trusted": true}, {"type": "settle", "cost": 3},
+        {"type": "settle", "cost": 3}
+      ]
+    },
+    "expected": {"states": [
+      {"phase": "idle", "available": 10, "held": 0, "spent": 0},
+      {"phase": "reserved", "available": 4, "held": 6, "spent": 0},
+      {"phase": "running", "available": 4, "held": 6, "spent": 0},
+      {"phase": "cancelling", "available": 4, "held": 6, "spent": 0},
+      {"phase": "cancelling", "available": 4, "held": 6, "spent": 0},
+      {"phase": "cancelling", "available": 4, "held": 6, "spent": 0},
+      {"phase": "stopped", "available": 4, "held": 6, "spent": 0},
+      {"phase": "settled", "available": 7, "held": 0, "spent": 3},
+      {"phase": "settled", "available": 7, "held": 0, "spent": 3}
+    ]}
+  }
+]

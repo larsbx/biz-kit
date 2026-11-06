@@ -63,6 +63,9 @@ The runner defaults to PostgreSQL at `127.0.0.1:5432`, administrative role
 `postgres`. `DISPATCH_E3_PGHOST`, `DISPATCH_E3_PGPORT`, `DISPATCH_E3_PGUSER` and
 `DISPATCH_E3_PGPASSWORD` can select the disposable test server. The role must be
 able to create/drop databases and install `btree_gist`. `DATABASE_URL` is ignored.
+The test server must expose installable `btree_gist` version `1.6` as well as its
+current version. If that historical fixture is unavailable, the runner fails
+explicitly instead of skipping the extension compatibility check.
 The runner creates its own `dispatch_e3_acceptance_*` databases, records only
 those it successfully created, and drops only those names on exit. It never
 migrates the existing application database.
@@ -74,6 +77,8 @@ policy fixture rather than a substitute for the complete Ash application tests.
 
 Acceptance covers:
 
+- an existing `btree_gist` 1.6 installation is refused by the capability preflight,
+  stays at version 1.6, and leaves baseline rows and table schema unchanged;
 - atomic refusal of missing/wrong-tenant identity, cross-tenant X/X and X/C
   baselines, and an active concurrent row without original role provenance;
 - successful identity backfill that preserves planned and terminal policy values;
@@ -88,8 +93,13 @@ Acceptance covers:
   stays open; cancellation/completion with both commit and rollback;
 - down/up preserving status/mode while keeping E1 and the shared extension.
 
+Every refusal compares the assignment rows and public table columns, constraints,
+indexes and triggers before and after the failed migration transaction.
+
 The conflicting races observe the second backend waiting on a PostgreSQL lock
 before committing or rolling back the first transaction. They have bounded waits
 and fail if the expected SQLSTATE or committed row count differs. They demonstrate
 the stated schedules on the tested PostgreSQL version; they are not a proof of all
 possible implementation executions.
+Each joined background process is immediately removed from cleanup tracking,
+including on unexpected race failures.

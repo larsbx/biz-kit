@@ -150,7 +150,9 @@ defmodule Dispatch.Fleet.AssignmentPolicyTest do
         :capability_removed,
         :mode_changed,
         :principal_changed,
-        :scope_changed
+        :scope_changed,
+        :participant_closed,
+        :user_suspended
       ] do
     @source_change change
     test "#{change} source cannot activate the previously planned decision", ctx do
@@ -216,18 +218,16 @@ defmodule Dispatch.Fleet.AssignmentPolicyTest do
     assert {:ok, _} = Board.transition(ctx.actor, ctx.concurrent.id, "activate", 0)
   end
 
-  for outcome <- [:commit, :rollback] do
+  for source_change <- [:revoked, :mode_changed], outcome <- [:commit, :rollback] do
+    @raced_source_change source_change
     @outcome outcome
-    test "activation rereads a concurrent source revocation after #{@outcome}", ctx do
+    test "activation rereads #{source_change} source after #{outcome}", ctx do
       parent = self()
 
       holder =
         session(fn ->
           Repo.transaction(fn ->
-            Repo.query!("UPDATE role_assignments SET status='REVOKED' WHERE id=$1", [
-              uuid(ctx.role.id)
-            ])
-
+            mutate_source(ctx, @raced_source_change)
             send(parent, {:source_locked, backend()})
 
             receive do
@@ -280,6 +280,8 @@ defmodule Dispatch.Fleet.AssignmentPolicyTest do
         assert {trip.status, trip.version} == {:ACTIVE, 1}
         assert audit_count(ctx.concurrent) == 1
       end
+
+      assert_unchanged_policy(ctx.concurrent)
     end
   end
 
@@ -446,6 +448,12 @@ defmodule Dispatch.Fleet.AssignmentPolicyTest do
         :scope_changed ->
           {"UPDATE role_assignments SET scope_type='STOP', scope_id=$2 WHERE id=$1",
            [uuid(ctx.role.id), uuid(Ash.UUID.generate())]}
+
+        :participant_closed ->
+          {"UPDATE participants SET status='CLOSED' WHERE id=$1", [uuid(ctx.driver.id)]}
+
+        :user_suspended ->
+          {"UPDATE users SET status='SUSPENDED' WHERE id=$1", [uuid(ctx.driver_user.id)]}
       end
 
     Repo.query!(sql, params)
