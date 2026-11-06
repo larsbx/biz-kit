@@ -28,11 +28,11 @@ the implementation refines the model.
 Coverage means the obligation is stated and checked over a model of the
 rule. Writing the models showed that, for these apps, the guarded model is
 the **intended** rule, and the code is weaker. Each model's header says so.
-These are open defects or host duties, not proofs.
+These are open defects or host duties, not proofs; `docs/roadmap.md`
+("Enforcement gaps") orders them. A closed gap leaves this table.
 
 | App | Gap |
 | --- | --- |
-| dispatch | Driver exclusivity only for exclusive drivers (`one_active_per_operator`); nothing enforces vehicle or trailer exclusivity, so two active trips can share a vehicle |
 | eatsbot_core | `UpdateHistory` writes the history row in `after_transaction`; a crash leaves state without history, so replay diverges. The code behaves like the control |
 | biz_kit_cluster | No fencing token: after a partition heals, the losing instance exits asynchronously and an effect in that window is not fenced |
 | spruce_goose | `AuthorityRuntime.ensure_local_execution_allowed/0` returns `:ok` when the marker file is missing (fails open) |

@@ -210,6 +210,42 @@ module tests successfully; it did not run local Elixir/PostgreSQL reproductions
 of the findings. CI success is evidence for the checks actually run, not for
 absence of these races.
 
+## Next: enforcement gaps (formal coverage findings, 2026-11-06)
+
+Writing a model for every app's obligation
+([formal coverage](../formal/quint/obligations/README.md)) showed where the
+code is weaker than the obligation it should enforce. The gaps are closed one
+at a time in this order: authority and data integrity first, by app priority
+and blast radius. Each fix is test-first in code; when it lands, its model's
+header cites the enforcing code and the gap leaves the README table.
+
+1. **dispatch: vehicle and trailer exclusivity.** Two ACTIVE trips could share
+   a vehicle or trailer. *Closed:* partial unique indexes
+   `one_active_per_vehicle` / `one_active_per_trailer`, with a
+   concurrent-sessions test.
+2. **keel: `Org.can?/4` on an invalid graph.** Permissions are derived without
+   checking `Invariants.valid?/1`, so a cyclic or ill-formed ownership graph
+   can grant authority.
+3. **biz_kit_cluster: fencing after a partition.** There is no fencing token;
+   the losing singleton can still act between the heal and its exit.
+4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
+   allows execution when the marker file is missing. The app is due for
+   decommission ([checklist](architecture/2026-11-06-sprucegoose-decommission.md)),
+   so fixing it needs an owner decision.
+5. **eatsbot_core: history atomic with state.** `UpdateHistory` writes the
+   history row in `after_transaction`; a crash leaves state with no history,
+   so replay diverges. The app is retiring, so this matters for its migration.
+6. **marketing_core: verify delivery evidence.** `Attribution.eligible?/3`
+   trusts the caller's `delivery_status: :confirmed`.
+7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
+   bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
+   (below).
+8. **eatsbot: retirement cutover fence.** Not implemented; it belongs to the
+   eatsbot retirement.
+9. **barter_core, federation_core: host contracts.** The cores leave signed
+   admission and authority inference to the host; state the host contract and
+   test it at each host.
+
 ## Next
 
 1. **Close the security and validation gate above.** Land focused corrections
