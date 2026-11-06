@@ -132,7 +132,7 @@ failures. It establishes no E2/E3 implementation or refinement theorem.
 The subsequent local extension links successful/total activation attempts to
 `Step`, proves reachable audit/version equality, and adds isolated mismatched
 version and reversed-winner tests. Its local receipt has updated source hashes;
-new hosted evidence is pending. The older hosted result remains pinned to its
+hosted acceptance subsequently passed at `e1d81bfa`, as recorded below. The older hosted result remains pinned to its
 original source and counts.
 
 
@@ -142,3 +142,12 @@ passed all 11 directed tests, 3,000 sampled 25-step traces, bounded checking
 through depth 8, and both required weaker-protocol refutations. These counts
 belong to the source hashes in the updated local receipt; they do not replace
 the hosted baseline's counts of 104 declarations and nine directed tests.
+
+
+Hosted replay of the extension passed at `e1d81bfa` in run
+[42113640384](https://github.com/larsbx/biz-kit/actions/runs/42113640384), with
+114 audited Lean declarations and 11 passing Quint directed tests. Runtime
+also passed its 61 baseline integration tests and both limitation controls.
+See [the separate hosted receipt](hosted_exclusivity_receipt_e1d81bfa.json).
+The subsequent review-only profile-patch experiment changes test source
+explicitly and supplies no additional Lean or refinement theorem.

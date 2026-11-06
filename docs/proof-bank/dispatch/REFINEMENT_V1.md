@@ -169,3 +169,11 @@ The [global exclusivity Lean/Quint layer](FORMAL_EXCLUSIVITY_V1.md) proves
 preservation under an abstract commit-time guard and refutes weaker guard
 models. Identity binding, authority and atomic database correspondence remain
 assumptions; these results do not close the runtime or refinement obligations.
+
+
+Hosted run 42113640384 at `e1d81bfa` also passed the extended formal layer
+(114 declarations, 11 Quint tests), portable linkage and 61 baseline runtime
+tests. Both stronger-policy assertions were refuted as expected. A later,
+separately labelled review-only runner tests the unapplied profile-binding
+patch against a derived source tree and restores/recompiles the baseline;
+its candidate result is not evidence for unchanged-source behavior.

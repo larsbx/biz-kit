@@ -1,7 +1,7 @@
 # Driver exclusivity: review proposal for #296
 
 Source baseline: `fd0e5cc20335ab58e5ccd3f39463c63897c4d585` (main inspected
-2026-11-05). Status: **hosted model and runtime evidence passed at `21923592`;
+2026-11-05). Status: **hosted model and runtime evidence passed at `e1d81bfa`;
 E2/E3 remain proposals and no implementation refinement is proved**.
 See the pinned execution receipts below.
 No operational code or migration is changed by this review packet.
@@ -240,3 +240,54 @@ production constraint installation, authority/identity stability or the full
 refinement claim. The later abstract admission-function linkage extension is
 locally rechecked separately; success at `21923592` is not relabelled as a
 hosted success at a subsequent source revision.
+
+
+## Hosted continuation at `e1d81bfa`
+
+[Run 42113640384](https://github.com/larsbx/biz-kit/actions/runs/42113640384)
+ran literal revision `e1d81bfa8311bd401add967ae7b6db7a9d30d440`.
+Formal, portable-linkage and runtime jobs all passed. Formal evidence includes
+the admission-function linkage, fresh kernel replay, 114-declaration axiom
+audit, 11 Quint directed tests and bounded depth-8 checking. Runtime again
+reported 61 tests with zero failures, including all 14 exclusivity cases;
+each stronger-policy probe produced its required assertion failure.
+See [the pinned receipt](hosted_exclusivity_receipt_e1d81bfa.json).
+
+## Review-only candidate patch experiment
+
+`scripts/dispatch/review-profile-binding-patch.sh REVIEWED_SHA` requires a
+literal 40-character lowercase SHA equal to HEAD and a clean checkout. It
+runs against the already prepared disposable Dispatch test database, following
+the ordinary tests and limitation controls. It establishes the foreign-profile
+acceptance failure on the baseline, hashes the original source and reviewed
+patch, temporarily applies that patch and requires all 14 cases to pass with
+the bound-profile acceptance assertion enabled. Global-user behavior remains
+the baseline policy during this experiment.
+
+The runner restores the original file and force-recompiles Dispatch, including
+on candidate failure. It fails if source/build restoration fails. Normal
+completion also requires an unchanged HEAD and clean checkout. Its candidate
+output refers to a **derived patched source**, not the unchanged commit SHA.
+The candidate patch remains unapplied in the committed operational module.
+The CI step is labelled separately from exact-source baseline acceptance.
+
+Local shell/workflow syntax and synthetic runner tests passed. Synthetic
+controls covered candidate success, candidate rejection, skipped cases,
+unrelated startup errors, missing baseline refutation and restoration-build
+failure. Revision/cleanliness guards refused invalid invocations; the actual
+dirty checkout was also rejected before executing tests. These validate the
+review runner, not PostgreSQL or the patch's real acceptance outcome. Hosted
+candidate execution is pending.
+
+For reproduction after checking out the reviewed source and preparing the
+same PostGIS/EventStore/dependency setup:
+
+```sh
+bash scripts/dispatch/review-profile-binding-patch.sh REVIEWED_FULL_SHA
+```
+
+This candidate addresses only borrowing another participant's profile. It
+does not resolve role expiry/revocation, carrier/scope binding, policy changes
+between planning and activation, E2/E3 or the implementation refinement theorem.
+No operational deployment, assignment correction or migration is authorized
+by an expected-green candidate test.

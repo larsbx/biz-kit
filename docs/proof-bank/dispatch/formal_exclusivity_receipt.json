@@ -1,5 +1,5 @@
 {
-  "status": "local-extension-replay-passed-prior-head-hosted-passed-new-head-pending",
+  "status": "local-and-hosted-model-runtime-replay-passed-at-e1d81bfa",
   "base_revision": "2192359288daab6291798619586f12b37e6b3f78",
   "source_sha256": {
     "formal/lean/BizKitDriverExclusivity.lean": "4b8216ce5fc7ce0853550c38951a7caf6b311494a46c9f093f3bb4a6223bbdba",
@@ -49,10 +49,10 @@
   "claims_excluded": [
     "Elixir/Ash/PostgreSQL refinement",
     "deployed database invariant",
-    "runtime test success at the subsequent formal extension revision",
     "owner approval of E2/E3",
     "authority and identity provenance",
     "liveness or deadlock freedom"
   ],
-  "hosted_baseline_receipt": "hosted_exclusivity_receipt_21923592.json"
+  "hosted_baseline_receipt": "hosted_exclusivity_receipt_21923592.json",
+  "hosted_extension_receipt": "hosted_exclusivity_receipt_e1d81bfa.json"
 }

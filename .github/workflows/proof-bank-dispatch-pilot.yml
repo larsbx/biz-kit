@@ -14,6 +14,7 @@ on:
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
       - 'scripts/dispatch/check-exclusivity-controls.sh'
+      - 'scripts/dispatch/review-profile-binding-patch.sh'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -35,6 +36,7 @@ on:
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
       - 'scripts/dispatch/check-exclusivity-controls.sh'
+      - 'scripts/dispatch/review-profile-binding-patch.sh'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -163,3 +165,7 @@ jobs:
       - name: Require the two proposed exclusivity controls to refute current behavior
         working-directory: apps/dispatch
         run: bash ../../scripts/dispatch/check-exclusivity-controls.sh
+      - name: Review the unapplied profile-binding patch in a temporary experiment
+        env:
+          REVIEWED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/dispatch/review-profile-binding-patch.sh "$REVIEWED_REVISION"
