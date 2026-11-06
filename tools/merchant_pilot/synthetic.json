@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "dataset": "synthetic",
+  "cohort_started_at": "2026-01-01T00:00:00Z",
+  "as_of": "2026-04-10T00:00:00Z",
+  "requests": [
+    {
+      "id": "00000000000000000000000000000001",
+      "qualified_at": "2026-01-01T00:00:00Z",
+      "withdrawn_at": null
+    },
+    {
+      "id": "00000000000000000000000000000002",
+      "qualified_at": "2026-01-03T00:00:00Z",
+      "withdrawn_at": null
+    },
+    {
+      "id": "00000000000000000000000000000003",
+      "qualified_at": "2026-01-04T00:00:00Z",
+      "withdrawn_at": null
+    },
+    {
+      "id": "00000000000000000000000000000004",
+      "qualified_at": "2026-04-08T00:00:00Z",
+      "withdrawn_at": null
+    },
+    {
+      "id": "00000000000000000000000000000005",
+      "qualified_at": "2026-01-05T00:00:00Z",
+      "withdrawn_at": "2026-01-06T00:00:00Z"
+    },
+    {
+      "id": "00000000000000000000000000000006",
+      "qualified_at": "2026-01-08T00:00:00Z",
+      "withdrawn_at": null
+    },
+    {
+      "id": "00000000000000000000000000000007",
+      "qualified_at": "2026-03-25T00:00:00Z",
+      "withdrawn_at": null
+    }
+  ],
+  "invitations": [
+    {
+      "request_id": "00000000000000000000000000000001",
+      "merchant_id": "00000000000000000000000000000065",
+      "invited_at": "2026-01-01T00:00:00Z",
+      "responded_at": "2026-01-02T00:00:00Z"
+    },
+    {
+      "request_id": "00000000000000000000000000000001",
+      "merchant_id": "00000000000000000000000000000066",
+      "invited_at": "2026-01-01T00:00:00Z",
+      "responded_at": null
+    },
+    {
+      "request_id": "00000000000000000000000000000002",
+      "merchant_id": "00000000000000000000000000000065",
+      "invited_at": "2026-01-03T00:00:00Z",
+      "responded_at": "2026-01-05T00:00:00Z"
+    },
+    {
+      "request_id": "00000000000000000000000000000003",
+      "merchant_id": "00000000000000000000000000000067",
+      "invited_at": "2026-01-04T00:00:00Z",
+      "responded_at": "2026-01-04T00:00:00Z"
+    },
+    {
+      "request_id": "00000000000000000000000000000004",
+      "merchant_id": "00000000000000000000000000000068",
+      "invited_at": "2026-04-08T00:00:00Z",
+      "responded_at": "2026-04-08T00:00:00Z"
+    },
+    {
+      "request_id": "00000000000000000000000000000005",
+      "merchant_id": "00000000000000000000000000000065",
+      "invited_at": "2026-01-05T00:00:00Z",
+      "responded_at": null
+    },
+    {
+      "request_id": "00000000000000000000000000000006",
+      "merchant_id": "00000000000000000000000000000066",
+      "invited_at": "2026-01-08T00:00:00Z",
+      "responded_at": "2026-01-15T00:00:00Z"
+    },
+    {
+      "request_id": "00000000000000000000000000000007",
+      "merchant_id": "00000000000000000000000000000069",
+      "invited_at": "2026-03-25T00:00:00Z",
+      "responded_at": "2026-03-26T00:00:00Z"
+    }
+  ],
+  "quotes": [
+    {
+      "id": "000000000000000000000000000000c9",
+      "request_id": "00000000000000000000000000000001",
+      "merchant_id": "00000000000000000000000000000065",
+      "issued_at": "2026-01-02T00:00:00Z",
+      "expires_at": "2026-01-09T00:00:00Z",
+      "withdrawn_at": null,
+      "qualified": true,
+      "currency": "USD",
+      "all_in_minor": 12000
+    },
+    {
+      "id": "000000000000000000000000000000ca",
+      "request_id": "00000000000000000000000000000002",
+      "merchant_id": "00000000000000000000000000000065",
+      "issued_at": "2026-01-05T00:00:00Z",
+      "expires_at": "2026-01-08T00:00:00Z",
+      "withdrawn_at": "2026-01-07T00:00:00Z",
+      "qualified": true,
+      "currency": "USD",
+      "all_in_minor": 12000
+    },
+    {
+      "id": "000000000000000000000000000000cb",
+      "request_id": "00000000000000000000000000000003",
+      "merchant_id": "00000000000000000000000000000067",
+      "issued_at": "2026-01-04T00:00:00Z",
+      "expires_at": "2026-01-12T00:00:00Z",
+      "withdrawn_at": null,
+      "qualified": false,
+      "currency": "USD",
+      "all_in_minor": 12000
+    },
+    {
+      "id": "000000000000000000000000000000cc",
+      "request_id": "00000000000000000000000000000003",
+      "merchant_id": "00000000000000000000000000000067",
+      "issued_at": "2026-01-05T00:00:00Z",
+      "expires_at": "2026-01-12T00:00:00Z",
+      "withdrawn_at": "2026-01-05T00:00:00Z",
+      "qualified": true,
+      "currency": "USD",
+      "all_in_minor": 12000
+    },
+    {
+      "id": "000000000000000000000000000000cd",
+      "request_id": "00000000000000000000000000000004",
+      "merchant_id": "00000000000000000000000000000068",
+      "issued_at": "2026-04-08T00:00:00Z",
+      "expires_at": "2026-04-11T00:00:00Z",
+      "withdrawn_at": null,
+      "qualified": true,
+      "currency": "USD",
+      "all_in_minor": 12000
+    },
+    {
+      "id": "000000000000000000000000000000ce",
+      "request_id": "00000000000000000000000000000006",
+      "merchant_id": "00000000000000000000000000000066",
+      "issued_at": "2026-01-15T00:00:00Z",
+      "expires_at": "2026-01-17T00:00:00Z",
+      "withdrawn_at": null,
+      "qualified": true,
+      "currency": "USD",
+      "all_in_minor": 12000
+    },
+    {
+      "id": "000000000000000000000000000000cf",
+      "request_id": "00000000000000000000000000000007",
+      "merchant_id": "00000000000000000000000000000069",
+      "issued_at": "2026-03-26T00:00:00Z",
+      "expires_at": "2026-03-29T00:00:00Z",
+      "withdrawn_at": null,
+      "qualified": true,
+      "currency": "JPY",
+      "all_in_minor": 17000
+    }
+  ],
+  "orders": [
+    {
+      "id": "0000000000000000000000000000012d",
+      "quote_id": "000000000000000000000000000000c9",
+      "servicing_store_id": "00000000000000000000000000000066",
+      "currency": "USD",
+      "accepted_at": "2026-01-03T00:00:00Z",
+      "promised_by": "2026-01-07T00:00:00Z",
+      "outcome": "fulfilled",
+      "outcome_at": "2026-01-06T00:00:00Z",
+      "paid_at": "2026-01-03T00:00:00Z",
+      "returned_at": "2026-01-20T00:00:00Z",
+      "disputed_at": "2026-02-02T00:00:00Z",
+      "reconciled_at": "2026-02-03T00:00:00Z",
+      "gross_minor": 10000,
+      "refunds": [
+        {
+          "id": "00000000000000000000000000000191",
+          "at": "2026-01-21T00:00:00Z",
+          "minor": 800
+        },
+        {
+          "id": "00000000000000000000000000000192",
+          "at": "2026-01-22T00:00:00Z",
+          "minor": 200
+        }
+      ],
+      "fees": {
+        "servicing_store": {
+          "gross_minor": 250,
+          "reversed_minor": 50
+        },
+        "platform": {
+          "gross_minor": 600,
+          "reversed_minor": 100
+        }
+      },
+      "costs_minor": {
+        "merchant": 7000,
+        "servicing_store": 180,
+        "platform": 200
+      }
+    },
+    {
+      "id": "0000000000000000000000000000012e",
+      "quote_id": "000000000000000000000000000000ca",
+      "servicing_store_id": null,
+      "currency": "USD",
+      "accepted_at": "2026-01-06T00:00:00Z",
+      "promised_by": "2026-01-10T00:00:00Z",
+      "outcome": "fulfilled",
+      "outcome_at": "2026-01-09T00:00:00Z",
+      "paid_at": "2026-01-06T00:00:00Z",
+      "returned_at": null,
+      "disputed_at": "2026-02-07T00:00:00Z",
+      "reconciled_at": "2026-02-08T00:00:00Z",
+      "gross_minor": 10000,
+      "refunds": [],
+      "fees": {
+        "servicing_store": {
+          "gross_minor": 0,
+          "reversed_minor": 0
+        },
+        "platform": {
+          "gross_minor": 500,
+          "reversed_minor": 0
+        }
+      },
+      "costs_minor": {
+        "merchant": 8000,
+        "servicing_store": 0,
+        "platform": 550
+      }
+    },
+    {
+      "id": "0000000000000000000000000000012f",
+      "quote_id": "000000000000000000000000000000cd",
+      "servicing_store_id": null,
+      "currency": "USD",
+      "accepted_at": "2026-04-08T00:00:00Z",
+      "promised_by": "2026-04-09T00:00:00Z",
+      "outcome": "pending",
+      "outcome_at": null,
+      "paid_at": null,
+      "returned_at": null,
+      "disputed_at": null,
+      "reconciled_at": null,
+      "gross_minor": null,
+      "refunds": [],
+      "fees": {
+        "servicing_store": {
+          "gross_minor": 0,
+          "reversed_minor": 0
+        },
+        "platform": {
+          "gross_minor": 0,
+          "reversed_minor": 0
+        }
+      },
+      "costs_minor": {
+        "merchant": null,
+        "servicing_store": 0,
+        "platform": null
+      }
+    },
+    {
+      "id": "00000000000000000000000000000130",
+      "quote_id": "000000000000000000000000000000ce",
+      "servicing_store_id": null,
+      "currency": "USD",
+      "accepted_at": "2026-01-16T00:00:00Z",
+      "promised_by": "2026-01-21T00:00:00Z",
+      "outcome": "cancelled",
+      "outcome_at": "2026-01-17T00:00:00Z",
+      "paid_at": null,
+      "returned_at": null,
+      "disputed_at": null,
+      "reconciled_at": "2026-01-18T00:00:00Z",
+      "gross_minor": 0,
+      "refunds": [],
+      "fees": {
+        "servicing_store": {
+          "gross_minor": 0,
+          "reversed_minor": 0
+        },
+        "platform": {
+          "gross_minor": 0,
+          "reversed_minor": 0
+        }
+      },
+      "costs_minor": {
+        "merchant": 100,
+        "servicing_store": 0,
+        "platform": 75
+      }
+    },
+    {
+      "id": "00000000000000000000000000000131",
+      "quote_id": "000000000000000000000000000000cf",
+      "servicing_store_id": null,
+      "currency": "JPY",
+      "accepted_at": "2026-03-26T00:00:00Z",
+      "promised_by": "2026-03-30T00:00:00Z",
+      "outcome": "fulfilled",
+      "outcome_at": "2026-03-31T00:00:00Z",
+      "paid_at": "2026-03-26T00:00:00Z",
+      "returned_at": null,
+      "disputed_at": null,
+      "reconciled_at": "2026-04-01T00:00:00Z",
+      "gross_minor": 17000,
+      "refunds": [],
+      "fees": {
+        "servicing_store": {
+          "gross_minor": 0,
+          "reversed_minor": 0
+        },
+        "platform": {
+          "gross_minor": 1100,
+          "reversed_minor": 0
+        }
+      },
+      "costs_minor": {
+        "merchant": null,
+        "servicing_store": 0,
+        "platform": 300
+      }
+    }
+  ],
+  "unallocated_costs": [
+    {
+      "currency": "USD",
+      "role": "merchant",
+      "minor": 500
+    },
+    {
+      "currency": "JPY",
+      "role": "platform",
+      "minor": 100
+    }
+  ]
+}

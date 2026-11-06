@@ -54,5 +54,6 @@
     "liveness or deadlock freedom"
   ],
   "hosted_baseline_receipt": "hosted_exclusivity_receipt_21923592.json",
-  "hosted_extension_receipt": "hosted_exclusivity_receipt_e1d81bfa.json"
+  "hosted_extension_receipt": "hosted_exclusivity_receipt_e1d81bfa.json",
+  "hosted_candidate_receipt": "hosted_exclusivity_receipt_c9f30a38.json"
 }

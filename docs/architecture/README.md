@@ -5,6 +5,9 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [SpruceGoose decommission checklist — 2026-11-06](2026-11-06-sprucegoose-decommission.md):
+  proposed; surfaces to rehost, the authority cutover, history kept as inert
+  audit data, and what is not migrated.
 - [PostgreSQL event log, Redis operations and TigerBeetle — 2026-10-30](2026-10-30-postgres-event-log-redis-consolidation.md):
   selected staged EventStore-library replacement, Redis/Oban/Kafka consolidation,
   SQL priorities, legacy retirement and compatibility/recovery gates; implementation pending.

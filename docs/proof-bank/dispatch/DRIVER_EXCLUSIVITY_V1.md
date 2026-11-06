@@ -1,7 +1,7 @@
 # Driver exclusivity: review proposal for #296
 
 Source baseline: `fd0e5cc20335ab58e5ccd3f39463c63897c4d585` (main inspected
-2026-11-05). Status: **hosted model and runtime evidence passed at `e1d81bfa`;
+2026-11-05). Status: **hosted model, runtime and candidate evidence passed at `c9f30a38`;
 E2/E3 remain proposals and no implementation refinement is proved**.
 See the pinned execution receipts below.
 No operational code or migration is changed by this review packet.
@@ -277,7 +277,7 @@ unrelated startup errors, missing baseline refutation and restoration-build
 failure. Revision/cleanliness guards refused invalid invocations; the actual
 dirty checkout was also rejected before executing tests. These validate the
 review runner, not PostgreSQL or the patch's real acceptance outcome. Hosted
-candidate execution is pending.
+candidate execution subsequently passed at `c9f30a38`, as recorded below.
 
 For reproduction after checking out the reviewed source and preparing the
 same PostGIS/EventStore/dependency setup:
@@ -291,3 +291,34 @@ does not resolve role expiry/revocation, carrier/scope binding, policy changes
 between planning and activation, E2/E3 or the implementation refinement theorem.
 No operational deployment, assignment correction or migration is authorized
 by an expected-green candidate test.
+
+
+## Candidate result and current-main integration (2026-11-06)
+
+[Run 42220377524](https://github.com/larsbx/biz-kit/actions/runs/42220377524)
+passed all three jobs at `c9f30a38ab36c9a534bc7f817b2b36a4fc658f3a`.
+Formal accepted 114 declarations, 11 directed Quint tests and the required
+negative controls. The ordinary PostgreSQL suite again passed 61 tests with
+zero failures. The expected limitations remained reproducible.
+
+The review-only patch step **also executed successfully on PostgreSQL**:
+the bound-profile assertion failed once in 14 baseline cases, then all 14
+cases passed with the exact reviewed patch applied. The runner restored the
+original source, rebuilt Dispatch and passed its final exact-HEAD/cleanliness
+checks. [The hosted receipt](hosted_exclusivity_receipt_c9f30a38.json) records
+source, patch and derived-target SHA-256 hashes. This is evidence for that
+minimal conditional correction in the supplied cases; it is not a claim that
+the unchanged source passes the bound-profile requirement.
+
+The review branch is subsequently reconciled with main at
+`83954f1fbffbee1df5fb25e69ab3b34bc92346e8`. That merge is clean. Dispatch's
+assignment implementation and the Lean/Quint exclusivity model sources are
+unchanged; the target/patch hashes still match the successful experiment.
+Main brings dependency changes including Ash 3.37.3, so fresh exact-head CI
+is required before accepting the integrated branch. Earlier successful runs
+remain evidence only at their pinned revisions.
+
+The minimal profile-binding patch is ready for owner review, but remains
+unapplied in the committed operational module. It does not choose E2/E3 or
+solve role validity, organizational scope, lifetime/provenance or full runtime
+refinement. #296 remains open. No assignment migration or deployment is added.

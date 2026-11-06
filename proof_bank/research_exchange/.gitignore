@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.lake/
+evidence/
+dist/
+node_modules/

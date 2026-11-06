@@ -1,0 +1,198 @@
+{
+  "schema": "formal-research-exchange/verification-plan/v1",
+  "scope": {
+    "reward": "one prefunded reward slot and two participant destinations",
+    "reservation": "one compute reservation",
+    "lean": "the actual pure transition functions, arbitrary natural parameters and finite traces",
+    "quint": "explicit finite domains in each model, safety only",
+    "python": "finite implementation tests and differential execution, not formal refinement",
+    "receipt": "unsigned trusted-local execution record, not public verifier authority"
+  },
+  "assumptions": [
+    "The caller approves the exact source digest, and the local host is trusted.",
+    "Configured IDs stand for authenticated principals and immutable content bindings.",
+    "An acceptance trusted flag comes from a controlled verifier; a stop trusted flag comes from an actual stop acknowledgment.",
+    "A transition is applied atomically; database linearizability is an integration obligation.",
+    "The initial reward slot is already funded, and the configuration is fixed throughout a trace.",
+    "Approved proof axioms are propext, Classical.choice and Quot.sound; no other axiom dependencies are permitted.",
+    "The correctness of the checkers, host runtimes, OS and compiler used for native execution is outside these service-state proofs."
+  ],
+  "stages": [
+    {
+      "id": "gate_unit_tests",
+      "evidence_class": "adversarial runner tests",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "required_patterns": [
+        "Ran [1-9][0-9]* tests",
+        "\\bOK\\b"
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "lean_build",
+      "evidence_class": "Lean source elaboration and executable build",
+      "cwd": "formal/lean",
+      "command": [
+        "{lake}",
+        "build"
+      ],
+      "required_patterns": [
+        "Build completed successfully"
+      ],
+      "forbidden_patterns": [
+        "declaration uses .sorry."
+      ],
+      "timeout_seconds": 240
+    },
+    {
+      "id": "lean_axioms",
+      "evidence_class": "transitive axiom policy inspection",
+      "cwd": "formal/lean",
+      "command": [
+        "{python}",
+        "{root}/tools/check_proofs.py",
+        "axioms",
+        "--registry",
+        "proof_targets.json",
+        "--lean",
+        "{lean}",
+        "--output",
+        "{output}/axioms.json"
+      ],
+      "required_patterns": [
+        "AXIOM_AUDIT_PASSED [1-9][0-9]* theorems"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "lean_export",
+      "evidence_class": "exported theorem dependency closure",
+      "cwd": "formal/lean",
+      "command": [
+        "{python}",
+        "{root}/tools/check_proofs.py",
+        "export",
+        "--registry",
+        "proof_targets.json",
+        "--leanexport",
+        "{leanexport}",
+        "--output",
+        "{output}/proofs.export"
+      ],
+      "required_patterns": [
+        "\"status\": \"exported\""
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "id": "lean_kernel_replay",
+      "evidence_class": "Lean kernel proof replay from export",
+      "cwd": "formal/lean",
+      "command": [
+        "{leanchecker}",
+        "--from-export",
+        "{output}/proofs.export"
+      ],
+      "required_patterns": [
+        "Lean default kernel accepts the solution"
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "id": "lean_independent_replay",
+      "evidence_class": "independent lean4lean proof replay from export",
+      "cwd": "formal/lean",
+      "command": [
+        "{lean4lean}",
+        "--import",
+        "{output}/proofs.export"
+      ],
+      "required_patterns": [
+        "checked [1-9][0-9]* declarations"
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "id": "lean_negative_controls",
+      "evidence_class": "deliberately invalid proof and axiom controls",
+      "cwd": "formal/lean",
+      "command": [
+        "{python}",
+        "{root}/tools/lean_negatives.py",
+        "--lean",
+        "{lean}",
+        "--cases",
+        "negative/cases.json",
+        "--output-dir",
+        "{output}/lean_negatives"
+      ],
+      "required_patterns": [
+        "LEAN_NEGATIVE_CONTROLS_PASSED [1-9][0-9]*"
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "id": "reference_unit_tests",
+      "evidence_class": "adversarial implementation tests",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "required_patterns": [
+        "Ran [1-9][0-9]* tests",
+        "\\bOK\\b"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "differential_traces",
+      "evidence_class": "finite Lean and Python executable conformance",
+      "command": [
+        "{python}",
+        "-m",
+        "reference.conformance",
+        "--lean-command",
+        "{root}/formal/lean/.lake/build/bin/exchange_trace",
+        "--report",
+        "{output}/conformance.json"
+      ],
+      "required_patterns": [
+        "CONFORMANCE_PASSED"
+      ],
+      "timeout_seconds": 240
+    },
+    {
+      "id": "quint_model_checks",
+      "evidence_class": "finite exhaustive safety, scenarios and mutant counterexamples",
+      "command": [
+        "{python}",
+        "formal/quint/run_checks.py",
+        "--output-dir",
+        "{output}/quint",
+        "--quint-cli",
+        "{quint}",
+        "--java-bin",
+        "{java}"
+      ],
+      "required_patterns": [
+        "QUINT_CHECKS_PASSED"
+      ],
+      "timeout_seconds": 600
+    }
+  ]
+}

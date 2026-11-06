@@ -151,3 +151,11 @@ also passed its 61 baseline integration tests and both limitation controls.
 See [the separate hosted receipt](hosted_exclusivity_receipt_e1d81bfa.json).
 The subsequent review-only profile-patch experiment changes test source
 explicitly and supplies no additional Lean or refinement theorem.
+
+
+Hosted run 42220377524 at `c9f30a38` again passed the formal layer and also
+passed the explicit review-only profile-patch experiment. See the
+[candidate receipt](hosted_exclusivity_receipt_c9f30a38.json). That candidate
+result is runtime evidence on derived source, not a new formal theorem.
+The subsequent main reconciliation leaves these Lean/Quint sources unchanged
+but changes runtime dependencies; its new exact-head CI remains pending.

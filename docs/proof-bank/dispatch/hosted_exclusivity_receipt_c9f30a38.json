@@ -1,0 +1,54 @@
+{
+  "source_revision": "c9f30a38ab36c9a534bc7f817b2b36a4fc658f3a",
+  "run_id": 42220377524,
+  "run_url": "https://github.com/larsbx/biz-kit/actions/runs/42220377524",
+  "jobs": {
+    "formal": {
+      "id": 127900630837,
+      "result": "success",
+      "axiom_audit_declarations": 114,
+      "quint_directed_tests": 11,
+      "negative_controls": [
+        "snapshotStep/safety",
+        "tenantStep/globalSafety"
+      ]
+    },
+    "portable_linkage": {
+      "id": 127900630868,
+      "result": "success"
+    },
+    "runtime": {
+      "id": 127900630647,
+      "result": "success",
+      "ordinary_tests": 61,
+      "ordinary_failures": 0,
+      "exclusivity_cases": 14,
+      "limitation_probes": {
+        "global_driver_boundary": "expected assertion failure confirmed",
+        "operator_profile_boundary": "expected assertion failure confirmed"
+      },
+      "candidate_experiment": {
+        "type": "explicitly derived patched source",
+        "baseline_tests": 14,
+        "baseline_expected_failures": 1,
+        "baseline_assertion": "proposed acceptance: another participant's role must not relax exclusivity",
+        "candidate_tests": 14,
+        "candidate_failures": 0,
+        "target": "apps/dispatch/lib/dispatch/fleet/changes/derive_operator_exclusivity.ex",
+        "baseline_target_sha256": "cceef7944f7ba67f9397687f438fb7f6840aa761b4abea4bd45f6c92e06521bb",
+        "patch": "docs/proof-bank/dispatch/PROPOSED_BIND_OPERATOR_PROFILE.patch",
+        "patch_sha256": "5f9cd5bce69fa8cdaeecbe482483cfbb64b576e44362d54ec81f8d9fd119f9d3",
+        "candidate_target_sha256": "c9f7183282ef5292af69cc73ecb6a7351f27a230f3ef11d04944cf02b2f22fa6",
+        "baseline_source_restored": true,
+        "baseline_dispatch_recompiled": true,
+        "final_head_and_clean_checkout_checks": "passed"
+      }
+    }
+  },
+  "interpretation": {
+    "candidate": "The minimal principal-binding patch changes the supplied regression from the expected failure to 14 passing candidate cases; baseline restoration succeeded.",
+    "operational_patch": "Still unapplied in committed assignment code.",
+    "limitations": "Does not prove validity of the role, carrier/scope binding, policy lifetime, E2/E3 enforcement or end-to-end refinement.",
+    "subsequent_main_integration": "Not covered by this run; dependencies changed and require fresh exact-head CI."
+  }
+}
