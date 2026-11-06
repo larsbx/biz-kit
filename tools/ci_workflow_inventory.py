@@ -52,6 +52,7 @@ def inspect_workflow(path: Path) -> dict:
         "workflow_run": {"workflows", "types", "branches", "branches-ignore"},
         "workflow_dispatch": {"inputs"},
         "schedule": set(),
+        "merge_group": {"checks_requested"},
     }
     list_fields = {"paths", "paths-ignore", "branches", "branches-ignore",
                    "tags", "tags-ignore", "types", "workflows"}
@@ -110,7 +111,7 @@ def inspect_workflow(path: Path) -> dict:
         if item:
             depth = len(line) - len(line.lstrip(" "))
             entry = item.group(1)
-            if current_event == "schedule" and depth == 4 and re.fullmatch(r"cron:\\s*.+", entry):
+            if current_event == "schedule" and depth == 4 and re.fullmatch(r"cron:\s*.+", entry):
                 continue
             if (depth == 6 and current_event in event_fields
                 and current_field in list_fields):
