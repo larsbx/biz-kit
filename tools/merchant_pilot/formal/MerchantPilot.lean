@@ -136,7 +136,7 @@ theorem unknown_expense_unknown (xs : List (Option Int)) (h : none ∈ xs) : poo
   induction xs with
   | nil => simp at h
   | cons x xs ih =>
-    simp only [List.mem_cons] instant h
+    simp only [List.mem_cons] at h
     rcases h with hx | ht
     · subst x; simp [pool, sumInputs]
     · have tail : sumInputs xs = none := by simpa [pool] using ih ht
