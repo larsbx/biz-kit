@@ -1,0 +1,815 @@
+{
+  "merchants": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "business_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "opted_in_at": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "withdrawn_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "participation_ref": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          }
+        }
+      }
+    }
+  },
+  "requests": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "buyer_key": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "geography": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "category": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "specification_ref": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "condition_ref": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "quantity": {
+            "type": "integer",
+            "nullable": false
+          },
+          "needed_by": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "budget_minor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[A-Z]{3}"
+          },
+          "submitted_at": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "qualified_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "status": {
+            "type": "choice",
+            "values": [
+              "unreviewed",
+              "qualified",
+              "rejected",
+              "duplicate"
+            ],
+            "nullable": false
+          },
+          "duplicate_of": {
+            "type": "string",
+            "nullable": true,
+            "pattern": null
+          },
+          "withdrawn_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "consent": {
+            "type": "object",
+            "nullable": false,
+            "fields": {
+              "revision_ref": {
+                "type": "string",
+                "nullable": false,
+                "pattern": "[0-9a-f]{32}"
+              },
+              "granted_at": {
+                "type": "string",
+                "nullable": true,
+                "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+              },
+              "sharing_revoked_at": {
+                "type": "string",
+                "nullable": true,
+                "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+              },
+              "measurement_authorized": {
+                "type": "boolean",
+                "nullable": false
+              }
+            }
+          },
+          "observed_through": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          }
+        }
+      }
+    }
+  },
+  "invitations": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "request_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "merchant_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "invited_at": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "responded_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          }
+        }
+      }
+    }
+  },
+  "quotes": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "request_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "merchant_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "issued_at": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "withdrawn_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "qualified": {
+            "type": "boolean",
+            "nullable": false
+          },
+          "currency": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[A-Z]{3}"
+          },
+          "price_minor": {
+            "type": "integer",
+            "nullable": false
+          },
+          "tax_minor": {
+            "type": "integer",
+            "nullable": false
+          },
+          "shipping_minor": {
+            "type": "integer",
+            "nullable": false
+          },
+          "buyer_fee_minor": {
+            "type": "integer",
+            "nullable": false
+          },
+          "supersedes_revision": {
+            "type": "integer",
+            "nullable": true
+          },
+          "item_evidence_ref": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "stock_evidence_ref": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          }
+        }
+      }
+    }
+  },
+  "fee_arrangements": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "merchant_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "servicing_store_id": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[A-Z]{3}"
+          },
+          "payer": {
+            "type": "choice",
+            "values": [
+              "merchant"
+            ],
+            "nullable": false
+          },
+          "valid_from": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "valid_until": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "terms_ref": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          }
+        }
+      }
+    }
+  },
+  "orders": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "quote_ref": {
+            "type": "object",
+            "nullable": false,
+            "fields": {
+              "source_id": {
+                "type": "string",
+                "nullable": false,
+                "pattern": "[0-9a-f]{32}"
+              },
+              "record_id": {
+                "type": "string",
+                "nullable": false,
+                "pattern": "[0-9a-f]{32}"
+              },
+              "revision": {
+                "type": "integer",
+                "nullable": false
+              }
+            }
+          },
+          "servicing_store_id": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "currency": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[A-Z]{3}"
+          },
+          "accepted_at": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "promised_by": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "outcome": {
+            "type": "choice",
+            "values": [
+              "pending",
+              "fulfilled",
+              "failed",
+              "cancelled"
+            ],
+            "nullable": false
+          },
+          "outcome_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "paid_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "returned_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "disputed_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "reconciled_at": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          },
+          "gross_minor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "refunds": {
+            "type": "array",
+            "item": {
+              "type": "object",
+              "nullable": false,
+              "fields": {
+                "id": {
+                  "type": "string",
+                  "nullable": false,
+                  "pattern": "[0-9a-f]{32}"
+                },
+                "at": {
+                  "type": "string",
+                  "nullable": false,
+                  "pattern": null
+                },
+                "minor": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "nullable": false,
+                  "pattern": "[0-9a-f]{32}"
+                },
+                "provider_verified": {
+                  "type": "boolean",
+                  "nullable": false
+                }
+              }
+            },
+            "minimum": 0
+          },
+          "fees": {
+            "type": "object",
+            "nullable": false,
+            "fields": {
+              "servicing_store": {
+                "type": "object",
+                "nullable": true,
+                "fields": {
+                  "gross_minor": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "reversed_minor": {
+                    "type": "integer",
+                    "nullable": false
+                  }
+                }
+              },
+              "platform": {
+                "type": "object",
+                "nullable": true,
+                "fields": {
+                  "gross_minor": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "reversed_minor": {
+                    "type": "integer",
+                    "nullable": false
+                  }
+                }
+              }
+            }
+          },
+          "fee_arrangement_id": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "stock_terms_revalidated": {
+            "type": "boolean",
+            "nullable": false
+          },
+          "provider_verified": {
+            "type": "boolean",
+            "nullable": false
+          },
+          "observed_through": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+          }
+        }
+      }
+    }
+  },
+  "costs": {
+    "type": "object",
+    "nullable": false,
+    "fields": {
+      "source_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "owner_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "record_id": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "[0-9a-f]{32}"
+      },
+      "revision": {
+        "type": "integer",
+        "nullable": false
+      },
+      "captured_at": {
+        "type": "string",
+        "nullable": false,
+        "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "item": {
+          "type": "string",
+          "nullable": false,
+          "pattern": null
+        },
+        "minimum": 1
+      },
+      "data": {
+        "type": "object",
+        "nullable": false,
+        "fields": {
+          "order_id": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "[0-9a-f]{32}"
+          },
+          "role": {
+            "type": "choice",
+            "values": [
+              "merchant",
+              "servicing_store",
+              "platform"
+            ],
+            "nullable": false
+          },
+          "currency": {
+            "type": "string",
+            "nullable": false,
+            "pattern": "[A-Z]{3}"
+          },
+          "complete": {
+            "type": "boolean",
+            "nullable": false
+          },
+          "items": {
+            "type": "array",
+            "item": {
+              "type": "object",
+              "nullable": false,
+              "fields": {
+                "id": {
+                  "type": "string",
+                  "nullable": false,
+                  "pattern": "[0-9a-f]{32}"
+                },
+                "kind": {
+                  "type": "choice",
+                  "values": [
+                    "acquisition",
+                    "processing",
+                    "inspection",
+                    "storage",
+                    "handling",
+                    "shipping",
+                    "fraud",
+                    "returns",
+                    "support",
+                    "operations",
+                    "insurance",
+                    "other"
+                  ],
+                  "nullable": false
+                },
+                "minor": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "incurred_at": {
+                  "type": "string",
+                  "nullable": false,
+                  "pattern": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "nullable": false,
+                  "pattern": "[0-9a-f]{32}"
+                }
+              }
+            },
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
