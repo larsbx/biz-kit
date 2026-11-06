@@ -50,3 +50,12 @@ Include accepted but cancelled, failed or returned orders so their attributable 
 The baseline and 10% and 25% cost increases hold revenues, fee terms and observed refunds constant. Additional cost rounds up to a minor unit per order and per unallocated cost pool. Each scenario reports losses and break-even-or-worse counts, so positive pooled margin cannot conceal their occurrence. Optional order detail gives signed cost headroom. Positive headroom is the exact additional cost that would exhaust contribution, zero is break-even, and negative headroom is the current shortfall.
 
 The scorecard has no transaction, payment, custody, settlement, auction or barter execution surface.
+
+## Online evidence intake and export
+
+[INTAKE.md](INTAKE.md) defines the approved-online-source workflow, accessible form groups,
+strict source records, provenance and consent rules. [intake.html](intake.html) prepares coordinator
+records for online source-owner review; it has no collection endpoint. `intake_export.py` projects
+approved source extracts to this unchanged v1 contract and a private provenance manifest. Unknown
+costs remain unknown; stale/lost source coverage refuses export. `intake.synthetic.json` is synthetic
+replay material only. Scope, category and participants still need owner approval before live collection.
