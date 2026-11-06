@@ -94,6 +94,17 @@ class ImpactTests(unittest.TestCase):
                                "apps/dispatch/test/driver_test.exs"])
         self.assertEqual(output["mode"], "full_fallback")
 
+    def test_sensitive_transitive_consumer_falls_back_full(self):
+        # A pure producer is not safe to scope if a sensitive host depends on it.
+        (self.root / "apps" / "dispatch" / "mix.exs").write_text(
+            "def project, do: [app: :dispatch, "
+            "deps: [{:inventory_core, in_umbrella: true}]]\n",
+            encoding="utf-8")
+        output = self.compute(["apps/inventory_core/lib/inventory.ex"])
+        self.assertEqual(output["mode"], "full_fallback")
+        self.assertTrue(any("incomplete-dependency-evidence" in r
+                            for r in output["reason_codes"]))
+
     def test_empty_diff_is_full_and_not_silent_skip(self):
         output = self.compute([])
         self.assertEqual(output["mode"], "full_fallback")
