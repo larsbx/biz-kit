@@ -3,11 +3,23 @@ on:
   pull_request:
     paths:
       - 'tools/merchant_pilot/**'
+      - 'apps/commerce_core/lib/commerce_core/merchant_pilot*'
+      - 'apps/commerce_core/lib/commerce_core/merchant_pilot/**'
+      - 'apps/commerce_core/lib/mix/tasks/commerce.pilot.ex'
+      - 'apps/commerce_core/test/merchant_pilot_test.exs'
+      - 'formal/lean/install-toolchain.sh'
+      - 'formal/lean/lean-toolchain'
       - '.github/workflows/merchant-pilot-intake.yml'
   push:
     branches: [main]
     paths:
       - 'tools/merchant_pilot/**'
+      - 'apps/commerce_core/lib/commerce_core/merchant_pilot*'
+      - 'apps/commerce_core/lib/commerce_core/merchant_pilot/**'
+      - 'apps/commerce_core/lib/mix/tasks/commerce.pilot.ex'
+      - 'apps/commerce_core/test/merchant_pilot_test.exs'
+      - 'formal/lean/install-toolchain.sh'
+      - 'formal/lean/lean-toolchain'
       - '.github/workflows/merchant-pilot-intake.yml'
   workflow_dispatch:
 permissions:
@@ -17,15 +29,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: erlef/setup-beam@v1
         with:
-          python-version: '3.11'
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Check Elixir formatting without loading the umbrella
+        run: elixir tools/merchant_pilot/format.exs --check
+      - name: Compile pilot modules with warnings as errors
+        run: |
+          mkdir -p "$RUNNER_TEMP/merchant-beams"
+          elixirc --warnings-as-errors -o "$RUNNER_TEMP/merchant-beams" apps/commerce_core/lib/commerce_core/merchant_pilot/*.ex apps/commerce_core/lib/commerce_core/merchant_pilot.ex apps/commerce_core/lib/mix/tasks/commerce.pilot.ex
       - name: Offline synthetic tests (no commercial evidence)
-        run: python3 -m unittest discover -s tools/merchant_pilot -v
+        run: elixir tools/merchant_pilot/test.exs
       - name: Export and consume unchanged v1 contract
         run: |
-          python3 tools/merchant_pilot/intake_export.py tools/merchant_pilot/intake.synthetic.json "$RUNNER_TEMP/merchant-export"
-          python3 tools/merchant_pilot/scorecard.py "$RUNNER_TEMP/merchant-export/snapshot.json"
+          elixir tools/merchant_pilot/cli.exs export tools/merchant_pilot/intake.synthetic.json "$RUNNER_TEMP/merchant-export"
+          elixir tools/merchant_pilot/cli.exs score "$RUNNER_TEMP/merchant-export/snapshot.json"
   preparation-form:
     runs-on: ubuntu-latest
     steps:
@@ -41,3 +60,45 @@ jobs:
         env:
           NODE_PATH: ${{ runner.temp }}/pilot-browser/node_modules
         run: node tools/merchant_pilot/test_intake_form.cjs
+  lean-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Install digest-verified repository-pinned Lean
+        run: bash formal/lean/install-toolchain.sh "$RUNNER_TEMP/merchant-lean"
+      - name: Kernel proofs, actual-exporter cases, axiom audit and negative controls
+        run: >-
+          elixir tools/merchant_pilot/formal/check_lean.exs
+          --lean "$RUNNER_TEMP/merchant-lean/bin/lean"
+          --leanchecker "$RUNNER_TEMP/merchant-lean/bin/leanchecker"
+  quint-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Install pinned Quint in isolated tools directory
+        run: npm install --prefix "$RUNNER_TEMP/merchant-quint" --no-audit --no-fund @informalsystems/quint@0.32.0
+      - name: Install digest-verified Apalache without archive ownership changes
+        run: bash tools/merchant_pilot/formal/install_apalache.sh "$RUNNER_TEMP/merchant-quint-home"
+      - name: Scenarios, mutation witnesses, seeded simulation, Elixir conformance and bounded model checking
+        env:
+          QUINT_HOME: ${{ runner.temp }}/merchant-quint-home
+        run: >-
+          elixir tools/merchant_pilot/formal/check_quint.exs
+          --quint "$RUNNER_TEMP/merchant-quint/node_modules/.bin/quint" --verify
