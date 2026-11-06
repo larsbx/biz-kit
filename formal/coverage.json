@@ -1,0 +1,360 @@
+{
+  "schema": "biz-kit.formal-coverage.v1",
+  "meaning": "Each covered app has a checked Lean theorem or Quint invariant stating its catalogued first_formal_obligation. Not a refinement claim.",
+  "covered": {
+    "agent_core": [
+      {
+        "quint": "formal/quint/obligations/agent_core.qnt",
+        "main": "agent_core",
+        "control": "agent_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Every launch ran an approved profile whose current manifest revision equals the run's pinned digest (Profiles.resolve/3 approval and digest checks)."
+      }
+    ],
+    "agent_ops_store": [
+      {
+        "quint": "formal/quint/lease_fencing.qnt",
+        "invariant": "singleExternalLaunch",
+        "witness": "noLaunchWitness",
+        "max_steps": 6,
+        "note": "Competing and stale lease holders launch the external effect at most once."
+      }
+    ],
+    "barter_core": [
+      {
+        "quint": "formal/quint/obligations/barter_core.qnt",
+        "main": "barter_core",
+        "control": "barter_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Optimizer and brokerage previews leave ownership unchanged; an asset changes hands only through an admission its provider signed (the admission half is a host duty, not code in barter_core)."
+      }
+    ],
+    "biz-kit": [
+      {
+        "quint": "formal/quint/obligations/biz_kit_platform.qnt",
+        "main": "biz_kit_platform",
+        "control": "biz_kit_platform_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Every effect committed through Log.append/2 has a registered type, an authenticated signature, its owning type's admission check, and a unique event id."
+      }
+    ],
+    "biz_kit_cluster": [
+      {
+        "quint": "formal/quint/obligations/biz_kit_cluster.qnt",
+        "main": "biz_kit_cluster",
+        "control": "biz_kit_cluster_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Singleton :global conflict resolution leaves at most one running instance after a heal; no fencing token exists (finding)."
+      }
+    ],
+    "biz_kit_composition": [
+      {
+        "quint": "formal/quint/obligations/biz_kit_composition.qnt",
+        "main": "biz_kit_composition",
+        "control": "biz_kit_composition_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Composition.preview discards the reserved next state and returns unsigned candidates, so committed reservations, sales and handoffs never exceed admitted signed commands."
+      }
+    ],
+    "biz_kit_extension": [
+      {
+        "quint": "formal/quint/obligations/biz_kit_extension.qnt",
+        "main": "biz_kit_extension",
+        "control": "biz_kit_extension_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Catalog build, activation planning and registry visibility never grant permissions, invoke an extension or write authoritative state."
+      }
+    ],
+    "biz_kit_identity": [
+      {
+        "quint": "formal/quint/obligations/biz_kit_identity.qnt",
+        "main": "biz_kit_identity",
+        "control": "biz_kit_identity_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Sessions restore tickets: a SessionStore read pending across revoke_principal cannot re-insert the session, so a revoked principal never acts."
+      }
+    ],
+    "commerce_core": [
+      {
+        "lean": "BizKitCommerce",
+        "theorem": "obligation",
+        "note": "Tax.flat/allocate shares sum exactly to the half-up order total for every choice of the extra indices, and extra never exceeds the number of bases."
+      }
+    ],
+    "coop_substrate": [
+      {
+        "quint": "formal/quint/obligations/coop_substrate.qnt",
+        "main": "coop_substrate",
+        "control": "coop_substrate_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Log append admits only signed, gate-authorized, non-replayed envelopes and assigns a derived stream and an unbroken sequence/hash chain."
+      }
+    ],
+    "dispatch": [
+      {
+        "quint": "formal/quint/obligations/dispatch.qnt",
+        "main": "dispatch",
+        "control": "dispatch_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "One-active-per-exclusive-driver (partial unique index one_active_per_operator) plus vehicle exclusivity; the vehicle half is the intended rule, not enforced in code."
+      }
+    ],
+    "dispatch_core": [
+      {
+        "quint": "formal/quint/obligations/dispatch_core.qnt",
+        "main": "dispatch_core",
+        "control": "dispatch_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "LastMile cancel_confirmed only before pickup; pickup and delivery refs are never fabricated or erased by cancellation."
+      }
+    ],
+    "eatsbot": [
+      {
+        "quint": "formal/quint/obligations/eatsbot.qnt",
+        "main": "eatsbot",
+        "control": "eatsbot_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Planned R5 cutover: no legacy write after cutover and migrated history equals accepted legacy history; not implemented in code (finding)."
+      }
+    ],
+    "eatsbot_core": [
+      {
+        "quint": "formal/quint/obligations/eatsbot_core.qnt",
+        "main": "eatsbot_core",
+        "control": "eatsbot_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Delivery history replays to the live state when the history row is written atomically; code writes it after_transaction (finding)."
+      }
+    ],
+    "eatsbot_extension_kafka": [
+      {
+        "quint": "formal/quint/obligations/eatsbot_extension_kafka.qnt",
+        "main": "eatsbot_extension_kafka",
+        "control": "eatsbot_extension_kafka_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Kafka.Driver records :ok only on a matching leader ACK; errors, exits and malformed replies are never recorded as success."
+      }
+    ],
+    "eatsbot_extension_prometheus": [
+      {
+        "quint": "formal/quint/obligations/eatsbot_extension_prometheus.qnt",
+        "main": "eatsbot_extension_prometheus",
+        "control": "eatsbot_extension_prometheus_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "PromEx tag_values project telemetry onto public tags only, and the scrape is read-only."
+      }
+    ],
+    "eatsbot_extension_telegram_bot": [
+      {
+        "quint": "formal/quint/obligations/eatsbot_extension_telegram_bot.qnt",
+        "main": "eatsbot_extension_telegram_bot",
+        "control": "eatsbot_extension_telegram_bot_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "verify_secret_token admits only requests whose header equals a valid configured secret, so unverified messages cause no effect."
+      }
+    ],
+    "federation_core": [
+      {
+        "quint": "formal/quint/obligations/federation_core.qnt",
+        "main": "federation_core",
+        "control": "federation_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Marketplace.decode_verified/2: claimed actor must equal the verified transport actor and all URLs share its origin, so remote input never speaks for local."
+      }
+    ],
+    "federation_service": [
+      {
+        "quint": "formal/quint/obligations/federation_service.qnt",
+        "main": "federation_service",
+        "control": "federation_service_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Store.project/5: tombstones are permanent and updates need a strictly higher revision, so reorder/retry cannot resurrect stale or withdrawn listings."
+      }
+    ],
+    "fulfillment_core": [
+      {
+        "quint": "formal/quint/obligations/fulfillment_core.qnt",
+        "main": "fulfillment_core",
+        "control": "fulfillment_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Only dispatch cancel_confirmed from cancel_requested reaches cancelled; terminal phases refuse events, so a delivery that wins the race is never erased."
+      }
+    ],
+    "group_buy_core": [
+      {
+        "quint": "formal/quint/obligations/group_buy_core.qnt",
+        "main": "group_buy_core",
+        "control": "group_buy_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "BindingRound sets activated once at the first threshold crossing, refuses withdrawal after it, and never moves stock or money."
+      }
+    ],
+    "hawala_capability": [
+      {
+        "quint": "formal/quint/obligations/hawala_capability.qnt",
+        "main": "hawala_capability",
+        "control": "hawala_capability_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "SignedTestPort.verify_response/3 accepts only TEST-domain frames with zero reserved bytes and the outbox view always reports paid/financial_authority false."
+      }
+    ],
+    "inventory_core": [
+      {
+        "lean": "BizKitInventory",
+        "theorem": "reachable_safe",
+        "note": "Every state reachable by interleaved receive/reserve/commit/release keeps held <= onHand."
+      }
+    ],
+    "keel": [
+      {
+        "quint": "formal/quint/obligations/keel.qnt",
+        "main": "keel",
+        "control": "keel_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Every permission Org.can?/4 grants comes from an edge active at t of a valid, acyclic organization (the validity half is intended, not enforced by can?/4)."
+      }
+    ],
+    "marketing_core": [
+      {
+        "quint": "formal/quint/obligations/marketing_core.qnt",
+        "main": "marketing_core",
+        "control": "marketing_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Attribution.eligible?/3: attribution only for confirmed delivery checked in within the window after delivery and after any prior attribution."
+      }
+    ],
+    "order_core": [
+      {
+        "quint": "formal/quint/obligations/order_core.qnt",
+        "main": "order_core",
+        "control": "order_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Lifecycle.apply answers every unauthorized command with a uniform forbidden before reading version or state, and the reachable states contain no payment or settlement state."
+      }
+    ],
+    "proof_bank_core": [
+      {
+        "quint": "formal/quint/obligations/proof_bank_core.qnt",
+        "main": "proof_bank_core",
+        "control": "proof_bank_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Every compiled blueprint is unverified, unapproved and inert; candidates carrying self-promotion claims are refused by the closed field set (ProofBankCore.compile/1)."
+      }
+    ],
+    "restaurant_core": [
+      {
+        "quint": "formal/quint/obligations/restaurant_core.qnt",
+        "main": "restaurant_core",
+        "control": "restaurant_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Device-signed restaurant events are admitted only for a key a governance-signed grant bound, with the action among the granted actions."
+      }
+    ],
+    "restaurant_host": [
+      {
+        "quint": "formal/quint/obligations/restaurant_host.qnt",
+        "main": "restaurant_host",
+        "control": "restaurant_host_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Against an adversarial host, the administrator signs held bytes only when they decode to the grant shown and replies with the signature alone."
+      }
+    ],
+    "sales_core": [
+      {
+        "quint": "formal/quint/obligations/sales_core.qnt",
+        "main": "sales_core",
+        "control": "sales_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Consent.record/3: strictly newer events and single-use evidence receipts, so no stale or replayed grant restores consent after withdrawal."
+      }
+    ],
+    "school_ops": [
+      {
+        "quint": "formal/quint/obligations/school_ops.qnt",
+        "main": "school_ops",
+        "control": "school_ops_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "No planned school task carries a learner-result field or a learner-record reference (TaskCore.Blueprint.normalize/1 closed keys, curriculum-only catalog)."
+      }
+    ],
+    "spruce_goose": [
+      {
+        "quint": "formal/quint/obligations/spruce_goose.qnt",
+        "main": "spruce_goose",
+        "control": "spruce_goose_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "After cutover no legacy ledger import (require_tuxedo/0) or direct CLI write (host marker) succeeds, and the authority cutover cannot be reverted."
+      }
+    ],
+    "task_core": [
+      {
+        "quint": "formal/quint/obligations/task_core.qnt",
+        "main": "task_core",
+        "control": "task_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Every dispatch of an agent run held an active operator and suggester grant and the task still at the run's expected_task_version (AgentRuns.runnable?/2)."
+      }
+    ]
+  },
+  "uncovered": []
+}
