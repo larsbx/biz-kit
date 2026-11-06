@@ -16,7 +16,8 @@
     "consolidation.yml",
     "kafka-producer.yml",
     "location-cross-repo-acceptance.yml",
-    "portal-auth-acceptance.yml"
+    "portal-auth-acceptance.yml",
+    "task-access-contract.yml"
   ],
   "workflow_owners": {
     "business-composition.yml": [
