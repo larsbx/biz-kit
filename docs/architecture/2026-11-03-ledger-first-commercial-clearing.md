@@ -5,6 +5,27 @@ Owner: biz-kit commercial/barter capabilities. **Hawala financial custody,
 credit, native postings, cross-authority clearing and finality remain exclusively
 owned by `larsbx/hawala-core`.**
 
+## Scope clarification — November 4, 2026
+
+The initial release question is whether a **specified B2B activity is not
+prohibited and does not require an unheld license or permission** under the
+laws actually applicable to its participants and operator. The project is
+not required to prove every invoice "lawful" or procure a lawyer's approval
+for each ordinary commercial entry. It also cannot claim a universal
+exemption from money-transmitter, sanctions or foreign restrictions.
+
+The [scoped non-prohibition profile](2026-11-04-commercial-clearing-nonprohibition-profile.md)
+defines an inert accounting/preview pilot and the separate conditions for
+two-principal, same-currency, own-obligation setoff. It records facts, legal
+authorities, review assumptions and explicit `undetermined` outcomes.
+Multilateral, third-party value transfer, cross-border, crypto, FX and
+transferable-credit operations require **separate** assessment.
+
+A preview makes **no** debt-discharge claim. A write that purports to
+extinguish an obligation still needs exact source binding, consenting
+principals, actual agreed discharge terms and durable replay protection.
+None of this gives Biz-kit Hawala or external settlement authority.
+
 ## Decision and priority
 
 The primary product operation is **commercial ledger accounting and lawful
@@ -132,7 +153,7 @@ writer, finance adapter or new financial authority.
 | Atomic local journal admission | Not implemented | Signed event gate and restart/failure replay |
 | Cross-node crash/partition recovery | Not implemented | Independent host adversarial tests |
 | Residual settlement and returns | Not implemented | Provider-specific signed bank evidence and reconciliation |
-| Sanctions, AML and licensing classification | Not implemented | Per-jurisdiction counsel-reviewed control gate |
+| Sanctions, AML and licensing applicability | Not implemented | Evidence-backed, activity- and jurisdiction-scoped non-prohibition assessment; targeted legal review where needed, not per-invoice counsel approval |
 | Legal tax treatment, audit and retention | Not implemented | Source/journal/evidence reconstruction and jurisdiction mapping |
 
 Formal/software proof of double-entry arithmetic does not establish legal
