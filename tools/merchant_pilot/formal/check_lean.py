@@ -96,7 +96,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='merchant-lean-') as directory:
         work = Path(directory)
         shutil.copy(HERE / 'MerchantPilot.lean', work)
-        env = dict(os.environ, LEAN_PATH=str(work))
+        lean_path = Path(shutil.which(args.lean) or args.lean).resolve()
+        env = dict(os.environ, LEAN_PATH=str(work),
+                   PATH=str(lean_path.parent) + os.pathsep + os.environ.get('PATH', ''))
         version = run([args.lean, '--version'], work, env).strip()
         if 'version 4.35.0' not in version:
             raise RuntimeError('use the repository-pinned Lean 4.35.0 toolchain')
