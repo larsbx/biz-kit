@@ -16,9 +16,21 @@ capital access/participation services**—are provided **at cost**, not at a
 commission or markup intended to maximize platform revenue.
 
 Producers pool their annual contributions to build shared **additional
-productive capacity**. Returns or allocations to members are a core objective,
-but the **mechanism is deliberately undecided**; do not substitute a
-fabricated dividend, guaranteed investment yield or automatic $250 refund.
+productive capacity**. **Updated owner decision (2026-11-07):** contributing
+producers acquire accumulating, risk-bearing **cooperative economic shares**
+through annual membership participation and may subscribe additional
+investment capital. The co-op or eligible capital subscribers may acquire
+distinct ownership stakes in identified productive assets of individual
+producer members. That producer progressively buys the investors' **actual
+asset shares at independently supported, then-current value** as its business
+can afford them; investor distributions depend on the project's genuine
+profitability and risk of loss, with neither interest nor guaranteed principal.
+These are two **different** cap tables and must not be conflated. See
+[diminishing producer asset equity](2026-11-07-diminishing-producer-equity.md).
+
+Redistribution, reserve thresholds, share unit pricing, buyout rules and
+legal issuance/classification remain under governance and counsel review.
+There is **no** promised dividend, par redemption or compulsory buyback.
 
 The product prioritizes qualified **wanted-item demand**, member supply
 matching, independently viable consignment and procurement. Direct
@@ -32,10 +44,12 @@ and Hawala financial-owner restrictions remain unchanged.
 There are **at least six separately accounted ledgers or sub-ledgers**, under
 appropriate governing authority—never a new network money writer:
 
-1. **Annual member contributions**: exact $250 per eligible producer/year.
-   Status as annual membership fee versus capital contribution/equity share
-   is **TBD**, jurisdiction- and charter-dependent. Do not call it refundable
-   equity without a separately legally effective capital contract.
+1. **Annual member contributions and accumulating economic shares**:
+   exact $250 per eligible producer/year, intended to acquire risk-bearing
+   cooperative capital units. Unit issue/valuation, tax treatment, statutory
+   instrument, transfer rights and any non-capital membership fee component
+   must be **legally implemented**, not assumed. A member share may lose
+   value and is not a refundable $250 claim or guaranteed yield.
 2. **Service operating collections & cost true-up**: dispatch, freight,
    shared logistics, marketplace operations, group procurement and other
    services priced on a transparent **fully allocated total cost basis**.
