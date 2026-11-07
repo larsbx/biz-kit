@@ -1,14 +1,29 @@
 defmodule Eatsbot.AuthenticationDependencyTest do
   use Eatsbot.DataCase, async: true
 
-  alias AshAuthentication.Jwt
+  alias AshAuthentication.{Info, Jwt}
   alias AshAuthentication.Plug.Helpers
+  alias AshAuthentication.Strategy.MagicLink
   alias AshAuthentication.TokenResource.Actions
   alias Eatsbot.Accounts.{Token, User}
 
   setup do
     user = Ash.create!(User, %{email: "dependency-security@example.com"}, authorize?: false)
     {:ok, user: user}
+  end
+
+  test "a magic link signs in its intended account only once", %{user: user} do
+    {:ok, strategy} = Info.strategy(User, :magic_link)
+    {:ok, link} = MagicLink.request_token_for_identity(strategy, user.email)
+
+    refute bearer(link).assigns[:current_user]
+
+    assert {:ok, signed_in} = MagicLink.Actions.sign_in(strategy, %{token: link}, [])
+    assert signed_in.id == user.id
+    assert bearer(signed_in.__metadata__.token).assigns.current_user.id == user.id
+
+    assert {:error, %AshAuthentication.Errors.AuthenticationFailed{}} =
+             MagicLink.Actions.sign_in(strategy, %{token: link}, [])
   end
 
   test "revoked authentication tokens cannot be used as bearer credentials", %{user: user} do
