@@ -4,6 +4,7 @@
     "ash-functions",
     "uuid-ossp",
     "citext",
-    "postgis"
+    "postgis",
+    "btree_gist"
   ]
 }

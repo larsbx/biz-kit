@@ -2,24 +2,16 @@ defmodule Dispatch.Fleet.Assignment do
   @moduledoc """
   A participant's work on one load with one vehicle (Section 22.2).
 
-  Section 22.2 permits at most one `ACTIVE` assignment per operator participant
-  **for the initial `DRIVER` role profile**, and says other profiles "may
-  declare a different cardinality constraint through reviewed application policy
-  and a matching database constraint".
+  E3 applies across tenants sharing this Dispatch database: one global User
+  may have several ACTIVE assignments only when every one is explicitly
+  concurrent. An exclusive assignment excludes every other active assignment
+  for that User. PLANNED work does not reserve occupancy; only a committed
+  completion or cancellation releases it. Recorded timestamps do not release it.
 
-  Both halves are load-bearing. The restriction is not bookkeeping: Section 6.1
-  scopes location collection to the active assignment and Section 25.2's offline
-  outbox attributes queued events to it, so two simultaneously active
-  assignments would make "which trip is this sample for" unanswerable. But
-  applying it to every profile would be wrong in the other direction — a
-  dispatcher, or a future courier or team-driver profile, has no such limit, and
-  a universal index would block work the specification permits.
-
-  `operator_exclusive` carries the deciding profile's answer onto the row, so
-  the unique index is partial on it. That is the "matching database constraint":
-  the rule lives in the database rather than in application code a bulk import
-  could bypass, while applying only to the profiles that declare it. It defaults
-  to `true`, so a caller that says nothing gets the restrictive behaviour.
+  The server derives and freezes `operator_user_id`, the selected role and
+  definition, and `operator_exclusive` when planning. PostgreSQL enforces the
+  User binding and both halves of E3 (exclusive/exclusive and mixed modes).
+  Authorization remains local to the participant, tenant and carrier.
   """
 
   use Ash.Resource,
@@ -31,9 +23,19 @@ defmodule Dispatch.Fleet.Assignment do
     table "assignments"
     repo Dispatch.Repo
 
-    # Partial on both columns: the rule binds only while an assignment is active
-    # *and* only for profiles that declare exclusivity (Section 22.2).
+    # Keep the historical E1 identity during rollout. The global E3 constraints
+    # are explicitly named because an Ash tenant identity would add tenant_id.
     identity_wheres_to_sql one_active_per_operator: "status = 'ACTIVE' AND operator_exclusive"
+
+    unique_index_names [
+      {[:operator_user_id], "assignments_active_exclusive_user_uniq",
+       "the driver is unavailable for this assignment"}
+    ]
+
+    exclusion_constraint_names [
+      {:operator_user_id, "assignments_active_mixed_user_modes_excl",
+       "the driver is unavailable for this assignment"}
+    ]
   end
 
   multitenancy do
@@ -47,6 +49,9 @@ defmodule Dispatch.Fleet.Assignment do
     attribute :tenant_id, :uuid, allow_nil?: false, public?: true
     attribute :load_id, :uuid, allow_nil?: false, public?: true
     attribute :operator_participant_id, :uuid, allow_nil?: false, public?: true
+    attribute :operator_user_id, :uuid, allow_nil?: false, public?: false
+    attribute :operator_role_assignment_id, :uuid, public?: false
+    attribute :operator_role_definition_id, :uuid, public?: false
     attribute :vehicle_id, :uuid, public?: true
     attribute :trailer_id, :uuid, public?: true
 
@@ -77,11 +82,11 @@ defmodule Dispatch.Fleet.Assignment do
   end
 
   identities do
-    # Section 22.2: at most one ACTIVE assignment per operator participant, for
-    # profiles that declare exclusivity. A profile permitting concurrency sets
-    # `operator_exclusive` false and falls outside the index entirely.
+    # Historical E1 index retained. E3 additionally rejects mixed-mode and
+    # shared-User conflicts across tenant and participant identities.
     identity :one_active_per_operator, [:operator_participant_id],
-      where: expr(status == :ACTIVE and operator_exclusive == true)
+      where: expr(status == :ACTIVE and operator_exclusive == true),
+      message: "the driver is unavailable for this assignment"
   end
 
   relationships do
@@ -103,11 +108,10 @@ defmodule Dispatch.Fleet.Assignment do
       Creates a PLANNED assignment. Planning does not start a trip.
 
       `operator_role_assignment_id` names the role the operator is assigned
-      under and decides whether Section 22.2's one-active-assignment rule
-      applies. It is an argument rather than an accepted attribute because the
-      answer is derived from the profile, never asserted: a caller must not be
-      able to opt out of the restriction by claiming it does not apply. Omitted,
-      the restrictive default stands.
+      under. It must be current and bound to this operator, tenant, carrier and
+      trip scope. Its definition and mode are recorded privately and revalidated
+      at activation. Callers cannot assert the User or mode. An omitted source
+      keeps the exclusive default; an explicitly invalid source is rejected.
       """
 
       argument :operator_role_assignment_id, :uuid
@@ -141,11 +145,12 @@ defmodule Dispatch.Fleet.Assignment do
     end
 
     update :activate do
-      description "Starts the trip. The partial index refuses a second active assignment."
+      description "Starts the trip when the immutable policy is current and E3 permits it."
       accept []
       require_atomic? false
       argument :expected_version, :integer
       change set_attribute(:status, :ACTIVE)
+      change Dispatch.Fleet.Changes.GuardAssignmentTransition
       change Dispatch.Accounts.Changes.IncrementVersion
       change optimistic_lock(:version)
     end
@@ -156,6 +161,7 @@ defmodule Dispatch.Fleet.Assignment do
       argument :expected_version, :integer
       change set_attribute(:status, :COMPLETED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
+      change Dispatch.Fleet.Changes.GuardAssignmentTransition
       change Dispatch.Accounts.Changes.IncrementVersion
       change optimistic_lock(:version)
       # Section 6.1: consent lasts for the trip plus grace, so it ends now too.
@@ -168,6 +174,7 @@ defmodule Dispatch.Fleet.Assignment do
       argument :expected_version, :integer
       change set_attribute(:status, :CANCELLED)
       change set_attribute(:ends_at, &DateTime.utc_now/0)
+      change Dispatch.Fleet.Changes.GuardAssignmentTransition
       change Dispatch.Accounts.Changes.IncrementVersion
       change optimistic_lock(:version)
       # Section 6.1: consent lasts for the trip plus grace, so it ends now too.
