@@ -34,7 +34,6 @@ These are open defects or host duties, not proofs; `docs/roadmap.md`
 | App | Gap |
 | --- | --- |
 | eatsbot_core | `UpdateHistory` writes the history row in `after_transaction`; a crash leaves state without history, so replay diverges. The code behaves like the control |
-| biz_kit_cluster | No fencing token: after a partition heals, the losing instance exits asynchronously and an effect in that window is not fenced |
 | spruce_goose | `AuthorityRuntime.ensure_local_execution_allowed/0` returns `:ok` when the marker file is missing (fails open) |
 | biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2` |
 | eatsbot | The retirement cutover fence is not implemented; the legacy writer starts unconditionally |
@@ -47,4 +46,7 @@ invoke or write path exists), restaurant_host (the governance seed is never
 sent; only "signs only what was shown" is guarded), hawala_capability
 (test-only adapter), school_ops (free-text titles are unchecked and
 unmodelled), eatsbot_extension_prometheus (`/metrics` authentication is
-deployment configuration).
+deployment configuration), biz_kit_cluster (ledger appends are fenced by the
+event store's expected-version check, so a stale appender is refused; other
+singletons' in-memory state diverges per side during a partition, as
+`docs/architecture/2026-10-19-cluster.md` records).
