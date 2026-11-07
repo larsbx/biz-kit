@@ -5,10 +5,16 @@ on:
     paths:
       - 'apps/proof_bank_core/**'
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
+      - 'apps/dispatch/lib/dispatch/fleet/**'
+      - 'apps/dispatch/lib/dispatch/access/driving.ex'
+      - 'apps/dispatch/lib/dispatch/accounts/participant.ex'
+      - 'apps/dispatch/priv/repo/migrations/**'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
+      - 'scripts/dispatch/check-exclusivity-controls.sh'
+      - 'scripts/dispatch/review-profile-binding-patch.sh'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -21,10 +27,16 @@ on:
     paths:
       - 'apps/proof_bank_core/**'
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
+      - 'apps/dispatch/lib/dispatch/fleet/**'
+      - 'apps/dispatch/lib/dispatch/access/driving.ex'
+      - 'apps/dispatch/lib/dispatch/accounts/participant.ex'
+      - 'apps/dispatch/priv/repo/migrations/**'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
+      - 'scripts/dispatch/check-exclusivity-controls.sh'
+      - 'scripts/dispatch/review-profile-binding-patch.sh'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -147,5 +159,13 @@ jobs:
           mix test --include integration \
             test/dispatch/operations/board_test.exs \
             test/dispatch/operations/board_concurrency_test.exs \
+            test/dispatch/operations/board_driver_exclusivity_test.exs \
             test/dispatch/operations/board_authority_concurrency_test.exs \
             test/dispatch_web/operations_controller_test.exs
+      - name: Require the two proposed exclusivity controls to refute current behavior
+        working-directory: apps/dispatch
+        run: bash ../../scripts/dispatch/check-exclusivity-controls.sh
+      - name: Review the unapplied profile-binding patch in a temporary experiment
+        env:
+          REVIEWED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/dispatch/review-profile-binding-patch.sh "$REVIEWED_REVISION"

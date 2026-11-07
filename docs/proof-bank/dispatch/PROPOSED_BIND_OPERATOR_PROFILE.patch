@@ -1,0 +1,12 @@
+--- a/apps/dispatch/lib/dispatch/fleet/changes/derive_operator_exclusivity.ex
++++ b/apps/dispatch/lib/dispatch/fleet/changes/derive_operator_exclusivity.ex
+@@ -39,6 +39,9 @@
+ 
+   defp exclusive?(changeset, role_assignment_id) do
+     with {:ok, assignment} <- fetch_assignment(changeset, role_assignment_id),
++         true <- assignment.principal_type == :PARTICIPANT,
++         true <- assignment.principal_id ==
++           Ash.Changeset.get_attribute(changeset, :operator_participant_id),
+          %{profile_module: module_name} <- assignment.role_definition,
+          {:ok, module} <- RoleProfile.fetch(module_name) do
+       not module.allows_concurrent_assignments?()
