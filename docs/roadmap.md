@@ -240,8 +240,11 @@ header cites the enforcing code and the gap leaves the README table.
    history row in `after_transaction`, so a failure left state with no
    history. *Closed:* the row is written in `after_action`, inside the state
    change's transaction.
-6. **marketing_core: verify delivery evidence.** `Attribution.eligible?/3`
-   trusts the caller's `delivery_status: :confirmed`.
+6. **marketing_core: verify delivery evidence.** *Closed as a host contract
+   that is already enforced:* `Attribution.eligible?/3` is pure and trusts
+   `delivery_status: :confirmed`, and its only host, `BizKit.MarketingBridge`,
+   binds that to a host-verified receipt (id, digest, fields) and refuses a
+   forged one. The model now cites the bridge.
 7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
    bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
    (below).
