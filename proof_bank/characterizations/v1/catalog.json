@@ -749,7 +749,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/keel/lib/keel/invariants.ex": "cd525419de5a4f47d8a17975b1d3abe28f88e6ce",
+        "apps/keel/lib/keel/invariants.ex": "34a2989c87ccf67284d39df0097d1c1dd6f43480",
         "apps/keel/lib/keel/decision.ex": "5064abc54b309a7b84faed531a9a330f32c96a73",
         "apps/keel/test/conformance_test.exs": "2de5b753d5fc09fcb9bf855bb008e96ec3a2186b"
       }
@@ -1083,6 +1083,17 @@
       "registered": [],
       "refreshed_paths": [
         "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "e43337353bd8adbb015881740135e1e30dda43c4",
+      "date": "2026-11-07",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/keel/lib/keel/invariants.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

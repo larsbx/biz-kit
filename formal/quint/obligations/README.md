@@ -36,7 +36,6 @@ These are open defects or host duties, not proofs; `docs/roadmap.md`
 | eatsbot_core | `UpdateHistory` writes the history row in `after_transaction`; a crash leaves state without history, so replay diverges. The code behaves like the control |
 | biz_kit_cluster | No fencing token: after a partition heals, the losing instance exits asynchronously and an effect in that window is not fenced |
 | spruce_goose | `AuthorityRuntime.ensure_local_execution_allowed/0` returns `:ok` when the marker file is missing (fails open) |
-| keel | `Keel.Org.can?/4` applies the interval filter but never checks `Keel.Invariants.valid?/1` (cycles, well-formed intervals) |
 | biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2` |
 | eatsbot | The retirement cutover fence is not implemented; the legacy writer starts unconditionally |
 | marketing_core | "Authenticated delivery" is the caller's `delivery_status: :confirmed`; `Attribution.eligible?/3` does not verify evidence |
