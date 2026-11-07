@@ -44,7 +44,10 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
 
       if @outcome == :commit do
         assert {:ok, :committed} = holder_result
-        assert {:error, {:invalid, _}} = contender_result
+
+        assert {:error, {:invalid, "the driver is unavailable for this assignment"}} =
+                 contender_result
+
         assert_state(first, :ACTIVE, 1)
         assert_state(second, :PLANNED, 0)
         assert audits(first) == 1
@@ -77,7 +80,10 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
         assert audits(ctx.b) == 1
       else
         assert {:error, :forced_rollback} = holder_result
-        assert {:error, {:invalid, _}} = contender_result
+
+        assert {:error, {:invalid, "the driver is unavailable for this assignment"}} =
+                 contender_result
+
         assert_state(ctx.a, :ACTIVE, 1)
         assert_state(ctx.b, :PLANNED, 0)
         assert audits(ctx.a) == 1
@@ -247,32 +253,14 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
     end
   end
 
-  test "two bound concurrent trips commit without waiting for each other", ctx do
+  test "same-tenant concurrent trips wait at the audit append, then both commit", ctx do
     role = courier_role(ctx.org, ctx.driver)
     assert {:ok, first} = plan(ctx.org, ctx.driver, ctx.a, role)
     assert {:ok, second} = plan(ctx.org, ctx.driver, ctx.b, role)
-    holder = held(ctx, first, "activate", 0, self())
-    assert_receive {:holding_exclusive, _}, 5_000
-
-    try do
-      assert {:ok, _} =
-               Task.await(
-                 session(fn -> Board.transition(ctx.actor, second.id, "activate", 0) end),
-                 5_000
-               )
-
-      assert_state(second, :ACTIVE, 1)
-      assert audits(second) == 1
-    after
-      send(holder.pid, :commit)
-    end
-
-    assert {:ok, :committed} = Task.await(holder, 10_000)
-    assert_state(first, :ACTIVE, 1)
-    assert audits(first) == 1
+    assert_shared_audit_serializes(ctx, first, second)
   end
 
-  test "different global Users can activate exclusive trips without waiting", ctx do
+  test "same-tenant exclusive trips for different Users wait only at the audit append", ctx do
     %{user: user, participant: driver} = Fixtures.person(ctx.org.id, ctx.org)
     Fixtures.assignment(ctx.org.id, ctx.org, driver, "DRIVER")
     second = Fixtures.assignment_record(ctx.org.id, ctx.org, driver)
@@ -281,16 +269,27 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
       ConcurrentSessions.cleanup(ctx.org, [ctx.dispatcher_user, ctx.driver_user, user])
     end)
 
+    refute second.operator_user_id == ctx.a.operator_user_id
+    assert_shared_audit_serializes(ctx, ctx.a, second)
+  end
+
+  test "cross-tenant exclusive trips for different Users commit independently", ctx do
+    other = Fixtures.carrier()
+    %{user: user, participant: driver} = Fixtures.person(other.id, other)
+    Fixtures.assignment(other.id, other, driver, "DRIVER")
+    actor = Fixtures.actor(other.id, other, driver, "DISPATCHER")
+    second = Fixtures.assignment_record(other.id, other, driver)
+    on_exit(fn -> ConcurrentSessions.cleanup(other, [user]) end)
+
+    refute second.operator_user_id == ctx.a.operator_user_id
     holder = held(ctx, ctx.a, "activate", 0, self())
-    assert_receive {:holding_exclusive, _}, 5_000
 
     try do
-      assert {:ok, _} =
-               Task.await(
-                 session(fn -> Board.transition(ctx.actor, second.id, "activate", 0) end),
-                 5_000
-               )
+      assert_receive {:holding_exclusive, _}, 5_000
+      contender = session(fn -> Board.transition(actor, second.id, "activate", 0) end)
+      assert {:ok, _} = Task.await(contender, 5_000)
 
+      assert_state(ctx.a, :PLANNED, 0)
       assert_state(second, :ACTIVE, 1)
       assert audits(second) == 1
     after
@@ -298,6 +297,8 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
     end
 
     assert {:ok, :committed} = Task.await(holder, 10_000)
+    assert_state(ctx.a, :ACTIVE, 1)
+    assert audits(ctx.a) == 1
   end
 
   test "reenrolment of one User does not release an old active assignment", ctx do
@@ -327,27 +328,38 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
   end
 
   test "an exclusive contender waits until both concurrent releases commit", ctx do
-    role = courier_role(ctx.org, ctx.driver)
-    assert {:ok, first} = plan(ctx.org, ctx.driver, ctx.a, role)
-    assert {:ok, second} = plan(ctx.org, ctx.driver, ctx.b, role)
+    other = Fixtures.carrier()
+    %{participant: other_driver} = Fixtures.person(other.id, other, user: ctx.driver_user)
+    other_actor = Fixtures.actor(other.id, other, other_driver, "DISPATCHER")
+    other_base = Fixtures.assignment_record(other.id, other, other_driver)
+
+    on_exit(:cleanup, fn ->
+      ConcurrentSessions.cleanup(other, [])
+      ConcurrentSessions.cleanup(ctx.org, [ctx.dispatcher_user, ctx.driver_user])
+    end)
+
+    # Separate audit chains let both releases reach their barriers independently.
+    first = trip_with_mode(ctx.org, ctx.driver, ctx.a, :concurrent)
+    second = trip_with_mode(other, other_driver, other_base, :concurrent)
+    assert first.operator_user_id == second.operator_user_id
     assert {:ok, _} = Board.transition(ctx.actor, first.id, "activate", 0)
-    assert {:ok, _} = Board.transition(ctx.actor, second.id, "activate", 0)
+    assert {:ok, _} = Board.transition(other_actor, second.id, "activate", 0)
     holder_a = held(ctx, first, "cancel", 1, self())
     assert_receive {:holding_exclusive, pid_a}, 5_000
-    holder_b = held(ctx, second, "complete", 1, self())
-    assert_receive {:holding_exclusive, pid_b}, 5_000
+    holder_b = held(%{actor: other_actor}, second, "complete", 1, self())
     parent = self()
 
-    contender =
-      session(fn ->
-        send(parent, {:exclusive_contender, backend()})
-        Board.transition(ctx.actor, ctx.a.id, "activate", 0)
-      end)
-
-    assert_receive {:exclusive_contender, contender_pid}, 5_000
-
     try do
-      blocker = await_blocker(contender_pid, [pid_a, pid_b])
+      assert_receive {:holding_exclusive, pid_b}, 5_000
+
+      contender =
+        session(fn ->
+          send(parent, {:exclusive_contender, backend()})
+          Board.transition(ctx.actor, ctx.a.id, "activate", 0)
+        end)
+
+      assert_receive {:exclusive_contender, contender_pid}, 5_000
+      blocker = await_blocker(contender_pid, [pid_a, pid_b], "transactionid")
 
       {released, remaining, remaining_pid} =
         if blocker == pid_a,
@@ -356,7 +368,7 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
 
       send(released.pid, :commit)
       assert {:ok, :committed} = Task.await(released, 10_000)
-      assert await_blocker(contender_pid, [remaining_pid]) == remaining_pid
+      assert await_blocker(contender_pid, [remaining_pid], "transactionid") == remaining_pid
       assert_state(ctx.a, :PLANNED, 0)
       assert audits(ctx.a) == 0
       send(remaining.pid, :commit)
@@ -485,18 +497,66 @@ defmodule Dispatch.Operations.BoardDriverExclusivityTest do
     |> Ash.create(authorize?: false, tenant: org.id)
   end
 
-  defp await_blocker(contender_pid, expected, attempts \\ 100)
+  defp assert_shared_audit_serializes(ctx, first, second) do
+    holder = held(ctx, first, "activate", 0, self())
+    parent = self()
 
-  defp await_blocker(_contender_pid, _expected, 0),
-    do: flunk("contender did not wait on the expected transaction")
+    contender =
+      try do
+        assert_receive {:holding_exclusive, holder_pid}, 5_000
 
-  defp await_blocker(contender_pid, expected, attempts) do
-    %{rows: [[blockers]]} = Repo.query!("SELECT pg_blocking_pids($1)", [contender_pid])
+        contender =
+          session(fn ->
+            send(parent, {:audit_contender, backend()})
+            Board.transition(ctx.actor, second.id, "activate", 0)
+          end)
 
-    case Enum.find(expected, &(&1 in blockers)) do
+        assert_receive {:audit_contender, contender_pid}, 5_000
+        assert await_blocker(contender_pid, [holder_pid], "advisory") == holder_pid
+        assert_state(second, :PLANNED, 0)
+        assert audits(second) == 0
+        contender
+      after
+        send(holder.pid, :commit)
+      end
+
+    assert {:ok, :committed} = Task.await(holder, 10_000)
+    assert {:ok, _} = Task.await(contender, 10_000)
+    assert_state(first, :ACTIVE, 1)
+    assert_state(second, :ACTIVE, 1)
+    assert audits(first) == 1
+    assert audits(second) == 1
+
+    assert %{rows: [[true]]} =
+             Repo.query!(
+               """
+               SELECT following.previous_event_hash = preceding.event_hash
+               FROM audit_events preceding JOIN audit_events following USING (tenant_id)
+               WHERE tenant_id = $1 AND preceding.subject_id = $2 AND following.subject_id = $3
+               """,
+               Enum.map([first.tenant_id, first.id, second.id], &Ecto.UUID.dump!/1)
+             )
+  end
+
+  defp await_blocker(contender_pid, expected, wait_event, attempts \\ 100)
+
+  defp await_blocker(_contender_pid, _expected, wait_event, 0),
+    do: flunk("contender did not wait on the expected #{wait_event} lock")
+
+  defp await_blocker(contender_pid, expected, wait_event, attempts) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT pg_blocking_pids(pid) FROM pg_stat_activity
+        WHERE pid = $1 AND wait_event_type = 'Lock' AND wait_event = $2
+        """,
+        [contender_pid, wait_event]
+      )
+
+    case Enum.find(expected, fn pid -> Enum.any?(rows, fn [blockers] -> pid in blockers end) end) do
       nil ->
         Process.sleep(25)
-        await_blocker(contender_pid, expected, attempts - 1)
+        await_blocker(contender_pid, expected, wait_event, attempts - 1)
 
       pid ->
         pid

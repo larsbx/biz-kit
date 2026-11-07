@@ -35,6 +35,7 @@ defmodule Dispatch.Operations.Board do
     complete: "assignment.completed",
     cancel: "assignment.cancelled"
   }
+  @driver_unavailable "the driver is unavailable for this assignment"
 
   @doc "The organization's loads, newest first, each with its stops and trips."
   @spec loads(Actor.t()) :: {:ok, [Load.t()]} | {:error, :forbidden}
@@ -485,30 +486,41 @@ defmodule Dispatch.Operations.Board do
   defp reloaded({:ok, %Load{id: id}}, actor), do: load(actor, id)
   defp reloaded(error, _actor), do: error
 
-  # The database and Ash speak in exceptions; the board answers in refusals.
-  defp refusal(reason) when reason in [:forbidden, :not_found, :stale], do: reason
-  defp refusal({:invalid, _message} = invalid), do: invalid
+  @doc false
+  @spec refusal(term()) :: refusal()
+  def refusal(reason) when reason in [:forbidden, :not_found, :stale], do: reason
+  def refusal({:invalid, _message} = invalid), do: invalid
 
-  defp refusal(%Ash.Error.Invalid{} = error) do
-    message = Exception.message(error)
-
-    cond do
-      message =~ "STALE_VERSION" ->
-        :stale
-
-      message =~ "one_active" or message =~ "unique" or
-          message =~ "the driver is unavailable for this assignment" ->
-        {:invalid, conflict(message)}
-
-      true ->
-        {:invalid, first_line(message)}
+  # Ash can roll back our outer Repo transaction with the raw changeset.
+  # Both shapes carry the same constraint error, including private DB detail.
+  def refusal(%Ash.Changeset{resource: Assignment} = changeset) do
+    case Ash.Error.to_error_class(changeset) do
+      %Ash.Error.Invalid{} = error -> refusal(error)
+      _ -> {:invalid, "the assignment change was refused"}
     end
   end
 
-  defp refusal(other), do: {:invalid, first_line(inspect(other))}
+  def refusal(%Ash.Error.Invalid{errors: errors} = error) do
+    if Enum.any?(errors, &occupancy_conflict?/1) do
+      {:invalid, @driver_unavailable}
+    else
+      message = Exception.message(error)
+      if message =~ "STALE_VERSION", do: :stale, else: {:invalid, first_line(message)}
+    end
+  end
 
-  defp conflict(_message),
-    do: "the driver is unavailable for this assignment"
+  def refusal(other), do: {:invalid, first_line(inspect(other))}
+
+  defp occupancy_conflict?(%Ash.Error.Changes.InvalidAttribute{private_vars: vars}) do
+    case {vars[:constraint_type], vars[:constraint]} do
+      {:unique, "assignments_one_active_per_operator_index"} -> true
+      {:unique, "assignments_active_exclusive_user_uniq"} -> true
+      {:exclusion, "assignments_active_mixed_user_modes_excl"} -> true
+      _ -> false
+    end
+  end
+
+  defp occupancy_conflict?(_error), do: false
 
   defp first_line(message) do
     message

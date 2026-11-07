@@ -6,6 +6,8 @@ defmodule DispatchWeb.OperationsControllerTest do
   import Plug.Conn
   import Plug.Test
 
+  alias Dispatch.Fleet.Assignment
+  alias Dispatch.Operations.Board
   alias Dispatch.Support.{Fixtures, PortalIdentity}
   alias Dispatch.Support.Tokens.StaticVerifier
 
@@ -29,6 +31,7 @@ defmodule DispatchWeb.OperationsControllerTest do
       org: org,
       desk: desk,
       driver: driver,
+      driver_user: field,
       token: StaticVerifier.token_for(desk.oidc_subject),
       driver_token: StaticVerifier.token_for(field.oidc_subject)
     }
@@ -105,7 +108,7 @@ defmodule DispatchWeb.OperationsControllerTest do
     refused = call(:post, path, expired, params)
     assert {refused.status, decoded(refused)["code"]} == {401, "UNAUTHENTICATED"}
 
-    unchanged = Ash.get!(Dispatch.Fleet.Assignment, trip.id, authorize?: false, tenant: ctx.org.id)
+    unchanged = Ash.get!(Assignment, trip.id, authorize?: false, tenant: ctx.org.id)
     assert {unchanged.status, unchanged.version} == {:PLANNED, trip.version}
 
     assert %{rows: []} =
@@ -209,5 +212,39 @@ defmodule DispatchWeb.OperationsControllerTest do
 
     conn = call(:get, "/v1/operations/loads", ctx.driver_token)
     assert {conn.status, decoded(conn)["code"]} == {403, "FORBIDDEN"}
+  end
+
+  test "cross-tenant E3 conflict is generic and a refused idempotent request can retry", ctx do
+    other = Fixtures.carrier()
+    %{participant: other_driver} = Fixtures.person(other.id, other, user: ctx.driver_user)
+    Fixtures.assignment(other.id, other, other_driver, "DRIVER")
+    other_actor = Fixtures.actor(other.id, other, other_driver, "DISPATCHER")
+    holder = Fixtures.assignment_record(other.id, other, other_driver)
+    contender = Fixtures.assignment_record(ctx.org.id, ctx.org, ctx.driver)
+    assert {:ok, _} = Board.transition(other_actor, holder.id, "activate", 0)
+
+    path = "/v1/operations/trips/#{contender.id}/transitions"
+    params = %{"action" => "activate", "expected_version" => 0}
+    key = [{"idempotency-key", "cross-tenant-activation"}]
+
+    for headers <- [[], key] do
+      refused = call(:post, path, ctx.token, params, headers)
+      assert refused.status == 422
+
+      assert %{"code" => "INVALID", "detail" => "the driver is unavailable for this assignment"} =
+               decoded(refused)
+
+      for private <- [ctx.driver_user.id, other.id, holder.id, holder.load_id, other_driver.id] do
+        refute refused.resp_body =~ private
+      end
+
+      unchanged = Ash.get!(Assignment, contender.id, authorize?: false, tenant: ctx.org.id)
+      assert {unchanged.status, unchanged.version} == {:PLANNED, 0}
+    end
+
+    assert {:ok, _} = Board.transition(other_actor, holder.id, "complete", 1)
+    retried = call(:post, path, ctx.token, params, key)
+    assert retried.status == 200
+    assert %{"trips" => [%{"status" => "ACTIVE", "version" => 1}]} = decoded(retried)
   end
 end

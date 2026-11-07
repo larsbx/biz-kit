@@ -163,17 +163,22 @@ without locking it. Clock time is taken after source locks. Direct Ash lifecycle
 actions additionally lock/re-read the assignment and enforce source-state and
 version guards before activation/completion/cancellation.
 
-Compatible share locks do **not** serialize two different assignments. The
-PostgreSQL unique and exclusion constraints arbitrate occupancy on distinct
-rows, including cross-tenant writers. No application `count` query, distributed
+Compatible share locks allow independent assignment updates to reach the
+occupancy checks. The PostgreSQL unique and exclusion constraints arbitrate
+occupancy on distinct rows, including cross-tenant writers. Compatible Board
+writes in the same tenant can still wait at the transaction-scoped audit-chain
+advisory lock before they commit. Writes in different tenants have separate
+audit chains. No application `count` query, distributed
 mutex, or global User `FOR UPDATE` lock is used for E3. Read Committed is the
 acceptance baseline. Arbitrary multi-row batch transactions can still deadlock
 or fail under contention; callers must handle database aborts. No general
 liveness, fairness, deadlock-freedom or automatic retry theorem is claimed.
 
-The named uniqueness and exclusion constraints are mapped through the pinned
-AshPostgres API to the same generic Board conflict. Direct SQL receives its
-normal SQLSTATE (`23505` or `23P01`); privileged diagnostics are not a public API.
+The named uniqueness and exclusion constraints are mapped from structured
+AshPostgres errors to the same generic Board conflict. The handler translates
+the error after rollback, including when the HTTP idempotency ledger owns the
+outer transaction. Direct SQL receives its normal SQLSTATE (`23505` or
+`23P01`); privileged diagnostics are not a public API.
 
 Direct Ash actions have resource-level identity/policy/lifecycle validation, and
 raw SQL encounters database occupancy and immutability checks. Neither is an
@@ -202,8 +207,11 @@ two limitations at their pinned commits.
 
 The PostgreSQL gates use independently checked-out, committed connections, not
 several tasks sharing one sandbox transaction. Interleaving tests observe actual
-blocking with `pg_blocking_pids` before releasing a held transaction. Required
-cases include mixed modes in both orders, shared Users across tenants and
+blocking with `pg_blocking_pids` before releasing a held transaction. The
+same-tenant compatibility tests distinguish an advisory audit wait from an
+occupancy conflict. Cross-tenant controls exercise independent commits and
+observe the exclusive contender waiting for each of two uncommitted releases.
+Required cases include mixed modes in both orders, shared Users across tenants and
 re-enrolment, valid concurrent coexistence, distinct Users, a third exclusive
 assignment after two concurrent ones, committed and rolled-back terminal
 release, identity/mode mutation rejection, source-role/definition revalidation,
@@ -230,6 +238,8 @@ startup alone is not counted as verification.
 The models' `audits` counter counts lifecycle transitions, excluding Board's
 separate `assignment.planned` event. The audit/version invariant therefore is
 not an equality between version and all persisted assignment audit rows.
+The tenant audit-chain lock, database wait order, and HTTP error disclosure are
+outside the state-transition models. Runtime tests cover those boundaries.
 Deliberately broken model controls must produce an invariant violation, not a
 parse error or an execution failure. The five controls remove mixed-mode
 protection, global identity scope, commit-time conflict rechecking, snapshot
