@@ -4,8 +4,12 @@
 // Rule in code: MarketingCore.Attribution.eligible?/3 is true only for evidence
 // with delivery_status :confirmed and a delivered_at, a check-in within
 // [0, window] after delivery, and any prior attribution strictly earlier.
-// FINDING: "authenticated" is the caller's :confirmed flag. The module does not
-// verify the evidence itself; its moduledoc leaves that to the host.
+// "Authenticated" is established by the host, as the moduledoc requires:
+// BizKit.MarketingBridge.preview/5 (verified_receipt/2) admits a receipt only
+// if it equals a host-verified delivery proof (id, digest and every field)
+// with status :confirmed, before calling eligible?/3. Tested by
+// MarketingBridgeTest "different merchant, party, campaign and digest fail
+// closed". A host that skips the bridge gets no authentication from the core.
 // Abstracted: times are 0..3, window = 1; one subscriber, one merchant.
 module marketing_core_spec {
   const GUARDED: bool

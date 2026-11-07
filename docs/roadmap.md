@@ -210,6 +210,53 @@ module tests successfully; it did not run local Elixir/PostgreSQL reproductions
 of the findings. CI success is evidence for the checks actually run, not for
 absence of these races.
 
+## Next: enforcement gaps (formal coverage findings, 2026-11-06)
+
+Writing a model for every app's obligation
+([formal coverage](../formal/quint/obligations/README.md)) showed where the
+code is weaker than the obligation it should enforce. The gaps are closed one
+at a time in this order: authority and data integrity first, by app priority
+and blast radius. Each fix is test-first in code; when it lands, its model's
+header cites the enforcing code and the gap leaves the README table.
+
+1. **dispatch: vehicle and trailer exclusivity.** Two ACTIVE trips could share
+   a vehicle or trailer. *Closed:* partial unique indexes
+   `one_active_per_vehicle` / `one_active_per_trailer`, with a
+   concurrent-sessions test.
+2. **keel: `Org.can?/4` on an invalid graph.** Permissions were derived
+   without checking validity, so a delegation cycle could launder authority.
+   *Closed:* `can?/4` requires `Invariants.valid_at?/2` (SPEC §4, amendment
+   A6), fail-closed per instant.
+3. **biz_kit_cluster: fencing after a partition.** *Closed as a modelling
+   error:* ledger appends are fenced by the event store's expected-version
+   check (a stale appender is refused); the model now says so. Other
+   singletons' in-memory state still diverges during a partition, as the
+   cluster ADR accepts.
+4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
+   allows execution when the marker file is missing. The app is due for
+   decommission ([checklist](architecture/2026-11-06-sprucegoose-decommission.md)),
+   so fixing it needs an owner decision.
+5. **eatsbot_core: history atomic with state.** `UpdateHistory` wrote the
+   history row in `after_transaction`, so a failure left state with no
+   history. *Closed:* the row is written in `after_action`, inside the state
+   change's transaction.
+6. **marketing_core: verify delivery evidence.** *Closed as a host contract
+   that is already enforced:* `Attribution.eligible?/3` is pure and trusts
+   `delivery_status: :confirmed`, and its only host, `BizKit.MarketingBridge`,
+   binds that to a host-verified receipt (id, digest, fields) and refuses a
+   forged one. The model now cites the bridge.
+7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
+   bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
+   (below).
+8. **eatsbot: retirement cutover fence.** Not implemented; it belongs to the
+   eatsbot retirement.
+9. **barter_core, federation_core: host contracts.** *Closed by host
+   review:* nothing in the repo transfers barter assets (preview only, no
+   host); `FederationService` is read-only and turns a subscription into
+   authority only through a signed local grant
+   (`CoopSubstrate.FederationAuthority`). Residual: the pilot
+   `approval_verifier` path has no atomic revocation fence.
+
 ## Next
 
 1. **Close the security and validation gate above.** Land focused corrections
