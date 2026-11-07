@@ -250,9 +250,12 @@ header cites the enforcing code and the gap leaves the README table.
    (below).
 8. **eatsbot: retirement cutover fence.** Not implemented; it belongs to the
    eatsbot retirement.
-9. **barter_core, federation_core: host contracts.** The cores leave signed
-   admission and authority inference to the host; state the host contract and
-   test it at each host.
+9. **barter_core, federation_core: host contracts.** *Closed by host
+   review:* nothing in the repo transfers barter assets (preview only, no
+   host); `FederationService` is read-only and turns a subscription into
+   authority only through a signed local grant
+   (`CoopSubstrate.FederationAuthority`). Residual: the pilot
+   `approval_verifier` path has no atomic revocation fence.
 
 ## Next
 

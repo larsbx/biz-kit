@@ -36,14 +36,16 @@ These are open defects or host duties, not proofs; `docs/roadmap.md`
 | spruce_goose | `AuthorityRuntime.ensure_local_execution_allowed/0` returns `:ok` when the marker file is missing (fails open) |
 | biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2` |
 | eatsbot | The retirement cutover fence is not implemented; the legacy writer starts unconditionally |
-| barter_core | Previews leave ownership unchanged; the signed admission that would transfer assets is a host duty, not in the core |
-| federation_core | The core never attributes remote input to a local seller; not inferring authority from candidates is a host duty |
 
 Enforced at the host, not in the core: marketing_core (the core trusts
 `delivery_status: :confirmed`; `BizKit.MarketingBridge` binds it to a
-host-verified receipt by id, digest and fields).
+host-verified receipt by id, digest and fields); federation_core
+(`FederationService` is read-only; subscriptions become authority only via a
+signed local grant through `CoopSubstrate.FederationAuthority`, except the
+pilot `approval_verifier` path, which has no atomic revocation fence).
 
-Holds by construction or scope, not by a check: biz_kit_extension (no grant,
+Holds by construction or scope, not by a check: barter_core (no code
+transfers barter assets; the cores only preview and have no host), biz_kit_extension (no grant,
 invoke or write path exists), restaurant_host (the governance seed is never
 sent; only "signs only what was shown" is guarded), hawala_capability
 (test-only adapter), school_ops (free-text titles are unchecked and
