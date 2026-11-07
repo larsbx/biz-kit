@@ -33,7 +33,6 @@ These are open defects or host duties, not proofs; `docs/roadmap.md`
 
 | App | Gap |
 | --- | --- |
-| eatsbot_core | `UpdateHistory` writes the history row in `after_transaction`; a crash leaves state without history, so replay diverges. The code behaves like the control |
 | spruce_goose | `AuthorityRuntime.ensure_local_execution_allowed/0` returns `:ok` when the marker file is missing (fails open) |
 | biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2` |
 | eatsbot | The retirement cutover fence is not implemented; the legacy writer starts unconditionally |

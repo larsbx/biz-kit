@@ -236,9 +236,10 @@ header cites the enforcing code and the gap leaves the README table.
    allows execution when the marker file is missing. The app is due for
    decommission ([checklist](architecture/2026-11-06-sprucegoose-decommission.md)),
    so fixing it needs an owner decision.
-5. **eatsbot_core: history atomic with state.** `UpdateHistory` writes the
-   history row in `after_transaction`; a crash leaves state with no history,
-   so replay diverges. The app is retiring, so this matters for its migration.
+5. **eatsbot_core: history atomic with state.** `UpdateHistory` wrote the
+   history row in `after_transaction`, so a failure left state with no
+   history. *Closed:* the row is written in `after_action`, inside the state
+   change's transaction.
 6. **marketing_core: verify delivery evidence.** `Attribution.eligible?/3`
    trusts the caller's `delivery_status: :confirmed`.
 7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
