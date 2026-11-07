@@ -223,11 +223,15 @@ header cites the enforcing code and the gap leaves the README table.
    a vehicle or trailer. *Closed:* partial unique indexes
    `one_active_per_vehicle` / `one_active_per_trailer`, with a
    concurrent-sessions test.
-2. **keel: `Org.can?/4` on an invalid graph.** Permissions are derived without
-   checking `Invariants.valid?/1`, so a cyclic or ill-formed ownership graph
-   can grant authority.
-3. **biz_kit_cluster: fencing after a partition.** There is no fencing token;
-   the losing singleton can still act between the heal and its exit.
+2. **keel: `Org.can?/4` on an invalid graph.** Permissions were derived
+   without checking validity, so a delegation cycle could launder authority.
+   *Closed:* `can?/4` requires `Invariants.valid_at?/2` (SPEC §4, amendment
+   A6), fail-closed per instant.
+3. **biz_kit_cluster: fencing after a partition.** *Closed as a modelling
+   error:* ledger appends are fenced by the event store's expected-version
+   check (a stale appender is refused); the model now says so. Other
+   singletons' in-memory state still diverges during a partition, as the
+   cluster ADR accepts.
 4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
    allows execution when the marker file is missing. The app is due for
    decommission ([checklist](architecture/2026-11-06-sprucegoose-decommission.md)),
