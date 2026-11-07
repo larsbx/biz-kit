@@ -36,6 +36,7 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+        id: checkout
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -43,6 +44,7 @@ jobs:
       - name: Install locked dependencies
         run: mix deps.get --check-locked
       - name: Compile the umbrella
+        id: umbrella
         run: mix compile --warnings-as-errors
       - name: Verify changed Elixir formatting
         run: >-
@@ -392,6 +394,7 @@ jobs:
         working-directory: apps/biz_kit_identity
         run: mix test
       - name: Create and migrate orchestration database
+        id: orchestration_db
         working-directory: apps/spruce_goose
         run: mix ecto.create && mix ecto.migrate
       # SpruceGoose starts the ledger too (it serves the change feed), against
@@ -399,35 +402,59 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
+      # Keep real failures on this check. Later suites require only their own
+      # setup steps, so a failed suite does not suppress independent evidence.
       - name: Prepare eatsbot's locale data and database
+        id: eatsbot_setup
+        if: ${{ !cancelled() && steps.umbrella.outcome == 'success' }}
         working-directory: apps/eatsbot
         run: mix localize.download_locales && mix ash.setup --quiet
       - name: Test eatsbot (orders, deliveries, storefront API)
+        if: ${{ !cancelled() && steps.eatsbot_setup.outcome == 'success' }}
         working-directory: apps/eatsbot
         env:
           ADMIN_API_KEY: test
         run: mix test && mix ash.codegen --check
       - name: Verify eatsbot formatting
+        if: ${{ !cancelled() && steps.umbrella.outcome == 'success' }}
         run: >-
           for app in eatsbot eatsbot_core eatsbot_extension_kafka
           eatsbot_extension_prometheus eatsbot_extension_telegram_bot;
           do (cd apps/$app && mix format --check-formatted) || exit 1; done
       - name: Test registry revocation across separate database sessions
+        if: ${{ !cancelled() && steps.orchestration_db.outcome == 'success' }}
         working-directory: apps/spruce_goose
         run: SPRUCE_GOOSE_TEST_DOGFOOD=true mix test test/actors_separate_sessions_test.exs --include separate_sessions
       # The web view: its modules against the ledger's canonical vectors, then
       # the first workflow in Chromium (sign in, enrol the device key, accept
       # an agent's suggestion, signed in the browser).
       - uses: actions/setup-node@v4
+        id: web_node
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         with:
           node-version: 22
       - name: Test the web view's modules
+        if: ${{ !cancelled() && steps.web_node.outcome == 'success' }}
         run: node --test apps/spruce_goose/test/js/*.test.mjs
       - name: Install Playwright and Chromium
+        id: browser_setup
+        if: ${{ !cancelled() && steps.web_node.outcome == 'success' && steps.orchestration_db.outcome == 'success' }}
         run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
       - name: Test the workflow in a browser
+        if: ${{ !cancelled() && steps.browser_setup.outcome == 'success' }}
         working-directory: apps/spruce_goose
         run: mix test --only browser
+
+  workflow-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Consolidation step dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/consolidation-regression"
+          "$RUNNER_TEMP/consolidation-regression/bin/python" -m pip install PyYAML==6.0.3
+          "$RUNNER_TEMP/consolidation-regression/bin/python" scripts/tests/test_consolidation_workflow.py -v
 
   release-smoke:
     # The production orchestration release (the ledger and SpruceGoose,
