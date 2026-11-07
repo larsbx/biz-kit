@@ -10,3 +10,7 @@ erl_crash.dump
 /apps/federation_service/test/support/__pycache__/
 /tools/__pycache__/
 /tools/halaqa_federation_draft/__pycache__/
+
+# Formal toolchain outputs
+_apalache-out/
+formal/lean/.lake/
