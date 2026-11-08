@@ -56,8 +56,8 @@ theorem stale_not_admitted (a : Bool) (expected : Nat) (s t : State)
   simp [Admitted, stale]
 
 theorem acceptance_does_not_create_payment (s : State) (b : Binding) :
-    ({ s with phase := .accepted, accepted := some b,
-       version := s.version + 1 } : State).evidence = s.evidence := rfl
+    ({ s with phase := .accepted, accepted := some b, version := s.version + 1 } : State).evidence =
+      s.evidence := rfl
 
 #print axioms exact_version_increment
 #print axioms accepted_binding_immutable
