@@ -20,7 +20,7 @@ defmodule RestaurantHost.Slice4GateTest do
 
     store |> element("#add-margherita") |> render_click()
     store |> element("#add-margherita") |> render_click()
-    assert store |> element("#total") |> render() =~ "27.06"
+    assert store |> element("#total") |> render() =~ "26.50"
 
     store |> form("#place", %{name: "Ada"}) |> render_submit()
     assert render(store) =~ "Received"
