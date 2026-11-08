@@ -219,7 +219,11 @@ must not run beside the ordinary service as a second production writer.
 
 Obtain successful exact-head hosted compilation, proofs, application tests and
 packaged acceptance. Then test that artifact on the actual target host behind the
-intended HTTPS proxy, with a graphical browser and an authorized business workflow.
+intended HTTPS proxy, using the packaged Biz-kit Tauri app and an authorized
+business workflow. Set `procurementOrigin` in the desktop config and use the
+Procurement entry under Business. The dedicated webview keeps navigation on the
+configured HTTPS origin. The desktop command capability applies to the main
+window and the procurement webview has no command grant.
 Check restart/revocation, restore procedures, artifact identity, signing-key custody,
 proxy logging/rate limiting, secret rotation and compatible rollback. Cost capture
 and scorecard export remain a separate small product implementation obligation.

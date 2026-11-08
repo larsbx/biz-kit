@@ -7,13 +7,17 @@ Needs tauri-driver 2.0.4 and WebKitWebDriver on PATH. Uses disposable XDG dirs
 and a synthetic config; never touches an operator's files or credentials.
 """
 import argparse
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import signal
 import socket
+import ssl
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -35,8 +39,54 @@ def until(check, description):
     raise AssertionError(f"Timed out: {description}")
 
 
-def run(binary, session_timeout=60, service_owner_fixture=False):
-    with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp:
+@contextmanager
+def procurement_fixture(tls):
+    if tls is None:
+        yield None
+        return
+
+    unexpected = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/":
+                self.send_response(303)
+                self.send_header("Location", "/requests")
+                self.end_headers()
+                return
+            if self.path in {"/foreign", "/popup"}:
+                unexpected.append(self.path)
+            port = self.server.server_port
+            html = (
+                '<h1>Procurement HTTPS fixture</h1>'
+                '<a id="orders" href="/orders">Orders</a> '
+                f'<a id="foreign" href="https://localhost:{port}/foreign">Foreign origin</a> '
+                '<a id="popup" target="_blank" href="/popup">New window</a>'
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+
+        def log_message(self, *_):
+            pass
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(*tls)
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"https://127.0.0.1:{server.server_port}", unexpected
+        finally:
+            server.shutdown()
+            thread.join()
+
+
+def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls=None):
+    with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp, procurement_fixture(procurement_tls) as procurement:
         root = Path(tmp)
         fixture = root / "app.json"
         original = '{"token":"original-native-fixture"}'
@@ -60,11 +110,13 @@ def run(binary, session_timeout=60, service_owner_fixture=False):
             assert service_file.stat().st_uid == 0 and os.getuid() != 0, "ownership fixture needs an ordinary editing user"
         config = root / "config" / "biz-kit"
         config.mkdir(parents=True)
-        (config / "config.json").write_text(json.dumps({
+        config_path = config / "config.json"
+        config_data = {
             "hosts": [{"name": "local", "label": "Local fixture", "ssh": None}],
             "configs": [{"path": str(fixture), "label": "Native fixture"}],
             "scriptsDir": str(root / "scripts"),
-        }))
+        }
+        config_path.write_text(json.dumps(config_data))
         env = {**os.environ, "XDG_CONFIG_HOME": str(root / "config"),
                "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache")}
         port, native_port = free_port(), free_port()
@@ -251,7 +303,41 @@ def run(binary, session_timeout=60, service_owner_fixture=False):
                     assert service_file.read_text() == service_original
                     print("PASS: native service-owned group-writable config save refused without ownership/content changes")
 
-
+                if procurement:
+                    origin, unexpected = procurement
+                    launcher = '[data-panel=procurement].tile button:not(.icon-btn)'
+                    click('.entry[data-panel=procurement]')
+                    click(launcher)
+                    until(lambda: js("return document.querySelector('[data-panel=procurement].tile [role=alert]')?.textContent.includes('not configured')"), "missing procurement config")
+                    config_path.write_text(json.dumps(dict(config_data, procurementOrigin=origin)))
+                    main = request("GET", base + "/window")
+                    click(launcher)
+                    handles = until(lambda: (rows if len(rows := request("GET", base + "/window/handles")) == 2 else None), "procurement window")
+                    remote = next(handle for handle in handles if handle != main)
+                    request("POST", base + "/window", {"handle": remote})
+                    until(lambda: js("return location.pathname === '/requests' && document.querySelector('h1')?.textContent === 'Procurement HTTPS fixture'"), "trusted HTTPS page and redirect")
+                    for command, args in [
+                        ("app_info", {}),
+                        ("read_config", {"host": "local", "path": str(fixture)}),
+                        ("run_on", {"host": "local", "script": "printf unexpected"}),
+                    ]:
+                        denied = request("POST", base + "/execute/async", {
+                            "script": """
+                                const done = arguments[arguments.length - 1];
+                                const bridge = window.__TAURI_INTERNALS__;
+                                if (!bridge?.invoke) { done(true); return; }
+                                bridge.invoke(arguments[0], arguments[1]).then(() => done(false), () => done(true));
+                            """,
+                            "args": [command, args],
+                        })
+                        assert denied is True, f"procurement webview invoked {command}"
+                    click("#foreign")
+                    click("#popup")
+                    click("#orders")
+                    until(lambda: js("return location.pathname === '/orders'"), "same-origin procurement navigation")
+                    assert not unexpected, f"procurement escaped its window or origin: {unexpected}"
+                    assert set(request("GET", base + "/window/handles")) == {main, remote}
+                    print("PASS: packaged Procurement launcher, trusted HTTPS, origin and popup blocking, and desktop IPC denial")
 
             except Exception:
                 if session:
@@ -292,5 +378,7 @@ if __name__ == "__main__":
                         help="Bound the native WebDriver handshake (seconds; default: 60).")
     parser.add_argument("--service-owner-fixture", action="store_true",
                         help="Also require the Linux CI service-owned file regression (uses sudo only to create the disposable fixture).")
+    parser.add_argument("--procurement-tls", nargs=2, metavar=("CERTIFICATE", "KEY"),
+                        help="Also check the Procurement webview using a disposable HTTPS certificate trusted by this test system.")
     args = parser.parse_args()
-    run(args.binary, args.session_timeout, args.service_owner_fixture)
+    run(args.binary, args.session_timeout, args.service_owner_fixture, args.procurement_tls)

@@ -17,11 +17,12 @@ no agent on the far side, nothing listening on a port.
 | **Scripts** | discovers `*.sh` and `*.py` in the scripts directory and runs them locally with live output and a dry-run/apply split |
 | **Configs** | browse and edit matched files, review the exact diff, and save only if the opened version is still current |
 | **Dispatch** | the carrier's dispatch board over dispatch's `/v1/operations`: create loads, add stops, plan trips with a driver and equipment, and start, complete or cancel them |
+| **Procurement** | opens the private coordinator console for requests, quotes, orders and evidence |
 | **Settings** | theme (dark, light, high contrast, or match the OS) and text size; stored per machine in the webview, not in `config.json` |
 
 **Tiles:** panels sit side by side in tiles, as in the Crew Deck. Every tile header has a panel picker, split right, split down, zoom (fill the window; `Esc` restores, the other tiles keep their state) and close. Drag the gap between tiles to resize, double-click it to even it out, or focus it and use the arrow keys. A sidebar panel is added as a tile by splitting the largest one, or highlighted if it is already open; the same panel can be open twice, e.g. Services on two hosts. **Layouts** in the sidebar are presets (Overview, Operate, Everything, Dispatch desk, Single), and the one the tiles still match is marked. The layout is remembered. `Ctrl+B` (or the button above the panel list) folds the sidebar to a rail of icons so the tiles get the width; that is remembered too.
 
-**Navigation:** panels are grouped by what they act on, with a one-line hint under each and ● open / + add. `Ctrl` `1`–`5` adds or highlights a panel, `Ctrl` `,` opens Settings, and `Ctrl` `+`/`-`/`0` change or reset the text size.
+**Navigation:** panels are grouped by what they act on, with a one-line hint under each and ● open / + add. `Ctrl` `1`–`6` adds or highlights a panel, `Ctrl` `,` opens Settings, and `Ctrl` `+`/`-`/`0` change or reset the text size.
 
 Surviving tiles retain their mounted panels when split, resized, zoomed, or moved
 by closing a neighbor or inserting a sidebar panel. Duplicate panels have separate
@@ -74,6 +75,7 @@ missing file means defaults, a malformed one is reported as an error. See
 | `protectedPaths` | `[]` | case-insensitive substrings; matching config files are read-only |
 | `checks` | `[]` | `{ "label", "command" }` run on each host by Health; exit 0 is healthy and the first output line is shown |
 | `dispatch` | none | `{ "api", "auth", "provider" }`: dispatch's base URL, biz-kit's `/auth` base URL, and the sign-in provider's name |
+| `procurementOrigin` | none | HTTPS origin of the private procurement service, such as `https://procurement.example.org` |
 
 ### Dispatch sign-in
 
@@ -90,6 +92,15 @@ the call. Against the dev stack, `"provider": "dispatcher"` signs in as its
 seeded dispatcher.
 
 Upgrading from `hosts.json`: move its array under `"hosts"` in `config.json`.
+
+### Procurement
+
+Set `procurementOrigin` in the desktop config and open **Business → Procurement**.
+Use an HTTPS origin trusted by the operating system. Enter the coordinator
+credential in the console's sign-in form. The dedicated window stays on the
+configured origin and has no desktop command permissions. Use the console's
+**Sign out** to end its session. The procurement service owns the session,
+signing keys, and PostgreSQL data. See the [host runbook](../docs/architecture/2026-11-08-procurement-mvp-host.md).
 
 ## Write posture
 
@@ -186,6 +197,10 @@ editor without discarding the draft. Linux CI additionally tests a large snapsho
 and refuses a group-writable, service-owned config save if ownership cannot be
 preserved. The `--service-owner-fixture` test flag uses `sudo` only to create a
 disposable root-owned fixture; the actual app runs as the ordinary operator.
+The same job uses a disposable trusted HTTPS fixture to check Procurement window
+launch, redirects, same-origin navigation, popup blocking and desktop command
+denial. Backend lifecycle and restore are tested by the separate procurement host
+workflow. The target-host workflow still needs to be exercised through Tauri.
 
 Every successful platform job builds installable candidates. Download the
 `biz-kit-<platform>-<exact source SHA>` artifact from that Desktop workflow run.
