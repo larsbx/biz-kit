@@ -113,7 +113,11 @@ defmodule BarterCore.SourceBoundFenceTest do
              )
 
     assert {:error, :invalid_reference_state} =
-             Fence.admit(%{intents: %{}, consumed: %{}}, plan("round-1", [source("OB-1")]), checks())
+             Fence.admit(
+               %{intents: %{}, consumed: %{}},
+               plan("round-1", [source("OB-1")]),
+               checks()
+             )
   end
 
   test "all external authority checks fail closed and cannot create a reference commit" do
