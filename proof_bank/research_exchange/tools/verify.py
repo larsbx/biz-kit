@@ -26,6 +26,45 @@ from source_snapshot import canonical, verify_manifest
 from runtime_identity import file_sha, tree_identity
 
 
+REQUIRED_STAGE_IDS = (
+    "gate_unit_tests", "lean_build", "lean_axioms", "lean_export",
+    "lean_kernel_replay", "lean_independent_replay", "lean_negative_controls",
+    "reference_unit_tests", "differential_traces", "quint_model_checks",
+    "adapter_model_checks", "adapter_acceptance",
+)
+
+
+def validate_plan(plan: dict) -> list[str]:
+    """Refuse partial, reordered or non-successful top-level acceptance gates."""
+    if not isinstance(plan, dict) or plan.get("schema") != "formal-research-exchange/verification-plan/v1":
+        raise ValueError("a supported verification plan is required")
+    stages = plan.get("stages")
+    if not isinstance(stages, list) or any(not isinstance(stage, dict) for stage in stages):
+        raise ValueError("verification stages must be a list of stage objects")
+    names = [stage.get("id") for stage in stages]
+    if names != list(REQUIRED_STAGE_IDS):
+        raise ValueError("the complete ordered 12-stage verification plan is required")
+    for stage in stages:
+        command = stage.get("command")
+        patterns = stage.get("required_patterns")
+        timeout = stage.get("timeout_seconds")
+        if not isinstance(command, list) or not command or any(
+                not isinstance(part, str) or not part for part in command):
+            raise ValueError(f"nonempty command required: {stage['id']}")
+        if not isinstance(patterns, list) or not patterns or any(
+                not isinstance(pattern, str) or not pattern for pattern in patterns):
+            raise ValueError(f"positive completion evidence required: {stage['id']}")
+        if type(timeout) is not int or timeout <= 0:
+            raise ValueError(f"positive timeout required: {stage['id']}")
+        # Mutant subprocesses may return failure, but their aggregate runner must
+        # itself succeed after verifying the precise expected counterexamples.
+        codes = stage.get("expected_exit_codes", [0])
+        if (not isinstance(codes, list) or len(codes) != 1 or
+                type(codes[0]) is not int or codes[0] != 0):
+            raise ValueError(f"top-level stage must require exit code zero: {stage['id']}")
+    return names
+
+
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -107,11 +146,7 @@ def main() -> int:
     # Before starting tools or clearing generated outputs, reject unreviewed source.
     manifest = verify_manifest(root, args.expected_source_sha256)
     plan = json.loads((root / "verification.plan.json").read_text())
-    if plan.get("schema") != "formal-research-exchange/verification-plan/v1" or not plan.get("stages"):
-        raise ValueError("a nonempty supported verification plan is required")
-    names = [stage["id"] for stage in plan["stages"]]
-    if len(names) != len(set(names)):
-        raise ValueError("stage ids must be unique")
+    names = validate_plan(plan)
 
     lean_root = args.lean_root.resolve()
     quint_cli = args.quint_cli.resolve()
@@ -136,6 +171,9 @@ def main() -> int:
     env["PYTHONPATH"] = str(root)
     env["FRE_LEAN_ROOT"] = str(lean_root)
     env.pop("FRE_APPLICATION_PATH", None)
+    # The acceptance driver must not inherit an unselected application-path
+    # adapter. Expose this setting only after the explicit adapter is hash-checked.
+    env.pop("FRE_APP_PATH_SHIM", None)
     if args.app_path_shim:
         shim = args.app_path_shim.resolve()
         if not shim.is_file():
@@ -177,6 +215,11 @@ def main() -> int:
     for name, expected in runtime_lock.get("optional_file_sha256", {}).items():
         if name in identities and identities[name]["sha256"] != expected:
             raise ValueError(f"optional runtime hash mismatch: {name}")
+    if shim:
+        approved_shim = runtime_lock.get("optional_file_sha256", {}).get("application_path_adapter")
+        if not approved_shim or identities["application_path_adapter"]["sha256"] != approved_shim:
+            raise ValueError("application-path adapter is not explicitly approved by the runtime lock")
+        env["FRE_APP_PATH_SHIM"] = str(shim)
     tree_paths = {"lean": lean_root, "quint_node_modules": quint_cli.parents[4],
                   "jre": java_bin.parent.parent}
     print("Hashing the pinned tool distributions", flush=True)
@@ -191,7 +234,9 @@ def main() -> int:
         "runtime_distributions": trees,
         "python_source_policy": "fresh cache prefix; existing project bytecode ignored; cache writes disabled",
         "status": "running", "signature": None,
-        "scope": plan["scope"], "assumptions": plan["assumptions"], "stages": []
+        "scope": plan["scope"], "assumptions": plan["assumptions"],
+        "required_stage_count": len(REQUIRED_STAGE_IDS), "required_stage_ids": names,
+        "stages": []
     }
     receipt_path = output / "receipt.json"
     receipt_path.write_bytes(canonical(receipt))
@@ -219,6 +264,9 @@ def main() -> int:
     except Exception as exc:
         failed = True
         receipt["error"] = str(exc)
+    if ([stage["id"] for stage in receipt["stages"]] != names or
+            any(stage["status"] != "passed" for stage in receipt["stages"])):
+        failed = True
     receipt["status"] = "failed" if failed else "passed"
     receipt["finished_at"] = utc_now()
     receipt["stages_not_run"] = names[len(receipt["stages"]):]

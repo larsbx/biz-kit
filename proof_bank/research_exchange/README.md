@@ -1,8 +1,8 @@
-# Formal Research Exchange — verification core
+# Formal Research Exchange — verification core and local adapter pilot
 
-Proof-first implementation of the acceptance and accounting boundary for a collaborative Lean/Quint research service. The repository contains executable Lean transition functions, theorems about those functions, finite Quint models, a Python reference, and a reproducible local verification gate.
+Proof-first implementation of the acceptance and accounting boundary for a collaborative Lean/Quint research service. The package contains executable Lean transition functions, theorems about those functions, finite Quint models, a pure Python reference, a local authenticated HTTP/SQLite adapter pilot, and a reproducible verification gate.
 
-This is the coordinator's verification foundation. It does not yet expose an MCP/UTCP endpoint or accept arbitrary Internet submissions. The trusted `accept` input in the formal model is an explicit premise, not an implemented authentication or theorem-verification service.
+The pilot exercises a controlled verifier and an atomic local transaction with disposable fixture credits. It listens only on `127.0.0.1`, checks exact operator-approved proof exports, and is separate from Biz-kit's production identity, signed business history and financial authority. There is no public MCP/UTCP endpoint, arbitrary Internet artifact acceptance or physical compute meter. The pure model's positive authority inputs remain explicit premises; the pilot supplies them through a narrow implementation whose correspondence is tested separately.
 
 ## Implemented kernels
 
@@ -10,7 +10,19 @@ This is the coordinator's verification foundation. It does not yet expose an MCP
 
 **Compute reservation:** reserve an affordable cap, start execution, request cancellation, acknowledge actual stopping, then settle cost and return the unused amount. Funds remain held while execution is running or cancellation awaits acknowledgment. A settled reservation is terminal.
 
-Invalid, well-typed actions return the original state. The model uses natural numbers; global supply, multiple slots and production persistence are outside this release's scope.
+Invalid, well-typed actions return the original state. These original kernels are unchanged by the adapter layer. They use natural numbers; global supply, accounting across multiple slots and production persistence are outside their proof scope.
+
+## Local authenticated adapter
+
+The [adapter pilot](adapter_pilot/README.md) adds credential-derived worker identity, exact verifier principal/role/slot scope, current enablement and grant epochs. It stores only domain-separated token hashes. A revoke/regrant cycle invalidates an already prepared verification. Worker routes lease a slot, submit immutable bytes and read status; the separately authorized internal verifier route triggers checking of the stored candidate. No request can supply `trusted`, a verdict, an acceptance receipt, a checker profile or a payout destination.
+
+The controlled checker accepts only the exact approved export of the reviewed trivial fixture theorem `ResearchExchange.Adapter.expected_fixture` (`forall n : Nat, n + 0 = n`). It requires actual replay by the pinned Lean kernel and `lean4lean`. A separate true arithmetic theorem supplies a valid-proof/wrong-target control. This demonstrates a precise authority boundary; it is not an arbitrary Lean-source compiler, general research validator or sandbox. Independent replay here means independent checker software on the same trusted host.
+
+Verification snapshots the immutable candidate, profile/configuration, row version and credential epoch. Checking occurs outside the database transaction. Commit rechecks current authority and those identities, invokes the existing reward transition, and persists reward state, one unique settlement and the canonical request/response binding together. SQLite uses WAL, `synchronous=FULL`, foreign keys and `BEGIN IMMEDIATE`. Credits and numeric database columns have explicit signed-64-bit bounds; full digest commitments remain Nat values in JSON.
+
+The adapter acceptance suite implements 18 mandatory checks using real HTTP, concurrent processes, revoked and rotated credentials, stale versions, wrong artifacts and targets, changed-content request-ID conflicts, and actual service-process exits before/after commit. A post-commit lost response must recover the same durable receipt; a pre-commit crash must leave no payout or settlement. `tools/run_adapter_acceptance.py` refuses skipped or missing tests. These are required gates; only an exact-revision receipt establishes the observed results for a particular revision.
+
+The admitted candidate still has no rejection/reissue transition. A submitted artifact that fails checking remains frozen in `submitted`; a new lease cannot replace it. The pilot does not add compute execution, termination observation or usage metering.
 
 ## Repository map
 
@@ -22,7 +34,10 @@ Invalid, well-typed actions return the original state. The model uses natural nu
 | `formal/lean/negative/` | Deliberately invalid proof and axiom-policy controls |
 | `formal/quint/` | Finite models, scenarios and model-checking runner |
 | `reference/` | Python reference and Lean/Python trace comparison |
-| `tests/` | Adversarial state-machine and serialization tests |
+| `adapter_pilot/` | Loopback HTTP, controlled fixed-export checking, SQLite persistence and trusted fixture preparation |
+| `tests/` | Adversarial pure state-machine and serialization checks |
+| `adapter_pilot/tests/` | Real HTTP/SQLite, controlled-checker and process-crash acceptance |
+| `tools/run_adapter_acceptance.py` | Mandatory adapter test lane; skipped tests cannot pass |
 | `tools/verify.py` | Reviewed-source gate and evidence orchestration |
 | `verification.plan.json` | Required commands, evidence classes and completion criteria |
 | `toolchains.lock.json` | Exact runtime distributions and download digests |
@@ -32,20 +47,20 @@ Invalid, well-typed actions return the original state. The model uses natural nu
 
 ## Fast local checks
 
-Python 3.12 or newer is sufficient for the Python checks. No Python packages are required.
+Python 3.12 or newer is sufficient for the original pure-reference and runner checks. No Python packages are required. Run these commands from the package root:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_reference.py' -v
 python3 -m unittest discover -s tools -p 'test_*.py' -v
 ```
 
-These are tests, not the full proof verification profile.
+These are tests, not the full proof verification profile. The adapter acceptance lane also requires the pinned checkers and freshly prepared fixed-export profile; the complete profile must run it without skips.
 
 ## Reproduce the complete profile
 
 The supplied toolchain lock targets Linux x86_64. Install Python 3.12+, Node 24.22.1, npm 11.9.0, and `zstd`; a C compiler is required to build the Lean executable and only if needed the optional application-path adapter. Select npm explicitly with `npm install --global --ignore-scripts --no-audit --no-fund npm@11.9.0`, since the Node release bundles a different npm version. The download installer verifies the pinned archives and the complete installed Lean, JRE, and Quint dependency distributions. The npm lock also pins transitive dependencies. The release receipt records the Python and Node executable identities used for the actual run; these host runtimes are not distributed in the bundle.
 
-Version 0.1.1 corrects the Lean and JRE whole-directory fingerprints to the exact contents of their already pinned release archives. The original 0.1.0 fingerprints included temporary files outside those archives. Archive hashes, individual checker/library hashes, transition definitions and proofs are unchanged. The verifier continues to reject any extra installed files; the correction does not introduce an exclusion rule.
+The historical version 0.1.1 correction aligned the Lean and JRE whole-directory fingerprints with the exact contents of their already pinned release archives. The original 0.1.0 fingerprints included temporary files outside those archives. That correction changed no archive hashes, individual checker/library hashes, transition definitions or proofs. The verifier continues to reject extra installed files. The adapter addition is a new source revision and requires its own reviewed manifest and complete acceptance receipt.
 
 ```bash
 python3 tools/bootstrap.py --destination /absolute/path/to/proof-tools
@@ -83,10 +98,15 @@ The receipt separates these evidence classes:
 2. **Proof dependency replay** from the exported theorem closure, checked by the official kernel and the bundled independent `lean4lean` checker.
 3. **Finite model checks** for the explicitly bounded Quint models. Only an exhausted state space counts as a successful safety check.
 4. **Adversarial and differential tests**, including actual Lean executable outputs compared against the Python reference. These do not constitute a formal refinement proof of Python or a future database service.
+5. **Local adapter conformance**, including authenticated HTTP operations, exact approved proof replay, concurrent database operations and real process-crash/retry tests. These support only the tested local HTTP/SQLite profile and fixture-credit boundary.
 
-The local receipt is intentionally unsigned. For public operation, a controlled verifier must issue a separately authenticated, candidate-bound result. A participant cannot make itself a verifier by returning a JSON receipt or setting `trusted` in a submitted object.
+The expanded theorem registry contains **63 named properties: the original 31 kernel properties plus 32 adapter-wrapper properties**. The wrapper calls the existing `Reward.accept`; it does not replace the core. Its authenticated-identity and checked-evidence facts, as well as atomic durable publication, are premises. The expanded negative-control set requires six intended refusals: the original four controls and two adapter controls. Registry membership and control counts do not replace successful exact-revision axiom audit and dual-checker replay.
 
-Read `docs/VERIFICATION_BOUNDARY.md` before attaching this kernel to a database or public tool protocol. The most consequential remaining integration requirement is to make acceptance, ledger transfer and persistent state change one atomic transaction. The initial slot has no rejection/reissue transition, so failed admitted candidates also need an explicit future closure path.
+The original finite Quint models retain seven scenarios and four faulty-transition controls. The adapter model adds ten scenarios and nine targeted mutants. Its current finite state space has 293,584 reachable states; acceptance requires exhausting that graph with no states left queued and observing an actual named-invariant counterexample for each mutant. These bounds cover two prepared operations and limited authority/version changes, not arbitrary workers, global accounts, fairness or liveness.
+
+The local receipt is intentionally unsigned. The pilot's verifier route authenticates a configured local credential and produces its own candidate-bound result; a participant cannot become the verifier by returning a JSON receipt or setting `trusted`. Public operation still requires accepted production identity, transport and evidence-custody controls.
+
+Read `docs/VERIFICATION_BOUNDARY.md` before integrating this pilot with a host or public tool protocol. The next production gate is a first-party adapter through existing CoopSubstrate/AgentCore authorization and PostgreSQL persistence, preserving Hawala/TigerBeetle financial authority and avoiding a competing business writer. It must establish exact committed-state correspondence, admission-time revocation, concurrency and recovery under that production storage profile. The local SQLite receipt does not discharge those obligations. Failed admitted candidates also require a separately specified and proved rejection/closure path.
 
 ## Upstream references
 

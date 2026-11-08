@@ -1,4 +1,5 @@
 import ResearchExchange.Binding
 import ResearchExchange.Reward
 import ResearchExchange.Reservation
+import ResearchExchange.Adapter
 import ResearchExchange.Examples
