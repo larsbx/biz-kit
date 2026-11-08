@@ -1,0 +1,70 @@
+name: Commercial source-bound admission proof
+
+on:
+  pull_request:
+    paths:
+      - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/lakefile.toml"
+      - "formal/lean/check.sh"
+      - "formal/quint/commercial_source_fence.qnt"
+      - "formal/quint/check_commercial_source_fence.sh"
+      - "docs/architecture/2026-11-08-commercial-source-fence-proof.md"
+      - ".github/workflows/commercial-source-fence-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/lakefile.toml"
+      - "formal/lean/check.sh"
+      - "formal/quint/commercial_source_fence.qnt"
+      - "formal/quint/check_commercial_source_fence.sh"
+      - "docs/architecture/2026-11-08-commercial-source-fence-proof.md"
+      - ".github/workflows/commercial-source-fence-proof.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quint-source-fence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install version-pinned Quint
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+      - name: Verify no double discharge and refute unsafe guards
+        run: bash formal/quint/check_commercial_source_fence.sh
+
+  lean-source-fence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Restore verified compiler cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: ${{ runner.temp }}/bizkit-lean-archives
+          key: lean-archive-linux-x64-${{ hashFiles('formal/lean/install-toolchain.sh', 'formal/lean/lean-toolchain') }}
+      - name: Install checksum-pinned Lean
+        env:
+          BIZKIT_LEAN_ARCHIVE_CACHE: ${{ runner.temp }}/bizkit-lean-archives
+        run: |
+          bash formal/lean/install-toolchain.sh "$RUNNER_TEMP/bizkit-lean"
+          echo "$RUNNER_TEMP/bizkit-lean/bin" >> "$GITHUB_PATH"
+      - name: Compile universal source-level theorems
+        working-directory: formal/lean
+        run: |
+          lake env lean BizKitCommercialSetoff.lean
+          lake build BizKitCommercialSetoff
+          lake env leanchecker --fresh --verbose BizKitCommercialSetoff
+      - name: Refuse unsafe Lean admissions / unresolved axioms
+        working-directory: formal/lean
+        run: |
+          ! grep -nE '(^|[^[:alnum:]_])sorry([^[:alnum:]_]|$)' BizKitCommercialSetoff.lean

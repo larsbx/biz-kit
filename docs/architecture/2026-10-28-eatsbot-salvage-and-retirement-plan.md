@@ -1,6 +1,8 @@
 # Eatsbot salvage and verified retirement plan
 
 Date: 2026-10-28. Status: **Proposed target architecture; inventory and retirement plan, not a production shutdown**.
+
+Since 2026-11-07 the [Eatsbot decommission checklist](2026-11-07-eatsbot-decommission.md) defines when this plan is done, for the rebuilt eatsbot (`restaurant_host`) that now replaces the legacy runtime. The R0–R6 packages and refusal rules below still apply.
 Paired with [the cross-repository extension ADR](2026-10-28-cross-repository-extension-and-hawala-capability.md) (biz-kit PR #175) and the [Eatsbot retirement ADR](https://github.com/larsbx/eatsbot/blob/dev/docs/modules/decisions/pages/biz-kit-interoperability-and-source-ownership.adoc) (eatsbot PR #35).
 
 ## Decision and end state
