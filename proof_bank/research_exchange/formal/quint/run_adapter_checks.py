@@ -17,7 +17,7 @@ import time
 
 QUINT_VERSION = "0.33.1"
 APALACHE_VERSION = "0.62.4"
-SCENARIO_COUNT = 10
+SCENARIO_COUNT = 17
 CASES = (
     ("adapter_safety", "step", "safety", False),
     ("reject_unauthorized_commit", "unauthorizedStep", "authorizedEffects", True),
@@ -29,6 +29,9 @@ CASES = (
     ("reject_stale_version", "staleVersionStep", "currentVersionOnly", True),
     ("reject_split_write", "splitWriteStep", "atomicSettlement", True),
     ("reject_duplicate_payment", "duplicatePaymentStep", "singlePayout", True),
+    ("reject_timeout_refund", "timeoutRefundStep", "checkedExactEvidence", True),
+    ("reject_duplicate_refund", "duplicateRefundStep", "singleRefund", True),
+    ("reject_acceptance_after_rejection", "overwriteRejectedStep", "exclusiveClosure", True),
 )
 
 
@@ -70,8 +73,8 @@ def main() -> int:
         },
         "scope": {
             "domains": "one admitted immutable candidate, two possible worker recipients, one verifier, two prepared request slots, one prefunded credit, row versions 0..2, grant epochs 0..2",
-            "attempts": "authenticated workers, anonymous verifier claims, wrong scope, unchecked evidence, wrong profile, and each single-field candidate mismatch",
-            "failures": "process death before commit or after atomic state/ledger/receipt commit; response loss and authorized retries",
+            "attempts": "authenticated workers, anonymous verifier claims, wrong scope, unchecked evidence, definitive rejection, checker unavailability, wrong profile, and each single-field candidate mismatch",
+            "failures": "process death before commit or after atomic acceptance or refund state/ledger/receipt commit; response loss and authorized retries",
             "interference": "bounded trusted grant revocation/rotation and version-only DB interference; these are conservative environment actions, not public worker endpoints",
             "properties": "complete finite safety exploration under atomic durable commits; no liveness, fairness, cryptographic authentication, checker correctness, or SQL implementation-refinement theorem",
             "request_identity": "two fixed canonical verification requests; changed-payload request-ID aliasing is a concrete adapter-test obligation outside this model",

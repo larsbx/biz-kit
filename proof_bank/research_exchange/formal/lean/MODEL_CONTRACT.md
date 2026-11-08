@@ -58,9 +58,28 @@ It then calls `Reward.accept cfg.reward state.reward true prepared.candidate`. I
 
 `revoke(state)` disables an enabled verifier and increments its authority epoch. It does not change the reward row version or balances. Revocation of an already disabled verifier is idempotent. The local runtime additionally provides trusted offline re-enablement, advancing the epoch on every actual enablement change; bounded grant rotation is exercised in the adapter Quint model and runtime acceptance. Current-epoch equality is always required at commit.
 
-`settlementConsistent` states that either there is no settlement and zero payouts, or the settlement is the same admitted candidate in an accepted reward state with one payout. The wrapper's 32 registered obligations cover guard refusal, exact underlying reward-transition correspondence, settlement consistency, local conservation, candidate immutability, single settlement, revocation and retry/response-loss safety. Together with the unchanged original 31 properties, the registry contains 63 properties. These claims require their stated premises and exact-revision axiom audit/export replay.
+`settlementConsistent` states that either there is no settlement and zero payouts, or the settlement is the same admitted candidate in an accepted reward state with one payout. The wrapper's 32 registered obligations cover guard refusal, exact underlying reward-transition correspondence, settlement consistency, local conservation, candidate immutability, single settlement, revocation and retry/response-loss safety. The original kernels and the acceptance wrapper contribute 63 of the 75 registered properties. These claims require their stated premises and exact-revision axiom audit/export replay.
 
 The formal settlement is a candidate-valued option, not a model of every concrete SQL column, HTTP response byte or permanent request-ID map. The Python pilot's canonical request binding and concurrent database/process-crash tests are separate implementation evidence. Lean does not verify the checker binaries, Python interpreter, SQL engine, durable storage or response transport.
+
+## Terminal rejection and refund
+
+`Closure.decide` accepts a typed positive, definitive rejection or inconclusive
+verdict. Rejection requires the same authentication, checked-evidence,
+profile, candidate, version and authority-epoch guards as acceptance. It
+additionally requires a valid submitted candidate, no payout or prior effect,
+and the positive original escrow in full. It atomically sets the phase to
+`rejected`, zeroes escrow, adds it to the funder, records the candidate and
+amount in a refund effect and increments the version. Worker actions and later
+decisions preserve the rejected reward. Revocation can still change the grant.
+Inconclusive evidence leaves the slot and all credits in place.
+
+The closure proofs quantify over arbitrary finite decision and revocation
+traces. They establish candidate immutability, conservation, terminal inertia,
+one refund effect and zero payouts on every rejected suffix. The model assumes
+authoritative verdicts and atomic publication, and treats one original slot as
+one escrow. Canonical HTTP request binding and explicit new funding for any
+replacement are concrete pilot obligations.
 
 ## Controlled artifact fixture
 
@@ -70,4 +89,4 @@ Only the internal controlled-check path may construct the core's positive `trust
 
 ## Explicit scope
 
-The theorems establish safety of the named pure transition definitions under explicit premises. Production database atomicity, concurrent linearizability, network transport, worker isolation, verifier authenticity, cryptographic commitments, arbitrary proof artifact validation, liveness/fair scheduling, metering truth, multi-reservation and multi-slot conservation, and distributed recovery are not covered. The local HTTP/SQLite pilot supplies finite tests toward a concrete correspondence; it is not a formal runtime-refinement theorem or production financial authority. An invalid admitted candidate still requires a future specified rejection/closure transition; the wrapper does not reopen it.
+The theorems establish safety of the named pure transition definitions under explicit premises. Production database atomicity, concurrent linearizability, network transport, worker isolation, verifier authenticity, cryptographic commitments, arbitrary proof artifact validation, liveness/fair scheduling, metering truth, multi-reservation and multi-slot conservation, and distributed recovery are not covered. The local HTTP/SQLite pilot supplies finite tests toward a concrete correspondence; it is not a formal runtime-refinement theorem or production financial authority.
