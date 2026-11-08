@@ -48,6 +48,16 @@ defmodule BizKit.MixProject do
           ],
           include_erts: true,
           strip_beams: false
+        ],
+        procurement: [
+          applications: [
+            biz_kit_cluster: :permanent,
+            coop_substrate: :permanent,
+            procurement_host: :permanent
+          ],
+          runtime_config_path: "config/procurement_runtime.exs",
+          include_erts: true,
+          strip_beams: false
         ]
       ]
     ]

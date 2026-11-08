@@ -1,0 +1,122 @@
+name: Procurement MVP host
+on:
+  pull_request:
+    paths:
+      - 'apps/procurement_host/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/commerce_core/**'
+      - 'apps/biz_kit_cluster/**'
+      - 'apps/task_core/**'
+      - 'apps/order_core/**'
+      - 'apps/restaurant_core/**'
+      - 'apps/agent_core/**'
+      - 'apps/agent_ops_store/**'
+      - 'apps/group_buy_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'native/**'
+      - 'config/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - 'proofs/procurement_mvp/**'
+      - 'tests/procurement_mvp/**'
+      - 'scripts/test-procurement-host.sh'
+      - '.github/workflows/procurement-mvp-host.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: procurement-host-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  ledger-http-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      EVENTSTORE_HOST: localhost
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: mix local.hex --force && mix local.rebar --force
+      - name: Actual ledger, authenticated HTTP and narrow release
+        run: bash scripts/test-procurement-host.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-host-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-host
+          if-no-files-found: error
+  formal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Replay lifecycle and admission proofs/models independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/procurement-formal
+          git rev-parse HEAD | tee .artifacts/procurement-formal/revision.txt
+          curl --fail --location --retry 3 https://github.com/leanprover/lean4/releases/download/v4.19.0/lean-4.19.0-linux.tar.zst -o "$RUNNER_TEMP/lean.tar.zst"
+          tar --zstd -xf "$RUNNER_TEMP/lean.tar.zst" -C "$RUNNER_TEMP"
+          lean="$RUNNER_TEMP/lean-4.19.0-linux/bin/lean"
+          "$lean" --version | tee .artifacts/procurement-formal/lean-version.txt
+          for model in Workflow Admission; do
+            "$lean" "proofs/procurement_mvp/$model.lean" 2>&1 | tee ".artifacts/procurement-formal/$model-axioms.log"
+            if grep -q sorryAx ".artifacts/procurement-formal/$model-axioms.log"; then exit 1; fi
+          done
+          npm install --prefix "$RUNNER_TEMP/quint" --no-save @informalsystems/quint@0.33.1
+          quint="$RUNNER_TEMP/quint/node_modules/.bin/quint"
+          "$quint" --version | tee .artifacts/procurement-formal/quint-version.txt
+          for model in workflow admission; do
+            "$quint" typecheck "proofs/procurement_mvp/$model.qnt" 2>&1 | tee ".artifacts/procurement-formal/$model-typecheck.log"
+            "$quint" test "proofs/procurement_mvp/$model.qnt" --seed=20261108 2>&1 | tee ".artifacts/procurement-formal/$model-tests.log"
+            "$quint" run "proofs/procurement_mvp/$model.qnt" --invariant=invariant --max-steps=24 --max-samples=2000 --seed=20261108 2>&1 | tee ".artifacts/procurement-formal/$model-simulation.log"
+          done
+          sha256sum proofs/procurement_mvp/* > .artifacts/procurement-formal/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-formal-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-formal
+          if-no-files-found: error
+  host-acceptance:
+    if: always()
+    needs: [ledger-http-release, formal]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every scoped check; skipped is not accepted
+        env:
+          RUNTIME: ${{ needs.ledger-http-release.result }}
+          FORMAL: ${{ needs.formal.result }}
+        run: |
+          test "$RUNTIME" = success
+          test "$FORMAL" = success
+          echo "Scoped acceptance at $SOURCE_REVISION, not deployed browser/restore acceptance."
