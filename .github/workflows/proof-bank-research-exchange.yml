@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      FRE_SOURCE_SHA256: 'e4a4de94cc119ce4750150c0aa367dbc99311df0e4489910375c23801d64b72b'
+      FRE_SOURCE_SHA256: 'e46f8f6c12f790d6889085d072b58f92067004077a8b7f430abcb8433bbb0776'
     defaults:
       run:
         working-directory: proof_bank/research_exchange

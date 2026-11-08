@@ -21,7 +21,7 @@ production remote-agent identity, meter physical compute or issue service credit
 - Twelve concrete Lean examples accompany the proofs. The strict axiom gate
   permits only `propext`, `Classical.choice` and `Quot.sound`. Exported theorem
   dependencies are replayed by both Lean's kernel and `lean4lean`.
-- The Lean adapter acceptance and closure wrappers bring the total to **75 registered properties**.
+- The Lean adapter acceptance and closure wrappers bring the total to **76 registered properties**.
   It invokes the existing `Reward.accept` and models current verifier identity,
   epoch, checked profile/candidate, row version and atomic matching settlement.
   Authenticated identity, checker truth and durable atomic publication remain
