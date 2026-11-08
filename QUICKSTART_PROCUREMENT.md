@@ -68,7 +68,7 @@ bash scripts/procurement-quickstart.sh run
 `run` also builds/reuses the toolchain image, so **`run` alone is sufficient** once
 the host prerequisites are ready. Normal Docker layer caching avoids repeating
 unchanged installation steps. The image uses Elixir 1.19.0 / OTP 27.3.4, Lean 4.19.0,
-Quint 0.33.1, Rust 1.90.0, Node 22.16.0, Python 3.12 and PostgreSQL 16. Installed
+Quint 0.33.1, Rust 1.91.0, Node 22.16.0, Python 3.12 and PostgreSQL 16. Installed
 package versions, tool-download hashes and the built image ID are retained.
 Package repositories and transitive downloads are not fully digest-pinned: this
 is an inspectable execution environment, **not a claim of bit-reproducible builds**.
