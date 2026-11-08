@@ -312,12 +312,14 @@ def lifecycle(browser: Browser, token: str, checks: dict) -> tuple[str, dict]:
     page = browser.page("/requests")
     require(browser.has_secure_session(), "no Secure session cookie")
     create = Forms(page).one("/request", suffix=True)
-    request_path = create["action"].rsplit("/", 1)[0]
     invalid = dict(create["fields"])
     invalid.pop("_csrf_token", None)
     status, _, _ = browser.request(create["action"], invalid)
     require(status == 403, "missing CSRF did not produce a refusal")
     checks["csrf_denied"] = True
+    # The WebView navigated to the refusal. Reopen the rendered form before submitting.
+    create = Forms(browser.page("/requests")).one("/request", suffix=True)
+    request_path = create["action"].rsplit("/", 1)[0]
     future = time.strftime("%Y-%m-%dT%H:%M", time.gmtime(time.time() + 86_400))
     original, _, _ = browser.submit(create, {
         "buyer_business_id": "acceptance-buyer", "description": "<script>synthetic packaging</script>",
@@ -338,6 +340,7 @@ def lifecycle(browser: Browser, token: str, checks: dict) -> tuple[str, dict]:
     browser.submit(old_accept, {"expected_version": current["fields"]["expected_version"],
                    "_csrf_token": current["fields"]["_csrf_token"], "evidence_ref": "obsolete"}, expected=409)
     checks["obsolete_quote_denied"] = True
+    current = Forms(browser.page(request_path)).one("/accept", suffix=True)
     browser.submit(current, {"evidence_ref": "synthetic-buyer-acceptance"})
     page = browser.page(request_path)
     browser.submit(Forms(page).one("/fulfill", suffix=True), {"evidence_ref": "synthetic-delivery"})

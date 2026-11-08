@@ -59,24 +59,24 @@ class NativeBrowser(Browser):
         previous = self.js("""
             const [origin, path, fields, rendered] = arguments;
             const target = new URL(path, origin);
-            if (location.origin !== origin || target.origin !== origin) return null;
+            if (location.origin !== origin || target.origin !== origin) return 'unexpected origin';
             if (fields === null) {
               setTimeout(() => location.href === target.href ? location.reload() : location.assign(target), 0);
             } else if (rendered) {
               const forms = [...document.forms].filter(f => f.action === target.href);
-              if (forms.length !== 1) return null;
+              if (forms.length !== 1) return 'missing or ambiguous form';
               const form = forms[0];
               for (const [name, value] of Object.entries(fields)) {
                 const field = form.elements.namedItem(name);
-                if (!field) return null;
+                if (!field) return 'missing field ' + name;
                 if (field.type === 'hidden') {
-                  if (field.value !== value) return null;
+                  if (field.value !== value) return 'changed hidden field ' + name;
                 } else {
                   field.value = value;
-                  if (field.value !== value) return null;
+                  if (field.value !== value) return 'field rejected value: ' + name;
                 }
               }
-              if (!form.checkValidity()) return null;
+              if (!form.checkValidity()) return 'form validation failed';
               setTimeout(() => form.requestSubmit(), 0);
             } else {
               const form = document.createElement('form');
@@ -92,7 +92,7 @@ class NativeBrowser(Browser):
             }
             return performance.timeOrigin;
         """, self.url, path, fields, rendered)
-        require(previous is not None, f"cannot drive native form or page {path}")
+        require(isinstance(previous, (int, float)), f"cannot drive native form or page {path}: {previous}")
 
         method = "GET" if fields is None else "POST"
         deadline = time.monotonic() + 20
