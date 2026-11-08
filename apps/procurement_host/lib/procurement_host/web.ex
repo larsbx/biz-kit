@@ -1,7 +1,7 @@
 defmodule ProcurementHost.Router do
   use Plug.Router
   alias CoopSubstrate.Procurement
-  alias ProcurementHost.{Auth, HTML}
+  alias ProcurementHost.{Admission, Auth, HTML}
   plug :match
   plug :dispatch
 
@@ -54,7 +54,7 @@ defmodule ProcurementHost.Router do
            {version, ""} <- Integer.parse(conn.body_params["expected_version"] || ""),
            command = %{"id" => conn.body_params["command_id"], "expected_version" => version,
              "action" => action, "attrs" => attrs},
-           {:ok, _} <- Procurement.submit(context, id, command, Auth.server()) do
+           {:ok, _} <- Admission.run(fn -> Procurement.submit(context, id, command, Auth.server()) end) do
         redirect(conn, "/requests/" <> URI.encode(id, &URI.char_unreserved?/1))
       else
         _ -> page(conn, "Command not accepted",
@@ -69,7 +69,7 @@ defmodule ProcurementHost.Router do
 
   defp protected(conn, fun) do
     with {:ok, context} <- Auth.context(conn),
-         {:ok, snapshot} <- Procurement.snapshot(context, Auth.server()) do
+         {:ok, snapshot} <- Admission.run(fn -> Procurement.snapshot(context, Auth.server()) end) do
       fun.(conn, context, snapshot)
     else
       _ -> conn |> configure_session(drop: true) |> redirect("/login")
