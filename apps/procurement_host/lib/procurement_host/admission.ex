@@ -12,7 +12,7 @@ defmodule ProcurementHost.Admission do
   response is not an explicit refusal and remains the operator's retry decision.
   """
 
-  @spec run((-> term())) :: term()
+  @spec run(function()) :: term()
   def run(operation) when is_function(operation, 0), do: attempt(operation, 3)
 
   defp attempt(operation, remaining) do
