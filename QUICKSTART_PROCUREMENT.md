@@ -6,12 +6,22 @@ toolchain, runs Lean/Quint first, then runs the existing packaged application
 acceptance. The server starts for the tests and stops afterwards; it does **not**
 leave a coordinator website running.
 
-**Known upstream blocker at `7f3275ce9006d29daf5eaee1cf0a7e63bd8a574b`:**
-`apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex:369` has an
-unbound `^key_id`. PR #334's kernel/formal checks passed, but this shared compiler
-error blocked host execution. This quick start does not patch or suppress it. An
-install can succeed while a run fails; retain that failed run as failure evidence.
-After the separate source repair is incorporated, rerun from a clean new commit.
+## Execution status and revision boundary
+
+PR #334 is merged into `main` at `3eb170b70d3cc16bedfceae865e8d68cf5d2cdbd`.
+Its implementation head `76f8156612a498e70277e753dfef15235a20e59b` passed the
+[packaged host acceptance](https://github.com/larsbx/biz-kit/actions/runs/42500170637),
+including formal replay, PostgreSQL-backed execution, restart, revocation and
+backup/restore. The former shared `commercial_setoff_proof.ex` compilation error
+and isolated-test dependency gap were repaired in that dependency.
+
+The first [quick-start run](https://github.com/larsbx/biz-kit/actions/runs/42493119708)
+passed wrapper controls but failed while building its toolchain: the Hex OTP
+archive's enclosing directory was not stripped before invoking `Install`.
+The Dockerfile now strips that directory and checks the installer and OTP runtime.
+**That source correction is not a successful container/application execution receipt.**
+Use a clean mainline checkout and retain the result of the exact revision you run.
+An installation can succeed while execution fails; keep failure evidence as failure.
 
 ## 1. Install the host prerequisites
 
@@ -34,19 +44,19 @@ is itself privileged. Remote Docker contexts and ARM/emulation are refused by th
 initial runner. WSL2 requires Linux-container mode and a local Unix-socket engine;
 it has not been separately accepted.
 
-Clone and select this PR branch before merge:
+Clone main after PR #337 is merged:
 
 ```sh
-git clone --branch mvp/procurement-quickstart-2026-11-08 https://github.com/larsbx/biz-kit.git
+git clone --branch main https://github.com/larsbx/biz-kit.git
 cd biz-kit
 git rev-parse HEAD
 bash scripts/procurement-quickstart.sh doctor
 ```
 
 Use normal GitHub SSH/credential-helper authentication for a private repository.
-Never put access tokens in the clone URL, command examples or evidence. After
-merge, use `main` instead. Commit or stash source changes: the runner rejects
-tracked edits and untracked files except generated `.artifacts/` evidence.
+Never put access tokens in the clone URL, command examples or evidence.
+Commit or stash source changes: the runner rejects tracked edits and untracked
+files except generated `.artifacts/` evidence.
 
 ## 2. Install the isolated tools, then run
 
@@ -135,10 +145,10 @@ real Docker installation/execution. A final gate rejects failed or skipped jobs;
 artifacts are uploaded even after execution failures. Checks use the literal PR
 head rather than the pull-request merge ref.
 
-The workflow runs for this PR's relevant changes. After it is on the default
+The workflow runs for relevant pull-request and mainline changes. On the default
 branch, use **Actions → Procurement MVP quick start → Run workflow** for the desired
 branch. Download `procurement-quickstart-<full-sha>` and inspect the run directory
-inside it. Before merge, do not assume the manual dispatch UI exposes the new workflow.
+inside it. Always match the evidence revision to the source being evaluated.
 
 ## 5. What to do with the release
 
@@ -151,9 +161,9 @@ copy the synthetic acceptance database/credentials or bootstrap real governance
 from test fixtures. The toolchain container is not a production image.
 
 Actual-host browser acceptance, real enrollment, proxy policy, key custody, backup
-of evidence/secrets and compatible rollback remain separate launch gates. This PR
-neither merges PR #334 nor deploys anything, and it does not implement cost capture
-or scorecard export.
+of evidence/secrets and compatible rollback remain separate launch gates. Merging
+these tools is not deployment approval; cost capture and scorecard export are not
+implemented by this quick start.
 
 ## Local wrapper controls (no Docker/application execution)
 
