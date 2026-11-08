@@ -20,6 +20,9 @@ structure State where
   evidence : Bool
   deriving DecidableEq, Repr
 
+private def acceptState (s : State) (b : Binding) : State :=
+  { s with phase := .accepted, accepted := some b, version := s.version + 1 }
+
 inductive Step : State → State → Prop where
   | qualify (s : State) (h : s.phase = .requested) :
       Step s { s with phase := .qualified, version := s.version + 1 }
@@ -27,7 +30,7 @@ inductive Step : State → State → Prop where
       Step s { s with latest := some b, version := s.version + 1 }
   | accept (s : State) (b : Binding) (h : s.phase = .qualified)
       (unbound : s.accepted = none) (exactQuote : s.latest = some b) :
-      Step s { s with phase := .accepted, accepted := some b, version := s.version + 1 }
+      Step s (acceptState s b)
   | fulfill (s : State) (h : s.phase = .accepted) :
       Step s { s with phase := .fulfilled, version := s.version + 1 }
   | cancel (s : State) (h : s.phase = .requested ∨ s.phase = .qualified ∨ s.phase = .accepted) :
@@ -46,7 +49,7 @@ theorem exact_version_increment {s t : State} (h : Step s t) :
 
 theorem accepted_binding_immutable {s t : State} {b : Binding}
     (h : Step s t) (bound : s.accepted = some b) : t.accepted = some b := by
-  cases h <;> simp_all
+  cases h <;> simp_all [acceptState]
 
 theorem unauthorized_not_admitted (expected : Nat) (s t : State) :
     ¬ Admitted false expected s t := by simp [Admitted]
@@ -56,8 +59,7 @@ theorem stale_not_admitted (a : Bool) (expected : Nat) (s t : State)
   simp [Admitted, stale]
 
 theorem acceptance_does_not_create_payment (s : State) (b : Binding) :
-    ({ s with phase := .accepted, accepted := some b, version := s.version + 1 } : State).evidence =
-      s.evidence := rfl
+    (acceptState s b).evidence = s.evidence := rfl
 
 #print axioms exact_version_increment
 #print axioms accepted_binding_immutable

@@ -54,9 +54,10 @@ module workflow {
     Set(2, 3, 5).contains(s.phase) implies s.accepted > 0,
   }
   run happyPathTest = init.then(qualify).then(quote).then(accept).then(fulfill)
-    .then(assert(all { invariant, s.phase == 3, not(s.evidence) }))
-  run evidenceIsSeparateTest = init.then(qualify).then(quote).then(accept).then(recordEvidence)
-    .then(assert(all { invariant, s.phase == 2, s.evidence }))
+    .expect(all { invariant, s.phase == 3, not(s.evidence) })
+  run evidenceIsSeparateTest = init.then(qualify).then(quote).then(accept)
+    .expect(all { invariant, s.phase == 2, not(s.evidence) })
+    .then(recordEvidence).expect(all { invariant, s.phase == 2, s.evidence })
   run quoteRevisionTest = init.then(qualify).then(quote).then(quote).then(accept)
-    .then(assert(all { invariant, s.accepted == 2 }))
+    .expect(all { invariant, s.accepted == 2 })
 }

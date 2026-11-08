@@ -19,7 +19,7 @@ module admission {
     qgrant' = 0, qversion' = 0, qid' = 0,
     sessionLive' = true, before' = 0, permitted' = false,
   }
-  action queue(id: int) = all {
+  action queue(id: int): bool = all {
     not(queued),
     queued' = true, qgrant' = grant, qversion' = version, qid' = id,
     active' = active, grant' = grant, version' = version,
@@ -53,8 +53,8 @@ module admission {
     all {
       queued, queued' = false,
       version' = if (commit) version + 1 else version,
-      first' = first or (commit and qid == 0),
-      second' = second or (commit and qid == 1),
+      first' = (first or (commit and qid == 0)),
+      second' = (second or (commit and qid == 1)),
       active' = active, grant' = grant, sessionLive' = sessionLive,
       qgrant' = qgrant, qversion' = qversion, qid' = qid,
       before' = version, permitted' = allowed,
@@ -74,13 +74,13 @@ module admission {
     not(permitted) implies version == before,
   }
   run revokedQueueTest = init.then(queue(0)).then(revoke).then(process)
-    .then(assert(all { invariant, version == 0 }))
+    .expect(all { invariant, version == 0 })
   run replacedGrantTest = init.then(queue(0)).then(renew).then(process)
-    .then(assert(all { invariant, version == 0 }))
+    .expect(all { invariant, version == 0 })
   run expiredSessionTest = init.then(queue(0)).then(expire).then(process)
-    .then(assert(all { invariant, version == 0 }))
+    .expect(all { invariant, version == 0 })
   run retryTest = init.then(queue(0)).then(process).then(queue(0)).then(process)
-    .then(assert(all { invariant, version == 1 }))
+    .expect(all { invariant, version == 1 })
   run historicalReplayTest = init.then(queue(0)).then(process).then(revoke).then(expire).then(restart)
-    .then(assert(all { invariant, version == 1 }))
+    .expect(all { invariant, version == 1 })
 }
