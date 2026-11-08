@@ -2,6 +2,7 @@ defmodule ProcurementHost.Auth do
   @moduledoc "A single coordinator credential, not general identity/onboarding. Ledger grants are authoritative."
   import Plug.Conn
   alias CoopSubstrate.Procurement
+  alias ProcurementHost.Admission
   @lifetime 14_400_000
 
   def from_env! do
@@ -26,7 +27,7 @@ defmodule ProcurementHost.Auth do
     if Plug.Crypto.secure_compare(:crypto.hash(:sha256, token), config.login_digest) do
       expires = Procurement.clock_ms() + @lifetime
       context = Map.put(config, :session_expires_at_ms, expires)
-      case Procurement.snapshot(context, server()) do
+      case Admission.run(fn -> Procurement.snapshot(context, server()) end) do
         {:ok, _} ->
           Plug.CSRFProtection.delete_csrf_token()
           {:ok, conn |> clear_session() |> configure_session(renew: true)
