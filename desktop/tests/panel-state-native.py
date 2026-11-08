@@ -12,31 +12,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
-import signal
-import socket
 import ssl
 import subprocess
 import tempfile
 import threading
-import time
-import urllib.error
-import urllib.request
 
 
-def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-def until(check, description):
-    end = time.monotonic() + 20
-    while time.monotonic() < end:
-        result = check()
-        if result:
-            return result
-        time.sleep(0.05)
-    raise AssertionError(f"Timed out: {description}")
+from native_webdriver import native_session, until
 
 
 @contextmanager
@@ -119,48 +101,11 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
         config_path.write_text(json.dumps(config_data))
         env = {**os.environ, "XDG_CONFIG_HOME": str(root / "config"),
                "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache")}
-        port, native_port = free_port(), free_port()
-        # Ignore shell proxy variables for the local WebDriver connection.
-        http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-        def request(method, path, payload=None, timeout=30):
-            data = None if payload is None else json.dumps(payload).encode()
-            req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data,
-                                         headers={"Content-Type": "application/json"}, method=method)
+        with (
+            (root / "driver.log").open("w+") as log,
+            native_session(binary, env, log, session_timeout) as (request, base),
+        ):
             try:
-                with http.open(req, timeout=timeout) as reply:
-                    result = json.load(reply)
-            except urllib.error.HTTPError as error:
-                raise AssertionError(error.read().decode()) from error
-            value = result.get("value")
-            if isinstance(value, dict) and "error" in value:
-                raise AssertionError(value)
-            return value
-
-        with open(root / "driver.log", "w+") as log:
-            driver = subprocess.Popen(["tauri-driver", "--port", str(port), "--native-port", str(native_port)],
-                                      env=env, stdout=log, stderr=log, start_new_session=True)
-            session = None
-            try:
-                def ready():
-                    if driver.poll() is not None:
-                        log.seek(0)
-                        raise AssertionError(log.read())
-                    try:
-                        for endpoint in (port, native_port):
-                            with socket.create_connection(("127.0.0.1", endpoint), timeout=0.1):
-                                pass
-                        return True
-                    except OSError:
-                        return False
-                until(ready, "tauri-driver")
-                print("Native acceptance: creating Tauri/WebKit session", flush=True)
-                session = request("POST", "/session", {"capabilities": {"alwaysMatch": {
-                    "tauri:options": {"application": str(binary)},
-                }}}, timeout=session_timeout)["sessionId"]
-                base = f"/session/{session}"
-                print("Native acceptance: session ready; exercising mounted editors", flush=True)
-
                 def js(script, *args):
                     return request("POST", base + "/execute/sync", {"script": script, "args": list(args)})
 
@@ -357,35 +302,19 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                     print("PASS: packaged Procurement webview desktop IPC denial", flush=True)
 
             except Exception:
-                if session:
-                    try:
-                        print("Native geometry:", request("POST", f"/session/{session}/execute/sync", {
-                            "script": "return [...document.querySelectorAll('.main,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
-                        print("Native page:", request("POST", f"/session/{session}/execute/sync", {
-                            "script": "return {url:location.href,ready:document.readyState,text:document.body.innerText.slice(0,1000)}", "args": []}))
-                        print("Native errors:", request("POST", f"/session/{session}/execute/sync", {
-                            "script": "return window.nativeErrors", "args": []}))
-                    except Exception:
-                        pass
+                try:
+                    print("Native geometry:", request("POST", base + "/execute/sync", {
+                        "script": "return [...document.querySelectorAll('.main,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
+                    print("Native page:", request("POST", base + "/execute/sync", {
+                        "script": "return {url:location.href,ready:document.readyState,text:document.body.innerText.slice(0,1000)}", "args": []}))
+                    print("Native errors:", request("POST", base + "/execute/sync", {
+                        "script": "return window.nativeErrors", "args": []}))
+                except Exception:
+                    pass
                 log.flush()
                 log.seek(0)
                 print(log.read())
                 raise
-            finally:
-                try:
-                    if session:
-                        request("DELETE", f"/session/{session}")
-                finally:
-                    # Also stop WebKit/app descendants after a failed session handshake.
-                    try:
-                        os.killpg(driver.pid, signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        driver.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(driver.pid, signal.SIGKILL)
-                        driver.wait()
 
 
 if __name__ == "__main__":

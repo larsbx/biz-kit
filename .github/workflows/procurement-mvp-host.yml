@@ -21,6 +21,7 @@ on:
       - 'mix.lock'
       - 'proofs/procurement_mvp/**'
       - 'tests/procurement_mvp/**'
+      - 'desktop/**'
       - 'scripts/test-procurement-host.sh'
       - '.github/workflows/procurement-mvp-host.yml'
   workflow_dispatch:
@@ -55,7 +56,7 @@ jobs:
           if-no-files-found: error
   ledger-http-release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16
@@ -88,6 +89,51 @@ jobs:
       - run: mix local.hex --force && mix local.rebar --force
       - name: Actual ledger, TLS forms, packaged restart, revocation and restore
         run: bash scripts/test-procurement-host.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Build the Linux desktop package for host acceptance
+        working-directory: desktop
+        run: |
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf webkit2gtk-driver xvfb xauth
+          cargo install tauri-driver --version 2.0.4 --locked
+          npm ci
+          npm run tauri build -- --ci --bundles deb
+      - name: Packaged Tauri and packaged backend lifecycle on the same PostgreSQL fixture
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+          NO_AT_BRIDGE: '1'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          git diff --quiet HEAD -- desktop tests/procurement_mvp
+          shopt -s nullglob
+          packages=(desktop/src-tauri/target/release/bundle/deb/*.deb)
+          test "${#packages[@]}" -eq 1
+          output=.artifacts/procurement-host
+          mkdir -p "$output/tauri"
+          desktop="$output/tauri/$(basename "${packages[0]}")"
+          cp "${packages[0]}" "$desktop"
+          tls=$(mktemp -d)
+          trust="/usr/local/share/ca-certificates/biz-kit-procurement-e2e-$$.crt"
+          trap 'sudo rm -f "$trust"; sudo update-ca-certificates >/dev/null; rm -rf "$tls"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=biz-kit-procurement-e2e \
+            -addext 'subjectAltName=IP:127.0.0.1' -keyout "$tls/key.pem" -out "$tls/cert.pem"
+          sudo install -m 0644 "$tls/cert.pem" "$trust"
+          sudo update-ca-certificates
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' \
+            python3 tests/procurement_mvp/release_acceptance.py \
+            --archive "$output/procurement-release.tar.gz" --revision "$SOURCE_REVISION" \
+            --desktop-deb "$desktop" --tls-pair "$tls/cert.pem" "$tls/key.pem" \
+            --receipts "$output/tauri" 2>&1 | tee "$output/tauri-acceptance.log"
+          test -s "$output/tauri/receipt.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -148,4 +194,4 @@ jobs:
           test "$CONTROLS" = success
           test "$RUNTIME" = success
           test "$FORMAL" = success
-          echo "Scoped packaged acceptance at $SOURCE_REVISION; target-host and graphical-browser acceptance remain separate."
+          echo "Scoped packaged backend and Linux Tauri acceptance at $SOURCE_REVISION; target-host deployment remains separate."
