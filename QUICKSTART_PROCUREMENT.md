@@ -18,10 +18,13 @@ and isolated-test dependency gap were repaired in that dependency.
 The first [quick-start run](https://github.com/larsbx/biz-kit/actions/runs/42493119708)
 passed wrapper controls but failed while building its toolchain: the Hex OTP
 archive's enclosing directory was not stripped before invoking `Install`.
-The Dockerfile now strips that directory and checks the installer and OTP runtime.
-**That source correction is not a successful container/application execution receipt.**
-Use a clean mainline checkout and retain the result of the exact revision you run.
-An installation can succeed while execution fails; keep failure evidence as failure.
+The Dockerfile strips that directory and checks the installer and OTP runtime.
+The [run on the combined revision](https://github.com/larsbx/biz-kit/actions/runs/42506763260)
+built the image, replayed Lean and Quint, and started disposable PostgreSQL.
+It stopped compiling `canonical_v1` because the locked `rustler` 0.38.0 requires
+Rust 1.91 or later. The image pins Rust 1.91.1 for that dependency.
+Use a clean checkout and retain the result of the exact revision you run.
+Packaged-release acceptance requires a separate passing Docker receipt for that revision.
 
 ## 1. Install the host prerequisites
 
@@ -68,7 +71,7 @@ bash scripts/procurement-quickstart.sh run
 `run` also builds/reuses the toolchain image, so **`run` alone is sufficient** once
 the host prerequisites are ready. Normal Docker layer caching avoids repeating
 unchanged installation steps. The image uses Elixir 1.19.0 / OTP 27.3.4, Lean 4.19.0,
-Quint 0.33.1, Rust 1.90.0, Node 22.16.0, Python 3.12 and PostgreSQL 16. Installed
+Quint 0.33.1, Rust 1.91.1, Node 22.16.0, Python 3.12 and PostgreSQL 16. Installed
 package versions, tool-download hashes and the built image ID are retained.
 Package repositories and transitive downloads are not fully digest-pinned: this
 is an inspectable execution environment, **not a claim of bit-reproducible builds**.

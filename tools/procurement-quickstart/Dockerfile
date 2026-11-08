@@ -29,7 +29,7 @@ RUN test "$(dpkg --print-architecture)" = amd64 \
  && tar --zstd -xf /tmp/lean.tar.zst --strip-components=1 -C /opt/lean \
  && curl -fL --retry 3 https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
  && chmod +x /tmp/rustup-init \
- && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain 1.90.0 \
+ && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain 1.91.1 \
  && npm install --prefix /opt/quint --no-save @informalsystems/quint@0.33.1 \
  && sha256sum /tmp/otp.tar.gz /tmp/elixir.zip /tmp/lean.tar.zst /tmp/rustup-init > /opt/downloads.sha256 \
  && rm -f /tmp/otp.tar.gz /tmp/elixir.zip /tmp/lean.tar.zst /tmp/rustup-init \
