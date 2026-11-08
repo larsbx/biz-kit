@@ -199,8 +199,9 @@ preserved. The `--service-owner-fixture` test flag uses `sudo` only to create a
 disposable root-owned fixture; the actual app runs as the ordinary operator.
 The same job uses a disposable trusted HTTPS fixture to check Procurement window
 launch, redirects, same-origin navigation, popup blocking and desktop command
-denial. Backend lifecycle and restore are tested by the separate procurement host
-workflow. The target-host workflow still needs to be exercised through Tauri.
+denial. The procurement host workflow runs the full lifecycle and restore using
+WebKit from the packaged Linux `.deb` against the packaged backend. The private
+target deployment still requires its own acceptance run.
 
 Every successful platform job builds installable candidates. Download the
 `biz-kit-<platform>-<exact source SHA>` artifact from that Desktop workflow run.

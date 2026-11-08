@@ -89,8 +89,12 @@ jobs:
           apps/coop_substrate/test/commercial_setoff_sources_test.exs
       - name: Signed bilateral source, admission, replay and restart controls
         working-directory: apps/coop_substrate
+        # The standalone dependency graph includes Localize without Eatsbot.
+        # Select Localize's own bundled locale directory for this test process.
         run: >-
-          mix test
+          mix run --no-start
+          -e 'Application.put_env(:localize, :otp_app, :localize, persistent: true);
+          Mix.Task.run("test", System.argv())' --
           test/commercial_setoff_test.exs
           test/commercial_setoff_proof_test.exs
           test/commercial_setoff_sources_test.exs
