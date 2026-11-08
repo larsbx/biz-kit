@@ -188,10 +188,10 @@ defmodule CoopSubstrate.CommercialSetoffProof do
         {:error, :invalid_source_shape}
 
       not (is_binary(id) and id != "" and is_integer(revision) and revision > 0 and
-              revision <= @max_minor and match?(<<_::256>>, hash)) ->
+             revision <= @max_minor and match?(<<_::256>>, hash)) ->
         {:error, :invalid_source_revision_or_digest}
 
-      not ({debtor, creditor} in [{a, b}, {b, a}]) ->
+      {debtor, creditor} not in [{a, b}, {b, a}] ->
         {:error, :invalid_source_parties}
 
       source["denomination"] != denomination ->
@@ -252,9 +252,15 @@ defmodule CoopSubstrate.CommercialSetoffProof do
       grant = grants[actor]
 
       cond do
-        not is_map(member) -> {:halt, {:error, {:member_missing, actor}}}
-        not is_map(grant) or grant[:active] != true -> {:halt, {:error, {:authority_inactive, actor}}}
-        grant[:key_id] != member[:key_id] -> {:halt, {:error, {:authority_key_stale, actor}}}
+        not is_map(member) ->
+          {:halt, {:error, {:member_missing, actor}}}
+
+        not is_map(grant) or grant[:active] != true ->
+          {:halt, {:error, {:authority_inactive, actor}}}
+
+        grant[:key_id] != member[:key_id] ->
+          {:halt, {:error, {:authority_key_stale, actor}}}
+
         not (is_binary(member[:key_id]) and member[:key_id] != "" and
                match?(<<_::256>>, member[:pubkey]) and match?(<<_::256>>, grant[:digest])) ->
           {:halt, {:error, {:invalid_authority, actor}}}
@@ -333,10 +339,10 @@ defmodule CoopSubstrate.CommercialSetoffProof do
       is_list(body["sources"]) and
           Enum.any?(body["sources"], fn source ->
             is_map(source) and
-              MapSet.member?(
-                spent,
-                {:source, chapter, source["obligation_id"], source["revision"]}
-              )
+                MapSet.member?(
+                  spent,
+                  {:source, chapter, source["obligation_id"], source["revision"]}
+                )
           end) ->
         {:error, :source_already_spent}
 
