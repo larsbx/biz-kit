@@ -104,7 +104,7 @@ bin/restaurant daemon
 | `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` | each device's 32-byte signing seed, base64; `<DEVICE_ID>` upper-cased with other characters as `_` |
 | `EVENTSTORE_*` | the ledger, as above |
 
-The restaurant file names the ledger chapter, merchant, currency, tax rate,
+The restaurant file names the ledger chapter, merchant, currency, tax jurisdiction (`US-MI`: Michigan, see `CommerceCore.Tax.Jurisdictions`),
 menu and devices. It holds no secret: seeds come only from the environment, and
 a board's pairing secret only as its SHA-256.
 
@@ -113,7 +113,7 @@ a board's pairing secret only as its SHA-256.
   "chapter": "chapter-genesis",
   "merchant": "shop",
   "currency": "USD",
-  "tax_rate": "0.0825",
+  "jurisdiction": "US-MI",
   "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
   "storefront": {"device_id": "storefront", "key_id": "k-store"},
   "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "<hex>"}}

@@ -1,7 +1,7 @@
 defmodule RestaurantHost.Restaurant do
   @moduledoc """
   One restaurant as this host serves it: its Log chapter and merchant, its menu
-  (a `CommerceCore.Catalog`), its tax rate, and the devices it signs for.
+  (a `CommerceCore.Catalog`), its tax jurisdiction, and the devices it signs for.
 
   A device is a key a governance grant (`RestaurantDeviceGrantedV1`) has bound
   to this merchant: the storefront (granted `checkout`) and each paired kitchen
@@ -12,7 +12,17 @@ defmodule RestaurantHost.Restaurant do
   alias CommerceCore.Catalog
   alias CoopSubstrate.Crypto
 
-  @enforce_keys [:chapter, :merchant, :currency, :tax_rate, :catalog, :menu, :storefront, :boards]
+  @enforce_keys [
+    :chapter,
+    :merchant,
+    :currency,
+    :jurisdiction,
+    :tax,
+    :catalog,
+    :menu,
+    :storefront,
+    :boards
+  ]
   defstruct @enforce_keys
 
   def current, do: :restaurant_host |> Application.fetch_env!(:restaurant) |> build()
@@ -53,11 +63,20 @@ defmodule RestaurantHost.Restaurant do
         catalog
       end)
 
+    jurisdiction = Map.fetch!(config, :jurisdiction)
+
+    tax =
+      case CommerceCore.Tax.Jurisdictions.profile(jurisdiction) do
+        {:ok, tax} -> tax
+        {:error, reason} -> raise ArgumentError, "#{reason}: #{inspect(jurisdiction)}"
+      end
+
     %__MODULE__{
       chapter: Map.fetch!(config, :chapter),
       merchant: merchant,
       currency: currency,
-      tax_rate: Decimal.new(Map.get(config, :tax_rate, "0")),
+      jurisdiction: jurisdiction,
+      tax: tax,
       catalog: catalog,
       menu: Enum.map(menu, &Map.take(&1, [:id, :name])),
       storefront: device(Map.fetch!(config, :storefront)),
