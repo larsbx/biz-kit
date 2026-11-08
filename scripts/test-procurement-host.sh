@@ -3,6 +3,7 @@
 # Explicit opt-in and loopback PostgreSQL are required; never use production.
 set -euo pipefail
 export PROCUREMENT_ENABLED=false
+export PYTHONDONTWRITEBYTECODE=1
 root=$(cd "$(dirname "$0")/.." && pwd)
 receipts=${PROCUREMENT_RECEIPTS:-"$root/.artifacts/procurement-host"}
 mkdir -p "$receipts"
