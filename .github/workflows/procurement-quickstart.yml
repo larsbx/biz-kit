@@ -1,5 +1,32 @@
 name: Procurement MVP quick start
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'QUICKSTART_PROCUREMENT.md'
+      - 'scripts/procurement-quickstart.sh'
+      - 'tools/procurement-quickstart/**'
+      - 'tests/procurement_mvp/**'
+      - 'proofs/procurement_mvp/**'
+      - 'scripts/test-procurement-host.sh'
+      - 'apps/procurement_host/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/commerce_core/**'
+      - 'apps/biz_kit_cluster/**'
+      - 'apps/task_core/**'
+      - 'apps/order_core/**'
+      - 'apps/restaurant_core/**'
+      - 'apps/agent_core/**'
+      - 'apps/agent_ops_store/**'
+      - 'apps/group_buy_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'config/**'
+      - 'native/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - '.github/workflows/procurement-quickstart.yml'
   pull_request:
     paths:
       - 'QUICKSTART_PROCUREMENT.md'
