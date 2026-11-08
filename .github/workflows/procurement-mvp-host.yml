@@ -32,6 +32,27 @@ concurrency:
 env:
   SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
+  runner-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - name: Artifact gate negative controls and real TLS cookie transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/procurement-runner
+          git rev-parse HEAD | tee .artifacts/procurement-runner/revision.txt
+          python3 -m unittest discover -s tests/procurement_mvp -p test_release_acceptance.py -v 2>&1 | tee .artifacts/procurement-runner/tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-runner-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-runner
+          if-no-files-found: error
   ledger-http-release:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -48,6 +69,7 @@ jobs:
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
       EVENTSTORE_HOST: localhost
+      PROCUREMENT_RELEASE_ACCEPTANCE: disposable-local-postgres
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,8 +80,13 @@ jobs:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - uses: dtolnay/rust-toolchain@stable
+      - name: Match backup and restore clients to PostgreSQL 16
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16 openssl
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
       - run: mix local.hex --force && mix local.rebar --force
-      - name: Actual ledger, authenticated HTTP and narrow release
+      - name: Actual ledger, TLS forms, packaged restart, revocation and restore
         run: bash scripts/test-procurement-host.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -109,14 +136,16 @@ jobs:
           if-no-files-found: error
   host-acceptance:
     if: always()
-    needs: [ledger-http-release, formal]
+    needs: [runner-controls, ledger-http-release, formal]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every scoped check; skipped is not accepted
         env:
+          CONTROLS: ${{ needs.runner-controls.result }}
           RUNTIME: ${{ needs.ledger-http-release.result }}
           FORMAL: ${{ needs.formal.result }}
         run: |
+          test "$CONTROLS" = success
           test "$RUNTIME" = success
           test "$FORMAL" = success
-          echo "Scoped acceptance at $SOURCE_REVISION, not deployed browser/restore acceptance."
+          echo "Scoped packaged acceptance at $SOURCE_REVISION; target-host and graphical-browser acceptance remain separate."
