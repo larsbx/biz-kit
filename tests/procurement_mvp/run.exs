@@ -6,7 +6,8 @@ defmodule ProcurementMVPTest do
 
   defp trusted(overrides \\ %{}), do: Map.merge(%{authorized: true, chapter_id: "ch", cooperative_id: "coop", request_id: "req", actor_id: "operator", now_ms: 1000}, overrides)
   defp request, do: %{buyer_business_id: "buyer", description: "100 cartons", quantity: 100, currency: "USD", needed_by_ms: 10_000, consent_ref: "private:consent"}
-  defp quote(rev \\ 1), do: %{quote_id: "q", merchant_business_id: "merchant", revision: rev, total_minor: 9000, currency: "USD", expires_at_ms: 2000, source_ref: "private:quote:#{rev}"}
+  # `quote` is an Elixir special form; use a non-reserved fixture name.
+  defp quote_attrs(rev \\ 1), do: %{quote_id: "q", merchant_business_id: "merchant", revision: rev, total_minor: 9000, currency: "USD", expires_at_ms: 2000, source_ref: "private:quote:#{rev}"}
   defp accept(rev \\ 1), do: %{quote_id: "q", revision: rev, buyer_business_id: "buyer", evidence_ref: "private:acceptance"}
   defp evidence, do: %{evidence_ref: "private:evidence"}
   defp command(s, action, attrs, id \\ nil), do: %{id: id || "#{action}:#{if(s, do: s.version, else: 0)}", expected_version: if(s, do: s.version, else: 0), action: action, attrs: attrs}
@@ -15,7 +16,7 @@ defmodule ProcurementMVPTest do
     next
   end
   defp prepared do
-    nil |> take(:request, request()) |> take(:qualify, evidence()) |> take(:quote, quote())
+    nil |> take(:request, request()) |> take(:qualify, evidence()) |> take(:quote, quote_attrs())
   end
 
   test "request through fulfillment; payment is separate and explicitly unverified" do
@@ -66,18 +67,18 @@ defmodule ProcurementMVPTest do
   end
 
   test "acceptance requires the exact latest quote revision" do
-    s = take(prepared(), :quote, quote(2))
+    s = take(prepared(), :quote, quote_attrs(2))
     assert {:error, :quote_revision_conflict} = W.apply_command(s, trusted(), command(s, :accept, accept(1)))
     a = take(s, :accept, accept(2))
     assert a.accepted_quote.revision == 2
     assert a.accepted_quote.source_ref == "private:quote:2"
-    assert {:error, :illegal_transition} = W.apply_command(a, trusted(), command(a, :quote, quote(3)))
+    assert {:error, :illegal_transition} = W.apply_command(a, trusted(), command(a, :quote, quote_attrs(3)))
   end
 
   test "quote revision cannot change its merchant owner or skip a revision" do
     s = prepared()
-    assert {:error, :quote_owner_mismatch} = W.apply_command(s, trusted(), command(s, :quote, %{quote(2) | merchant_business_id: "other"}))
-    assert {:error, :quote_revision_conflict} = W.apply_command(s, trusted(), command(s, :quote, quote(3)))
+    assert {:error, :quote_owner_mismatch} = W.apply_command(s, trusted(), command(s, :quote, %{quote_attrs(2) | merchant_business_id: "other"}))
+    assert {:error, :quote_revision_conflict} = W.apply_command(s, trusted(), command(s, :quote, quote_attrs(3)))
   end
 
   test "acceptance cannot substitute another buyer" do
@@ -129,7 +130,7 @@ defmodule ProcurementMVPTest do
 
   test "quote currency cannot change and request consent is mandatory" do
     s = prepared()
-    assert {:error, :invalid_quote} = W.apply_command(s, trusted(), command(s, :quote, %{quote(2) | currency: "EUR"}))
+    assert {:error, :invalid_quote} = W.apply_command(s, trusted(), command(s, :quote, %{quote_attrs(2) | currency: "EUR"}))
     assert {:error, :invalid_request} = W.apply_command(nil, trusted(), command(nil, :request, Map.delete(request(), :consent_ref)))
   end
 
@@ -138,12 +139,12 @@ defmodule ProcurementMVPTest do
   end
 
   test "fixed-context command replay reconstructs exactly the same state" do
-    commands = [{:request, request()}, {:qualify, evidence()}, {:quote, quote()}, {:accept, accept()}, {:fulfill, evidence()}]
+    commands = [{:request, request()}, {:qualify, evidence()}, {:quote, quote_attrs()}, {:accept, accept()}, {:fulfill, evidence()}]
     replay = fn -> Enum.reduce(commands, nil, fn {a, p}, s -> take(s, a, p) end) end
     assert replay.() == replay.()
   end
 
-  defp action_attrs("quote" <> r), do: {:quote, quote(String.to_integer(r))}
+  defp action_attrs("quote" <> r), do: {:quote, quote_attrs(String.to_integer(r))}
   defp action_attrs("accept" <> r), do: {:accept, accept(String.to_integer(r))}
   defp action_attrs("payment"), do: {:payment_evidence, evidence()}
   defp action_attrs(name), do: {Map.fetch!(%{"qualify" => :qualify, "fulfill" => :fulfill, "cancel" => :cancel, "dispute" => :dispute}, name), evidence()}

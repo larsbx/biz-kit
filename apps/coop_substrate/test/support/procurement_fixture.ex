@@ -39,7 +39,8 @@ defmodule CoopSubstrate.ProcurementFixture do
   def request(f), do: %{"buyer_business_id" => "buyer", "description" => "Bulk packaging",
     "quantity" => 4, "currency" => "USD", "needed_by_ms" => f.now + 86_400_000,
     "consent_ref" => "buyer-consent-private"}
-  def quote(f), do: %{"quote_id" => "quote-1", "merchant_business_id" => "merchant",
+  # Avoid the built-in Elixir `quote` special form in local fixture calls.
+  def quote_attrs(f), do: %{"quote_id" => "quote-1", "merchant_business_id" => "merchant",
     "revision" => 1, "total_minor" => 12000, "currency" => "USD",
     "expires_at_ms" => f.now + 600_000, "source_ref" => "merchant-quote-private"}
   def acceptance, do: %{"quote_id" => "quote-1", "revision" => 1,
@@ -51,7 +52,7 @@ defmodule CoopSubstrate.ProcurementFixture do
   def quoted(f) do
     {:ok, _} = submit(f, "request", 0, request(f))
     {:ok, _} = submit(f, "qualify", 1, %{"evidence_ref" => "qualification"})
-    {:ok, _} = submit(f, "quote", 2, quote(f))
+    {:ok, _} = submit(f, "quote", 2, quote_attrs(f))
     :ok
   end
 end
