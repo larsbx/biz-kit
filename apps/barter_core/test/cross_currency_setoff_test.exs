@@ -142,7 +142,7 @@ defmodule BarterCore.CrossCurrencySetoffTest do
 
     assert {:ok, another} = propose(%{quote() | revision: 2})
     refute original.terms_hash == another.terms_hash
-    assert {:ok, another} = propose(quote(), base(), %{rate() | numerator: 12})
+    assert {:ok, another} = propose(quote(), base(), %{rate() | numerator: 13})
     refute original.terms_hash == another.terms_hash
   end
 
