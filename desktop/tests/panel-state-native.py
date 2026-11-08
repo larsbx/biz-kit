@@ -316,6 +316,29 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                     remote = next(handle for handle in handles if handle != main)
                     request("POST", base + "/window", {"handle": remote})
                     until(lambda: js("return location.pathname === '/requests' && document.querySelector('h1')?.textContent === 'Procurement HTTPS fixture'"), "trusted HTTPS page and redirect")
+                    print("PASS: packaged Procurement launcher and trusted HTTPS redirect", flush=True)
+
+                    # Drive ordinary navigation directly in the remote document.
+                    # WebKitDriver's element lookup can disconnect in this window.
+                    js("setTimeout(() => document.querySelector('#foreign').click(), 0)")
+                    point = js("""const b = document.querySelector('#popup').getBoundingClientRect();
+                        return {x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2)};""")
+                    # Use a user gesture so browser popup suppression cannot stand
+                    # in for the app's explicit new-window refusal.
+                    request("POST", base + "/actions", {"actions": [{
+                        "type": "pointer", "id": "procurement-popup", "parameters": {"pointerType": "mouse"},
+                        "actions": [
+                            {"type": "pointerMove", "duration": 0, **point},
+                            {"type": "pointerDown", "button": 0},
+                            {"type": "pointerUp", "button": 0},
+                        ],
+                    }]})
+                    js("setTimeout(() => document.querySelector('#orders').click(), 0)")
+                    until(lambda: js("return location.pathname === '/orders'"), "same-origin procurement navigation")
+                    assert not unexpected, f"procurement escaped its window or origin: {unexpected}"
+                    assert set(request("GET", base + "/window/handles")) == {main, remote}
+                    print("PASS: packaged Procurement same-origin navigation and popup blocking", flush=True)
+
                     for command, args in [
                         ("app_info", {}),
                         ("read_config", {"host": "local", "path": str(fixture)}),
@@ -331,13 +354,7 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                             "args": [command, args],
                         })
                         assert denied is True, f"procurement webview invoked {command}"
-                    click("#foreign")
-                    click("#popup")
-                    click("#orders")
-                    until(lambda: js("return location.pathname === '/orders'"), "same-origin procurement navigation")
-                    assert not unexpected, f"procurement escaped its window or origin: {unexpected}"
-                    assert set(request("GET", base + "/window/handles")) == {main, remote}
-                    print("PASS: packaged Procurement launcher, trusted HTTPS, origin and popup blocking, and desktop IPC denial")
+                    print("PASS: packaged Procurement webview desktop IPC denial", flush=True)
 
             except Exception:
                 if session:
