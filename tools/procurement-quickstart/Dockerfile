@@ -15,11 +15,14 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 ENV PATH=/opt/otp/bin:/opt/elixir/bin:/opt/lean/bin:/opt/quint/node_modules/.bin:/opt/cargo/bin:/usr/lib/postgresql/16/bin:${PATH}
 ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo
 # Ubuntu 24.04 amd64 OTP build published by Hex's Bob builder.
+# Hex archives have one enclosing directory, as handled by erlef/setup-beam.
 RUN test "$(dpkg --print-architecture)" = amd64 \
  && mkdir -p /opt/otp /opt/elixir /opt/lean \
  && curl -fL --retry 3 https://builds.hex.pm/builds/otp/amd64/ubuntu-24.04/OTP-27.3.4.tar.gz -o /tmp/otp.tar.gz \
- && tar -xzf /tmp/otp.tar.gz -C /opt/otp \
+ && tar -xzf /tmp/otp.tar.gz --strip-components=1 -C /opt/otp \
+ && test -x /opt/otp/Install \
  && (cd /opt/otp && ./Install -minimal /opt/otp) \
+ && /opt/otp/bin/erl -noshell -eval 'case erlang:system_info(otp_release) of "27" -> halt(0); _ -> halt(1) end.' \
  && curl -fL --retry 3 https://builds.hex.pm/builds/elixir/v1.19.0-otp-27.zip -o /tmp/elixir.zip \
  && unzip -q /tmp/elixir.zip -d /opt/elixir \
  && curl -fL --retry 3 https://github.com/leanprover/lean4/releases/download/v4.19.0/lean-4.19.0-linux.tar.zst -o /tmp/lean.tar.zst \
