@@ -122,6 +122,35 @@ defmodule BarterCore.CrossCurrencySetoffTest do
              )
   end
 
+  test "source ID substitution with identical nominal amounts changes the commitment" do
+    assert {:ok, original} = propose()
+    replaced = %{base() | id: "https://alpha.example/obligations/equivalent-eur"}
+    assert {:ok, same_amounts} = propose(quote(), replaced)
+
+    assert same_amounts.totals_by_currency == original.totals_by_currency
+    refute same_amounts.terms_hash == original.terms_hash
+    assert {:error, :invalid_cross_currency_plan} =
+             Setoff.verify_plan(%{original | b_to_a: replaced}, @now)
+  end
+
+  test "different currency minor-unit scales are represented in the agreed ratio" do
+    # 100 JPY yen as base units, 150 USD cents as quote units:
+    # the rate is 3 USD cents for each 2 JPY yen, not 3 USD per 2 JPY.
+    assert {:ok, plan} =
+             propose(source("usd", "alpha", "beta", 150, "USD"),
+               source("jpy", "beta", "alpha", 100, "JPY"),
+               %{
+                 rate()
+                 | base_currency: "JPY",
+                   numerator: 3,
+                   denominator: 2
+               }
+             )
+
+    assert Enum.map(plan.source_reductions, & &1.proposed_reduction_minor) == [150, 100]
+    assert Enum.all?(plan.source_reductions, &(&1.residual_minor == 0))
+  end
+
   test "source revision, amount, rate, evidence, and output edits invalidate verification" do
     assert {:ok, original} = propose()
 
