@@ -124,7 +124,13 @@ The required sequence is:
    with errors fatal, replay and compare the head/hash/state, then require that
    revoked credentials still cannot log in to the restored application.
 
-The fixture is not a graphical browser and is not the intended production proxy.
+The host workflow also repeats the same acceptance sequence using the executable
+extracted from the same-revision Linux desktop `.deb`. It opens Procurement from
+the actual Tauri app and submits the rendered forms in WebKit, including the
+authenticated lifecycle. The HTTPS proxy records response status and location
+for the checks without recording credentials or cookies. This run produces a
+separate `tauri/receipt.json` binding the host archive, desktop package and
+executable digests. Both runs use disposable PostgreSQL and a loopback TLS proxy.
 Synthetic SQL restore does not validate backup of external evidence, service
 secrets or the production host filesystem. Offline fixture code lives under tests,
 not in the application release, and refuses non-acceptance databases. No public
@@ -137,7 +143,7 @@ rerun removes the previous success receipt. Receipts are explicitly
 arbitrary supplied receipt JSON is truthful. Source identity and artifact digest
 must be read together with the actual trusted execution evidence.
 
-The final CI gate requires runner controls, actual runtime/release acceptance and
+The final CI gate requires runner controls, both packaged acceptance runs and
 independent Lean/Quint replay. A failed or skipped prerequisite is not success.
 
 ## Reproduce and build

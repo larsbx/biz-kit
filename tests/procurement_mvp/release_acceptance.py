@@ -9,6 +9,7 @@ approval. No receipt is written unless every required check completes.
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import hashlib
 import http.client
 import http.cookiejar
@@ -18,6 +19,7 @@ import json
 import os
 from pathlib import Path
 import re
+from queue import Queue
 import secrets
 import shutil
 import signal
@@ -161,8 +163,11 @@ class Browser:
         status, _, headers = self.request(path, fields)
         require(status == 303 and headers.get("Location") == "/login", "revoked/unauthenticated request admitted")
 
+    def has_secure_session(self) -> bool:
+        return any(cookie.name == "_procurement_pilot" and cookie.secure for cookie in self.cookies)
 
-def proxy(backend_port: int, certificate: Path, key: Path):
+
+def proxy(backend_port: int, certificate: Path, key: Path, observations: Queue | None = None):
     class Forward(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass  # No cookies, credentials or request bodies in receipts.
@@ -192,6 +197,9 @@ def proxy(backend_port: int, certificate: Path, key: Path):
                         self.send_header(name, value)
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
+                if observations is not None:
+                    headers = {name: result.getheader(name) for name in ("Location", "Cache-Control")}
+                    observations.put((self.command, self.path, result.status, headers))
                 self.wfile.write(payload)
             except (OSError, http.client.HTTPException):
                 self.send_error(502)
@@ -302,7 +310,7 @@ def lifecycle(browser: Browser, token: str, checks: dict) -> tuple[str, dict]:
     _, body, _ = browser.submit(login, {"token": token})
     require(token not in body, "credential reflected by login")
     page = browser.page("/requests")
-    require(any(cookie.secure for cookie in browser.cookies), "no Secure session cookie")
+    require(browser.has_secure_session(), "no Secure session cookie")
     create = Forms(page).one("/request", suffix=True)
     request_path = create["action"].rsplit("/", 1)[0]
     invalid = dict(create["fields"])
@@ -344,7 +352,7 @@ def lifecycle(browser: Browser, token: str, checks: dict) -> tuple[str, dict]:
     return request_path, original
 
 
-def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
+def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None, tls_pair=None) -> dict:
     env = database_environment(dict(os.environ))
     for executable in ("createdb", "dropdb", "pg_dump", "pg_restore", "openssl"):
         require(shutil.which(executable) is not None, f"required tool unavailable: {executable}")
@@ -352,7 +360,9 @@ def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
     checks: dict[str, bool] = {}
     receipts.mkdir(parents=True, exist_ok=True)
     os.umask(0o077)
-    with tempfile.TemporaryDirectory(prefix="bizkit-procurement-") as directory:
+    require((desktop_deb is None) == (tls_pair is None), "native acceptance requires a package and a trusted TLS pair")
+    with ExitStack() as stack:
+        directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="bizkit-procurement-"))
         work = Path(directory)
         root = unpack(archive, work, revision)
         checks["packaged_identity"] = True
@@ -376,13 +386,23 @@ def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
             harness.run([harness.executable, "eval", "ProcurementHost.ReleaseTasks.migrate()"], label="migrate")
             checks["migration"] = True
             harness.fixture("seed")
-            certificate, key = work / "tls.crt", work / "tls.key"
-            harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                         "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=127.0.0.1",
-                         "-addext", "subjectAltName=IP:127.0.0.1"], label="test-certificate")
+            if tls_pair is None:
+                certificate, key = work / "tls.crt", work / "tls.key"
+                harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                             "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=127.0.0.1",
+                             "-addext", "subjectAltName=IP:127.0.0.1"], label="test-certificate")
+            else:
+                certificate, key = tls_pair
             harness.start()
-            tls = proxy(port, certificate, key)
-            browser = Browser(f"https://127.0.0.1:{tls.server_address[1]}", certificate)
+            observations = Queue() if desktop_deb is not None else None
+            tls = proxy(port, certificate, key, observations)
+            origin = f"https://127.0.0.1:{tls.server_address[1]}"
+            if desktop_deb is None:
+                browser = Browser(origin, certificate)
+            else:
+                from tauri_client import packaged_browser
+
+                browser = stack.enter_context(packaged_browser(desktop_deb, origin, observations, work, receipts))
             path, retry = lifecycle(browser, token, checks)
             harness.stop()
             before = harness.fixture("inspect")
@@ -427,6 +447,9 @@ def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
                        "trust": "unsigned-runner-observation", "restored_ledger": revoked,
                        "scope": "synthetic loopback HTTPS/SQL; not target-host or graphical-browser acceptance"}
             validate_receipt(receipt, revision, artifact_sha256)
+            if desktop_deb is not None:
+                receipt.update(kind="procurement-packaged-tauri-acceptance-v1", desktop=browser.identity,
+                               scope="packaged Linux Tauri/WebKit and ERTS over synthetic loopback HTTPS/SQL")
         finally:
             if tls is not None:
                 tls.shutdown()
@@ -440,12 +463,15 @@ def main():
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--receipts", type=Path, required=True)
+    parser.add_argument("--desktop-deb", type=Path)
+    parser.add_argument("--tls-pair", type=Path, nargs=2, metavar=("CERTIFICATE", "KEY"))
     args = parser.parse_args()
     destination = args.receipts.resolve()
     destination.mkdir(parents=True, exist_ok=True)
     receipt_path = destination / "receipt.json"
     receipt_path.unlink(missing_ok=True)  # A previous success never survives a failed rerun.
-    receipt = acceptance(args.archive.resolve(), args.revision, destination)
+    receipt = acceptance(args.archive.resolve(), args.revision, destination,
+                         desktop_deb=args.desktop_deb, tls_pair=args.tls_pair)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
     print(json.dumps(receipt, sort_keys=True))
 
