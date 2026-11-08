@@ -366,7 +366,8 @@ defmodule CoopSubstrate.CommercialSetoffProof do
 
         case {authority, signer} do
           {%{"key_id" => key_id, "pubkey" => {:bytes, pubkey}},
-           %{key_id: ^key_id, signature: sig}} when is_binary(sig) ->
+           %{key_id: signer_key_id, signature: sig}}
+          when signer_key_id === key_id and is_binary(sig) ->
             unless Crypto.verify(bytes, sig, pubkey), do: {:error, {:invalid_consent, actor}}
 
           _ ->
