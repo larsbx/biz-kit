@@ -233,9 +233,11 @@ header cites the enforcing code and the gap leaves the README table.
    singletons' in-memory state still diverges during a partition, as the
    cluster ADR accepts.
 4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
-   allows execution when the marker file is missing. The app is due for
-   decommission ([checklist](architecture/2026-11-06-sprucegoose-decommission.md)),
-   so fixing it needs an owner decision.
+   allowed execution when the marker file was missing. *Closed:* only a
+   marker reading `local` allows direct execution; a missing, empty or
+   remote marker refuses. Fixed ahead of the
+   [decommission](architecture/2026-11-06-sprucegoose-decommission.md) by
+   owner decision.
 5. **eatsbot_core: history atomic with state.** `UpdateHistory` wrote the
    history row in `after_transaction`, so a failure left state with no
    history. *Closed:* the row is written in `after_action`, inside the state

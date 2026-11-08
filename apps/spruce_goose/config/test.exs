@@ -15,7 +15,11 @@ config :bcrypt_elixir, log_rounds: 1
 # on every call while the subject under test stays the behaviour, not the
 # permission. `test/actors_test.exs` names restricted actors explicitly.
 config :spruce_goose, :default_actor, "test-system"
-config :spruce_goose, :authority_host_marker, "/nonexistent/sprucegoose-test-authority-marker"
+# The marker check fails closed, so the suite runs as the authoritative host.
+config :spruce_goose,
+       :authority_host_marker,
+       Path.expand("../test/fixtures/authority-host-local", __DIR__)
+
 config :spruce_goose, :allow_unbound_task_admission, true
 config :spruce_goose, :allow_legacy_hierarchy_mutation, true
 

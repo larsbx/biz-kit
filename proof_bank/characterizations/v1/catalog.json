@@ -249,7 +249,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "e2f099b45d8c932ab137c293738a3e1028651e90",
+        "mix.exs": "16cb062b38f6305c1a7fef09a91a8b4b66f45f1e",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -908,7 +908,7 @@
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
         "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
-        "apps/restaurant_host/lib/restaurant_host/orders.ex": "f9579a3911e3a28ac76c39603b12f037a1a5532f",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "6484d887e3df43b993721519797c30313c230f1f",
         "apps/restaurant_host/test/device_grants_test.exs": "1d7c4902612759051c5ff7ff2571aad4cbc2ae3e"
       }
     },
@@ -1001,8 +1001,8 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/spruce_goose/lib/spruce_goose/actors.ex": "a33b0bf900ab778b50a65701f4722397ca800958",
-        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "d710a25373fe846a0cfc3ae4e49fb7d770bb0d9a",
-        "apps/spruce_goose/test/authority_runtime_test.exs": "7ccba2dbfb78867713276f9f914c5f203b8e7b0e"
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "7798e2e33b670c2bccfa0483d0200ce0d9d79850",
+        "apps/spruce_goose/test/authority_runtime_test.exs": "85879d3948f48304bad734d7c1a575d8dd8a2784"
       }
     },
     {
@@ -1094,6 +1094,20 @@
       "registered": [],
       "refreshed_paths": [
         "apps/keel/lib/keel/invariants.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "0d903ae26db7f10bceba43890289ead9cf2595c4",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex",
+        "apps/spruce_goose/test/authority_runtime_test.exs",
+        "mix.exs"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
