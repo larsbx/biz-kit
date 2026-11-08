@@ -77,9 +77,11 @@ directory or equivalent isolated boundary, bounded output, and no exported
 generator stdout or errors containing material. Keep forms, names, nonce,
 answer digests, manifest, raw request identifiers and decryptable pointers
 out of public catalog, task text, logs, caches, Redis and permanent ledger
-events. The signed ledger carries an opaque operation reference and, where
-necessary, a privacy-reviewed hiding commitment. Use protected receipt data
-to resolve the reference. Agree retention, deletion, key rotation, backup
+events. Signed completion carries an opaque operation reference and a
+privacy-reviewed hiding commitment to the exact staged bundle. The
+commitment must resist guessing low-entropy fields and bind the immutable
+context and all three payloads. Use protected receipt data to resolve and
+verify it. Agree retention, deletion, key rotation, backup
 expiry and audit access before activation. Keep replay-safe tombstones through
 the accepted retry horizon and never resurrect expired material.
 
@@ -104,11 +106,18 @@ the accepted retry horizon and never resurrect expired material.
    and a durable custody receipt. With separate transactions, stage first,
    append once using a stable outcome ID, then finalize receipt and cursor
    together. Crash after append reconciles the same candidate and outcome
-   before advancing. An orphan stage is inaccessible, with governed cleanup
-   that first proves there is no accepted completion. Replies and worker ACKs
-   require durable completion. Recheck current authority before a reply,
-   including duplicate Begin.
-4. Consume a verified bounded complete prefix, refusing gaps and unknown
+   before advancing, even if the learner's grant has since been revoked.
+   Receipt repair releases no private bytes. Replies and successful worker
+   ACKs require durable completion. Recheck current authority before a
+   reply, including duplicate Begin.
+4. An orphan stage is inaccessible. Cleanup must win a terminal abort
+   through the same serialized admission as completion before deleting an
+   incomplete candidate. A momentary absence of completion is insufficient.
+   Completion and abort are mutually exclusive per operation. If abort
+   wins, fence late staging and completion, then retain the terminal
+   binding so the same request cannot regenerate. If completion wins,
+   retain the candidate for receipt recovery and apply normal retention.
+5. Consume a verified bounded complete prefix, refusing gaps and unknown
    event types. Replay rebuilds operational state from accepted IDs and
    receipts and never generates forms. Redis loss cannot erase these bindings.
 
@@ -121,19 +130,22 @@ the accepted retry horizon and never resurrect expired material.
 - **Single publication.** On the active backend, run concurrent same-key and
   conflicting requests across workers. Kill before staging, after staging,
   after signed completion and before response. Show one visible form and
-  outcome, no cursor skip, and correct recovery after Redis loss. Demonstrate
-  that private bytes are immutable and receipts match signed authority.
+  outcome, no cursor skip, and correct recovery after Redis loss. Race
+  terminal cleanup against a worker holding the staged candidate and test
+  recovery after completion followed by revocation. Demonstrate that
+  private bytes are immutable and receipts match signed authority.
 - **Confidentiality and integrity.** Exercise tenant/class/owner and teacher
   capability isolation through real endpoints and storage roles. Mutate or
   replace form, manifest, custody binding and version metadata. Verify
   redaction in responses, audit, logs, tracing, backups and effect receipts.
   Exercise retired pins and archive dispatch.
-- **Source acceptance.** The inspected revision
-  `345d033dfa2232bef09d3b5008fed8f743975891` is a candidate only. The
-  [Rust workflow failed](https://github.com/larsbx/school-ops/actions/runs/41689728115)
-  and the crate lockfile was absent at that path. Require reviewed lockfile,
-  exact-head locked builds, tests, format, clippy and CLI negative checks on
-  Linux, Windows and macOS before pin approval.
+- **Source acceptance.** The [November 6 Rust run](https://github.com/larsbx/school-ops/actions/runs/42234049737)
+  passed three-platform tests and Linux format, lint and CLI checks on the
+  GitHub merge commit for PR head `c0ea18e`. It resolved dependencies at
+  run time. The [locked verification change](https://github.com/larsbx/school-ops/commit/b8adb58270b278d3a038a1ebfa7e75e743097be1)
+  captures that lockfile and checks the PR head directly. Require a reviewed
+  lockfile, exact-head locked builds, tests, format, clippy and CLI negative
+  checks on Linux, Windows and macOS before pin approval.
 - **Educational and release acceptance.** Require owner approval of exact
   source and authority model, independent security/privacy review, qualified
   scholarly/source and age-suitability review, and curriculum readiness

@@ -60,6 +60,8 @@ class Contract:
         operation = (scope, key)
         if self.intents.setdefault(operation, pin) != pin:
             raise Refusal("conflict")
+        if operation in self.outcomes and self.outcomes[operation] is None:
+            raise Refusal("unavailable")
         if operation not in self.staged:
             self.generated += 1
             candidate = Session(scope, f"synthetic-handle-{self.generated}", pin)
@@ -69,16 +71,38 @@ class Contract:
         candidate = self.staged[operation]
         if fail == "after stage":
             raise Crash()
-        self.require(principal, scope, "learner")
-        outcome = self.outcomes.setdefault(operation, candidate.binding())
-        if outcome != candidate.binding():
-            raise Refusal("integrity")
+        self.complete(operation, candidate)
         if fail == "after append":
             raise Crash()
-        self.receipts[(scope[0], candidate.handle)] = operation
+        self.recover(operation)
         if fail == "after receipt":
             raise Crash()
         return candidate.handle, self.read(scope[0], principal, candidate.handle)
+
+    def complete(self, operation, candidate):
+        scope, _ = operation
+        self.require(scope[-1], scope, "learner")
+        if operation in self.outcomes and self.outcomes[operation] is None:
+            raise Refusal("unavailable")
+        if self.staged.get(operation) != candidate:
+            raise Refusal("integrity")
+        self.outcomes.setdefault(operation, candidate.binding())
+
+    def abort(self, operation):
+        """Model a terminal abort accepted by the same gate as completion."""
+        if operation not in self.intents or self.outcomes.setdefault(operation, None) is not None:
+            raise Refusal("unavailable")
+        self.staged.pop(operation, None)
+
+    def recover(self, operation):
+        """Project a completion into a receipt without returning private bytes."""
+        outcome = self.outcomes.get(operation)
+        if outcome is None:
+            raise Refusal("unavailable")
+        candidate = self.staged.get(operation)
+        if candidate is None or outcome != candidate.binding():
+            raise Refusal("integrity")
+        self.receipts[(candidate.scope[0], candidate.handle)] = operation
 
     def read(self, tenant, principal, handle, teacher=False):
         operation = self.receipts.get((tenant, handle))
@@ -152,6 +176,49 @@ class PracticeContractTests(unittest.TestCase):
                 for store in (model.intents, model.staged, model.outcomes, model.receipts):
                     self.assertEqual(len(store), 1)
                 self.assertEqual(model.generated, 2 if phase == "before stage" else 1)
+
+    def test_abort_fences_late_completion_and_duplicate_begin(self):
+        with self.assertRaises(Crash):
+            self.model.begin(self.scope, fail="after stage")
+        operation = (self.scope, "retry-key")
+        stale_candidate = self.model.staged[operation]
+        with self.assertRaisesRegex(Refusal, "unavailable"):
+            self.model.recover(operation)
+        self.model.abort(operation)
+        with self.assertRaisesRegex(Refusal, "unavailable"):
+            self.model.complete(operation, stale_candidate)
+        with self.assertRaisesRegex(Refusal, "unavailable"):
+            self.model.begin(self.scope)
+        self.assertFalse(self.model.staged)
+        self.assertFalse(self.model.receipts)
+        self.assertEqual(self.model.generated, 1)
+
+    def test_completion_fences_cleanup_and_recovery_preserves_revocation(self):
+        with self.assertRaises(Crash):
+            self.model.begin(self.scope, fail="after append")
+        operation = (self.scope, "retry-key")
+        handle = self.model.staged[operation].handle
+        self.model.grants.clear()
+        with self.assertRaisesRegex(Refusal, "unavailable"):
+            self.model.abort(operation)
+        self.assertIsNone(self.model.recover(operation))
+        self.assertEqual(len(self.model.receipts), 1)
+        with self.assertRaisesRegex(Refusal, "unavailable"):
+            self.model.read("tenant-a", "learner-a", handle)
+        with self.assertRaisesRegex(Refusal, "unavailable"):
+            self.model.begin(self.scope)
+
+    def test_recovery_refuses_missing_or_substituted_candidate(self):
+        with self.assertRaises(Crash):
+            self.model.begin(self.scope, fail="after append")
+        operation = (self.scope, "retry-key")
+        saved = self.model.staged.pop(operation)
+        with self.assertRaisesRegex(Refusal, "integrity"):
+            self.model.recover(operation)
+        self.model.staged[operation] = replace(saved, teacher=b"substituted")
+        with self.assertRaisesRegex(Refusal, "integrity"):
+            self.model.recover(operation)
+        self.assertFalse(self.model.receipts)
 
     def assert_saved_refusal(self, reason, **changes):
         handle, _ = self.model.begin(self.scope)
