@@ -55,6 +55,7 @@ defmodule CommerceCore.Catalog do
          sku: selected.sku,
          modifiers: chosen,
          unit_price: Enum.reduce(deltas, money, &Money.add!(&2, &1)),
+         discounts: product.discounts,
          tax_context: product.tax_context
        }}
     end
@@ -169,6 +170,7 @@ defmodule CommerceCore.Catalog do
     variants = Map.get(item, :variants, [])
     tax_context = Map.get(item, :tax_context, "unspecified")
     modifier_groups = Map.get(item, :modifier_groups, [])
+    discounts = Map.get(item, :discounts, [])
 
     with :ok <- identifier(id),
          :ok <- identifier(sku),
@@ -178,7 +180,8 @@ defmodule CommerceCore.Catalog do
          {:ok, normalized_variants} <- normalize_variants(variants),
          :ok <- unique_variants(normalized_variants),
          true <- is_binary(tax_context) and byte_size(tax_context) > 0,
-         {:ok, groups} <- normalize_groups(modifier_groups) do
+         {:ok, groups} <- normalize_groups(modifier_groups),
+         {:ok, rules} <- normalize_discounts(discounts) do
       {:ok,
        %{
          id: id,
@@ -187,6 +190,7 @@ defmodule CommerceCore.Catalog do
          prices: normalized_prices,
          variants: normalized_variants,
          modifier_groups: groups,
+         discounts: rules,
          tax_context: tax_context
        }}
     else
@@ -196,6 +200,17 @@ defmodule CommerceCore.Catalog do
   end
 
   defp normalize(_), do: {:error, :invalid_product}
+
+  # Each rule valid (`CommerceCore.Discounts.normalize/1`), ids distinct.
+  defp normalize_discounts(rules) when is_list(rules) do
+    normalized = Enum.map(rules, &CommerceCore.Discounts.normalize/1)
+
+    if Enum.all?(normalized, &match?({:ok, _}, &1)) and unique?(Enum.map(rules, & &1.id)),
+      do: {:ok, Enum.map(normalized, &elem(&1, 1))},
+      else: {:error, :invalid_discounts}
+  end
+
+  defp normalize_discounts(_), do: {:error, :invalid_discounts}
 
   # A group offers 1+ distinct options, each priced at a non-negative delta in
   # each currency it lists, and allows 0 ≤ min ≤ max choices, 1 ≤ max ≤ options.

@@ -105,7 +105,10 @@ bin/restaurant daemon
 | `EVENTSTORE_*` | the ledger, as above |
 
 The restaurant file names the ledger chapter, merchant, currency, tax rate,
-menu and devices. It holds no secret: seeds come only from the environment, and
+timezone (IANA, optional, default `Etc/UTC`), menu and devices. A menu item may
+list `discounts`; the format is in `RestaurantHost.Config`, for example
+`{"id": "lunch", "method": "percent_off", "rate": "0.2", "hours": [11, 14], "weekdays": [1, 2, 3, 4, 5]}`.
+Hours are local, inclusive, and wrap past midnight when `from > to`. It holds no secret: seeds come only from the environment, and
 a board's pairing secret only as its SHA-256.
 
 ```json

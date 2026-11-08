@@ -36,8 +36,9 @@ sequence).
 
 Money is Hawala's. The device prices an order with `CommerceCore.Checkout`
 before signing; admission records that snapshot in integer minor units and
-checks only its shape, so this layer (and the substrate that admits it) never
-loads the money stack. `CoopSubstrate` registers these types in its Log:
+checks its shape and that it adds up (Pricing's I₂: each line discount within
+its line, subtotal and total exact), so this layer (and the substrate that
+admits it) never loads the money stack. `CoopSubstrate` registers these types in its Log:
 `apps/coop_substrate/test/restaurant_admission_test.exs` shows eight concurrent
 copies of one checkout place one order, ungranted devices append nothing, and
 an order's history replays to its live state.

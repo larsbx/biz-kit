@@ -85,3 +85,15 @@ Hawala gateway, followed by downstream persistence; this core exposes no
 financial-acceptance action.
 
 See [the fixture provenance, intentional differences and remaining migration gates](../../docs/architecture/2026-10-31-eatsbot-safety-compatibility.md).
+
+**Discounts.** `CommerceCore.Discounts` holds a line's discount rules:
+`percent_off` (half-up on the line), `unit_price` (lowers each unit to a
+price, never raises it), `buy_x_pay_y` and `x_for_amount` (whole bundles
+only), each optionally limited to weekdays, local hours (inclusive, wrapping
+past midnight) and a minimum quantity. Rules do not stack: `best/3` takes the
+largest discount, ties to the earlier rule, so `0 ≤ discount ≤ line` and
+`Pricing.price/3` accepts the result. The clock is an argument, so the rules
+stay pure. A catalog product may carry `discounts`; `Catalog.put/4` validates
+them and `quote/6` returns them. Properties check the bounds, optimality,
+order independence and the hour windows. Eatsbot's `DiscountsCalculation` is
+not migrated (decommission D1); the module doc lists how these rules differ.

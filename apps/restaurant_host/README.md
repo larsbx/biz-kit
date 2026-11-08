@@ -50,3 +50,14 @@ it at the legacy eatsbot's locale cache.
   [docs/deploy.md](../../docs/deploy.md#the-restaurant-release).
 * Grant revocation, staff sign-in, cancellation reasons chosen at the board,
   receipt printing, delivery (slice 5) and card payments through Hawala.
+* Editing the menu and its discounts without a restart (decommission D6):
+  today both come from the restaurant file.
+
+## Discounts
+
+A menu item may list discount rules (`CommerceCore.Discounts`; format in
+`RestaurantHost.Config` and [docs/deploy.md](../../docs/deploy.md#the-restaurant-release)).
+The storefront gives each line the single best rule that applies at the
+restaurant's local time (`timezone`, IANA, default UTC), taxes the discounted
+amount, shows the discount, and signs the line with the rule's id
+(`discount_rule`).

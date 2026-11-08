@@ -185,6 +185,39 @@ defmodule RestaurantCore.AdmissionTest do
            ) == :ok
   end
 
+  test "a placed snapshot must add up (I₂), in integers, with each discount within its line" do
+    g = admin_gate()
+
+    line = fn d ->
+      %{"name" => "M", "unit_minor" => 1250, "quantity" => 2, "discount_minor" => d}
+    end
+
+    adj = fn tax ->
+      %{"discount_total" => 100, "tax_total" => tax, "delivery_fee" => 0, "tip" => 50}
+    end
+
+    # 2500 − 300 = 2200; 2200 − 100 + 181 + 0 + 50 = 2331
+    good = %{
+      "lines" => [line.(300)],
+      "subtotal_minor" => 2200,
+      "total_minor" => 2331,
+      "adjustments" => adj.(181)
+    }
+
+    assert Admission.check(place(device("pos"), good), g) == :ok
+
+    for bad <- [
+          %{good | "subtotal_minor" => 2500},
+          %{good | "total_minor" => 2332},
+          %{good | "lines" => [line.(-1)], "subtotal_minor" => 2501, "total_minor" => 2632},
+          %{good | "lines" => [line.(2501)], "subtotal_minor" => -1, "total_minor" => 130},
+          %{good | "adjustments" => adj.(0), "total_minor" => 2150, "subtotal_minor" => 0}
+        ] do
+      assert Admission.check(place(device("pos"), bad), g) == {:error, :invalid_checkout_command},
+             inspect(bad)
+    end
+  end
+
   test "steps are authorized by the grant, not the request; an unknown order is indistinguishable" do
     g = gate([grant("pos", "admin", @all), grant("bot", "system", @all)])
     g = %{g | restaurant: Admission.fold(place(device("pos")), g)}

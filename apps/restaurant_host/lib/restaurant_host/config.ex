@@ -10,6 +10,14 @@ defmodule RestaurantHost.Config do
   `RestaurantHost.Application` loads it at boot and refuses to start on any
   error, so a bad configuration fails the deploy, not a guest's order.
 
+  A menu item may list `discounts` (`CommerceCore.Discounts`), each with an
+  `id`, a `method` and its fields — `percent_off` `rate` (a decimal string),
+  `unit_price` `price_minor`, `buy_x_pay_y` `x` and `y`, `x_for_amount` `x`
+  and `amount_minor` — and optional `enabled`, `weekdays` (ISO, 1 = Monday),
+  `hours` (`[from, to]`, inclusive, wrapping past midnight) and
+  `min_quantity`. `timezone` (IANA, default `Etc/UTC`) is the local time those
+  conditions read.
+
       {
         "chapter": "chapter-genesis", "merchant": "shop",
         "currency": "USD", "tax_rate": "0.0825",
@@ -19,7 +27,15 @@ defmodule RestaurantHost.Config do
       }
   """
 
-  @top ~w(chapter merchant currency tax_rate menu storefront boards)
+  @top ~w(chapter merchant currency tax_rate timezone menu storefront boards)
+  @item ~w(id name sku price_minor)
+  @rule_conditions ~w(id method enabled weekdays hours min_quantity)
+  @rule_fields %{
+    "percent_off" => ~w(rate),
+    "unit_price" => ~w(price_minor),
+    "buy_x_pay_y" => ~w(x y),
+    "x_for_amount" => ~w(x amount_minor)
+  }
   @device ~w(device_id key_id)
 
   @doc "Read the restaurant file at `path` with seeds from `env`."
@@ -38,7 +54,8 @@ defmodule RestaurantHost.Config do
          {:ok, merchant} <- segment(doc, "merchant"),
          {:ok, currency} <- currency(doc["currency"]),
          {:ok, tax_rate} <- tax_rate(doc["tax_rate"]),
-         {:ok, menu} <- menu(doc["menu"]),
+         {:ok, timezone} <- timezone(Map.get(doc, "timezone", "Etc/UTC")),
+         {:ok, menu} <- menu(doc["menu"], currency),
          {:ok, storefront} <- device("storefront", doc["storefront"], env, false),
          {:ok, boards} <- boards(doc["boards"], env),
          :ok <- distinct_devices(storefront, boards) do
@@ -48,6 +65,7 @@ defmodule RestaurantHost.Config do
          merchant: merchant,
          currency: currency,
          tax_rate: tax_rate,
+         timezone: timezone,
          menu: menu,
          storefront: storefront,
          boards: boards
@@ -106,24 +124,94 @@ defmodule RestaurantHost.Config do
 
   defp tax_rate(_), do: invalid("tax_rate")
 
-  defp menu([_ | _] = items) do
-    if Enum.all?(items, &item?/1),
-      do:
-        {:ok,
-         for(
-           i <- items,
-           do: %{id: i["id"], name: i["name"], sku: i["sku"], price_minor: i["price_minor"]}
-         )},
+  defp timezone(tz) when is_binary(tz) do
+    case DateTime.now(tz, Tz.TimeZoneDatabase) do
+      {:ok, _} -> {:ok, tz}
+      _ -> invalid("timezone")
+    end
+  end
+
+  defp timezone(_), do: invalid("timezone")
+
+  defp menu([_ | _] = items, currency) do
+    parsed = Enum.map(items, &item(&1, currency))
+
+    if Enum.all?(parsed, &match?({:ok, _}, &1)),
+      do: {:ok, Enum.map(parsed, &elem(&1, 1))},
       else: invalid("menu")
   end
 
-  defp menu(_), do: invalid("menu")
+  defp menu(_, _), do: invalid("menu")
 
-  defp item?(%{"id" => id, "name" => name, "sku" => sku, "price_minor" => p} = i)
-       when is_binary(id) and is_binary(name) and is_binary(sku) and is_integer(p) and p >= 0,
-       do: map_size(i) == 4 and id != "" and name != "" and sku != ""
+  defp item(%{"id" => id, "name" => name, "sku" => sku, "price_minor" => p} = i, currency)
+       when is_binary(id) and is_binary(name) and is_binary(sku) and is_integer(p) and p >= 0 do
+    with :ok <- only(i, ["discounts" | @item], "menu"),
+         true <- id != "" and name != "" and sku != "",
+         {:ok, discounts} <- discounts(Map.get(i, "discounts", []), currency) do
+      {:ok, %{id: id, name: name, sku: sku, price_minor: p, discounts: discounts}}
+    else
+      _ -> :error
+    end
+  end
 
-  defp item?(_), do: false
+  defp item(_, _), do: :error
+
+  # Each rule as `CommerceCore.Discounts` takes it, amounts in the menu's
+  # currency; the catalog validates the whole list again when it is put.
+  defp discounts(rules, currency) when is_list(rules) do
+    parsed = Enum.map(rules, &rule(&1, currency))
+    ids = Enum.map(rules, &(is_map(&1) && &1["id"]))
+
+    with true <- Enum.all?(parsed, &match?({:ok, _}, &1)),
+         true <- Enum.uniq(ids) == ids do
+      {:ok, Enum.map(parsed, &elem(&1, 1))}
+    else
+      _ -> :error
+    end
+  end
+
+  defp discounts(_, _), do: :error
+
+  defp rule(%{"method" => method} = r, currency) when is_map_key(@rule_fields, method) do
+    with :ok <- only(r, @rule_conditions ++ @rule_fields[method], "discount"),
+         {:ok, attrs} <- rule_attrs(r, currency) do
+      CommerceCore.Discounts.normalize(attrs)
+    else
+      _ -> :error
+    end
+  end
+
+  defp rule(_, _), do: :error
+
+  defp rule_attrs(r, currency) do
+    money = &Money.from_integer(&1, currency)
+
+    fields =
+      Enum.flat_map(r, fn
+        {"id", v} -> [id: v]
+        {"method", v} -> [method: String.to_existing_atom(v)]
+        {"enabled", v} -> [enabled: v]
+        {"weekdays", v} -> [weekdays: v]
+        {"hours", [from, to]} -> [hours: {from, to}]
+        {"hours", _} -> [hours: :invalid]
+        {"min_quantity", v} -> [min_quantity: v]
+        {"rate", v} when is_binary(v) -> [rate: decimal(v)]
+        {"rate", _} -> [rate: :invalid]
+        {"price_minor", v} when is_integer(v) -> [price: money.(v)]
+        {"amount_minor", v} when is_integer(v) -> [amount: money.(v)]
+        {k, v} when k in ~w(x y) -> [{String.to_existing_atom(k), v}]
+        _ -> [invalid: true]
+      end)
+
+    if Keyword.has_key?(fields, :invalid), do: :error, else: {:ok, Map.new(fields)}
+  end
+
+  defp decimal(v) do
+    case Decimal.parse(v) do
+      {d, ""} -> d
+      _ -> :invalid
+    end
+  end
 
   defp boards(%{} = boards, env) do
     Enum.reduce_while(boards, {:ok, %{}}, fn {id, spec}, {:ok, acc} ->

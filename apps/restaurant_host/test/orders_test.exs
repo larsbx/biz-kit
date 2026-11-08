@@ -46,4 +46,90 @@ defmodule RestaurantHost.OrdersTest do
     assert %{state: :completed, version: 4, actions: []} = Orders.get(r, id)
     assert Orders.step(r, "board-1", id, :cancel, 4, "too late") == {:error, :invalid_transition}
   end
+
+  describe "discounts at the merchant's local time (decommission D5)" do
+    @lunch %{id: "lunch", method: :percent_off, rate: Decimal.new("0.2"), hours: {11, 14}}
+
+    setup do
+      menu = [
+        %{
+          id: "margherita",
+          name: "Margherita",
+          sku: "MARG",
+          price_minor: 1250,
+          discounts: [@lunch]
+        },
+        %{id: "pepperoni", name: "Pepperoni", sku: "PEPP", price_minor: 1400}
+      ]
+
+      World.build(menu: menu, timezone: "America/New_York")
+    end
+
+    # Tuesday 10 November 2026, New York on EST (UTC−5).
+    @lunchtime ~U[2026-11-10 16:30:00Z]
+    @afternoon ~U[2026-11-10 20:00:00Z]
+
+    test "a rule in its window discounts its line; tax is on the discounted amount", %{
+      restaurant: r
+    } do
+      {:ok, p} = Orders.price(r, %{"margherita" => 2, "pepperoni" => 1}, @lunchtime)
+
+      assert Enum.map(
+               p.lines,
+               &{&1.item_id, minor(&1.discount), &1.discount_rule, minor(&1.subtotal)}
+             ) ==
+               [{"margherita", 500, "lunch", 2000}, {"pepperoni", 0, nil, 1400}]
+
+      # 8.25% of 34.00 is 2.805, half-up to 2.81.
+      assert {minor(p.subtotal), minor(p.tax), minor(p.total)} == {3400, 281, 3681}
+
+      {:ok, later} = Orders.price(r, %{"margherita" => 2}, @afternoon)
+      assert [%{discount_rule: nil}] = later.lines
+      assert minor(later.subtotal) == 2500
+    end
+
+    test "the window follows local time across daylight saving", %{restaurant: r} do
+      # 15:30 UTC is 11:30 in July (EDT) but 10:30 in November (EST).
+      {:ok, summer} = Orders.price(r, %{"margherita" => 1}, ~U[2026-07-14 15:30:00Z])
+      {:ok, winter} = Orders.price(r, %{"margherita" => 1}, ~U[2026-11-10 15:30:00Z])
+      assert [%{discount_rule: "lunch"}] = summer.lines
+      assert [%{discount_rule: nil}] = winter.lines
+    end
+
+    test "the Log admits the discounted snapshot and keeps its amounts", %{restaurant: r} do
+      {:ok, id} = Orders.place(r, %{"margherita" => 2}, "Ada", "key-d", @lunchtime)
+      # 2500 − 500 = 2000; tax 165; total 2165
+      assert [%{id: ^id, total: 2165}] = Orders.list(r)
+    end
+  end
+
+  describe "the storefront shows a line's discount" do
+    import Phoenix.ConnTest
+    import Phoenix.LiveViewTest
+    @endpoint RestaurantHost.Web.Endpoint
+
+    setup do
+      tenth = %{id: "tenth", method: :percent_off, rate: Decimal.new("0.1")}
+
+      menu = [
+        %{
+          id: "margherita",
+          name: "Margherita",
+          sku: "MARG",
+          price_minor: 1250,
+          discounts: [tenth]
+        }
+      ]
+
+      World.build(menu: menu)
+    end
+
+    test "discount and discounted total on the page" do
+      {:ok, store, _} = live(build_conn(), "/")
+      store |> element("#add-margherita") |> render_click()
+      store |> element("#add-margherita") |> render_click()
+      assert store |> element("#discount-margherita") |> render() =~ "2.50"
+      assert store |> element("#total") |> render() =~ "24.36"
+    end
+  end
 end

@@ -296,7 +296,8 @@ defmodule RestaurantCore.Admission do
          true <- currency?(p["currency"]),
          true <- lines?(p["lines"]),
          {:ok, adjustments} <- adjustments(p["adjustments"]),
-         true <- Enum.all?([p["subtotal_minor"], p["total_minor"]], &minor?/1) do
+         true <- Enum.all?([p["subtotal_minor"], p["total_minor"]], &minor?/1),
+         true <- adds_up?(p["lines"], p["subtotal_minor"], p["total_minor"], adjustments) do
       cmd =
         %{
           cart_id: p["cart_id"],
@@ -350,6 +351,17 @@ defmodule RestaurantCore.Admission do
       )
 
   defp lines?(_), do: false
+
+  # Pricing's I₂ on the signed integers: each 0 ≤ dᵢ ≤ uᵢ·qᵢ, the subtotal is
+  # Σ (uᵢ·qᵢ − dᵢ) and the total is subtotal − discount_total + tax_total +
+  # delivery_fee + tip. Admission still loads no money stack.
+  defp adds_up?(lines, subtotal, total, adj) do
+    bases = Enum.map(lines, &{&1["unit_minor"] * &1["quantity"], &1["discount_minor"]})
+
+    Enum.all?(bases, fn {base, d} -> 0 <= d and d <= base end) and
+      subtotal == Enum.sum(for {base, d} <- bases, do: base - d) and
+      total == subtotal - adj.discount_total + adj.tax_total + adj.delivery_fee + adj.tip
+  end
 
   defp adjustments(%{} = a) do
     if Enum.sort(Map.keys(a)) == Enum.sort(Map.keys(@adjustments)) and

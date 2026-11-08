@@ -10,7 +10,7 @@ defmodule RestaurantHost.Orders do
   Hawala's. The signed snapshot records the amounts in minor units.
   """
 
-  alias CommerceCore.{Catalog, Pricing, Tax}
+  alias CommerceCore.{Catalog, Discounts, Pricing, Tax}
   alias CoopSubstrate.{Log, ULID}
   alias CoopSubstrate.Protocol.Envelope
   alias RestaurantCore.Admission
@@ -24,13 +24,18 @@ defmodule RestaurantHost.Orders do
     end
   end
 
-  @doc "Price a basket, `%{item_id => quantity}`: lines, subtotal, tax and total."
-  def price(%Restaurant{} = r, basket) when is_map(basket) do
+  @doc """
+  Price a basket, `%{item_id => quantity}`, at `now`: lines (each with the best
+  discount rule applicable at the restaurant's local time), subtotal, tax on
+  the discounted lines, and total.
+  """
+  def price(%Restaurant{} = r, basket, now \\ DateTime.utc_now()) when is_map(basket) do
     names = Map.new(r.menu, &{&1.id, &1.name})
     zero = Money.zero(r.currency)
 
-    with {:ok, lines} <- lines(r, basket, names),
-         bases = Enum.map(lines, &Money.mult!(&1.unit_price, &1.quantity)),
+    with {:ok, lines} <- lines(r, basket, names, local(r, now)),
+         bases =
+           Enum.map(lines, &Money.sub!(Money.mult!(&1.unit_price, &1.quantity), &1.discount)),
          {:ok, tax} <- Tax.flat(r.currency, %{rate: r.tax_rate, fee_taxable?: false}, bases, zero),
          adjustments = %{
            discount_total: zero,
@@ -50,19 +55,29 @@ defmodule RestaurantHost.Orders do
     end
   end
 
-  defp lines(r, basket, names) do
+  # ISO weekday and hour in the restaurant's timezone: what discount rules read.
+  defp local(r, now) do
+    {:ok, local} = DateTime.shift_zone(now, r.timezone, Tz.TimeZoneDatabase)
+    %{weekday: Date.day_of_week(local), hour: local.hour}
+  end
+
+  defp lines(r, basket, names, at) do
     basket
     |> Enum.filter(fn {_, qty} -> qty > 0 end)
     |> Enum.sort()
     |> Enum.reduce_while({:ok, []}, fn {id, qty}, {:ok, acc} ->
       case Catalog.quote(r.catalog, r.merchant, id, nil, r.currency) do
         {:ok, q} when is_integer(qty) ->
+          %{discount: discount, rule: rule} =
+            Discounts.best(q.discounts, %{unit_price: q.unit_price, quantity: qty}, at)
+
           line = %{
             item_id: id,
             name: names[id],
             unit_price: q.unit_price,
             quantity: qty,
-            discount: Money.zero(r.currency)
+            discount: discount,
+            discount_rule: rule
           }
 
           {:cont, {:ok, acc ++ [line]}}
@@ -77,8 +92,8 @@ defmodule RestaurantHost.Orders do
   Place a pickup order. `key` identifies this checkout attempt: submitting it
   again returns the same order rather than a second one.
   """
-  def place(%Restaurant{} = r, basket, pickup_name, key) do
-    with {:ok, priced} <- price(r, basket) do
+  def place(%Restaurant{} = r, basket, pickup_name, key, now \\ DateTime.utc_now()) do
+    with {:ok, priced} <- price(r, basket, now) do
       payload = %{
         "merchant_id" => r.merchant,
         "order_id" => ULID.generate(),
@@ -153,14 +168,18 @@ defmodule RestaurantHost.Orders do
     end
   end
 
-  defp signed_line(l),
-    do: %{
+  defp signed_line(l) do
+    line = %{
       "item_id" => l.item_id,
       "name" => l.name,
       "unit_minor" => minor(l.unit_price),
       "quantity" => l.quantity,
       "discount_minor" => minor(l.discount)
     }
+
+    # The applied rule's id, so the signed order says why it was discounted.
+    if l.discount_rule, do: Map.put(line, "discount_rule", l.discount_rule), else: line
+  end
 
   defp minor(money), do: money |> Money.to_integer_exp() |> elem(1)
 end

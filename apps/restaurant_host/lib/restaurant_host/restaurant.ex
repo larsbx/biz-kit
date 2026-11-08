@@ -12,7 +12,17 @@ defmodule RestaurantHost.Restaurant do
   alias CommerceCore.Catalog
   alias CoopSubstrate.Crypto
 
-  @enforce_keys [:chapter, :merchant, :currency, :tax_rate, :catalog, :menu, :storefront, :boards]
+  @enforce_keys [
+    :chapter,
+    :merchant,
+    :currency,
+    :tax_rate,
+    :timezone,
+    :catalog,
+    :menu,
+    :storefront,
+    :boards
+  ]
   defstruct @enforce_keys
 
   def current, do: :restaurant_host |> Application.fetch_env!(:restaurant) |> build()
@@ -47,7 +57,8 @@ defmodule RestaurantHost.Restaurant do
             id: item.id,
             sku: item.sku,
             visibility: :published,
-            prices: %{currency => Money.from_integer(item.price_minor, currency)}
+            prices: %{currency => Money.from_integer(item.price_minor, currency)},
+            discounts: Map.get(item, :discounts, [])
           })
 
         catalog
@@ -58,6 +69,7 @@ defmodule RestaurantHost.Restaurant do
       merchant: merchant,
       currency: currency,
       tax_rate: Decimal.new(Map.get(config, :tax_rate, "0")),
+      timezone: Map.get(config, :timezone, "Etc/UTC"),
       catalog: catalog,
       menu: Enum.map(menu, &Map.take(&1, [:id, :name])),
       storefront: device(Map.fetch!(config, :storefront)),

@@ -111,6 +111,10 @@ defmodule RestaurantHost.Web.StorefrontLive do
         <span>{money(line.subtotal)}</span>
         <button phx-click="remove" phx-value-id={line.item_id}>Remove one</button>
       </div>
+      <div :for={line <- @priced.lines} :if={line.discount_rule} class="row discount">
+        <span>{line.name}: discount</span>
+        <span id={"discount-#{line.item_id}"}>−{money(line.discount)}</span>
+      </div>
       <div class="row"><span>Tax</span><span>{money(@priced.tax)}</span></div>
       <div class="row"><strong>Total</strong><strong id="total">{money(@priced.total)}</strong></div>
 
