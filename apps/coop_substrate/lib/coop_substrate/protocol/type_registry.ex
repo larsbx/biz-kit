@@ -1087,6 +1087,7 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
     @builtin_types
     |> Map.merge(TaskCore.Admission.event_types())
     |> Map.merge(RestaurantCore.Admission.event_types())
+    |> Map.merge(DispatchCore.Admission.event_types())
     |> Map.merge(CoopSubstrate.GroupBuys.event_types())
     |> Map.merge(CoopSubstrate.FederationAuthority.event_types())
     |> Map.merge(CoopSubstrate.WriterFence.event_types())

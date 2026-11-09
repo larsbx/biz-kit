@@ -7,8 +7,10 @@
 // unique indexes PostgreSQL enforces under concurrent commits;
 // Dispatch.Operations.Board refusal/1 names the conflicting driver or
 // equipment. Tested by BoardTest "equipment on active trips" and
-// EquipmentExclusivityConcurrencyTest. Trailers follow the vehicle rule and
-// are not modelled separately.
+// EquipmentExclusivityConcurrencyTest. On the ledger path the same rule is
+// DispatchCore.Admission's check at `activate`, run by the single appender
+// (every operator exclusive there; CoopSubstrate.DispatchAssignmentsTest).
+// Trailers follow the vehicle rule and are not modelled separately.
 // Abstracted: two assignments, two drivers, two vehicles; commits serialize
 // (the database's unique check), so interleaving is a sequence of steps.
 module dispatch_spec {

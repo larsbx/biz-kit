@@ -5,6 +5,10 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Dispatch assignments on the ledger — 2026-11-09](2026-11-09-dispatch-assignments-on-the-ledger.md):
+  first Dispatch slice of consolidation step 4; the assignment lifecycle as
+  signed, admitted events, with equipment exclusivity at the append gate. The
+  board does not use it yet.
 - [SpruceGoose decommission checklist — 2026-11-06](2026-11-06-sprucegoose-decommission.md):
   proposed; surfaces to rehost, the authority cutover, history kept as inert
   audit data, and what is not migrated.

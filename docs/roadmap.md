@@ -249,7 +249,11 @@ header cites the enforcing code and the gap leaves the README table.
    forged one. The model now cites the bridge.
 7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
    bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
-   (below).
+   (below). *Started with Dispatch* (owner decision):
+   [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md)
+   gives the assignment lifecycle a signed, admitted path and a fold rebuilt
+   from the ledger. Dispatch's board still writes rows; parity, the command
+   switch and the writer fence follow. eatsbot's fence is item 8.
 8. **eatsbot: retirement cutover fence.** The legacy writer could not be stopped. *Closed:*
    governance orders the fence on the ledger (`LegacyWriterFenced`, for a
    closed set of writers, only under declared governance), and
@@ -337,7 +341,8 @@ What remains, in order:
   shadows, boards and inbox captures are not migrated; they go with its
   writer.
 - **Dispatch and ownership.** Move dispatch, Keel ownership and shared
-  principal facts onto the same admission path.
+  principal facts onto the same admission path. First slice:
+  [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md).
 - **Cutover.** Fence the old writers behind a signed baseline and prove
   replay. Then retire the old row authority, the local certified writer,
   the business outboxes and the duplicate issuers.
