@@ -470,6 +470,13 @@ defmodule CoopSubstrate.Log do
   end
 
   defp duplicate(envelopes, gate) do
+    case CoopSubstrate.CommercialAdmission.duplicate(envelopes, gate) do
+      :new -> procurement_duplicate(envelopes, gate)
+      result -> result
+    end
+  end
+
+  defp procurement_duplicate(envelopes, gate) do
     case CoopSubstrate.Procurement.duplicate(envelopes, gate) do
       :new -> existing_duplicate(envelopes, gate)
       result -> result
@@ -484,8 +491,11 @@ defmodule CoopSubstrate.Log do
   end
 
   defp append_verified(envelopes, head, gate, state) do
-    with :ok <- verify_validity(envelopes, gate),
-         {:ok, assigned, new_head} <- assign_chains(envelopes, head),
+    # Tentative assignment is pure. Full source-record hashes must be identical
+    # during ordered batch validation and committed/recovery folds. No state is
+    # published until validation, encoding and expected-version persistence pass.
+    with {:ok, assigned, new_head} <- assign_chains(envelopes, head),
+         :ok <- verify_validity(assigned, gate),
          {:ok, event_data} <- encode_batch(assigned),
          :ok <- persist(event_data, head.global_seq) do
       link_batch(assigned, head)
@@ -548,9 +558,9 @@ defmodule CoopSubstrate.Log do
   # against the gate state — the pure Membership fold of the log so far —
   # advanced through the batch in order so event N sees N-1. Rejection aborts
   # the whole batch before persistence; the advanced gate is recomputed from
-  # the assigned envelopes only after the append succeeds. (The gate fold
-  # never reads log-assigned fields, so folding unassigned envelopes here is
-  # correct.)
+  # the assigned envelopes only after the append succeeds. Assignment is now
+  # tentative and precedes this check: commercial provenance reads full-record
+  # hashes, so pre-commit and replay folds must see identical chain fields.
   # Defer cross-task constraints (e.g. never disable the last owner) to the
   # batch's final state so a governed rotation (disable + enable) is atomic.
   defp verify_validity(envelopes, gate) do

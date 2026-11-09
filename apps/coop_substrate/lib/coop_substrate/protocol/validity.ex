@@ -82,7 +82,8 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
   def check(%Envelope{} = env, gate) do
-    with :ok <- check_role_keys(env, gate) do
+    with :ok <- CoopSubstrate.CommercialAdmission.fence(env, gate),
+         :ok <- check_role_keys(env, gate) do
       type_check(env, gate)
     end
   end
@@ -115,6 +116,11 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @commercial_types Map.keys(CoopSubstrate.CommercialAdmission.event_types())
+  defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_types do
+    CoopSubstrate.CommercialAdmission.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
     CoopSubstrate.FederationAuthority.check(env, gate)
   end

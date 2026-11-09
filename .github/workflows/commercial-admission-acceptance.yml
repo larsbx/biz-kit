@@ -1,0 +1,182 @@
+name: Protected commercial admission acceptance
+
+on:
+  pull_request:
+    paths:
+      - "apps/coop_substrate/**"
+      - "apps/biz_kit_cluster/**"
+      - "formal/lean/BizKitCommercialAdmission.lean"
+      - "formal/lean/check_commercial_admission.sh"
+      - "formal/lean/lean-toolchain"
+      - "formal/lean/install-toolchain.sh"
+      - "formal/quint/commercial_admission.qnt"
+      - "formal/quint/check_commercial_admission.sh"
+      - "docs/architecture/2026-11-09-commercial-protected-admission.md"
+      - "mix.lock"
+      - "mix.exs"
+      - "config/**"
+      - ".github/workflows/commercial-admission-acceptance.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/coop_substrate/**"
+      - "apps/biz_kit_cluster/**"
+      - "formal/lean/BizKitCommercialAdmission.lean"
+      - "formal/lean/check_commercial_admission.sh"
+      - "formal/lean/lean-toolchain"
+      - "formal/lean/install-toolchain.sh"
+      - "formal/quint/commercial_admission.qnt"
+      - "formal/quint/check_commercial_admission.sh"
+      - "docs/architecture/2026-11-09-commercial-protected-admission.md"
+      - "mix.lock"
+      - "mix.exs"
+      - "config/**"
+      - ".github/workflows/commercial-admission-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean-invariants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Restore compiler archive
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: ${{ runner.temp }}/bizkit-lean-archives
+          key: lean-archive-linux-x64-${{ hashFiles('formal/lean/install-toolchain.sh', 'formal/lean/lean-toolchain') }}
+      - name: Install checksum-pinned Lean
+        env:
+          BIZKIT_LEAN_ARCHIVE_CACHE: ${{ runner.temp }}/bizkit-lean-archives
+        run: |
+          bash formal/lean/install-toolchain.sh "$RUNNER_TEMP/bizkit-lean"
+          echo "$RUNNER_TEMP/bizkit-lean/bin" >> "$GITHUB_PATH"
+      - name: Universal invariants, compiled axiom inventory and false-theorem controls
+        env:
+          COMMERCIAL_ADMISSION_EVIDENCE_DIR: ${{ github.workspace }}/commercial-evidence/lean
+        run: |
+          mkdir -p commercial-evidence/lean
+          git rev-parse HEAD > commercial-evidence/lean/git-head.txt
+          git rev-parse 'HEAD^{tree}' > commercial-evidence/lean/git-tree.txt
+          bash formal/lean/check_commercial_admission.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: commercial-admission-lean-${{ github.event.pull_request.head.sha || github.sha }}
+          path: commercial-evidence/lean
+          if-no-files-found: error
+
+  quint-countermodels:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Quint
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.33.1
+      - name: Independent bounded model and targeted counterexamples
+        env:
+          COMMERCIAL_QUINT_EVIDENCE_DIR: ${{ github.workspace }}/commercial-evidence/quint
+        run: bash formal/quint/check_commercial_admission.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: commercial-admission-quint-${{ github.event.pull_request.head.sha || github.sha }}
+          path: commercial-evidence/quint
+          if-no-files-found: error
+
+  signed-ledger:
+    needs: [lean-invariants, quint-countermodels]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Record exact source identity
+        run: |
+          mkdir -p commercial-evidence/runtime
+          git rev-parse HEAD > commercial-evidence/runtime/git-head.txt
+          git rev-parse 'HEAD^{tree}' > commercial-evidence/runtime/git-tree.txt
+          sha256sum apps/coop_substrate/lib/coop_substrate/commercial_admission.ex \
+            apps/coop_substrate/lib/coop_substrate/log.ex \
+            apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex \
+            apps/coop_substrate/lib/coop_substrate/protocol/validity.ex \
+            apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex \
+            apps/coop_substrate/test/commercial_admission_test.exs \
+            > commercial-evidence/runtime/sources.sha256
+          elixir --version > commercial-evidence/runtime/elixir-version.txt
+      - name: Locked dependencies and strict umbrella compilation
+        run: |
+          set -o pipefail
+          mix deps.get --check-locked 2>&1 | tee commercial-evidence/runtime/dependencies.log
+          mix compile --warnings-as-errors 2>&1 | tee commercial-evidence/runtime/compile.log
+      - name: Targeted formatting
+        run: >-
+          mix format --check-formatted
+          apps/coop_substrate/lib/coop_substrate/commercial_admission.ex
+          apps/coop_substrate/lib/coop_substrate/log.ex
+          apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex
+          apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
+          apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
+          apps/coop_substrate/test/commercial_admission_test.exs
+      - name: Real signed append, historical replay, conflicts and restart regressions
+        working-directory: apps/coop_substrate
+        run: |
+          set -o pipefail
+          mix run --no-start \
+            -e 'Application.put_env(:localize, :otp_app, :localize, persistent: true); Mix.Task.run("test", System.argv())' -- \
+            test/commercial_admission_test.exs \
+            test/commercial_setoff_intent_test.exs \
+            test/commercial_setoff_test.exs \
+            test/commercial_setoff_proof_test.exs \
+            test/commercial_setoff_sources_test.exs \
+            test/netting_execution_test.exs \
+            test/obligation_rail_test.exs \
+            test/log_test.exs \
+            test/role_key_test.exs \
+            test/key_recovery_test.exs \
+            test/cluster_test.exs \
+            test/procurement_test.exs \
+            test/group_buy_authority_test.exs \
+            test/group_buy_escrow_admission_test.exs \
+            --seed 0 2>&1 | tee ../../commercial-evidence/runtime/tests.log
+      - name: Require unchanged inspected sources
+        run: sha256sum --check commercial-evidence/runtime/sources.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: commercial-admission-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+          path: commercial-evidence/runtime
+          if-no-files-found: error
