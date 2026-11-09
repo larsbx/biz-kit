@@ -239,7 +239,10 @@ defmodule CoopSubstrate.Projections.Membership do
     CoopSubstrate.CommercialSourceLineage.assigned(env, next)
   end
 
-  def handle_event(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env, state) do
+  def handle_event(
+        %Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env,
+        state
+      ) do
     next =
       update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
         %{ob | open: false}
