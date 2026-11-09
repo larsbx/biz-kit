@@ -19,7 +19,7 @@ defmodule RestaurantHost.Config do
       }
   """
 
-  @top ~w(chapter merchant currency jurisdiction menu storefront boards)
+  @top ~w(chapter merchant currency jurisdiction menu storefront boards delivery_enabled)
   @device ~w(device_id key_id)
 
   @doc "Read the restaurant file at `path` with seeds from `env`."
@@ -39,6 +39,8 @@ defmodule RestaurantHost.Config do
          {:ok, currency} <- currency(doc["currency"]),
          {:ok, jurisdiction} <- jurisdiction(doc["jurisdiction"]),
          {:ok, menu} <- menu(doc["menu"]),
+         delivery_enabled = Map.get(doc, "delivery_enabled", false),
+         true <- is_boolean(delivery_enabled) or invalid("delivery_enabled"),
          {:ok, storefront} <- device("storefront", doc["storefront"], env, false),
          {:ok, boards} <- boards(doc["boards"], env),
          :ok <- distinct_devices(storefront, boards) do
@@ -49,6 +51,7 @@ defmodule RestaurantHost.Config do
          currency: currency,
          jurisdiction: jurisdiction,
          menu: menu,
+         delivery_enabled: delivery_enabled,
          storefront: storefront,
          boards: boards
        }}

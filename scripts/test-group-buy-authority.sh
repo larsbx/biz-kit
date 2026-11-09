@@ -6,7 +6,7 @@ trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
 # Include the ledger's full test dependency closure, including federation
 # authority/replay adapters; otherwise Mix fails before any escrow test runs.
-for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core agent_core agent_ops_store \
+for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core agent_core agent_ops_store \
   group_buy_core inventory_core federation_core federation_service; do
   cp -R "$root/apps/$app" "$stage/apps/"
 done

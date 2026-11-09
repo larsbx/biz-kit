@@ -148,6 +148,10 @@ defmodule RestaurantHost.Web.BoardLive do
         <span class="state">{order.state}</span>
         <span>{money(order.total, @restaurant.currency)} cash</span>
       </div>
+      <p :if={order.delivery} id={"delivery-#{order.id}"}>
+        Dispatch handoff {order.delivery.phase} · version {order.delivery.version} ·
+        order <code>{order.id}</code>
+      </p>
       <ul>
         <li :for={line <- order.lines}>{line["quantity"]} × {line["name"]}</li>
       </ul>

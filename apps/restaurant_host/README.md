@@ -50,7 +50,8 @@ it at the legacy eatsbot's locale cache.
 ## Pickup MVP boundaries
 
 Customers and staff use prebound Biz-kit identities. Discounts are
-merchant-funded, fixed amounts per item. Delivery remains slice 5 through
-Dispatch and FulfillmentCore, and card payments belong to Hawala.
+merchant-funded, fixed amounts per item. The optional arranged-delivery pilot
+hands ready orders to Dispatch via FulfillmentCore. Card payments belong to
+Hawala.
 The release can be tested with an empty restaurant ledger before the
 separate legacy cutover tracked in [#176](https://github.com/larsbx/biz-kit/issues/176).

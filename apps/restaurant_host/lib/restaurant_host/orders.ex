@@ -6,7 +6,7 @@ defmodule RestaurantHost.Orders do
   `RestaurantOrderStepV1`. The Log admits or refuses (`RestaurantCore.Admission`);
   the host never decides on its own and keeps no order state.
 
-  No financial operation exists here: payment is cash at pickup, and money is
+  No financial operation exists here: payment is cash at handoff, and money is
   Hawala's. The signed snapshot records the amounts in minor units.
   """
 
@@ -85,20 +85,30 @@ defmodule RestaurantHost.Orders do
   end
 
   @doc """
-  Place a pickup order. `key` identifies this checkout attempt: submitting it
+  Place a pickup or configured delivery order. `key` identifies this checkout attempt: submitting it
   again returns the same order rather than a second one.
   """
-  def place(%Restaurant{} = r, basket, pickup_name, key, principal \\ nil) do
-    with {:ok, priced} <- price(r, basket) do
+  def place(
+        %Restaurant{} = r,
+        basket,
+        pickup_name,
+        key,
+        principal \\ nil,
+        fulfillment \\ "pickup"
+      ) do
+    with :ok <- offered(r, fulfillment),
+         {:ok, priced} <- price(r, basket) do
+      order_id = ULID.generate()
+
       payload = %{
         "merchant_id" => r.merchant,
-        "order_id" => ULID.generate(),
+        "order_id" => order_id,
         "cart_id" => key,
         "principal_id" => principal || "guest:" <> key,
         "menu_revision" => r.menu_revision,
         "channel" => "web",
         "idempotency_key" => key,
-        "fulfillment" => "pickup",
+        "fulfillment" => fulfillment,
         "pickup_name" => pickup_name,
         "currency" => Atom.to_string(r.currency),
         "lines" => Enum.map(priced.lines, &signed_line/1),
@@ -108,6 +118,11 @@ defmodule RestaurantHost.Orders do
           Map.new(priced.adjustments, fn {k, v} -> {Atom.to_string(k), minor(v)} end)
       }
 
+      payload =
+        if fulfillment == "delivery",
+          do: Map.put(payload, "delivery", %{"request_id" => order_id}),
+          else: payload
+
       case submit(r, r.storefront, "RestaurantOrderPlacedV1", payload) do
         :ok -> {:ok, payload["order_id"]}
         {:error, {:duplicate_checkout, id}} -> {:ok, id}
@@ -115,6 +130,14 @@ defmodule RestaurantHost.Orders do
       end
     end
   end
+
+  defp offered(_, "pickup"), do: :ok
+
+  defp offered(r, "delivery") do
+    if Restaurant.delivery_available?(r), do: :ok, else: {:error, :invalid_fulfillment}
+  end
+
+  defp offered(_, _), do: {:error, :invalid_fulfillment}
 
   @doc "Take an order step from a paired board, at the order's current version."
   def step(%Restaurant{} = r, board_id, order_id, action, version, reason \\ nil, staff \\ nil) do

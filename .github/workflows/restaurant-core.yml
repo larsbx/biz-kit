@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/order_core/**'
+      - 'apps/fulfillment_core/**'
       - 'apps/restaurant_core/**'
       - 'apps/commerce_core/**'
       - 'apps/coop_substrate/**'
@@ -52,9 +53,11 @@ jobs:
           apps/restaurant_core/mix.exs
           apps/restaurant_core/lib/restaurant_core/kitchen.ex
           apps/restaurant_core/lib/restaurant_core/admission.ex
+          apps/restaurant_core/lib/restaurant_core/delivery.ex
           apps/restaurant_core/lib/restaurant_core/menu.ex
           apps/restaurant_core/test/kitchen_safety_test.exs
           apps/restaurant_core/test/admission_test.exs
+          apps/restaurant_core/test/delivery_test.exs
           apps/restaurant_core/test/menu_admission_test.exs
           apps/coop_substrate/test/restaurant_admission_test.exs
       - name: Lifecycle properties, kitchen conformance and admission refinement
