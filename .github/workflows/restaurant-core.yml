@@ -82,6 +82,7 @@ jobs:
           --health-retries 5
     env:
       MIX_ENV: test
+      BIZKIT_BUNDLED_TEST_LOCALE: "true"
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
     steps:
@@ -112,6 +113,7 @@ jobs:
           --health-retries 5
     env:
       MIX_ENV: test
+      BIZKIT_BUNDLED_TEST_LOCALE: "true"
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
     steps:
