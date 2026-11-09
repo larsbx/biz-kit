@@ -1,3 +1,10 @@
+# Mix prunes umbrella siblings which are not Dispatch dependencies before it
+# loads tests. Compose the separately compiled host here, after that pruning;
+# do not turn this acceptance harness into a production application dependency.
+true = Code.prepend_path(Path.join([Mix.Project.build_path(), "lib", "procurement_host", "ebin"]))
+Code.ensure_loaded!(ProcurementHost.Web)
+Code.ensure_loaded!(ProcurementHost.Dispatch)
+
 defmodule Dispatch.ProcurementDeliveryTest do
   @moduledoc """
   The real Dispatch worker and authenticated courier portal against the real
@@ -20,7 +27,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
   alias Dispatch.Accounts.RoleAssignment
   alias Dispatch.Fleet.{Assignment, Load}
   alias Dispatch.{RestaurantAutomation, RestaurantDelivery, RestaurantReceipts}
-  alias Dispatch.Support.{Fixtures, PortalIdentity}
+  alias Dispatch.Support.{ConcurrentSessions, Fixtures, PortalIdentity}
   alias ProcurementHost.Dispatch, as: Handoff
 
   @moduletag :integration
@@ -46,8 +53,11 @@ defmodule Dispatch.ProcurementDeliveryTest do
     :ok
   end
 
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo)
+  setup tags do
+    # The restart case commits every transaction. Its independent PostgreSQL
+    # observer must see the trip without borrowing this test's connection.
+    checkout = if tags[:committed], do: [sandbox: false], else: []
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Dispatch.Repo, checkout)
     Ecto.Adapters.SQL.Sandbox.mode(Dispatch.Repo, {:shared, self()})
     :ok = PortalIdentity.setup()
     old_clock = Procurement.clock_ms()
@@ -59,6 +69,11 @@ defmodule Dispatch.ProcurementDeliveryTest do
     carrier = Fixtures.carrier()
     tenant = carrier.id
     %{user: user, participant: courier} = Fixtures.person(tenant, carrier)
+
+    if tags[:committed] do
+      on_exit(fn -> ConcurrentSessions.cleanup(carrier, [user]) end)
+    end
+
     courier_role = Fixtures.assignment(tenant, carrier, courier, "DRIVER")
     service = service_role(tenant)
     {:ok, service_actor} = Actor.from_assignment(service)
@@ -336,12 +351,15 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert Log.head() == head
   end
 
+  @tag :committed
   test "worker and canonical appender restarts recover accepted, in-transit and delivered state",
        c do
     quote = order!(c, "order-1")
 
     assert {:ok, {_load, planned}} =
              RestaurantAutomation.prepare(c.service_actor, c.config, "order-1")
+
+    assert_committed_trip(c, "order-1", planned, :PLANNED)
 
     # Simulate the process boundary after remote admission, before activation.
     assert {:ok, _} =
@@ -353,6 +371,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert Log.head() == head
     trip = trip!(c, "order-1")
     assert trip.id == planned.id
+    assert_committed_trip(c, "order-1", trip, :ACTIVE)
 
     page = login(c.user, c.courier_role)
     page = receipt(page, trip, "picked_up", code(c, "order-1", "picked_up"))
@@ -365,6 +384,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     run_worker_until(fn -> trip!(c, "order-1").status == :ACTIVE end)
     assert Log.head() == head
     assert length(assignments(c)) == 1
+    assert_committed_trip(c, "order-1", trip, :ACTIVE)
 
     page = receipt(page, trip, "delivered", code(c, "order-1", "delivered"))
     assert page.status == 200
@@ -373,6 +393,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     run_worker_until(fn -> trip!(c, "order-1").status == :COMPLETED end)
     assert Log.head() == head
     assert trip!(c, "order-1").id == planned.id
+    assert_committed_trip(c, "order-1", trip, :COMPLETED)
     assert_exact_fulfillment(c, "order-1", quote)
     assert :ok = Log.verify_chains()
   end
@@ -525,6 +546,49 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert load
     assert [trip] = Enum.filter(assignments(c), &(&1.load_id == load.id))
     trip
+  end
+
+  defp assert_committed_trip(c, order, trip, status) do
+    # No Repo/Sandbox pool is used here. A different PostgreSQL backend cannot
+    # observe rows which exist only inside the test owner's open transaction.
+    config =
+      Dispatch.Repo.config()
+      |> Keyword.take([
+        :hostname,
+        :port,
+        :username,
+        :password,
+        :database,
+        :ssl,
+        :ssl_opts,
+        :socket_dir,
+        :parameters,
+        :connect_timeout
+      ])
+
+    assert {:ok, connection} = Postgrex.start_link(config)
+
+    try do
+      assert %{rows: [[backend, id, load_id, courier_id, state, external_reference]]} =
+               Postgrex.query!(
+                 connection,
+                 """
+                 SELECT pg_backend_pid(), a.id::text, a.load_id::text,
+                        a.operator_participant_id::text, a.status, l.external_reference
+                   FROM assignments a
+                   JOIN loads l ON l.id = a.load_id AND l.tenant_id = a.tenant_id
+                  WHERE a.id = $1::uuid AND a.tenant_id = $2::uuid
+                 """,
+                 [Ecto.UUID.dump!(trip.id), Ecto.UUID.dump!(c.tenant)]
+               )
+
+      refute backend == ConcurrentSessions.backend()
+
+      assert {id, load_id, courier_id, state, external_reference} ==
+               {trip.id, trip.load_id, c.courier.id, Atom.to_string(status), reference(c, order)}
+    after
+      GenServer.stop(connection)
+    end
   end
 
   defp assert_exact_fulfillment(c, id, quote) do

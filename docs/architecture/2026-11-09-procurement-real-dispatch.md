@@ -10,10 +10,10 @@ signer-count correction from
 integration introduced by
 [PR #349](https://github.com/larsbx/biz-kit/pull/349).
 
-**Execution status: pending for this continuation.** The integration source,
-script and workflow are reviewable acceptance work. Add passing or failing
-results only after observing the corresponding run, including its full source
-revision. The earlier packaged results at
+**Execution results:** the observed runs and their exact source revisions are
+recorded in [PR #355](https://github.com/larsbx/biz-kit/pull/355). This note defines
+the acceptance contract; the existence of the test, script or workflow is not a
+passing execution result. The earlier packaged results at
 `8d36ed5373468106d48309470d669f8b4f370ed2` belong to #354 and do not accept later
 source changes.
 
@@ -130,7 +130,7 @@ revision-specific results before promoting a claim to verified.
 | Retries | Repeated polling reuses the exact load/assignment. Freshly signed retries with the same accepted command/proof return the duplicate result without another ledger append. |
 | Cancellation before acceptance | The procurement cancellation wins before custody; subsequent work reconciliation cancels any corresponding planned assignment and a late acceptance cannot revive the order. |
 | Cancellation after acceptance | The canonical gate requires custody reconciliation and refuses an ordinary commercial cancellation. |
-| Restart/recovery | Rebuilding the canonical Log preserves the original order and quote. A restarted/reinvoked worker recovers planned, accepted or delivered work using persistent identity and does not create a replacement order or trip. |
+| Restart/recovery | Rebuilding the canonical Log preserves the original order and quote. A restarted worker recovers accepted, in-transit and delivered work using the same trip. The recovery fixture commits its Dispatch records and independently reads their identity/status from a separate PostgreSQL backend, so a shared uncommitted sandbox cannot supply the evidence. |
 
 The dispatch client uses actual system time when signing. The existing general
 procurement fixture uses a fixed test clock, so the integrated fixture must align

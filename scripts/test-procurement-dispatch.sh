@@ -12,6 +12,12 @@ export RESTAURANT_DISPATCH_AUTOMATED=false
 export PROCUREMENT_DISPATCH_AUTOMATED=false
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+revision=$(git -C "$root" rev-parse HEAD)
+receipts="$root/.artifacts/procurement-dispatch/$revision"
+mkdir -p "$receipts"
+# Even a rejected rerun must not leave an older success as its apparent result.
+rm -f "$receipts/result.json"
+printf '%s\n' "$revision" > "$receipts/revision.txt"
 for tool in python3 elixir mix; do
   command -v "$tool" >/dev/null || { echo "Required tool missing: $tool" >&2; exit 1; }
 done
@@ -33,16 +39,10 @@ if os.environ.get("MIX_TEST_PARTITION"):
     raise SystemExit("Run the acceptance against the named test databases without a partition override")
 PY
 
-revision=$(git -C "$root" rev-parse HEAD)
 if [ -n "${SOURCE_REVISION:-}" ]; then test "$SOURCE_REVISION" = "$revision"; fi
 paths=(apps config native mix.exs mix.lock scripts/test-procurement-dispatch.sh .github/workflows/procurement-dispatch.yml)
 git -C "$root" diff --quiet HEAD -- "${paths[@]}"
 test -z "$(git -C "$root" ls-files --others --exclude-standard -- "${paths[@]}")"
-receipts="$root/.artifacts/procurement-dispatch/$revision"
-mkdir -p "$receipts"
-rm -f "$receipts/result.json"
-printf '%s\n' "$revision" > "$receipts/revision.txt"
-
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
@@ -69,7 +69,7 @@ mix compile --warnings-as-errors 2>&1 | tee "$receipts/compile.log"
   2>&1 | tee "$receipts/signer-count.log"
 (cd apps/dispatch; mix ash.setup --quiet; mix test --include integration --warnings-as-errors) \
   2>&1 | tee "$receipts/dispatch.log"
-(cd apps/dispatch; elixir -pa ../../_build/test/lib/procurement_host/ebin -S mix test \
+(cd apps/dispatch; mix test \
   --include integration --warnings-as-errors integration_test/procurement_delivery_test.exs) \
   2>&1 | tee "$receipts/worker.log"
 (cd apps/dispatch; mix openapi.check; mix ash_postgres.generate_migrations --check) \
@@ -84,7 +84,9 @@ from pathlib import Path
 
 out = Path(sys.argv[1])
 for name in ("signer-count.log", "dispatch.log", "worker.log"):
-    if not re.search(r"\b[1-9][0-9]* tests?, 0 failures\b", (out / name).read_text()):
+    log = (out / name).read_text()
+    if (not re.search(r"\b[1-9][0-9]* tests?, 0 failures\b", log)
+            or re.search(r"\b[1-9][0-9]* invalid\b", log)):
         raise SystemExit(f"Missing nonempty passing test summary: {name}")
 logs = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
         for p in sorted(out.iterdir()) if p.is_file() and p.name != "result.json"}
