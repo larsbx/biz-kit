@@ -135,6 +135,9 @@ same batch cause the whole batch to fail. Two independently prepared appends
 through one appender admit at most one. Two appender processes with the same
 store version cannot both append: the losing process stops on
 `wrong_expected_version` and its replacement recovers the winner's state.
+V2 also refuses an intent ID already present in the historical V1 proposal
+projection. Migration requires a fresh intent ID; it never upgrades a V1
+proposal into a reservation implicitly.
 
 Restart first verifies the existing chains, then reconstructs the profile,
 provenance, authority epochs, intent identities and reservations from the

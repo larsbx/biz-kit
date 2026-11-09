@@ -132,7 +132,7 @@ defmodule CoopSubstrate.CommercialAdmission do
          :ok <- require_profile(p),
          :ok <- active_profile(state, ch, p),
          :ok <- header(p),
-         :ok <- fresh_intent(state, ch, p["intent_id"]),
+         :ok <- fresh_intent(gate, state, ch, p["intent_id"]),
          :ok <- current_parties(env, gate, state),
          {:ok, authority} <- current_governance(env, gate, state),
          :ok <- bind_authority(authority, p),
@@ -186,7 +186,7 @@ defmodule CoopSubstrate.CommercialAdmission do
         })
 
       with :ok <- exact_sources(rows, prepared),
-           :ok <- fresh_intent(state, chapter, intent_id),
+           :ok <- fresh_intent(gate, state, chapter, intent_id),
            :ok <- unreserved(state, chapter, rows),
            do: {:ok, prepared}
     else
@@ -419,8 +419,11 @@ defmodule CoopSubstrate.CommercialAdmission do
        else: {:error, :invalid_commercial_admission_header}
   end
 
-  defp fresh_intent(state, ch, id) do
-    if Map.has_key?(state.intents, {ch, id}), do: {:error, :commercial_intent_replayed}, else: :ok
+  defp fresh_intent(gate, state, ch, id) do
+    if Map.has_key?(state.intents, {ch, id}) or
+         Map.has_key?(gate.commercial_setoff_intents, {ch, id}),
+       do: {:error, :commercial_intent_replayed},
+       else: :ok
   end
 
   defp current_parties(%Envelope{chapter_id: ch, payload: p, signers: signers}, gate, state) do

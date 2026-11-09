@@ -299,6 +299,18 @@ defmodule CoopSubstrate.CommercialAdmissionTest do
     assert :ok = Log.verify_chains()
   end
 
+  test "V2 cannot reuse a historical V1 intent identity", ctx do
+    ctx = seed!(ctx)
+    {:ok, [_]} = Log.append(legacy_intent(ctx))
+    {:ok, [authority]} = Log.append(declaration(ctx.gov, ctx.gov))
+    {:ok, [profile]} = Log.append(activation(ctx))
+    ctx = Map.merge(ctx, %{authority: authority, profile: profile})
+    reject!(intent(ctx, payload(ctx, "V1-1")), :commercial_intent_replayed)
+    assert {:ok, [_]} = Log.append(intent(ctx, payload(ctx, "V2-NEW")))
+    restart_log()
+    reject!(intent(ctx, payload(ctx, "V1-1")), :commercial_intent_replayed)
+  end
+
   test "full committed hashes are reserved once while all obligations and financial state stay open",
        ctx do
     ctx = protected!(ctx)
