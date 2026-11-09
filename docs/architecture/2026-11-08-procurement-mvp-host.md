@@ -113,9 +113,13 @@ The required sequence is:
 3. Drive rendered forms through a certificate-verified loopback HTTPS fixture,
    with normal Secure cookies and CSRF. Deny unauthenticated access and missing
    CSRF; complete request, qualification, two quote revisions, exact acceptance
-   and fulfillment. Reject the obsolete quote at the current aggregate version.
-4. Repeat the exact original request command and require six persisted commands
-   and version six, the frozen second quote, and no implied payment evidence.
+   and Dispatch fulfillment. Reject the obsolete quote at the current aggregate
+   version. Queue the accepted order in the coordinator UI and use the signed
+   Dispatch API with a synthetic courier to submit pickup and delivery.
+4. Repeat the original request command and the delivery receipt. Require one
+   order with six business command receipts at version seven, the frozen second
+   quote, the Dispatch delivery proof and no implied payment evidence. Check the
+   canonical head to ensure rejected requests and retries added no events.
 5. Stop/start the packaged process, reread the order through HTTP, and compare the
    canonical head/hash and replayed state after restart.
 6. Revoke offline while the host is stopped; use the old session to attempt a
@@ -136,7 +140,7 @@ secrets or the production host filesystem. Offline fixture code lives under test
 not in the application release, and refuses non-acceptance databases. No public
 bootstrap endpoint is added. It never starts a second live appender.
 
-A success receipt requires all 12 checks, a matching source revision and archive
+A success receipt requires all 13 checks, a matching source revision and archive
 SHA-256. Failed/skipped/missing checks and stale receipts are rejected; a failed
 rerun removes the previous success receipt. Receipts are explicitly
 `unsigned-runner-observation`, not cryptographic runner attestations or proof that
