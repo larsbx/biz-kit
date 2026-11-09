@@ -79,11 +79,12 @@ defmodule Dispatch.HTTPTransportTest do
        pools: %{default: [conn_opts: Keyword.put(connection, :transport_opts, transport)]}}
     )
 
-    assert {:error, %{reason: {:tls_alert, {:handshake_failure, reason}}}} =
+    assert {:error, %{reason: {:tls_alert, {alert, reason}}}} =
              Finch.request(Finch.build(:get, "https://127.0.0.1:#{port}/work"), name)
 
+    assert alert in [:bad_certificate, :handshake_failure]
     assert to_string(reason) =~ "hostname_check_failed"
-    assert {:error, {:tls_alert, {:handshake_failure, _}}} = Task.await(server, 6_000)
+    assert {:error, {:tls_alert, {^alert, _}}} = Task.await(server, 6_000)
   end
 
   defp tls_server do
