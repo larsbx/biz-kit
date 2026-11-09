@@ -4,20 +4,26 @@ on:
   pull_request:
     paths:
       - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/BizKitCommercialLineage.lean"
       - "formal/lean/lakefile.toml"
       - "formal/lean/check.sh"
       - "formal/quint/commercial_source_fence.qnt"
+      - "formal/quint/commercial_lineage.qnt"
       - "formal/quint/check_commercial_source_fence.sh"
+      - "formal/quint/check_commercial_lineage.sh"
       - "docs/architecture/2026-11-08-commercial-source-fence-proof.md"
       - ".github/workflows/commercial-source-fence-proof.yml"
   push:
     branches: [main]
     paths:
       - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/BizKitCommercialLineage.lean"
       - "formal/lean/lakefile.toml"
       - "formal/lean/check.sh"
       - "formal/quint/commercial_source_fence.qnt"
+      - "formal/quint/commercial_lineage.qnt"
       - "formal/quint/check_commercial_source_fence.sh"
+      - "formal/quint/check_commercial_lineage.sh"
       - "docs/architecture/2026-11-08-commercial-source-fence-proof.md"
       - ".github/workflows/commercial-source-fence-proof.yml"
 
@@ -39,6 +45,8 @@ jobs:
         run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
       - name: Verify no double discharge and refute unsafe guards
         run: bash formal/quint/check_commercial_source_fence.sh
+      - name: Verify irreversible source classification and refute unsafe reassignment
+        run: bash formal/quint/check_commercial_lineage.sh
 
   lean-source-fence:
     runs-on: ubuntu-24.04
@@ -64,7 +72,10 @@ jobs:
           lake env lean BizKitCommercialSetoff.lean
           lake build BizKitCommercialSetoff
           lake env leanchecker --fresh --verbose BizKitCommercialSetoff
+          lake env lean BizKitCommercialLineage.lean
+          lake build BizKitCommercialLineage
+          lake env leanchecker --fresh --verbose BizKitCommercialLineage
       - name: Refuse unsafe Lean admissions / unresolved axioms
         working-directory: formal/lean
         run: |
-          ! grep -nE '(^|[^[:alnum:]_])sorry([^[:alnum:]_]|$)' BizKitCommercialSetoff.lean
+          ! grep -nE '(^|[^[:alnum:]_])sorry([^[:alnum:]_]|$)' BizKitCommercialSetoff.lean BizKitCommercialLineage.lean
