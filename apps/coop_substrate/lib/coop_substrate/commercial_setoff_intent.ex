@@ -76,7 +76,8 @@ defmodule CoopSubstrate.CommercialSetoffIntent do
 
     if Enum.sort(Map.keys(p)) == Enum.sort(@payload_keys) and
          Enum.all?([a, b, denomination, id], &(is_binary(&1) and &1 != "")) and
-         a < b and byte_size(id) <= 256 and byte_size(denomination) == 3 and
+         a < b and String.match?(id, ~r/\A[A-Za-z0-9_-]{1,128}\z/) and
+         byte_size(denomination) == 3 and
          String.match?(denomination, ~r/\A[A-Z]{3}\z/) do
       :ok
     else
