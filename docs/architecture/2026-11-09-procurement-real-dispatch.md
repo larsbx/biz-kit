@@ -63,6 +63,28 @@ Dispatch dependency graph need not acquire a dependency on `procurement_host`
 merely to compile the test: the integration harness explicitly supplies the
 required host and ledger modules.
 
+### Shared HTTP transport correction
+
+The first executable worker run exposed a failure in the shared `Dispatch.Finch`
+configuration before a work request reached the host. Its default TLS options
+included `customize_hostname_check`. The locked Finch 0.24.0 removes the other
+TLS-only options when opening an HTTP pool, but leaves this option in place;
+Mint's TCP connection consequently exits with `:badarg`. This affects the
+explicitly supported loopback HTTP integration, not a procurement business
+transition.
+
+The fix removes only that redundant override. It retains explicit
+`verify: :verify_peer`, the CAStore trust bundle, verification depth and the
+configured connection timeout. The locked Mint 1.11.0 installs its HTTPS
+hostname matcher when peer verification is enabled. Regression tests exercise
+the production Finch pool against loopback HTTP and an untrusted HTTPS
+certificate. A third test copies the production TLS options into an isolated
+pool, trusts only a disposable test CA, and requires rejection of a certificate
+for the wrong hostname. No verification bypass or live endpoint is introduced.
+
+The procurement source adapter and business reducer remain unchanged. The
+necessary production change is confined to this shared transport configuration.
+
 ## Business and transport boundaries
 
 ### One request and one authoritative business ledger
