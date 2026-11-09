@@ -8,9 +8,12 @@ on:
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex"
       - "apps/coop_substrate/test/commercial_setoff_proof_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_sources_test.exs"
+      - "apps/coop_substrate/test/commercial_setoff_intent_test.exs"
       - "docs/architecture/2026-11-03-commercial-setoff-source-binding-v1.md"
+      - "docs/architecture/2026-11-08-commercial-exact-source-intent.md"
       - "docs/architecture/2026-11-03-ledger-first-commercial-clearing.md"
       - ".github/workflows/commercial-clearing-acceptance.yml"
   push:
@@ -21,9 +24,12 @@ on:
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex"
       - "apps/coop_substrate/test/commercial_setoff_proof_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_sources_test.exs"
+      - "apps/coop_substrate/test/commercial_setoff_intent_test.exs"
       - "docs/architecture/2026-11-03-commercial-setoff-source-binding-v1.md"
+      - "docs/architecture/2026-11-08-commercial-exact-source-intent.md"
       - "docs/architecture/2026-11-03-ledger-first-commercial-clearing.md"
       - ".github/workflows/commercial-clearing-acceptance.yml"
 
@@ -87,6 +93,8 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex
           apps/coop_substrate/test/commercial_setoff_proof_test.exs
           apps/coop_substrate/test/commercial_setoff_sources_test.exs
+          apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex
+          apps/coop_substrate/test/commercial_setoff_intent_test.exs
       - name: Signed bilateral source, admission, replay and restart controls
         working-directory: apps/coop_substrate
         # The standalone dependency graph includes Localize without Eatsbot.
@@ -98,5 +106,6 @@ jobs:
           test/commercial_setoff_test.exs
           test/commercial_setoff_proof_test.exs
           test/commercial_setoff_sources_test.exs
+          test/commercial_setoff_intent_test.exs
           test/netting_execution_test.exs
           test/obligation_rail_test.exs
