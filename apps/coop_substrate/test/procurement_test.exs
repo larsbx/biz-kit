@@ -16,6 +16,42 @@ defmodule CoopSubstrate.ProcurementTest do
   @pick_digest String.duplicate("a", 64)
   @drop_digest String.duplicate("b", 64)
 
+  test "two valid signatures cannot interrupt or mutate the canonical appender", %{f: f} do
+    :ok = F.quoted(f)
+    assert {:ok, _} = F.submit(f, "accept", 3, F.acceptance())
+    enrolled = new_member("procurement_dispatch", "dispatch-key")
+    assert {:ok, [_]} = Log.append(route(f, enrolled, true, 0))
+    :ok = Procurement.request_dispatch(f.context, "request-1", 4, @pick_digest, @drop_digest)
+
+    first_rogue = new_member("procurement_dispatch", "rogue-1")
+    second_rogue = new_member("procurement_dispatch", "rogue-2")
+    valid = step(f, enrolled, "accept", 0)
+    appender = GenServer.whereis(Log.server())
+    head = Log.head()
+    gate = Log.gate()
+    assert {:ok, events} = Log.read_all()
+
+    for signers <- [[first_rogue, second_rogue], [enrolled, first_rogue]] do
+      attack =
+        multi_signed_event(signers, valid.type, valid.payload,
+          chapter_id: valid.chapter_id,
+          timestamp_ms: valid.timestamp_ms
+        )
+
+      assert :ok = Envelope.verify(attack)
+      assert {:error, {:reject, 0, :procurement_dispatch_forbidden}} = Log.append(attack)
+      assert GenServer.whereis(Log.server()) == appender
+      assert Log.head() == head
+      assert Log.gate() == gate
+      assert Log.read_all() == {:ok, events}
+    end
+
+    assert {:ok, [committed]} = Log.append(valid)
+    assert committed.global_seq == head.global_seq + 1
+    assert GenServer.whereis(Log.server()) == appender
+    assert :ok = Log.verify_chains()
+  end
+
   test "Dispatch closes the existing order with exact signed custody evidence and replays", %{f: f} do
     :ok = F.quoted(f)
     {:ok, _} = F.submit(f, "accept", 3, F.acceptance())

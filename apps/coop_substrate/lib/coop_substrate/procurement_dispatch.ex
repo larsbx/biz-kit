@@ -187,6 +187,8 @@ defmodule CoopSubstrate.ProcurementDispatch do
     end
   end
 
+  def step(_state, %Envelope{}, _fulfill), do: {:error, :procurement_dispatch_forbidden}
+
   defp order_view(%{phase: phase, dispatch: codes}, transport, chapter, coop, id)
        when phase in [:accepted, :fulfilled, :disputed] do
     stage =
