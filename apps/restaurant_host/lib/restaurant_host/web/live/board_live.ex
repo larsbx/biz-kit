@@ -44,22 +44,24 @@ defmodule RestaurantHost.Web.BoardLive do
   end
 
   @impl true
-  def handle_event("act", %{"id" => id, "action" => name}, socket),
-    do: act(socket, id, name, nil)
+  def handle_event("act", %{"id" => id, "action" => name, "version" => version}, socket),
+    do: act(socket, id, name, version, nil)
 
-  def handle_event("cancel", %{"id" => id, "reason" => reason}, socket) when is_binary(reason),
-    do: act(socket, id, "cancel", String.trim(reason))
+  def handle_event("cancel", %{"id" => id, "reason" => reason, "version" => version}, socket)
+      when is_binary(reason),
+      do: act(socket, id, "cancel", version, String.trim(reason))
 
   def handle_event(_, _, socket), do: {:noreply, socket}
 
-  defp act(socket, id, name, reason) do
+  defp act(socket, id, name, version_text, reason) when is_binary(version_text) do
     %{restaurant: r, board: board} = socket.assigns
 
     with {:ok, staff} <- access(socket),
-         %{} = order <- Orders.get(r, id),
+         {version, ""} <- Integer.parse(version_text),
+         %{version: ^version} = order <- Orders.get(r, id),
          action when not is_nil(action) <- Enum.find(order.actions, &(Atom.to_string(&1) == name)),
          true <- action != :cancel or (is_binary(reason) and String.length(reason) in 1..200),
-         :ok <- Orders.step(r, board, id, action, order.version, reason, staff) do
+         :ok <- Orders.step(r, board, id, action, version, reason, staff) do
       {:noreply, socket |> assign(error: nil) |> load()}
     else
       _ ->
@@ -69,6 +71,8 @@ defmodule RestaurantHost.Web.BoardLive do
          |> load()}
     end
   end
+
+  defp act(socket, _, _, _, _), do: {:noreply, socket}
 
   @impl true
   def handle_info(:check_access, socket) do
@@ -152,12 +156,14 @@ defmodule RestaurantHost.Web.BoardLive do
         phx-click="act"
         phx-value-id={order.id}
         phx-value-action={action}
+        phx-value-version={order.version}
         id={"#{action}-#{order.id}"}
       >
         {label(action)}
       </button>
       <form :if={:cancel in order.actions} phx-submit="cancel" id={"cancel-#{order.id}"}>
         <input type="hidden" name="id" value={order.id} />
+        <input type="hidden" name="version" value={order.version} />
         <label>Cancellation reason <input name="reason" maxlength="200" required /></label>
         <button type="submit">Cancel order</button>
       </form>

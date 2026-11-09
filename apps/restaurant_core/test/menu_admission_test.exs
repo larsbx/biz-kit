@@ -57,6 +57,87 @@ defmodule RestaurantCore.MenuAdmissionTest do
     assert Admission.check(command, %{initial | restaurant: state}) == {:error, :stale_menu}
   end
 
+  test "new placements pin the revision, currency and exact item terms" do
+    initial = gate()
+
+    grant =
+      event("RestaurantDeviceGrantedV1", %{
+        "merchant_id" => "shop",
+        "device_id" => "till",
+        "key_id" => @board.key_id,
+        "actor" => "system",
+        "actions" => ["checkout"],
+        "pubkey" => {:bytes, @board.pubkey}
+      })
+
+    g = %{initial | restaurant: Admission.fold(grant, initial)}
+
+    menu =
+      event("RestaurantMenuPublishedV1", %{
+        "merchant_id" => "shop",
+        "currency" => "USD",
+        "items" => [@item],
+        "expected_revision" => 0
+      })
+
+    current = %{g | restaurant: Admission.fold(menu, g)}
+
+    line = %{
+      "item_id" => "meal",
+      "name" => "Meal",
+      "unit_minor" => 1250,
+      "quantity" => 2,
+      "discount_minor" => 500
+    }
+
+    place =
+      event(
+        "RestaurantOrderPlacedV1",
+        %{
+          "merchant_id" => "shop",
+          "order_id" => "order",
+          "cart_id" => "cart",
+          "principal_id" => "customer",
+          "channel" => "web",
+          "idempotency_key" => "key",
+          "fulfillment" => "pickup",
+          "menu_revision" => 1,
+          "currency" => "USD",
+          "lines" => [line],
+          "subtotal_minor" => 2000,
+          "total_minor" => 2120,
+          "adjustments" => %{
+            "discount_total" => 0,
+            "tax_total" => 120,
+            "delivery_fee" => 0,
+            "tip" => 0
+          }
+        },
+        @board
+      )
+
+    assert :ok = Admission.check(place, current)
+
+    assert Admission.check(put_in(place.payload["menu_revision"], 0), current) ==
+             {:error, :stale_menu}
+
+    assert Admission.check(put_in(place.payload["currency"], "EUR"), current) ==
+             {:error, :menu_currency_mismatch}
+
+    for {field, value} <- [
+          {"item_id", "other"},
+          {"name", "Other"},
+          {"unit_minor", 1249},
+          {"discount_minor", 249}
+        ] do
+      assert Admission.check(
+               put_in(place.payload["lines"], [Map.put(line, field, value)]),
+               current
+             ) ==
+               {:error, :menu_line_mismatch}
+    end
+  end
+
   test "revocation fences the granted key and keeps it from being granted again" do
     grant =
       event("RestaurantDeviceGrantedV1", %{
