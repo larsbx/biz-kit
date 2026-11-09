@@ -85,7 +85,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21.0.13+9'
+          java-version: '21.0.13+9.0.LTS'
           java-package: jre
       - name: Install pinned Quint
         run: npm install --global --no-audit --no-fund @informalsystems/quint@0.33.1
