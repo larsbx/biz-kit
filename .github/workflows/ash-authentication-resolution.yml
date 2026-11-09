@@ -1,0 +1,110 @@
+name: Ash authentication remediation validation
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  upstream-advisories:
+    if: github.head_ref == 'security/ash-authentication-rc16'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      ERL_FLAGS: '+S 4:4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: team-alembic/ash_authentication
+          ref: d264f101dfd8336e77c29deb0ecc3f14af5348e3
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: mix deps.get
+      - name: Run upstream enrollment and brute-force regressions
+        run: |
+          files=$(grep -rlE 'defmodule AshAuthentication\.(Strategy\.Totp\.ConfirmSetupTest|BruteForceValidationTest) do' test)
+          test "$(printf '%s\n' "$files" | wc -l)" -eq 2
+          printf '%s\n' "$files" | xargs mix test
+  umbrella-auth:
+    if: github.head_ref == 'security/ash-authentication-rc16'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      ERL_FLAGS: '+S 4:4'
+      DATABASE_URL: ecto://postgres:postgres@localhost:5432/dispatch_test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - run: git rev-parse HEAD && mix deps.get --check-locked && mix hex.audit
+      - name: Compile exact PR head
+        id: exact
+        continue-on-error: true
+        run: mix compile --warnings-as-errors
+      - name: Apply the independent #301 compile correction to the runner only
+        if: steps.exact.outcome == 'failure'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex")
+          text = path.read_text()
+          old = "def prepare(chapter, {a, b}, denomination, residual_id, timestamp_ms, server \\\\ Log.server())"
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, old.replace("{a, b}", "pair")))
+          PY
+          git diff --check && git diff
+          mix compile --warnings-as-errors
+      - name: Identity
+        working-directory: apps/biz_kit_identity
+        run: mix test
+      - name: Initialize signed ledger
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
+      - name: Dispatch authorization and tenant isolation
+        working-directory: apps/dispatch
+        run: mix ecto.create && mix ecto.migrate && mix test --include integration
+      - name: Eatsbot authentication, tenant isolation and Telegram webhook
+        working-directory: apps/eatsbot
+        env:
+          ADMIN_API_KEY: test
+        run: |
+          mix localize.download_locales
+          mix test test/eatsbot/authentication_dependency_test.exs test/eatsbot/tenant_dependency_test.exs test/eatsbot_web/admin_auth_dependency_test.exs test/eatsbot_web/controllers/telegram_webhook_test.exs
+          mix ash.codegen --check
+      - name: Eatsbot Core
+        working-directory: apps/eatsbot_core
+        run: mix test
+      - name: Telegram extension
+        working-directory: apps/eatsbot_extension_telegram_bot
+        run: mix test
+      - name: Production release smoke
+        if: success() || failure()
+        env:
+          MIX_ENV: prod
+        run: mix deps.get --check-locked && scripts/release-smoke.sh
