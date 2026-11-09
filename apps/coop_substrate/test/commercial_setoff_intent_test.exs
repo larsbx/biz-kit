@@ -19,7 +19,9 @@ defmodule CoopSubstrate.CommercialSetoffIntentTest do
 
     for {member_id, actor} <- [{"M-alice", alice}, {"M-bob", bob}] do
       {:ok, [_]} =
-        Log.append(signed_event(actor, "MemberRegistered", registration_payload(member_id, actor)))
+        Log.append(
+          signed_event(actor, "MemberRegistered", registration_payload(member_id, actor))
+        )
     end
 
     %{alice: alice, bob: bob}
@@ -121,6 +123,7 @@ defmodule CoopSubstrate.CommercialSetoffIntentTest do
     assert event.type == "CommercialSetoffIntentRecordedV1"
 
     gate = Log.gate()
+
     assert gate.commercial_setoff_intents[{@chapter, "SET-1"}].status ==
              :signed_proposal_not_discharge
 
@@ -160,7 +163,10 @@ defmodule CoopSubstrate.CommercialSetoffIntentTest do
     p = payload()
 
     reject!(
-      dual_sign(unsigned(ctx, %{p | "source_terms_digest" => {:bytes, :crypto.hash(:sha256, "wrong")}}), ctx),
+      dual_sign(
+        unsigned(ctx, %{p | "source_terms_digest" => {:bytes, :crypto.hash(:sha256, "wrong")}}),
+        ctx
+      ),
       :commercial_setoff_digest_mismatch
     )
 
@@ -170,6 +176,7 @@ defmodule CoopSubstrate.CommercialSetoffIntentTest do
     )
 
     replacement = [hd(sources()), source("OB-2", "M-bob", "M-alice", 61)]
+
     reject!(
       dual_sign(unsigned(ctx, payload("SET-OTHER", replacement)), ctx),
       :commercial_setoff_source_mismatch
