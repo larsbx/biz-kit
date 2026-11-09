@@ -9,7 +9,8 @@ the signed Log (`CoopSubstrate.Log`, rule `RestaurantCore.Admission`).
     kitchen board (/board) sign RestaurantOrderStepV1 ─────────────────┘        │
                          ◀──────────── live view of what the Log holds ◀───────┘
 
-* **Storefront.** Menu from a `CommerceCore.Catalog`, priced with `Tax` and
+* **Storefront.** Menu from the Log (`RestaurantHost.Menu`: governance-signed
+  `RestaurantMenuItemPutV1` facts, as a `CommerceCore.Catalog`), priced with `Tax` and
   `Pricing`; the guest gives a name and pays cash at pickup. The host signs
   the priced snapshot with the storefront device (granted `checkout`). A
   repeated submit carries the same checkout key, so it returns the same order.
@@ -50,13 +51,15 @@ it at the legacy eatsbot's locale cache.
   [docs/deploy.md](../../docs/deploy.md#the-restaurant-release).
 * Grant revocation, staff sign-in, cancellation reasons chosen at the board,
   receipt printing, delivery (slice 5) and card payments through Hawala.
-* Editing the menu and its discounts without a restart (decommission D6):
-  today both come from the restaurant file.
 
-## Discounts
+## Menu and discounts
 
-A menu item may list discount rules (`CommerceCore.Discounts`; format in
-`RestaurantHost.Config` and [docs/deploy.md](../../docs/deploy.md#the-restaurant-release)).
+The menu is on the Log, edited one item at a time with `mix restaurant.menu`
+(`RestaurantHost.MenuEditor`, `RestaurantHost.MenuItems`; see
+[docs/deploy.md](../../docs/deploy.md#the-menu)). The storefront re-reads it on
+every admitted ledger batch, so an edit shows without a restart. A menu item
+may list discount rules (`RestaurantCore.Menu` wire format,
+`CommerceCore.Discounts`).
 The storefront gives each line the single best rule that applies at the
 restaurant's local time (`timezone`, IANA, default UTC), taxes the discounted
 amount, shows the discount, and signs the line with the rule's id

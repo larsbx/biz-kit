@@ -1,7 +1,8 @@
 defmodule RestaurantHost.Restaurant do
   @moduledoc """
-  One restaurant as this host serves it: its Log chapter and merchant, its menu
-  (a `CommerceCore.Catalog`), its tax jurisdiction, and the devices it signs for.
+  One restaurant as this host serves it: its Log chapter and merchant, its
+  currency, tax jurisdiction and timezone, and the devices it signs for. Its
+  menu is on the Log (`RestaurantHost.Menu`), not here.
 
   A device is a key a governance grant (`RestaurantDeviceGrantedV1`) has bound
   to this merchant: the storefront (granted `checkout`) and each paired kitchen
@@ -9,7 +10,6 @@ defmodule RestaurantHost.Restaurant do
   secret. Built from the `:restaurant_host, :restaurant` application env.
   """
 
-  alias CommerceCore.Catalog
   alias CoopSubstrate.Crypto
 
   @enforce_keys [
@@ -19,8 +19,6 @@ defmodule RestaurantHost.Restaurant do
     :jurisdiction,
     :tax,
     :timezone,
-    :catalog,
-    :menu,
     :storefront,
     :boards
   ]
@@ -45,25 +43,6 @@ defmodule RestaurantHost.Restaurant do
   def build(config) do
     currency = Map.fetch!(config, :currency)
     merchant = Map.fetch!(config, :merchant)
-    menu = Map.fetch!(config, :menu)
-
-    {:ok, empty} = Catalog.new(merchant)
-
-    catalog =
-      menu
-      |> Enum.with_index()
-      |> Enum.reduce(empty, fn {item, version}, catalog ->
-        {:ok, catalog} =
-          Catalog.put(catalog, merchant, version, %{
-            id: item.id,
-            sku: item.sku,
-            visibility: :published,
-            prices: %{currency => Money.from_integer(item.price_minor, currency)},
-            discounts: Map.get(item, :discounts, [])
-          })
-
-        catalog
-      end)
 
     jurisdiction = Map.fetch!(config, :jurisdiction)
 
@@ -80,8 +59,6 @@ defmodule RestaurantHost.Restaurant do
       jurisdiction: jurisdiction,
       tax: tax,
       timezone: Map.get(config, :timezone, "Etc/UTC"),
-      catalog: catalog,
-      menu: Enum.map(menu, &Map.take(&1, [:id, :name])),
       storefront: device(Map.fetch!(config, :storefront)),
       boards: Map.new(Map.get(config, :boards, %{}), fn {id, d} -> {id, device(d)} end)
     }

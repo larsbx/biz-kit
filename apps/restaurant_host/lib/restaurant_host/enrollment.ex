@@ -87,15 +87,6 @@ defmodule RestaurantHost.Enrollment do
     _ -> {:error, :unexpected_proposal}
   end
 
-  defp load_signer do
-    case Ops.load_signer("governance") do
-      {:ok, signer} -> {:ok, signer}
-      _ -> {:error, :governance_key_unavailable}
-    end
-  rescue
-    _ -> {:error, :governance_key_unavailable}
-  end
-
   defp options(args) do
     {opts, positional, invalid} =
       OptionParser.parse(args,
@@ -107,24 +98,45 @@ defmodule RestaurantHost.Enrollment do
         ]
       )
 
-    base = opts[:server] || System.get_env("RESTAURANT_URL", "http://127.0.0.1:4070")
-
     with [device] <- positional,
          [] <- invalid,
          true <- length(Keyword.keys(opts)) == length(Enum.uniq(Keyword.keys(opts))),
          true <- Enum.all?([device, opts[:chapter], opts[:merchant]], &DeviceGrants.identifier?/1),
-         %URI{scheme: scheme, host: host, userinfo: nil, query: nil, fragment: nil, path: path} <-
-           URI.parse(base),
-         true <- is_binary(host) and host != "" and path in [nil, "", "/"],
-         true <-
-           scheme == "https" or (scheme == "http" and host in ["localhost", "127.0.0.1", "::1"]) do
-      {:ok, device, opts[:chapter], opts[:merchant], String.trim_trailing(base, "/"),
-       opts[:yes] == true}
+         {:ok, base} <- server(opts[:server]) do
+      {:ok, device, opts[:chapter], opts[:merchant], base, opts[:yes] == true}
     else
       _ -> {:error, :invalid_options}
     end
   rescue
     _ -> {:error, :invalid_options}
+  end
+
+  @doc """
+  The host's base URL (`--server`, else `RESTAURANT_URL`, else local): HTTPS,
+  or HTTP only on loopback, with no credentials, query or path.
+  """
+  def server(given) do
+    base = given || System.get_env("RESTAURANT_URL", "http://127.0.0.1:4070")
+
+    with %URI{scheme: scheme, host: host, userinfo: nil, query: nil, fragment: nil, path: path} <-
+           URI.parse(base),
+         true <- is_binary(host) and host != "" and path in [nil, "", "/"],
+         true <-
+           scheme == "https" or (scheme == "http" and host in ["localhost", "127.0.0.1", "::1"]) do
+      {:ok, String.trim_trailing(base, "/")}
+    else
+      _ -> {:error, :invalid_options}
+    end
+  end
+
+  @doc "The governance signer from HARNESS_KEYS_DIR."
+  def load_signer do
+    case Ops.load_signer("governance") do
+      {:ok, signer} -> {:ok, signer}
+      _ -> {:error, :governance_key_unavailable}
+    end
+  rescue
+    _ -> {:error, :governance_key_unavailable}
   end
 
   defp url(base, device), do: base <> "/api/device-grants/" <> Client.segment(device)

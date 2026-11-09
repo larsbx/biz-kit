@@ -41,7 +41,7 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
         )
     end
 
-    {:ok, pos: pos, kds: kds, ghost: ghost}
+    {:ok, gov: gov, pos: pos, kds: kds, ghost: ghost}
   end
 
   defp checkout(device, order_id),
@@ -117,5 +117,36 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
 
     {:ok, replayed} = Log.replay(Membership)
     assert Admission.state(replayed.restaurant, @ch, "shop", "o1") == live
+  end
+
+  test "menu items are governance-signed, carry discount rules, and replay (D6)", ctx do
+    put = fn signer, version, price ->
+      signed_event(signer, "RestaurantMenuItemPutV1", %{
+        "merchant_id" => "shop",
+        "expected_version" => version,
+        "item_id" => "margherita",
+        "name" => "Margherita",
+        "sku" => "MARG",
+        "price_minor" => price,
+        "currency" => "USD",
+        "visibility" => "published",
+        "discounts" => [
+          %{"id" => "lunch", "method" => "percent_off", "rate" => "0.2", "hours" => [11, 14]},
+          %{"id" => "off", "method" => "buy_x_pay_y", "x" => 3, "y" => 2, "enabled" => false}
+        ]
+      })
+    end
+
+    # A device key cannot even form a menu envelope: the type requires governance.
+    assert_raise MatchError, ~r/roles_mismatch/, fn -> put.(ctx.pos, 0, 1250) end
+    assert {:ok, _} = Log.append(put.(ctx.gov, 0, 1250))
+    assert {:error, _} = Log.append(put.(ctx.gov, 0, 1300))
+    assert {:ok, _} = Log.append(put.(ctx.gov, 1, 1300))
+
+    live = Admission.menu(Log.gate().restaurant, @ch, "shop")
+    assert %{version: 2, items: %{"margherita" => %{price_minor: 1300, discounts: [_, _]}}} = live
+
+    {:ok, replayed} = Log.replay(Membership)
+    assert Admission.menu(replayed.restaurant, @ch, "shop") == live
   end
 end

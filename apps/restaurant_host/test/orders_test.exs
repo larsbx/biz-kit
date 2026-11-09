@@ -48,18 +48,12 @@ defmodule RestaurantHost.OrdersTest do
   end
 
   describe "discounts at the merchant's local time (decommission D5)" do
-    @lunch %{id: "lunch", method: :percent_off, rate: Decimal.new("0.2"), hours: {11, 14}}
+    @lunch %{"id" => "lunch", "method" => "percent_off", "rate" => "0.2", "hours" => [11, 14]}
 
     setup do
       menu = [
-        %{
-          id: "margherita",
-          name: "Margherita",
-          sku: "MARG",
-          price_minor: 1250,
-          discounts: [@lunch]
-        },
-        %{id: "pepperoni", name: "Pepperoni", sku: "PEPP", price_minor: 1400}
+        World.item("margherita", "Margherita", "MARG", 1250, [@lunch]),
+        World.item("pepperoni", "Pepperoni", "PEPP", 1400)
       ]
 
       World.build(menu: menu, timezone: "America/Detroit")
@@ -109,17 +103,8 @@ defmodule RestaurantHost.OrdersTest do
     @endpoint RestaurantHost.Web.Endpoint
 
     setup do
-      tenth = %{id: "tenth", method: :percent_off, rate: Decimal.new("0.1")}
-
-      menu = [
-        %{
-          id: "margherita",
-          name: "Margherita",
-          sku: "MARG",
-          price_minor: 1250,
-          discounts: [tenth]
-        }
-      ]
+      tenth = %{"id" => "tenth", "method" => "percent_off", "rate" => "0.1"}
+      menu = [World.item("margherita", "Margherita", "MARG", 1250, [tenth])]
 
       World.build(menu: menu)
     end

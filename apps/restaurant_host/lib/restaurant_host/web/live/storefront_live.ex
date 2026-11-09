@@ -21,6 +21,8 @@ defmodule RestaurantHost.Web.StorefrontLive do
   @impl true
   def mount(_params, _session, socket) do
     r = Restaurant.current()
+    # Menu edits and kitchen steps both arrive as admitted ledger batches.
+    if connected?(socket), do: Orders.subscribe()
 
     {:ok,
      assign(socket,
@@ -46,7 +48,6 @@ defmodule RestaurantHost.Web.StorefrontLive do
 
     case Orders.place(r, basket, String.trim(name), key) do
       {:ok, id} ->
-        if connected?(socket), do: Orders.subscribe()
         {:noreply, assign(socket, order: Orders.get(r, id), error: nil)}
 
       {:error, reason} ->
@@ -58,6 +59,13 @@ defmodule RestaurantHost.Web.StorefrontLive do
   def handle_info({:coop_ledger, _}, %{assigns: %{order: %{id: id}}} = socket),
     do: {:noreply, assign(socket, order: Orders.get(socket.assigns.restaurant, id))}
 
+  def handle_info({:coop_ledger, _}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(menu: Orders.menu(socket.assigns.restaurant))
+       |> reprice(socket.assigns.basket)}
+
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp rebasket(socket, id, delta) do
@@ -66,6 +74,11 @@ defmodule RestaurantHost.Web.StorefrontLive do
       |> Map.update(id, max(delta, 0), &max(&1 + delta, 0))
       |> Map.reject(fn {_, q} -> q == 0 end)
 
+    reprice(socket, basket)
+  end
+
+  # Price the basket against the menu as the Log holds it now.
+  defp reprice(socket, basket) do
     priced =
       case Orders.price(socket.assigns.restaurant, basket) do
         {:ok, priced} when basket != %{} -> priced

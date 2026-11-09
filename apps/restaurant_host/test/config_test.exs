@@ -13,9 +13,6 @@ defmodule RestaurantHost.ConfigTest do
         "merchant" => "shop",
         "currency" => "USD",
         "jurisdiction" => "US-MI",
-        "menu" => [
-          %{"id" => "margherita", "name" => "Margherita", "sku" => "MARG", "price_minor" => 1250}
-        ],
         "storefront" => %{"device_id" => "storefront", "key_id" => "k-store"},
         "boards" => %{
           "board-1" => %{
@@ -62,7 +59,9 @@ defmodule RestaurantHost.ConfigTest do
   test "malformed files are refused with a reason" do
     assert Config.parse("{", env()) == {:error, :invalid_json}
     assert Config.parse(json(%{"currency" => "usd"}), env()) == {:error, {:invalid, "currency"}}
-    assert Config.parse(json(%{"menu" => []}), env()) == {:error, {:invalid, "menu"}}
+    # The menu is on the Log (decommission D6), so the file may not carry one.
+    assert Config.parse(json(%{"menu" => []}), env()) ==
+             {:error, {:unexpected_field, "restaurant", "menu"}}
 
     assert Config.parse(json(%{"jurisdiction" => "US-XX"}), env()) ==
              {:error, {:invalid, "jurisdiction"}}
@@ -99,77 +98,13 @@ defmodule RestaurantHost.ConfigTest do
     assert {:error, _} = Config.parse(json(%{"chapter" => ""}), env())
   end
 
-  describe "discounts and timezone (decommission D5)" do
-    defp with_discounts(rules),
-      do: %{
-        "menu" => [
-          %{
-            "id" => "margherita",
-            "name" => "Margherita",
-            "sku" => "MARG",
-            "price_minor" => 1250,
-            "discounts" => rules
-          }
-        ]
-      }
+  test "the timezone defaults to UTC and must be a known IANA zone" do
+    assert {:ok, %{timezone: "Etc/UTC"}} = Config.parse(json(), env())
 
-    test "each method parses into a catalog rule, and the timezone defaults to UTC" do
-      rules = [
-        %{"id" => "lunch", "method" => "percent_off", "rate" => "0.2", "hours" => [11, 14]},
-        %{"id" => "happy", "method" => "unit_price", "price_minor" => 900, "weekdays" => [5]},
-        %{"id" => "3for2", "method" => "buy_x_pay_y", "x" => 3, "y" => 2, "enabled" => false},
-        %{
-          "id" => "pair",
-          "method" => "x_for_amount",
-          "x" => 2,
-          "amount_minor" => 2000,
-          "min_quantity" => 2
-        }
-      ]
+    assert {:ok, %{timezone: "America/Detroit"}} =
+             Config.parse(json(%{"timezone" => "America/Detroit"}), env())
 
-      assert {:ok, config} = Config.parse(json(with_discounts(rules)), env())
-      assert config.timezone == "Etc/UTC"
-
-      assert [
-               %{id: "lunch", method: :percent_off, rate: rate, hours: {11, 14}},
-               %{id: "happy", method: :unit_price, price: price, weekdays: [5]},
-               %{id: "3for2", method: :buy_x_pay_y, x: 3, y: 2, enabled: false},
-               %{id: "pair", method: :x_for_amount, amount: amount, min_quantity: 2}
-             ] = hd(config.menu).discounts
-
-      assert Decimal.equal?(rate, "0.2")
-      assert Money.equal?(price, Money.from_integer(900, :USD))
-      assert Money.equal?(amount, Money.from_integer(2000, :USD))
-
-      r = Restaurant.build(config)
-
-      assert {:ok, %{discounts: [_, _, _, _]}} =
-               CommerceCore.Catalog.quote(r.catalog, "shop", "margherita", nil, :USD)
-    end
-
-    test "a malformed rule or an unknown timezone refuses the file" do
-      for rule <- [
-            %{"id" => "x", "method" => "fixed", "discount" => 5},
-            %{"id" => "x", "method" => "percent_off", "rate" => 0.2},
-            %{"id" => "x", "method" => "percent_off", "rate" => "1.5"},
-            %{"id" => "x", "method" => "buy_x_pay_y", "x" => 2, "y" => 2},
-            %{"id" => "x", "method" => "percent_off", "rate" => "0.1", "hours" => [9]},
-            %{"id" => "x", "method" => "percent_off", "rate" => "0.1", "colour" => "red"}
-          ] do
-        assert Config.parse(json(with_discounts([rule])), env()) == {:error, {:invalid, "menu"}},
-               inspect(rule)
-      end
-
-      ok = %{"id" => "x", "method" => "percent_off", "rate" => "0.1"}
-
-      assert Config.parse(json(with_discounts([ok, ok])), env()) ==
-               {:error, {:invalid, "menu"}}
-
-      assert {:ok, %{timezone: "America/New_York"}} =
-               Config.parse(json(%{"timezone" => "America/New_York"}), env())
-
-      assert Config.parse(json(%{"timezone" => "Mars/Olympus"}), env()) ==
-               {:error, {:invalid, "timezone"}}
-    end
+    assert Config.parse(json(%{"timezone" => "Mars/Olympus"}), env()) ==
+             {:error, {:invalid, "timezone"}}
   end
 end

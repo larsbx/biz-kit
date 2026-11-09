@@ -12,7 +12,8 @@ defmodule RestaurantHost.World do
 
   @doc """
   Options: `grant: false` leaves the devices ungranted; `menu:` and
-  `timezone:` replace the default menu and UTC; `governance:` a signer
+  `timezone:` replace the default menu (wire items, see `item/5`, put on the
+  Log with the governance key) and UTC; `governance:` a signer
   (`%{key_id, pubkey, seed}`, e.g. from `CoopSubstrate.Harness.Ops`) to declare
   instead of a fresh key.
   """
@@ -41,11 +42,6 @@ defmodule RestaurantHost.World do
       currency: :USD,
       jurisdiction: "US-MI",
       timezone: Keyword.get(opts, :timezone, "Etc/UTC"),
-      menu:
-        Keyword.get(opts, :menu, [
-          %{id: "margherita", name: "Margherita", sku: "MARG", price_minor: 1250},
-          %{id: "pepperoni", name: "Pepperoni", sku: "PEPP", price_minor: 1400}
-        ]),
       storefront: %{
         device_id: "storefront",
         key_id: storefront.signer.key_id,
@@ -63,6 +59,14 @@ defmodule RestaurantHost.World do
 
     r = Restaurant.current()
 
+    opts
+    |> Keyword.get(:menu, [
+      item("margherita", "Margherita", "MARG", 1250),
+      item("pepperoni", "Pepperoni", "PEPP", 1400)
+    ])
+    |> Enum.with_index()
+    |> Enum.each(fn {i, version} -> put_item!(chapter, gov, i, version) end)
+
     if Keyword.get(opts, :grant, true) do
       for device <- ["storefront", "board-1"] do
         {:ok, d} = DeviceGrants.details(r, device)
@@ -72,6 +76,28 @@ defmodule RestaurantHost.World do
 
     %{restaurant: r, secret: secret, chapter: chapter, governance: gov}
   end
+
+  @doc "Put a menu item on the Log, signed by the world's governance key."
+  def put_item!(chapter, gov, item, version),
+    do:
+      append!(
+        chapter,
+        gov,
+        "RestaurantMenuItemPutV1",
+        Map.merge(item, %{"merchant_id" => "shop", "expected_version" => version})
+      )
+
+  @doc "A published USD menu item in its signed wire form."
+  def item(id, name, sku, price_minor, discounts \\ []),
+    do: %{
+      "item_id" => id,
+      "name" => name,
+      "sku" => sku,
+      "price_minor" => price_minor,
+      "currency" => "USD",
+      "visibility" => "published",
+      "discounts" => discounts
+    }
 
   defp key(role) do
     {pubkey, seed} = Crypto.generate_keypair()

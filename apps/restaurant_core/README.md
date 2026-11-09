@@ -34,6 +34,12 @@ comes from the grant, never the payload, and `test/admission_test.exs` proves
 admission refines the kitchen reducer (same outcome, same state, for any step
 sequence).
 
+`RestaurantCore.Menu` holds each merchant's menu as governance-signed
+`RestaurantMenuItemPutV1` facts: one item per event, at the expected menu
+version, money-free (integer minor units, decimal-string rates), refusing
+exactly what the host's catalog would refuse, so an admitted edit always
+applies. `encode_item/1` inverts `decode_item/1` (a property).
+
 Money is Hawala's. The device prices an order with `CommerceCore.Checkout`
 before signing; admission records that snapshot in integer minor units and
 checks its shape and that it adds up (Pricing's I₂: each line discount within

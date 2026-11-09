@@ -105,10 +105,8 @@ bin/restaurant daemon
 | `EVENTSTORE_*` | the ledger, as above |
 
 The restaurant file names the ledger chapter, merchant, currency, tax jurisdiction (`US-MI`: Michigan, see `CommerceCore.Tax.Jurisdictions`),
-timezone (IANA, optional, default `Etc/UTC`), menu and devices. A menu item may
-list `discounts`; the format is in `RestaurantHost.Config`, for example
-`{"id": "lunch", "method": "percent_off", "rate": "0.2", "hours": [11, 14], "weekdays": [1, 2, 3, 4, 5]}`.
-Hours are local, inclusive, and wrap past midnight when `from > to`. It holds no secret: seeds come only from the environment, and
+timezone (IANA, optional, default `Etc/UTC`; the local time discount rules
+read) and devices. The menu is not in it: it lives on the ledger (below). It holds no secret: seeds come only from the environment, and
 a board's pairing secret only as its SHA-256.
 
 ```json
@@ -117,7 +115,7 @@ a board's pairing secret only as its SHA-256.
   "merchant": "shop",
   "currency": "USD",
   "jurisdiction": "US-MI",
-  "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
+  "timezone": "America/Detroit",
   "storefront": {"device_id": "storefront", "key_id": "k-store"},
   "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "<hex>"}}
 }
@@ -174,6 +172,39 @@ Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 seed-variable names and device keys must be distinct in one restaurant.
 
 Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
+
+### The menu
+
+Each menu item is a governance-signed fact on the ledger
+(`RestaurantMenuItemPutV1`), added or replaced one at a time, from the
+administrator's machine with the same governance key:
+
+```sh
+mix restaurant.menu put calzone.json --chapter chapter-genesis --merchant shop --server https://order.example
+# or, from a release copy:
+bin/restaurant eval 'RestaurantHost.ReleaseTasks.menu(["put", "calzone.json", "--chapter", "chapter-genesis", "--merchant", "shop", "--server", "https://order.example"])'
+```
+
+```json
+{"item_id": "calzone", "name": "Calzone", "sku": "CALZ", "price_minor": 1500,
+ "currency": "USD", "visibility": "published",
+ "discounts": [{"id": "lunch", "method": "percent_off", "rate": "0.2",
+                "hours": [11, 14], "weekdays": [1, 2, 3, 4, 5]}]}
+```
+
+The command reads the menu (`GET /api/menu`, public), shows the item next to
+the one it replaces at the current menu version, and signs only an envelope
+that is exactly that item at that version; if another edit lands first, the
+ledger refuses it and nothing changes. The storefront shows an admitted edit
+at once, without a restart. `"visibility": "hidden"` takes an item off the
+menu. Orders keep the prices they were placed at.
+
+Discount methods: `percent_off` (`rate`, a decimal string in (0, 1]),
+`unit_price` (`price_minor`), `buy_x_pay_y` (`x`, `y`), `x_for_amount` (`x`,
+`amount_minor`); optional `enabled`, `weekdays` (1 = Monday), `hours`
+(`[from, to]`, local, inclusive, wrapping past midnight when `from > to`) and
+`min_quantity`. Each line gets the single largest discount that applies
+(`RestaurantCore.Menu`, `CommerceCore.Discounts`).
 
 ## Testing a deployment
 

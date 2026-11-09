@@ -14,6 +14,9 @@ defmodule RestaurantCore.Admission do
       snapshot is recorded in integer minor units and checked for shape only.
     * `RestaurantOrderStepV1`, signed by a granted device, runs
       `RestaurantCore.Kitchen.apply/3`.
+    * `RestaurantMenuItemPutV1`, signed by a declared governance key, adds or
+      replaces one menu item at the merchant's expected menu version
+      (`RestaurantCore.Menu`).
 
   The trusted context is derived from the grant, never from the payload, and
   the outcome is exactly the reducers' outcome (`admit/3` serves both check and
@@ -22,11 +25,12 @@ defmodule RestaurantCore.Admission do
   """
 
   alias OrderCore.Placement
-  alias RestaurantCore.Kitchen
+  alias RestaurantCore.{Kitchen, Menu}
 
   @grant "RestaurantDeviceGrantedV1"
   @placed "RestaurantOrderPlacedV1"
   @step "RestaurantOrderStepV1"
+  @menu "RestaurantMenuItemPutV1"
   @device "restaurant_device"
 
   @actors Map.new(~w(admin staff system)a, &{Atom.to_string(&1), &1})
@@ -45,6 +49,18 @@ defmodule RestaurantCore.Admission do
           "pubkey" => :pubkey,
           "actor" => :string,
           "actions" => :any
+        }),
+      @menu =>
+        spec("governance", "restaurant_menus", ["merchant_id"], %{
+          "merchant_id" => :string,
+          "expected_version" => :int,
+          "item_id" => :string,
+          "name" => :string,
+          "sku" => :string,
+          "price_minor" => :int,
+          "currency" => :string,
+          "visibility" => :string,
+          "discounts" => :any
         }),
       @placed =>
         spec(
@@ -92,7 +108,11 @@ defmodule RestaurantCore.Admission do
       payload: %{required: required, optional: optional}
     }
 
-  def init, do: %{grants: %{}, merchants: %{}}
+  def init, do: %{grants: %{}, merchants: %{}, menus: %{}}
+
+  @doc "A merchant's menu (`RestaurantCore.Menu`): its version and items by id."
+  def menu(state, chapter, merchant),
+    do: state |> Map.get(:menus, %{}) |> Map.get({chapter, merchant}, Menu.new())
 
   @doc "`:ok` when the event may be appended to a gate holding `role_keys` and `restaurant`."
   def check(env, gate) do
@@ -162,6 +182,14 @@ defmodule RestaurantCore.Admission do
              else: :ok
            ) do
       {:ok, put_in(state, [:grants, id], grant)}
+    end
+  end
+
+  defp admit_one(%{type: @menu, chapter_id: ch, signers: [signer], payload: p}, keys, state) do
+    with :ok <- governance(ch, signer, keys),
+         {:ok, item} <- Menu.decode_item(Map.drop(p, ["merchant_id", "expected_version"])),
+         {:ok, menu} <- Menu.put(menu(state, ch, p["merchant_id"]), p["expected_version"], item) do
+      {:ok, put_in(state, [Access.key(:menus, %{}), {ch, p["merchant_id"]}], menu)}
     end
   end
 

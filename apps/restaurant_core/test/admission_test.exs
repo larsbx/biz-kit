@@ -106,11 +106,62 @@ defmodule RestaurantCore.AdmissionTest do
         grant("bot", "system", @all)
       ])
 
-  test "every registered type is one of the three, each signed by one role" do
+  test "every registered type is one of the four, each signed by one role" do
     assert Map.keys(Admission.event_types()) |> Enum.sort() ==
-             ~w(RestaurantDeviceGrantedV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
+             ~w(RestaurantDeviceGrantedV1 RestaurantMenuItemPutV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
 
     for {_, spec} <- Admission.event_types(), do: assert([_] = spec.required_roles)
+  end
+
+  defp menu_put(signer, version, extra \\ %{}),
+    do:
+      env(
+        "RestaurantMenuItemPutV1",
+        signer,
+        Map.merge(
+          %{
+            "merchant_id" => "shop",
+            "expected_version" => version,
+            "item_id" => "margherita",
+            "name" => "Margherita",
+            "sku" => "MARG",
+            "price_minor" => 1250,
+            "currency" => "USD",
+            "visibility" => "published",
+            "discounts" => []
+          },
+          extra
+        )
+      )
+
+  test "menu items are governance facts, versioned per merchant (D6)" do
+    g = admin_gate()
+    assert Admission.menu(g.restaurant, @ch, "shop") == %{version: 0, items: %{}}
+
+    # A device, even an admin one, cannot edit the menu; nor an undeclared key.
+    assert Admission.check(menu_put(device("pos"), 0), g) ==
+             {:error, :restaurant_governance_not_declared}
+
+    assert Admission.check(menu_put(%{@gov | key_id: "other"}, 0), g) ==
+             {:error, :restaurant_governance_not_declared}
+
+    g1 = %{g | restaurant: Admission.fold(menu_put(@gov, 0), g)}
+
+    assert %{version: 1, items: %{"margherita" => %{price_minor: 1250}}} =
+             Admission.menu(g1.restaurant, @ch, "shop")
+
+    assert Admission.check(menu_put(@gov, 0, %{"price_minor" => 1300}), g1) ==
+             {:error, :stale_menu_version}
+
+    assert Admission.check(menu_put(@gov, 1, %{"price_minor" => 0}), g1) ==
+             {:error, :invalid_menu_item}
+
+    assert Admission.check(menu_put(@gov, 1, %{"item_id" => "p2"}), g1) ==
+             {:error, :duplicate_sku}
+
+    # Menus are per merchant: another merchant starts at version 0.
+    assert Admission.check(menu_put(@gov, 0, %{"merchant_id" => "cafe"}), g1) == :ok
+    assert Admission.menu(g1.restaurant, @ch, "cafe") == %{version: 0, items: %{}}
   end
 
   test "a grant needs a declared governance key and a well-formed actor and action list" do

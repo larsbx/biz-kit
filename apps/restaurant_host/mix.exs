@@ -38,7 +38,8 @@ defmodule RestaurantHost.MixProject do
       {:jason, "~> 1.4"},
       # IANA zones, so time-of-day discounts follow the merchant's local time.
       {:tz, "~> 0.28.4"},
-      {:lazy_html, "~> 0.1.13", only: :test}
+      {:lazy_html, "~> 0.1.13", only: :test},
+      {:stream_data, "~> 1.1", only: [:test, :dev]}
     ]
   end
 end

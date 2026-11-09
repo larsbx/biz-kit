@@ -23,6 +23,12 @@ defmodule RestaurantHost.Web.Router do
     get "/device-grants/:device", DeviceGrantController, :show
     post "/device-grants/:device", DeviceGrantController, :prepare
     post "/device-grants/:device/:id", DeviceGrantController, :submit
+
+    # `mix restaurant.menu`: likewise, only a governance signature on the held
+    # item at the reviewed menu version is admitted. The menu itself is public.
+    get "/menu", MenuItemController, :index
+    post "/menu-items/:item", MenuItemController, :prepare
+    post "/menu-items/:item/:id", MenuItemController, :submit
   end
 
   scope "/", RestaurantHost.Web do

@@ -14,12 +14,14 @@ defmodule RestaurantHost.Orders do
   alias CoopSubstrate.{Log, ULID}
   alias CoopSubstrate.Protocol.Envelope
   alias RestaurantCore.Admission
-  alias RestaurantHost.Restaurant
+  alias RestaurantHost.{Menu, Restaurant}
 
-  @doc "The menu: each item with its price."
+  @doc "The menu as the Log holds it now: each published item with its price."
   def menu(%Restaurant{} = r) do
-    for %{id: id, name: name} <- r.menu do
-      {:ok, quote} = Catalog.quote(r.catalog, r.merchant, id, nil, r.currency)
+    %{catalog: catalog, listing: listing} = Menu.current(r)
+
+    for %{id: id, name: name} <- listing do
+      {:ok, quote} = Catalog.quote(catalog, r.merchant, id, nil, r.currency)
       %{id: id, name: name, price: quote.unit_price}
     end
   end
@@ -30,10 +32,11 @@ defmodule RestaurantHost.Orders do
   the discounted lines, and total.
   """
   def price(%Restaurant{} = r, basket, now \\ DateTime.utc_now()) when is_map(basket) do
-    names = Map.new(r.menu, &{&1.id, &1.name})
+    %{catalog: catalog, listing: listing} = Menu.current(r)
+    names = Map.new(listing, &{&1.id, &1.name})
     zero = Money.zero(r.currency)
 
-    with {:ok, lines} <- lines(r, basket, names, local(r, now)),
+    with {:ok, lines} <- lines(r, catalog, basket, names, local(r, now)),
          bases =
            Enum.map(lines, &Money.sub!(Money.mult!(&1.unit_price, &1.quantity), &1.discount)),
          {:ok, tax} <- Tax.flat(r.currency, r.tax, bases, zero),
@@ -61,12 +64,12 @@ defmodule RestaurantHost.Orders do
     %{weekday: Date.day_of_week(local), hour: local.hour}
   end
 
-  defp lines(r, basket, names, at) do
+  defp lines(r, catalog, basket, names, at) do
     basket
     |> Enum.filter(fn {_, qty} -> qty > 0 end)
     |> Enum.sort()
     |> Enum.reduce_while({:ok, []}, fn {id, qty}, {:ok, acc} ->
-      case Catalog.quote(r.catalog, r.merchant, id, nil, r.currency) do
+      case Catalog.quote(catalog, r.merchant, id, nil, r.currency) do
         {:ok, q} when is_integer(qty) ->
           %{discount: discount, rule: rule} =
             Discounts.best(q.discounts, %{unit_price: q.unit_price, quantity: qty}, at)
