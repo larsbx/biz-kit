@@ -7,11 +7,15 @@
 // platform writer and stops legacy writes; retirement archives, never deletes.
 // Obligation: from cutover on, every accepted legacy fact is in the migrated
 // history (none lost, no legacy write after cutover) and retirement keeps it.
-// GUARDED is the stop of legacy writes at cutover.
+// GUARDED is the stop of legacy writes at cutover, enforced by
+// CoopSubstrate.WriterFence: governance orders it on the ledger
+// (LegacyWriterFenced), and `mix coop.fence_writer` installs, in one
+// transaction on eatsbot's database, statement triggers refusing every write,
+// which wait for writers in flight (CoopSubstrate.WriterFenceTest). It fences
+// any deployment of the legacy writer, not only this repository's copy.
+// Not enforced by code: carrying the accepted history across (`migrated`)
+// stays the R4/R5 runbook's duty, checked by its acceptance.
 // Abstracted: history as counters of accepted facts per writer.
-// FINDING: no such fence exists in code. apps/eatsbot (Eatsbot.Application)
-// starts the legacy Ash writer unconditionally; R5 is unimplemented, so this
-// models the planned rule, not enforced behaviour.
 module eatsbot_spec {
   const GUARDED: bool
   var phase: str          // "LEGACY" | "CUTOVER" | "RETIRED"

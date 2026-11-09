@@ -250,8 +250,13 @@ header cites the enforcing code and the gap leaves the README table.
 7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
    bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
    (below).
-8. **eatsbot: retirement cutover fence.** Not implemented; it belongs to the
-   eatsbot retirement.
+8. **eatsbot: retirement cutover fence.** The legacy writer could not be stopped. *Closed:*
+   governance orders the fence on the ledger (`LegacyWriterFenced`, for a
+   closed set of writers, only under declared governance), and
+   `mix coop.fence_writer` installs it in eatsbot's database in one
+   transaction: statement triggers refuse every write, after waiting for
+   writers in flight. It fences every deployment of the legacy writer.
+   Migrating the accepted history remains the R5 runbook's step.
 9. **barter_core, federation_core: host contracts.** *Closed by host
    review:* nothing in the repo transfers barter assets (preview only, no
    host); `FederationService` is read-only and turns a subscription into

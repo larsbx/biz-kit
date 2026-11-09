@@ -115,6 +115,11 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+  defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
+    CoopSubstrate.WriterFence.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
     CoopSubstrate.FederationAuthority.check(env, gate)
   end
