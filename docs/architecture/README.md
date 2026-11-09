@@ -5,6 +5,9 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Task host — 2026-11-09](2026-11-09-task-host.md): SpruceGoose's web
+  surface (`/auth`, the task view, its commands and the feed) rehosted on
+  `apps/task_host`; native sessions kept; `/mcp` and the OAuth2 issuer dropped.
 - [Dispatch assignments on the ledger — 2026-11-09](2026-11-09-dispatch-assignments-on-the-ledger.md):
   first Dispatch slice of consolidation step 4; the assignment lifecycle as
   signed, admitted events, with equipment exclusivity at the append gate. The
