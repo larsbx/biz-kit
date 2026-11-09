@@ -51,7 +51,7 @@ defmodule CoopSubstrate.CommercialSourceLineage do
   for legacy aggregate netting. Never mistake a residual net obligation for an
   originally signed and independently evidenced commercial invoice.
   """
-  def netted(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p} = env, before, after) do
+  def netted(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p} = env, before, next_state) do
     {a, b, den} = {p["party_a"], p["party_b"], p["denomination"]}
 
     closed =
@@ -60,7 +60,7 @@ defmodule CoopSubstrate.CommercialSourceLineage do
           do: {ch, id}
 
     advanced =
-      Enum.reduce(closed, after, fn key, acc ->
+      Enum.reduce(closed, next_state, fn key, acc ->
         advance(acc, key, env, :legacy_netting_closed, false)
       end)
 
