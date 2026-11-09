@@ -47,7 +47,11 @@ defmodule RestaurantHost.Web.BoardLive do
   def handle_event("act", %{"id" => id, "action" => name, "version" => version}, socket),
     do: act(socket, id, name, version, nil)
 
-  def handle_event("cancel", %{"order_id" => id, "reason" => reason, "version" => version}, socket)
+  def handle_event(
+        "cancel",
+        %{"order_id" => id, "reason" => reason, "version" => version},
+        socket
+      )
       when is_binary(reason),
       do: act(socket, id, "cancel", version, String.trim(reason))
 
