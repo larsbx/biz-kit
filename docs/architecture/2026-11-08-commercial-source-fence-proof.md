@@ -61,12 +61,15 @@ same intent are a conflict, not a retry.
 
 ## Proof and adversarial surfaces
 
-**Lean 4, `BizKitCommercialSetoff`:** universal finite-set theorems
-establish no admission on absent evidence, nonempty-source requirement,
+**Lean 4, `BizKitCommercialSetoff`:** universal theorems over **exactly two
+original source IDs per admission**, encoded with chapter-qualified identities
+and boolean membership functions (no unavailable `Finset` dependency).
+The theorems cover absent-evidence refusal, distinct-source requirement,
 accepted intent/source marking, duplicate-intent stuttering, and refusal
-of an overlapping second source-set claim. Scope-qualified source identity
-is explicit. The mathematical body captures the atomic admission ideal;
-it does not prove that the present Elixir writer refines that ideal.
+of a competing second admission sharing the first source. This is narrower
+than a proof over arbitrary multilateral source sets. The model captures
+the atomic admission ideal; it does not prove that the present Elixir writer
+refines that ideal.
 
 **Quint, `commercial_source_fence.qnt`:** bounded nondeterministic traces
 with three abstract source IDs, repeated intent IDs, lost reply/restart
@@ -116,3 +119,16 @@ Do not mark #299 resolved or activate commercial settlement based on this
 PR alone. The next implementation branch must integrate a new, still-disabled
 source-bound business event and its serialized replay fence in the existing
 `CoopSubstrate.Log`, with independent legal/evidence validators.
+
+## 2026-11-08 corrective acceptance record
+
+The first merged proof branch (#340) had **failed Lean elaboration** because
+`import Std` did not provide `Finset` in its pinned environment. All
+apparently subsequent `sorry` reports followed that failure and were **not
+kernel acceptance**. Its dedicated bounded Quint job passed. Its BarterCore
+tests reported 43 passes and no test failures, but the formatting gate failed.
+The follow-on PR #342 replaces the unsupported finite-set definitions with
+explicit two-source boolean-membership state and applies the hosted formatter
+patch. This correction does not strengthen legal authority or imply production
+admission; exact-head Lean, fresh kernel audit, and Barter formatting must
+pass before the repair can be described as verified.
