@@ -43,6 +43,8 @@ defmodule CoopSubstrate.Projections.Membership do
       throughput_rules: %{},
       floor_rules: %{},
       obligations: %{},
+      # Pure, signed proposals only; never reserve/close source obligations.
+      commercial_setoff_intents: %{},
       role_keys: %{},
       federation_grants: %{},
       # Who each role key was declared for (its optional `member_id`), by
@@ -233,6 +235,15 @@ defmodule CoopSubstrate.Projections.Membership do
     update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
       %{ob | open: false}
     end)
+  end
+
+  # The source-bound commercial intent is only a signed proposal: no debt
+  # discharge, journal mutation, reservation or financial settlement here.
+  def handle_event(
+        %Envelope{type: "CommercialSetoffIntentRecordedV1"} = env,
+        state
+      ) do
+    CoopSubstrate.CommercialSetoffIntent.fold(env, state)
   end
 
   # Phase 9A: an executed netting round closes every open like-denominated
