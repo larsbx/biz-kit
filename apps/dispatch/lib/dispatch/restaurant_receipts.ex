@@ -13,13 +13,10 @@ defmodule Dispatch.RestaurantReceipts do
         "handoff_token" => code
       })
       when phase in ["picked_up", "delivered"] and is_binary(code) and byte_size(code) in 22..30 do
-    with true <- RestaurantAutomation.enabled?(),
-         {:ok, <<_::128>>} <- Base.url_decode64(String.trim(code), padding: false),
-         {:ok, id} <- Ecto.UUID.cast(id),
-         {:ok, config} <- RestaurantDelivery.configuration(),
-         true <- config.tenant == actor.tenant_id do
+    with {:ok, <<_::128>>} <- Base.url_decode64(String.trim(code), padding: false),
+         {:ok, id} <- Ecto.UUID.cast(id) do
       Repo.transaction(fn ->
-        case receipt(actor, config, id, phase, String.trim(code)) do
+        case receipt(actor, id, phase, String.trim(code)) do
           {:ok, result} -> result
           {:error, reason} -> Repo.rollback(reason)
         end
@@ -31,7 +28,7 @@ defmodule Dispatch.RestaurantReceipts do
 
   def submit(_, _), do: {:error, :invalid_receipt}
 
-  defp receipt(actor, config, id, phase, code) do
+  defp receipt(actor, id, phase, code) do
     # Close the race with assignment cancellation or courier role revocation
     # while the remote ledger accepts the scoped proof.
     Repo.query!(
@@ -47,7 +44,7 @@ defmodule Dispatch.RestaurantReceipts do
              trip.status in [:ACTIVE, :COMPLETED],
          {:ok, %Load{} = load} <-
            Ash.get(Load, trip.load_id, tenant: actor.tenant_id, authorize?: false),
-         {:ok, order} <- order_id(load.external_reference, config),
+         {:ok, config, order} <- source(load.external_reference, actor.tenant_id),
          {:ok, result} <-
            RestaurantDelivery.publish_automated(command(trip, order, phase, code), config) do
       {:ok, result}
@@ -56,18 +53,31 @@ defmodule Dispatch.RestaurantReceipts do
     end
   end
 
-  defp order_id(reference, config) when is_binary(reference) do
-    prefix = RestaurantDelivery.load_reference(config.chapter, config.merchant, "")
-
-    if String.starts_with?(reference, prefix) do
-      order = String.replace_prefix(reference, prefix, "")
-      if ULID.valid?(order), do: {:ok, order}, else: :error
+  defp source(reference, tenant) when is_binary(reference) do
+    with [source, _, _, _] <- String.split(reference, ":", parts: 4),
+         {:ok, source} <- source_type(source),
+         true <- RestaurantAutomation.enabled?(source),
+         {:ok, %{tenant: ^tenant} = config} <- RestaurantDelivery.configuration(source),
+         prefix = RestaurantDelivery.load_reference(config.chapter, config.merchant, "", source),
+         true <- String.starts_with?(reference, prefix),
+         order = String.replace_prefix(reference, prefix, ""),
+         true <- valid_order?(source, order) do
+      {:ok, config, order}
     else
-      :error
+      _ -> :error
     end
   end
 
-  defp order_id(_, _), do: :error
+  defp source(_, _), do: :error
+
+  defp source_type("restaurant"), do: {:ok, :restaurant}
+  defp source_type("procurement"), do: {:ok, :procurement}
+  defp source_type(_), do: :error
+
+  defp valid_order?(:restaurant, order), do: ULID.valid?(order)
+
+  defp valid_order?(:procurement, order),
+    do: Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/, order)
 
   defp command(trip, order, phase, code) do
     digest = :crypto.hash(:sha256, code)
@@ -78,7 +88,7 @@ defmodule Dispatch.RestaurantReceipts do
       "order_id" => order,
       "load_id" => trip.load_id,
       "assignment_id" => trip.id,
-      "command_id" => phase <> "-" <> order,
+      "command_id" => phase <> "-" <> proof_id,
       "expected_version" => if(phase == "picked_up", do: 1, else: 2),
       "proof_id" => proof_id,
       "proof_digest" => Base.encode16(digest, case: :lower)

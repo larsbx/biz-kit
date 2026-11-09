@@ -9,7 +9,7 @@ defmodule ProcurementHost.ReleaseTasks do
     {:ok, _} = Application.ensure_all_started(:commerce_core)
     {:ok, _} = Application.ensure_all_started(:coop_substrate)
     %{"type" => type, "chapter_id" => chapter, "payload" => payload} = path |> File.read!() |> Jason.decode!()
-    unless type in ["ProcurementOperatorGrantedV1", "ProcurementBusinessEnrolledV1"],
+    unless type in ["ProcurementOperatorGrantedV1", "ProcurementBusinessEnrolledV1", "ProcurementDispatchRouteV1"],
       do: raise("not a procurement authority event")
     seed = Base.decode16!(System.fetch_env!("PROCUREMENT_GOVERNANCE_SEED_HEX"), case: :mixed)
     key = System.fetch_env!("PROCUREMENT_GOVERNANCE_KEY_ID")

@@ -38,7 +38,9 @@ defmodule Dispatch.Application do
   end
 
   defp restaurant_children do
-    if Dispatch.RestaurantAutomation.enabled?(), do: [Dispatch.RestaurantAutomation], else: []
+    for source <- [:restaurant, :procurement],
+        Dispatch.RestaurantAutomation.enabled?(source),
+        do: {Dispatch.RestaurantAutomation, source}
   end
 
   defp outbox_children do

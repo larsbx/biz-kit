@@ -22,8 +22,8 @@ defmodule Dispatch.RestaurantDelivery do
   """
 
   @doc "The exact Dispatch external reference for one restaurant order."
-  def load_reference(chapter, merchant, order),
-    do: "restaurant:" <> Enum.join([chapter, merchant, order], ":")
+  def load_reference(chapter, merchant, order, source \\ :restaurant),
+    do: Enum.join([Atom.to_string(source), chapter, merchant, order], ":")
 
   @doc "Verify the Dispatch source and submit a signed handoff to the restaurant host."
   def publish(input) do
@@ -118,13 +118,19 @@ defmodule Dispatch.RestaurantDelivery do
   def source_matches?(_, _), do: false
 
   defp signed_body(input, config) do
+    {type, role, scope_field} =
+      case Map.get(config, :source, :restaurant) do
+        :restaurant -> {"RestaurantDeliveryStepV1", "restaurant_dispatch", "merchant_id"}
+        :procurement -> {"ProcurementDispatchStepV1", "procurement_dispatch", "cooperative_id"}
+      end
+
     payload =
       input
       |> Map.delete("reviewed")
-      |> Map.merge(%{"merchant_id" => config.merchant, "tenant_id" => config.tenant})
+      |> Map.merge(%{scope_field => config.merchant, "tenant_id" => config.tenant})
 
     signer = %{
-      role: "restaurant_dispatch",
+      role: role,
       key_id: config.key_id,
       pubkey: Crypto.pubkey_from_seed(config.seed)
     }
@@ -132,7 +138,7 @@ defmodule Dispatch.RestaurantDelivery do
     with {:ok, env} <-
            Envelope.new(%{
              chapter_id: config.chapter,
-             type: "RestaurantDeliveryStepV1",
+             type: type,
              payload: payload,
              signers: [signer],
              timestamp_ms: System.system_time(:millisecond)
@@ -144,17 +150,17 @@ defmodule Dispatch.RestaurantDelivery do
   end
 
   @doc false
-  def configuration do
-    chapter = System.get_env("RESTAURANT_DISPATCH_CHAPTER")
-    merchant = System.get_env("RESTAURANT_DISPATCH_MERCHANT")
-    tenant = System.get_env("RESTAURANT_DISPATCH_TENANT")
-    key_id = System.get_env("RESTAURANT_DISPATCH_KEY_ID")
-    base = System.get_env("RESTAURANT_DISPATCH_URL")
-    seed_path = System.get_env("RESTAURANT_DISPATCH_SEED_FILE")
+  def configuration(source \\ :restaurant) do
+    chapter = env(source, "CHAPTER")
+    merchant = env(source, if(source == :procurement, do: "COOPERATIVE", else: "MERCHANT"))
+    tenant = env(source, "TENANT")
+    key_id = env(source, "KEY_ID")
+    base = env(source, "URL")
+    seed_path = env(source, "SEED_FILE")
 
     with true <- Enum.all?([chapter, merchant, key_id], &token?/1),
          {:ok, _} <- Ecto.UUID.dump(tenant),
-         {:ok, url} <- endpoint(base),
+         {:ok, base} <- endpoint(base),
          true <- is_binary(seed_path),
          {:ok, encoded} <- File.read(seed_path),
          {:ok, <<_::256>> = seed} <- Base.decode64(String.trim(encoded)) do
@@ -165,12 +171,22 @@ defmodule Dispatch.RestaurantDelivery do
          tenant: tenant,
          key_id: key_id,
          seed: seed,
-         url: url
+         source: source,
+         url:
+           base <>
+             if(source == :procurement,
+               do: "/api/procurement-dispatch",
+               else: "/api/restaurant-delivery"
+             )
        }}
     else
       _ -> {:error, :invalid_dispatch_delivery_configuration}
     end
   end
+
+  @doc false
+  def env(source, field) when source in [:restaurant, :procurement],
+    do: System.get_env(String.upcase(Atom.to_string(source)) <> "_DISPATCH_" <> field)
 
   defp token?(value),
     do:
@@ -184,7 +200,7 @@ defmodule Dispatch.RestaurantDelivery do
          true <- is_binary(host) and host != "" and path in [nil, "", "/"],
          true <-
            scheme == "https" or (scheme == "http" and host in ["127.0.0.1", "localhost", "::1"]) do
-      {:ok, String.trim_trailing(base, "/") <> "/api/restaurant-delivery"}
+      {:ok, String.trim_trailing(base, "/")}
     else
       _ -> {:error, :invalid_restaurant_url}
     end

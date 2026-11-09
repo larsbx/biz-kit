@@ -18,7 +18,9 @@ defmodule DispatchWeb.RestaurantReceiptController do
   end
 
   defp page(conn, message) do
-    with true <- RestaurantAutomation.enabled?(),
+    with true <-
+           RestaurantAutomation.enabled?(:restaurant) or
+             RestaurantAutomation.enabled?(:procurement),
          {:ok, trips} <- Trips.mine(conn.assigns.actor) do
       token = Phoenix.Controller.get_csrf_token()
 
@@ -28,8 +30,8 @@ defmodule DispatchWeb.RestaurantReceiptController do
         end
 
       html(conn, [
-        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Restaurant handoff</title>",
-        "<h1>Restaurant handoff</h1>",
+        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Delivery handoff</title>",
+        "<h1>Delivery handoff</h1>",
         if(message, do: ["<p role=\"status\">", message, "</p>"], else: []),
         "<form method=\"post\" action=\"/ui/restaurant-receipts\">",
         "<input type=\"hidden\" name=\"_csrf_token\" value=\"",
@@ -44,7 +46,7 @@ defmodule DispatchWeb.RestaurantReceiptController do
         "<button>Record handoff</button></form></html>"
       ])
     else
-      _ -> conn |> put_status(403) |> text("Restaurant handoff is unavailable.")
+      _ -> conn |> put_status(403) |> text("Delivery handoff is unavailable.")
     end
   end
 end
