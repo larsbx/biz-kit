@@ -35,17 +35,32 @@ operator commands](../../docs/deploy.md#the-restaurant-release).
 `test/slice4_gate_test.exs` is the slice gate: a pickup order is placed on the
 web, accepted, prepared and completed on the board, and the guest's page shows
 "Picked up". Each test builds its restaurant in a fresh Log chapter
-(`RestaurantHost.World`), so the shared ledger needs no reset. Needs Postgres
-for the Log's event store:
+(`RestaurantHost.World`), so the shared ledger needs no reset between host
+tests. `test/board_cancellation_test.exs` submits the actual cancellation form
+and checks order identity, signed reason and staff, stale versions, and
+staff/device revocation. Needs Postgres for the Log's event store.
+
+From the repository root, using a disposable test database (the substrate
+test alias drops and recreates its event store):
 
 ```sh
-cd apps/restaurant_host
-EVENTSTORE_USERNAME=postgres EVENTSTORE_PASSWORD=postgres mix test --no-start
+export MIX_ENV=test
+export BIZKIT_BUNDLED_TEST_LOCALE=true
+export EVENTSTORE_USERNAME=postgres
+export EVENTSTORE_PASSWORD=postgres
+mix deps.get --check-locked
+(cd apps/coop_substrate && mix test test/restaurant_admission_test.exs test/log_test.exs test/governance_authorization_test.exs --warnings-as-errors)
+(cd apps/restaurant_host && mix compile --warnings-as-errors)
+(cd apps/restaurant_host && mix test --no-start --warnings-as-errors)
 ```
 
-`--no-start` matters: the test helper points Localize at its bundled English
-locale before starting the host, because the umbrella's shared config points
-it at the legacy eatsbot's locale cache.
+`BIZKIT_BUNDLED_TEST_LOCALE=true` selects Localize's bundled locale cache at
+configuration time, before standalone Mix tasks start their dependencies.
+The umbrella otherwise points Localize at the legacy Eatsbot application,
+which these narrow jobs do not load. The override requires both `MIX_ENV=test`
+and the explicit flag; development and production keep their existing
+settings. It does not enable runtime locale downloads. `--no-start` keeps the
+host's explicit startup in its test helper.
 
 ## Pickup MVP boundaries
 

@@ -11,3 +11,8 @@ end
 
 # Credentials submitted to sign-in must never enter Phoenix request logs.
 config :phoenix, :filter_parameters, ["password", "token", "authorization"]
+
+# Narrow ledger and Dispatch jobs do not carry the legacy Eatsbot locale cache.
+if config_env() == :test and System.get_env("BIZKIT_BUNDLED_TEST_LOCALE") == "true" do
+  config :localize, otp_app: :localize
+end
