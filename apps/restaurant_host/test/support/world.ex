@@ -39,7 +39,7 @@ defmodule RestaurantHost.World do
       chapter: chapter,
       merchant: "shop",
       currency: :USD,
-      tax_rate: "0.0825",
+      jurisdiction: "US-MI",
       timezone: Keyword.get(opts, :timezone, "Etc/UTC"),
       menu:
         Keyword.get(opts, :menu, [

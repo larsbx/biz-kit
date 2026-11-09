@@ -12,7 +12,7 @@ defmodule RestaurantHost.ConfigTest do
         "chapter" => "chapter-genesis",
         "merchant" => "shop",
         "currency" => "USD",
-        "tax_rate" => "0.0825",
+        "jurisdiction" => "US-MI",
         "menu" => [
           %{"id" => "margherita", "name" => "Margherita", "sku" => "MARG", "price_minor" => 1250}
         ],
@@ -63,7 +63,9 @@ defmodule RestaurantHost.ConfigTest do
     assert Config.parse("{", env()) == {:error, :invalid_json}
     assert Config.parse(json(%{"currency" => "usd"}), env()) == {:error, {:invalid, "currency"}}
     assert Config.parse(json(%{"menu" => []}), env()) == {:error, {:invalid, "menu"}}
-    assert Config.parse(json(%{"tax_rate" => "abc"}), env()) == {:error, {:invalid, "tax_rate"}}
+
+    assert Config.parse(json(%{"jurisdiction" => "US-XX"}), env()) ==
+             {:error, {:invalid, "jurisdiction"}}
 
     bad_hash = %{
       "board-1" => %{"device_id" => "board-1", "key_id" => "k", "pairing_sha256" => "zz"}

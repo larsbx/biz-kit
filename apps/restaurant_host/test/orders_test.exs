@@ -13,8 +13,8 @@ defmodule RestaurantHost.OrdersTest do
     assert Enum.map(priced.lines, &{&1.item_id, &1.quantity, minor(&1.subtotal)}) ==
              [{"margherita", 2, 2500}, {"pepperoni", 1, 1400}]
 
-    # 8.25% of 39.00 is 3.2175, half-up to 3.22.
-    assert {minor(priced.subtotal), minor(priced.tax), minor(priced.total)} == {3900, 322, 4222}
+    # Michigan: 6% of 39.00 is 2.34.
+    assert {minor(priced.subtotal), minor(priced.tax), minor(priced.total)} == {3900, 234, 4134}
     assert Orders.price(r, %{"calzone" => 1}) == {:error, :unknown_item}
   end
 
@@ -24,7 +24,7 @@ defmodule RestaurantHost.OrdersTest do
     {:ok, id} = Orders.place(r, %{"margherita" => 2}, "Ada", "key-1")
     assert {:ok, ^id} = Orders.place(r, %{"margherita" => 2}, "Ada", "key-1")
 
-    assert [%{id: ^id, state: :placed, pickup_name: "Ada", total: 2706, fulfillment: :pickup}] =
+    assert [%{id: ^id, state: :placed, pickup_name: "Ada", total: 2650, fulfillment: :pickup}] =
              Orders.list(r)
 
     assert Orders.place(r, %{}, "Ada", "key-2") == {:error, :no_lines}
@@ -62,10 +62,10 @@ defmodule RestaurantHost.OrdersTest do
         %{id: "pepperoni", name: "Pepperoni", sku: "PEPP", price_minor: 1400}
       ]
 
-      World.build(menu: menu, timezone: "America/New_York")
+      World.build(menu: menu, timezone: "America/Detroit")
     end
 
-    # Tuesday 10 November 2026, New York on EST (UTC−5).
+    # Tuesday 10 November 2026, Detroit on EST (UTC−5).
     @lunchtime ~U[2026-11-10 16:30:00Z]
     @afternoon ~U[2026-11-10 20:00:00Z]
 
@@ -80,8 +80,8 @@ defmodule RestaurantHost.OrdersTest do
              ) ==
                [{"margherita", 500, "lunch", 2000}, {"pepperoni", 0, nil, 1400}]
 
-      # 8.25% of 34.00 is 2.805, half-up to 2.81.
-      assert {minor(p.subtotal), minor(p.tax), minor(p.total)} == {3400, 281, 3681}
+      # Michigan's 6% of 34.00 is 2.04.
+      assert {minor(p.subtotal), minor(p.tax), minor(p.total)} == {3400, 204, 3604}
 
       {:ok, later} = Orders.price(r, %{"margherita" => 2}, @afternoon)
       assert [%{discount_rule: nil}] = later.lines
@@ -98,8 +98,8 @@ defmodule RestaurantHost.OrdersTest do
 
     test "the Log admits the discounted snapshot and keeps its amounts", %{restaurant: r} do
       {:ok, id} = Orders.place(r, %{"margherita" => 2}, "Ada", "key-d", @lunchtime)
-      # 2500 − 500 = 2000; tax 165; total 2165
-      assert [%{id: ^id, total: 2165}] = Orders.list(r)
+      # 2500 − 500 = 2000; tax 120; total 2120
+      assert [%{id: ^id, total: 2120}] = Orders.list(r)
     end
   end
 
@@ -129,7 +129,7 @@ defmodule RestaurantHost.OrdersTest do
       store |> element("#add-margherita") |> render_click()
       store |> element("#add-margherita") |> render_click()
       assert store |> element("#discount-margherita") |> render() =~ "2.50"
-      assert store |> element("#total") |> render() =~ "24.36"
+      assert store |> element("#total") |> render() =~ "23.85"
     end
   end
 end
