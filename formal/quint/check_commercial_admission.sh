@@ -16,6 +16,14 @@ git -C "$repo_dir" rev-parse HEAD > "$evidence_dir/git-head.txt"
 git -C "$repo_dir" status --porcelain -- formal/quint/commercial_admission.qnt formal/quint/check_commercial_admission.sh > "$evidence_dir/source-status.txt"
 "$quint_cli" --version > "$evidence_dir/quint-version.txt"
 test "$(tr -d '\r\n' < "$evidence_dir/quint-version.txt")" = "0.33.1"
+# Apalache 0.62.4 is compiled for Java 21 (class-file version 65). Refuse
+# the hosted image's default Java 17 before starting any acceptance stage.
+if ! java -version > "$evidence_dir/java-version.txt" 2>&1 ||
+    ! grep -Fq 'Temurin-21.0.13+9' "$evidence_dir/java-version.txt"; then
+  cat "$evidence_dir/java-version.txt" >&2
+  echo "FAIL: pinned Apalache requires Temurin Java 21.0.13+9" >&2
+  exit 1
+fi
 cd "$evidence_dir"
 spec="$evidence_dir/commercial_admission.qnt"
 

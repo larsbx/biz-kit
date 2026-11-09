@@ -193,6 +193,11 @@ distinct real invariant counterexample for each weakened guard. Parser
 failures, timeouts and generic nonzero exits do not count as counterexamples.
 Retained logs and ITF traces identify the exact model and checker hashes.
 
+The Quint runner requires Quint 0.33.1, Apalache 0.62.4 and Temurin Java
+21.0.13+9 on `PATH`. Apalache uses Java 21 class files; the hosted image's
+default Java 17 cannot load it. The workflow installs the pinned JRE, and the
+runner records and verifies its version before any acceptance stage.
+
 These models are not a mechanized refinement proof of Elixir/PostgreSQL or a
 cryptographic proof. Hash collision resistance, truthful source authentication,
 the signature verifier, store durability and the model/runtime correspondence

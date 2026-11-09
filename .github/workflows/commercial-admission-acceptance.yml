@@ -81,6 +81,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install Apalache's pinned Java runtime
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21.0.13+9'
+          java-package: jre
       - name: Install pinned Quint
         run: npm install --global --no-audit --no-fund @informalsystems/quint@0.33.1
       - name: Independent bounded model and targeted counterexamples
