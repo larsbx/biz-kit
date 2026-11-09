@@ -47,7 +47,7 @@ defmodule RestaurantHost.DeliveryGateTest do
         do: assert(:ok = Orders.step(r, "board-1", id, action, version))
 
     assert %{state: :ready, delivery: %{phase: :requested, version: 0}} = Orders.get(r, id)
-    assert {:error, :delivery_owned} = Orders.step(r, "board-1", id, :complete, 3)
+    assert {:error, :invalid_transition} = Orders.step(r, "board-1", id, :complete, 3)
     {wrong_pubkey, wrong_seed} = Crypto.generate_keypair()
     assert submit(r, %{signer | pubkey: wrong_pubkey}, wrong_seed, base).status == 403
     assert submit(r, signer, seed, base).status == 201
@@ -75,6 +75,7 @@ defmodule RestaurantHost.DeliveryGateTest do
     assert submit(r, signer, seed, dropoff).status == 422
     assert submit(r, signer, seed, pickup).status == 201
     assert %{state: :dispatched} = Orders.get(r, id)
+    assert {:error, :delivery_owned} = Orders.step(r, "board-1", id, :complete, 4)
     assert submit(r, signer, seed, dropoff).status == 201
     assert %{state: :completed, delivery: %{phase: :delivered, version: 3}} = Orders.get(r, id)
     assert render(storefront) =~ "Delivered"
