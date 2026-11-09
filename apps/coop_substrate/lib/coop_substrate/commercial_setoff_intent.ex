@@ -16,7 +16,7 @@ defmodule CoopSubstrate.CommercialSetoffIntent do
   alias CoopSubstrate.Canonical
   alias CoopSubstrate.Protocol.Envelope
 
-  @type "CommercialSetoffIntentRecordedV1"
+  @intent_type "CommercialSetoffIntentRecordedV1"
   @source_keys ~w(amount_minor creditor_id debtor_id denomination obligation_id)
   @payload_keys ~w(a_to_b b_to_a denomination intent_id party_a party_b
                    setoff source_terms_digest sources)
@@ -24,14 +24,14 @@ defmodule CoopSubstrate.CommercialSetoffIntent do
   @max_minor 9_223_372_036_854_775_807
 
   @doc "The admitted event is only a signed, inert accounting proposal."
-  def event_type, do: @type
+  def event_type, do: @intent_type
 
   @doc """
   Called by Validity inside the existing serialized business append gate.
   A source list is bound to canonical currently open obligations, not just
   aggregate totals. Any changed source set or current signing key is refused.
   """
-  def check(%Envelope{type: @type, chapter_id: chapter, payload: payload} = env, gate)
+  def check(%Envelope{type: @intent_type, chapter_id: chapter, payload: payload} = env, gate)
       when is_map(payload) and is_map(gate) do
     with :ok <- validate_header(payload),
          :ok <- unique_intent(gate, chapter, payload["intent_id"]),
@@ -49,7 +49,7 @@ defmodule CoopSubstrate.CommercialSetoffIntent do
   Fold after authorized Log admission. Do not change any obligation,
   reservation, payable, financial balance or custody state.
   """
-  def fold(%Envelope{type: @type, chapter_id: chapter, payload: p}, state) do
+  def fold(%Envelope{type: @intent_type, chapter_id: chapter, payload: p}, state) do
     record = %{
       party_a: p["party_a"],
       party_b: p["party_b"],
