@@ -141,6 +141,7 @@ jobs:
             apps/coop_substrate/lib/coop_substrate/protocol/validity.ex \
             apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex \
             apps/coop_substrate/test/commercial_admission_test.exs \
+            apps/coop_substrate/test/group_buy_authority_test.exs \
             > commercial-evidence/runtime/sources.sha256
           elixir --version > commercial-evidence/runtime/elixir-version.txt
       - name: Locked dependencies and strict umbrella compilation
@@ -157,6 +158,7 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
           apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
           apps/coop_substrate/test/commercial_admission_test.exs
+          apps/coop_substrate/test/group_buy_authority_test.exs
       - name: Real signed append, historical replay, conflicts and restart regressions
         working-directory: apps/coop_substrate
         run: |

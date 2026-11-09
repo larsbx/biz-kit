@@ -4,7 +4,7 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
   alias CoopSubstrate.{Canonical, GroupBuys, Log}
   alias CoopSubstrate.GroupBuyClock, as: Clock
   alias CoopSubstrate.GroupBuys.Cipher
-  alias CoopSubstrate.Projections.Membership
+  alias CoopSubstrate.Projections.{AdmissionGate, Membership}
   alias CoopSubstrate.Protocol.Envelope
   alias GroupBuyCore.BindingRound, as: Round
 
@@ -562,7 +562,7 @@ defmodule CoopSubstrate.GroupBuyAuthorityTest do
     gate = Log.gate()
     restart_log()
     assert Log.gate() == gate
-    assert {:ok, ^gate} = Log.replay(Membership)
+    assert {:ok, ^gate} = Log.replay(AdmissionGate)
     assert :ok = Log.verify_chains()
   end
 
