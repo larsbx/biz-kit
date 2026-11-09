@@ -18,20 +18,24 @@ defmodule Dispatch.RestaurantAutomation do
 
   @poll_ms 5_000
 
-  def enabled?, do: System.get_env("RESTAURANT_DISPATCH_AUTOMATED") == "true"
+  def enabled?(source \\ :restaurant), do: RestaurantDelivery.env(source, "AUTOMATED") == "true"
 
-  def start_link(_opts), do: GenServer.start_link(__MODULE__, "", name: __MODULE__)
+  def child_spec(source) do
+    %{id: {__MODULE__, source}, start: {__MODULE__, :start_link, [source]}}
+  end
+
+  def start_link(source), do: GenServer.start_link(__MODULE__, source)
 
   @impl true
-  def init(cursor) do
+  def init(source) do
     Process.send_after(self(), :poll, 0)
-    {:ok, cursor}
+    {:ok, {source, ""}}
   end
 
   @impl true
-  def handle_info(:poll, cursor) do
+  def handle_info(:poll, {source, cursor}) do
     next =
-      case poll(cursor) do
+      case poll(cursor, source) do
         {:ok, next} ->
           next || ""
 
@@ -41,12 +45,12 @@ defmodule Dispatch.RestaurantAutomation do
       end
 
     Process.send_after(self(), :poll, @poll_ms)
-    {:noreply, next}
+    {:noreply, {source, next}}
   end
 
   @doc false
-  def poll(cursor) do
-    with {:ok, config} <- configuration(),
+  def poll(cursor, source \\ :restaurant) do
+    with {:ok, config} <- configuration(source),
          {:ok, actor} <- actor(config),
          {:ok, %{"jobs" => jobs, "next" => next}} when is_list(jobs) <-
            RestaurantDelivery.work(config, cursor) do
@@ -69,14 +73,14 @@ defmodule Dispatch.RestaurantAutomation do
     end
   end
 
-  defp configuration do
-    with true <- enabled?(),
-         {:ok, scope} <- RestaurantDelivery.configuration(),
-         {:ok, service} <- uuid_env("RESTAURANT_DISPATCH_SERVICE_ROLE"),
-         {:ok, courier} <- uuid_env("RESTAURANT_DISPATCH_COURIER"),
-         {:ok, site} <- text_env("RESTAURANT_DISPATCH_SITE"),
-         {:ok, pickup} <- text_env("RESTAURANT_DISPATCH_PICKUP"),
-         {:ok, dropoff} <- text_env("RESTAURANT_DISPATCH_DROPOFF") do
+  defp configuration(source) do
+    with true <- enabled?(source),
+         {:ok, scope} <- RestaurantDelivery.configuration(source),
+         {:ok, service} <- uuid_env(source, "SERVICE_ROLE"),
+         {:ok, courier} <- uuid_env(source, "COURIER"),
+         {:ok, site} <- text_env(source, "SITE"),
+         {:ok, pickup} <- text_env(source, "PICKUP"),
+         {:ok, dropoff} <- text_env(source, "DROPOFF") do
       {:ok,
        Map.merge(scope, %{
          service: service,
@@ -90,10 +94,10 @@ defmodule Dispatch.RestaurantAutomation do
     end
   end
 
-  defp uuid_env(name), do: Ecto.UUID.cast(System.get_env(name))
+  defp uuid_env(source, name), do: Ecto.UUID.cast(RestaurantDelivery.env(source, name))
 
-  defp text_env(name) do
-    case System.get_env(name) do
+  defp text_env(source, name) do
+    case RestaurantDelivery.env(source, name) do
       text when is_binary(text) and byte_size(text) in 1..500 ->
         if String.trim(text) != "", do: {:ok, text}, else: :error
 
@@ -129,7 +133,8 @@ defmodule Dispatch.RestaurantAutomation do
         "order_id" => order,
         "load_id" => load.id,
         "assignment_id" => trip.id,
-        "command_id" => "accept-" <> order,
+        "command_id" =>
+          "accept-" <> Base.url_encode64(:crypto.hash(:sha256, order), padding: false),
         "expected_version" => 0
       }
 
@@ -304,5 +309,11 @@ defmodule Dispatch.RestaurantAutomation do
   defp advance(_, _, _, _, _), do: {:error, :unexpected_assignment_state}
 
   defp reference(config, order),
-    do: RestaurantDelivery.load_reference(config.chapter, config.merchant, order)
+    do:
+      RestaurantDelivery.load_reference(
+        config.chapter,
+        config.merchant,
+        order,
+        Map.get(config, :source, :restaurant)
+      )
 end

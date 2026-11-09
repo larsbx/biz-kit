@@ -12,7 +12,7 @@ successful exact-head hosted receipts; runner tests are not application acceptan
 One private coordinator console, three server-rendered views: requests,
 quotes/orders, operations/evidence. Existing CommerceCore workflow remains the
 only business reducer. No new authoritative database, notification service,
-payment processor, Dispatch dependency, capital ledger or marketplace framework.
+payment processor, capital ledger or marketplace framework. Dispatch is optional.
 Business participation is explicit governance enrollment. Enrollment, consent,
 merchant quotes, delivery and payment references are **operator attestations**,
 not independently verified business registration, buyer signatures or bank facts.
@@ -236,3 +236,54 @@ and scorecard export remain a separate small product implementation obligation.
 
 No automatic merge or deployment. No claim of full branch acceptance, independent
 external-evidence verification, legal compliance, settlement or end-to-end refinement.
+
+## Dispatch fulfillment on the existing order
+
+The coordinator may queue the accepted order for an enrolled Dispatch route.
+The signed request binds the existing Procurement request ID and current
+accepted version. Dispatch uses the same ID in its load reference and records
+custody receipts against it. Admitted delivery applies the Procurement kernel's
+fulfillment transition to the original accepted order. The quote and
+payment-evidence records retain their existing authority.
+
+Governance configures one route per cooperative. Enroll a
+`ProcurementDispatchRouteV1` event with the existing offline enrollment command.
+The payload names the cooperative, Dispatch tenant UUID, fixed site, Dispatch
+key ID and hex public key, plus `active` and `expected_version`. A first route
+uses expected version zero. The currently enrolled route's key can be rotated
+without changing the tenant or site used by outstanding orders.
+
+```json
+{
+  "type": "ProcurementDispatchRouteV1",
+  "chapter_id": "chapter-id",
+  "payload": {
+    "cooperative_id": "coop",
+    "tenant_id": "11111111-1111-1111-1111-111111111111",
+    "site": "North dock",
+    "key_id": "procurement-dispatch",
+    "pubkey_hex": "<64 hex digits>",
+    "active": true,
+    "expected_version": 0
+  }
+}
+```
+
+On the Dispatch release configure the same worker settings as the restaurant
+delivery profile under `PROCUREMENT_DISPATCH_*`. Use `COOPERATIVE` in place of
+`MERCHANT`, the coordinator host's private HTTPS origin for `URL`, and
+`AUTOMATED=true`. The reverse proxy must forward
+`/api/procurement-dispatch/work` and `/api/procurement-dispatch` to the loopback
+host. These calls use a separately scoped signed request or signed event.
+The worker uses a dedicated service assignment and an authorized courier,
+with the configured pickup/drop-off addresses and exact enrolled `SITE`.
+The restaurant and procurement workers can run concurrently.
+
+The coordinator page shows the handoff state and the separate codes used
+by the shipper and receiver. The authenticated assigned courier submits
+them in Dispatch at `/ui/restaurant-receipts`. Keep the coordinator host
+secret stable while any issued codes are outstanding. Cancellation before
+acceptance leaves a cleanup job for any planned Dispatch assignment. Once
+Dispatch accepts custody, the order stays in its existing lifecycle while
+the operator reconciles an exception. External fulfillment remains available
+for accepted orders that have no Dispatch request.

@@ -46,7 +46,7 @@ bash "$root/tests/procurement_mvp/check.sh" 2>&1 | tee "$receipts/kernel.log"
 cd "$stage"
 MIX_ENV=test mix deps.get --check-locked
 MIX_ENV=test mix compile --warnings-as-errors 2>&1 | tee "$receipts/compile.log"
-(cd apps/coop_substrate; mix test test/procurement_test.exs test/log_test.exs test/envelope_test.exs --warnings-as-errors) \
+(cd apps/coop_substrate; mix test test/procurement_test.exs test/procurement_dispatch_policy_test.exs test/log_test.exs test/envelope_test.exs --warnings-as-errors) \
   2>&1 | tee "$receipts/ledger-tests.log"
 (cd apps/procurement_host; mix test --warnings-as-errors) 2>&1 | tee "$receipts/http-tests.log"
 MIX_ENV=prod mix deps.get --check-locked

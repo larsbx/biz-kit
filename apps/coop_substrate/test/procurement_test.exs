@@ -1,11 +1,106 @@
 defmodule CoopSubstrate.ProcurementTest do
   use CoopSubstrate.LogCase, async: false
-  alias CoopSubstrate.{Log, Procurement, ProcurementFixture, ProcurementTestClock}
+  alias CoopSubstrate.{Log, Procurement, ProcurementDispatch, ProcurementFixture, ProcurementTestClock}
   alias CoopSubstrate.Projections.AdmissionGate
   alias CoopSubstrate.Protocol.Envelope
   alias ProcurementFixture, as: F
   setup do
     {:ok, f: F.setup()}
+  end
+
+  @tenant "11111111-1111-1111-1111-111111111111"
+  @load "22222222-2222-2222-2222-222222222222"
+  @assignment "33333333-3333-3333-3333-333333333333"
+  @pickup "44444444-4444-4444-4444-444444444444"
+  @dropoff "55555555-5555-5555-5555-555555555555"
+  @pick_digest String.duplicate("a", 64)
+  @drop_digest String.duplicate("b", 64)
+
+  test "Dispatch closes the existing order with exact signed custody evidence and replays", %{f: f} do
+    :ok = F.quoted(f)
+    {:ok, _} = F.submit(f, "accept", 3, F.acceptance())
+    courier = new_member("procurement_dispatch", "dispatch-key")
+    {:ok, [_]} = Log.append(route(f, courier, true, 0))
+
+    assert {:error, {:reject, 0, :stale_version}} =
+             Procurement.request_dispatch(f.context, "request-1", 3, @pick_digest, @drop_digest)
+    assert :ok = Procurement.request_dispatch(f.context, "request-1", 4, @pick_digest, @drop_digest)
+    assert {:error, {:reject, 0, :dispatch_handoff_in_progress}} =
+             F.submit(f, "fulfill", 5, %{"evidence_ref" => "manual"})
+
+    initial = Procurement.state(Log.gate())
+    assert [%{order_id: "request-1", phase: "requested"}] =
+             ProcurementDispatch.work(initial, f.context.chapter_id, "coop", @tenant, "")
+    assert [] = ProcurementDispatch.work(initial, f.context.chapter_id, "other", @tenant, "")
+
+    rogue = new_member("procurement_dispatch", "dispatch-key")
+    assert {:error, {:reject, 0, :procurement_dispatch_forbidden}} =
+             Log.append(step(f, rogue, "accept", 0))
+    assert {:ok, [_]} = Log.append(step(f, courier, "accept", 0))
+    assert {:error, {:reject, 0, :dispatch_custody_reconciliation_required}} =
+             F.submit(f, "cancel", 5, %{"evidence_ref" => "cancel"})
+
+    dropoff = %{"proof_id" => @dropoff, "proof_digest" => @drop_digest}
+    assert {:error, _} = Log.append(step(f, courier, "delivered", 1, dropoff))
+    assert {:error, {:reject, 0, :delivery_code_required_or_invalid}} =
+             Log.append(step(f, courier, "picked_up", 1, %{"proof_id" => @pickup, "proof_digest" => @drop_digest}))
+
+    assert {:ok, [_]} =
+             Log.append(step(f, courier, "picked_up", 1, %{"proof_id" => @pickup, "proof_digest" => @pick_digest}))
+
+    # Separate evidence may advance the commerce version while transport is underway.
+    assert {:ok, _} = F.submit(f, "payment_evidence", 5, %{"evidence_ref" => "operator-payment"})
+    assert {:ok, [_]} = Log.append(step(f, courier, "delivered", 2, dropoff))
+    head = Log.head()
+    assert {:error, {:reject, 0, :duplicate_delivery_step}} =
+             Log.append(step(f, courier, "delivered", 2, dropoff))
+    assert Log.head() == head
+
+    assert {:ok, %{requests: [row]}} = Procurement.snapshot(f.context)
+    assert row.scope == {f.context.chapter_id, "coop", "request-1"}
+    assert row.phase == :fulfilled and row.version == 7 and row.dispatch_phase == :delivered
+    assert row.accepted_quote.revision == 1
+    assert row.outcome_ref == "dispatch:" <> @dropoff
+    assert [%{bank_verified: false}] = row.payment_evidence
+
+    before = Procurement.state(Log.gate())
+    :ok = restart_log()
+    assert Procurement.state(Log.gate()) == before
+    assert :ok = Log.verify_chains()
+  end
+
+  test "cancellation before claim leaves a cleanup job and route revocation blocks the signer", %{f: f} do
+    :ok = F.quoted(f)
+    {:ok, _} = F.submit(f, "accept", 3, F.acceptance())
+    courier = new_member("procurement_dispatch", "dispatch-key")
+    {:ok, [_]} = Log.append(route(f, courier, true, 0))
+    :ok = Procurement.request_dispatch(f.context, "request-1", 4, @pick_digest, @drop_digest)
+    assert {:ok, _} = F.submit(f, "cancel", 5, %{"evidence_ref" => "cancelled"})
+    assert {:error, {:reject, 0, :delivery_order_not_ready}} = Log.append(step(f, courier, "accept", 0))
+    assert [%{order_id: "request-1", phase: "cancelled"}] =
+             ProcurementDispatch.work(Procurement.state(Log.gate()), f.context.chapter_id, "coop", @tenant, "")
+    assert {:ok, [_]} = Log.append(route(f, courier, false, 1))
+    assert {:error, {:reject, 0, :procurement_dispatch_forbidden}} =
+             Log.append(step(f, courier, "accept", 0))
+  end
+
+  defp route(f, courier, active, expected) do
+    F.event(f, "ProcurementDispatchRouteV1", %{
+      "cooperative_id" => "coop", "tenant_id" => @tenant, "site" => "North dock",
+      "key_id" => courier.signer.key_id, "pubkey" => {:bytes, courier.signer.pubkey},
+      "active" => active, "expected_version" => expected
+    })
+  end
+
+  defp step(f, courier, op, version, extra \\ %{}) do
+    payload = Map.merge(%{
+      "cooperative_id" => "coop", "order_id" => "request-1", "tenant_id" => @tenant,
+      "load_id" => @load, "assignment_id" => @assignment, "command_id" => op,
+      "op" => op, "expected_version" => version, "automated" => true
+    }, extra)
+
+    signed_event(courier, "ProcurementDispatchStepV1", payload,
+      chapter_id: f.context.chapter_id, timestamp_ms: f.now)
   end
 
   test "signed workflow persists, audits and replays after expiry and restart", %{f: f} do
