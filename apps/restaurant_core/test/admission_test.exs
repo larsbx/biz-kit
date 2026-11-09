@@ -106,9 +106,9 @@ defmodule RestaurantCore.AdmissionTest do
         grant("bot", "system", @all)
       ])
 
-  test "every registered type is one of the three, each signed by one role" do
+  test "every registered type is signed by exactly one role" do
     assert Map.keys(Admission.event_types()) |> Enum.sort() ==
-             ~w(RestaurantDeviceGrantedV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
+             ~w(RestaurantDeviceGrantedV1 RestaurantDeviceRevokedV1 RestaurantMenuPublishedV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
 
     for {_, spec} <- Admission.event_types(), do: assert([_] = spec.required_roles)
   end

@@ -8,6 +8,7 @@ defmodule RestaurantHost.Web.StorefrontLive do
 
   alias CoopSubstrate.ULID
   alias RestaurantHost.{Orders, Restaurant}
+  alias RestaurantHost.Web.AuthController
 
   @status %{
     placed: "Received",
@@ -19,14 +20,18 @@ defmodule RestaurantHost.Web.StorefrontLive do
   }
 
   @impl true
-  def mount(_params, _session, socket) do
-    r = Restaurant.current()
+  def mount(_params, session, socket) do
+    r = Restaurant.current() |> Restaurant.published_menu()
+    reference = session["restaurant_identity"]
 
     {:ok,
      assign(socket,
        page_title: "Order for pickup",
        restaurant: r,
        menu: Orders.menu(r),
+       identity_ref: reference,
+       signed_in?: match?({:ok, _}, AuthController.principal(reference)),
+       sign_in_available?: AuthController.enabled?(),
        basket: %{},
        priced: nil,
        name: "",
@@ -39,18 +44,43 @@ defmodule RestaurantHost.Web.StorefrontLive do
   @impl true
   def handle_event("add", %{"id" => id}, socket), do: {:noreply, rebasket(socket, id, 1)}
   def handle_event("remove", %{"id" => id}, socket), do: {:noreply, rebasket(socket, id, -1)}
-  def handle_event("name", %{"name" => name}, socket), do: {:noreply, assign(socket, name: name)}
 
-  def handle_event("place", %{"name" => name}, socket) do
-    %{restaurant: r, basket: basket, key: key} = socket.assigns
+  def handle_event("name", %{"name" => name}, socket) when is_binary(name),
+    do: {:noreply, assign(socket, name: name)}
 
-    case Orders.place(r, basket, String.trim(name), key) do
-      {:ok, id} ->
-        if connected?(socket), do: Orders.subscribe()
-        {:noreply, assign(socket, order: Orders.get(r, id), error: nil)}
+  def handle_event("place", %{"name" => name}, socket) when is_binary(name) do
+    %{restaurant: r, basket: basket, key: key, identity_ref: reference} = socket.assigns
+
+    with {:ok, principal} <- checkout_principal(reference),
+         {:ok, id} <- Orders.place(r, basket, String.trim(name), key, principal) do
+      if connected?(socket), do: Orders.subscribe()
+      {:noreply, assign(socket, order: Orders.get(r, id), error: nil)}
+    else
+      {:error, :stale_menu} ->
+        latest = Restaurant.published_menu(r)
+
+        {:noreply,
+         assign(socket,
+           restaurant: latest,
+           menu: Orders.menu(latest),
+           basket: %{},
+           priced: nil,
+           error: "The menu changed. Please review it and add your items again."
+         )}
 
       {:error, reason} ->
         {:noreply, assign(socket, error: message(reason))}
+    end
+  end
+
+  def handle_event(_, _, socket), do: {:noreply, socket}
+
+  defp checkout_principal(nil), do: {:ok, nil}
+
+  defp checkout_principal(reference) do
+    case AuthController.principal(reference) do
+      {:ok, _} = principal -> principal
+      {:error, _} -> {:error, :session_expired}
     end
   end
 
@@ -61,6 +91,12 @@ defmodule RestaurantHost.Web.StorefrontLive do
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp rebasket(socket, id, delta) do
+    if Enum.any?(socket.assigns.menu, &(&1.id == id)),
+      do: update_basket(socket, id, delta),
+      else: socket
+  end
+
+  defp update_basket(socket, id, delta) do
     basket =
       socket.assigns.basket
       |> Map.update(id, max(delta, 0), &max(&1 + delta, 0))
@@ -75,6 +111,7 @@ defmodule RestaurantHost.Web.StorefrontLive do
     assign(socket, basket: basket, priced: priced)
   end
 
+  defp message(:session_expired), do: "Your session ended. Please sign in again."
   defp message(:no_lines), do: "Add something to your order first."
   defp message(:invalid_checkout_command), do: "Please give a name for pickup."
   defp message(_), do: "We could not place that order. Please try again."
@@ -96,6 +133,14 @@ defmodule RestaurantHost.Web.StorefrontLive do
   def render(assigns) do
     ~H"""
     <h1>Order for pickup</h1>
+    <nav :if={@sign_in_available?}>
+      <a :if={!@signed_in?} href="/auth/login">Sign in</a>
+      <a :if={@signed_in?} href="/account/orders">Your orders</a>
+      <.form :if={@signed_in?} for={%{}} action="/auth/logout" method="post">
+        <button type="submit">Sign out</button>
+      </.form>
+    </nav>
+    <p :if={@menu == []}>Pickup ordering is currently unavailable.</p>
     <section id="menu">
       <div :for={item <- @menu} class="row">
         <span>{item.name}</span>

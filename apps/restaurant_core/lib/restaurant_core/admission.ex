@@ -22,9 +22,11 @@ defmodule RestaurantCore.Admission do
   """
 
   alias OrderCore.Placement
-  alias RestaurantCore.Kitchen
+  alias RestaurantCore.{Kitchen, Menu}
 
   @grant "RestaurantDeviceGrantedV1"
+  @revoke "RestaurantDeviceRevokedV1"
+  @menu "RestaurantMenuPublishedV1"
   @placed "RestaurantOrderPlacedV1"
   @step "RestaurantOrderStepV1"
   @device "restaurant_device"
@@ -46,6 +48,18 @@ defmodule RestaurantCore.Admission do
           "actor" => :string,
           "actions" => :any
         }),
+      @revoke =>
+        spec("governance", "restaurant_devices", ["merchant_id"], %{
+          "merchant_id" => :string,
+          "key_id" => :string
+        }),
+      @menu =>
+        spec("governance", "restaurant_menu", ["merchant_id"], %{
+          "merchant_id" => :string,
+          "expected_revision" => :int,
+          "currency" => :string,
+          "items" => :any
+        }),
       @placed =>
         spec(
           @device,
@@ -65,7 +79,7 @@ defmodule RestaurantCore.Admission do
             "subtotal_minor" => :int,
             "total_minor" => :int
           },
-          %{"delivery" => :any, "pickup_name" => :string}
+          %{"delivery" => :any, "pickup_name" => :string, "menu_revision" => :int}
         ),
       @step =>
         spec(
@@ -79,7 +93,7 @@ defmodule RestaurantCore.Admission do
             "expected_version" => :int,
             "action" => :string
           },
-          %{"reason" => :string}
+          %{"reason" => :string, "staff_principal" => :string}
         )
     }
   end
@@ -92,7 +106,17 @@ defmodule RestaurantCore.Admission do
       payload: %{required: required, optional: optional}
     }
 
-  def init, do: %{grants: %{}, merchants: %{}}
+  def init, do: %{grants: %{}, merchants: %{}, menus: %{}}
+
+  def menu(state, chapter, merchant),
+    do: get_in(state, [:menus, {chapter, merchant}])
+
+  def active_device?(state, chapter, merchant, signer) do
+    case state.grants[{chapter, merchant, signer.key_id}] do
+      %{pubkey: pubkey} = grant -> pubkey == signer.pubkey and not Map.get(grant, :revoked, false)
+      nil -> false
+    end
+  end
 
   @doc "`:ok` when the event may be appended to a gate holding `role_keys` and `restaurant`."
   def check(env, gate) do
@@ -165,6 +189,32 @@ defmodule RestaurantCore.Admission do
     end
   end
 
+  defp admit_one(%{type: @revoke, chapter_id: ch, signers: [signer], payload: p}, keys, state) do
+    id = {ch, p["merchant_id"], p["key_id"]}
+
+    with :ok <- governance(ch, signer, keys),
+         %{} = grant <- state.grants[id],
+         false <- Map.get(grant, :revoked, false) do
+      {:ok, put_in(state, [:grants, id], Map.put(grant, :revoked, true))}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :restaurant_device_not_active}
+    end
+  end
+
+  defp admit_one(%{type: @menu, chapter_id: ch, signers: [signer], payload: p}, keys, state) do
+    merchant = p["merchant_id"]
+    current = menu(state, ch, merchant)
+    revision = if current, do: current.revision, else: 0
+
+    with :ok <- governance(ch, signer, keys),
+         true <- p["expected_revision"] == revision or {:error, :stale_menu},
+         true <- Menu.valid?(p["currency"], p["items"]) or {:error, :invalid_restaurant_menu} do
+      publication = %{revision: revision + 1, currency: p["currency"], items: p["items"]}
+      {:ok, put_in(state, [:menus, {ch, merchant}], publication)}
+    end
+  end
+
   defp admit_one(%{type: @placed, chapter_id: ch, payload: p} = env, _keys, state) do
     with {:ok, _grant} <- device(env, state, :checkout),
          {:ok, cmd, cart, snapshot} <- decode_checkout(p),
@@ -187,13 +237,24 @@ defmodule RestaurantCore.Admission do
            cart_id: cmd.cart_id
          },
          {:ok, checkout} <-
-           placed(Placement.apply(projection, trusted, cmd, snapshot), merchant, cmd),
+           placed(
+             Placement.apply(projection, trusted, cmd, fn cart, command ->
+               with :ok <- checkout_menu(menu(state, ch, p["merchant_id"]), p),
+                    do: snapshot.(cart, command)
+             end),
+             merchant,
+             cmd
+           ),
          {:ok, order} <- Kitchen.new(p["merchant_id"], p["order_id"], cmd.fulfillment) do
       {:ok,
        put_in(state, [:merchants, {ch, p["merchant_id"]}], %{
          checkout: checkout,
          orders: Map.put(merchant.orders, p["order_id"], order),
-         details: Map.put(merchant.details, p["order_id"], %{pickup_name: p["pickup_name"]}),
+         details:
+           Map.put(merchant.details, p["order_id"], %{
+             pickup_name: p["pickup_name"],
+             menu_revision: Map.get(p, "menu_revision", 0)
+           }),
          index: Map.put(merchant.index, {cmd.channel, cmd.idempotency_key}, p["order_id"])
        })}
     end
@@ -241,12 +302,37 @@ defmodule RestaurantCore.Admission do
 
   # A device acts only for the merchant it was granted, with its granted key.
   defp device(%{chapter_id: ch, signers: [signer], payload: p}, state, action) do
-    case state.grants[{ch, p["merchant_id"], signer.key_id}] do
-      %{pubkey: pubkey} = grant when pubkey == signer.pubkey ->
-        if action == nil or action in grant.actions, do: {:ok, grant}, else: {:error, :forbidden}
+    merchant = p["merchant_id"]
 
-      _ ->
-        {:error, :forbidden}
+    with true <- active_device?(state, ch, merchant, signer),
+         grant = state.grants[{ch, merchant, signer.key_id}],
+         true <- is_nil(action) or action in grant.actions do
+      {:ok, grant}
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  defp checkout_menu(nil, payload) do
+    if Map.get(payload, "menu_revision", 0) == 0, do: :ok, else: {:error, :stale_menu}
+  end
+
+  defp checkout_menu(menu, payload) do
+    with true <- payload["menu_revision"] == menu.revision or {:error, :stale_menu},
+         true <- payload["currency"] == menu.currency or {:error, :menu_currency_mismatch},
+         items = Map.new(menu.items, &{&1["id"], &1}),
+         true <-
+           Enum.all?(payload["lines"], fn line ->
+             case items[line["item_id"]] do
+               nil ->
+                 false
+
+               item ->
+                 line["name"] == item["name"] and line["unit_minor"] == item["price_minor"] and
+                   line["discount_minor"] == Map.get(item, "discount_minor", 0) * line["quantity"]
+             end
+           end) or {:error, :menu_line_mismatch} do
+      :ok
     end
   end
 

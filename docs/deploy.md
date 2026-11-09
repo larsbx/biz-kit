@@ -98,9 +98,11 @@ bin/restaurant daemon
 | Variable | For |
 | --- | --- |
 | `RESTAURANT_PUBLIC_BASE_URL` | the public URL; the live pages' websocket origin check compares against its host |
-| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | the signed session that holds a paired board |
+| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | signs the browser session for board pairing and customer sign-in |
 | `RESTAURANT_PORT` (default `4070`), `RESTAURANT_BIND_IP` (default `0.0.0.0`; `::` for IPv6, `127.0.0.1` behind a local proxy) | where it listens, behind a TLS-terminating proxy |
 | `RESTAURANT_CONFIG_FILE` | the restaurant file (below) |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `BIZKIT_IDENTITY_BINDINGS` | optional account sign-in using existing Biz-kit principal bindings. Register `<RESTAURANT_PUBLIC_BASE_URL>/auth/callback` with WorkOS. |
+| `RESTAURANT_STAFF_PRINCIPALS` | comma-separated Biz-kit principal IDs. When present, a board requires both pairing and staff sign-in. An empty list denies every staff principal. |
 | `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` | each device's 32-byte signing seed, base64; `<DEVICE_ID>` upper-cased with other characters as `_` |
 | `EVENTSTORE_*` | the ledger, as above |
 
@@ -171,6 +173,49 @@ Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 seed-variable names and device keys must be distinct in one restaurant.
 
 Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
+
+
+### Publish a menu or revoke a board key
+
+The restaurant file supplies menu revision 0. A governance publication
+replaces the complete menu, including ordering and any removed items. Read
+the current revision from `GET /api/restaurant-menu`, then save a command as
+JSON on the governance operator's machine. For the first publication:
+
+```json
+{
+  "merchant_id": "shop",
+  "expected_revision": 0,
+  "currency": "USD",
+  "items": [
+    {"id": "margherita", "sku": "MARG", "name": "Margherita",
+     "price_minor": 1250, "discount_minor": 250}
+  ]
+}
+```
+
+The optional discount is funded by the restaurant and applied to each unit
+before tax. The signed order keeps the original unit price and the applied
+line discount. Michigan's treatment of seller-funded discounts is described
+in [R 205.22](https://www.michigan.gov/taxes/-/media/Project/Websites/treasury/Rules/R_205-1_to_R_205-141_700772_7.pdf).
+An empty `items` list pauses new pickup orders.
+
+```sh
+mix restaurant.manage publish-menu menu.json --chapter chapter-genesis --server https://order.example
+```
+
+To revoke a board or storefront key, use the JSON
+`{"merchant_id":"shop","key_id":"k-board"}` with the same command, replacing
+`publish-menu` with `revoke-device`. Replace a revoked key by enrolling a new
+key ID. Both operations are available from an operator's release copy:
+
+```sh
+bin/restaurant eval 'RestaurantHost.ReleaseTasks.manage(["publish-menu", "menu.json", "--chapter", "chapter-genesis", "--server", "https://order.example"])'
+```
+
+The operator's copy uses `HARNESS_KEYS_DIR` as for enrollment. It verifies the
+held envelope against the local command before signing, and the running host
+submits the signature to the Log.
 
 ## Testing a deployment
 

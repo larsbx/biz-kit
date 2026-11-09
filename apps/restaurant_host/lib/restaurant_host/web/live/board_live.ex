@@ -8,6 +8,9 @@ defmodule RestaurantHost.Web.BoardLive do
   use Phoenix.LiveView
 
   alias RestaurantHost.{Orders, Restaurant}
+  alias RestaurantHost.Web.AuthController
+
+  @access_check_ms 5_000
 
   @labels %{
     accept: "Accept",
@@ -22,54 +25,111 @@ defmodule RestaurantHost.Web.BoardLive do
     r = Restaurant.current()
     board = session["board"]
 
-    if Map.has_key?(r.boards, board) do
-      if connected?(socket), do: Orders.subscribe()
+    socket =
+      assign(socket,
+        page_title: "Kitchen",
+        restaurant: r,
+        board: board,
+        identity_ref: session["restaurant_identity"],
+        error: nil,
+        orders: []
+      )
 
-      {:ok,
-       socket |> assign(page_title: "Kitchen", restaurant: r, board: board, error: nil) |> load()}
-    else
-      {:ok, assign(socket, page_title: "Kitchen", board: nil)}
+    if connected?(socket) and is_binary(board) and Map.has_key?(r.boards, board) do
+      Orders.subscribe()
+      Process.send_after(self(), :check_access, @access_check_ms)
     end
+
+    {:ok, load(socket)}
   end
 
   @impl true
-  def handle_event("act", %{"id" => id, "action" => name}, %{assigns: %{board: board}} = socket)
-      when is_binary(board) do
-    r = socket.assigns.restaurant
+  def handle_event("act", %{"id" => id, "action" => name}, socket),
+    do: act(socket, id, name, nil)
 
-    with %{} = order <- Orders.get(r, id),
+  def handle_event("cancel", %{"id" => id, "reason" => reason}, socket) when is_binary(reason),
+    do: act(socket, id, "cancel", String.trim(reason))
+
+  def handle_event(_, _, socket), do: {:noreply, socket}
+
+  defp act(socket, id, name, reason) do
+    %{restaurant: r, board: board} = socket.assigns
+
+    with {:ok, staff} <- access(socket),
+         %{} = order <- Orders.get(r, id),
          action when not is_nil(action) <- Enum.find(order.actions, &(Atom.to_string(&1) == name)),
-         :ok <- Orders.step(r, board, id, action, order.version, reason(action)) do
+         true <- action != :cancel or (is_binary(reason) and String.length(reason) in 1..200),
+         :ok <- Orders.step(r, board, id, action, order.version, reason, staff) do
       {:noreply, socket |> assign(error: nil) |> load()}
     else
       _ ->
         {:noreply,
-         socket |> assign(error: "That order changed; the board is up to date now.") |> load()}
+         socket
+         |> assign(error: "The action was refused. Check the order and try again.")
+         |> load()}
     end
   end
 
   @impl true
-  def handle_info({:coop_ledger, _}, socket), do: {:noreply, load(socket)}
+  def handle_info(:check_access, socket) do
+    Process.send_after(self(), :check_access, @access_check_ms)
+    {:noreply, load(socket)}
+  end
 
-  defp reason(:cancel), do: "Cancelled at the kitchen board"
-  defp reason(_), do: nil
+  def handle_info({:coop_ledger, _}, socket), do: {:noreply, load(socket)}
+  def handle_info(_, socket), do: {:noreply, socket}
+
+  defp access(socket) do
+    %{restaurant: r, board: board, identity_ref: reference} = socket.assigns
+
+    if Restaurant.active_board?(r, board) do
+      case Application.get_env(:restaurant_host, :staff_principals) do
+        nil ->
+          {:ok, nil}
+
+        principals ->
+          with {:ok, principal} <- AuthController.principal(reference),
+               true <- principal in principals do
+            {:ok, principal}
+          else
+            _ -> {:error, :staff_required}
+          end
+      end
+    else
+      {:error, :unpaired}
+    end
+  end
 
   defp load(socket) do
-    orders =
-      Orders.list(socket.assigns.restaurant)
-      |> Enum.reject(&OrderCore.Lifecycle.terminal?(&1.state))
+    case access(socket) do
+      {:ok, _staff} ->
+        orders =
+          Orders.list(socket.assigns.restaurant)
+          |> Enum.reject(&OrderCore.Lifecycle.terminal?(&1.state))
 
-    assign(socket, orders: orders)
+        assign(socket, access: :allowed, orders: orders)
+
+      {:error, reason} ->
+        assign(socket, access: reason, orders: [])
+    end
   end
 
   defp money(minor, currency), do: Money.to_string!(Money.from_integer(minor, currency))
   defp label(action), do: Map.get(@labels, action, to_string(action))
 
   @impl true
-  def render(%{board: nil} = assigns) do
+  def render(%{access: :unpaired} = assigns) do
     ~H"""
     <h1>Kitchen</h1>
-    <p id="unpaired">This board is not paired.</p>
+    <p id="unpaired">Pair an enrolled kitchen board to continue.</p>
+    """
+  end
+
+  def render(%{access: :staff_required} = assigns) do
+    ~H"""
+    <h1>Kitchen</h1>
+    <p id="staff-required">Sign in with an authorized staff account.</p>
+    <a href="/auth/login?return=kitchen">Staff sign-in</a>
     """
   end
 
@@ -88,7 +148,7 @@ defmodule RestaurantHost.Web.BoardLive do
         <li :for={line <- order.lines}>{line["quantity"]} × {line["name"]}</li>
       </ul>
       <button
-        :for={action <- order.actions}
+        :for={action <- order.actions -- [:cancel]}
         phx-click="act"
         phx-value-id={order.id}
         phx-value-action={action}
@@ -96,6 +156,11 @@ defmodule RestaurantHost.Web.BoardLive do
       >
         {label(action)}
       </button>
+      <form :if={:cancel in order.actions} phx-submit="cancel" id={"cancel-#{order.id}"}>
+        <input type="hidden" name="id" value={order.id} />
+        <label>Cancellation reason <input name="reason" maxlength="200" required /></label>
+        <button type="submit">Cancel order</button>
+      </form>
     </article>
     """
   end

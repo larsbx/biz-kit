@@ -18,19 +18,20 @@ defmodule RestaurantHost.Orders do
 
   @doc "The menu: each item with its price."
   def menu(%Restaurant{} = r) do
-    for %{id: id, name: name} <- r.menu do
+    for %{id: id, name: name} = item <- r.menu do
       {:ok, quote} = Catalog.quote(r.catalog, r.merchant, id, nil, r.currency)
-      %{id: id, name: name, price: quote.unit_price}
+      discount = item_discount(item, r.currency)
+      %{id: id, name: name, price: Money.sub!(quote.unit_price, discount)}
     end
   end
 
   @doc "Price a basket, `%{item_id => quantity}`: lines, subtotal, tax and total."
   def price(%Restaurant{} = r, basket) when is_map(basket) do
-    names = Map.new(r.menu, &{&1.id, &1.name})
+    items = Map.new(r.menu, &{&1.id, &1})
     zero = Money.zero(r.currency)
 
-    with {:ok, lines} <- lines(r, basket, names),
-         bases = Enum.map(lines, &Money.mult!(&1.unit_price, &1.quantity)),
+    with {:ok, lines} <- lines(r, basket, items),
+         bases = Enum.map(lines, &tax_base/1),
          {:ok, tax} <- Tax.flat(r.currency, r.tax, bases, zero),
          adjustments = %{
            discount_total: zero,
@@ -50,19 +51,29 @@ defmodule RestaurantHost.Orders do
     end
   end
 
-  defp lines(r, basket, names) do
+  # A published line discount is offered and funded by the seller at checkout.
+  defp tax_base(line) do
+    line.unit_price |> Money.mult!(line.quantity) |> Money.sub!(line.discount)
+  end
+
+  defp item_discount(item, currency),
+    do: Money.from_integer(Map.get(item, :discount_minor, 0), currency)
+
+  defp lines(r, basket, items) do
     basket
     |> Enum.filter(fn {_, qty} -> qty > 0 end)
     |> Enum.sort()
     |> Enum.reduce_while({:ok, []}, fn {id, qty}, {:ok, acc} ->
       case Catalog.quote(r.catalog, r.merchant, id, nil, r.currency) do
         {:ok, q} when is_integer(qty) ->
+          item = Map.fetch!(items, id)
+
           line = %{
             item_id: id,
-            name: names[id],
+            name: item.name,
             unit_price: q.unit_price,
             quantity: qty,
-            discount: Money.zero(r.currency)
+            discount: item |> item_discount(r.currency) |> Money.mult!(qty)
           }
 
           {:cont, {:ok, acc ++ [line]}}
@@ -77,13 +88,14 @@ defmodule RestaurantHost.Orders do
   Place a pickup order. `key` identifies this checkout attempt: submitting it
   again returns the same order rather than a second one.
   """
-  def place(%Restaurant{} = r, basket, pickup_name, key) do
+  def place(%Restaurant{} = r, basket, pickup_name, key, principal \\ nil) do
     with {:ok, priced} <- price(r, basket) do
       payload = %{
         "merchant_id" => r.merchant,
         "order_id" => ULID.generate(),
         "cart_id" => key,
-        "principal_id" => "guest:" <> key,
+        "principal_id" => principal || "guest:" <> key,
+        "menu_revision" => r.menu_revision,
         "channel" => "web",
         "idempotency_key" => key,
         "fulfillment" => "pickup",
@@ -105,7 +117,7 @@ defmodule RestaurantHost.Orders do
   end
 
   @doc "Take an order step from a paired board, at the order's current version."
-  def step(%Restaurant{} = r, board_id, order_id, action, version, reason \\ nil) do
+  def step(%Restaurant{} = r, board_id, order_id, action, version, reason \\ nil, staff \\ nil) do
     with {:ok, board} <- Map.fetch(r.boards, board_id) |> or_forbidden() do
       payload =
         %{
@@ -116,6 +128,7 @@ defmodule RestaurantHost.Orders do
           "action" => Atom.to_string(action)
         }
         |> then(&if(reason, do: Map.put(&1, "reason", reason), else: &1))
+        |> then(&if(staff, do: Map.put(&1, "staff_principal", staff), else: &1))
 
       submit(r, board, "RestaurantOrderStepV1", payload)
     end
@@ -128,6 +141,9 @@ defmodule RestaurantHost.Orders do
   def list(%Restaurant{} = r), do: Admission.orders(Log.gate().restaurant, r.chapter, r.merchant)
 
   def get(%Restaurant{} = r, id), do: Enum.find(list(r), &(&1.id == id))
+
+  def for_principal(%Restaurant{} = r, principal) when is_binary(principal),
+    do: Enum.filter(list(r), &(&1.principal == principal))
 
   @doc "Receive `{:coop_ledger, envelopes}` for every admitted batch."
   def subscribe, do: :pg.join(CoopSubstrate.Feed, :ledger, self())
