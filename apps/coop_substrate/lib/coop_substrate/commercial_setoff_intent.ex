@@ -94,23 +94,24 @@ defmodule CoopSubstrate.CommercialSetoffIntent do
   defp unique_intent(_, _, _), do: {:error, :missing_commercial_setoff_gate}
 
   defp current_roles(%Envelope{signers: signers}, gate, chapter, p) do
-    Enum.reduce_while([{"party_a", p["party_a"]}, {"party_b", p["party_b"]}], :ok,
-      fn {role, actor}, _ ->
-        case Map.get(gate.members, {chapter, actor}) do
-          %{key_id: key_id, pubkey: pubkey} ->
-            if Enum.any?(signers, fn signer ->
-                 signer.role == role and signer.key_id == key_id and
-                   signer.pubkey == pubkey
-               end) do
-              {:cont, :ok}
-            else
-              {:halt, {:error, {:stale_commercial_setoff_signer, role}}}
-            end
+    parties = [{"party_a", p["party_a"]}, {"party_b", p["party_b"]}]
 
-          _ ->
-            {:halt, {:error, {:unknown_commercial_setoff_actor, actor}}}
-        end
-      end)
+    Enum.reduce_while(parties, :ok, fn {role, actor}, _ ->
+      case Map.get(gate.members, {chapter, actor}) do
+        %{key_id: key_id, pubkey: pubkey} ->
+          if Enum.any?(signers, fn signer ->
+               signer.role == role and signer.key_id == key_id and
+                 signer.pubkey == pubkey
+             end) do
+            {:cont, :ok}
+          else
+            {:halt, {:error, {:stale_commercial_setoff_signer, role}}}
+          end
+
+        _ ->
+          {:halt, {:error, {:unknown_commercial_setoff_actor, actor}}}
+      end
+    end)
   end
 
   defp exact_current_sources(%{obligations: obligations}, chapter, p) do
