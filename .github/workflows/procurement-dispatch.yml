@@ -1,0 +1,63 @@
+name: Procurement real Dispatch acceptance
+on:
+  pull_request:
+    paths:
+      - 'apps/dispatch/**'
+      - 'apps/procurement_host/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/biz_kit_identity/**'
+      - 'apps/biz_kit_cluster/**'
+      - 'apps/commerce_core/**'
+      - 'apps/restaurant_core/**'
+      - 'apps/fulfillment_core/**'
+      - 'config/**'
+      - 'native/**'
+      - 'mix.*'
+      - 'scripts/test-procurement-dispatch.sh'
+      - '.github/workflows/procurement-dispatch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: procurement-dispatch-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  real-worker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      EVENTSTORE_HOST: 127.0.0.1
+      PGPASSWORD: postgres
+      DATABASE_URL: ecto://dispatch:dispatch@127.0.0.1:5432/dispatch_test
+      PROCUREMENT_DISPATCH_ACCEPTANCE: disposable-local-postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
+      - uses: dtolnay/rust-toolchain@1.91.1
+      - run: mix local.hex --force && mix local.rebar --force
+      - name: Create the disposable Dispatch database role
+        run: psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
+      - name: Real worker, authorized assignments and courier receipts
+        run: bash scripts/test-procurement-dispatch.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-dispatch-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-dispatch/${{ env.SOURCE_REVISION }}
+          if-no-files-found: error

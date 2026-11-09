@@ -1,14 +1,19 @@
 # Procurement and Dispatch quickstart
 
 Run the packaged Biz-kit procurement MVP against disposable PostgreSQL. The
-runner replays Lean and Quint first, then drives the coordinator's HTTPS forms
-and the signed Dispatch API through a complete synthetic order. It stops the
-server and database at the end and saves evidence for the exact commit you ran.
+Docker runner replays Lean and Quint first, then drives the coordinator's HTTPS
+forms and the signed Dispatch API through a complete synthetic order. It stops
+the server and database at the end and saves evidence for the exact commit you ran.
 
-The courier side is a synthetic signing client. It exercises the real
-procurement host's work, pickup and delivery endpoints. For the Dispatch
-worker, assignment and courier portal, see
-[Dispatch partner acceptance](.github/workflows/dispatch-partners.yml).
+There are two separate acceptance paths. The **packaged procurement quickstart**
+below uses a synthetic signing client for Dispatch. The **focused Dispatch
+integration** invokes the actual source worker, authorized assignment operations
+and courier portal/receipt path against PostgreSQL and the procurement host. Its
+checks and execution status are described in
+[Verify the actual Dispatch path](#verify-the-actual-dispatch-path) and the
+[integration note](docs/architecture/2026-11-09-procurement-real-dispatch.md).
+Both paths use disposable identities and data. Their evidence must be reported
+separately; neither initiates a live delivery.
 
 ## 1. Install the host prerequisites
 
@@ -168,3 +173,46 @@ bash -n scripts/procurement-quickstart.sh
 The Docker subprocess in these controls is deliberately fake. Passing these tests
 is evidence about orchestration/rejection behavior only. Full container and
 application acceptance still require the real `run` command or hosted workflow.
+
+## Verify the actual Dispatch path
+
+The focused [integration script](scripts/test-procurement-dispatch.sh) and
+[Procurement Dispatch workflow](.github/workflows/procurement-dispatch.yml) cover
+the procurement adapter through the same Dispatch worker and receipt functions
+used by the service. Use a clean committed checkout and a disposable loopback
+PostgreSQL instance with PostGIS. The script resets the canonical
+`coop_substrate_eventstore_test` database and migrates/tests `dispatch_test`;
+use a test-only server and the explicit acceptance opt-in:
+
+```sh
+export PROCUREMENT_DISPATCH_ACCEPTANCE=disposable-local-postgres
+export EVENTSTORE_USERNAME=postgres EVENTSTORE_PASSWORD=postgres EVENTSTORE_HOST=127.0.0.1
+export DATABASE_URL=ecto://dispatch:dispatch@127.0.0.1:5432/dispatch_test
+bash scripts/test-procurement-dispatch.sh
+```
+
+The credentials above are disposable test settings. This path needs Elixir/OTP
+and the locked application dependencies in addition to PostgreSQL/PostGIS. It
+stages the required application closure and runs
+`apps/dispatch/integration_test/procurement_delivery_test.exs`; that cross-service
+suite is outside ordinary Dispatch test discovery. Evidence is retained under
+`.artifacts/procurement-dispatch/<full-sha>/`, including the revision and logs;
+`result.json` is written only on success. It is separate from the Docker command
+above. The intended acceptance contract includes authorized assignment, pickup
+and drop-off, a busy courier, incorrect codes, inert retries, cancellation before
+custody, refusal of
+cancellation after acceptance, and recovery from durable work after restart.
+The original request, accepted quote and payment-evidence boundary remain part
+of the assertions. The integration note records what has actually executed;
+test source or a queued workflow alone is not a passing result.
+
+The actual Dispatch source path and the packaged procurement host establish
+different evidence. The packaged host's `dispatch_handoff` receipt still refers
+to its synthetic client. A successful source integration run establishes the
+worker/assignment/receipt behavior exercised by that run; it does not by itself
+establish a packaged Dispatch release, a graphical courier browser or a physical
+delivery. The courier fixture drives the real router's login, role selection and
+receipt forms using encrypted cookie sessions and CSRF tokens, with test-issued
+identities/sessions and the real `BizKitSession` verifier. Existing
+[Dispatch partner acceptance](.github/workflows/dispatch-partners.yml) remains a
+separate regression gate.
