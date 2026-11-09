@@ -62,7 +62,8 @@ business consents, admit a signed ledger event, discharge any debt, post a
 journal, transfer funds, or issue Hawala/bank instructions. Production
 commercial discharge and any non-prohibition classification remain separate.
 
-See [cross-currency preview ADR](../../docs/architecture/2026-11-08-cross-currency-commercial-setoff-preview.md)
+See the [cross-currency preview ADR](../../docs/architecture/2026-11-08-cross-currency-commercial-setoff-preview.md),
+the [Lean–Quint–Elixir proof bank](../../proof_bank/cross_currency_setoff/README.md),
 and [scoped legal profile](../../docs/architecture/2026-11-04-commercial-clearing-nonprohibition-profile.md).
 
 Run `cd apps/barter_core && mix test` under Elixir 1.19 / OTP 27.

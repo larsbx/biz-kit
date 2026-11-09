@@ -43,7 +43,7 @@ The result is the **largest exact offset for the declared rational rate** and tw
 
 Example: A→B USD 1,000,000 cents ($10,000); B→A EUR 800,000 cents (€8,000); agreed **11 USD cents per 10 EUR cents**. Pure preview: proposed EUR reduction 800,000 cents; USD reduction 880,000 cents; remaining USD 120,000 cents ($1,200). **No currency changes hands and no legally effective discharge is inferred by the computation.**
 
-The deterministic `terms_hash` covers both individual source IDs/revisions/evidence refs/parties/currencies/amounts/expiries, the full negotiated rational, evidence and agreement references, intent and observation time, and reductions. `verify_plan/2` independently recomputes and requires exact equality. Hashing host assertions does **not** authenticate their real-world contents.
+The deterministic `terms_hash` covers both individual source IDs/revisions/evidence refs/parties/currencies/amounts/expiries, the full negotiated rational, evidence and agreement references, intent and observation time, and reductions. `verify_plan/2` recomputes from the candidate's own asserted inputs and requires exact equality. It does not consult authoritative source history: a freshly rebuilt candidate with substituted or fabricated but well-shaped assertions can verify. Hashing host assertions does **not** authenticate their real-world contents.
 
 ## Nonclaims and fail-closed profile
 
@@ -71,3 +71,28 @@ Cross-border, multilateral, transferable-credit and operator FX services are **d
 `apps/barter_core/test/cross_currency_setoff_test.exs` covers exact 11:10 two-currency reduction and conservation, partial minor-unit offsets, no-silent-rounding refusal, tampered sources/revisions/rate/terms, expired/future/noncanonical rates, nonreciprocal or malformed parties, same-currency routing, mutated output, and numerical bounds.
 
 These are *software arithmetic and assertion-shape tests* only. They are not proof of independent consent, legal permission, accounting finality, or a currency-market quote.
+
+## Lean-first arithmetic and independent bounded comparison
+
+The [cross-currency proof bank](../../proof_bank/cross_currency_setoff/README.md)
+adds 40 universal Lean theorems with explicit proposition contracts and an axiom
+audit. Coprimality derives the common-multiplier form for **every** integer pair
+obeying the rate equation, so maximum-offset claims quantify over all feasible
+exact integer offsets. Per-currency conservation, integer residuals, rate
+uniqueness, refusal, source preservation and inert output effects are separate
+registered obligations.
+
+The independent Quint model enumerates integer pairs directly and compares all
+2,916 bounded arithmetic cases against Lean and the actual Elixir implementation.
+Another 992 deterministic boundary cases compare Lean and Elixir. Source and
+agreement controls are finite fixtures; no exhaustive temporal protocol check
+or whole-Elixir refinement theorem is claimed. The runner checks clean Git-head
+source bytes, fresh compilation/kernel replay, proof-placeholder rejection,
+behavioral source mutations, all 55 Barter tests and the scoped formatter repair.
+
+The dedicated workflow checks out the actual PR head and retains its receipt,
+input/output corpora, runtime fingerprints and logs. The proof bank documents
+the remaining public-ID/parser, serialization/hash, external source authority,
+contractual discharge, accounting and regulatory boundaries. This is arithmetic
+and asserted-record assurance for the draft; it is not production activation or
+closure of issue #299.

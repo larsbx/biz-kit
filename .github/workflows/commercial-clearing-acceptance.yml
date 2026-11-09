@@ -36,6 +36,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27.3.4"
@@ -70,6 +72,8 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27.3.4"
