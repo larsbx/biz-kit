@@ -14,7 +14,8 @@ import.
 | `keel` | `apps/keel` | `larsbx/keel` | Company-structure primitives: pure functions, no runtime |
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
-| `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task/workflow views, web/MCP endpoint, and the legacy orchestration writer |
+| `task_host` | `apps/task_host` | `apps/spruce_goose`'s web layer | Sign-in (`/auth`), the task web view, its signed commands and the change feed, over the ledger ([decision](docs/architecture/2026-11-09-task-host.md)) |
+| `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | The legacy orchestration writer and its CLI service, until decommission |
 | `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database. An imported copy: `larsbx/eatsbot` stays the authoritative, independently evolving product, and production deploys from there |
 | `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
 
@@ -76,6 +77,7 @@ mix compile
 (cd apps/biz_kit_cluster  && mix test)
 (cd apps/dispatch       && mix test)                      # unit tier
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
+(cd apps/task_host      && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 (cd apps/eatsbot        && MIX_ENV=test mix ash.setup && ADMIN_API_KEY=test mix test)
 (cd apps/school_ops     && mix test)                        # no database required
@@ -110,7 +112,7 @@ The root [mix.exs](mix.exs) defines both profiles from the same source and lock:
 
 | Release | Includes | Build |
 | --- | --- | --- |
-| `orchestration` | Ledger, identity, cluster and SpruceGoose; excludes Dispatch | `MIX_ENV=prod mix release orchestration` |
+| `orchestration` | Ledger, identity, cluster, the task host and SpruceGoose; excludes Dispatch | `MIX_ENV=prod mix release orchestration` |
 | `biz_kit` | The above plus Dispatch and Keel | `MIX_ENV=prod mix release biz_kit` |
 
 [docs/deploy.md](docs/deploy.md) describes settings, migration limits and
@@ -128,8 +130,8 @@ production writers have been consolidated.
   SpruceGoose's isolated runtime tests use inert peer settings
   (`SpruceGoose.UmbrellaRuntime`); those fixtures are not deployment evidence.
 - Dispatch and SpruceGoose still read shared `DATABASE_URL`, `POOL_SIZE` and
-  `SECRET_KEY_BASE` variables, and their HTTP listeners both default to 4000
-  (`PORT` / `MCP_PORT`). Their conflicting tables and migration histories
+  `SECRET_KEY_BASE` variables. Dispatch listens on `PORT` (4000), the task
+  host on `TASK_HOST_PORT` (4001). Their conflicting tables and migration histories
   prevent a safe shared-schema deployment. Isolation is a migration boundary;
   the selected destination is one reconciled database, not permanent separate
   authorities. See the [database contract](docs/architecture/2026-10-11-single-source-of-truth.md#commands-and-projections)

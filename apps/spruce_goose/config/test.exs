@@ -27,12 +27,6 @@ config :spruce_goose,
        :systemwide_sop_path,
        Path.expand("../test/fixtures/systemwide-sop.md", __DIR__)
 
-# Loopback-only test endpoint; not started unless a test asks for it.
-config :spruce_goose, SpruceGoose.Web.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4002],
-  server: false,
-  secret_key_base: String.duplicate("test-only-secret-key-base-", 4)
-
 # Test-database connection, environment-driven.
 #
 # Only the database *name* was overridable, and `config/config.exs` declares no
@@ -83,17 +77,7 @@ config :logger, level: :warning
 
 config :spruce_goose, Oban, testing: :manual
 
-# Short, so the change feed's idle path (tick and heartbeat) runs in tests.
-config :spruce_goose, :feed_heartbeat_ms, 200
-config :spruce_goose, :secure_cookies, false
 
-# Every request in the suite comes from loopback; RateLimitTest sets its own.
-config :spruce_goose, SpruceGoose.Web.RateLimit,
-  limits: %{
-    sign_in: {1_000_000, 60_000},
-    capability: {1_000_000, 60_000},
-    api: {1_000_000, 60_000}
-  }
 
 config :spruce_goose, :start_outbox_dispatcher, false
 
