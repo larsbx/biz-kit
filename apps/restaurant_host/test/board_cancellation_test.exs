@@ -157,9 +157,26 @@ defmodule RestaurantHost.BoardCancellationTest do
   defp staff_session do
     principal = Principal.new_id()
     Application.put_env(:restaurant_host, :staff_principals, [principal])
+
+    previous_bindings = Application.fetch_env(:biz_kit_identity, :bindings)
+
+    Application.put_env(:biz_kit_identity, :bindings, [
+      %{issuer: "biz-kit-development", subject: "staff", principal: principal}
+    ])
+
     token = Sessions.create(principal, %{issuer: "biz-kit-development", subject: "staff"})
     reference = Sessions.reference(token)
-    on_exit(fn -> Sessions.revoke_reference(reference) end)
+
+    on_exit(fn ->
+      Sessions.revoke_reference(reference)
+
+      case previous_bindings do
+        {:ok, value} -> Application.put_env(:biz_kit_identity, :bindings, value)
+        :error -> Application.delete_env(:biz_kit_identity, :bindings)
+      end
+    end)
+
+    assert {:ok, %{principal: ^principal}} = BizKit.Identity.session_from_reference(reference)
     {principal, reference}
   end
 end
