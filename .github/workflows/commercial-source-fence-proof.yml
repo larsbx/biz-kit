@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/CheckCommercialSourceFence.lean"
+      - "formal/lean/install-toolchain.sh"
+      - "formal/lean/lean-toolchain"
       - "formal/lean/lakefile.toml"
       - "formal/lean/check.sh"
       - "formal/quint/commercial_source_fence.qnt"
@@ -14,6 +17,9 @@ on:
     branches: [main]
     paths:
       - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/CheckCommercialSourceFence.lean"
+      - "formal/lean/install-toolchain.sh"
+      - "formal/lean/lean-toolchain"
       - "formal/lean/lakefile.toml"
       - "formal/lean/check.sh"
       - "formal/quint/commercial_source_fence.qnt"
@@ -38,7 +44,11 @@ jobs:
       - name: Install version-pinned Quint
         run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
       - name: Verify no double discharge and refute unsafe guards
-        run: bash formal/quint/check_commercial_source_fence.sh
+        run: |
+          git rev-parse HEAD
+          quint --version
+          sha256sum formal/quint/{commercial_source_fence.qnt,check_commercial_source_fence.sh}
+          bash formal/quint/check_commercial_source_fence.sh
 
   lean-source-fence:
     runs-on: ubuntu-24.04
@@ -61,10 +71,12 @@ jobs:
       - name: Compile universal source-level theorems
         working-directory: formal/lean
         run: |
-          lake env lean BizKitCommercialSetoff.lean
+          git rev-parse HEAD
+          lean --version
+          sha256sum BizKitCommercialSetoff.lean CheckCommercialSourceFence.lean
+          lake env lean -DwarningAsError=true BizKitCommercialSetoff.lean
           lake build BizKitCommercialSetoff
           lake env leanchecker --fresh --verbose BizKitCommercialSetoff
-      - name: Refuse unsafe Lean admissions / unresolved axioms
+      - name: Execute source-fence checks and audit compiled axioms
         working-directory: formal/lean
-        run: |
-          ! grep -nE '(^|[^[:alnum:]_])sorry([^[:alnum:]_]|$)' BizKitCommercialSetoff.lean
+        run: lake env lean -DwarningAsError=true CheckCommercialSourceFence.lean
