@@ -23,7 +23,7 @@ inductive Change where
 
 structure SourceState where
   originalOnly : Bool
-  open : Bool
+  isOpen : Bool
   revision : Nat
   deriving Repr
 
@@ -34,9 +34,9 @@ def change (s : SourceState) : Change → SourceState
   | .assignment =>
       { s with originalOnly := false, revision := s.revision + 1 }
   | .directDischarge =>
-      { s with originalOnly := false, open := false, revision := s.revision + 1 }
+      { s with originalOnly := false, isOpen := false, revision := s.revision + 1 }
   | .legacyNetting =>
-      { s with originalOnly := false, open := false, revision := s.revision + 1 }
+      { s with originalOnly := false, isOpen := false, revision := s.revision + 1 }
   | .observe => s
 
 def replay (s : SourceState) : List Change → SourceState
@@ -44,7 +44,7 @@ def replay (s : SourceState) : List Change → SourceState
   | operation :: rest => replay (change s operation) rest
 
 theorem recorded_is_original :
-    recorded.originalOnly = true ∧ recorded.open = true ∧ recorded.revision = 1 := by
+    recorded.originalOnly = true ∧ recorded.isOpen = true ∧ recorded.revision = 1 := by
   decide
 
 theorem assignment_invalidates_original (s : SourceState) :
@@ -52,12 +52,12 @@ theorem assignment_invalidates_original (s : SourceState) :
 
 theorem direct_discharge_invalidates_original (s : SourceState) :
     (change s .directDischarge).originalOnly = false ∧
-    (change s .directDischarge).open = false := by
+    (change s .directDischarge).isOpen = false := by
   decide
 
 theorem legacy_netting_invalidates_original (s : SourceState) :
     (change s .legacyNetting).originalOnly = false ∧
-    (change s .legacyNetting).open = false := by
+    (change s .legacyNetting).isOpen = false := by
   decide
 
 /-- No further operation can restore the classification after it has gone. -/
@@ -96,13 +96,13 @@ theorem replay_revision_monotone (s : SourceState) (operations : List Change) :
 
 /-- A direct discharge and all its successors remain closed. -/
 theorem change_preserves_closed (s : SourceState) (a : Change)
-    (h : s.open = false) :
-    (change s a).open = false := by
+    (h : s.isOpen = false) :
+    (change s a).isOpen = false := by
   cases a <;> simp [change, h]
 
 theorem replay_preserves_closed (s : SourceState) (operations : List Change)
-    (h : s.open = false) :
-    (replay s operations).open = false := by
+    (h : s.isOpen = false) :
+    (replay s operations).isOpen = false := by
   induction operations generalizing s with
   | nil => simpa [replay] using h
   | cons a tail ih =>
