@@ -56,6 +56,32 @@ defmodule DeliveryTest do
       end
     end
 
+    # formal/quint/obligations/eatsbot_core.qnt: replay of the history must
+    # reproduce the state, so a state change commits only with its history row.
+    test "a state change whose history row fails to write is not committed" do
+      delivery = Deliveries.Delivery.empty!(authorize?: false)
+
+      Eatsbot.Repo.query!("""
+      CREATE FUNCTION pg_temp.refuse_history() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'history write refused'; END $$ LANGUAGE plpgsql
+      """)
+
+      Eatsbot.Repo.query!("""
+      CREATE TRIGGER refuse_history BEFORE INSERT ON delivery_state_changes
+      FOR EACH ROW EXECUTE FUNCTION pg_temp.refuse_history()
+      """)
+
+      assert_raise Ash.Error.Unknown, fn ->
+        Deliveries.Delivery.update_state!(delivery, :In_Preparation, authorize?: false)
+      end
+
+      reloaded =
+        Ash.get!(Deliveries.Delivery, delivery.id, authorize?: false, load: [:state_history])
+
+      assert Deliveries.Transitions.equals?(reloaded.state, delivery.state)
+      assert reloaded.state_history == []
+    end
+
     test "invalid transition" do
       assert_raise Ash.Error.Invalid, fn ->
         Deliveries.Delivery.empty!(authorize?: false)

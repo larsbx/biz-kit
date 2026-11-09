@@ -122,7 +122,7 @@ one exception: `voices`, whose order is part of the result.
 | `reserved(e, m)` | `∃b ∈ Body. of(b) = e ∧ reserves(b) ⊒ m` |
 | `owns_all(e, p, t)` | `∅ ≠ {h │ (h, e, _, _) ∈ Stake_t} = {p}` |
 | `capabilities(p, t)` | `⋃{effective(r, t) │ r ∈ roles(p, t)}`: raw, before reservation |
-| `can(p, m, t)` | `∃r ∈ roles(p, t). effective(r, t) ⊒ m ∧ ¬reserved(entity_of(r), m) ∧ (alien(m) ⟹ owns_all(entity_of(r), p, t))` |
+| `can(p, m, t)` | `valid_at(O, t) ∧ ∃r ∈ roles(p, t). effective(r, t) ⊒ m ∧ ¬reserved(entity_of(r), m) ∧ (alien(m) ⟹ owns_all(entity_of(r), p, t))`: an organization that is not well formed at `t` grants nothing at `t` (§6, A6) |
 | `competent(b, m, t)` | `effective(b, t) ⊒ m ∧ (reserves(b) ⊒ m ∨ ¬reserved(of(b), m)) ∧ (alien(m) ⟹ members(b) = {:stake, _})` |
 | `members(b, t)` | eligible parties mapped to their weights: `{:seats, R}` gives `⋃{holders(r, t) │ r ∈ R}`, and `{:stake, c}` gives `{h │ (h, of(b), c, _) ∈ Stake_t}`. The weight is `1` for `:per_capita`, or `holding(p, of(b), c', t)` for `{:units, c'}` |
 
@@ -190,6 +190,7 @@ The tally is always reported, whatever `o` is.
 - **Result.** `check(O)` returns a list of violations `(name, t, detail)`. `t = nil` marks a static check; otherwise `t` is the epoch at which the violation was found.
 - **Deduplication.** Violations are deduplicated by `(name, detail)`, keeping the earliest `t`: static violations first, then temporal ones in epoch order.
 - **Validity.** `valid?(O) ⟺ check(O) = []`.
+- **Validity at an instant.** `valid_at(O, t)` holds when every static invariant and every temporal invariant evaluated at `t` reports nothing. The snapshot at `t` equals the one at the greatest epoch `≤ t`, so this agrees with the epoch evaluation of `check`. `can` (§4) requires it.
 
 Static invariants are evaluated once:
 

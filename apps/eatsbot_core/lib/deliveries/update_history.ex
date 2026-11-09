@@ -1,6 +1,7 @@
 defmodule EatsbotCore.Deliveries.UpdateHistory do
   @moduledoc """
-  Checks validity of state transition and also adds it to the state history.
+  Checks validity of state transition and records it in the state history,
+  in the same transaction as the state change.
   """
 
   alias EatsbotCore.Deliveries.Transitions
@@ -19,10 +20,15 @@ defmodule EatsbotCore.Deliveries.UpdateHistory do
       comment = Transitions.message(old_state, new_state)
 
       changeset
+      # Inside the state change's transaction: the history row commits with
+      # the new state or neither does, so replaying the history reproduces
+      # the state (formal/quint/obligations/eatsbot_core.qnt).
+      |> Ash.Changeset.after_action(fn _changeset, result ->
+        DeliveryStateChanges.add_to_state_history!(id, old_state, new_state, comment)
+        {:ok, result}
+      end)
       |> Ash.Changeset.after_transaction(fn
         _changeset, {:ok, result} ->
-          DeliveryStateChanges.add_to_state_history!(id, old_state, new_state, comment)
-
           :telemetry.execute([:ash, :deliveries, :update, :state], %{count: 1}, %{
             action: :update_state,
             old_state: old_state,

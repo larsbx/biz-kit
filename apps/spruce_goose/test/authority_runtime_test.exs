@@ -9,6 +9,8 @@ defmodule SpruceGoose.AuthorityRuntimeTest do
     Application.put_env(:spruce_goose, :authority_host_marker, path)
 
     on_exit(fn ->
+      File.rm(path)
+
       if prior,
         do: Application.put_env(:spruce_goose, :authority_host_marker, prior),
         else: Application.delete_env(:spruce_goose, :authority_host_marker)
@@ -17,10 +19,17 @@ defmodule SpruceGoose.AuthorityRuntimeTest do
     %{path: path}
   end
 
-  test "missing or local markers allow direct execution", %{path: path} do
-    assert :ok = AuthorityRuntime.ensure_local_execution_allowed()
+  test "only a local marker allows direct execution", %{path: path} do
     File.write!(path, "local\n")
     assert :ok = AuthorityRuntime.ensure_local_execution_allowed()
+  end
+
+  test "a missing or empty marker refuses direct execution", %{path: path} do
+    assert {:error, message} = AuthorityRuntime.ensure_local_execution_allowed()
+    assert message =~ "is missing"
+    File.write!(path, " \n")
+    assert {:error, message} = AuthorityRuntime.ensure_local_execution_allowed()
+    assert message =~ "is empty"
   end
 
   test "a delegated host marker refuses direct execution", %{path: path} do

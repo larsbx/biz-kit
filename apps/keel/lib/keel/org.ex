@@ -121,8 +121,15 @@ defmodule Keel.Org do
   @doc """
   Some role `party` holds covers `need`, `need` is not reserved to a body of that
   role's entity, and — for alienation — `party` owns that entity outright.
+
+  Fails closed: an org that is not well formed at `t` (`Keel.Invariants.valid_at?/2`:
+  cycles, bad intervals, oversubscribed seats, …) grants nothing at `t`.
   """
   def can?(org, party, need, t) do
+    Keel.Invariants.valid_at?(org, t) and permitted?(org, party, need, t)
+  end
+
+  defp permitted?(org, party, need, t) do
     Enum.any?(roles(org, party, t), fn r ->
       e = entity_of(org, r)
 
