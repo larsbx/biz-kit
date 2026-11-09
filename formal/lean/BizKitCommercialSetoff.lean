@@ -34,6 +34,13 @@ def Ready (s : State) (intent : IntentKey) (a b : SourceKey)
     s.consumed a = false ∧ s.consumed b = false ∧
     s.intents intent = false
 
+/-- Computable Boolean membership and equality decide this proposed gate.
+    Necessary for the `if Ready ...` admission transition to elaborate. -/
+instance (s : State) (intent : IntentKey) (a b : SourceKey)
+    (evidenceOK : Bool) : Decidable (Ready s intent a b evidenceOK) := by
+  unfold Ready
+  infer_instance
+
 /-- Ideal atomic business admission; not the runtime Log implementation. -/
 def admit (s : State) (intent : IntentKey) (a b : SourceKey)
     (evidenceOK : Bool) : State :=
