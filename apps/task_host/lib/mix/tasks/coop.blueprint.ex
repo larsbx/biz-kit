@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Coop.Blueprint do
   server, which stores them and prepares a `TaskBlueprintAppliedV1`; the
   key in `HARNESS_KEYS_DIR` signs it only if it applies exactly the bytes
   and source read here. Does not start the application. `--server`
-  defaults to `$BIZKIT_URL`, then `http://127.0.0.1:4000`.
+  defaults to `$BIZKIT_URL`, then `http://127.0.0.1:4001`, the task host.
   """
 
   use Mix.Task
@@ -32,7 +32,7 @@ defmodule Mix.Tasks.Coop.Blueprint do
 
     with [scope, repository, commit, path] <- positional,
          [chapter, tenant, project] <- String.split(scope, "/") do
-      base = opts[:server] || System.get_env("BIZKIT_URL", "http://127.0.0.1:4000")
+      base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
       apply_blueprint(base, {chapter, tenant, project}, repository, commit, path, opts[:yes])
     else
       _ -> Mix.raise(@usage)

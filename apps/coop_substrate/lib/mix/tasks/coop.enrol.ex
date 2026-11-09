@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Coop.Enrol do
   server, whose ledger admits it.
 
   Does not start the application: the running server is the only appender.
-  `--server` defaults to `$BIZKIT_URL`, then `http://127.0.0.1:4000`.
+  `--server` defaults to `$BIZKIT_URL`, then `http://127.0.0.1:4001`, the task host.
   """
 
   use Mix.Task
@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Coop.Enrol do
     code =
       List.first(positional) || Mix.raise("usage: mix coop.enrol <CODE> [--server URL] [--yes]")
 
-    base = opts[:server] || System.get_env("BIZKIT_URL", "http://127.0.0.1:4000")
+    base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
 
     with {:ok, signer} <- Ops.load_signer("governance"),
          {:ok, details} <- Approver.fetch(base, code) do

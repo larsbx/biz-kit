@@ -33,7 +33,8 @@ defmodule TaskHost.Web.AuthTest do
       assert conn.status == 302
       assert location =~ "https://api.workos.com/user_management/authorize?"
       assert query["state"] == cookie(conn, "bizkit_login_state")
-      assert query["redirect_uri"] =~ "/auth/workos/callback"
+      # No public URL configured: the endpoint's own loopback port, not another app's.
+      assert query["redirect_uri"] == "http://127.0.0.1:4002/auth/workos/callback"
       assert conn.resp_cookies["bizkit_login_state"][:http_only]
     end
 

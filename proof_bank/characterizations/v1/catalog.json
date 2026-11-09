@@ -1103,7 +1103,7 @@
       "evidence_git_blobs": {
         "apps/task_host/lib/task_host/web/command_controller.ex": "40f24af1b2898c8811b1fd4b5e6dca219a3bc7c6",
         "apps/task_host/lib/task_host/web/requests.ex": "67111e3e64dcb8ef3f8d8b8233d8bce0d3b1a8f2",
-        "apps/task_host/lib/task_host/web/auth_controller.ex": "bd5b81be8357cfed9a2463734c39642c424dee09",
+        "apps/task_host/lib/task_host/web/auth_controller.ex": "22173f86d570815c3a164383bb9ab4e5565b86f3",
         "apps/task_host/test/task_host/web/command_test.exs": "a7fbe14b7ed5ce6aa45cb942a310dba66c4c41f9"
       }
     }
@@ -1223,6 +1223,17 @@
       "refreshed_paths": [
         "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex",
         "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "58140f4934bc27ddc6684bbf4c27e0a99fee7b8d",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/task_host/lib/task_host/web/auth_controller.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

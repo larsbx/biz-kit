@@ -231,10 +231,17 @@ defmodule TaskHost.Web.AuthController do
     conn |> put_status(401) |> json(%{error: "unauthorized"})
   end
 
-  defp callback_url(provider),
-    do:
-      Application.get_env(:task_host, :public_url, "http://127.0.0.1:4000") <>
-        "/auth/#{provider}/callback"
+  defp callback_url(provider), do: public_url() <> "/auth/#{provider}/callback"
+
+  # SPRUCE_GOOSE_PUBLIC_URL where set; otherwise this endpoint on loopback, at
+  # the port it was configured to listen on.
+  defp public_url do
+    Application.get_env(:task_host, :public_url) ||
+      "http://127.0.0.1:" <>
+        to_string(
+          get_in(Application.get_env(:task_host, TaskHost.Web.Endpoint, []), [:http, :port])
+        )
+  end
 
   defp cookie_opts(opts),
     do:
