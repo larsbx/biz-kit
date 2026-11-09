@@ -53,12 +53,12 @@ theorem assignment_invalidates_original (s : SourceState) :
 theorem direct_discharge_invalidates_original (s : SourceState) :
     (change s .directDischarge).originalOnly = false ∧
     (change s .directDischarge).isOpen = false := by
-  decide
+  exact ⟨rfl, rfl⟩
 
 theorem legacy_netting_invalidates_original (s : SourceState) :
     (change s .legacyNetting).originalOnly = false ∧
     (change s .legacyNetting).isOpen = false := by
-  decide
+  exact ⟨rfl, rfl⟩
 
 /-- No further operation can restore the classification after it has gone. -/
 theorem change_cannot_regain_original (s : SourceState) (a : Change)
