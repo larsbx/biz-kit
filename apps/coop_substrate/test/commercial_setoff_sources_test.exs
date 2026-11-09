@@ -20,7 +20,9 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
 
     for {member_id, actor} <- [{"M-alice", alice}, {"M-bob", bob}, {"M-carol", carol}] do
       {:ok, [_]} =
-        Log.append(signed_event(actor, "MemberRegistered", registration_payload(member_id, actor)))
+        Log.append(
+          signed_event(actor, "MemberRegistered", registration_payload(member_id, actor))
+        )
     end
 
     %{alice: alice, bob: bob, carol: carol}
@@ -81,7 +83,8 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     }
   end
 
-  test "extracts signed full-record hashes and exact source versions without admitting anything", ctx do
+  test "extracts signed full-record hashes and exact source versions without admitting anything",
+       ctx do
     {ab, ba} = pair!(ctx)
     head_before = Log.head()
 
@@ -118,7 +121,8 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     assert Log.head() == head_before
   end
 
-  test "a source history with assignments remains refused even if present-day parties are unchanged", ctx do
+  test "a source history with assignments remains refused even if present-day parties are unchanged",
+       ctx do
     pair!(ctx)
 
     {:ok, [_]} =
@@ -190,6 +194,7 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     record!(ctx.alice, ctx.bob, "OB-1", "M-alice", "M-bob", 100)
 
     assert {:error, :no_bilateral_sources} = snapshot()
+
     assert {:error, :invalid_request} =
              CommercialSetoffSources.snapshot(@chapter, {"M-bob", "M-alice"}, "USD")
 
@@ -197,7 +202,9 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     assert {:error, :no_bilateral_sources} = snapshot()
     assert :ok = Log.verify_chains()
   end
-  test "local consent verifier reloads authenticated sources rather than trusting caller records", ctx do
+
+  test "local consent verifier reloads authenticated sources rather than trusting caller records",
+       ctx do
     pair!(ctx)
     assert {:ok, current} = snapshot()
 
@@ -256,7 +263,8 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     assert :ok = Log.verify_chains()
   end
 
-  test "local consent verification rejects non-original revisions and revoked synthetic grants", ctx do
+  test "local consent verification rejects non-original revisions and revoked synthetic grants",
+       ctx do
     pair!(ctx)
     {:ok, current} = snapshot()
 
@@ -309,5 +317,4 @@ defmodule CoopSubstrate.CommercialSetoffSourcesTest do
     assert {:error, {:unsupported_source_history, "OB-1"}} =
              CommercialSetoffSources.verify_local(proof, grants(ctx), signed)
   end
-
 end

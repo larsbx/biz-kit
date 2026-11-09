@@ -102,7 +102,8 @@ defmodule BarterCore.CrossCurrencySetoffTest do
 
   test "partial exact setoff never invents a fractional cent or adds currencies" do
     assert {:ok, plan} =
-             propose(source("usd", "alpha", "beta", 10, "USD"),
+             propose(
+               source("usd", "alpha", "beta", 10, "USD"),
                source("eur", "beta", "alpha", 5, "EUR"),
                %{rate() | numerator: 3, denominator: 2}
              )
@@ -116,7 +117,8 @@ defmodule BarterCore.CrossCurrencySetoffTest do
 
   test "refuses a wholly fractional offset rather than rounding or fabricating value" do
     assert {:error, :no_exact_minor_unit_offset} =
-             propose(source("usd", "alpha", "beta", 10, "USD"),
+             propose(
+               source("usd", "alpha", "beta", 10, "USD"),
                source("eur", "beta", "alpha", 1, "EUR"),
                %{rate() | numerator: 3, denominator: 2}
              )
@@ -129,6 +131,7 @@ defmodule BarterCore.CrossCurrencySetoffTest do
 
     assert same_amounts.totals_by_currency == original.totals_by_currency
     refute same_amounts.terms_hash == original.terms_hash
+
     assert {:error, :invalid_cross_currency_plan} =
              Setoff.verify_plan(%{original | b_to_a: replaced}, @now)
   end
@@ -137,7 +140,8 @@ defmodule BarterCore.CrossCurrencySetoffTest do
     # 100 JPY yen as base units, 150 USD cents as quote units:
     # the rate is 3 USD cents for each 2 JPY yen, not 3 USD per 2 JPY.
     assert {:ok, plan} =
-             propose(source("usd", "alpha", "beta", 150, "USD"),
+             propose(
+               source("usd", "alpha", "beta", 150, "USD"),
                source("jpy", "beta", "alpha", 100, "JPY"),
                %{
                  rate()
@@ -247,7 +251,8 @@ defmodule BarterCore.CrossCurrencySetoffTest do
     max = 9_007_199_254_740_991
 
     assert {:ok, plan} =
-             propose(source("usd", "alpha", "beta", max, "USD"),
+             propose(
+               source("usd", "alpha", "beta", max, "USD"),
                source("eur", "beta", "alpha", max, "EUR"),
                %{rate() | numerator: 1, denominator: 1}
              )

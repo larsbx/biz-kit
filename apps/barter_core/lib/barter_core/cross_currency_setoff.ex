@@ -57,7 +57,9 @@ defmodule BarterCore.CrossCurrencySetoff do
 
       fields =
         [@schema, intent_id, Integer.to_string(now)] ++
-          source_fields(a_to_b) ++ source_fields(b_to_a) ++ rate_fields(rate) ++
+          source_fields(a_to_b) ++
+          source_fields(b_to_a) ++
+          rate_fields(rate) ++
           [Integer.to_string(quote_cleared), Integer.to_string(base_cleared)]
 
       {:ok,

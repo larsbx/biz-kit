@@ -126,7 +126,8 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
     Map.merge(ctx, %{proof: proof, signatures: sign(proof, ctx)})
   end
 
-  test "binds exact sorted source IDs, revisions, event digests, amounts, currency and keys", ctx do
+  test "binds exact sorted source IDs, revisions, event digests, amounts, currency and keys",
+       ctx do
     assert {:ok, result} = verify(ctx)
     assert result.status == :inert_cryptographic_checks_only
     assert result.admission == :not_authorized
@@ -170,6 +171,7 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
 
     assert {:error, :stale_or_substituted_source_binding} = verify(ctx, sources: changed_rev)
     assert {:error, :stale_or_substituted_source_binding} = verify(ctx, sources: changed_hash)
+
     assert {:error, :cross_currency_source} =
              prepare(ctx, [%{source | "denomination" => "EUR"} | rest])
   end
@@ -190,6 +192,7 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
     assert {:error, {:authority_inactive, "M-bob"}} = verify(ctx, grants: revoked)
 
     new_ref = put_in(ctx.grants, ["M-bob", :digest], :crypto.hash(:sha256, "new-agency"))
+
     assert {:error, :stale_or_substituted_source_binding} =
              verify(ctx, grants: new_ref)
   end
@@ -236,11 +239,13 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
     assert {:error, {:authority_key_stale, "M-bob"}} = verify(ctx)
 
     updated_grants = put_in(ctx.grants, ["M-bob", :key_id], replacement.signer.key_id)
+
     assert {:error, :stale_or_substituted_source_binding} =
              verify(ctx, grants: updated_grants)
   end
 
-  test "detects model replay and real legacy-ledger discharge without claiming an atomic fence", ctx do
+  test "detects model replay and real legacy-ledger discharge without claiming an atomic fence",
+       ctx do
     assert {:error, :replayed_intent} =
              verify(ctx, spent: MapSet.new([ctx.proof.commitment]))
 
@@ -277,16 +282,26 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
     assert :ok = Log.verify_chains()
   end
 
-  test "missing or changed legal references cannot silently acquire cryptographic approval", ctx do
+  test "missing or changed legal references cannot silently acquire cryptographic approval",
+       ctx do
     assert {:error, :unverified_or_missing_legal_refs} =
-             Proof.prepare(Log.gate(), @chapter, {"M-alice", "M-bob"}, "USD", ctx.sources,
-               "SET-1", ctx.grants, %{}
+             Proof.prepare(
+               Log.gate(),
+               @chapter,
+               {"M-alice", "M-bob"},
+               "USD",
+               ctx.sources,
+               "SET-1",
+               ctx.grants,
+               %{}
              )
 
     tampered = put_in(ctx.proof, [:body, "legal_evidence", "jurisdiction"], "OTHER")
+
     assert {:error, :stale_or_substituted_source_binding} =
              verify(ctx, proof: tampered)
   end
+
   test "source-level replay model blocks a second intent with different nonce", ctx do
     assert {:ok, second_intent} = prepare(ctx, nil, nil, "SET-2")
     second_signatures = sign(second_intent, ctx)
@@ -316,5 +331,4 @@ defmodule CoopSubstrate.CommercialSetoffProofTest do
 
     assert %{open: true} = Log.gate().obligations[{@chapter, "OB-1"}]
   end
-
 end
