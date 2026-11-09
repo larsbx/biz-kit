@@ -538,9 +538,14 @@ if config_env() == :prod and restaurant_released? do
   config :restaurant_host, :restaurant_file, require_env.("RESTAURANT_CONFIG_FILE")
 end
 
-# The shared config points Localize at the legacy eatsbot's locale cache, which
-# the restaurant release does not carry; Money then uses the bundled locale.
-if release_name == "restaurant" do
+# The shared config points Localize at the legacy eatsbot's locale cache
+# (apps/eatsbot/config/config.exs). A boot that does not carry eatsbot uses
+# Localize's bundled locale instead: the restaurant release, and a Mix run of an
+# app that only reaches Money through a core (`cd apps/coop_substrate && mix
+# test`, whose code path holds that app's dependencies only). Without this,
+# Localize refuses to start there ("unknown application: :eatsbot").
+if release_name == "restaurant" or
+     (is_nil(release_name) and :code.lib_dir(:eatsbot) == {:error, :bad_name}) do
   config :localize, otp_app: :localize
 end
 
