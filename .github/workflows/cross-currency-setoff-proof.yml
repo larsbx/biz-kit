@@ -28,7 +28,6 @@ jobs:
     timeout-minutes: 25
     env:
       SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      EVIDENCE_DIR: ${{ runner.temp }}/cross-currency-proof-evidence
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,12 +52,12 @@ jobs:
           --lean-bin "$RUNNER_TEMP/cross-currency-lean/bin/lean"
           --quint-cli "$GITHUB_WORKSPACE/proof_bank/cross_currency_setoff/tooling/quint/node_modules/.bin/quint"
           --elixir-bin "$(command -v elixir)"
-          --output "$EVIDENCE_DIR"
+          --output "$RUNNER_TEMP/cross-currency-proof-evidence"
       - name: Retain exact-source receipt and complete comparison logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cross-currency-preview-${{ env.SOURCE_HEAD }}
-          path: ${{ env.EVIDENCE_DIR }}
+          path: ${{ runner.temp }}/cross-currency-proof-evidence
           if-no-files-found: warn
           retention-days: 30
