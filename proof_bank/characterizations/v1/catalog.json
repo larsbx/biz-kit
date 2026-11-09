@@ -843,7 +843,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "adc7fb24a1daadb64b5cdfd4e6be85fee79bf32b",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "57aaaaec54729834053993d4eb028c835bbcc86e",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -1157,6 +1157,17 @@
       "refreshed_paths": [],
       "renamed": {},
       "meaning": "Registered without characterization; pinned bytes are the registration evidence"
+    },
+    {
+      "at_sha": "9708b2828277dcc34a19061bae387bf260700948",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
     }
   ]
 }

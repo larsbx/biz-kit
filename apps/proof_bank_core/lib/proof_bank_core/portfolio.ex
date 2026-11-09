@@ -68,6 +68,9 @@ defmodule ProofBankCore.Portfolio do
     # order_core, restaurant_core and restaurant_host at the next milestone.
     {"order_core", :capability, :conformance,
      "Order authorization must precede state inspection, and no lifecycle state may assert payment or settlement."},
+    # Registered without review by owner decision (2026-11-08).
+    {"procurement_host", :hosted, :conformance,
+     "A command must be re-signed only after an explicit pre-append clock refusal, and never after an outcome that may have committed."},
     {"restaurant_core", :capability, :conformance,
      "A restaurant event must be admitted only when signed by a device a governance grant authorized for that action."},
     {"restaurant_host", :hosted, :conformance,
