@@ -99,6 +99,7 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
       )
 
     assert Log.gate().obligations[{@chapter, "OB-1"}].debtor_id == "M-alice"
+
     assert %{source_revision: 3, source_kind: :assigned, open: true, original_only: false} =
              ledger_row("OB-1")
 
@@ -127,15 +128,21 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
         )
       )
 
-    assert %{source_revision: 2, source_kind: :direct_discharge_attested,
-             original_only: false, open: false, financial_settlement: :none} =
+    assert %{
+             source_revision: 2,
+             source_kind: :direct_discharge_attested,
+             original_only: false,
+             open: false,
+             financial_settlement: :none
+           } =
              ledger_row("OB-1")
 
     refute Lineage.original_only?(Log.gate(), @chapter, "OB-1")
     assert Log.gate().obligations[{@chapter, "OB-1"}].open == false
   end
 
-  test "legacy bilateral netting closes its source histories and marks residual as derived", ctx do
+  test "legacy bilateral netting closes its source histories and marks residual as derived",
+       ctx do
     {:ok, [_]} = Log.append(event(ctx, "OB-1", "M-alice", "M-bob", 100))
     {:ok, [_]} = Log.append(event(ctx, "OB-2", "M-bob", "M-alice", 60))
 
@@ -162,15 +169,28 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
         )
       )
 
-    assert %{source_revision: 2, source_kind: :legacy_netting_closed,
-             original_only: false, open: false} = ledger_row("OB-1")
+    assert %{
+             source_revision: 2,
+             source_kind: :legacy_netting_closed,
+             original_only: false,
+             open: false
+           } = ledger_row("OB-1")
 
-    assert %{source_revision: 2, source_kind: :legacy_netting_closed,
-             original_only: false, open: false} = ledger_row("OB-2")
+    assert %{
+             source_revision: 2,
+             source_kind: :legacy_netting_closed,
+             original_only: false,
+             open: false
+           } = ledger_row("OB-2")
 
-    assert %{source_revision: 1, source_kind: :legacy_netting_residual,
-             original_signed_core_digest: nil, original_only: false,
-             open: true, financial_settlement: :none} = ledger_row("OB-NET-1")
+    assert %{
+             source_revision: 1,
+             source_kind: :legacy_netting_residual,
+             original_signed_core_digest: nil,
+             original_only: false,
+             open: true,
+             financial_settlement: :none
+           } = ledger_row("OB-NET-1")
 
     assert Log.gate().obligations[{@chapter, "OB-NET-1"}].amount_minor == 40
     refute Lineage.original_only?(Log.gate(), @chapter, "OB-NET-1")
