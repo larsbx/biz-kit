@@ -94,9 +94,11 @@ defmodule ProcurementHost.Dispatch do
   end
 
   defp json(conn, status, body) do
+    # The worker resets its scan on JSON null. Erlang's :json encoder treats
+    # Elixir nil as the string "nil", skipping earlier IDs on later scans.
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(status, :json.encode(body))
+    |> send_resp(status, Jason.encode!(body))
     |> halt()
   end
 end

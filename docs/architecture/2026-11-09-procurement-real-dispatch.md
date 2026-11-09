@@ -82,8 +82,24 @@ certificate. A third test copies the production TLS options into an isolated
 pool, trusts only a disposable test CA, and requires rejection of a certificate
 for the wrong hostname. No verification bypass or live endpoint is introduced.
 
-The procurement source adapter and business reducer remain unchanged. The
-necessary production change is confined to this shared transport configuration.
+### Exhausted work-feed cursor correction
+
+Once HTTP requests could execute, the integration exposed a second adapter
+defect. `ProcurementHost.Dispatch` used Erlang's `:json.encode/1`, which encodes
+Elixir `nil` as the JSON string `"nil"`. An exhausted page therefore returned
+`"next": "nil"` instead of `"next": null`. The worker retained that string as
+its next cursor and could stop revisiting orders whose IDs sort before it.
+
+The response now uses the host's existing Jason dependency, matching the
+Dispatch work contract and preserving JSON null. The HTTP regression checks both
+a short work page and an empty exhausted page. The actual-worker recovery test
+requires the live worker to reset to the empty cursor and poll again without
+another business-ledger append. This corrects polling/retry behavior without
+changing order identity, quote acceptance or the custody reducer.
+
+The existing procurement business reducer remains unchanged. Production changes
+are confined to the shared transport options and the host's JSON response
+encoder.
 
 ## Business and transport boundaries
 

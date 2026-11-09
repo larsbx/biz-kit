@@ -354,47 +354,49 @@ defmodule Dispatch.ProcurementDeliveryTest do
   @tag :committed
   test "worker and canonical appender restarts recover accepted, in-transit and delivered state",
        c do
-    quote = order!(c, "order-1")
+    # This ID sorts before the erroneous literal cursor "nil".
+    id = "a-order"
+    quote = order!(c, id)
 
     assert {:ok, {_load, planned}} =
-             RestaurantAutomation.prepare(c.service_actor, c.config, "order-1")
+             RestaurantAutomation.prepare(c.service_actor, c.config, id)
 
-    assert_committed_trip(c, "order-1", planned, :PLANNED)
+    assert_committed_trip(c, id, planned, :PLANNED)
 
     # Simulate the process boundary after remote admission, before activation.
     assert {:ok, _} =
-             RestaurantDelivery.publish_automated(accept_command(planned, "order-1"), c.config)
+             RestaurantDelivery.publish_automated(accept_command(planned, id), c.config)
 
-    assert trip!(c, "order-1").status == :PLANNED
+    assert trip!(c, id).status == :PLANNED
     head = Log.head()
-    run_worker_until(fn -> trip!(c, "order-1").status == :ACTIVE end)
+    run_worker_until(fn -> trip!(c, id).status == :ACTIVE end)
     assert Log.head() == head
-    trip = trip!(c, "order-1")
+    trip = trip!(c, id)
     assert trip.id == planned.id
-    assert_committed_trip(c, "order-1", trip, :ACTIVE)
+    assert_committed_trip(c, id, trip, :ACTIVE)
 
     page = login(c.user, c.courier_role)
-    page = receipt(page, trip, "picked_up", code(c, "order-1", "picked_up"))
+    page = receipt(page, trip, "picked_up", code(c, id, "picked_up"))
     assert page.status == 200
-    assert row(c, "order-1").dispatch_phase == :in_transit
+    assert row(c, id).dispatch_phase == :in_transit
     in_transit = Procurement.state(Log.gate())
     head = Log.head()
     assert :ok = restart_log()
     assert Procurement.state(Log.gate()) == in_transit
-    run_worker_until(fn -> trip!(c, "order-1").status == :ACTIVE end)
+    run_worker_until(fn -> trip!(c, id).status == :ACTIVE end)
     assert Log.head() == head
     assert length(assignments(c)) == 1
-    assert_committed_trip(c, "order-1", trip, :ACTIVE)
+    assert_committed_trip(c, id, trip, :ACTIVE)
 
-    page = receipt(page, trip, "delivered", code(c, "order-1", "delivered"))
+    page = receipt(page, trip, "delivered", code(c, id, "delivered"))
     assert page.status == 200
     head = Log.head()
     assert :ok = restart_log()
-    run_worker_until(fn -> trip!(c, "order-1").status == :COMPLETED end)
+    run_worker_until(fn -> trip!(c, id).status == :COMPLETED end)
     assert Log.head() == head
-    assert trip!(c, "order-1").id == planned.id
-    assert_committed_trip(c, "order-1", trip, :COMPLETED)
-    assert_exact_fulfillment(c, "order-1", quote)
+    assert trip!(c, id).id == planned.id
+    assert_committed_trip(c, id, trip, :COMPLETED)
+    assert_exact_fulfillment(c, id, quote)
     assert :ok = Log.verify_chains()
   end
 
@@ -757,8 +759,12 @@ defmodule Dispatch.ProcurementDeliveryTest do
       # barrier observes a completed real reconciliation even when the durable
       # trip already has the desired state (the in-transit restart case).
       send(worker, :poll)
-      :sys.get_state(worker)
+      assert {:procurement, ""} = :sys.get_state(worker)
       await(predicate, 250)
+      head = Log.head()
+      send(worker, :poll)
+      assert {:procurement, ""} = :sys.get_state(worker)
+      assert Log.head() == head
     after
       GenServer.stop(worker)
     end
