@@ -224,6 +224,7 @@ harmful outcome it permitted. Regression tests: `test/amendments_test.exs`.
 | A3′ | Dissolution was treated as alienation (full consent) | One partner could hold the others in a partnership indefinitely; no owner could exit or dispose of their own share without everyone | `dissolve ∉ 𝒜`. Revocable classes: any holder may withdraw or dissolve. Each owner may transfer their own units (`Ownership.transfer/8`), subject to eligibility and optional pre-emption. A majority may bind an owner on alienation only through that owner's revocable mandate (I17) |
 | A4 | `Body.grants` defaulted to `*` | Any body declared ad hoc was plenary (fail-open) | Default `[]` (fail-closed); authority must be granted |
 | A5 | — (new with A1) | A reservation its body cannot decide is a permanent deadlock; two bodies reserving overlapping matters contest authority | Invariant I15 |
+| A6 | `can` read seats, delegation and stakes without regard to whether the organization was well formed | A delegation cycle laundered authority into a role, and cyclic ownership or an oversubscribed seat still conferred permissions | **An invalid organization grants nothing.** `can(p, m, t)` requires `valid_at(O, t)`: every static invariant, and every temporal invariant at `t`, holds. Fail-closed per instant, so an invalidity that begins later does not revoke earlier authority. `formal/quint/obligations/keel.qnt` |
 
 ## Scope
 

@@ -249,7 +249,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "e2f099b45d8c932ab137c293738a3e1028651e90",
+        "mix.exs": "16cb062b38f6305c1a7fef09a91a8b4b66f45f1e",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -345,7 +345,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
-        "apps/dispatch/lib/dispatch/operations/board.ex": "9b39439c521ec723625f31f28d02f4770e18061d",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "62fb826ed46e3c65ccaf7b01d8c982f9b4748960",
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
       }
     },
@@ -749,7 +749,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/keel/lib/keel/invariants.ex": "cd525419de5a4f47d8a17975b1d3abe28f88e6ce",
+        "apps/keel/lib/keel/invariants.ex": "34a2989c87ccf67284d39df0097d1c1dd6f43480",
         "apps/keel/lib/keel/decision.ex": "5064abc54b309a7b84faed531a9a330f32c96a73",
         "apps/keel/test/conformance_test.exs": "2de5b753d5fc09fcb9bf855bb008e96ec3a2186b"
       }
@@ -843,7 +843,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "adc7fb24a1daadb64b5cdfd4e6be85fee79bf32b",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "57aaaaec54729834053993d4eb028c835bbcc86e",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -908,7 +908,7 @@
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
         "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
-        "apps/restaurant_host/lib/restaurant_host/orders.ex": "f9579a3911e3a28ac76c39603b12f037a1a5532f",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "6484d887e3df43b993721519797c30313c230f1f",
         "apps/restaurant_host/test/device_grants_test.exs": "1d7c4902612759051c5ff7ff2571aad4cbc2ae3e"
       }
     },
@@ -1001,8 +1001,8 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/spruce_goose/lib/spruce_goose/actors.ex": "a33b0bf900ab778b50a65701f4722397ca800958",
-        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "d710a25373fe846a0cfc3ae4e49fb7d770bb0d9a",
-        "apps/spruce_goose/test/authority_runtime_test.exs": "7ccba2dbfb78867713276f9f914c5f203b8e7b0e"
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "7798e2e33b670c2bccfa0483d0200ce0d9d79850",
+        "apps/spruce_goose/test/authority_runtime_test.exs": "85879d3948f48304bad734d7c1a575d8dd8a2784"
       }
     },
     {
@@ -1035,6 +1035,41 @@
         "apps/task_core/lib/task_core/admission.ex": "fde86025a69bae06969fcc1e6c27dd0ef13b5b9a",
         "apps/task_core/lib/task_core/agent_runs.ex": "e2cea02be4c1e7f2d28e829d1eb09c85e7b45844",
         "apps/task_core/test/agent_runs_test.exs": "74e16f5dc07bac66e82a9a72a6452560c09a7f19"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "procurement_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Procurement coordinator console over CoopSubstrate.Procurement and the signed Log",
+      "intended_features": [
+        "Coordinator sign-in",
+        "Request, quote and order commands",
+        "Bounded clock-boundary re-signing"
+      ],
+      "observed_code_paths": [
+        "apps/procurement_host/lib/procurement_host/admission.ex",
+        "apps/procurement_host/lib/procurement_host/auth.ex",
+        "apps/procurement_host/lib/procurement_host/web.ex"
+      ],
+      "observed_test_path": "apps/procurement_host/test/admission_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-08); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "A command is re-signed only after an explicit pre-append clock-boundary refusal, at most three attempts, and never after an outcome that may have committed",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "29aad2442197fb934043ff49d89c905758b5ba3c",
+      "evidence_git_blobs": {
+        "apps/procurement_host/lib/procurement_host/admission.ex": "2fd2528409078795551cb8974ddc594a967afc09",
+        "apps/procurement_host/lib/procurement_host/auth.ex": "d4b867705b5eb607ea32c867fca03d3d2947a454",
+        "apps/procurement_host/lib/procurement_host/web.ex": "25fbb12e1c13b4ec28e30fe0e051ae283904f3c8",
+        "apps/procurement_host/test/admission_test.exs": "44bd8ceccaaa9cac2b5d62a373275c1d5195efb3"
       }
     }
   ],
@@ -1072,6 +1107,64 @@
       "registered": [],
       "refreshed_paths": [
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "4c030846756c4b6a2944048d7608ec0615892ae0",
+      "date": "2026-11-06",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "e43337353bd8adbb015881740135e1e30dda43c4",
+      "date": "2026-11-07",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/keel/lib/keel/invariants.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "0d903ae26db7f10bceba43890289ead9cf2595c4",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex",
+        "apps/spruce_goose/test/authority_runtime_test.exs",
+        "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "29aad2442197fb934043ff49d89c905758b5ba3c",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "procurement_host"
+      ],
+      "refreshed_paths": [],
+      "renamed": {},
+      "meaning": "Registered without characterization; pinned bytes are the registration evidence"
+    },
+    {
+      "at_sha": "9708b2828277dcc34a19061bae387bf260700948",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

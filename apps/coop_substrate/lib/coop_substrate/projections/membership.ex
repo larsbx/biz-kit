@@ -31,6 +31,7 @@ defmodule CoopSubstrate.Projections.Membership do
       orchestration: CoopSubstrate.Projections.Tasks.init(),
       group_buys: CoopSubstrate.GroupBuys.init(),
       restaurant: RestaurantCore.Admission.init(),
+      dispatch: DispatchCore.Admission.init(),
       entities: %{},
       members: %{},
       memberships: %{},
@@ -94,6 +95,7 @@ defmodule CoopSubstrate.Projections.Membership do
   # but not folded here would leave every later check reading stale state.
   @task_types Map.keys(TaskCore.Admission.event_types())
   @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
+  @dispatch_types Map.keys(DispatchCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
@@ -110,6 +112,11 @@ defmodule CoopSubstrate.Projections.Membership do
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @restaurant_types do
     %{state | restaurant: RestaurantCore.Admission.fold(env, state)}
+  end
+
+  @impl true
+  def handle_event(%Envelope{type: type} = env, state) when type in @dispatch_types do
+    %{state | dispatch: DispatchCore.Admission.fold(env, state)}
   end
 
   @impl true
