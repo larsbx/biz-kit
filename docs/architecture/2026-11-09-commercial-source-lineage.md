@@ -99,3 +99,17 @@ event replay. Multilateral/cross-node settlement requires separate
 proofs of conditional agreement and conservative HELD recovery.
 
 Related: merged #344, #298, #342; open P0 #299 and audit #290.
+
+## Parallel proof obligations
+
+[PR #346](https://github.com/larsbx/biz-kit/pull/346) develops a separate
+Lean/Quint source-lineage safety model: it requires that assignment-away
+and later assignment-back can never requalify a claim as an original-only
+obligation, that terminal closure stays terminal, and that revisions do not
+decrease. The model contains an unsafe reassignment counterexample and
+nonvacuity witnesses.
+
+This proof track is **not** a claim that PR #345's Elixir projection refines
+the model; the canonical signed-log replay tests and exact-head hosted
+compilation/formatting are required independently. No automatic contractual
+release or regulated payment capability is enabled by either PR.
