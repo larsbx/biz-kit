@@ -7,7 +7,7 @@ defmodule RestaurantHost.Web.StorefrontLive do
   use Phoenix.LiveView
 
   alias CoopSubstrate.ULID
-  alias RestaurantHost.{Orders, Restaurant}
+  alias RestaurantHost.{DeliveryCodes, Orders, Restaurant}
   alias RestaurantHost.Web.AuthController
 
   @status %{
@@ -119,6 +119,10 @@ defmodule RestaurantHost.Web.StorefrontLive do
   end
 
   defp message(:session_expired), do: "Your session ended. Please sign in again."
+
+  defp message(:delivery_sign_in_required),
+    do: "Sign in to order delivery and keep access to your drop-off code."
+
   defp message(:invalid_fulfillment), do: "Delivery is unavailable. Please choose pickup."
   defp message(:no_lines), do: "Add something to your order first."
   defp message(:invalid_checkout_command), do: "Please give a name for pickup."
@@ -144,6 +148,10 @@ defmodule RestaurantHost.Web.StorefrontLive do
                                                                                         "on delivery",
                                                                                       else:
                                                                                         "at pickup"}.
+    </p>
+    <p :if={@order.delivery_site && @order.state not in [:completed, :cancelled]}>
+      Give the courier this code when you receive your order:
+      <code id="dropoff-code">{DeliveryCodes.code(@restaurant, @order.id, "delivered")}</code>
     </p>
     <p><a href="/">Back to the menu</a></p>
     """
@@ -184,11 +192,15 @@ defmodule RestaurantHost.Web.StorefrontLive do
           Fulfillment
           <select name="fulfillment" id="fulfillment">
             <option value="pickup" selected={@fulfillment == "pickup"}>Pickup</option>
-            <option value="delivery" selected={@fulfillment == "delivery"}>Arranged delivery</option>
+            <option value="delivery" selected={@fulfillment == "delivery"}>
+              {if @restaurant.delivery_site,
+                do: "Delivery to " <> @restaurant.delivery_site,
+                else: "Arranged delivery"}
+            </option>
           </select>
         </label>
         <p :if={@delivery_available? && @fulfillment == "delivery"}>
-          Arrange delivery with the restaurant before placing your order. Pay the courier in cash.
+          Pay the courier in cash. The order confirmation includes your drop-off code.
         </p>
         <button type="submit">Place order, pay cash</button>
       </form>

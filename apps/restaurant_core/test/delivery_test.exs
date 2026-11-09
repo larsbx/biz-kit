@@ -87,6 +87,76 @@ defmodule RestaurantCore.DeliveryTest do
              })
   end
 
+  test "automatic orders require distinct exact pickup and drop-off commitments" do
+    pickup_digest = String.duplicate("a", 64)
+    dropoff_digest = String.duplicate("b", 64)
+
+    assert {:ok, order} =
+             Delivery.bind_checkout(ready(), %{
+               "profile" => "automatic-v1",
+               "site" => "North desk",
+               "request_id" => "order",
+               "pickup_digest" => pickup_digest,
+               "dropoff_digest" => dropoff_digest
+             })
+
+    initial = Delivery.init()
+    accept = operation("accept", 0, %{"automated" => true})
+
+    pickup =
+      operation("picked_up", 1, %{
+        "automated" => true,
+        "proof_id" => @pickup,
+        "proof_digest" => pickup_digest
+      })
+
+    dropoff =
+      operation("delivered", 2, %{
+        "automated" => true,
+        "proof_id" => @dropoff,
+        "proof_digest" => dropoff_digest
+      })
+
+    assert {:error, :delivery_code_required_or_invalid} =
+             Delivery.apply(initial, "chapter", "shop", order, Map.delete(accept, "automated"))
+
+    assert {:ok, booked, ^order} = Delivery.apply(initial, "chapter", "shop", order, accept)
+
+    assert {:error, :delivery_code_required_or_invalid} =
+             Delivery.apply(booked, "chapter", "shop", order, %{
+               pickup
+               | "proof_digest" => dropoff_digest
+             })
+
+    assert {:ok, moving, %{state: :dispatched} = out} =
+             Delivery.apply(booked, "chapter", "shop", order, pickup)
+
+    assert {:ok, final, %{state: :completed} = completed} =
+             Delivery.apply(moving, "chapter", "shop", out, dropoff)
+
+    assert {:error, :duplicate_delivery_step} =
+             Delivery.apply(final, "chapter", "shop", completed, dropoff)
+
+    state =
+      put_in(Admission.init(), [:merchants, {"chapter", "shop"}], %{orders: %{"order" => order}})
+
+    assert [%{phase: "requested", order_id: "order", site: "North desk"}] =
+             Admission.delivery_work(state, "chapter", "shop", @tenant, "")
+
+    delivered =
+      put_in(
+        %{state | delivery: final},
+        [:merchants, {"chapter", "shop"}, :orders, "order"],
+        completed
+      )
+
+    assert [%{phase: "delivered", load_id: @load, assignment_id: @assignment}] =
+             Admission.delivery_work(delivered, "chapter", "shop", @tenant, "")
+
+    assert [] = Admission.delivery_work(delivered, "chapter", "shop", @load, "")
+    assert [] = Admission.delivery_work(delivered, "chapter", "shop", @tenant, "order")
+  end
+
   test "the signed gate scopes transport authority to chapter, merchant and tenant" do
     original = Admission.init()
 

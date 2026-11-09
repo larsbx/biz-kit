@@ -217,60 +217,55 @@ The operator's copy uses `HARNESS_KEYS_DIR` as for enrollment. It verifies the
 held envelope against the local command before signing, and the running host
 submits the signature to the Log.
 
-### Arranged delivery with Dispatch
+### Automated restaurant delivery with Dispatch
 
-Set `"delivery_enabled": true` in the restaurant file to offer arranged
-delivery after a Dispatch key is enrolled. Keep the default for pickup-only
-restaurants. Agree delivery and capture the address and contact in Dispatch
-before using the pilot. The restaurant ledger carries opaque references and
-the existing order name. Cash remains due at handoff.
+Set `"delivery_enabled": true` and `"delivery_site": "North building desk"`
+in the restaurant file. The site is the approved drop-off destination
+shown to signed-in customers. The initial profile runs one configured pickup
+and drop-off route with one authorized courier. Delivery is cash at handoff.
 
-Enroll a dedicated Dispatch signing key with the restaurant operator command:
+Enroll a dedicated Dispatch key with
+`mix restaurant.manage grant-dispatch dispatch-key.json --chapter chapter-genesis --server https://order.example`.
+The JSON contains `merchant_id`, `tenant_id` (Dispatch UUID), `key_id` and
+`pubkey` (base64url without padding). The key can be revoked with
+`revoke-device`. The seed is a base64-encoded 32-byte seed in a protected
+file on the Dispatch machine.
 
-```sh
-mix restaurant.manage grant-dispatch dispatch-key.json --chapter chapter-genesis --server https://order.example
-```
-
-The JSON names `merchant_id`, `tenant_id` (the Dispatch tenant UUID), `key_id`,
-and `pubkey` (base64url without padding). Revoke this key with
-`revoke-device`. The signing seed is a base64-encoded 32-byte seed in an
-operator-readable file on the Dispatch release machine.
-
-Set these variables in the Dispatch release:
-
-| Variable | Value |
+| Dispatch release variable | Value |
 | --- | --- |
+| `RESTAURANT_DISPATCH_AUTOMATED` | `true` starts the reconciler |
 | `RESTAURANT_DISPATCH_URL` | Restaurant HTTPS origin |
-| `RESTAURANT_DISPATCH_CHAPTER`, `RESTAURANT_DISPATCH_MERCHANT` | Exact enrolled chapter and merchant |
-| `RESTAURANT_DISPATCH_TENANT`, `RESTAURANT_DISPATCH_KEY_ID` | Enrolled Dispatch tenant and key ID |
-| `RESTAURANT_DISPATCH_SEED_FILE` | Path to the protected seed file |
+| `RESTAURANT_DISPATCH_CHAPTER`, `RESTAURANT_DISPATCH_MERCHANT` | Enrolled restaurant scope |
+| `RESTAURANT_DISPATCH_TENANT`, `RESTAURANT_DISPATCH_KEY_ID` | Enrolled Dispatch tenant and key |
+| `RESTAURANT_DISPATCH_SEED_FILE` | Protected signing-seed file |
+| `RESTAURANT_DISPATCH_SERVICE_ROLE` | Organization-scoped Dispatch service role assignment UUID with the board's load, stop and trip capabilities |
+| `RESTAURANT_DISPATCH_COURIER` | Participant UUID for a courier holding a driving role in that organization |
+| `RESTAURANT_DISPATCH_SITE` | Exact restaurant `delivery_site` value |
+| `RESTAURANT_DISPATCH_PICKUP`, `RESTAURANT_DISPATCH_DROPOFF` | Approved Dispatch stop addresses |
 
-Use the existing Dispatch board to create a load with external reference
-`restaurant:<chapter>:<merchant>:<order-id>`, add pickup and delivery stops,
-and activate a driver assignment. After the kitchen marks the order ready,
-an operator with access to the Dispatch release can submit the handoff:
+Provision the service assignment with the existing Dispatch `:grant` action
+during release setup. Use a dedicated `SERVICE` principal, the carrier's
+organization scope, and a dispatcher role definition. Dispatch revalidates
+this assignment for each write and records it in the audit trail.
 
-```sh
-bin/biz_kit rpc ' {:ok, result} = Dispatch.RestaurantDelivery.publish(%{
-  "op" => "accept", "order_id" => "ORDER", "load_id" => "LOAD_UUID",
-  "assignment_id" => "ASSIGNMENT_UUID", "command_id" => "accept-1", "expected_version" => 0
-}); IO.inspect(result)'
-```
+When a delivery order becomes ready, Dispatch creates the load and stops,
+plans the available courier's trip, submits signed acceptance, then activates
+the trip. A busy courier leaves the order queued. The restaurant ledger is
+the retry source after restart. Dispatch cancels a planned trip when kitchen
+cancellation wins before acceptance.
 
-Use the same load and assignment for the remaining steps:
+At pickup the kitchen board shows a code to give the courier. At drop-off the
+customer shows the separate code from the order confirmation or account history.
+The courier signs into Dispatch and submits each code from
+`/ui/restaurant-receipts` against the active assignment. The restaurant ledger
+matches the signed receipt to the exact assignment, phase and code commitment.
+Dispatch completes the trip after the ledger records drop-off. Keep the
+restaurant endpoint secret stable while any issued codes are outstanding.
 
-| Operation | Version | Dispatch source and operator review |
-| --- | ---: | --- |
-| `picked_up` | 1 | Active or completed assignment and `PICKUP_DOCUMENT` from the load's pickup stop. Supply its UUID as `proof_id` and `"reviewed" => true` after verifying the evidence. |
-| `delivered` | 2 | Completed assignment and `PROOF_OF_DELIVERY` from the load's delivery stop. Supply its distinct UUID and attest after review. |
-
-Use a distinct command ID for each step. Repeat the same payload and command
-ID after an uncertain response. A signed duplicate does not advance the
-handoff again. The kitchen board shows the current handoff version. Once
-Dispatch accepts, the board cannot cancel the order. Resolve exceptions with
-Dispatch before taking any further action. The pilot has no automatic
-routing, address collection in checkout, or post-acceptance cancellation
-workflow.
+The routine path requires no dispatcher RPC or document review. A revoked
+courier, changed route, or cancellation after accepted custody requires
+operator reconciliation. The pilot uses a fixed destination and does not
+collect customer addresses in checkout.
 
 ## Testing a deployment
 

@@ -2,9 +2,24 @@ defmodule RestaurantHost.Web.DeliveryController do
   @moduledoc false
   use Phoenix.Controller, formats: [:json]
 
-  alias CoopSubstrate.{Canonical, Log}
+  alias CoopSubstrate.{Canonical, Log, RestaurantDeliveryWork}
   alias CoopSubstrate.Protocol.Envelope
+  alias RestaurantCore.Admission
   alias RestaurantHost.Restaurant
+
+  def work(conn, _) do
+    r = Restaurant.current()
+    state = Log.gate().restaurant
+
+    with {:ok, tenant, cursor} <-
+           RestaurantDeliveryWork.authorize(conn.body_params, state, r.chapter, r.merchant) do
+      jobs = Admission.delivery_work(state, r.chapter, r.merchant, tenant, cursor)
+      next = if length(jobs) == 25, do: List.last(jobs).order_id
+      conn |> put_resp_header("cache-control", "no-store") |> json(%{jobs: jobs, next: next})
+    else
+      _ -> conn |> put_status(403) |> json(%{error: "forbidden"})
+    end
+  end
 
   def submit(conn, _) do
     r = Restaurant.current()

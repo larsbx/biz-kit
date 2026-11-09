@@ -1,8 +1,10 @@
 defmodule Dispatch.RestaurantDeliveryTest do
   use ExUnit.Case, async: false
 
+  alias Dispatch.Access.Actor
+  alias Dispatch.Accounts.RoleAssignment
   alias Dispatch.Fleet.{Assignment, Load, PartnerActions}
-  alias Dispatch.RestaurantDelivery
+  alias Dispatch.{RestaurantAutomation, RestaurantDelivery}
   alias Dispatch.Support.Fixtures, as: F
 
   @moduletag :integration
@@ -70,6 +72,46 @@ defmodule Dispatch.RestaurantDeliveryTest do
       assert {:error, :dispatch_source_not_confirmed} =
                RestaurantDelivery.confirm_source(input, config)
     end
+  end
+
+  test "the worker plans once and leaves a second order queued until the courier is available",
+       c do
+    tenant = c.config.tenant
+    carrier = Ash.get!(Dispatch.Accounts.Organization, tenant, authorize?: false)
+    courier = F.participant(tenant, carrier)
+    F.assignment(tenant, carrier, courier, "DRIVER")
+    definition = F.role_definition(tenant, "DISPATCHER")
+
+    service =
+      RoleAssignment
+      |> Ash.Changeset.for_create(:grant, %{
+        tenant_id: tenant,
+        principal_type: :SERVICE,
+        principal_id: Ash.UUID.generate(),
+        organization_id: tenant,
+        role_definition_id: definition.id,
+        scope_type: :ORGANIZATION,
+        starts_at: DateTime.add(DateTime.utc_now(), -60)
+      })
+      |> Ash.create!(authorize?: false, tenant: tenant)
+      |> Ash.load!([:role_definition], authorize?: false, tenant: tenant)
+
+    assert {:ok, actor} = Actor.from_assignment(service)
+    config = Map.merge(c.config, %{courier: courier.id, pickup: "Kitchen", dropoff: "North desk"})
+
+    assert {:ok, {load, %{status: :PLANNED} = trip}} =
+             RestaurantAutomation.prepare(actor, config, "automatic-order")
+
+    assert Enum.map(load.stops, &{&1.kind, &1.address_text}) ==
+             [{:PICKUP, "Kitchen"}, {:DELIVERY, "North desk"}]
+
+    assert {:ok, {same_load, same_trip}} =
+             RestaurantAutomation.prepare(actor, config, "automatic-order")
+
+    assert {same_load.id, same_trip.id} == {load.id, trip.id}
+
+    assert {:error, :courier_unavailable} =
+             RestaurantAutomation.prepare(actor, config, "second-order")
   end
 
   defp move(assignment, action, tenant) do

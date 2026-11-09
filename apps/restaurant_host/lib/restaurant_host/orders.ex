@@ -14,7 +14,7 @@ defmodule RestaurantHost.Orders do
   alias CoopSubstrate.{Log, ULID}
   alias CoopSubstrate.Protocol.Envelope
   alias RestaurantCore.Admission
-  alias RestaurantHost.Restaurant
+  alias RestaurantHost.{DeliveryCodes, Restaurant}
 
   @doc "The menu: each item with its price."
   def menu(%Restaurant{} = r) do
@@ -96,7 +96,7 @@ defmodule RestaurantHost.Orders do
         principal \\ nil,
         fulfillment \\ "pickup"
       ) do
-    with :ok <- offered(r, fulfillment),
+    with :ok <- offered(r, fulfillment, principal),
          {:ok, priced} <- price(r, basket) do
       order_id = ULID.generate()
 
@@ -119,9 +119,16 @@ defmodule RestaurantHost.Orders do
       }
 
       payload =
-        if fulfillment == "delivery",
-          do: Map.put(payload, "delivery", %{"request_id" => order_id}),
-          else: payload
+        case {fulfillment, r.delivery_site} do
+          {"delivery", site} when is_binary(site) ->
+            Map.put(payload, "delivery", DeliveryCodes.request(r, order_id))
+
+          {"delivery", nil} ->
+            Map.put(payload, "delivery", %{"request_id" => order_id})
+
+          _ ->
+            payload
+        end
 
       case submit(r, r.storefront, "RestaurantOrderPlacedV1", payload) do
         :ok -> {:ok, payload["order_id"]}
@@ -131,13 +138,16 @@ defmodule RestaurantHost.Orders do
     end
   end
 
-  defp offered(_, "pickup"), do: :ok
+  defp offered(_, "pickup", _), do: :ok
 
-  defp offered(r, "delivery") do
+  defp offered(%Restaurant{delivery_site: site}, "delivery", nil) when is_binary(site),
+    do: {:error, :delivery_sign_in_required}
+
+  defp offered(r, "delivery", _) do
     if Restaurant.delivery_available?(r), do: :ok, else: {:error, :invalid_fulfillment}
   end
 
-  defp offered(_, _), do: {:error, :invalid_fulfillment}
+  defp offered(_, _, _), do: {:error, :invalid_fulfillment}
 
   @doc "Take an order step from a paired board, at the order's current version."
   def step(%Restaurant{} = r, board_id, order_id, action, version, reason \\ nil, staff \\ nil) do

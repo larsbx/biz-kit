@@ -22,6 +22,44 @@ defmodule RestaurantCore.Delivery do
       is_binary(value) and
         Regex.match?(~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/, value)
 
+  def bind_checkout(
+        %{fulfillment: :delivery} = order,
+        %{"profile" => "automatic-v1", "site" => site} = p
+      ) do
+    if map_size(p) == 5 and is_binary(site) and byte_size(site) in 1..120 and
+         p["request_id"] == order.id and digest?(p["pickup_digest"]) and
+         digest?(p["dropoff_digest"]) and p["pickup_digest"] != p["dropoff_digest"] do
+      {:ok,
+       Map.put(order, :automated_delivery, %{
+         site: site,
+         pickup: p["pickup_digest"],
+         dropoff: p["dropoff_digest"]
+       })}
+    else
+      {:error, :invalid_delivery_codes}
+    end
+  end
+
+  def bind_checkout(order, _), do: {:ok, order}
+
+  defp digest?(digest),
+    do: is_binary(digest) and Regex.match?(~r/\A[0-9a-f]{64}\z/, digest)
+
+  defp verify_receipt(%{automated_delivery: codes}, operation, p) do
+    case {operation, p["automated"], p["proof_digest"]} do
+      {:accept, true, nil} -> :ok
+      {:in_transit, true, digest} when digest == codes.pickup -> :ok
+      {:delivered, true, digest} when digest == codes.dropoff -> :ok
+      _ -> {:error, :delivery_code_required_or_invalid}
+    end
+  end
+
+  defp verify_receipt(_, _, p) do
+    if Map.has_key?(p, "automated") or Map.has_key?(p, "proof_digest"),
+      do: {:error, :automated_delivery_required},
+      else: :ok
+  end
+
   def apply(delivery, chapter, merchant, %{fulfillment: :delivery, id: id} = order, p) do
     key = {chapter, merchant, id}
     load = {chapter, p["tenant_id"], p["load_id"]}
@@ -29,13 +67,18 @@ defmodule RestaurantCore.Delivery do
 
     with {:ok, operation} <- Map.fetch(@operations, p["op"]),
          :ok <- evidence(operation, p),
+         :ok <- verify_receipt(order, operation, p),
          {:ok, prior} <- current(delivery.handoffs[key], order),
          :ok <- bind_load(delivery, key, load, prior, operation, p["assignment_id"]),
          command = command(p, operation),
          {:ok, updated, :accepted} <- FulfillmentCore.apply(prior, merchant, :dispatch, command),
          :ok <- unused_proof(delivery, proof, operation),
          {:ok, order} <- mirror(order, operation) do
-      updated = Map.put(updated, :dispatch_assignment, p["assignment_id"])
+      updated =
+        Map.merge(updated, %{
+          dispatch_assignment: p["assignment_id"],
+          dispatch_tenant: p["tenant_id"]
+        })
 
       updated_delivery =
         delivery
@@ -89,7 +132,8 @@ defmodule RestaurantCore.Delivery do
       op: operation,
       transport_ref: p["load_id"],
       assignment_ref: p["assignment_id"],
-      proof_ref: p["proof_id"]
+      proof_ref: p["proof_id"],
+      proof_digest: p["proof_digest"]
     }
   end
 

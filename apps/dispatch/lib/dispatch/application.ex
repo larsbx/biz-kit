@@ -32,9 +32,13 @@ defmodule Dispatch.Application do
           # into a burst of outbound fetches. Started after Finch, which it uses.
           Dispatch.Identity.Tokens.KeyStore,
           DispatchWeb.Endpoint
-        ]
+        ] ++ restaurant_children()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Dispatch.Supervisor)
+  end
+
+  defp restaurant_children do
+    if Dispatch.RestaurantAutomation.enabled?(), do: [Dispatch.RestaurantAutomation], else: []
   end
 
   defp outbox_children do

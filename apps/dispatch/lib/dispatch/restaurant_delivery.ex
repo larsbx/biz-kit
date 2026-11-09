@@ -7,7 +7,7 @@ defmodule Dispatch.RestaurantDelivery do
   It never copies an address, document locator or money claim to the ledger.
   """
 
-  alias CoopSubstrate.{Canonical, Crypto}
+  alias CoopSubstrate.{Canonical, Crypto, RestaurantDeliveryWork}
   alias CoopSubstrate.Protocol.Envelope
 
   @ops ~w(accept picked_up delivered)
@@ -31,19 +31,39 @@ defmodule Dispatch.RestaurantDelivery do
          {:ok, config} <- configuration(),
          :ok <- confirm_source(input, config),
          {:ok, body} <- signed_body(input, config) do
-      case Finch.request(
-             Finch.build(:post, config.url, [{"content-type", "application/json"}], body),
-             Dispatch.Finch
-           ) do
-        {:ok, %{status: code, body: response}} when code in [200, 201] ->
-          Jason.decode(response)
+      post(config.url, body)
+    end
+  end
 
-        {:ok, %{status: code, body: response}} ->
-          {:error, {:restaurant_refused, code, response}}
+  @doc false
+  def work(config, cursor),
+    do:
+      post(
+        config.url <> "/work",
+        Jason.encode!(RestaurantDeliveryWork.sign(config, cursor, config.seed))
+      )
 
-        {:error, reason} ->
-          {:error, reason}
-      end
+  @doc false
+  def publish_automated(input, config) do
+    with {:ok, body} <- signed_body(Map.put(input, "automated", true), config) do
+      post(config.url, body)
+    end
+  end
+
+  defp post(url, body) do
+    case Finch.request(
+           Finch.build(:post, url, [{"content-type", "application/json"}], body),
+           Dispatch.Finch,
+           receive_timeout: 5_000
+         ) do
+      {:ok, %{status: code, body: response}} when code in [200, 201] ->
+        Jason.decode(response)
+
+      {:ok, %{status: code, body: response}} ->
+        {:error, {:restaurant_refused, code, response}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -123,7 +143,8 @@ defmodule Dispatch.RestaurantDelivery do
     end
   end
 
-  defp configuration do
+  @doc false
+  def configuration do
     chapter = System.get_env("RESTAURANT_DISPATCH_CHAPTER")
     merchant = System.get_env("RESTAURANT_DISPATCH_MERCHANT")
     tenant = System.get_env("RESTAURANT_DISPATCH_TENANT")

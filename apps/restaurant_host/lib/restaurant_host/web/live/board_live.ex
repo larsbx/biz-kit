@@ -7,7 +7,7 @@ defmodule RestaurantHost.Web.BoardLive do
   """
   use Phoenix.LiveView
 
-  alias RestaurantHost.{Orders, Restaurant}
+  alias RestaurantHost.{DeliveryCodes, Orders, Restaurant}
   alias RestaurantHost.Web.AuthController
 
   @access_check_ms 5_000
@@ -151,6 +151,10 @@ defmodule RestaurantHost.Web.BoardLive do
       <p :if={order.delivery} id={"delivery-#{order.id}"}>
         Dispatch handoff {order.delivery.phase} · version {order.delivery.version} ·
         order <code>{order.id}</code>
+      </p>
+      <p :if={order.delivery_site && order.delivery && order.delivery.phase == :accepted}>
+        Give this code to the assigned courier at pickup:
+        <code>{DeliveryCodes.code(@restaurant, order.id, "picked_up")}</code>
       </p>
       <ul>
         <li :for={line <- order.lines}>{line["quantity"]} × {line["name"]}</li>

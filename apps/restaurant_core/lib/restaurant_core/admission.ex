@@ -64,7 +64,7 @@ defmodule RestaurantCore.Admission do
             "expected_version" => :int,
             "op" => :string
           },
-          %{"proof_id" => :string}
+          %{"proof_id" => :string, "proof_digest" => :string, "automated" => :bool}
         ),
       @grant =>
         spec("governance", "restaurant_devices", ["merchant_id"], %{
@@ -158,6 +158,53 @@ defmodule RestaurantCore.Admission do
     end)
   end
 
+  def dispatch_key(state, chapter, merchant, tenant, key_id) do
+    case state.grants[{chapter, merchant, key_id}] do
+      %{actor: :dispatch, tenant: ^tenant, pubkey: pubkey} = grant ->
+        if Map.get(grant, :revoked, false), do: :error, else: {:ok, pubkey}
+
+      _ ->
+        :error
+    end
+  end
+
+  @doc "Opaque automation work from the same replayable order and handoff projection."
+  def delivery_work(state, chapter, merchant, tenant, after_id) do
+    orders = get_in(state, [:merchants, {chapter, merchant}, :orders]) || %{}
+
+    orders
+    |> Enum.filter(fn {id, order} ->
+      id > after_id and Map.has_key?(order, :automated_delivery)
+    end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Stream.flat_map(fn {id, order} ->
+      site = order.automated_delivery.site
+      handoff = Delivery.handoff(state.delivery, chapter, merchant, id)
+
+      case {order.state, handoff} do
+        {stage, nil} when stage in [:ready, :cancelled] ->
+          phase = if stage == :ready, do: "requested", else: "cancelled"
+          [%{order_id: id, site: site, phase: phase}]
+
+        {_, %{dispatch_tenant: ^tenant, phase: phase} = h}
+        when phase in [:accepted, :delivered] ->
+          [
+            %{
+              order_id: id,
+              site: site,
+              phase: Atom.to_string(phase),
+              load_id: h.transport_ref,
+              assignment_id: h.dispatch_assignment
+            }
+          ]
+
+        _ ->
+          []
+      end
+    end)
+    |> Enum.take(25)
+  end
+
   @doc "`:ok` when the event may be appended to a gate holding `role_keys` and `restaurant`."
   def check(env, gate) do
     with {:ok, _} <- admit(env, gate.role_keys, gate.restaurant), do: :ok
@@ -205,7 +252,8 @@ defmodule RestaurantCore.Admission do
             state: order.state,
             version: order.version,
             actions: order_actions(order, handoff),
-            delivery: public_handoff(order, handoff)
+            delivery: public_handoff(order, handoff),
+            delivery_site: get_in(order, [:automated_delivery, :site])
           })
           |> Map.merge(Map.fetch!(details, id))
         end)
@@ -340,7 +388,8 @@ defmodule RestaurantCore.Admission do
              merchant,
              cmd
            ),
-         {:ok, order} <- Kitchen.new(p["merchant_id"], p["order_id"], cmd.fulfillment) do
+         {:ok, order} <- Kitchen.new(p["merchant_id"], p["order_id"], cmd.fulfillment),
+         {:ok, order} <- Delivery.bind_checkout(order, p["delivery"]) do
       {:ok,
        put_in(state, [:merchants, {ch, p["merchant_id"]}], %{
          checkout: checkout,

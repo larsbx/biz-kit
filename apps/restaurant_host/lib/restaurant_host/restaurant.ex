@@ -24,7 +24,7 @@ defmodule RestaurantHost.Restaurant do
     :storefront,
     :boards
   ]
-  defstruct @enforce_keys ++ [menu_revision: 0, delivery_enabled: false]
+  defstruct @enforce_keys ++ [menu_revision: 0, delivery_enabled: false, delivery_site: nil]
 
   def current, do: :restaurant_host |> Application.fetch_env!(:restaurant) |> build()
 
@@ -64,6 +64,7 @@ defmodule RestaurantHost.Restaurant do
       catalog: nil,
       menu: [],
       delivery_enabled: Map.get(config, :delivery_enabled, false),
+      delivery_site: Map.get(config, :delivery_site),
       storefront: device(Map.fetch!(config, :storefront)),
       boards: Map.new(Map.get(config, :boards, %{}), fn {id, d} -> {id, device(d)} end)
     }

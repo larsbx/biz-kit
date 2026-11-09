@@ -4,9 +4,9 @@ defmodule RestaurantHost.DeliveryGateTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
-  alias CoopSubstrate.{Canonical, Crypto}
+  alias CoopSubstrate.{Canonical, Crypto, RestaurantDeliveryWork}
   alias CoopSubstrate.Protocol.Envelope
-  alias RestaurantHost.{Management, Orders, World}
+  alias RestaurantHost.{DeliveryCodes, Management, Orders, World}
 
   @endpoint RestaurantHost.Web.Endpoint
   @tenant "11111111-1111-1111-1111-111111111111"
@@ -22,22 +22,7 @@ defmodule RestaurantHost.DeliveryGateTest do
     assert Orders.place(r, %{"margherita" => 1}, "Ada", "key", nil, "delivery") ==
              {:error, :invalid_fulfillment}
 
-    grant = %{
-      "merchant_id" => r.merchant,
-      "tenant_id" => @tenant,
-      "key_id" => "dispatch",
-      "pubkey" => Base.url_encode64(pubkey, padding: false)
-    }
-
-    assert {:ok, held} = Management.prepare(r, "grant-dispatch", grant, gov.signer.key_id)
-
-    assert {:ok, _} =
-             Management.submit(
-               r,
-               "grant-dispatch",
-               held.id,
-               Crypto.sign(held.signing_bytes, gov.seed)
-             )
+    enroll(r, gov, pubkey)
 
     {:ok, storefront, _} = live(build_conn(), "/")
     storefront |> element("#add-margherita") |> render_click()
@@ -93,6 +78,113 @@ defmodule RestaurantHost.DeliveryGateTest do
     assert submit(r, signer, seed, dropoff).status == 201
     assert %{state: :completed, delivery: %{phase: :delivered, version: 3}} = Orders.get(r, id)
     assert render(storefront) =~ "Delivered"
+  end
+
+  test "signed work and receipt commitments drive the automatic handoff" do
+    %{restaurant: r, governance: gov} =
+      World.build(delivery_enabled: true, delivery_site: "North desk")
+
+    {pubkey, seed} = Crypto.generate_keypair()
+    enroll(r, gov, pubkey)
+    basket = %{"margherita" => 1}
+
+    assert {:error, :delivery_sign_in_required} =
+             Orders.place(r, basket, "Ada", "automatic", nil, "delivery")
+
+    assert {:ok, order} = Orders.place(r, basket, "Ada", "automatic", "customer", "delivery")
+
+    for {action, version} <- Enum.with_index([:accept, :start_preparing, :mark_ready]),
+        do: assert(:ok = Orders.step(r, "board-1", order, action, version))
+
+    scope = %{chapter: r.chapter, merchant: r.merchant, tenant: @tenant, key_id: "dispatch"}
+    request = RestaurantDeliveryWork.sign(scope, "", seed)
+
+    assert %{"jobs" => [%{"order_id" => ^order, "phase" => "requested", "site" => "North desk"}]} =
+             request |> work() |> json_response(200)
+
+    assert work(request).status == 403
+    assert work(RestaurantDeliveryWork.sign(%{scope | tenant: @load}, "", seed)).status == 403
+
+    signer = %{role: "restaurant_dispatch", key_id: "dispatch", pubkey: pubkey}
+
+    base = %{
+      "merchant_id" => r.merchant,
+      "order_id" => order,
+      "tenant_id" => @tenant,
+      "load_id" => @load,
+      "assignment_id" => @assignment,
+      "automated" => true
+    }
+
+    accept =
+      Map.merge(base, %{"command_id" => "accept", "op" => "accept", "expected_version" => 0})
+
+    assert submit(r, signer, seed, accept).status == 201
+
+    pickup =
+      Map.merge(base, %{
+        "command_id" => "pickup",
+        "op" => "picked_up",
+        "expected_version" => 1,
+        "proof_id" => @pickup,
+        "proof_digest" => digest(r, order, "picked_up")
+      })
+
+    assert submit(r, signer, seed, %{pickup | "proof_digest" => digest(r, order, "delivered")}).status ==
+             422
+
+    assert submit(r, signer, seed, pickup).status == 201
+
+    dropoff =
+      Map.merge(base, %{
+        "command_id" => "dropoff",
+        "op" => "delivered",
+        "expected_version" => 2,
+        "proof_id" => @dropoff,
+        "proof_digest" => digest(r, order, "delivered")
+      })
+
+    assert submit(r, signer, seed, dropoff).status == 201
+    assert submit(r, signer, seed, dropoff).status == 200
+
+    assert %{
+             "jobs" => [
+               %{"order_id" => ^order, "phase" => "delivered", "assignment_id" => @assignment}
+             ]
+           } =
+             scope |> RestaurantDeliveryWork.sign("", seed) |> work() |> json_response(200)
+  end
+
+  defp work(payload) do
+    build_conn()
+    |> Plug.Conn.put_req_header("content-type", "application/json")
+    |> post("/api/restaurant-delivery/work", Jason.encode!(payload))
+  end
+
+  defp digest(r, order, phase) do
+    code = DeliveryCodes.code(r, order, phase)
+    Base.encode16(:crypto.hash(:sha256, code), case: :lower)
+  end
+
+  defp enroll(r, gov, pubkey) do
+    grant = %{
+      "merchant_id" => r.merchant,
+      "tenant_id" => @tenant,
+      "key_id" => "dispatch",
+      "pubkey" => Base.url_encode64(pubkey, padding: false)
+    }
+
+    assert {:ok, held} = Management.prepare(r, "grant-dispatch", grant, gov.signer.key_id)
+
+    assert {:ok, _} =
+             Management.submit(
+               r,
+               "grant-dispatch",
+               held.id,
+               Crypto.sign(held.signing_bytes, gov.seed)
+             )
+
+    :ok
   end
 
   defp submit(r, signer, seed, payload) do
