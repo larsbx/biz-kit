@@ -6,6 +6,7 @@ on:
       - 'apps/task_core/**'
       - 'apps/order_core/**'
       - 'apps/commerce_core/**'
+      - 'tools/merchant_pilot/**'
       - 'apps/restaurant_core/**'
       - 'apps/inventory_core/**'
       - 'apps/fulfillment_core/**'
@@ -47,6 +48,13 @@ jobs:
           for sibling in order_core restaurant_core; do
             [ -d "$RUNNER_TEMP/portable-eatsbot/$sibling" ] || cp -R "apps/$sibling" "$RUNNER_TEMP/portable-eatsbot/"
           done
+          # CommerceCore's merchant pilot tests read the pilot tool's shared
+          # fixtures at ../../../tools/merchant_pilot from its test directory,
+          # which is $RUNNER_TEMP/tools/merchant_pilot once the package is copied.
+          if [ "${{ matrix.app }}" = commerce_core ]; then
+            mkdir -p "$RUNNER_TEMP/tools"
+            cp -R tools/merchant_pilot "$RUNNER_TEMP/tools/"
+          fi
           cd "$RUNNER_TEMP/portable-eatsbot/${{ matrix.app }}"
           mix --version
           mix deps.get
