@@ -1,0 +1,16 @@
+name = "cross_currency_setoff"
+version = "0.1.0"
+defaultTargets = ["CrossCurrencySetoff", "Contracts", "AxiomAudit", "setoff-eval"]
+
+[[lean_lib]]
+name = "CrossCurrencySetoff"
+
+[[lean_lib]]
+name = "Contracts"
+
+[[lean_lib]]
+name = "AxiomAudit"
+
+[[lean_exe]]
+name = "setoff-eval"
+root = "Eval"

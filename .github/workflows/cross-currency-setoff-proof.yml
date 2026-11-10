@@ -1,0 +1,63 @@
+name: Cross-currency setoff — Lean, Quint and Elixir
+
+on:
+  pull_request:
+    paths:
+      - "proof_bank/cross_currency_setoff/**"
+      - "apps/barter_core/**"
+      - "apps/coop_substrate/**/commercial_setoff*"
+      - "formal/lean/install-toolchain.sh"
+      - "formal/lean/lean-toolchain"
+      - ".github/workflows/cross-currency-setoff-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "proof_bank/cross_currency_setoff/**"
+      - "apps/barter_core/**"
+      - "formal/lean/install-toolchain.sh"
+      - "formal/lean/lean-toolchain"
+      - ".github/workflows/cross-currency-setoff-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-preview-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # The format-only audit reads the original PR #341 source revision.
+          fetch-depth: 0
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4.19"
+          elixir-version: "1.19.0"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install checksum-pinned Lean 4.35.0
+        run: bash formal/lean/install-toolchain.sh "$RUNNER_TEMP/cross-currency-lean"
+      - name: Install locked Quint 0.33.1 dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix proof_bank/cross_currency_setoff/tooling/quint
+      - name: Prove, replay, compare and reject adversarial mutations
+        run: >-
+          python3 -I proof_bank/cross_currency_setoff/tools/verify.py
+          --expected-head "$SOURCE_HEAD"
+          --lean-bin "$RUNNER_TEMP/cross-currency-lean/bin/lean"
+          --quint-cli "$GITHUB_WORKSPACE/proof_bank/cross_currency_setoff/tooling/quint/node_modules/.bin/quint"
+          --elixir-bin "$(command -v elixir)"
+          --output "$RUNNER_TEMP/cross-currency-proof-evidence"
+      - name: Retain exact-source receipt and complete comparison logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-currency-preview-${{ env.SOURCE_HEAD }}
+          path: ${{ runner.temp }}/cross-currency-proof-evidence
+          if-no-files-found: warn
+          retention-days: 30
