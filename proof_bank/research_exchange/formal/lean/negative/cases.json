@@ -24,6 +24,18 @@
       "mode": "axiom_rejection",
       "target": "ResearchExchange.Negative.unproved",
       "required_pattern": "injected"
+    },
+    {
+      "id": "worker-cannot-authorize-adapter-payment",
+      "file": "negative/WorkerAcceptance.lean",
+      "mode": "compile_rejection",
+      "required_pattern": "proved that the proposition"
+    },
+    {
+      "id": "adapter-payment-cannot-omit-settlement",
+      "file": "negative/UnrecordedPayout.lean",
+      "mode": "compile_rejection",
+      "required_pattern": "proved that the proposition"
     }
   ]
 }
