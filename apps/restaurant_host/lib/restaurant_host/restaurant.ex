@@ -1,7 +1,8 @@
 defmodule RestaurantHost.Restaurant do
   @moduledoc """
   One restaurant as this host serves it: its Log chapter and merchant, its menu
-  (a `CommerceCore.Catalog`), its tax jurisdiction, and the devices it signs for.
+  (a `CommerceCore.Catalog`), its tax jurisdiction, the devices it signs for
+  and, optionally, its flat delivery fee.
 
   A device is a key a governance grant (`RestaurantDeviceGrantedV1`) has bound
   to this merchant: the storefront (granted `checkout`) and each paired kitchen
@@ -23,7 +24,7 @@ defmodule RestaurantHost.Restaurant do
     :storefront,
     :boards
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [delivery: nil]
 
   def current, do: :restaurant_host |> Application.fetch_env!(:restaurant) |> build()
 
@@ -80,7 +81,12 @@ defmodule RestaurantHost.Restaurant do
       catalog: catalog,
       menu: Enum.map(menu, &Map.take(&1, [:id, :name])),
       storefront: device(Map.fetch!(config, :storefront)),
-      boards: Map.new(Map.get(config, :boards, %{}), fn {id, d} -> {id, device(d)} end)
+      boards: Map.new(Map.get(config, :boards, %{}), fn {id, d} -> {id, device(d)} end),
+      delivery:
+        with(
+          %{fee_minor: fee} <- Map.get(config, :delivery),
+          do: %{fee: Money.from_integer(fee, currency)}
+        )
     }
   end
 

@@ -5,6 +5,8 @@ on:
     paths:
       - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
+      - 'apps/fulfillment_core/**'
+      - 'formal/quint/obligations/restaurant_delivery.qnt'
       - 'apps/commerce_core/**'
       - 'apps/coop_substrate/**'
       - 'apps/restaurant_host/**'
@@ -47,14 +49,21 @@ jobs:
           apps/order_core/mix.exs
           apps/order_core/lib/order_core/lifecycle.ex
           apps/order_core/lib/order_core/placement.ex
+          apps/order_core/lib/order_core/transport.ex
           apps/order_core/test/lifecycle_test.exs
+          apps/order_core/test/transport_test.exs
           apps/restaurant_core/mix.exs
           apps/restaurant_core/lib/restaurant_core/kitchen.ex
           apps/restaurant_core/lib/restaurant_core/admission.ex
+          apps/restaurant_core/lib/restaurant_core/coupling.ex
+          apps/restaurant_core/lib/restaurant_core/delivery.ex
           apps/restaurant_core/test/kitchen_safety_test.exs
           apps/restaurant_core/test/admission_test.exs
+          apps/restaurant_core/test/coupling_test.exs
+          apps/restaurant_core/test/delivery_admission_test.exs
           apps/coop_substrate/test/restaurant_admission_test.exs
-      - name: Lifecycle properties, kitchen conformance and admission refinement
+          apps/coop_substrate/test/restaurant_delivery_test.exs
+      - name: Lifecycle and transport properties, kitchen conformance, the I8 relation and admission refinement
         run: |
           (cd apps/order_core && mix test --no-start)
           (cd apps/restaurant_core && mix test --no-start)
@@ -85,9 +94,9 @@ jobs:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
       - run: mix deps.get --check-locked
-      - name: Signed restaurant admission through the Log (race, authority, replay)
+      - name: Signed restaurant admission and delivery handoff through the Log (race, authority, replay)
         working-directory: apps/coop_substrate
-        run: mix test test/restaurant_admission_test.exs test/log_test.exs test/governance_authorization_test.exs --warnings-as-errors
+        run: mix test test/restaurant_admission_test.exs test/restaurant_delivery_test.exs test/log_test.exs test/governance_authorization_test.exs --warnings-as-errors
 
   host:
     runs-on: ubuntu-24.04

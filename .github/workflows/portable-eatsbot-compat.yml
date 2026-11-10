@@ -45,7 +45,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/portable-eatsbot"
           cp -R "apps/${{ matrix.app }}" "$RUNNER_TEMP/portable-eatsbot/"
           # In-umbrella sibling dependencies resolve as ../<app> outside it too.
-          for sibling in order_core restaurant_core; do
+          for sibling in order_core restaurant_core fulfillment_core; do
             [ -d "$RUNNER_TEMP/portable-eatsbot/$sibling" ] || cp -R "apps/$sibling" "$RUNNER_TEMP/portable-eatsbot/"
           done
           # CommerceCore's merchant pilot tests read the pilot tool's shared
@@ -57,6 +57,8 @@ jobs:
           fi
           cd "$RUNNER_TEMP/portable-eatsbot/${{ matrix.app }}"
           mix --version
-          mix deps.get
+          # In-umbrella siblings compile in this project's environment, so their
+          # test-only dependencies (fulfillment_core's jason) resolve only in :test.
+          MIX_ENV=test mix deps.get
           MIX_ENV=test mix compile --warnings-as-errors
           MIX_ENV=test mix test --no-start

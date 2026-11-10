@@ -306,7 +306,16 @@
         "invariant": "obligation",
         "witness": "obligationWitness",
         "max_steps": 6,
-        "note": "Device-signed restaurant events are admitted only for a key a governance-signed grant bound, with the action among the granted actions."
+        "note": "Restaurant events are admitted only for a key a governance-signed grant bound: a device with the action among its granted actions, or, for a transport step, the merchant's Dispatch transport key; the two registries share no key."
+      },
+      {
+        "quint": "formal/quint/obligations/restaurant_delivery.qnt",
+        "main": "restaurant_delivery",
+        "control": "restaurant_delivery_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 8,
+        "note": "The delivery handoff (I8): every admitted joint step is a Coupling row between coupled (order, handoff view) pairs; order edges into dispatched, completed or failed are Dispatch's, completion and failure carry proof, and every other order edge is the restaurant's. The control admits the cells the pinned reducers accept but admission refuses."
       }
     ],
     "restaurant_host": [

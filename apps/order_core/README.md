@@ -12,6 +12,13 @@ The money-free order core. Pure; no dependencies.
 
   Authorization precedes every observation of state; scope, revision,
   idempotency, required reasons and delivery ownership are the core's.
+* `OrderCore.Transport`: the only entry to the delivery-owned edges
+  (`sₙ → dispatched → completed | failed`), which every order action refuses
+  (`:delivery_owned`). Its trusted context is exactly
+  `%{transport: true, principal, merchant, order_id}`, derived by the host from
+  a transport grant; a device context is refused here, as Lifecycle refuses this
+  one. Commands are `%{id, expected_version, to, reason}`, idempotent under
+  `{:transport, id}`; `failed` needs a reason.
 * `OrderCore.Placement`: one order per cart, channel-scoped idempotency, cart
   ownership and the workflow's fulfillments. The priced snapshot is opaque:
   `CommerceCore.Checkout` prices with Money, and signed-log admission
@@ -22,7 +29,9 @@ every placed order is `financial_status: :unconfirmed`.
 
 `test/lifecycle_test.exs` proves the lifecycle's shape, walk ≡ replay, delivery
 ownership, authorization before observation, stage roles and replay refusal for
-arbitrary stage lists. Placement is exercised through CommerceCore's checkout
+arbitrary stage lists. `test/transport_test.exs` proves Transport takes exactly
+the three delivery-owned edges, the two contexts are disjoint both ways, and
+mixed histories replay as lifecycle histories. Placement is exercised through CommerceCore's checkout
 tests and the restaurant admission tests.
 
 ```sh

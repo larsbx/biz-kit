@@ -843,7 +843,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "3559d1d539ba3b2d4c3fbca0db12d41e57f029ff",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "d6bb1d7855651f168e2cef829fbca3736db3a1aa",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -856,7 +856,8 @@
       "intended_purpose": "Kitchen workflow and pure admission of signed restaurant events",
       "intended_features": [
         "Kitchen workflow",
-        "Signed restaurant event admission"
+        "Signed restaurant event admission",
+        "Delivery handoff admission"
       ],
       "observed_code_paths": [
         "apps/restaurant_core/lib/restaurant_core/admission.ex",
@@ -864,7 +865,7 @@
       ],
       "observed_test_path": "apps/restaurant_core/test/admission_test.exs",
       "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
-      "first_formal_obligation": "A restaurant event is admitted only when signed by a device a governance grant authorized for that action",
+      "first_formal_obligation": "A restaurant event is admitted only when signed by a key a governance grant authorized for it: a restaurant device for that action, or the merchant's Dispatch transport key for a transport step",
       "first_formal_layer": "L2",
       "priority": "P1",
       "review_status": "needs_owner_review",
@@ -874,9 +875,9 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
-        "apps/restaurant_core/lib/restaurant_core/admission.ex": "04a1de89eb31a407177091458fc7cf20e6fa5d74",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex": "e0d952c794fd699917b7316e2179c33b65c2ba73",
         "apps/restaurant_core/lib/restaurant_core/kitchen.ex": "3e6118cdcf95d5486880d21dd5c33b118592482f",
-        "apps/restaurant_core/test/admission_test.exs": "6bb241ecf1d7f37edacce0940d64a8dfdbb33108"
+        "apps/restaurant_core/test/admission_test.exs": "8ace277b4895145f9300c2264a5f80c73af0bbf7"
       }
     },
     {
@@ -908,7 +909,7 @@
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
         "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
-        "apps/restaurant_host/lib/restaurant_host/orders.ex": "6484d887e3df43b993721519797c30313c230f1f",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "bf88d82fa8e83b19d046b59902a531144ca48c0c",
         "apps/restaurant_host/test/device_grants_test.exs": "1d7c4902612759051c5ff7ff2571aad4cbc2ae3e"
       }
     },
@@ -1234,6 +1235,20 @@
       "registered": [],
       "refreshed_paths": [
         "apps/task_host/lib/task_host/web/auth_controller.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "b1bcc390f7ccdf6d2898c5fde907625f93bf5cba",
+      "date": "2026-11-10",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex",
+        "apps/restaurant_core/test/admission_test.exs",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

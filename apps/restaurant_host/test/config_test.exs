@@ -46,6 +46,27 @@ defmodule RestaurantHost.ConfigTest do
     assert Restaurant.pair(r, "board-1", "nope") == :error
   end
 
+  test "an optional delivery section sets one flat fee, and holds nothing else" do
+    {:ok, config} = Config.parse(json(%{"delivery" => %{"fee_minor" => 399}}), env())
+    assert config.delivery == %{fee_minor: 399}
+    assert Restaurant.build(config).delivery == %{fee: Money.from_integer(399, :USD)}
+
+    {:ok, config} = Config.parse(json(), env())
+    assert config.delivery == nil and Restaurant.build(config).delivery == nil
+
+    for bad <- [%{"fee_minor" => -1}, %{"fee_minor" => "3.99"}, %{}, "399"],
+        do:
+          assert(
+            Config.parse(json(%{"delivery" => bad}), env()) == {:error, {:invalid, "delivery"}}
+          )
+
+    assert Config.parse(json(%{"delivery" => %{"fee_minor" => 399, "seed" => "x"}}), env()) ==
+             {:error, {:unexpected_field, "delivery", "seed"}}
+
+    assert Config.parse(json(%{"transport" => %{"seed" => "x"}}), env()) ==
+             {:error, {:unexpected_field, "restaurant", "transport"}}
+  end
+
   test "a seed never comes from the file, and every device needs one" do
     assert Config.parse(json(), Map.delete(env(), "RESTAURANT_DEVICE_SEED_BOARD_1")) ==
              {:error, {:missing_seed, "RESTAURANT_DEVICE_SEED_BOARD_1"}}

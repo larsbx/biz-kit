@@ -3,11 +3,17 @@ defmodule RestaurantHost.Orders do
   Orders as the host serves them, cash only: the storefront prices a basket
   (`CommerceCore.Catalog`, `Tax`, `Pricing`), signs `RestaurantOrderPlacedV1`
   with the storefront device and submits it to the Log; a paired board signs
-  `RestaurantOrderStepV1`. The Log admits or refuses (`RestaurantCore.Admission`);
-  the host never decides on its own and keeps no order state.
+  `RestaurantOrderStepV1`, and for a delivery order requests a driver
+  (`RestaurantTransportRequestedV1`) or withdraws the request
+  (`RestaurantTransportCancelRequestedV1`). The Log admits or refuses
+  (`RestaurantCore.Admission`); the host never decides on its own and keeps no
+  order state.
 
-  No financial operation exists here: payment is cash at pickup, and money is
-  Hawala's. The signed snapshot records the amounts in minor units.
+  Only Dispatch signs a transport step (`RestaurantTransportStepV1`) with a key
+  the host never holds; no function here builds one.
+
+  No financial operation exists here: payment is cash at pickup or on delivery,
+  and money is Hawala's. The signed snapshot records the amounts in minor units.
   """
 
   alias CommerceCore.{Catalog, Pricing, Tax}
@@ -24,18 +30,23 @@ defmodule RestaurantHost.Orders do
     end
   end
 
-  @doc "Price a basket, `%{item_id => quantity}`: lines, subtotal, tax and total."
-  def price(%Restaurant{} = r, basket) when is_map(basket) do
+  @doc """
+  Price a basket, `%{item_id => quantity}`: lines, subtotal, tax and total. A
+  delivery basket adds the restaurant's fee as an itemized delivery charge,
+  taxed only where the jurisdiction taxes it.
+  """
+  def price(%Restaurant{} = r, basket, fulfillment \\ :pickup) when is_map(basket) do
     names = Map.new(r.menu, &{&1.id, &1.name})
     zero = Money.zero(r.currency)
 
-    with {:ok, lines} <- lines(r, basket, names),
+    with {:ok, fee} <- fee(r, fulfillment, zero),
+         {:ok, lines} <- lines(r, basket, names),
          bases = Enum.map(lines, &Money.mult!(&1.unit_price, &1.quantity)),
-         {:ok, tax} <- Tax.flat(r.currency, r.tax, bases, zero),
+         {:ok, tax} <- Tax.flat(r.currency, r.tax, bases, fee),
          adjustments = %{
            discount_total: zero,
            tax_total: tax.total,
-           delivery_fee: zero,
+           delivery_fee: fee,
            tip: zero
          },
          {:ok, priced} <- Pricing.price(r.currency, lines, adjustments) do
@@ -49,6 +60,16 @@ defmodule RestaurantHost.Orders do
        }}
     end
   end
+
+  defp fee(_r, :pickup, zero), do: {:ok, zero}
+  defp fee(%Restaurant{delivery: %{fee: fee}}, :delivery, _), do: {:ok, fee}
+  defp fee(_r, :delivery, _), do: {:error, :delivery_unavailable}
+
+  @doc "Whether delivery is offered: a delivery section and a Dispatch transport grant on the ledger."
+  def delivery?(%Restaurant{delivery: nil}), do: false
+
+  def delivery?(%Restaurant{} = r),
+    do: Admission.transport?(Log.gate().restaurant, r.chapter, r.merchant)
 
   defp lines(r, basket, names) do
     basket
@@ -74,27 +95,34 @@ defmodule RestaurantHost.Orders do
   end
 
   @doc """
-  Place a pickup order. `key` identifies this checkout attempt: submitting it
-  again returns the same order rather than a second one.
+  Place a pickup order, or, given `%{address, notes}`, a delivery order. `key`
+  identifies this checkout attempt: submitting it again returns the same order
+  rather than a second one.
   """
-  def place(%Restaurant{} = r, basket, pickup_name, key) do
-    with {:ok, priced} <- price(r, basket) do
-      payload = %{
-        "merchant_id" => r.merchant,
-        "order_id" => ULID.generate(),
-        "cart_id" => key,
-        "principal_id" => "guest:" <> key,
-        "channel" => "web",
-        "idempotency_key" => key,
-        "fulfillment" => "pickup",
-        "pickup_name" => pickup_name,
-        "currency" => Atom.to_string(r.currency),
-        "lines" => Enum.map(priced.lines, &signed_line/1),
-        "subtotal_minor" => minor(priced.subtotal),
-        "total_minor" => minor(priced.total),
-        "adjustments" =>
-          Map.new(priced.adjustments, fn {k, v} -> {Atom.to_string(k), minor(v)} end)
-      }
+  def place(%Restaurant{} = r, basket, pickup_name, key, delivery \\ nil) do
+    fulfillment = if delivery, do: :delivery, else: :pickup
+
+    with :ok <- if(delivery && not delivery?(r), do: {:error, :delivery_unavailable}, else: :ok),
+         {:ok, details} <- delivery_details(delivery),
+         {:ok, priced} <- price(r, basket, fulfillment) do
+      payload =
+        %{
+          "merchant_id" => r.merchant,
+          "order_id" => ULID.generate(),
+          "cart_id" => key,
+          "principal_id" => "guest:" <> key,
+          "channel" => "web",
+          "idempotency_key" => key,
+          "fulfillment" => Atom.to_string(fulfillment),
+          "pickup_name" => pickup_name,
+          "currency" => Atom.to_string(r.currency),
+          "lines" => Enum.map(priced.lines, &signed_line/1),
+          "subtotal_minor" => minor(priced.subtotal),
+          "total_minor" => minor(priced.total),
+          "adjustments" =>
+            Map.new(priced.adjustments, fn {k, v} -> {Atom.to_string(k), minor(v)} end)
+        }
+        |> then(&if(details, do: Map.put(&1, "delivery", details), else: &1))
 
       case submit(r, r.storefront, "RestaurantOrderPlacedV1", payload) do
         :ok -> {:ok, payload["order_id"]}
@@ -119,6 +147,50 @@ defmodule RestaurantHost.Orders do
 
       submit(r, board, "RestaurantOrderStepV1", payload)
     end
+  end
+
+  @doc "Request a driver for a ready delivery order from a paired board, at the order's version."
+  def request_transport(%Restaurant{} = r, board_id, order_id, version) do
+    with {:ok, board} <- Map.fetch(r.boards, board_id) |> or_forbidden() do
+      submit(r, board, "RestaurantTransportRequestedV1", %{
+        "merchant_id" => r.merchant,
+        "order_id" => order_id,
+        "request_id" => ULID.generate(),
+        "expected_version" => version
+      })
+    end
+  end
+
+  @doc """
+  Cancel from a paired board. While a driver request is live, withdraw it
+  first: before Dispatch accepts, the order then cancels at once (`:ok`);
+  after, the withdrawal waits for Dispatch (`{:ok, :pending}`). Once Dispatch
+  confirms it or reports a failure before pickup, the board's Cancel finishes
+  the cancellation. Anything else is the ledger's answer to the cancel step.
+  """
+  def cancel(%Restaurant{} = r, board_id, order_id, reason) do
+    with {:ok, board} <- Map.fetch(r.boards, board_id) |> or_forbidden(),
+         %{} = order <- get(r, order_id) || {:error, :forbidden},
+         :ok <- withdraw(r, board, order, reason),
+         %{} = order <- get(r, order_id) do
+      if match?(%{view: :cancel_pending}, order.handoff),
+        do: {:ok, :pending},
+        else: step(r, board_id, order_id, :cancel, order.version, reason)
+    end
+  end
+
+  defp withdraw(r, board, %{handoff_actions: actions, handoff: handoff} = order, reason) do
+    if :withdraw_transport in actions,
+      do:
+        submit(r, board, "RestaurantTransportCancelRequestedV1", %{
+          "merchant_id" => r.merchant,
+          "order_id" => order.id,
+          "request_id" => handoff.request_id,
+          "command_id" => ULID.generate(),
+          "expected_version" => handoff.version,
+          "reason" => reason
+        }),
+      else: :ok
   end
 
   defp or_forbidden({:ok, board}), do: {:ok, board}
@@ -151,6 +223,23 @@ defmodule RestaurantHost.Orders do
       {:error, {:reject, 0, reason}} -> {:error, reason}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  # The guest's address (trimmed, 1..200 characters) and optional notes (≤ 200).
+  defp delivery_details(nil), do: {:ok, nil}
+
+  defp delivery_details(%{} = d) do
+    address = String.trim(Map.get(d, :address) || "")
+    notes = String.trim(Map.get(d, :notes) || "")
+
+    if address != "" and String.length(address) <= 200 and String.length(notes) <= 200,
+      do:
+        {:ok,
+         if(notes == "",
+           do: %{"address" => address},
+           else: %{"address" => address, "notes" => notes}
+         )},
+      else: {:error, :invalid_address}
   end
 
   defp signed_line(l),
