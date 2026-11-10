@@ -163,7 +163,10 @@ defmodule TaskHost.Web.NativeSignInTest do
     headers = [{"authorization", "Bearer " <> session}]
     assert call(:get, "/auth/me", headers).status == 200
     principal = ctx.person
-    authenticated_at = inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:millisecond)
+
+    authenticated_at =
+      inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:millisecond)
+
     assert {:ok, %{principal: ^principal, authenticated_at: ^authenticated_at}} =
              BizKit.Identity.session(session)
 
@@ -238,17 +241,17 @@ defmodule TaskHost.Web.NativeSignInTest do
     workos_signs_in("user_A")
     %{"code" => code} = ctx |> browser_round_trip() |> location() |> query()
 
-    # Test config logs at :warning; this module is not async, so raising the
-    # level for this one check affects no other test.
+    # Capture Phoenix router parameter logging as well as the controller message.
     level = Logger.level()
-    Logger.configure(level: :info)
+    Logger.configure(level: :debug)
     on_exit(fn -> Logger.configure(level: level) end)
 
     log =
-      ExUnit.CaptureLog.capture_log([level: :info, format: "$message\n"], fn ->
+      ExUnit.CaptureLog.capture_log([level: :debug, format: "$message\n"], fn ->
         assert token(%{"code" => code, "code_verifier" => ctx.verifier}).status == 400
       end)
 
+    assert log =~ "Parameters:"
     assert log =~ "native token refused: missing_parameters"
     refute log =~ code
     refute log =~ ctx.verifier
