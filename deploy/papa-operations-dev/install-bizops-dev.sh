@@ -4,6 +4,12 @@
 #   install-bizops-dev.sh <orchestration-release.tar.gz>
 # Idempotent: keeps the env file, keys, databases and state across upgrades.
 set -euo pipefail
+script_dir=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+helper=$script_dir/approve.sh
+if [ ! -f "$helper" ] || [ ! -r "$helper" ]; then
+  printf 'Missing or unreadable approval helper: %s\nUpload approve.sh beside the installer.\n' "$helper" >&2
+  exit 1
+fi
 tarball=$(readlink -f "$1")
 base=$HOME/ops/bizops-dev
 PGBIN=$HOME/data/pglocal19/bin
@@ -12,6 +18,7 @@ psql() { "$PGBIN/psql" -h /tmp -p 5432 -U postgres -v ON_ERROR_STOP=1 -At "$@"; 
 
 install -d -m700 "$base" "$base/keys" "$base/state"
 umask 077
+install -m 0700 -- "$helper" "$base/approve.sh"
 
 # --- databases: one role, three databases, nothing shared with the cluster's
 # other tenants (spruce_goose_dev there belongs to the accountabot dashboard).
