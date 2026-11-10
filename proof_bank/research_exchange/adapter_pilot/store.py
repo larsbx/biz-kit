@@ -19,9 +19,9 @@ from typing import Callable
 
 from reference import codec
 from reference.kernel import (Accept, Lease, RewardConfig, RewardPhase, Submit,
-                              Tick, initial_reward, reward_step)
+                              Tick, initial_reward, reject_reward, reward_step)
 
-from .checker import CheckedExport
+from .checker import CheckedExport, RejectedExport, matches_export
 from .common import (MAX_ARTIFACT, MAX_INTEGER, MAX_TTL_MS, PilotError, bounded,
                      canonical, digest, exact_fields, identifier, profile_binding,
                      token_digest, validate_profile)
@@ -101,6 +101,31 @@ CREATE TABLE IF NOT EXISTS settlements (
     version INTEGER NOT NULL,
     receipt_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS refunds (
+    slot_id TEXT PRIMARY KEY REFERENCES slots(slot_id),
+    refund_id TEXT NOT NULL UNIQUE,
+    candidate_sha256 TEXT NOT NULL,
+    profile_sha256 TEXT NOT NULL,
+    amount INTEGER NOT NULL CHECK(amount > 0),
+    before_version INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    receipt_json TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS exclusive_refund
+BEFORE INSERT ON refunds WHEN EXISTS (SELECT 1 FROM settlements WHERE slot_id=NEW.slot_id)
+BEGIN SELECT RAISE(ABORT, 'slot already settled'); END;
+CREATE TRIGGER IF NOT EXISTS exclusive_settlement
+BEFORE INSERT ON settlements WHEN EXISTS (SELECT 1 FROM refunds WHERE slot_id=NEW.slot_id)
+BEGIN SELECT RAISE(ABORT, 'slot already refunded'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_refund
+BEFORE UPDATE ON refunds
+BEGIN SELECT RAISE(ABORT, 'immutable refund'); END;
+CREATE TRIGGER IF NOT EXISTS permanent_refund
+BEFORE DELETE ON refunds
+BEGIN SELECT RAISE(ABORT, 'immutable refund'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_closed_slot
+BEFORE UPDATE ON slots WHEN json_extract(OLD.state_json, '$.phase') IN ('accepted', 'rejected')
+BEGIN SELECT RAISE(ABORT, 'immutable terminal slot'); END;
 CREATE TRIGGER IF NOT EXISTS immutable_slot_config
 BEFORE UPDATE OF config_json, config_sha256, profile_json, profile_sha256 ON slots
 BEGIN SELECT RAISE(ABORT, 'immutable slot configuration'); END;
@@ -153,7 +178,7 @@ class Store:
             conn.executescript(SCHEMA)
         self.path.chmod(0o600)
 
-    def provision_slot(self, slot_id: str, profile: dict, reward: int = 5,
+    def provision_slot(self, slot_id: str, profile: dict, *, reward: int,
                        worker_a: int = 10, worker_b: int = 20, funder: int = 7,
                        verifier_principal: int = 30) -> None:
         identifier(slot_id)
@@ -266,9 +291,23 @@ class Store:
     def _view(conn, row) -> dict:
         settlement = conn.execute("SELECT receipt_json FROM settlements WHERE slot_id=?",
                                   (row["slot_id"],)).fetchone()
-        return {"slot_id": row["slot_id"], "version": row["version"],
-                "state": json.loads(row["state_json"]),
+        state = json.loads(row["state_json"])
+        view = {"slot_id": row["slot_id"], "version": row["version"], "state": state,
                 "settlement": json.loads(settlement[0]) if settlement else None}
+        if state["phase"] == RewardPhase.REJECTED:
+            refund = conn.execute("SELECT receipt_json FROM refunds WHERE slot_id=?",
+                                  (row["slot_id"],)).fetchone()
+            if refund is None or settlement is not None:
+                raise PilotError(503, "kernel_invariant_failed")
+            view["refund"] = json.loads(refund[0])
+        return view
+
+    def _terminal_reply(self, conn, row, state):
+        if state.phase == RewardPhase.ACCEPTED:
+            return Reply(200, self._view(conn, row))
+        if state.phase == RewardPhase.REJECTED:
+            return Reply(422, {"error": "proof_refused", **self._view(conn, row)})
+        return None
 
     def status(self, token: str, slot_id: str) -> Reply:
         identifier(slot_id)
@@ -305,6 +344,9 @@ class Store:
                 return existing
             cfg = codec.reward_config(json.loads(row["config_json"])["reward"])
             old = codec.reward_state(json.loads(row["state_json"]))
+            if old.phase == RewardPhase.REJECTED:
+                return self._save_reply(conn, auth["principal"], request_id, hashed, slot_id,
+                                        operation, Reply(409, {"error": "transition_refused"}))
             now = max(old.now, bounded(self.clock_ms()))
             state = reward_step(cfg, old, Tick(now - old.now))
             if operation == "lease":
@@ -349,9 +391,10 @@ class Store:
             if existing is not None:
                 return existing
             state = codec.reward_state(json.loads(row["state_json"]))
-            if state.phase == RewardPhase.ACCEPTED:
+            terminal = self._terminal_reply(conn, row, state)
+            if terminal is not None:
                 return self._save_reply(conn, auth["principal"], request_id, request_hash, slot_id,
-                                        "verify", Reply(200, self._view(conn, row)))
+                                        "verify", terminal)
             if state.phase != RewardPhase.SUBMITTED or state.candidate is None:
                 return self._save_reply(conn, auth["principal"], request_id, request_hash, slot_id,
                                         "verify", Reply(409, {"error": "transition_refused"}))
@@ -387,8 +430,12 @@ class Store:
                 or canonical(codec.encode(state.candidate)).decode() != prepared.candidate_json
                 or row["artifact"] != prepared.artifact):
             raise PilotError(409, "stale_verification")
-        if state.phase == RewardPhase.ACCEPTED:
-            return row, Reply(200, self._view(conn, row))
+        terminal = self._terminal_reply(conn, row, state)
+        if terminal is not None:
+            # A new request racing closure observes the winner and gets its own
+            # permanent binding without creating another financial effect.
+            return row, self._save_reply(conn, prepared.principal, prepared.request_id,
+                                         prepared.request_sha256, prepared.slot_id, "verify", terminal)
         if row["version"] != prepared.version or state.phase != RewardPhase.SUBMITTED:
             raise PilotError(409, "stale_verification")
         return row, None
@@ -397,67 +444,70 @@ class Store:
         with self.transaction() as conn:
             _row, existing = self._current_prepared(conn, prepared)
             if existing is not None:
-                saved = conn.execute("SELECT 1 FROM requests WHERE principal=? AND request_id=?",
-                                     (prepared.principal, prepared.request_id)).fetchone()
-                if saved is None:
-                    self._save_reply(conn, prepared.principal, prepared.request_id,
-                                     prepared.request_sha256, prepared.slot_id, "verify", existing)
                 return existing
             return self._save_reply(conn, prepared.principal, prepared.request_id,
                                     prepared.request_sha256, prepared.slot_id, "verify",
                                     Reply(error.status, {"error": error.code}))
 
-    def commit_verification(self, prepared: PreparedVerification, checked: CheckedExport,
+    def commit_verification(self, prepared: PreparedVerification, decision: CheckedExport | RejectedExport,
                             *, before_commit: Callable[[], None] | None = None,
                             after_commit: Callable[[], None] | None = None) -> Reply:
-        if (not isinstance(checked, CheckedExport)
-                or checked.profile_sha256 != prepared.profile_sha256
-                or checked.artifact_sha256 != prepared.artifact_sha256):
+        if (not isinstance(decision, (CheckedExport, RejectedExport))
+                or decision.profile_sha256 != prepared.profile_sha256
+                or decision.artifact_sha256 != prepared.artifact_sha256):
             raise PilotError(422, "proof_refused")
         with self.transaction() as conn:
             row, existing = self._current_prepared(conn, prepared)
             if existing is not None:
-                # A competing commit may have returned this exact operation,
-                # or completed the same frozen candidate under another ID.
-                saved = conn.execute("SELECT 1 FROM requests WHERE principal=? AND request_id=?",
-                                     (prepared.principal, prepared.request_id)).fetchone()
-                if saved is None:
-                    self._save_reply(conn, prepared.principal, prepared.request_id,
-                                     prepared.request_sha256, prepared.slot_id, "verify", existing)
                 return existing
             cfg = codec.reward_config(json.loads(row["config_json"])["reward"])
             state = codec.reward_state(json.loads(row["state_json"]))
             candidate = codec.candidate(json.loads(prepared.candidate_json))
-            accepted = reward_step(cfg, state, Accept(True, candidate))
-            if accepted.phase != RewardPhase.ACCEPTED or accepted is state:
+            rejecting = isinstance(decision, RejectedExport)
+            if rejecting == matches_export(prepared.profile, prepared.artifact):
+                raise PilotError(503, "decision_evidence_mismatch")
+            if rejecting:
+                next_state = reject_reward(cfg, state, candidate)
+            else:
+                next_state = reward_step(cfg, state, Accept(True, candidate))
+            if next_state is state:
                 raise PilotError(409, "transition_refused")
-            if accepted.total != state.total or accepted.payouts != 1:
+            if next_state.total != state.total or next_state.payouts != (0 if rejecting else 1):
                 raise PilotError(503, "kernel_invariant_failed")
+
             version = bounded(row["version"] + 1)
-            settlement_id = digest(canonical({"domain": "research-exchange/local-settlement/v1",
-                                             "slot": prepared.slot_id,
-                                             "candidate": prepared.candidate_sha256,
-                                             "profile": prepared.profile_sha256}))
+            kind = "refund" if rejecting else "settlement"
+            domain = f"research-exchange/local-{kind}/v1"
+            effect_id = digest(canonical({"domain": domain, "slot": prepared.slot_id,
+                                          "candidate": prepared.candidate_sha256,
+                                          "profile": prepared.profile_sha256}))
             receipt = {
-                "schema": "research-exchange/local-settlement/v1", "settlement_id": settlement_id,
+                "schema": domain, f"{kind}_id": effect_id,
                 "slot_id": prepared.slot_id, "candidate_sha256": prepared.candidate_sha256,
                 "profile_sha256": prepared.profile_sha256, "artifact_sha256": prepared.artifact_sha256,
-                "worker": candidate.worker, "amount": cfg.reward,
-                "before_version": row["version"], "version": version,
+                "amount": cfg.reward, "before_version": row["version"], "version": version,
                 "verifier_principal": prepared.principal,
-                "credential_epoch": prepared.credential_epoch,
-                "verification": checked.receipt, "scope": "local-fixture-credits-only",
+                "credential_epoch": prepared.credential_epoch, "scope": "local-fixture-credits-only",
             }
             changed = conn.execute("UPDATE slots SET state_json=?,version=? WHERE slot_id=? AND version=?",
-                                   (canonical(codec.encode(accepted)).decode(), version,
+                                   (canonical(codec.encode(next_state)).decode(), version,
                                     prepared.slot_id, prepared.version))
             if changed.rowcount != 1:
                 raise PilotError(409, "stale_verification")
-            conn.execute("INSERT INTO settlements VALUES(?,?,?,?,?,?,?,?,?)",
-                         (prepared.slot_id, settlement_id, prepared.candidate_sha256,
-                          prepared.profile_sha256, candidate.worker, cfg.reward,
-                          row["version"], version, canonical(receipt).decode()))
-            reply = Reply(200, self._view(conn, self._slot(conn, prepared.slot_id)))
+            common = (prepared.slot_id, effect_id, prepared.candidate_sha256, prepared.profile_sha256)
+            if rejecting:
+                receipt["reason"] = "exact_export_mismatch"
+                receipt["approved_artifact_sha256"] = prepared.profile["artifact_sha256"]
+                receipt["destination"] = "original_slot_funder"
+                conn.execute("INSERT INTO refunds VALUES(?,?,?,?,?,?,?,?)",
+                             (*common, cfg.reward, row["version"], version, canonical(receipt).decode()))
+            else:
+                receipt["worker"] = candidate.worker
+                receipt["verification"] = decision.receipt
+                conn.execute("INSERT INTO settlements VALUES(?,?,?,?,?,?,?,?,?)",
+                             (*common, candidate.worker, cfg.reward, row["version"], version,
+                              canonical(receipt).decode()))
+            reply = self._terminal_reply(conn, self._slot(conn, prepared.slot_id), next_state)
             self._save_reply(conn, prepared.principal, prepared.request_id,
                              prepared.request_sha256, prepared.slot_id, "verify", reply)
             if before_commit is not None:
@@ -474,6 +524,8 @@ class Store:
             view = self._view(conn, row)
             view["settlements"] = [dict(r) for r in conn.execute(
                 "SELECT * FROM settlements WHERE slot_id=?", (slot_id,))]
+            view["refunds"] = [dict(r) for r in conn.execute(
+                "SELECT * FROM refunds WHERE slot_id=?", (slot_id,))]
             view["requests"] = [dict(r) for r in conn.execute(
                 "SELECT * FROM requests WHERE slot_id=? ORDER BY principal,request_id", (slot_id,))]
             view["sqlite"] = {"version": sqlite3.sqlite_version,

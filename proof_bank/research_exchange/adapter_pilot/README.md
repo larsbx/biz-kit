@@ -7,7 +7,7 @@ financial adapter, or a production authentication/settlement deployment.
 
 The existing `reference/` remains pure. This adapter calls its actual reward
 transition after authenticated admission and controlled proof checking, then
-persists the resulting state, settlement event and request receipt in one
+persists the resulting state, payout or refund effect and request receipt in one
 SQLite transaction. The runtime tests are finite implementation evidence;
 they are not a formal refinement proof of Python, SQLite, HTTP or cryptography.
 
@@ -28,7 +28,8 @@ checker/library hashes and axiom policy. It accepts only that exact export.
 
 The runtime does **not** compile contributor Lean, load contributor imports,
 evaluate tactics, take executable paths from HTTP, or trust a client-supplied
-verdict. A wrong digest is rejected before starting either checker. An exact
+verdict. A mismatch against the immutable approved export is a definitive
+rejection after profile and tool identity checks. An exact
 approved export must then pass both actual checkers with zero exit status and
 their required completion markers. This narrow whitelist is not arbitrary
 research validation or a sandbox for untrusted Lean elaboration.
@@ -125,7 +126,9 @@ from copied bytes; admission time and original lease deadline come from the
 server clock.
 
 Successful operations return `{slot_id, version, state, settlement}`.
-Failures return `{error}` with a stable code and non-2xx status. Each completed
+A terminal rejection returns HTTP 422 with `error: proof_refused`, terminal
+state and a stable `refund` receipt. Status reads include that receipt. Other
+failures return `{error}`. Each completed
 well-formed operation is permanently bound to its canonical request, operation
 and slot under the authenticated principal's request ID. Identical retry
 returns the saved response. Changed content under the same ID is a conflict.
@@ -138,19 +141,29 @@ idempotency identity.
 
 Verification snapshots the immutable candidate, artifact/profile/config
 identities, row version, credential identity and epoch inside a short database
-transaction. Both proof replays run outside that transaction. Commit takes
+transaction. Exact-export checking and any proof replays run outside it. Commit takes
 `BEGIN IMMEDIATE` and checks current credential role, scope, enablement, exact
 verifier principal, epoch, candidate, profile/config and row version again.
 
 Only successful controlled checking permits the internal call to
 `reward_step(config, state, Accept(True, exact_candidate))`. The new state, one
 unique settlement event and stored response/request binding commit together.
-No response is sent before commit. An authorized retry can return an already
-committed identical candidate outcome; it cannot create another payout.
+A definitive mismatch takes the rejection transition, returns the full escrow
+to the original slot funder, and atomically records the refund, rejected state
+and request binding. An authorized retry returns the durable winner without a
+second effect. Historical responses keep their original request identities.
+Timeout, tool unavailability and inconclusive replay return HTTP 503 and keep
+the slot submitted with its escrow. Use a new request ID for a fresh check.
+
+Provisioning requires an explicit reward amount. A replacement needs a new
+slot ID, a new explicit fixture escrow and separately scoped credentials. The
+rejected candidate, bytes and request history remain attached to the old slot.
+`initialize()` adds the refund schema to an existing pilot database. The
+reviewed PR #335 source profile remains eligible for existing immutable slots.
 
 SQLite uses WAL, `synchronous=FULL`, foreign keys, independent connections and
 bounded busy handling. `store.inspect(slot_id)` is a trusted offline inspection
-API returning state/version, settlement/request rows and the actual SQLite
+API returning state/version, payout/refund/request rows and the actual SQLite
 durability settings. It never returns credentials or token hashes. This
 single-host profile does not establish PostgreSQL conformance, replication,
 backup recovery, hardware power-loss guarantees or exactly-once external
@@ -165,15 +178,15 @@ For process crash acceptance, trusted startup configuration can select:
 
 These call `os._exit` inside the service process before the transaction commit
 or immediately after commit and before the response, respectively. They are
-not HTTP fields or headers. A pre-commit crash must leave neither payout nor
-settlement/request receipt. A post-commit lost response must leave all three;
-restart/retry returns the original durable response.
+not HTTP fields or headers. A pre-commit crash rolls back the state, ledger effect and request receipt.
+A post-commit crash leaves all three; restart/retry returns the original
+durable response.
 
 Trusted race tests may use `--pause-after-verification PATHBASE
---pause-request-id REQUEST_ID`. After actual checker success, the service
+--pause-request-id REQUEST_ID`. After a definitive verification decision, the service
 writes `PATHBASE.ready` and waits at most 20 seconds for `PATHBASE.release`.
 Tests can revoke/regrant the credential or advance the row version before
-release and require refusal without settlement. No test hook is selectable
+release and require refusal without a payout or refund. No test hook is selectable
 through the API.
 
 ## Remaining boundaries
@@ -181,8 +194,7 @@ through the API.
 The local operator, database integrity, OS, Python and checker runtimes are
 trusted. Independent replay is independent checking software on this host,
 not an independent machine or signed attestation. Uploaded source compilation,
-real compute execution/metering, multi-slot/global accounting, rejection of
-an invalid admitted candidate, scoped artifact publication, network security,
+real compute execution/metering, multi-slot/global accounting, scoped artifact
+publication, network security,
 production identity/revocation, Biz-kit signed admission and financial
-authority remain separate work. A timely admitted candidate stays frozen;
-this slice adds no reject/reissue transition.
+authority remain separate work.

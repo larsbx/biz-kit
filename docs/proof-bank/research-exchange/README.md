@@ -21,15 +21,15 @@ production remote-agent identity, meter physical compute or issue service credit
 - Twelve concrete Lean examples accompany the proofs. The strict axiom gate
   permits only `propext`, `Classical.choice` and `Quot.sound`. Exported theorem
   dependencies are replayed by both Lean's kernel and `lean4lean`.
-- The Lean adapter wrapper adds 32 properties, making **63 registered properties**.
+- The Lean adapter acceptance and closure wrappers bring the total to **76 registered properties**.
   It invokes the existing `Reward.accept` and models current verifier identity,
   epoch, checked profile/candidate, row version and atomic matching settlement.
   Authenticated identity, checker truth and durable atomic publication remain
-  premises. The required negative-control set grows from four to six intended
+  premises. The required negative-control set grows from four to seven intended
   refusals. These counts require exact-revision audit and replay before acceptance.
 - The original Quint models retain two finite spaces, seven scenarios and four
-  faulty-transition controls. The adapter model adds ten scenarios and nine
-  targeted mutants; its current bounded graph has 293,584 reachable states.
+  faulty-transition controls. The adapter model adds 17 scenarios and 12
+  targeted mutants; its current bounded graph has 676,952 reachable states.
   Acceptance requires complete exploration and genuine named-invariant
   counterexamples for the mutants. There is no fairness or liveness claim.
 - The pure Python reference still compares actual compiled Lean transitions
@@ -46,8 +46,9 @@ public API. The pilot implements local credential separation, current enablement
 and epoch fencing, permanent request binding and a transactional fixture-credit
 operation. Initial reward funding, accounting across slots, global budgets,
 arbitrary artifacts, production identity/financial integration and distributed
-recovery remain separate obligations. A failed admitted artifact remains stuck
-in `submitted`: there is no reject/reissue transition.
+recovery remain separate obligations. A definitive exact-export mismatch closes the slot and refunds its original
+escrow once. Unavailable and inconclusive checking leave the slot submitted.
+A replacement requires a fresh explicitly funded slot.
 
 ## What the local pilot adds
 
@@ -67,17 +68,16 @@ replay runs different checker software on the same trusted local host.
 
 The database transaction rechecks active credential role/scope, exact verifier
 principal and epoch, frozen candidate/config/profile and row version after
-checking. It persists reward state, one unique settlement and the canonical
+checking. It persists reward state, one unique payout or refund and the canonical
 request response together before replying. Effective credential changes advance
 the epoch; a revoke/regrant cycle cannot revive a prepared result. SQLite uses
 WAL, `synchronous=FULL`, foreign keys and `BEGIN IMMEDIATE`.
 
-The adapter suite implements 18 mandatory checks covering real HTTP, credential substitution,
+The adapter suite implements 27 mandatory checks covering real HTTP, credential substitution,
 revocation/rotation, stale versions, changed-content request IDs, wrong-target
 proofs, concurrent commits, and actual service-process death before/after commit.
-Before commit, neither payout nor settlement/request receipt may survive; after
-commit but before response, all must survive and retry must return the original
-result. The runner rejects missing or skipped tests. These are required gates;
+Before commit, the terminal state, effect and request receipt all roll back.
+After commit, they survive and retry returns the original result. The runner rejects missing or skipped tests. These are required gates;
 the complete receipt for an exact revision establishes its observed results.
 
 ## Repository acceptance

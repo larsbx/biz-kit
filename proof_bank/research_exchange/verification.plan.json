@@ -6,7 +6,7 @@
     "lean": "the actual pure transition functions and guarded adapter commit wrapper, arbitrary natural parameters and finite traces",
     "quint": "explicit finite domains in each model, safety only",
     "python": "finite implementation tests and differential execution, not formal refinement",
-    "adapter": "loopback HTTP and SQLite pilot with live credential checks, exact approved proof-export profiles and atomic fixture-credit settlement; no production deployment or external financial settlement",
+    "adapter": "loopback HTTP and SQLite pilot with live credential checks, exact approved proof-export profiles and atomic fixture-credit payout or refund; no production deployment or external financial settlement",
     "adapter_model": "two prepared operations, bounded grant/row-version interference, process crashes and lost-response retry; atomic durable commits are modeled, not a SQL implementation-refinement theorem",
     "receipt": "unsigned trusted-local execution record, not public verifier authority"
   },
@@ -212,7 +212,7 @@
         "{java}"
       ],
       "required_patterns": [
-        "^QUINT_ADAPTER_CHECKS_PASSED 1 exhaustive model; 10 scenarios; 9 targeted mutants$"
+        "^QUINT_ADAPTER_CHECKS_PASSED 1 exhaustive model; 17 scenarios; 12 targeted mutants$"
       ],
       "expected_exit_codes": [0],
       "timeout_seconds": 900
@@ -227,7 +227,7 @@
         "{output}/adapter_acceptance"
       ],
       "required_patterns": [
-        "^ADAPTER_ACCEPTANCE_PASSED [1-9][0-9]* tests; 0 skipped$"
+        "^ADAPTER_ACCEPTANCE_PASSED 27 tests; 0 skipped$"
       ],
       "expected_exit_codes": [0],
       "timeout_seconds": 600
