@@ -38,6 +38,17 @@ defmodule TaskHost.Web.AuthTest do
       assert conn.resp_cookies["bizkit_login_state"][:http_only]
     end
 
+    test "advertises the public TaskHost callback when sign-in is behind a proxy" do
+      Application.put_env(:task_host, :public_url, "https://auth.example.test:8443")
+      on_exit(fn -> Application.delete_env(:task_host, :public_url) end)
+
+      conn = call(:get, "/auth/workos/login", [])
+      assert conn.status == 302
+      [location] = Plug.Conn.get_resp_header(conn, "location")
+      query = location |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+      assert query["redirect_uri"] == "https://auth.example.test:8443/auth/workos/callback"
+    end
+
     test "issues an HttpOnly session for a bound identity" do
       workos_signs_in("user_A")
       conn = sign_in("workos", "code")

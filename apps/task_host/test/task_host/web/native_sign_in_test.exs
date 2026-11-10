@@ -145,6 +145,34 @@ defmodule TaskHost.Web.NativeSignInTest do
     assert TaskHost.Repo.query!("SELECT count(*) FROM identity_native_sessions").rows == [[0]]
   end
 
+  test "restores a SpruceGoose-format native session without a new sign-in", ctx do
+    session = "nat_" <> Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+    hash = :crypto.hash(:sha256, session)
+    inserted_at = ~N[2026-10-21 12:00:00.123456]
+
+    # Model a row already on disk when TaskHost takes over the legacy database.
+    # Bypass the new writer and its cache so only the existing row can authenticate.
+    TaskHost.Repo.query!(
+      """
+      INSERT INTO identity_native_sessions (token_hash, principal, issuer, subject, inserted_at)
+      VALUES ($1, $2, $3, $4, $5)
+      """,
+      [hash, ctx.person, workos_iss(), "user_A", inserted_at]
+    )
+
+    headers = [{"authorization", "Bearer " <> session}]
+    assert call(:get, "/auth/me", headers).status == 200
+    principal = ctx.person
+    authenticated_at = inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:millisecond)
+    assert {:ok, %{principal: ^principal, authenticated_at: ^authenticated_at}} =
+             BizKit.Identity.session(session)
+
+    assert call(:post, "/auth/logout", headers).status == 204
+    restart_sessions()
+    assert call(:get, "/auth/me", headers).status == 401
+    assert TaskHost.Repo.query!("SELECT count(*) FROM identity_native_sessions").rows == [[0]]
+  end
+
   # What a restart does to the sessions held in memory.
   defp restart_sessions do
     name = BizKit.Cluster.Singleton.name(BizKit.Identity.Sessions)
