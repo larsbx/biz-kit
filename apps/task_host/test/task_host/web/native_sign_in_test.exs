@@ -16,7 +16,7 @@ defmodule TaskHost.Web.NativeSignInTest do
 
   import TaskHost.{IdentityFixtures, LedgerFixtures}
 
-  alias BizKit.Identity.Principal
+  alias BizKit.Identity.{Principal, Sessions}
 
   require Logger
 
@@ -145,22 +145,42 @@ defmodule TaskHost.Web.NativeSignInTest do
     assert TaskHost.Repo.query!("SELECT count(*) FROM identity_native_sessions").rows == [[0]]
   end
 
-  # What a restart does to the sessions held in memory.
-  defp restart_sessions do
-    name = BizKit.Cluster.Singleton.name(BizKit.Identity.Sessions)
-    pid = GenServer.whereis(name)
-    ref = Process.monitor(pid)
-    Process.exit(pid, :kill)
-    assert_receive {:DOWN, ^ref, :process, _pid, _reason}
-    wait_until(fn -> GenServer.whereis(name) not in [nil, pid] end)
+  test "restores a SpruceGoose-format native session without a new sign-in", ctx do
+    session = "nat_" <> Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+    hash = :crypto.hash(:sha256, session)
+    inserted_at = ~N[2026-10-21 12:00:00.123456]
+
+    # Model a row already on disk when TaskHost takes over the legacy database.
+    # Bypass the new writer and its cache so only the existing row can authenticate.
+    TaskHost.Repo.query!(
+      """
+      INSERT INTO identity_native_sessions (token_hash, principal, issuer, subject, inserted_at)
+      VALUES ($1, $2, $3, $4, $5)
+      """,
+      [hash, ctx.person, workos_iss(), "user_A", inserted_at]
+    )
+
+    headers = [{"authorization", "Bearer " <> session}]
+    assert call(:get, "/auth/me", headers).status == 200
+    principal = ctx.person
+
+    authenticated_at =
+      inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:millisecond)
+
+    assert {:ok, %{principal: ^principal, authenticated_at: ^authenticated_at}} =
+             BizKit.Identity.session(session)
+
+    assert call(:post, "/auth/logout", headers).status == 204
+    restart_sessions()
+    assert call(:get, "/auth/me", headers).status == 401
+    assert TaskHost.Repo.query!("SELECT count(*) FROM identity_native_sessions").rows == [[0]]
   end
 
-  defp wait_until(check, tries \\ 100) do
-    cond do
-      check.() -> :ok
-      tries == 0 -> flunk("the session process did not come back")
-      true -> Process.sleep(10) && wait_until(check, tries - 1)
-    end
+  # Restart the supervised singleton without exhausting the supervisor's
+  # crash budget when several persistence tests run consecutively.
+  defp restart_sessions do
+    :ok = Supervisor.terminate_child(BizKit.Identity.Supervisor, Sessions)
+    {:ok, _} = Supervisor.restart_child(BizKit.Identity.Supervisor, Sessions)
   end
 
   test "a code is refused without the app's verifier, and is spent by the attempt", ctx do
@@ -221,17 +241,17 @@ defmodule TaskHost.Web.NativeSignInTest do
     workos_signs_in("user_A")
     %{"code" => code} = ctx |> browser_round_trip() |> location() |> query()
 
-    # Test config logs at :warning; this module is not async, so raising the
-    # level for this one check affects no other test.
+    # Capture Phoenix router parameter logging as well as the controller message.
     level = Logger.level()
-    Logger.configure(level: :info)
+    Logger.configure(level: :debug)
     on_exit(fn -> Logger.configure(level: level) end)
 
     log =
-      ExUnit.CaptureLog.capture_log([level: :info, format: "$message\n"], fn ->
+      ExUnit.CaptureLog.capture_log([level: :debug, format: "$message\n"], fn ->
         assert token(%{"code" => code, "code_verifier" => ctx.verifier}).status == 400
       end)
 
+    assert log =~ "Parameters:"
     assert log =~ "native token refused: missing_parameters"
     refute log =~ code
     refute log =~ ctx.verifier

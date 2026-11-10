@@ -9,5 +9,6 @@ for app <- ~w(keel coop_substrate dispatch spruce_goose task_host restaurant_hos
   import_config path
 end
 
-# Credentials submitted to sign-in must never enter Phoenix request logs.
-config :phoenix, :filter_parameters, ["password", "token", "authorization"]
+# Keep Dispatch and TaskHost credentials out of Phoenix request logs. Phoenix
+# matches substrings, so "code" also covers "code_verifier".
+config :phoenix, :filter_parameters, ~w(password token authorization secret code state signature)

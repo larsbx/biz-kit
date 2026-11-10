@@ -56,7 +56,7 @@ const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
     await page.locator('#projects .row').filter({ hasText: `${tenant} / project-1` }).filter({ hasText: '4 people' }).waitFor();
     if (await page.getByLabel(`Successor for ${tenant} / project-1`, { exact: true }).inputValue() !== 'alice') throw Error('live update erased the successor');
     await offboard();
-    await page.locator('#status').filter({ hasText: 'Choose exactly one successor' }).waitFor();
+    await page.locator('#status').filter({ hasText: 'Every successor must name an accountable human principal' }).waitFor();
     if (await dialog.isVisible()) throw Error('incomplete selection reached signing');
     await choose('project-2');
     await offboard();
