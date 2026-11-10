@@ -91,8 +91,11 @@ defmodule ProcurementHost.HTTPTest do
     signed = RestaurantDeliveryWork.sign(scope, "", signer.seed)
     response = work(signed)
     assert response.status == 200
-    assert %{"jobs" => [%{"order_id" => "request-1", "site" => "North dock", "phase" => "requested"}]} =
-      :json.decode(response.resp_body)
+    assert %{"jobs" => [%{"order_id" => "request-1", "site" => "North dock", "phase" => "requested"}],
+      "next" => nil} = Jason.decode!(response.resp_body)
+    exhausted = work(RestaurantDeliveryWork.sign(scope, "request-1", signer.seed))
+    assert exhausted.status == 200
+    assert %{"jobs" => [], "next" => nil} = Jason.decode!(exhausted.resp_body)
     assert work(signed).status == 403
     assert work(RestaurantDeliveryWork.sign(%{scope | source: :restaurant}, "", signer.seed)).status == 403
   end

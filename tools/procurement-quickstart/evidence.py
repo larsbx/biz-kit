@@ -16,7 +16,7 @@ CHECKS = frozenset({
     "packaged_identity", "migration", "unauthenticated_denied", "csrf_denied",
     "http_lifecycle", "obsolete_quote_denied", "exact_retry_inert", "restart_replay",
     "revoked_session_denied", "revoked_write_inert", "backup_restore_equal",
-    "restored_revocation_denied",
+    "restored_revocation_denied", "dispatch_handoff",
 })
 TRUST = "unsigned-runner-observation"
 
