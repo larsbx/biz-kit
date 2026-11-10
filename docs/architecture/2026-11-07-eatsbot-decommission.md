@@ -57,7 +57,7 @@ Recorded 2026-11-07 by the owner.
 | Surface (umbrella copy) | Rebuilt at `89d5e8a2` | Requirement | Gate |
 | --- | --- | --- | --- |
 | Guest ordering and checkout | Storefront `/`: catalog menu, `Tax`/`Pricing`, cash at pickup, idempotent checkout key | Card payment only through Hawala; checkout stays financially unconfirmed until then | Slice 4 gate test passes against the deployed host; a card payment is settled by Hawala, never by an order step |
-| Kitchen order lifecycle | Board `/board`: device-signed `RestaurantOrderStepV1`, pairing by secret | Staff sign-in, device grant revocation, cancellation reasons at the board | Revoked device's next event is refused; each retained step admitted by a signed event, with a refusal test |
+| Kitchen order lifecycle | Board `/board`: device-signed `RestaurantOrderStepV1`, pairing by secret | Device revocation done (2026-11-10: `RestaurantDeviceRevokedV1`, `mix restaurant.revoke`; a revoked key is never re-granted). Open: staff sign-in, cancellation reasons at the board | Revoked device's next event is refused (tested over HTTP); each retained step admitted by a signed event, with a refusal test |
 | Menu, catalog, modifiers, availability | Updated 2026-11-09: menu is governance-signed `RestaurantMenuItemPutV1` facts (`RestaurantCore.Menu`, versioned per merchant), read by the storefront as a `CommerceCore.Catalog` on every ledger batch; edited with `mix restaurant.menu` (hold, review, sign); restaurant file has no menu; hidden items leave the storefront | D6 done in code. Gap: menu events carry no modifiers or variants yet, though `CommerceCore.Catalog` has them | Holds on the deployed host (release smoke puts the menu with the release tool) |
 | Discounts and promotions | `CommerceCore.Discounts` (percent off, unit price, buy x pay y, x for an amount; weekday, local-hour and quantity conditions; best single rule) on catalog products; storefront applies them at the restaurant's timezone; admission refuses a snapshot that does not add up (I₂). Rules travel with each menu item on the Log (D6) | D5 done in code | Holds on the deployed host |
 | Deliveries: `/deliveries`, `/map`, `DeliveryAuthPlug` bearer keys, public tracking | Not built (slice 5). Kitchen workflow has `dispatched`, delivery-owned | `DispatchCore` policy, `FulfillmentCore` handoff, `apps/dispatch` as the one transport writer | A delivery order reaches `completed` only on Dispatch-owned proof; no bearer key or GPS proximity counts as proof |
@@ -75,7 +75,7 @@ Recorded 2026-11-07 by the owner.
 | Rebuilt admission | `RestaurantCore.Admission` refines the kitchen reducer; the Log admits orders and steps from granted devices only | Holds on the deployed host |
 | Legacy order and checkout semantics | 48 recorded successes kept, 459 unauthorized requests refused, 207 typed refusals (`order_actions`, pinned to `eatsbot@15a201e`) | Holds |
 | Legacy state carried over | D1: none | The Log holds no legacy order, delivery, account or consent; the archive (§3) is the only copy |
-| Single writer | Legacy is the only production writer | At the switch instant, legacy order writes are refused and the rebuilt host is the one writer; recorded with time and both release versions |
+| Single writer | Legacy is the only production writer. The fence exists in code (main, 2026-11-09): governance appends `LegacyWriterFenced` for `eatsbot`, and `mix coop.fence_writer` installs refusing triggers on the legacy database in one transaction (`CoopSubstrate.WriterFence`) | At the switch instant the fence is installed on production's database and the rebuilt host is the one writer; recorded with time and both release versions |
 | Drain | Not started | Legacy stops taking new orders first; open orders and deliveries finish on legacy; Kafka and job queues empty; late callbacks reconciled; unknown outcomes held, not guessed |
 | Rollback | Not defined | A rollback window with its exit condition; configuration rollback is not a writer fence |
 
@@ -117,7 +117,7 @@ code; their UX may be adapted). Restaurant kitchen stages stay in
 | R2 pure cores | `marketing_core`, `dispatch_core`, `order_core`, `restaurant_core` (incl. menu), `CommerceCore` checkout, tax, pricing and discounts | Modifiers and variants in menu events |
 | R3 host and admission | `restaurant_host` slice 4: signed placement and steps, device grants, `restaurant` release | Every "Not yet" in its README; delivery (slice 5); D4 |
 | R4 parallel proof | Not started | Run the rebuilt host on a real merchant beside legacy, with no dual writes; no state migration (D1) |
-| R5 switch and drain | Not started | §2 |
+| R5 switch and drain | Fence mechanism in code (`CoopSubstrate.WriterFence`); not run against production | §2 |
 | R6 retire | Not started | Definition, point 4 |
 
 ## Open

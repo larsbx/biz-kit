@@ -106,9 +106,9 @@ defmodule RestaurantCore.AdmissionTest do
         grant("bot", "system", @all)
       ])
 
-  test "every registered type is one of the four, each signed by one role" do
+  test "every registered type is one of the five, each signed by one role" do
     assert Map.keys(Admission.event_types()) |> Enum.sort() ==
-             ~w(RestaurantDeviceGrantedV1 RestaurantMenuItemPutV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
+             ~w(RestaurantDeviceGrantedV1 RestaurantDeviceRevokedV1 RestaurantMenuItemPutV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
 
     for {_, spec} <- Admission.event_types(), do: assert([_] = spec.required_roles)
   end
@@ -162,6 +162,40 @@ defmodule RestaurantCore.AdmissionTest do
     # Menus are per merchant: another merchant starts at version 0.
     assert Admission.check(menu_put(@gov, 0, %{"merchant_id" => "cafe"}), g1) == :ok
     assert Admission.menu(g1.restaurant, @ch, "cafe") == %{version: 0, items: %{}}
+  end
+
+  defp revoke(id, merchant \\ "shop"),
+    do: env("RestaurantDeviceRevokedV1", @gov, %{"merchant_id" => merchant, "key_id" => id})
+
+  test "a revoked device acts never again, its key is never re-granted, its orders stay" do
+    g = admin_gate()
+    g = %{g | restaurant: Admission.fold(place(device("pos")), g)}
+
+    assert Admission.check(%{revoke("pos") | signers: [device("kds")]}, g) ==
+             {:error, :restaurant_governance_not_declared}
+
+    assert Admission.check(revoke("nobody"), g) == {:error, :unknown_restaurant_grant}
+    assert Admission.check(revoke("pos", "cafe"), g) == {:error, :unknown_restaurant_grant}
+
+    g = %{g | restaurant: Admission.fold(revoke("pos"), g)}
+
+    assert Admission.check(
+             place(device("pos"), %{
+               "order_id" => "o2",
+               "cart_id" => "c2",
+               "idempotency_key" => "k2"
+             }),
+             g
+           ) ==
+             {:error, :forbidden}
+
+    assert Admission.check(step(device("pos"), "accept", 0), g) == {:error, :forbidden}
+    assert Admission.check(revoke("pos"), g) == {:error, :unknown_restaurant_grant}
+    assert Admission.check(grant("pos", "admin", @all), g) == {:error, :restaurant_key_revoked}
+
+    # The placed order is untouched, and another granted device still acts on it.
+    assert Admission.state(g.restaurant, @ch, "shop", "o1").state == :placed
+    assert Admission.check(step(device("kds"), "accept", 0), g) == :ok
   end
 
   test "a grant needs a declared governance key and a well-formed actor and action list" do

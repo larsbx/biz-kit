@@ -23,6 +23,15 @@ defmodule RestaurantHost.Web.GovernanceApi do
     end
   end
 
+  @doc "`:ok` when the request is signed by any key that governs `chapter` (a signed read)."
+  def authorize(conn, chapter) do
+    with [header] <- get_req_header(conn, "authorization"),
+         {:ok, request, _signature} <-
+           Authorization.parse(header, conn.method, conn.request_path),
+         do: authorize(conn, request.key_id, chapter),
+         else: (_ -> {:error, :forbidden})
+  end
+
   @doc "A hold, as the operator's client reads it."
   def held(conn, held),
     do:

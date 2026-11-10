@@ -166,12 +166,29 @@ reviewed grant and governance signer, then sends only a signature. Submission
 is single-use; expired, replayed, unauthorized or malformed grants cannot
 append. A repeat enrollment is refused as already granted. For refusal,
 check chapter governance, device configuration, key identifiers and clock
-before preparing a new grant. This command does not rotate or revoke keys.
+before preparing a new grant. This command does not rotate keys; to retire a
+device, revoke it (below) and grant its replacement a new key.
 Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 `_`, `.` or `-`, starting with a letter or digit. Device IDs, key IDs, derived
 seed-variable names and device keys must be distinct in one restaurant.
 
 Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
+
+### Revoking a device
+
+A lost or retired device is revoked from the administrator's machine:
+
+```sh
+mix restaurant.revoke k-board --chapter chapter-genesis --merchant shop --server https://order.example
+# or: bin/restaurant eval 'RestaurantHost.ReleaseTasks.revoke(["k-board", "--chapter", ...])'
+```
+
+The command reads the granted devices with a governance-signed request
+(`GET /api/devices`), shows the device the key belongs to, and signs exactly
+its revocation (`RestaurantDeviceRevokedV1`). From then on the ledger refuses
+everything the key signs, and never grants that key again; orders it already
+placed stay. Give the replacement device a new key and seed in the restaurant
+file and environment, restart, and grant it.
 
 ### The menu
 

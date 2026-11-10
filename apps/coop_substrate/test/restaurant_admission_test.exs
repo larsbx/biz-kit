@@ -149,4 +149,36 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
     {:ok, replayed} = Log.replay(Membership)
     assert Admission.menu(replayed.restaurant, @ch, "shop") == live
   end
+
+  test "a revoked device appends nothing more, cannot be re-granted, and replay agrees", ctx do
+    {:ok, _} = Log.append(checkout(ctx.pos, "o1"))
+
+    revoke =
+      signed_event(ctx.gov, "RestaurantDeviceRevokedV1", %{
+        "merchant_id" => "shop",
+        "key_id" => ctx.kds.signer.key_id
+      })
+
+    assert {:ok, _} = Log.append(revoke)
+    assert {:error, _} = Log.append(step(ctx.kds, "accept", 0))
+    assert {:ok, _} = Log.append(step(ctx.pos, "accept", 0))
+
+    regrant =
+      signed_event(ctx.gov, "RestaurantDeviceGrantedV1", %{
+        "merchant_id" => "shop",
+        "device_id" => "device-again",
+        "key_id" => ctx.kds.signer.key_id,
+        "pubkey" => {:bytes, ctx.kds.signer.pubkey},
+        "actor" => "staff",
+        "actions" => ["accept"]
+      })
+
+    assert {:error, _} = Log.append(regrant)
+
+    live = Log.gate().restaurant
+    {:ok, replayed} = Log.replay(Membership)
+
+    assert Map.take(replayed.restaurant, [:grants, :revoked]) ==
+             Map.take(live, [:grants, :revoked])
+  end
 end

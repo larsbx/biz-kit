@@ -26,6 +26,11 @@ defmodule RestaurantHost.Web.Router do
 
     # `mix restaurant.menu`: likewise, only a governance signature on the held
     # item at the reviewed menu version is admitted. The menu itself is public.
+    # `mix restaurant.revoke`: the device list is a governance-signed read.
+    get "/devices", DeviceRevocationController, :index
+    post "/device-revocations/:key", DeviceRevocationController, :prepare
+    post "/device-revocations/:key/:id", DeviceRevocationController, :submit
+
     get "/menu", MenuItemController, :index
     post "/menu-items/:item", MenuItemController, :prepare
     post "/menu-items/:item/:id", MenuItemController, :submit

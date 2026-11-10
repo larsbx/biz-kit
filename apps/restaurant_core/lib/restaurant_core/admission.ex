@@ -14,6 +14,8 @@ defmodule RestaurantCore.Admission do
       snapshot is recorded in integer minor units and checked for shape only.
     * `RestaurantOrderStepV1`, signed by a granted device, runs
       `RestaurantCore.Kitchen.apply/3`.
+    * `RestaurantDeviceRevokedV1`, signed by a declared governance key,
+      removes a device's grant and bars its key from being granted again.
     * `RestaurantMenuItemPutV1`, signed by a declared governance key, adds or
       replaces one menu item at the merchant's expected menu version
       (`RestaurantCore.Menu`).
@@ -28,6 +30,7 @@ defmodule RestaurantCore.Admission do
   alias RestaurantCore.{Kitchen, Menu}
 
   @grant "RestaurantDeviceGrantedV1"
+  @revoke "RestaurantDeviceRevokedV1"
   @placed "RestaurantOrderPlacedV1"
   @step "RestaurantOrderStepV1"
   @menu "RestaurantMenuItemPutV1"
@@ -49,6 +52,11 @@ defmodule RestaurantCore.Admission do
           "pubkey" => :pubkey,
           "actor" => :string,
           "actions" => :any
+        }),
+      @revoke =>
+        spec("governance", "restaurant_devices", ["merchant_id"], %{
+          "merchant_id" => :string,
+          "key_id" => :string
         }),
       @menu =>
         spec("governance", "restaurant_menus", ["merchant_id"], %{
@@ -108,7 +116,7 @@ defmodule RestaurantCore.Admission do
       payload: %{required: required, optional: optional}
     }
 
-  def init, do: %{grants: %{}, merchants: %{}, menus: %{}}
+  def init, do: %{grants: %{}, revoked: MapSet.new(), merchants: %{}, menus: %{}}
 
   @doc "A merchant's menu (`RestaurantCore.Menu`): its version and items by id."
   def menu(state, chapter, merchant),
@@ -176,12 +184,21 @@ defmodule RestaurantCore.Admission do
 
     with :ok <- governance(ch, signer, keys),
          {:ok, grant} <- decode_grant(p),
-         :ok <-
-           if(Map.has_key?(state.grants, id),
-             do: {:error, :restaurant_key_already_granted},
-             else: :ok
-           ) do
+         :ok <- grantable(state, id) do
       {:ok, put_in(state, [:grants, id], grant)}
+    end
+  end
+
+  # Revoking removes the grant, so the key can sign nothing more, and bars it
+  # for good: a replacement device gets a new key. Admitted orders stay.
+  defp admit_one(%{type: @revoke, chapter_id: ch, signers: [signer], payload: p}, keys, state) do
+    id = {ch, p["merchant_id"], p["key_id"]}
+
+    with :ok <- governance(ch, signer, keys),
+         true <- Map.has_key?(state.grants, id) or {:error, :unknown_restaurant_grant} do
+      {:ok,
+       %{state | grants: Map.delete(state.grants, id)}
+       |> Map.put(:revoked, MapSet.put(revoked(state), id))}
     end
   end
 
@@ -260,6 +277,16 @@ defmodule RestaurantCore.Admission do
   end
 
   defp admit_one(_, _, _), do: {:error, :unknown_restaurant_event}
+
+  defp revoked(state), do: Map.get(state, :revoked, MapSet.new())
+
+  defp grantable(state, id) do
+    cond do
+      Map.has_key?(state.grants, id) -> {:error, :restaurant_key_already_granted}
+      MapSet.member?(revoked(state), id) -> {:error, :restaurant_key_revoked}
+      true -> :ok
+    end
+  end
 
   defp governance(ch, signer, keys) do
     if Map.get(keys[{ch, "governance"}] || %{}, signer.key_id) == signer.pubkey,
