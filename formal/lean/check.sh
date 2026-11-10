@@ -19,6 +19,7 @@ lake env leanchecker --fresh --verbose BizKitCommerce
 lake env leanchecker --fresh --verbose BizKitCommercialSetoff
 lake env leanchecker --fresh --verbose BizKitCommercialLineage
 bash check_inventory_fixtures.sh
+bash check_lineage_fixtures.sh
 
 audit_sha=46024e005996495c65ef609368e11ab39c4222e3
 scratch=$(mktemp -d "${RUNNER_TEMP:-/tmp}/bizkit-axiom-audit.XXXXXX")
