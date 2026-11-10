@@ -2,14 +2,14 @@ name: Research exchange bounded MCP adapter
 on:
   pull_request:
     paths:
-      - 'apps/research_exchange/**'
+      - 'proof_bank/research_exchange_mcp/**'
       - 'docs/proof-bank/research-exchange/MCP_ADAPTER_REVIEW.md'
       - 'proof_bank/research_exchange/**'
       - '.github/workflows/research-exchange-adapter.yml'
   push:
     branches: [main]
     paths:
-      - 'apps/research_exchange/**'
+      - 'proof_bank/research_exchange_mcp/**'
       - 'docs/proof-bank/research-exchange/MCP_ADAPTER_REVIEW.md'
       - 'proof_bank/research_exchange/**'
       - '.github/workflows/research-exchange-adapter.yml'
@@ -31,11 +31,11 @@ jobs:
           elixir-version: '1.19.0'
       - name: Formatting and warning-free compilation
         run: |
-          elixir apps/research_exchange/test/format.exs --check
+          elixir proof_bank/research_exchange_mcp/test/format.exs --check
           mkdir -p "$RUNNER_TEMP/research-exchange-beams"
-          elixirc --warnings-as-errors -o "$RUNNER_TEMP/research-exchange-beams" apps/research_exchange/lib/research_exchange/*.ex
+          elixirc --warnings-as-errors -o "$RUNNER_TEMP/research-exchange-beams" proof_bank/research_exchange_mcp/lib/research_exchange/*.ex
       - name: Executable admission and stdio adversarial tests
-        run: elixir apps/research_exchange/test/run.exs
+        run: elixir proof_bank/research_exchange_mcp/test/run.exs
       - name: Verify unchanged reviewed core source
         run: >-
           python3 proof_bank/research_exchange/tools/source_snapshot.py verify

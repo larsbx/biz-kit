@@ -25,7 +25,7 @@ review before issuance. This adapter has no monetary settlement operation.
 | Future persistence port | Expected-version transaction/outbox interface, documented but not implemented or installed |
 | CI proposal | Scoped adapter formatting, compilation, tests and reviewed-core-source check; separate from mathematical acceptance |
 
-Implementation: [`apps/research_exchange`](../../../apps/research_exchange).
+Implementation: [`proof_bank/research_exchange_mcp`](../../../proof_bank/research_exchange_mcp).
 Reproduction and the operator configuration contract are in its README.
 No external dependencies are added. Python remains only in the existing proof
 and CI tooling; the new service adapter and its tests are Elixir.

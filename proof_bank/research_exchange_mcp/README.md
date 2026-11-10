@@ -32,10 +32,10 @@ cannot reuse those keys. This is bounded local provisioning, not Internet OAuth.
 Requires Elixir 1.19.0 and OTP 27.3.4 (`:json` is part of OTP).
 
 ```bash
-elixir apps/research_exchange/test/format.exs --check
+elixir proof_bank/research_exchange_mcp/test/format.exs --check
 mkdir -p /tmp/research-exchange-beams
-elixirc --warnings-as-errors -o /tmp/research-exchange-beams apps/research_exchange/lib/research_exchange/*.ex
-elixir apps/research_exchange/test/run.exs
+elixirc --warnings-as-errors -o /tmp/research-exchange-beams proof_bank/research_exchange_mcp/lib/research_exchange/*.ex
+elixir proof_bank/research_exchange_mcp/test/run.exs
 python3 proof_bank/research_exchange/tools/source_snapshot.py verify \
   --expected-source-sha256 b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564
 ```
@@ -43,7 +43,7 @@ python3 proof_bank/research_exchange/tools/source_snapshot.py verify \
 The tests generate their own local credentials and start an actual local stdio
 subprocess. They never execute submitted Lean/Quint or call an external service.
 For complete mathematical kernel acceptance, follow the separately pinned
-[core verification profile](../../proof_bank/research_exchange/README.md).
+[core verification profile](../research_exchange/README.md).
 
 ## Local transport configuration
 
@@ -64,7 +64,7 @@ positive integer `generation`. Token hashes map to `principal`, `expires`
 configuration; no working credential or deployment configuration is committed.
 
 ```bash
-elixir apps/research_exchange/bin/stdio.exs
+elixir proof_bank/research_exchange_mcp/bin/stdio.exs
 ```
 
 Negotiate `initialize` with protocol `2025-11-25`, send
