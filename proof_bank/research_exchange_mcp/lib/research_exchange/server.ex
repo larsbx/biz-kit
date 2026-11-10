@@ -1,28 +1,34 @@
 defmodule ResearchExchange.Server do
   @moduledoc """
-  Serialized, bounded, in-memory admission adapter. No listener, executor,
+  Serialized, bounded admission adapter with optional SQLite persistence. No listener, executor,
   accounting ledger, award issuance, or call to Reward.accept/Reservation.settle.
   The public call surface cannot assert verifier success or select a principal.
   """
   use GenServer
   alias ResearchExchange.Evidence, as: E
-  @core_revision "83954f1fbffbee1df5fb25e69ab3b34bc92346e8"
-  @core_source "b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564"
+  alias ResearchExchange.SQLite
+  @core_revision "d6c07ef7b57e844c3aaad8d2c7dff938098a71bf"
+  @core_source "e46f8f6c12f790d6889085d072b58f92067004077a8b7f430abcb8433bbb0776"
   @max_artifact 65_536
   @max_entries 128
+  @call_timeout 15_000
 
-  def start_link(config), do: GenServer.start_link(__MODULE__, config)
-  def call(pid, token, tool, args), do: GenServer.call(pid, {:call, token, tool, args})
-  def authenticate(pid, token), do: GenServer.call(pid, {:authenticate, token})
+  def start_link(config), do: GenServer.start_link(__MODULE__, config, timeout: @call_timeout)
+
+  def call(pid, token, tool, args),
+    do: GenServer.call(pid, {:call, token, tool, args}, @call_timeout)
+
+  def authenticate(pid, token), do: GenServer.call(pid, {:authenticate, token}, @call_timeout)
   # These are operator/worker ports, never registered MCP tools. Host isolation
   # is required: untrusted agents must not get BEAM/RPC access to this process.
-  def observe(pid, observation, mac), do: GenServer.call(pid, {:observe, observation, mac})
+  def observe(pid, observation, mac),
+    do: GenServer.call(pid, {:observe, observation, mac}, @call_timeout)
 
   def observe_compute(pid, observation, mac),
-    do: GenServer.call(pid, {:compute, observation, mac})
+    do: GenServer.call(pid, {:compute, observation, mac}, @call_timeout)
 
-  def revoke(pid, token_hash), do: GenServer.call(pid, {:revoke, token_hash})
-  def job(pid, id, worker_key), do: GenServer.call(pid, {:job, id, worker_key})
+  def revoke(pid, token_hash), do: GenServer.call(pid, {:revoke, token_hash}, @call_timeout)
+  def job(pid, id, worker_key), do: GenServer.call(pid, {:job, id, worker_key}, @call_timeout)
   def core, do: %{"revision" => @core_revision, "source_manifest_sha256" => @core_source}
 
   @impl true
@@ -48,16 +54,70 @@ defmodule ResearchExchange.Server do
       end)
 
     boot = Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
-    {:ok, %{config: config, boot: boot, submissions: %{}, jobs: %{}, replay: %{}, version: 0}}
+
+    state = %{
+      config: config,
+      boot: boot,
+      submissions: %{},
+      jobs: %{},
+      replay: %{},
+      revoked: %{},
+      version: 0,
+      journal: nil
+    }
+
+    case Map.fetch(config, :sqlite_path) do
+      :error ->
+        {:ok, state}
+
+      {:ok, path} ->
+        case SQLite.open(path, config.receipt_key) do
+          {:ok, port, epoch, version, data} ->
+            {:ok,
+             Map.merge(%{state | journal: port, version: version} |> Map.put(:epoch, epoch), data)}
+
+          {:error, reason} ->
+            {:stop, reason}
+        end
+    end
   end
 
   @impl true
-  def handle_call({:authenticate, token}, _from, s), do: {:reply, auth(s, token), s}
+  def handle_call(message, from, %{journal: nil} = s), do: transition(message, from, s)
 
-  def handle_call({:revoke, h}, _from, s),
-    do: {:reply, :ok, put_in(s.config.tokens, Map.delete(s.config.tokens, h))}
+  def handle_call({:compute, _, _}, _from, s),
+    do: {:reply, {:error, :metering_disabled}, s}
 
-  def handle_call({:call, token, tool, args}, _from, s) do
+  def handle_call(message, from, s) do
+    with :ok <- SQLite.fence(s),
+         {:reply, reply, updated} <- transition(message, from, s),
+         :ok <- if(updated == s, do: :ok, else: SQLite.commit(s, updated)) do
+      version = if updated == s, do: s.version, else: s.version + 1
+      {:reply, reply, %{updated | version: version}}
+    else
+      {:error, :journal_unavailable} = error -> {:stop, :normal, error, s}
+      {:error, _} = error -> {:reply, error, s}
+    end
+  end
+
+  @impl true
+  def format_status(status) do
+    # GenServer diagnostics must not print bearer tokens, operator keys or artifacts.
+    Map.merge(status, %{state: :redacted, message: :redacted, log: []})
+  end
+
+  @impl true
+  def handle_info({port, {:exit_status, _}}, %{journal: port} = s), do: {:stop, :normal, s}
+
+  defp transition({:authenticate, token}, _from, s), do: {:reply, auth(s, token), s}
+
+  defp transition({:revoke, h}, _from, s) do
+    if Map.has_key?(s.config.tokens, h),
+      do: {:reply, :ok, put_in(s.revoked[h], true)},
+      else: {:reply, :ok, s}
+  end
+
+  defp transition({:call, token, tool, args}, _from, s) do
     result = with {:ok, grant} <- auth(s, token), do: dispatch(s, grant, tool, args)
 
     case result do
@@ -66,21 +126,20 @@ defmodule ResearchExchange.Server do
     end
   end
 
-  def handle_call({:job, id, key}, _from, s) do
-    result =
-      if E.equal?(key, s.config.worker_key) do
-        case Map.fetch(s.jobs, id) do
-          {:ok, j} -> {:ok, Map.take(j, [:binding, :capability, :artifact])}
-          :error -> {:error, :not_found}
-        end
-      else
-        {:error, :unauthorized}
-      end
-
-    {:reply, result, s}
+  defp transition({:job, id, key}, _from, s) do
+    with true <- E.equal?(key, s.config.worker_key),
+         {:ok, j} <- Map.fetch(s.jobs, id),
+         {:ok, current} <- worker_job(s, j) do
+      updated = if j == current, do: s, else: put_in(s.jobs[id], current)
+      {:reply, {:ok, Map.take(current, [:binding, :capability, :artifact])}, updated}
+    else
+      false -> {:reply, {:error, :unauthorized}, s}
+      :error -> {:reply, {:error, :not_found}, s}
+      {:error, _} = error -> {:reply, error, s}
+    end
   end
 
-  def handle_call({kind, obs, mac}, _from, s) when kind in [:observe, :compute] do
+  defp transition({kind, obs, mac}, _from, s) when kind in [:observe, :compute] do
     case record(s, kind, obs, mac) do
       {:ok, receipt, updated} -> {:reply, {:ok, receipt}, updated}
       {:error, reason} -> {:reply, {:error, reason}, s}
@@ -89,16 +148,23 @@ defmodule ResearchExchange.Server do
 
   defp auth(s, token)
        when is_binary(token) and byte_size(token) >= 32 and byte_size(token) <= 512 do
-    case Map.get(s.config.tokens, E.hash(token)) do
+    grant(s, E.hash(token))
+  end
+
+  defp auth(_, _), do: {:error, :unauthorized}
+
+  defp grant(s, hash) do
+    case if(s.revoked[hash], do: nil, else: s.config.tokens[hash]) do
       %{expires: expires} = grant ->
-        if expires > now(s), do: {:ok, grant}, else: {:error, :unauthorized}
+        if expires > now(s),
+          do: {:ok, Map.put(grant, :credential, hash)},
+          else: {:error, :unauthorized}
 
       _ ->
         {:error, :unauthorized}
     end
   end
 
-  defp auth(_, _), do: {:error, :unauthorized}
   defp now(s), do: Map.get(s.config, :clock, fn -> System.system_time(:second) end).()
   defp hex?(x, n), do: is_binary(x) and byte_size(x) == n and String.match?(x, ~r/\A[0-9a-f]+\z/)
   defp exact?(m, keys), do: is_map(m) and Enum.sort(Map.keys(m)) == Enum.sort(keys)
@@ -151,9 +217,7 @@ defmodule ResearchExchange.Server do
              is_integer(a["generation"]) and a["generation"] == lib["generation"],
          true <- E.equal?(a["artifact_sha256"], E.hash(a["artifact"])) do
       replay(s, g, "proof_submit", a, fn ->
-        if map_size(s.submissions) >= @max_entries,
-          do: {:error, :capacity},
-          else: submit(s, g, lib, a)
+        submit(s, g, lib, a)
       end)
     else
       false -> {:error, :invalid_or_stale_binding}
@@ -177,7 +241,7 @@ defmodule ResearchExchange.Server do
             {:error, :already_requested}
 
           true ->
-            request(s, sub, a["submission_id"])
+            request(s, sub, a["submission_id"], g.credential)
         end
       end)
     else
@@ -226,7 +290,7 @@ defmodule ResearchExchange.Server do
         b["engine"] == l["engine"] and
         b["source_snapshot_sha256"] == l["snapshot_sha256"] and b["generation"] == l["generation"] and
         b["environment_sha256"] == l["environment_sha256"] and
-        b["policy_sha256"] == l["policy_sha256"]
+        b["policy_sha256"] == l["policy_sha256"] and b["core"] == core()
 
   defp replay(s, g, tool, a, create) do
     key = {g.principal, a["idempotency_key"]}
@@ -244,7 +308,11 @@ defmodule ResearchExchange.Server do
         end
 
       {^digest, r} ->
-        {:ok, r, s}
+        binding = r["payload"]["binding"]
+
+        if current?(binding, s.config.libraries[binding["library"]]),
+          do: {:ok, r, s},
+          else: {:error, :invalid_or_stale_binding}
 
       _ ->
         {:error, :idempotency_conflict}
@@ -266,34 +334,39 @@ defmodule ResearchExchange.Server do
       "core" => core()
     }
 
-    id = E.digest("research-exchange/submission/v1", %{"boot" => s.boot, "binding" => binding})
-    r = receipt(s, "submitted", id, binding, %{})
-    item = %{binding: binding, artifact: a["artifact"], receipt: r}
-    {:ok, r, %{s | submissions: Map.put(s.submissions, id, item), version: s.version + 1}}
+    identity = if s.journal, do: binding, else: %{"boot" => s.boot, "binding" => binding}
+    id = E.digest("research-exchange/submission/v1", identity)
+
+    case Map.fetch(s.submissions, id) do
+      {:ok, item} ->
+        {:ok, item.receipt, s}
+
+      :error when map_size(s.submissions) >= @max_entries ->
+        {:error, :capacity}
+
+      :error ->
+        r = receipt(s, "submitted", id, binding, %{})
+        item = %{binding: binding, artifact: a["artifact"], receipt: r}
+        {:ok, r, %{s | submissions: Map.put(s.submissions, id, item), version: s.version + 1}}
+    end
   end
 
-  defp request(s, sub, submission_id) do
-    nonce = Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)
-
-    binding =
-      Map.merge(sub.binding, %{
-        "submission_id" => submission_id,
-        "nonce" => nonce,
-        "boot" => s.boot,
-        "expires_at" => now(s) + 300
-      })
+  defp request(s, sub, submission_id, credential) do
+    binding = attempt(s, Map.put(sub.binding, "submission_id", submission_id))
 
     id = E.digest("research-exchange/job/v1", binding)
     cap = E.mac(s.config.worker_key, "research-exchange/capability/v1", binding)
 
     r =
       receipt(s, "queued_execution_disabled", id, binding, %{
-        "reservation" => "memory-only-capacity-slot",
+        "reservation" =>
+          if(s.journal, do: "sqlite-capacity-slot", else: "memory-only-capacity-slot"),
         "credits_issued" => 0
       })
 
     j = %{
       binding: binding,
+      credential: credential,
       artifact: sub.artifact,
       capability: cap,
       receipt: r,
@@ -304,6 +377,50 @@ defmodule ResearchExchange.Server do
 
     {:ok, r, %{s | jobs: Map.put(s.jobs, id, j), version: s.version + 1}}
   end
+
+  defp attempt(s, binding) do
+    Map.merge(binding, %{
+      "nonce" => Base.encode16(:crypto.strong_rand_bytes(32), case: :lower),
+      "boot" => s.boot,
+      "reservation_version" => s.version + 1,
+      "expires_at" => now(s) + 300
+    })
+  end
+
+  defp worker_job(%{journal: nil}, j), do: {:ok, j}
+
+  defp worker_job(s, j) do
+    with :ok <- current_job(s, j), false <- j.observed do
+      if live_attempt?(s, j) do
+        {:ok, j}
+      else
+        binding = attempt(s, j.binding)
+        cap = E.mac(s.config.worker_key, "research-exchange/capability/v1", binding)
+        {:ok, %{j | binding: binding, capability: cap}}
+      end
+    else
+      true -> {:error, :reservation_closed}
+      error -> error
+    end
+  end
+
+  defp current_job(%{journal: nil}, _), do: :ok
+
+  defp current_job(s, j) do
+    with {:ok, g} <- grant(s, j.credential),
+         true <- g.principal == j.binding["contributor"],
+         :ok <- scope(g, "verification:request"),
+         {:ok, lib} <- library(s, g, j.binding["library"]),
+         true <- current?(j.binding, lib),
+         true <- E.equal?(j.binding["artifact_sha256"], E.hash(j.artifact)) do
+      :ok
+    else
+      _ -> {:error, :stale_reservation}
+    end
+  end
+
+  defp live_attempt?(s, j),
+    do: j.binding["boot"] == s.boot and now(s) < j.binding["expires_at"]
 
   defp receipt(s, status, id, binding, details) do
     E.receipt(
@@ -339,15 +456,18 @@ defmodule ResearchExchange.Server do
     with true <- exact?(obs, fields),
          {:ok, j} <- Map.fetch(s.jobs, obs["job_id"]) |> found(),
          true <- obs["binding"] == j.binding and E.equal?(obs["capability"], j.capability),
-         true <- now(s) < j.binding["expires_at"],
+         :ok <- current_job(s, j),
          {:ok, lib} <- Map.fetch(s.config.libraries, j.binding["library"]) |> found(),
          true <- current?(j.binding, lib),
          true <- valid_observation?(kind, obs),
-         true <- E.equal?(mac, E.mac(key, domain, obs)) do
+         true <- E.equal?(mac, E.mac(key, domain, obs)),
+         true <- live_attempt?(s, j) or (s.journal != nil and j.observed) do
       flag = if kind == :observe, do: :observed, else: :compute
 
       if Map.fetch!(j, flag) do
-        {:error, :observation_replay}
+        if s.journal != nil and j.observations[domain] == Map.delete(obs, "capability"),
+          do: {:ok, j.receipt, s},
+          else: {:error, :observation_replay}
       else
         status =
           if kind == :observe,

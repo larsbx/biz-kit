@@ -25,9 +25,9 @@ jobs:
   verification:
     name: Research exchange complete verification
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
-      FRE_SOURCE_SHA256: 'b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564'
+      FRE_SOURCE_SHA256: 'e46f8f6c12f790d6889085d072b58f92067004077a8b7f430abcb8433bbb0776'
     defaults:
       run:
         working-directory: proof_bank/research_exchange
@@ -85,7 +85,7 @@ jobs:
           npm install --global --ignore-scripts --no-audit --no-fund npm@11.9.0
           test "$(npm --version)" = '11.9.0'
           python3 tools/bootstrap.py --destination "$RUNNER_TEMP/research-exchange-tools"
-      - name: Run every required proof, model and negative-control stage
+      - name: Run all 12 required proof, model and adapter acceptance stages
         run: |
           set -euo pipefail
           FRE_TOOLS="$RUNNER_TEMP/research-exchange-tools"
@@ -96,6 +96,21 @@ jobs:
             --java-bin "$FRE_TOOLS/jdk-21.0.13+9-jre/bin/java" \
             --quint-home "$FRE_TOOLS/quint-home" \
             --output evidence/ci
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          receipt = json.loads(Path('evidence/ci/receipt.json').read_text())
+          stages = receipt['stages']
+          if not (receipt['status'] == 'passed'
+                  and receipt['required_stage_count'] == 12
+                  and len(stages) == 12
+                  and [stage['id'] for stage in stages] == receipt['required_stage_ids']
+                  and {'adapter_model_checks', 'adapter_acceptance'} <= {stage['id'] for stage in stages}
+                  and all(stage['status'] == 'passed' for stage in stages)
+                  and receipt['stages_not_run'] == []):
+              raise SystemExit('The complete successful 12-stage receipt is required')
+          print('ALL_12_REQUIRED_STAGES_PASSED')
+          PY
       - name: Preserve proof evidence and failure receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

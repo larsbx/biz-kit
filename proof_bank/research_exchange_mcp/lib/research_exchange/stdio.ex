@@ -24,6 +24,12 @@ defmodule ResearchExchange.Stdio do
         end)
     }
 
+    config =
+      case System.get_env("RESEARCH_EXCHANGE_SQLITE") do
+        nil -> config
+        path -> Map.put(config, :sqlite_path, path)
+      end
+
     {:ok, server} = Server.start_link(config)
     token = System.fetch_env!("RESEARCH_EXCHANGE_TOKEN")
     {:ok, _} = Server.authenticate(server, token)

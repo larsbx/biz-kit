@@ -1,4 +1,4 @@
-# Research exchange verification core
+# Research exchange verification core and local adapter pilot
 
 The [standalone package](../../../proof_bank/research_exchange/README.md) supplies
 the first proof layer for a proposed public research service exposing Lean,
@@ -6,45 +6,92 @@ mathlib, Quint and selected research libraries to contributing agents. It lives
 under Proof Bank so its own Lake package and pinned toolchains remain isolated
 from the existing application pilots.
 
-This is a verification core and reference implementation. It does not register a
-new umbrella application, deploy a public MCP/UTCP endpoint, authenticate remote
-workers, meter physical compute, or issue service credit.
+The original verification core and pure reference now have a local authenticated
+HTTP/SQLite acceptance pilot beside them. It listens only on `127.0.0.1`, checks
+fixed reviewed proof exports and moves disposable fixture credits. It does not
+register a new umbrella app, deploy public MCP/UTCP endpoints, establish
+production remote-agent identity, meter physical compute or issue service credit.
 
 ## Executable definitions and evidence classes
 
 - The Lean kernels implement one prefunded reward slot and one independent
-  compute reservation. Their 31 registered universal theorems cover binding,
+  compute reservation. Their unchanged 31 registered universal properties cover binding,
   candidate immutability, stale/expired submissions, delayed verification,
   payout retries, local conservation, cancellation holds and terminal settlement.
 - Twelve concrete Lean examples accompany the proofs. The strict axiom gate
   permits only `propext`, `Classical.choice` and `Quot.sound`. Exported theorem
   dependencies are replayed by both Lean's kernel and `lean4lean`.
-- Quint checks two explicit finite state spaces, seven scenarios, and four
-  deliberate faulty transitions. These establish finite safety evidence, with
-  no fairness or liveness claim.
-- The Python code is a reference oracle, test harness and verification tooling.
-  It is not a production service implementation. Its comparison invokes the
-  actual compiled Lean transition executable. Finite agreement is not a formal
-  refinement theorem for Python, a database or the eventual server.
+- The Lean adapter acceptance and closure wrappers bring the total to **76 registered properties**.
+  It invokes the existing `Reward.accept` and models current verifier identity,
+  epoch, checked profile/candidate, row version and atomic matching settlement.
+  Authenticated identity, checker truth and durable atomic publication remain
+  premises. The required negative-control set grows from four to seven intended
+  refusals. These counts require exact-revision audit and replay before acceptance.
+- The original Quint models retain two finite spaces, seven scenarios and four
+  faulty-transition controls. The adapter model adds 17 scenarios and 12
+  targeted mutants; its current bounded graph has 676,952 reachable states.
+  Acceptance requires complete exploration and genuine named-invariant
+  counterexamples for the mutants. There is no fairness or liveness claim.
+- The pure Python reference still compares actual compiled Lean transitions
+  against finite traces. A separate local adapter adds authenticated HTTP,
+  controlled checking and atomic SQLite writes. Finite agreement and HTTP/crash
+  tests do not constitute formal refinement of Python, SQLite or a future
+  production service.
 
 The package's [verification boundary](../../../proof_bank/research_exchange/docs/VERIFICATION_BOUNDARY.md)
 and [model contract](../../../proof_bank/research_exchange/formal/lean/MODEL_CONTRACT.md)
 remain authoritative about assumptions. In particular, trusted verifier and stop
 inputs are premises; contributors must never supply them as authority in a
-public API. Initial reward funding, multiple slots, global budgets, rejection and
-reissue, revocation, persistent recovery and atomic database application remain
-separate obligations.
+public API. The pilot implements local credential separation, current enablement
+and epoch fencing, permanent request binding and a transactional fixture-credit
+operation. Initial reward funding, accounting across slots, global budgets,
+arbitrary artifacts, production identity/financial integration and distributed
+recovery remain separate obligations. A definitive exact-export mismatch closes the slot and refunds its original
+escrow once. Unavailable and inconclusive checking leave the slot submitted.
+A replacement requires a fresh explicitly funded slot.
+
+## What the local pilot adds
+
+The [pilot contract and reproduction guide](../../../proof_bank/research_exchange/adapter_pilot/README.md)
+defines offline credential/profile provisioning and the loopback API. Workers
+can lease, submit immutable bytes and read status. The exact configured verifier
+principal has a separately authorized internal verify route that checks the
+already stored candidate; requests cannot supply identity, `trusted`, verdict,
+receipt, profile, checker command or payout destination as authority.
+
+The approved artifact is the export of the reviewed trivial theorem
+`forall n : Nat, n + 0 = n`. A different true arithmetic export is the wrong-target
+control. Both pinned checker programs must actually replay the approved bytes.
+This tests exact evidence binding and controlled verifier authority; it is not
+arbitrary research validation or a sandbox for uploaded Lean source. Independent
+replay runs different checker software on the same trusted local host.
+
+The database transaction rechecks active credential role/scope, exact verifier
+principal and epoch, frozen candidate/config/profile and row version after
+checking. It persists reward state, one unique payout or refund and the canonical
+request response together before replying. Effective credential changes advance
+the epoch; a revoke/regrant cycle cannot revive a prepared result. SQLite uses
+WAL, `synchronous=FULL`, foreign keys and `BEGIN IMMEDIATE`.
+
+The adapter suite implements 27 mandatory checks covering real HTTP, credential substitution,
+revocation/rotation, stale versions, changed-content request IDs, wrong-target
+proofs, concurrent commits, and actual service-process death before/after commit.
+Before commit, the terminal state, effect and request receipt all roll back.
+After commit, they survive and retry returns the original result. The runner rejects missing or skipped tests. These are required gates;
+the complete receipt for an exact revision establishes its observed results.
 
 ## Repository acceptance
 
 The [dedicated workflow](../../../.github/workflows/proof-bank-research-exchange.yml)
 checks out the literal PR head or push commit, rejects a mismatched checkout,
 records the Git commit and tree alongside the reviewed package digest, and runs
-the complete ten-stage profile. It also records the executing workflow's ref and
+every required stage in the current profile, including the adapter model and
+local runtime acceptance lanes. It also records the executing workflow's ref and
 SHA, which can differ from the checked-out package revision. A skipped
 proof/model stage is not acceptance.
 The upload includes the exported proof closure, axiom report, trace comparison,
-counterexamples, logs, receipt and Git provenance. Failure receipts are retained
+counterexamples, fixed-export/checker evidence, local adapter acceptance records,
+logs, receipt and Git provenance. Failure receipts are retained
 when produced. The optional local executable-location adapter is not used on
 the standard hosted runner.
 
@@ -96,6 +143,22 @@ Lean 4.35.0, Quint 0.33.1, Apalache 0.62.4 and Java 21.0.13+9. Run
 regenerating a manifest does not by itself authorize source changes. Toolchains
 and generated evidence remain outside the committed source inventory.
 
-The next service seam is a controlled verifier result followed by an atomic
-`accept_candidate` domain transaction. Both MCP and UTCP adapters should invoke
-that same operation, with exact challenge, artifact and environment bindings.
+## Next production integration gate
+
+Carry the demonstrated local boundary into a first-party host adapter using
+existing CoopSubstrate/AgentCore authorization and approved execution profiles,
+artifact custody and PostgreSQL operational persistence. `ProofBankCore` remains
+an inert contract/blueprint core; do not add a competing signed business writer.
+Hawala/TigerBeetle retains real financial authority. A local proof receipt or
+SQLite credit movement cannot authorize an external payout.
+
+Require exact candidate/profile and production-grant binding at admission, a
+reviewed representation relation between production records and formal state,
+concurrent/crash/recovery evidence under the actual storage profile, and a full
+receipt for that exact integration revision. Preserve stable effect IDs and
+provider reconciliation where financial effects cross transaction boundaries.
+MCP and UTCP transports should then call the same accepted domain operation.
+
+Compute execution, genuine stop observations, authorized physical usage
+metering, global budgets, arbitrary-proof isolation and invalid-candidate
+closure each require a separately stated and reproducible acceptance gate.

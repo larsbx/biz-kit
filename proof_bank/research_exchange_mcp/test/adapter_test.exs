@@ -511,21 +511,6 @@ defmodule ResearchExchange.AdapterTest do
     File.chmod!(path, 0o600)
     script = Path.expand("../bin/stdio.exs", __DIR__)
 
-    port =
-      Port.open({:spawn_executable, System.find_executable("elixir")}, [
-        :binary,
-        :exit_status,
-        {:line, 131_072},
-        {:args, [script]},
-        {:env,
-         [
-           {~c"RESEARCH_EXCHANGE_CONFIG", String.to_charlist(path)},
-           {~c"RESEARCH_EXCHANGE_TOKEN", String.to_charlist(@token)}
-         ]}
-      ])
-
-    on_exit(fn -> if Port.info(port), do: Port.close(port) end)
-
     requests = [
       rpc("initialize", %{
         "protocolVersion" => "2025-11-25",
@@ -536,6 +521,37 @@ defmodule ResearchExchange.AdapterTest do
       rpc("tools/call", %{"name" => "library_discover", "arguments" => %{}}),
       rpc("tools/call", %{"name" => "proof_submit", "arguments" => args()})
     ]
+
+    results = stdio_round_trip(script, path, nil, requests)
+    database = Path.join(dir, "exchange.sqlite")
+    first = stdio_round_trip(script, path, database, requests)
+    assert first == stdio_round_trip(script, path, database, requests)
+    assert Enum.at(first, 2)["result"]["structuredContent"]["payload"]["status"] == "submitted"
+
+    assert Enum.at(results, 0)["result"]["protocolVersion"] == "2025-11-25"
+    assert Enum.at(results, 1)["result"]["structuredContent"]["libraries"] |> length() == 1
+    r = Enum.at(results, 2)["result"]["structuredContent"]
+    assert Evidence.verify_receipt?(r, @receipt)
+    assert r["payload"]["binding"]["artifact_sha256"] == args()["artifact_sha256"]
+  end
+
+  defp stdio_round_trip(script, path, database, requests) do
+    port =
+      Port.open({:spawn_executable, System.find_executable("elixir")}, [
+        :binary,
+        :exit_status,
+        {:line, 131_072},
+        {:args, [script]},
+        {:env,
+         [
+           {~c"RESEARCH_EXCHANGE_CONFIG", String.to_charlist(path)},
+           {~c"RESEARCH_EXCHANGE_TOKEN", String.to_charlist(@token)},
+           {~c"RESEARCH_EXCHANGE_SQLITE",
+            if(database, do: String.to_charlist(database), else: false)}
+         ]}
+      ])
+
+    on_exit(fn -> if Port.info(port), do: Port.close(port) end)
 
     Port.command(port, Enum.map(requests, &(Evidence.canonical(&1) <> "\n")))
 
@@ -549,11 +565,7 @@ defmodule ResearchExchange.AdapterTest do
         end
       end
 
-    assert Enum.at(results, 0)["result"]["protocolVersion"] == "2025-11-25"
-    assert Enum.at(results, 1)["result"]["structuredContent"]["libraries"] |> length() == 1
-    r = Enum.at(results, 2)["result"]["structuredContent"]
-    assert Evidence.verify_receipt?(r, @receipt)
-    assert r["payload"]["binding"]["artifact_sha256"] == args()["artifact_sha256"]
     Port.close(port)
+    results
   end
 end

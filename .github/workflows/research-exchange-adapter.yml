@@ -36,9 +36,9 @@ jobs:
           elixirc --warnings-as-errors -o "$RUNNER_TEMP/research-exchange-beams" proof_bank/research_exchange_mcp/lib/research_exchange/*.ex
       - name: Executable admission and stdio adversarial tests
         run: elixir proof_bank/research_exchange_mcp/test/run.exs
-      - name: Verify unchanged reviewed core source
+      - name: Verify pinned pilot core source
         run: >-
           python3 proof_bank/research_exchange/tools/source_snapshot.py verify
-          --expected-source-sha256 b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564
+          --expected-source-sha256 e46f8f6c12f790d6889085d072b58f92067004077a8b7f430abcb8433bbb0776
       # Kernel acceptance remains the separate complete core workflow. This job
       # does not run contributor artifacts, issue credits, or deploy anything.

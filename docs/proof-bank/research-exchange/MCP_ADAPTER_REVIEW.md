@@ -113,3 +113,18 @@ and disposable fixture credits. This draft targets `main` and keeps the MCP
 admission protocol independently reviewable. Connecting the two requires a
 separate representation and authorization review, including an update to the
 reviewed core pin if the proof package changes.
+
+## SQLite integration follow-up
+
+The earlier sections describe the original memory-only PR #359 revision.
+
+The optional SQLite journal reuses the connection and immediate transaction
+boundary from the loopback pilot in #335 and #336. It leaves the two APIs
+separate. MCP uses scoped string principals, exact UTF-8 artifacts, its
+own canonical evidence format and separate worker MACs. The loopback
+pilot uses scoped integer principals, pinned proof-export profiles and
+independent exact-export checks before committing a fixture reward or refund.
+An MCP observation is never sent to that reward transition.
+
+See the [durable admission instructions](../../../proof_bank/research_exchange_mcp/README.md#durable-local-mcp-admission)
+for the single-writer fencing policy, restart behavior and test commands.

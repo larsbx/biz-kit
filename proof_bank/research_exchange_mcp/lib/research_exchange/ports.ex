@@ -1,6 +1,6 @@
 defmodule ResearchExchange.Ports do
   @moduledoc """
-  Future integration contract; no implementation is installed by this adapter.
+  Future dispatch contract. The SQLite journal handles admission only.
   A durable implementation must atomically check the expected version, consume
   the principal/idempotency key, store immutable artifacts and receipts, reserve
   capacity, and append a dispatch outbox event before acknowledging admission.
