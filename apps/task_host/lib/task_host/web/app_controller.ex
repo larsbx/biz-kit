@@ -15,10 +15,15 @@ defmodule TaskHost.Web.AppController do
     "app.js" => "text/javascript",
     "cbor.js" => "text/javascript",
     "device.js" => "text/javascript",
-    "view.js" => "text/javascript"
+    "view.js" => "text/javascript",
+    "operations.html" => "text/html",
+    "operations.js" => "text/javascript",
+    "operations-view.js" => "text/javascript",
+    "operations.css" => "text/css"
   }
 
   def index(conn, _params), do: serve(conn, "index.html")
+  def operations(conn, _params), do: serve(conn, "operations.html")
 
   def file(conn, %{"file" => file}) when is_map_key(@files, file), do: serve(conn, file)
   def file(conn, _params), do: send_resp(conn, 404, "")

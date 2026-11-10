@@ -439,6 +439,38 @@ end
 # prefix until SpruceGoose's decommission.
 task_host_released? = release_name not in ["eatsbot", "restaurant"]
 
+# Optional presentation catalogue for /operations. Read at boot, never from a
+# request-supplied path. Invalid or oversized input disables the operations
+# endpoint (503) rather than exposing file contents or widening any grant.
+# OTP 27's JSON decoder is available before application dependencies start.
+if task_host_released? do
+  operations =
+    case System.get_env("TASK_HOST_OPERATIONS_CONFIG") do
+      nil ->
+        Application.get_env(:task_host, :operations, %{
+          "schema_version" => 1,
+          "title" => "Operations",
+          "time_zone" => "Etc/UTC",
+          "workspaces" => []
+        })
+
+      path ->
+        case File.open(path, [:read, :binary], &IO.binread(&1, 65_537)) do
+          {:ok, bytes} when is_binary(bytes) and byte_size(bytes) <= 65_536 ->
+            try do
+              :json.decode(bytes)
+            rescue
+              _error -> :invalid
+            end
+
+          _error ->
+            :invalid
+        end
+    end
+
+  config :task_host, :operations, operations
+end
+
 if config_env() == :prod and task_host_released? do
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") || raise "SECRET_KEY_BASE is required for the task host"
