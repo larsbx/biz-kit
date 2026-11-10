@@ -158,6 +158,17 @@ production writers have been consolidated.
 
 ## Roadmap
 
+### Configurable operations workspace
+
+`/operations` in `task_host` provides Today, Upcoming, active work, evidence
+review, closed tasks and workflow templates over authorized canonical project
+views. Configure the title, timezone, workspace labels, categories and exact
+project mappings with `TASK_HOST_OPERATIONS_CONFIG`; see
+[the operations MVP contract](docs/architecture/2026-11-09-configurable-operations-mvp.md)
+and [example configuration](config/operations.example.json).
+This first increment reuses existing signed task actions. Assignment, recurring
+execution and purchasing additions remain later stages of the documented MVP.
+
 [docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
 in what order, the remaining consolidation steps, and open questions.
 

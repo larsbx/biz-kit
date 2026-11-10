@@ -23,6 +23,8 @@ defmodule TaskHost.Web.Router do
   scope "/", TaskHost.Web do
     get("/app", AppController, :index)
     get("/app/:file", AppController, :file)
+    get("/operations", AppController, :operations)
+    get("/api/v1/operations", OperationsController, :index)
     post("/api/v1/commands/:id", CommandController, :submit)
     post("/api/v1/devices/challenges/:id", DeviceController, :prove)
     get("/api/v1/enrolments/:code", EnrolmentController, :show)

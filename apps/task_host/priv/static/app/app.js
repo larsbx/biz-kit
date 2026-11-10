@@ -76,6 +76,7 @@ let governing = false;
 // One decision at a time: the confirmation dialog shows one command, and the
 // bytes signed must be the ones it shows.
 let deciding = false;
+let focusedTask = false;
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -109,7 +110,7 @@ function render() {
       ? tasks.map(([id, t]) =>
           el(
             "div",
-            { className: "card" },
+            { className: "card", id: `task-${id}`, tabIndex: -1 },
             el(
               "div",
               { className: "row" },
@@ -143,6 +144,18 @@ function render() {
   renderDelegations();
   renderHistory();
   renderDevices();
+
+  // The Operations read view opens this existing signed action surface.
+  // The query selects a card, never an action, key, or authorization grant.
+  const requested = params.get("focus");
+  if (!focusedTask && requested && Object.hasOwn(view.tasks, requested)) {
+    const target = document.getElementById(`task-${requested}`);
+    if (target) {
+      focusedTask = true;
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    }
+  }
 }
 
 // The task's next lifecycle step as a button, or what it is waiting for.
