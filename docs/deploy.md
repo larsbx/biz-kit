@@ -10,7 +10,7 @@ Date: 2026-10-20. The shortest path to a running deployment.
 
 | Release | Applications | Boots in production when |
 | --- | --- | --- |
-| `orchestration` | the ledger (`coop_substrate`), identity, cluster, SpruceGoose (web view, API, CLI service) | the settings below are set |
+| `orchestration` | the ledger (`coop_substrate`), identity, cluster, the task host (`task_host`: sign-in, web view, API, change feed), SpruceGoose (CLI service, until it retires) | the settings below are set |
 | `biz_kit` | all of the above, plus `dispatch` and `keel` | dispatch's integrations are configured too |
 | `eatsbot` | `eatsbot` and its `eatsbot_*` siblings | `DATABASE_URL`, `SECRET_KEY_BASE`, `GEOCODING_TOKEN`, `TOKEN_SIGNING_SECRET` are set |
 | `restaurant` | the ledger and the rebuilt eatsbot's host (`restaurant_host`) | the [restaurant settings](#the-restaurant-release) are set |
@@ -52,13 +52,15 @@ MIX_ENV=prod mix deps.get --only prod
 MIX_ENV=prod mix release orchestration
 # copy _build/prod/rel/orchestration to the host (it includes ERTS), then:
 bin/orchestration eval "SpruceGoose.ReleaseTasks.migrate()"   # before every start; idempotent
+bin/orchestration eval "TaskHost.ReleaseTasks.migrate()"      # likewise
 bin/orchestration daemon                                       # or a systemd unit running `start`
 ```
 
-`SpruceGoose.ReleaseTasks.migrate/0`:
-1. creates and initializes the ledger's event store database, if needed;
-2. creates SpruceGoose's database, if needed;
-3. applies pending migrations.
+Each migrate task creates and initializes the ledger's event store database
+if needed, creates its own database if needed, and applies pending
+migrations. The task host's only table holds native apps' sessions; pointed
+at SpruceGoose's database (the default, `DATABASE_URL`), it finds the table
+already there and every signed-in device stays signed in.
 
 Migrations never run on boot.
 
@@ -66,13 +68,14 @@ Migrations never run on boot.
 
 | Variable | For |
 | --- | --- |
-| `DATABASE_URL`, `DATABASE_SSL` (default `true`), `DATABASE_CA_CERT_FILE` | SpruceGoose's database |
+| `DATABASE_URL`, `DATABASE_SSL` (default `true`), `DATABASE_CA_CERT_FILE` | SpruceGoose's database, and the task host's unless `TASK_HOST_DATABASE_URL` names another |
 | `EVENTSTORE_HOST`, `EVENTSTORE_PORT`, `EVENTSTORE_DATABASE`, `EVENTSTORE_USERNAME`, `EVENTSTORE_PASSWORD` | the ledger |
-| `SECRET_KEY_BASE` (≥ 64 bytes), `TOKEN_SIGNING_SECRET`, `OAUTH2_SIGNING_SECRET` | sessions and tokens |
+| `SECRET_KEY_BASE` (≥ 64 bytes), `TOKEN_SIGNING_SECRET` | sessions and tokens |
 | `SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR` | the first operator SpruceGoose's registry accepts |
-| `SPRUCE_GOOSE_MCP_ENABLED=true`, `MCP_PORT`, `SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS` | serve the web view and API, on loopback only. Put a reverse proxy in front, and list it in `SPRUCE_GOOSE_TRUSTED_PROXIES` |
+| `TASK_HOST_PORT` (default `4001`; `MCP_PORT` if set) | the task host's sign-in, web view and API, on loopback only. Put a reverse proxy in front, and list it in `SPRUCE_GOOSE_TRUSTED_PROXIES` |
 | `SPRUCE_GOOSE_PUBLIC_URL`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `BIZKIT_IDENTITY_BINDINGS` | sign-in (`docs/architecture/2026-10-18-identity.md`) |
-| `ARTIFACT_STORE_ROOT` (default `/var/lib/sprucegoose/artifacts`) | uploaded evidence, SOPs and inputs |
+| `COOP_ARTIFACT_DIR` | the bytes ledger custody receipts name (uploaded evidence, SOPs and inputs). Unset, `priv/artifacts` under the release's working directory: set it, and keep the bytes with it when moving |
+| `ARTIFACT_STORE_ROOT` (default `/var/lib/sprucegoose/artifacts`) | SpruceGoose's legacy artifact store |
 | `BIZKIT_CLUSTER_NODES`, `RELEASE_DISTRIBUTION`, `RELEASE_NODE`, `RELEASE_COOKIE` | several nodes (`docs/architecture/2026-10-19-cluster.md`) |
 | `SPRUCE_GOOSE_OBAN_ENABLED` (default `true`) | SpruceGoose's job queue |
 

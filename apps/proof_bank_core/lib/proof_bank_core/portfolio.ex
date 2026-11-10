@@ -81,6 +81,9 @@ defmodule ProofBankCore.Portfolio do
      "Curriculum source revisions must be pinned and staff task completion must not imply learner attainment."},
     {"spruce_goose", :hosted, :manual,
      "Existing orchestration commands must not create a second writer during signed-ledger migration."},
+    # Registered without review by owner decision (2026-11-09).
+    {"task_host", :hosted, :conformance,
+     "A held command must be appended only with its owner's signature over exactly the bytes held, and only once."},
     {"task_core", :foundation, :conformance,
      "Task transitions must refuse stale versions and preserve signed approval and review requirements."},
     {"proof_bank_core", :foundation, :conformance,

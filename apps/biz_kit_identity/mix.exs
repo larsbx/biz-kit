@@ -28,6 +28,8 @@ defmodule BizKit.Identity.MixProject do
       {:biz_kit_cluster, in_umbrella: true},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
+      # Ecto.Query for PostgresSessionStore; the host provides the repo.
+      {:ecto, "~> 3.14"},
       {:plug, "~> 1.16", only: :test}
     ]
   end

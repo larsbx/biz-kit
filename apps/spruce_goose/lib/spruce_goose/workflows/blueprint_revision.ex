@@ -12,7 +12,8 @@ defmodule SpruceGoose.Workflows.BlueprintRevision do
     authorizers: [Ash.Policy.Authorizer]
 
   alias SpruceGoose.Checks.{HasRole, Readable}
-  alias SpruceGoose.Blueprints.{Applier, SourceVerifier}
+  alias SpruceGoose.Blueprints.Applier
+  alias TaskHost.Blueprints.SourceVerifier
 
   @hex40 ~r/\A[0-9a-f]{40}\z/
   @hex64 ~r/\A[0-9a-f]{64}\z/

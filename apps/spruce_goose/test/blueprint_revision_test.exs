@@ -10,13 +10,13 @@ defmodule SpruceGoose.BlueprintRevisionTest do
   @digest String.duplicate("c", 64)
 
   setup do
-    previous = Application.get_env(:spruce_goose, :blueprint_source_verifier)
-    Application.put_env(:spruce_goose, :blueprint_source_verifier, __MODULE__.Verifier)
+    previous = Application.get_env(:task_host, :blueprint_source_verifier)
+    Application.put_env(:task_host, :blueprint_source_verifier, __MODULE__.Verifier)
 
     on_exit(fn ->
       if previous,
-        do: Application.put_env(:spruce_goose, :blueprint_source_verifier, previous),
-        else: Application.delete_env(:spruce_goose, :blueprint_source_verifier)
+        do: Application.put_env(:task_host, :blueprint_source_verifier, previous),
+        else: Application.delete_env(:task_host, :blueprint_source_verifier)
     end)
   end
 
@@ -196,7 +196,7 @@ defmodule SpruceGoose.BlueprintRevisionTest do
   end
 
   test "apply refuses an invalid package without creating partial hierarchy or receipt" do
-    Application.put_env(:spruce_goose, :blueprint_source_verifier, __MODULE__.InvalidVerifier)
+    Application.put_env(:task_host, :blueprint_source_verifier, __MODULE__.InvalidVerifier)
     project = Ash.create!(Project, %{key: "legible", name: "Legible"})
     approver = actor_with_role("blueprint-invalid", :approver)
 
@@ -212,7 +212,7 @@ defmodule SpruceGoose.BlueprintRevisionTest do
 
   test "apply refuses invalid artifact requirements before materializing hierarchy" do
     Application.put_env(
-      :spruce_goose,
+      :task_host,
       :blueprint_source_verifier,
       __MODULE__.InvalidArtifactsVerifier
     )
@@ -251,7 +251,7 @@ defmodule SpruceGoose.BlueprintRevisionTest do
   end
 
   defmodule Verifier do
-    @behaviour SpruceGoose.Blueprints.SourceVerifier
+    @behaviour TaskHost.Blueprints.SourceVerifier
 
     @impl true
     def verify(_repository, _commit, _path) do
@@ -287,7 +287,7 @@ defmodule SpruceGoose.BlueprintRevisionTest do
   end
 
   defmodule InvalidVerifier do
-    @behaviour SpruceGoose.Blueprints.SourceVerifier
+    @behaviour TaskHost.Blueprints.SourceVerifier
 
     @impl true
     def verify(_repository, _commit, _path) do
@@ -314,7 +314,7 @@ defmodule SpruceGoose.BlueprintRevisionTest do
   end
 
   defmodule InvalidArtifactsVerifier do
-    @behaviour SpruceGoose.Blueprints.SourceVerifier
+    @behaviour TaskHost.Blueprints.SourceVerifier
 
     @impl true
     def verify(_repository, _commit, _path) do

@@ -363,6 +363,15 @@
         "max_steps": 6,
         "note": "Every dispatch of an agent run held an active operator and suggester grant and the task still at the run's expected_task_version (AgentRuns.runnable?/2)."
       }
+    ],
+    "task_host": [
+      {
+        "quint": "formal/quint/obligations/task_host.qnt",
+        "main": "task_host",
+        "control": "task_host_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness"
+      }
     ]
   },
   "uncovered": []

@@ -2,7 +2,7 @@ defmodule BizKit.Identity.SessionStore do
   @moduledoc """
   Where native apps' sessions outlive the session process
   (docs/architecture/2026-10-21-native-sign-in.md). Configured as
-  `:biz_kit_identity, :session_store`; SpruceGoose provides the Postgres one.
+  `:biz_kit_identity, :session_store`; `BizKit.Identity.PostgresSessionStore` keeps them in Postgres.
 
   All nodes must use the same durable backend. Reads run in the fetching
   process; put/delete/delete_principal run in the cluster session singleton.
