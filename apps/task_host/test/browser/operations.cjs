@@ -15,7 +15,7 @@ lines.on('line', line => {
 const next = () => messages.length ? Promise.resolve(messages.shift()) : new Promise(resolve => waiters.push(resolve));
 const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
 const cards = page => page.locator('#task-list [data-task-key]');
-const privateValues = ['workspace-b', 'Private B desk', 'Private B record', 'Beta / confidential'];
+const privateValues = ['private-workspace-beta', 'Private B desk', 'Private B record', 'Beta / confidential'];
 
 async function signIn(page, subject) {
   const login = await page.request.get(`${base}/auth/second/login`, { maxRedirects: 0 });
@@ -134,7 +134,7 @@ async function bootstrap(browser) {
       ['Private B record', 'Review <b>A</b> record'].sort(), 'titles must stay literal and scoped');
     assert.equal(await full.locator('#task-list h3 b').count(), 0, 'task title must not become HTML');
     await full.locator('#workspace-list [data-workspace="workspace-a"]').filter({ hasText: 'Custom <A> desk' }).waitFor();
-    await full.locator('#workspace-list [data-workspace="workspace-b"]').filter({ hasText: 'Private B desk' }).waitFor();
+    await full.locator('#workspace-list [data-workspace="private-workspace-beta"]').filter({ hasText: 'Private B desk' }).waitFor();
     const keys = await cards(full).evaluateAll(nodes => nodes.map(node => node.dataset.taskKey));
     assert.equal(new Set(keys).size, 2, 'colliding task IDs from different scopes were conflated');
 

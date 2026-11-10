@@ -106,7 +106,7 @@ defmodule TaskHost.Web.OperationsBrowserTest do
       "time_zone" => "Etc/UTC",
       "workspaces" => [
         workspace(first, "workspace-a", "Custom <A> desk", "Alpha / any-work"),
-        workspace(second, "workspace-b", "Private B desk", "Beta / confidential")
+        workspace(second, "private-workspace-beta", "Private B desk", "Beta / confidential")
       ]
     })
 
