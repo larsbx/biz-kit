@@ -33,16 +33,29 @@ settlement paths continue to consume their own canonical events.
 
 `ScfCore.SignedProjection.replay/2` accepts normalized fixture rows from
 sequence 1 and a fixed book profile (`chapter`, `entity`, `first_year`).
-A future trusted host would normalize each audited, admitted envelope
-into `%{ref: ref, payload: payload}`. Use the envelope's `global_seq` as
-`ref.sequence`, its `chapter_id` as `ref.chapter`, its `stream_seq` as
-`ref.stream_sequence`, and copy `event_id`, `stream_id` and `type`.
-Use `SignedConsumerSource.event_digest/1` for `ref.digest`. Convert canonical
-byte wrappers on reference and document digests into raw 32-byte binaries.
-The fold trusts that boundary. It cannot authenticate a map supplied by an
-API client. The fixtures exercise the projection independently of source
-admission. The three SCF event names below are proposed contracts and have
-no type registration, signer grants, storage path or runtime wiring.
+An authorized internal caller can run `CoopSubstrate.ScfReplaySource.capture/1`
+and pass the returned `rows` to the fold. Capture audits the local log at a
+fixed head, reads pages of up to 100 records, checks every global link and
+requires the terminal digest to match the captured head. The caller supplies
+a record limit up to 10,000. Capture fails without partial rows if the head
+exceeds that limit or any page fails verification.
+
+```elixir
+with {:ok, %{head: head, rows: rows}} <- CoopSubstrate.ScfReplaySource.capture(1_000),
+     {:ok, book} <- ScfCore.SignedProjection.replay(rows, profile) do
+  {:ok, %{head: head, book: book}}
+end
+```
+
+The reader retains the canonical full-record digest, event ID, chapter,
+global sequence, stream ID, stream sequence and type. It unwraps canonical
+byte values only for the proposed accounting reference and document digest
+fields. Keep the captured rows inside the authorized process because the
+prefix can contain data for other books. The fold trusts the reader and its
+canonical admission boundary. Its fixture entry point also supports isolated
+tests. The three SCF event names below are proposed contracts awaiting type
+registration and signer grants. This operator-run path has no scheduler or
+deployment wiring.
 
 | Input | Projection rule |
 | --- | --- |
