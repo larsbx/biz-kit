@@ -16,7 +16,7 @@ defmodule TaskHost.Web.NativeSignInTest do
 
   import TaskHost.{IdentityFixtures, LedgerFixtures}
 
-  alias BizKit.Identity.Principal
+  alias BizKit.Identity.{Principal, Sessions}
 
   require Logger
 
@@ -173,22 +173,11 @@ defmodule TaskHost.Web.NativeSignInTest do
     assert TaskHost.Repo.query!("SELECT count(*) FROM identity_native_sessions").rows == [[0]]
   end
 
-  # What a restart does to the sessions held in memory.
+  # Restart the supervised singleton without exhausting the supervisor's
+  # crash budget when several persistence tests run consecutively.
   defp restart_sessions do
-    name = BizKit.Cluster.Singleton.name(BizKit.Identity.Sessions)
-    pid = GenServer.whereis(name)
-    ref = Process.monitor(pid)
-    Process.exit(pid, :kill)
-    assert_receive {:DOWN, ^ref, :process, _pid, _reason}
-    wait_until(fn -> GenServer.whereis(name) not in [nil, pid] end)
-  end
-
-  defp wait_until(check, tries \\ 100) do
-    cond do
-      check.() -> :ok
-      tries == 0 -> flunk("the session process did not come back")
-      true -> Process.sleep(10) && wait_until(check, tries - 1)
-    end
+    :ok = Supervisor.terminate_child(BizKit.Identity.Supervisor, Sessions)
+    {:ok, _} = Supervisor.restart_child(BizKit.Identity.Supervisor, Sessions)
   end
 
   test "a code is refused without the app's verifier, and is spent by the attempt", ctx do
