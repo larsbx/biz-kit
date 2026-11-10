@@ -1,7 +1,7 @@
 defmodule ProcurementHost.HTTPTest do
   use CoopSubstrate.LogCase, async: false
   import Plug.Test
-  alias CoopSubstrate.{Log, Procurement, ProcurementFixture, ProcurementTestClock}
+  alias CoopSubstrate.{Log, Procurement, ProcurementFixture, ProcurementTestClock, RestaurantDeliveryWork}
   alias ProcurementHost.{HTML, Web}
   @token String.duplicate("x", 48)
 
@@ -66,6 +66,41 @@ defmodule ProcurementHost.HTTPTest do
     :ok = restart_log()
     assert request(:get, "/requests/http-request", %{}, final).resp_body =~ "fulfilled"
     assert {:ok, %{requests: [%{payment_evidence: []}]}} = Procurement.snapshot(f.context)
+  end
+
+  test "the accepted order exposes signed work through its existing coordinator page", %{f: f} do
+    :ok = ProcurementFixture.quoted(f)
+    assert {:ok, _} = ProcurementFixture.submit(f, "accept", 3, ProcurementFixture.acceptance())
+    signer = new_member("procurement_dispatch", "dispatch")
+    tenant = "11111111-1111-1111-1111-111111111111"
+    route = ProcurementFixture.event(f, "ProcurementDispatchRouteV1", %{
+      "cooperative_id" => "coop", "tenant_id" => tenant, "site" => "North dock",
+      "key_id" => signer.signer.key_id, "pubkey" => {:bytes, signer.signer.pubkey},
+      "active" => true, "expected_version" => 0
+    })
+    assert {:ok, [_]} = Log.append(route)
+
+    detail = request(:get, "/requests/request-1", %{}, login())
+    assert detail.resp_body =~ "Queue Dispatch handoff"
+    assert request(:post, "/requests/request-1/dispatch",
+      %{"_csrf_token" => csrf(detail), "expected_version" => "4"}, detail).status == 303
+
+    scope = %{source: :procurement, chapter: f.context.chapter_id, merchant: "coop",
+      tenant: tenant, key_id: signer.signer.key_id}
+
+    signed = RestaurantDeliveryWork.sign(scope, "", signer.seed)
+    response = work(signed)
+    assert response.status == 200
+    assert %{"jobs" => [%{"order_id" => "request-1", "site" => "North dock", "phase" => "requested"}]} =
+      :json.decode(response.resp_body)
+    assert work(signed).status == 403
+    assert work(RestaurantDeliveryWork.sign(%{scope | source: :restaurant}, "", signer.seed)).status == 403
+  end
+
+  defp work(input) do
+    c = conn(:post, "/api/procurement-dispatch/work", IO.iodata_to_binary(:json.encode(input)))
+    c = Plug.Conn.put_req_header(c, "content-type", "application/json")
+    Web.call(c, Web.init([]))
   end
 
   test "revocation denies an already authenticated browser read and write", %{f: f} do

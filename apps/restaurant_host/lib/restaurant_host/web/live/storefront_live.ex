@@ -1,13 +1,13 @@
 defmodule RestaurantHost.Web.StorefrontLive do
   @moduledoc """
-  The storefront: pick from the menu, give a name for pickup, place the order
-  and pay cash at the counter. After placing, the page follows the order's
+  The storefront: pick from the menu and pay cash at pickup or, where
+  enabled, at the handoff for an arranged delivery. After placing, the page follows the order's
   state as the Log admits each kitchen step.
   """
   use Phoenix.LiveView
 
   alias CoopSubstrate.ULID
-  alias RestaurantHost.{Orders, Restaurant}
+  alias RestaurantHost.{DeliveryCodes, Orders, Restaurant}
   alias RestaurantHost.Web.AuthController
 
   @status %{
@@ -16,7 +16,8 @@ defmodule RestaurantHost.Web.StorefrontLive do
     preparing: "Being prepared",
     ready: "Ready for pickup",
     completed: "Picked up",
-    cancelled: "Cancelled"
+    cancelled: "Cancelled",
+    dispatched: "Out for delivery"
   }
 
   @impl true
@@ -26,8 +27,9 @@ defmodule RestaurantHost.Web.StorefrontLive do
 
     {:ok,
      assign(socket,
-       page_title: "Order for pickup",
+       page_title: "Order online",
        restaurant: r,
+       delivery_available?: Restaurant.delivery_available?(r),
        menu: Orders.menu(r),
        identity_ref: reference,
        signed_in?: match?({:ok, _}, AuthController.principal(reference)),
@@ -35,6 +37,7 @@ defmodule RestaurantHost.Web.StorefrontLive do
        basket: %{},
        priced: nil,
        name: "",
+       fulfillment: "pickup",
        key: ULID.generate(),
        order: nil,
        error: nil
@@ -45,14 +48,18 @@ defmodule RestaurantHost.Web.StorefrontLive do
   def handle_event("add", %{"id" => id}, socket), do: {:noreply, rebasket(socket, id, 1)}
   def handle_event("remove", %{"id" => id}, socket), do: {:noreply, rebasket(socket, id, -1)}
 
-  def handle_event("name", %{"name" => name}, socket) when is_binary(name),
-    do: {:noreply, assign(socket, name: name)}
+  def handle_event("name", %{"name" => name} = params, socket) when is_binary(name),
+    do:
+      {:noreply,
+       assign(socket, name: name, fulfillment: Map.get(params, "fulfillment", "pickup"))}
 
-  def handle_event("place", %{"name" => name}, socket) when is_binary(name) do
+  def handle_event("place", %{"name" => name} = params, socket) when is_binary(name) do
     %{restaurant: r, basket: basket, key: key, identity_ref: reference} = socket.assigns
 
+    fulfillment = Map.get(params, "fulfillment", "pickup")
+
     with {:ok, principal} <- checkout_principal(reference),
-         {:ok, id} <- Orders.place(r, basket, String.trim(name), key, principal) do
+         {:ok, id} <- Orders.place(r, basket, String.trim(name), key, principal, fulfillment) do
       if connected?(socket), do: Orders.subscribe()
       {:noreply, assign(socket, order: Orders.get(r, id), error: nil)}
     else
@@ -112,27 +119,47 @@ defmodule RestaurantHost.Web.StorefrontLive do
   end
 
   defp message(:session_expired), do: "Your session ended. Please sign in again."
+
+  defp message(:delivery_sign_in_required),
+    do: "Sign in to order delivery and keep access to your drop-off code."
+
+  defp message(:invalid_fulfillment), do: "Delivery is unavailable. Please choose pickup."
   defp message(:no_lines), do: "Add something to your order first."
   defp message(:invalid_checkout_command), do: "Please give a name for pickup."
   defp message(_), do: "We could not place that order. Please try again."
 
   defp money(m), do: Money.to_string!(m)
+  defp status(%{fulfillment: :delivery, state: :ready}), do: "Ready for courier"
+  defp status(%{fulfillment: :delivery, state: :completed}), do: "Delivered"
+  defp status(%{state: state}), do: Map.get(@status, state, to_string(state))
 
   @impl true
   def render(%{order: %{} = order} = assigns) do
-    assigns = assign(assigns, status: Map.get(@status, order.state, to_string(order.state)))
+    assigns = assign(assigns, status: status(order))
 
     ~H"""
     <h1>Thanks, {@order.pickup_name}</h1>
     <p>Order <code id="order-id">{@order.id}</code></p>
     <p id="order-status">{@status}</p>
-    <p>Pay {money(Money.from_integer(@order.total, @restaurant.currency))} in cash at pickup.</p>
+    <p :if={@order.state != :cancelled}>
+      Pay {money(Money.from_integer(@order.total, @restaurant.currency))} in cash {if @order.fulfillment ==
+                                                                                        :delivery,
+                                                                                      do:
+                                                                                        "on delivery",
+                                                                                      else:
+                                                                                        "at pickup"}.
+    </p>
+    <p :if={@order.delivery_site && @order.state not in [:completed, :cancelled]}>
+      Give the courier this code when you receive your order:
+      <code id="dropoff-code">{DeliveryCodes.code(@restaurant, @order.id, "delivered")}</code>
+    </p>
+    <p><a href="/">Back to the menu</a></p>
     """
   end
 
   def render(assigns) do
     ~H"""
-    <h1>Order for pickup</h1>
+    <h1>{if @delivery_available?, do: "Order online", else: "Order for pickup"}</h1>
     <nav :if={@sign_in_available?}>
       <a :if={!@signed_in?} href="/auth/login">Sign in</a>
       <a :if={@signed_in?} href="/account/orders">Your orders</a>
@@ -140,7 +167,7 @@ defmodule RestaurantHost.Web.StorefrontLive do
         <button type="submit">Sign out</button>
       </.form>
     </nav>
-    <p :if={@menu == []}>Pickup ordering is currently unavailable.</p>
+    <p :if={@menu == []}>Ordering is currently unavailable.</p>
     <section id="menu">
       <div :for={item <- @menu} class="row">
         <span>{item.name}</span>
@@ -160,8 +187,22 @@ defmodule RestaurantHost.Web.StorefrontLive do
       <div class="row"><strong>Total</strong><strong id="total">{money(@priced.total)}</strong></div>
 
       <form id="place" phx-change="name" phx-submit="place">
-        <label>Name for pickup <input name="name" value={@name} maxlength="80" required /></label>
-        <button type="submit">Place order, pay cash at pickup</button>
+        <label>Name for order <input name="name" value={@name} maxlength="80" required /></label>
+        <label :if={@delivery_available?}>
+          Fulfillment
+          <select name="fulfillment" id="fulfillment">
+            <option value="pickup" selected={@fulfillment == "pickup"}>Pickup</option>
+            <option value="delivery" selected={@fulfillment == "delivery"}>
+              {if @restaurant.delivery_site,
+                do: "Delivery to " <> @restaurant.delivery_site,
+                else: "Arranged delivery"}
+            </option>
+          </select>
+        </label>
+        <p :if={@delivery_available? && @fulfillment == "delivery"}>
+          Pay the courier in cash. The order confirmation includes your drop-off code.
+        </p>
+        <button type="submit">Place order, pay cash</button>
       </form>
     </section>
 

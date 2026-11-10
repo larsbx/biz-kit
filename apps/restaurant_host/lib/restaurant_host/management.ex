@@ -8,21 +8,22 @@ defmodule RestaurantHost.Management do
   alias CoopSubstrate.Commands
   alias CoopSubstrate.Governance.Client
   alias CoopSubstrate.Harness.Ops
-  alias RestaurantCore.Menu
+  alias RestaurantCore.{Delivery, Menu}
   alias RestaurantHost.{DeviceGrants, Restaurant}
 
   @operations %{
     "publish-menu" => "RestaurantMenuPublishedV1",
+    "grant-dispatch" => "RestaurantDispatchGrantedV1",
     "revoke-device" => "RestaurantDeviceRevokedV1"
   }
 
   def prepare(%Restaurant{} = r, operation, payload, key_id) do
     with {:ok, type} <- Map.fetch(@operations, operation),
          true <- payload["merchant_id"] == r.merchant,
-         true <- valid?(operation, payload),
+         {:ok, normalized} <- normalize(operation, payload),
          true <- operation != "publish-menu" or payload["currency"] == Atom.to_string(r.currency),
          {:ok, signer} <- Commands.governance_signer(r.chapter, key_id) do
-      Commands.hold(owner(r, operation), r.chapter, type, payload, signer)
+      Commands.hold(owner(r, operation), r.chapter, type, normalized, signer)
     else
       {:error, _} = error -> error
       _ -> {:error, :bad_request}
@@ -47,14 +48,31 @@ defmodule RestaurantHost.Management do
 
   defp valid?(_, _), do: false
 
+  defp normalize(
+         "grant-dispatch",
+         %{"key_id" => key, "tenant_id" => tenant, "pubkey" => encoded} = p
+       )
+       when map_size(p) == 4 and is_binary(encoded) do
+    with true <- DeviceGrants.identifier?(key) and Delivery.uuid?(tenant),
+         {:ok, <<_::256>> = pubkey} <- Base.url_decode64(encoded, padding: false) do
+      {:ok, %{p | "pubkey" => {:bytes, pubkey}}}
+    else
+      _ -> {:error, :bad_request}
+    end
+  end
+
+  defp normalize(operation, payload) do
+    if valid?(operation, payload), do: {:ok, payload}, else: {:error, :bad_request}
+  end
+
   @doc "Sign only the exact locally supplied chapter, event type and payload."
   def approve(base, chapter, operation, payload, signer) do
     with {:ok, type} <- Map.fetch(@operations, operation),
-         true <- valid?(operation, payload) do
+         {:ok, normalized} <- normalize(operation, payload) do
       Client.sign_held(
         base <> "/api/restaurant-management/" <> operation,
         signer,
-        &matches?(&1, chapter, type, payload),
+        &matches?(&1, chapter, type, normalized),
         %{"chapter_id" => chapter, "payload" => payload}
       )
     else

@@ -22,7 +22,7 @@ defmodule RestaurantCore.Admission do
   """
 
   alias OrderCore.Placement
-  alias RestaurantCore.{Kitchen, Menu}
+  alias RestaurantCore.{Delivery, Kitchen, Menu}
 
   @grant "RestaurantDeviceGrantedV1"
   @revoke "RestaurantDeviceRevokedV1"
@@ -30,6 +30,9 @@ defmodule RestaurantCore.Admission do
   @placed "RestaurantOrderPlacedV1"
   @step "RestaurantOrderStepV1"
   @device "restaurant_device"
+  @dispatch "restaurant_dispatch"
+  @dispatch_grant "RestaurantDispatchGrantedV1"
+  @delivery_step "RestaurantDeliveryStepV1"
 
   @actors Map.new(~w(admin staff system)a, &{Atom.to_string(&1), &1})
   @actions Map.new([:checkout | Map.keys(Kitchen.workflow().actions)], &{Atom.to_string(&1), &1})
@@ -39,6 +42,30 @@ defmodule RestaurantCore.Admission do
 
   def event_types do
     %{
+      @dispatch_grant =>
+        spec("governance", "restaurant_devices", ["merchant_id"], %{
+          "merchant_id" => :string,
+          "tenant_id" => :string,
+          "key_id" => :string,
+          "pubkey" => :pubkey
+        }),
+      @delivery_step =>
+        spec(
+          @dispatch,
+          "restaurant_orders",
+          ["merchant_id", "order_id"],
+          %{
+            "merchant_id" => :string,
+            "order_id" => :string,
+            "tenant_id" => :string,
+            "load_id" => :string,
+            "assignment_id" => :string,
+            "command_id" => :string,
+            "expected_version" => :int,
+            "op" => :string
+          },
+          %{"proof_id" => :string, "proof_digest" => :string, "automated" => :bool}
+        ),
       @grant =>
         spec("governance", "restaurant_devices", ["merchant_id"], %{
           "merchant_id" => :string,
@@ -106,16 +133,76 @@ defmodule RestaurantCore.Admission do
       payload: %{required: required, optional: optional}
     }
 
-  def init, do: %{grants: %{}, merchants: %{}, menus: %{}}
+  def init, do: %{grants: %{}, merchants: %{}, menus: %{}, delivery: Delivery.init()}
 
   def menu(state, chapter, merchant),
     do: get_in(state, [:menus, {chapter, merchant}])
 
   def active_device?(state, chapter, merchant, signer) do
     case state.grants[{chapter, merchant, signer.key_id}] do
-      %{pubkey: pubkey} = grant -> pubkey == signer.pubkey and not Map.get(grant, :revoked, false)
-      nil -> false
+      %{actor: actor, pubkey: pubkey} = grant when actor != :dispatch ->
+        pubkey == signer.pubkey and not Map.get(grant, :revoked, false)
+
+      _ ->
+        false
     end
+  end
+
+  def dispatch_available?(state, chapter, merchant) do
+    Enum.any?(state.grants, fn
+      {{^chapter, ^merchant, _}, %{actor: :dispatch} = grant} ->
+        not Map.get(grant, :revoked, false)
+
+      _ ->
+        false
+    end)
+  end
+
+  def dispatch_key(state, chapter, merchant, tenant, key_id) do
+    case state.grants[{chapter, merchant, key_id}] do
+      %{actor: :dispatch, tenant: ^tenant, pubkey: pubkey} = grant ->
+        if Map.get(grant, :revoked, false), do: :error, else: {:ok, pubkey}
+
+      _ ->
+        :error
+    end
+  end
+
+  @doc "Opaque automation work from the same replayable order and handoff projection."
+  def delivery_work(state, chapter, merchant, tenant, after_id) do
+    orders = get_in(state, [:merchants, {chapter, merchant}, :orders]) || %{}
+
+    orders
+    |> Enum.filter(fn {id, order} ->
+      id > after_id and Map.has_key?(order, :automated_delivery)
+    end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Stream.flat_map(fn {id, order} ->
+      site = order.automated_delivery.site
+      handoff = Delivery.handoff(state.delivery, chapter, merchant, id)
+
+      case {order.state, handoff} do
+        {stage, nil} when stage in [:ready, :cancelled] ->
+          phase = if stage == :ready, do: "requested", else: "cancelled"
+          [%{order_id: id, site: site, phase: phase}]
+
+        {_, %{dispatch_tenant: ^tenant, phase: phase} = h}
+        when phase in [:accepted, :delivered] ->
+          [
+            %{
+              order_id: id,
+              site: site,
+              phase: Atom.to_string(phase),
+              load_id: h.transport_ref,
+              assignment_id: h.dispatch_assignment
+            }
+          ]
+
+        _ ->
+          []
+      end
+    end)
+    |> Enum.take(25)
   end
 
   @doc "`:ok` when the event may be appended to a gate holding `role_keys` and `restaurant`."
@@ -146,6 +233,7 @@ defmodule RestaurantCore.Admission do
         index
         |> Enum.map(fn {key, id} ->
           order = Map.fetch!(orders, id)
+          handoff = Delivery.handoff(state.delivery, chapter, merchant, id)
 
           placed
           |> Map.fetch!(key)
@@ -163,13 +251,24 @@ defmodule RestaurantCore.Admission do
             id: id,
             state: order.state,
             version: order.version,
-            actions: Kitchen.available_actions(order)
+            actions: order_actions(order, handoff),
+            delivery: public_handoff(order, handoff),
+            delivery_site: get_in(order, [:automated_delivery, :site])
           })
           |> Map.merge(Map.fetch!(details, id))
         end)
         |> Enum.sort_by(& &1.id)
     end
   end
+
+  defp order_actions(order, nil), do: Kitchen.available_actions(order)
+  defp order_actions(order, _handoff), do: Kitchen.available_actions(order) -- [:cancel]
+
+  defp public_handoff(%{fulfillment: :delivery, state: :ready}, nil),
+    do: %{phase: :requested, version: 0}
+
+  defp public_handoff(_, nil), do: nil
+  defp public_handoff(_, handoff), do: Map.take(handoff, [:phase, :version])
 
   @spec admit(map(), map(), map()) :: {:ok, map()} | {:error, term()}
   def admit(%{signers: [_]} = env, keys, state), do: admit_one(env, keys, state)
@@ -186,6 +285,50 @@ defmodule RestaurantCore.Admission do
              else: :ok
            ) do
       {:ok, put_in(state, [:grants, id], grant)}
+    end
+  end
+
+  defp admit_one(
+         %{type: @dispatch_grant, chapter_id: ch, signers: [signer], payload: p},
+         keys,
+         state
+       ) do
+    id = {ch, p["merchant_id"], p["key_id"]}
+
+    with :ok <- governance(ch, signer, keys),
+         true <- Delivery.uuid?(p["tenant_id"]) or {:error, :invalid_dispatch_tenant},
+         false <- Map.has_key?(state.grants, id),
+         {:bytes, <<_::256>> = pubkey} <- p["pubkey"] do
+      grant = %{actor: :dispatch, tenant: p["tenant_id"], pubkey: pubkey}
+      {:ok, put_in(state, [:grants, id], grant)}
+    else
+      {:error, _} = error -> error
+      true -> {:error, :restaurant_key_already_granted}
+      _ -> {:error, :invalid_dispatch_grant}
+    end
+  end
+
+  defp admit_one(
+         %{type: @delivery_step, chapter_id: ch, signers: [signer], payload: p},
+         _keys,
+         state
+       ) do
+    merchant = p["merchant_id"]
+    order_id = p["order_id"]
+    id = {ch, merchant, signer.key_id}
+
+    with %{actor: :dispatch, tenant: tenant, pubkey: pubkey} = grant <- state.grants[id],
+         true <- tenant == p["tenant_id"] and pubkey == signer.pubkey,
+         false <- Map.get(grant, :revoked, false),
+         order = state(state, ch, merchant, order_id),
+         {:ok, delivery, order} <- Delivery.apply(state.delivery, ch, merchant, order, p) do
+      {:ok,
+       state
+       |> Map.put(:delivery, delivery)
+       |> put_in([:merchants, {ch, merchant}, :orders, order_id], order)}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :forbidden}
     end
   end
 
@@ -245,7 +388,8 @@ defmodule RestaurantCore.Admission do
              merchant,
              cmd
            ),
-         {:ok, order} <- Kitchen.new(p["merchant_id"], p["order_id"], cmd.fulfillment) do
+         {:ok, order} <- Kitchen.new(p["merchant_id"], p["order_id"], cmd.fulfillment),
+         {:ok, order} <- Delivery.bind_checkout(order, p["delivery"]) do
       {:ok,
        put_in(state, [:merchants, {ch, p["merchant_id"]}], %{
          checkout: checkout,
@@ -261,7 +405,8 @@ defmodule RestaurantCore.Admission do
   end
 
   defp admit_one(%{type: @step, chapter_id: ch, payload: p} = env, _keys, state) do
-    with {:ok, grant} <- device(env, state, nil) do
+    with {:ok, grant} <- device(env, state, nil),
+         :ok <- cancellation_allowed(state.delivery, ch, p) do
       trusted = %{
         merchant: p["merchant_id"],
         order_id: p["order_id"],
@@ -293,6 +438,14 @@ defmodule RestaurantCore.Admission do
   end
 
   defp admit_one(_, _, _), do: {:error, :unknown_restaurant_event}
+
+  defp cancellation_allowed(delivery, chapter, %{"action" => "cancel"} = p) do
+    if Delivery.handoff(delivery, chapter, p["merchant_id"], p["order_id"]),
+      do: {:error, :dispatch_custody_reconciliation_required},
+      else: :ok
+  end
+
+  defp cancellation_allowed(_, _, _), do: :ok
 
   defp governance(ch, signer, keys) do
     if Map.get(keys[{ch, "governance"}] || %{}, signer.key_id) == signer.pubkey,

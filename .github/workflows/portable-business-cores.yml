@@ -44,7 +44,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/business-core-vendor"
           cp -R "apps/${{ matrix.app }}" "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
           # In-umbrella sibling dependencies resolve as ../<app> outside it too.
-          for sibling in order_core restaurant_core; do
+          for sibling in order_core restaurant_core fulfillment_core; do
             [ -d "$RUNNER_TEMP/business-core-vendor/$sibling" ] || cp -R "apps/$sibling" "$RUNNER_TEMP/business-core-vendor/"
           done
       - name: Resolve the package's own dependencies and compile

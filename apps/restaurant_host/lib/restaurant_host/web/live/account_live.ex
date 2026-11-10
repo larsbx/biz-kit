@@ -2,15 +2,16 @@ defmodule RestaurantHost.Web.AccountLive do
   @moduledoc false
   use Phoenix.LiveView
 
-  alias RestaurantHost.{Orders, Restaurant}
+  alias RestaurantHost.{DeliveryCodes, Orders, Restaurant}
   alias RestaurantHost.Web.AuthController
 
   @impl true
   def mount(_params, session, socket) do
     case AuthController.principal(session["restaurant_identity"]) do
       {:ok, principal} ->
-        orders = Restaurant.current() |> Orders.for_principal(principal) |> Enum.reverse()
-        {:ok, assign(socket, page_title: "Your orders", orders: orders)}
+        restaurant = Restaurant.current()
+        orders = restaurant |> Orders.for_principal(principal) |> Enum.reverse()
+        {:ok, assign(socket, page_title: "Your orders", orders: orders, restaurant: restaurant)}
 
       {:error, _} ->
         {:ok, redirect(socket, to: "/")}
@@ -32,7 +33,11 @@ defmodule RestaurantHost.Web.AccountLive do
     <p :if={@orders == []}>You have no orders with this restaurant.</p>
     <ul>
       <li :for={order <- @orders} id={"account-order-#{order.id}"}>
-        <code>{order.id}</code> · {order.state} · {money(order)}
+        <code>{order.id}</code>
+        · {order.state} · {money(order)}
+        <span :if={order.delivery_site && order.state not in [:completed, :cancelled]}>
+          · Drop-off code <code>{DeliveryCodes.code(@restaurant, order.id, "delivered")}</code>
+        </span>
       </li>
     </ul>
     """

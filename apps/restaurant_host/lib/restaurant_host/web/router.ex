@@ -20,6 +20,8 @@ defmodule RestaurantHost.Web.Router do
   scope "/api", RestaurantHost.Web do
     pipe_through :api
 
+    post "/restaurant-delivery", DeliveryController, :submit
+    post "/restaurant-delivery/work", DeliveryController, :work
     get "/restaurant-menu", DeviceGrantController, :menu
     post "/restaurant-management/:operation", DeviceGrantController, :prepare_management
     post "/restaurant-management/:operation/:id", DeviceGrantController, :submit_management

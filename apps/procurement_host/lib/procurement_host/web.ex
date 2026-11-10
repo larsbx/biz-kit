@@ -1,7 +1,7 @@
 defmodule ProcurementHost.Router do
   use Plug.Router
   alias CoopSubstrate.Procurement
-  alias ProcurementHost.{Admission, Auth, HTML}
+  alias ProcurementHost.{Admission, Auth, Dispatch, HTML}
   plug :match
   plug :dispatch
 
@@ -41,10 +41,20 @@ defmodule ProcurementHost.Router do
     end)
   end
   get "/requests/:id" do
-    protected(conn, fn conn, _context, snapshot ->
+    protected(conn, fn conn, context, snapshot ->
       case Enum.find(snapshot.requests, &(elem(&1.scope, 2) == id)) do
         nil -> page(conn, "Not found", "<p>No request in this cooperative.</p>", 404)
-        row -> page(conn, "Request " <> id, HTML.detail(row, snapshot.businesses))
+        row -> page(conn, "Request " <> id, HTML.detail(row, snapshot.businesses) <> HTML.dispatch(row, snapshot.dispatch_site, context))
+      end
+    end)
+  end
+  post "/requests/:id/dispatch" do
+    protected(conn, fn conn, context, _snapshot ->
+      with {version, ""} <- Integer.parse(conn.body_params["expected_version"] || ""),
+           :ok <- Admission.run(fn -> Dispatch.request(context, id, version) end) do
+        redirect(conn, "/requests/" <> URI.encode(id, &URI.char_unreserved?/1))
+      else
+        _ -> page(conn, "Dispatch request refused", "<p>Reload the order and check the enrolled route.</p>", 409)
       end
     end)
   end
@@ -84,14 +94,25 @@ defmodule ProcurementHost.Web do
   @moduledoc "Server-rendered operator console. No public ledger read, seed, or authority fields in forms."
   use Plug.Builder
   plug :secret
-  plug Plug.Parsers, parsers: [:urlencoded], pass: [], length: 16_384
+  plug Plug.Parsers, parsers: [:urlencoded, :json], pass: [], length: 16_384, json_decoder: Jason
+  plug :headers
+  plug :dispatch_api
   plug Plug.Session, store: :cookie, key: "_procurement_pilot",
     signing_salt: "procurement-sign-v1", encryption_salt: "procurement-encrypt-v1",
     secure: true, http_only: true, same_site: "Strict", max_age: 14_400
   plug :fetch_session
   plug Plug.CSRFProtection
-  plug :headers
   plug ProcurementHost.Router
+
+  # Machine calls authenticate their signed scope/envelope. Browser POSTs
+  # still pass through session and CSRF protection below this plug.
+  def dispatch_api(%{method: "POST", path_info: ["api", "procurement-dispatch", "work"]} = conn, _),
+    do: ProcurementHost.Dispatch.work(conn)
+
+  def dispatch_api(%{method: "POST", path_info: ["api", "procurement-dispatch"]} = conn, _),
+    do: ProcurementHost.Dispatch.submit(conn)
+
+  def dispatch_api(conn, _), do: conn
 
   def secret(conn, _), do: %{conn | secret_key_base: ProcurementHost.Auth.settings().secret_key_base}
   def headers(conn, _) do
