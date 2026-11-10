@@ -175,6 +175,28 @@ seed-variable names and device keys must be distinct in one restaurant.
 
 Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
 
+### Delivery
+
+Delivery is optional and off by default. The restaurant file may add one flat
+fee, in minor units, itemized on every delivery order (untaxed under `US-MI`):
+
+```json
+"delivery": {"fee_minor": 399}
+```
+
+The storefront offers delivery only when that section is present *and* the
+ledger holds a Dispatch transport grant (`RestaurantTransportGrantedV1`) for
+the merchant. This release ships no tooling that issues such a grant, and no
+Dispatch signing path, so delivery stays off on a deployed host until both
+exist (see the
+[delivery handoff ADR](architecture/2026-11-10-restaurant-delivery-handoff.md)).
+A transport key's seed belongs to Dispatch: never put it on the restaurant
+server, in the restaurant file or in its environment. The host refuses any
+`transport` field in the file. Whoever holds the chapter's governance key can
+grant transport keys, so for a delivery chapter that key must stay with the
+coop's administrators, never on the restaurant server. The ledger refuses a
+transport key that is also a device or role key, in either order.
+
 ## Testing a deployment
 
 `scripts/release-smoke.sh` is what the `release-smoke` CI job runs, and it

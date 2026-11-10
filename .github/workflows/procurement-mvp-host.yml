@@ -9,6 +9,7 @@ on:
       - 'apps/task_core/**'
       - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
+      - 'apps/fulfillment_core/**'
       - 'apps/agent_core/**'
       - 'apps/agent_ops_store/**'
       - 'apps/group_buy_core/**'

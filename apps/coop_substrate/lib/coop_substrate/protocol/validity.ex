@@ -152,6 +152,11 @@ defmodule CoopSubstrate.Protocol.Validity do
       Map.has_key?(declared, p["key_id"]) ->
         {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
 
+      RestaurantCore.Admission.transport_pubkey?(gate.restaurant, p["pubkey"]) ->
+        # A Dispatch transport key is never also a role key, in either order
+        # (RestaurantTransportGrantedV1 refuses a declared role key).
+        {:error, :key_not_separate}
+
       governance == nil and p["role"] != "governance" ->
         # No governance exists yet: the only representable declaration is the
         # genesis governance key itself.

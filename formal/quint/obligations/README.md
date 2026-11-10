@@ -3,7 +3,10 @@
 One Quint file per Proof Bank catalog app: `<app>.qnt`. Each one states that
 app's catalogued `first_formal_obligation`
 (`proof_bank/characterizations/v1/catalog.json`) as an invariant over an
-abstract state machine of the rule that enforces it.
+abstract state machine of the rule that enforces it. An app with a second
+obligation adds a second file under its own name, registered beside the first
+in `formal/coverage.json`: `restaurant_delivery.qnt` states restaurant_core's
+delivery handoff (I8) over the rows of `RestaurantCore.Coupling`.
 
 Each file has three modules:
 

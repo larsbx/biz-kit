@@ -72,7 +72,7 @@ defmodule ProofBankCore.Portfolio do
     {"procurement_host", :hosted, :conformance,
      "A command must be re-signed only after an explicit pre-append clock refusal, and never after an outcome that may have committed."},
     {"restaurant_core", :capability, :conformance,
-     "A restaurant event must be admitted only when signed by a device a governance grant authorized for that action."},
+     "A restaurant event must be admitted only when signed by a key a governance grant authorized for it: a restaurant device for that action, or the merchant's Dispatch transport key for a transport step."},
     {"restaurant_host", :hosted, :conformance,
      "The host must obtain a governance signature only on the device grant it showed."},
     {"sales_core", :capability, :conformance,

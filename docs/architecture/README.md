@@ -5,6 +5,11 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Restaurant delivery handoff — 2026-11-10](2026-11-10-restaurant-delivery-handoff.md):
+  eatsbot rebuild slice 5; a delivery order handed to Dispatch through
+  FulfillmentCore, I8 as a literal relation of 19 coupled pairs and 30 joint
+  steps, dispatched at pickup, proof-backed completion and failure, two-phase
+  cancellation. Delivery stays off until Dispatch's side exists.
 - [Task host — 2026-11-09](2026-11-09-task-host.md): SpruceGoose's web
   surface (`/auth`, the task view, its commands and the feed) rehosted on
   `apps/task_host`; native sessions kept; `/mcp` and the OAuth2 issuer dropped.

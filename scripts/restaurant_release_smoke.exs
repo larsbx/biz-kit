@@ -10,4 +10,9 @@ for {action, version} <- Enum.with_index([:accept, :start_preparing, :mark_ready
     do: :ok = Orders.step(r, "board-1", id, action, version)
 
 %{state: :completed, version: 4, total: 2650} = Orders.get(r, id)
+
+# The release carries the delivery handoff and routes its types through
+# RestaurantCore.Admission; no transport key exists here, so no driver moves.
+true = Code.ensure_loaded?(FulfillmentCore) and Code.ensure_loaded?(OrderCore.Transport)
+{:error, :not_a_delivery_order} = Orders.request_transport(r, "board-1", id, 4)
 IO.puts("SMOKE OK #{id}")

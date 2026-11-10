@@ -15,11 +15,17 @@ defmodule RestaurantHost.Config do
         "currency": "USD", "jurisdiction": "US-MI",
         "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
         "storefront": {"device_id": "storefront", "key_id": "k-store"},
-        "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "…"}}
+        "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "…"}},
+        "delivery": {"fee_minor": 399}
       }
+
+  `delivery` is optional: one flat fee in minor units, itemized on every
+  delivery order. Delivery is offered only once the ledger also holds a
+  Dispatch transport grant for the merchant; no transport key or seed is ever
+  part of this file.
   """
 
-  @top ~w(chapter merchant currency jurisdiction menu storefront boards)
+  @top ~w(chapter merchant currency jurisdiction menu storefront boards delivery)
   @device ~w(device_id key_id)
 
   @doc "Read the restaurant file at `path` with seeds from `env`."
@@ -41,7 +47,8 @@ defmodule RestaurantHost.Config do
          {:ok, menu} <- menu(doc["menu"]),
          {:ok, storefront} <- device("storefront", doc["storefront"], env, false),
          {:ok, boards} <- boards(doc["boards"], env),
-         :ok <- distinct_devices(storefront, boards) do
+         :ok <- distinct_devices(storefront, boards),
+         {:ok, delivery} <- delivery(doc["delivery"]) do
       {:ok,
        %{
          chapter: chapter,
@@ -50,10 +57,24 @@ defmodule RestaurantHost.Config do
          jurisdiction: jurisdiction,
          menu: menu,
          storefront: storefront,
-         boards: boards
+         boards: boards,
+         delivery: delivery
        }}
     end
   end
+
+  defp delivery(nil), do: {:ok, nil}
+
+  defp delivery(%{} = spec) do
+    with :ok <- only(spec, ["fee_minor"], "delivery") do
+      case spec["fee_minor"] do
+        fee when is_integer(fee) and fee >= 0 -> {:ok, %{fee_minor: fee}}
+        _ -> invalid("delivery")
+      end
+    end
+  end
+
+  defp delivery(_), do: invalid("delivery")
 
   defp decode(json) do
     case :json.decode(json) do

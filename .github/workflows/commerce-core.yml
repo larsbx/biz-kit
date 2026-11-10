@@ -6,6 +6,7 @@ on:
       - 'apps/commerce_core/**'
       - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
+      - 'apps/fulfillment_core/**'
       - 'apps/eatsbot_core/**'
       - 'apps/eatsbot/**'
       - 'apps/biz_kit_composition/**'
