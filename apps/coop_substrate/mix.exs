@@ -36,10 +36,9 @@ defmodule CoopSubstrate.MixProject do
       {:task_core, in_umbrella: true},
       # The restaurant order lifecycle the ledger admits (eatsbot rebuild).
       {:restaurant_core, in_umbrella: true},
+      {:dispatch_core, in_umbrella: true},
       # Cross-boundary signed replay acceptance; no production dependency.
       {:agent_ops_store, in_umbrella: true, only: :test},
-      # Code only (procurement's pure workflow); not started, so Localize does
-      # not boot against the legacy eatsbot's locale config.
       {:commerce_core, in_umbrella: true, only: :test, runtime: false},
       {:federation_service, in_umbrella: true, only: :test},
       {:group_buy_core, in_umbrella: true},

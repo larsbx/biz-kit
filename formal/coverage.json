@@ -278,6 +278,15 @@
         "note": "Lifecycle.apply answers every unauthorized command with a uniform forbidden before reading version or state, and the reachable states contain no payment or settlement state."
       }
     ],
+    "procurement_host": [
+      {
+        "quint": "formal/quint/obligations/procurement_host.qnt",
+        "main": "procurement_host",
+        "control": "procurement_host_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness"
+      }
+    ],
     "proof_bank_core": [
       {
         "quint": "formal/quint/obligations/proof_bank_core.qnt",
