@@ -15,7 +15,7 @@ lines.on('line', line => {
 const next = () => messages.length ? Promise.resolve(messages.shift()) : new Promise(resolve => waiters.push(resolve));
 const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
 const cards = page => page.locator('#task-list [data-task-key]');
-const privateValues = ['workspace-b', 'Private B desk', 'Private B record', 'Beta / confidential'];
+const privateValues = ['private-workspace-beta', 'Private B desk', 'Private B record', 'Beta / confidential'];
 
 async function signIn(page, subject) {
   const login = await page.request.get(`${base}/auth/second/login`, { maxRedirects: 0 });
@@ -68,6 +68,47 @@ async function assertMobile(page) {
     'operations screen overflows the 390px viewport');
 }
 
+async function bootstrap(browser) {
+  const page = await browser.newPage();
+  page.setDefaultTimeout(20_000);
+  const app = `${base}/app?${new URLSearchParams({
+    chapter: firstChapter, tenant, project: 'project-1', provider: 'bootstrap',
+  })}`;
+  await page.goto(app);
+  await Promise.all([
+    page.waitForURL(`${base}/app`),
+    page.getByRole('link', { name: 'Sign in', exact: true }).click(),
+  ]);
+  const identity = await page.request.get(`${base}/auth/me`);
+  assert.equal(identity.status(), 200);
+
+  const before = await page.request.get(`${base}/api/v1/operations`);
+  assert.equal(before.status(), 200);
+  assert.deepEqual((await before.json()).workspaces, [], 'workspace visible before approval');
+
+  await page.goto(app);
+  await page.locator('#enrol-label').fill('Synthetic bootstrap browser');
+  await page.locator('#enrol-role').selectOption('governance');
+  await page.locator('#enrol-form').getByRole('button', { name: 'Request access' }).click();
+  const pending = page.locator('#admin-enrolment .code');
+  await pending.waitFor();
+  assert.equal(await page.locator('#admin-section').isVisible(), false);
+  say({ stage: 'bootstrap_pending', code: await pending.textContent() });
+  assert.equal(await next(), 'inspected');
+  await page.reload();
+  await pending.waitFor();
+  say({ stage: 'bootstrap_still_pending' });
+
+  assert.equal(await next(), 'approved');
+  await page.reload();
+  await page.locator('#admin-section').waitFor();
+  await page.locator('#admin-enrolment').filter({ hasText: 'This browser administers this chapter.' }).waitFor();
+  await page.goto(`${base}/operations?provider=bootstrap`);
+  await page.locator('#workspace-list [data-workspace="bootstrap-desk"]').waitFor();
+  await cards(page).locator('h3').filter({ hasText: 'Synthetic bootstrap record' }).waitFor();
+  say({ stage: 'bootstrap_approved' });
+}
+
 (async () => {
   const executable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   const browser = await chromium.launch({
@@ -76,6 +117,10 @@ async function assertMobile(page) {
   });
   const errors = [];
   try {
+    if (secondChapter === '--bootstrap') {
+      await bootstrap(browser);
+      return;
+    }
     const fullContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const full = await fullContext.newPage();
     full.setDefaultTimeout(20_000);
@@ -89,7 +134,7 @@ async function assertMobile(page) {
       ['Private B record', 'Review <b>A</b> record'].sort(), 'titles must stay literal and scoped');
     assert.equal(await full.locator('#task-list h3 b').count(), 0, 'task title must not become HTML');
     await full.locator('#workspace-list [data-workspace="workspace-a"]').filter({ hasText: 'Custom <A> desk' }).waitFor();
-    await full.locator('#workspace-list [data-workspace="workspace-b"]').filter({ hasText: 'Private B desk' }).waitFor();
+    await full.locator('#workspace-list [data-workspace="private-workspace-beta"]').filter({ hasText: 'Private B desk' }).waitFor();
     const keys = await cards(full).evaluateAll(nodes => nodes.map(node => node.dataset.taskKey));
     assert.equal(new Set(keys).size, 2, 'colliding task IDs from different scopes were conflated');
 
