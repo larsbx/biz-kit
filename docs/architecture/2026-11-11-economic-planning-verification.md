@@ -169,6 +169,44 @@ empirical forecast evaluation remain separate evidence classes.
 
 ## Delivery order and gates
 
+### EPV-02a: offline boundary after the initial proof gate
+
+The next implementation slice is the
+[strict offline replay boundary](../../proof_bank/economic_planning/adapter/CONTRACT.md).
+A new Lean replay function starts at `initial`; a successful result is proved to
+be an accepted trace, with the existing capacity, source, cost and token
+guarantees. Rejection is final for that action prefix. Independent expected-type
+contracts and the namespace axiom audit include the new theorems.
+
+The Python reference adapter is confined to the research toolchain. A host
+supplies an immutable source/catalog snapshot, an identity assertion and a read
+authorization callback. Caller JSON supplies exact expected revisions and
+proposed actions, never source payloads, grants or an opening state. A host catalog
+binds each monetary source total to canonical components before output release;
+callers cannot rename duplicate charges across different quotes. The adapter
+rechecks requested reads before releasing one final certificate. Strict decoding
+rejects duplicate and unknown fields, ambiguous catalogs, unsafe numeric forms,
+unsupported enums, missing fields and oversized inputs. Exact natural quantities
+use canonical decimal strings; unknown values remain null. Separate commitments
+bind actual request bytes, the validated snapshot and the prepared replay bundle.
+
+Adversarial tests exercise that authority boundary. A deterministic authored and
+seeded corpus compares complete Python states, certificates and first rejection
+indices with an oracle that executes the actual Lean kernel. The public offline
+path retains only its final state; full prefixes are test diagnostics.
+Deliberately broken candidate implementations must fail the same comparisons.
+Independent golden cases constrain both implementations.
+
+This completes a bounded offline serialization/replay gate, not all of EPV-02.
+Provider/platform authentication, durable atomic source and grant snapshots,
+canonical resource/component registry construction and actual data-source reads
+remain before application integration. Finite differential checks are not a
+universal runtime refinement proof. Signed/fractional price and rate observations
+also need a separately specified numeric adapter; no value is clamped or rounded
+to fit the current nonnegative integral kernel.
+
+### Program milestones
+
 | Milestone | Deliverable | Required evidence before advancing |
 | --- | --- | --- |
 | EPV-01 | Inert planning contracts and verification package | Lean theorem/type/axiom checks, fresh kernel replay, executable positive/negative scenarios, independent finite Quint exploration, and validated guard-removal counterexamples tied to exact source/tool identities. |

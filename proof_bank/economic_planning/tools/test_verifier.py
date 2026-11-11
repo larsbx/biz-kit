@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+from copy import deepcopy
 from pathlib import Path
 import subprocess
 import sys
@@ -251,6 +252,91 @@ class ModelOutcomeControls(unittest.TestCase):
 
     def test_positive_result_cannot_also_contain_invariant_violation(self):
         self.rejected(SAFE + COUNTEREXAMPLE, 0, False)
+
+
+class AdapterReceiptControls(unittest.TestCase):
+    def setUp(self):
+        self.registry = {
+            "boundary_tests": ["Boundary.test_exact_source"],
+            "named_cases": ["known_case"], "goldens": ["known_case", "complete_snapshot"],
+            "seed": 17, "random_cases": 1, "prefix_states": 5,
+            "controls": [{"name": "ignored_guard", "witness": "known_case", "path": "both"}],
+        }
+        self.report = {
+            "schema": "biz-kit/economic-planning/adapter-verification-v1", "status": "passed",
+            "boundary_tests": self.registry["boundary_tests"][:], "boundary_test_count": 1,
+            "skipped_test_count": 0,
+            "differential": {
+                "schema": "biz-kit/economic-planning/differential-v1", "status": "passed",
+                "case_names": ["known_case", "seeded_0000"], "named_case_names": ["known_case"],
+                "golden_names": ["known_case", "complete_snapshot"],
+                "seed": 17, "case_count": 2, "random_case_count": 1, "golden_count": 2,
+                "public_final_comparison_count": 2, "full_state_comparisons": 5, "oracle_exit_code": 0,
+                "input_sha256": "a" * 64, "stdout_sha256": "b" * 64, "stderr_sha256": "c" * 64,
+                "claims": {"finite_differential_evidence": True, "universal_runtime_refinement": False,
+                           "source_authentication": False, "forecast_accuracy": False},
+                "controls": [{"name": "ignored_guard", "witness": "known_case", "path": "both",
+                              "mismatches": {"prefix": "different acceptance", "final": "different acceptance"},
+                              "mutated_source_sha256": "d" * 64}],
+            },
+        }
+
+    def rejected(self, report):
+        with self.assertRaises(ValueError):
+            VERIFY.adapter_result(report, self.registry)
+
+    def test_complete_offline_adapter_inventory_is_accepted(self):
+        self.assertEqual(VERIFY.adapter_result(self.report, self.registry), {
+            "boundary_tests": 1, "differential_cases": 2, "prefix_states": 5,
+            "final_state_comparisons": 2, "goldens": 2, "mutants": 1,
+        })
+
+    def test_failed_or_skipped_boundary_tests_cannot_be_reported_as_success(self):
+        for key, value in [("status", "failed"), ("boundary_tests", []),
+                           ("boundary_test_count", True), ("skipped_test_count", 1)]:
+            report = deepcopy(self.report)
+            report[key] = value
+            with self.subTest(key=key):
+                self.rejected(report)
+
+    def test_missing_reordered_or_duplicate_case_inventory_is_refused(self):
+        for key, value in [("case_names", ["known_case"]), ("case_names", ["seeded_0000", "known_case"]),
+                           ("case_names", ["known_case", "known_case"]), ("named_case_names", []),
+                           ("golden_names", ["known_case"])]:
+            report = deepcopy(self.report)
+            report["differential"][key] = value
+            with self.subTest(key=key, value=value):
+                self.rejected(report)
+
+    def test_wrong_counts_or_nonzero_oracle_exit_are_refused(self):
+        for key in ("case_count", "random_case_count", "golden_count", "public_final_comparison_count",
+                    "full_state_comparisons", "seed", "oracle_exit_code"):
+            report = deepcopy(self.report)
+            report["differential"][key] += 1
+            with self.subTest(key=key):
+                self.rejected(report)
+
+    def test_missing_mutation_witness_or_either_replay_path_is_refused(self):
+        for update in ({"mismatches": {}}, {"mismatches": {"prefix": "difference"}},
+                       {"mismatches": {"prefix": "difference", "final": ""}},
+                       {"witness": "another_case"}, {"path": "prefix"}, {"mutated_source_sha256": ""}):
+            report = deepcopy(self.report)
+            report["differential"]["controls"][0].update(update)
+            with self.subTest(update=update):
+                self.rejected(report)
+        report = deepcopy(self.report)
+        report["differential"]["controls"] = []
+        self.rejected(report)
+
+    def test_missing_byte_commitments_and_overstated_claims_are_refused(self):
+        for key in ("input_sha256", "stdout_sha256", "stderr_sha256"):
+            report = deepcopy(self.report)
+            report["differential"][key] = "missing"
+            self.rejected(report)
+        for key in ("universal_runtime_refinement", "source_authentication", "forecast_accuracy"):
+            report = deepcopy(self.report)
+            report["differential"]["claims"][key] = True
+            self.rejected(report)
 
 
 class ExactSourceControls(unittest.TestCase):

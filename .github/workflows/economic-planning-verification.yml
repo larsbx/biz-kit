@@ -61,7 +61,7 @@ jobs:
         run: >-
           python3 proof_bank/research_exchange/tools/bootstrap.py
           --destination "$RUNNER_TEMP/economic-planning-tools"
-      - name: Prove contracts and reject deliberate countermodels
+      - name: Prove contracts and verify the offline replay boundary
         run: >-
           python3 -I proof_bank/economic_planning/tools/verify.py
           --expected-head "$PLANNING_SOURCE_HEAD"

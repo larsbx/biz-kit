@@ -56,6 +56,20 @@
     "EconomicPlanning.initial_costs_safe",
     "EconomicPlanning.cost_preserves_disjoint_currency",
     "EconomicPlanning.step_preserves_costs",
-    "EconomicPlanning.trace_costs_disjoint_currency"
+    "EconomicPlanning.trace_costs_disjoint_currency",
+    "EconomicPlanning.trace_trans",
+    "EconomicPlanning.replayFrom_success_trace",
+    "EconomicPlanning.replay_success_trace",
+    "EconomicPlanning.replayFrom_append",
+    "EconomicPlanning.replay_rejected_prefix",
+    "EconomicPlanning.replay_initial_empty",
+    "EconomicPlanning.replay_capacity_safe",
+    "EconomicPlanning.replay_capacity_conservation",
+    "EconomicPlanning.replay_unknown_capacity_unused",
+    "EconomicPlanning.replay_sources_available",
+    "EconomicPlanning.replay_costs_disjoint_currency",
+    "EconomicPlanning.replay_operational_token",
+    "EconomicPlanning.replayFrom_publications_prefix",
+    "EconomicPlanning.replayFrom_preserves_published_certificate"
   ]
 }

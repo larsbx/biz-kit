@@ -294,3 +294,62 @@ example : ∀ {ctx : Context} {s s' : State} {action : Action}
 example : ∀ {ctx : Context} {token : String} {s : State}
     (h : Trace ctx (initial token) s),
     CostsSafe ctx s := @trace_costs_disjoint_currency
+
+-- Independent replay contract types; these are literal expected propositions.
+example : ∀ {ctx : Context} {first middle last : State}
+    (before : Trace ctx first middle) (after : Trace ctx middle last),
+    Trace ctx first last := @trace_trans
+
+example : ∀ {ctx : Context} {first last : State} {actions : List Action}
+    (h : replayFrom ctx first actions = some last),
+    Trace ctx first last := @replayFrom_success_trace
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s),
+    Trace ctx (initial token) s := @replay_success_trace
+
+example : ∀ (ctx : Context) (s : State) (before after : List Action),
+    replayFrom ctx s (before ++ after) =
+      (replayFrom ctx s before).bind (fun middle => replayFrom ctx middle after) := @replayFrom_append
+
+example : ∀ {ctx : Context} {token : String} {before after : List Action}
+    (h : replay ctx token before = none),
+    replay ctx token (before ++ after) = none := @replay_rejected_prefix
+
+example : ∀ (ctx : Context) (token : String),
+    replay ctx token [] = some (initial token) := @replay_initial_empty
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s),
+    CapacitySafe ctx s := @replay_capacity_safe
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s) (key : ResourceKey) (r : Resource) (cap : Nat)
+    (hr : ctx.resource key = some r) (hc : r.capacity = some cap),
+    used s.allocations key ≤ cap ∧ cap - used s.allocations key + used s.allocations key = cap := @replay_capacity_conservation
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s) (key : ResourceKey) (r : Resource)
+    (hr : ctx.resource key = some r) (hc : r.capacity = none),
+    used s.allocations key = 0 := @replay_unknown_capacity_unused
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s),
+    SourcesSafe ctx s := @replay_sources_available
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s),
+    CostsSafe ctx s := @replay_costs_disjoint_currency
+
+example : ∀ {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s),
+    s.operationalToken = token := @replay_operational_token
+
+example : ∀ {ctx : Context} {first last : State} {actions : List Action}
+    (h : replayFrom ctx first actions = some last),
+    first.publications.IsPrefix last.publications := @replayFrom_publications_prefix
+
+example : ∀ {ctx : Context} {first last : State} {actions : List Action}
+    (h : replayFrom ctx first actions = some last) (cert : Certificate)
+    (hc : cert ∈ first.publications),
+    cert ∈ last.publications := @replayFrom_preserves_published_certificate

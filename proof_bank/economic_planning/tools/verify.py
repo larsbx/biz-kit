@@ -139,6 +139,59 @@ def model_result(log: str, code: int, version: str, negative: bool) -> dict:
             "distinct": int(stats[2]), "queued": 0, "depth": int(depth[1])}
 
 
+def adapter_result(report: dict, registry: dict) -> dict:
+    """Accept only the complete committed offline boundary/corpus inventory."""
+    if report.get("schema") != "biz-kit/economic-planning/adapter-verification-v1" or report.get("status") != "passed":
+        raise ValueError("missing successful adapter report")
+    tests = registry["boundary_tests"]
+    named = registry["named_cases"]
+    goldens = registry["goldens"]
+    for values, label in [(tests, "boundary tests"), (named, "differential cases"), (goldens, "golden assertions")]:
+        unique_names(values, label)
+    random_count = registry["random_cases"]
+    if type(random_count) is not int or not 1 <= random_count <= 1024:
+        raise ValueError("invalid deterministic random corpus size")
+    expected_names = named + [f"seeded_{i:04d}" for i in range(random_count)]
+    if report.get("boundary_tests") != tests or type(report.get("boundary_test_count")) is not int or report["boundary_test_count"] != len(tests) or type(report.get("skipped_test_count")) is not int or report["skipped_test_count"] != 0:
+        raise ValueError("boundary test inventory incomplete")
+    result = report.get("differential", {})
+    if result.get("schema") != "biz-kit/economic-planning/differential-v1" or result.get("status") != "passed":
+        raise ValueError("missing successful differential evidence")
+    if result.get("case_names") != expected_names or result.get("named_case_names") != named or result.get("golden_names") != goldens:
+        raise ValueError("differential or golden inventory mismatch")
+    counts = {"case_count": len(expected_names), "random_case_count": random_count,
+              "golden_count": len(goldens), "public_final_comparison_count": len(expected_names),
+              "full_state_comparisons": registry["prefix_states"], "seed": registry["seed"], "oracle_exit_code": 0}
+    for key, expected in counts.items():
+        if type(result.get(key)) is not int or result[key] != expected:
+            raise ValueError(f"differential result count mismatch: {key}")
+    for key in ("input_sha256", "stdout_sha256", "stderr_sha256"):
+        if type(result.get(key)) is not str or not re.fullmatch(r"[0-9a-f]{64}", result[key]):
+            raise ValueError("missing exact oracle byte commitments")
+    required_claims = {"finite_differential_evidence": True, "universal_runtime_refinement": False,
+                       "source_authentication": False, "forecast_accuracy": False}
+    claims = result.get("claims")
+    if type(claims) is not dict or set(claims) != set(required_claims) or any(claims[k] is not value for k, value in required_claims.items()):
+        raise ValueError("adapter evidence claims exceed this gate")
+    controls = result.get("controls")
+    expected_controls = registry["controls"]
+    if type(controls) is not list or not expected_controls or len(controls) != len(expected_controls):
+        raise ValueError("deliberate adapter mutation inventory incomplete")
+    unique_names([control["name"] for control in expected_controls], "adapter mutation controls")
+    for actual, expected in zip(controls, expected_controls):
+        if any(actual.get(key) != value for key, value in expected.items()):
+            raise ValueError("adapter mutation witness mismatch")
+        paths = {"prefix", "final"} if expected["path"] == "both" else {expected["path"]}
+        mismatches = actual.get("mismatches")
+        if type(mismatches) is not dict or set(mismatches) != paths or any(type(value) is not str or not value for value in mismatches.values()):
+            raise ValueError("adapter mutation lacks a concrete comparison rejection")
+        if not re.fullmatch(r"[0-9a-f]{64}", actual.get("mutated_source_sha256", "")):
+            raise ValueError("missing actual mutated source identity")
+    return {"boundary_tests": len(tests), "differential_cases": len(expected_names),
+            "prefix_states": result["full_state_comparisons"], "final_state_comparisons": len(expected_names),
+            "goldens": len(goldens), "mutants": len(controls)}
+
+
 def inventory() -> dict[str, str]:
     paths = git("ls-files", "--", *SOURCE_PATHS).splitlines()
     for required in SOURCE_PATHS:
@@ -285,8 +338,8 @@ def main() -> int:
         if registry.get("module") != "Proofs" or registry.get("namespace") != "EconomicPlanning":
             raise ValueError("unexpected theorem module/namespace")
         targets = unique_names(registry["theorems"], "theorem registry")
-        for module in ["EconomicPlanning", "Proofs", "Contracts", "Audit"]:
-            entry, log = run(f"lean_{module.lower()}", [paths["lean"], "-DwarningAsError=true", "-o", build / f"{module}.olean", f"{module}.lean"], lean_env, lean_dir)
+        for module in ["EconomicPlanning", "Replay", "Proofs", "Contracts", "Audit", "Wire", "Oracle"]:
+            entry, log = run(f"lean_{module.lower()}", [paths["lean"], "-DwarningAsError=true", "-o", build / f"{module}.olean", f"{module}.lean"], lean_env, lean_dir, timeout=300)
             require(f"lean_{module.lower()}", entry, entry["exit_code"] == 0,
                     "independent proposition contracts" if module == "Contracts" else "Lean kernel acceptance")
             if module == "Audit":
@@ -298,9 +351,10 @@ def main() -> int:
                     incomplete_rejected = True
                 require("incomplete_proof_inventory", {"log": entry["log"]}, incomplete_rejected,
                         "expected incomplete-theorem-inventory rejection")
-        # Fresh kernel replay checks the compiled model/proofs instead of merely
-        # trusting a successful earlier compiler log.
-        for module in ["EconomicPlanning", "Proofs", "Contracts"]:
+        # --fresh Contracts replays ALL its imported and defined constants into
+        # an empty kernel environment, including the model, Replay and Proofs.
+        # Separate fresh replays of those imports repeat the same work.
+        for module in ["Contracts"]:
             entry, log = run(f"kernel_replay_{module.lower()}", [paths["leanchecker"], "--fresh", "--verbose", module], lean_env, lean_dir)
             require(f"kernel_replay_{module.lower()}", entry, entry["exit_code"] == 0,
                     "fresh Lean kernel replay")
@@ -309,6 +363,15 @@ def main() -> int:
         actual = re.findall(r"^PASS ([A-Za-z_][A-Za-z0-9_.]*)$", log, re.M)
         require("lean_regressions", entry, entry["exit_code"] == 0 and actual == expected_tests,
                 "executable synthetic Lean scenarios", {"tests": actual})
+        adapter_output = output / "adapter"
+        entry, log = run("offline_adapter", [paths["python"], "-I", PACKAGE / "adapter/run_checks.py",
+            "--lean", paths["lean"], "--build", build, "--output", adapter_output], lean_env, timeout=300)
+        adapter_report = json.loads((adapter_output / "report.json").read_text())
+        adapter_registry = json.loads((PACKAGE / "adapter/checks.json").read_text())
+        adapter_detail = adapter_result(adapter_report, adapter_registry)
+        require("offline_adapter", entry, entry["exit_code"] == 0 and "ECONOMIC_PLANNING_ADAPTER_PASSED" in log,
+                "finite offline serialization, authority and runtime comparison evidence", adapter_detail)
+        receipt["adapter"] = adapter_detail
         # A fresh, deliberately unapproved axiom must be rejected by the same
         # parser used for the real proofs, even when Lean accepts its theorem.
         bad = build / "ForbiddenAxiom.lean"
