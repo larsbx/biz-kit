@@ -15,3 +15,4 @@ export { default as HeadingPitchRange } from "@cesium/engine/Source/Core/Heading
 export { default as Matrix4 } from "@cesium/engine/Source/Core/Matrix4.js";
 export { default as EntityCollection } from "@cesium/engine/Source/DataSources/EntityCollection.js";
 export { default as Camera } from "@cesium/engine/Source/Scene/Camera.js";
+export { default as ScreenSpaceEventType } from "@cesium/engine/Source/Core/ScreenSpaceEventType.js";

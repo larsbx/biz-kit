@@ -12,6 +12,8 @@ lake build
 # Replay the complete imported environment in the Lean kernel, including the
 # separate bundle and lease modules. This is not a different kernel implementation.
 lake env leanchecker --fresh --verbose BizKitEventProofs
+lake env leanchecker --fresh --verbose BizKitDispatchSpatial
+lake env lean CheckDispatchSpatial.lean
 lake env leanchecker --fresh --verbose BizKitOutcomeAdmission
 lake env leanchecker --fresh --verbose BizKitInventory
 lake env leanchecker --fresh --verbose BizKitInventoryLocations
@@ -30,7 +32,7 @@ cp lean-toolchain "$scratch/audit/lean-toolchain"
 
 # The audit selects declarations by defining MODULE, not their namespace.
 # Auditing only BizKitEventProofs would omit BizKitBundles and BizKitLeases.
-for root in BizKitLeases BizKitBundles BizKitDispatch BizKitEventProofs BizKitOutcomeAdmission BizKitInventory BizKitInventoryLocations BizKitCommerce BizKitCommercialSetoff; do
+for root in BizKitLeases BizKitBundles BizKitDispatch BizKitDispatchSpatial BizKitEventProofs BizKitOutcomeAdmission BizKitInventory BizKitInventoryLocations BizKitCommerce BizKitCommercialSetoff; do
   lake env "$scratch/audit/.lake/build/bin/axiom-audit" \
     --root "$root" --allow propext,Classical.choice,Quot.sound
 done

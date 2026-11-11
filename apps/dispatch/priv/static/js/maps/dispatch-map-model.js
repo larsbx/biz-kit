@@ -3,63 +3,95 @@ import { freshness } from "./map-freshness.js";
 export const MAX_PARTICIPANTS = 200;
 export const MAX_SNAPSHOT_BYTES = 262144;
 export const SNAPSHOT_TIMEOUT_MS = 45000;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
 
-const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
+export const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const numeric = value => typeof value === "number" && Number.isFinite(value);
 const time = value => typeof value === "string" && ISO_TIME.test(value) && Number.isFinite(Date.parse(value));
 
-/** Fail the complete snapshot closed; partial validation cannot retain old data. */
-export function validateSnapshot(value, now = Date.now()) {
-  if (!object(value) || value.schema_version !== 1 || value.limit !== MAX_PARTICIPANTS ||
-      !["ok", "capacity_exceeded"].includes(value.status) || !time(value.generated_at) ||
-      !Array.isArray(value.participants) || value.participants.length > MAX_PARTICIPANTS) {
-    throw new TypeError("Invalid location snapshot");
-  }
+export const SHA256 = /^[0-9a-f]{64}$/;
+export const reference = (value, kind, id) => isObject(value) && value.kind === kind &&
+  typeof value.id === "string" && UUID.test(value.id) && (!id || value.id.toLowerCase() === id.toLowerCase());
+const copyRef = value => ({ kind: value.kind, id: value.id.toLowerCase() });
+
+export function assertCurrentSnapshot(value, now = Date.now()) {
   const generated = Date.parse(value.generated_at);
   if (generated > now + 30000 || now - generated > SNAPSHOT_TIMEOUT_MS) {
     throw new TypeError("Location snapshot is not current");
   }
-  if (value.status === "capacity_exceeded" && value.participants.length !== 0) {
-    throw new TypeError("Capacity response must contain no locations");
+}
+
+/** Validate one scoped complete replacement; unknown fields never enter the UI. */
+export function validateSnapshot(value, now = Date.now(), { requireCurrent = true } = {}) {
+  if (!isObject(value) || value.schema_version !== 2 || value.limit !== MAX_PARTICIPANTS ||
+      !["ok", "capacity_exceeded"].includes(value.status) || !time(value.generated_at) ||
+      !Array.isArray(value.participants) || value.participants.length > MAX_PARTICIPANTS ||
+      !isObject(value.scope) || !SHA256.test(value.scope.key) || !reference(value.scope.organization, "organization") ||
+      !isObject(value.query) || value.query.area !== "organization" || value.query.time !== "latest" ||
+      !isObject(value.coordinates) || value.coordinates.crs !== "EPSG:4326" ||
+      value.coordinates.units !== "degrees" || value.coordinates.order !== "named_lat_lng" ||
+      !isObject(value.source) || value.source.kind !== "dispatch_location_projection" || !SHA256.test(value.source.revision) ||
+      !isObject(value.cursor) || !UUID.test(value.cursor.stream_id) || !Number.isSafeInteger(value.cursor.sequence) || value.cursor.sequence < 0 ||
+      typeof value.work_access !== "boolean") {
+    throw new TypeError("Invalid location snapshot");
+  }
+  if (requireCurrent) assertCurrentSnapshot(value, now);
+  const generated = Date.parse(value.generated_at);
+  const coverage = value.coverage;
+  if (!isObject(coverage) || coverage.population !== "active_participants" || coverage.limit !== MAX_PARTICIPANTS ||
+      coverage.next_cursor !== null || coverage.returned !== value.participants.length ||
+      (value.status === "ok" ? coverage.complete !== true || coverage.total !== coverage.returned :
+        coverage.complete !== false || coverage.returned !== 0 || coverage.total !== null)) {
+    throw new TypeError("Invalid snapshot coverage");
   }
   const seen = new Set();
   const participants = value.participants.map(participant => {
-    if (!object(participant) || !UUID.test(participant.participant_id) ||
-        seen.has(participant.participant_id.toLowerCase()) || typeof participant.public_name !== "string") {
+    if (!isObject(participant) || typeof participant.participant_id !== "string" || !UUID.test(participant.participant_id) ||
+        seen.has(participant.participant_id.toLowerCase()) || typeof participant.public_name !== "string" ||
+        !reference(participant.ref, "participant", participant.participant_id)) {
       throw new TypeError("Invalid participant");
     }
     seen.add(participant.participant_id.toLowerCase());
     const position = participant.position;
-    if (position !== null && (!object(position) || !numeric(position.lat) || Math.abs(position.lat) > 90 ||
+    if (position !== null && (!isObject(position) || !numeric(position.lat) || Math.abs(position.lat) > 90 ||
         !numeric(position.lng) || Math.abs(position.lng) > 180 || !numeric(position.accuracy_m) ||
         position.accuracy_m < 0 || !time(position.occurred_at) || !time(position.received_at) ||
         Date.parse(position.occurred_at) > generated + 300000 || Date.parse(position.received_at) > generated + 30000 ||
-        typeof position.provider !== "string" || position.provider.length > 32 || typeof position.is_mock !== "boolean")) {
+        typeof position.provider !== "string" || position.provider.length > 32 || typeof position.is_mock !== "boolean" ||
+        !reference(position.observation_ref, "location_observation"))) {
       throw new TypeError("Invalid location observation");
     }
-    // Retain only the protocol's allowlisted fields; never carry arbitrary
-    // server fields into a renderer, link, browser store or console.
     return {
-      participant_id: participant.participant_id,
+      participant_id: participant.participant_id.toLowerCase(), ref: copyRef(participant.ref),
       public_name: participant.public_name,
       position: position === null ? null : {
+        observation_ref: copyRef(position.observation_ref),
         lat: position.lat, lng: position.lng, accuracy_m: position.accuracy_m,
         occurred_at: position.occurred_at, received_at: position.received_at,
         provider: position.provider, is_mock: position.is_mock
       }
     };
   });
-  return { schema_version: 1, status: value.status, generated_at: value.generated_at, limit: MAX_PARTICIPANTS, participants };
+  return {
+    schema_version: 2, status: value.status, generated_at: value.generated_at, limit: MAX_PARTICIPANTS,
+    scope: { key: value.scope.key, organization: copyRef(value.scope.organization) },
+    query: { area: "organization", time: "latest" },
+    coordinates: { crs: "EPSG:4326", units: "degrees", order: "named_lat_lng" },
+    source: { kind: "dispatch_location_projection", revision: value.source.revision },
+    cursor: { stream_id: value.cursor.stream_id.toLowerCase(), sequence: value.cursor.sequence },
+    coverage: { population: "active_participants", complete: coverage.complete, returned: coverage.returned,
+      total: coverage.total, limit: MAX_PARTICIPANTS, next_cursor: null },
+    work_access: value.work_access, participants
+  };
 }
 
-export function parseSnapshot(text, now = Date.now()) {
+export function parseSnapshot(text, now = Date.now(), options) {
   if (typeof text !== "string" || text.length > MAX_SNAPSHOT_BYTES ||
       new TextEncoder().encode(text).byteLength > MAX_SNAPSHOT_BYTES) {
     throw new TypeError("Location snapshot is too large");
   }
-  return validateSnapshot(JSON.parse(text), now);
+  return validateSnapshot(JSON.parse(text), now, options);
 }
 
 export function observationPresentation(position, now = Date.now()) {

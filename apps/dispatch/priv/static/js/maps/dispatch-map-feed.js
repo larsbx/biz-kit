@@ -1,4 +1,4 @@
-import { MAX_SNAPSHOT_BYTES, parseSnapshot, SNAPSHOT_TIMEOUT_MS } from "./dispatch-map-model.js";
+import { MAX_SNAPSHOT_BYTES, parseSnapshot, assertCurrentSnapshot, SHA256, SNAPSHOT_TIMEOUT_MS } from "./dispatch-map-model.js";
 
 const SNAPSHOT_PATH = "/ui/operations/locations";
 const STREAM_PATH = `${SNAPSHOT_PATH}/stream`;
@@ -10,6 +10,7 @@ export const MAX_RECONNECT_ATTEMPTS = 5;
  * implicit, unbounded reconnect loop is never used.
  */
 export function createLocationFeed({
+  expectedScopeKey,
   onSnapshot,
   onStatus,
   fetchImpl = globalThis.fetch.bind(globalThis),
@@ -18,7 +19,10 @@ export function createLocationFeed({
   schedule = globalThis.setTimeout,
   cancel = globalThis.clearTimeout
 }) {
+  if (!SHA256.test(expectedScopeKey)) throw new TypeError("A server-bound scope is required");
   let active = false;
+  let snapshotCursor = null;
+  let streamCursor = null;
   let generation = 0;
   let source = null;
   let request = null;
@@ -29,6 +33,7 @@ export function createLocationFeed({
 
   function closeTransport() {
     generation++;
+    snapshotCursor = streamCursor = null;
     source?.close();
     source = null;
     request?.abort();
@@ -68,12 +73,31 @@ export function createLocationFeed({
   function accept(text, ownGeneration, streamed) {
     if (!active || generation !== ownGeneration) return false;
     let snapshot;
-    try { snapshot = parseSnapshot(text, now()); }
+    try { snapshot = parseSnapshot(text, now(), { requireCurrent: false }); }
+    catch { terminal("invalid"); return false; }
+    if (snapshot.scope.key !== expectedScopeKey) { terminal("scope_changed"); return false; }
+    const cursor = snapshot.cursor;
+    if (!streamed) {
+      if (cursor.sequence !== 0) { terminal("invalid"); return false; }
+    } else if (streamCursor === null) {
+      // The first SSE frame belongs to a newly authorized server stream. This
+      // single handoff is the only point where a different stream is admitted.
+      if (!snapshotCursor || cursor.sequence !== 0 || cursor.stream_id === snapshotCursor.stream_id) {
+        terminal("invalid"); return false;
+      }
+    } else {
+      if (cursor.stream_id !== streamCursor.stream_id) { terminal("invalid"); return false; }
+      // Old or duplicate frames cannot restore deleted records or renew liveness.
+      if (cursor.sequence <= streamCursor.sequence) return false;
+    }
+    try { assertCurrentSnapshot(snapshot, now()); }
     catch { terminal("invalid"); return false; }
     if (snapshot.status === "capacity_exceeded") {
       terminal("capacity");
       return false;
     }
+    if (streamed) streamCursor = cursor;
+    else snapshotCursor = cursor;
     onSnapshot(snapshot);
     onStatus("connected");
     if (streamed) attempts = 0;

@@ -54,14 +54,34 @@ defmodule Dispatch.Operations.LocationSnapshotTest do
     %{participant: outside} = Fixtures.person(elsewhere.id, elsewhere)
 
     assert {:ok, %{snapshot: snapshot, watch_ids: watches}} = LocationSnapshot.build(ctx.tracker)
-    assert snapshot.schema_version == 1
+    assert snapshot.schema_version == 2
     assert snapshot.status == "ok"
     assert snapshot.limit == 200
     assert {:ok, _, _} = DateTime.from_iso8601(snapshot.generated_at)
     assert length(snapshot.participants) == 2
+    assert snapshot.scope.key == LocationSnapshot.scope_key(ctx.tracker)
+    assert snapshot.scope.organization == %{kind: "organization", id: ctx.carrier.id}
+    assert snapshot.query == %{area: "organization", time: "latest"}
+    assert snapshot.coordinates == %{crs: "EPSG:4326", units: "degrees", order: "named_lat_lng"}
+
+    assert snapshot.coverage == %{
+             population: "active_participants",
+             complete: true,
+             returned: 2,
+             total: 2,
+             limit: 200,
+             next_cursor: nil
+           }
+
+    assert snapshot.work_access
+    assert snapshot.source.kind == "dispatch_location_projection"
+    assert snapshot.source.revision =~ ~r/^[0-9a-f]{64}$/
+    assert snapshot.cursor.sequence == 0
+    assert {:ok, _} = Ecto.UUID.cast(snapshot.cursor.stream_id)
     refute row(snapshot, unrelated.id)
     refute row(snapshot, outside.id)
     assert row(snapshot, ctx.desk.id).position == nil
+    assert row(snapshot, ctx.driver.id).ref == %{kind: "participant", id: ctx.driver.id}
     assert watches == [ctx.driver.id]
 
     position = row(snapshot, ctx.driver.id).position
@@ -70,6 +90,8 @@ defmodule Dispatch.Operations.LocationSnapshotTest do
     assert position.accuracy_m == 12.0
     assert position.provider == "test-device"
     assert position.is_mock
+    assert position.observation_ref.kind == "location_observation"
+    assert {:ok, _} = Ecto.UUID.cast(position.observation_ref.id)
     assert position.occurred_at == sample["occurred_at"]
     assert {:ok, _, _} = DateTime.from_iso8601(position.received_at)
     refute Map.has_key?(position, :device_id)
@@ -132,6 +154,10 @@ defmodule Dispatch.Operations.LocationSnapshotTest do
     assert {:ok, result} = LocationSnapshot.build(ctx.tracker)
     assert result.snapshot.status == "capacity_exceeded"
     assert result.snapshot.participants == []
+    assert result.snapshot.coverage.complete == false
+    assert result.snapshot.coverage.returned == 0
+    assert result.snapshot.coverage.total == nil
+    assert result.snapshot.coverage.next_cursor == nil
     assert result.watch_ids == []
     assert {:emit, chunk, _} = LocationStream.tick(session, :refresh)
     assert event(chunk)["status"] == "capacity_exceeded"
@@ -250,6 +276,108 @@ defmodule Dispatch.Operations.LocationSnapshotTest do
     assert LocationDemand.watched?(ctx.driver.id)
     send(task.pid, :finish)
     Task.await(task)
+    refute LocationDemand.watched?(ctx.driver.id)
+  end
+
+  test "content revision is stable while GET lifetimes are always fresh", ctx do
+    {grant, _} = sharing(ctx)
+    assert {:ok, first} = LocationSnapshot.build(ctx.tracker)
+    assert {:ok, second} = LocationSnapshot.build(ctx.tracker)
+    assert first.snapshot.source.revision == second.snapshot.source.revision
+    refute first.snapshot.cursor.stream_id == second.snapshot.cursor.stream_id
+    assert first.snapshot.cursor.sequence == second.snapshot.cursor.sequence
+
+    {:ok, _} = Locations.revoke_consent(ctx.driver_actor, grant.id)
+    assert {:ok, revoked} = LocationSnapshot.build(ctx.tracker)
+    refute first.snapshot.source.revision == revoked.snapshot.source.revision
+  end
+
+  test "SSE sequences increase and reconnect starts a new zero-based lifetime", ctx do
+    sharing(ctx)
+    assert {:ok, session, initial} = LocationStream.open(ctx.tracker, last_event_id: "stale:777")
+    initial = event(initial)
+    assert initial["cursor"]["sequence"] == 0
+    assert {:emit, first, session} = LocationStream.tick(session, :refresh)
+    assert {:emit, second, session} = LocationStream.tick(session, :heartbeat)
+    assert event(first)["cursor"]["sequence"] == 1
+    assert event(second)["cursor"]["sequence"] == 2
+    assert event(second)["cursor"]["stream_id"] == initial["cursor"]["stream_id"]
+    LocationStream.release(session)
+
+    assert {:ok, resumed, fresh} = LocationStream.open(ctx.tracker, last_event_id: "stale:777")
+    assert event(fresh)["cursor"]["sequence"] == 0
+    refute event(fresh)["cursor"]["stream_id"] == initial["cursor"]["stream_id"]
+    LocationStream.release(resumed)
+  end
+
+  test "scope identity binds the selected authority rather than its cached time", ctx do
+    assert LocationSnapshot.scope_key(ctx.tracker) ==
+             LocationSnapshot.scope_key(%{ctx.tracker | at: DateTime.add(ctx.tracker.at, 1)})
+
+    for changed <- [
+          %{ctx.tracker | tenant_id: Ecto.UUID.generate()},
+          %{ctx.tracker | principal_id: Ecto.UUID.generate()},
+          %{ctx.tracker | principal_type: :SERVICE},
+          %{
+            ctx.tracker
+            | role_assignment: %{ctx.tracker.role_assignment | id: Ecto.UUID.generate()}
+          },
+          %{
+            ctx.tracker
+            | role_assignment: %{
+                ctx.tracker.role_assignment
+                | organization_id: Ecto.UUID.generate()
+              }
+          }
+        ] do
+      refute LocationSnapshot.scope_key(ctx.tracker) == LocationSnapshot.scope_key(changed)
+    end
+  end
+
+  test "a malformed stored uncertainty cannot leave the checked presentation boundary", ctx do
+    sharing(ctx)
+
+    Dispatch.Repo.query!(
+      "UPDATE location_samples SET accuracy_m = -1 WHERE participant_id = $1 AND tenant_id = $2",
+      [Ecto.UUID.dump!(ctx.driver.id), Ecto.UUID.dump!(ctx.tenant)]
+    )
+
+    assert {:ok, result} = LocationSnapshot.build(ctx.tracker)
+    assert row(result.snapshot, ctx.driver.id).position == nil
+  end
+
+  test "a stream cannot migrate away from its originally bound scope", ctx do
+    sharing(ctx)
+    assert {:ok, session, _} = LocationStream.open(ctx.tracker)
+    assert LocationDemand.watched?(ctx.driver.id)
+    # The page-bound scope is immutable even if a future adapter hands the
+    # stream a different fresh actor. Refuse before synchronizing any demand.
+    stale_binding = %{session | scope_key: String.duplicate("0", 64)}
+    assert LocationStream.tick(stale_binding, :heartbeat) == {:close, :unauthorized}
+    refute LocationDemand.watched?(ctx.driver.id)
+  end
+
+  test "oversized roster text clears the entire snapshot and existing watches", ctx do
+    sharing(ctx)
+    assert {:ok, session, _} = LocationStream.open(ctx.tracker)
+    assert LocationDemand.watched?(ctx.driver.id)
+
+    Dispatch.Repo.query!(
+      "UPDATE participants SET public_name = $1 WHERE id = $2 AND tenant_id = $3",
+      [
+        String.duplicate("x", LocationSnapshot.response_limit()),
+        Ecto.UUID.dump!(ctx.driver.id),
+        Ecto.UUID.dump!(ctx.tenant)
+      ]
+    )
+
+    assert {:ok, %{snapshot: snapshot, watch_ids: []}} = LocationSnapshot.build(ctx.tracker)
+    assert snapshot.status == "capacity_exceeded"
+    assert snapshot.participants == []
+    refute snapshot.coverage.complete
+    assert byte_size(Jason.encode!(snapshot)) <= LocationSnapshot.response_limit()
+    assert {:emit, chunk, _} = LocationStream.tick(session, :heartbeat)
+    assert event(chunk)["status"] == "capacity_exceeded"
     refute LocationDemand.watched?(ctx.driver.id)
   end
 end

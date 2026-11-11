@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createLocationFeed } from "../../../apps/dispatch/priv/static/js/maps/dispatch-map-feed.js";
-import { snapshot } from "./fixtures.mjs";
+import { snapshot, streamSnapshot, capacitySnapshot, withParticipants, SCOPE_KEY, SSE_STREAM, GET_STREAM } from "./fixtures.mjs";
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 
@@ -25,6 +25,7 @@ function harness({ responses = [] } = {}) {
     headers: new Headers({ "content-type": type }), text: async () => JSON.stringify(value)
   });
   const feed = createLocationFeed({
+    expectedScopeKey: SCOPE_KEY,
     onSnapshot: value => observations.push(value), onStatus: value => statuses.push(value),
     now: () => clock,
     schedule: (callback, delay) => { const id = ++sequence; timers.set(id, { at: clock + delay, callback }); return id; },
@@ -58,7 +59,7 @@ test("initial authorized GET is same-origin, uncached, followed by full SSE snap
   assert.equal(h.requests[0].options.credentials, "same-origin");
   assert.equal(h.requests[0].options.redirect, "manual");
   assert.equal(h.streams[0].url, "/ui/operations/locations/stream");
-  const next = snapshot(h.now()); next.participants[0].position = null;
+  const next = streamSnapshot(h.now()); next.participants[0].position = null;
   h.streams[0].emit(next);
   assert.equal(h.observations.at(-1).participants[0].position, null);
   h.feed.destroy(); assert.equal(h.observations.at(-1), null);
@@ -94,9 +95,9 @@ test("401, 403, 404, login HTML and redirects are terminal", async () => {
 });
 
 test("malformed or over-capacity stream replaces all visible data with none", async () => {
-  for (const bad of ["{broken", { ...snapshot(), status: "capacity_exceeded", participants: [] }]) {
+  for (const bad of ["{broken", capacitySnapshot()]) {
     const h = harness(); h.feed.start(); await flush();
-    const value = typeof bad === "string" ? bad : { ...bad, generated_at: new Date(h.now()).toISOString() };
+    const value = typeof bad === "string" ? bad : { ...bad, generated_at: new Date(h.now()).toISOString(), cursor: { stream_id: SSE_STREAM, sequence: 0 } };
     h.streams[0].emit(value);
     assert.equal(h.observations.at(-1), null);
     assert.equal(h.streams[0].closed, true);
@@ -142,4 +143,52 @@ test("hung GET is cleared and aborted before a bounded reconnect", async () => {
   assert.equal(h.observations.at(-1), null);
   assert.equal(h.statuses.at(-1), "reconnecting");
   h.feed.destroy();
+});
+
+test("old same-stream snapshots cannot resurrect a removed observation or renew the watchdog", async () => {
+  const h = harness(); h.feed.start(); await flush();
+  const old = streamSnapshot(h.now(), 0);
+  h.streams[0].emit(old);
+  const deletion = streamSnapshot(h.now(), 1); deletion.participants[0].position = null;
+  h.streams[0].emit(deletion);
+  const accepted = h.observations.length;
+  await h.advance(44000);
+  h.streams[0].emit({ ...old, generated_at: new Date(h.now()).toISOString() });
+  h.streams[0].emit({ ...deletion, generated_at: new Date(h.now()).toISOString() });
+  assert.equal(h.observations.length, accepted);
+  assert.equal(h.observations.at(-1).participants[0].position, null);
+  await h.advance(1000);
+  assert.equal(h.observations.at(-1), null);
+  assert.equal(h.statuses.at(-1), "silent");
+  h.feed.destroy();
+});
+
+test("scope changes, a second stream handoff and nonzero first frames fail closed", async () => {
+  for (const makeBad of [
+    h => ({ ...streamSnapshot(h.now()), scope: { ...snapshot().scope, key: "c".repeat(64) } }),
+    h => snapshot(h.now()),
+    h => streamSnapshot(h.now(), 1)
+  ]) {
+    const h = harness(); h.feed.start(); await flush();
+    h.streams[0].emit(makeBad(h));
+    assert.equal(h.observations.at(-1), null);
+    assert.equal(h.streams[0].closed, true);
+  }
+  const h = harness(); h.feed.start(); await flush();
+  h.streams[0].emit(streamSnapshot(h.now()));
+  h.streams[0].emit(snapshot(h.now(), { streamId: GET_STREAM, sequence: 1 }));
+  assert.equal(h.observations.at(-1), null);
+  assert.equal(h.statuses.at(-1), "invalid");
+});
+
+test("GET scope is checked before opening a stream and sequence must start at zero", async () => {
+  for (const bad of [
+    { ...snapshot(Date.UTC(2026, 10, 11, 12)), scope: { ...snapshot().scope, key: "c".repeat(64) } },
+    snapshot(Date.UTC(2026, 10, 11, 12), { sequence: 1 })
+  ]) {
+    const responses = []; const h = harness({ responses }); responses.push(h.response(bad));
+    h.feed.start(); await flush();
+    assert.equal(h.streams.length, 0);
+    assert.equal(h.observations.at(-1), null);
+  }
 });

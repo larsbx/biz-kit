@@ -24,11 +24,12 @@ container. Dispatch adds its own observation renderer and authorized feed.
 - Replace the upstream `Viewer` construction with `CesiumWidget`, which owns
   the scene, camera, entity display and imagery in this pinned version. This
   removes the unused application widgets and their import-time Knockout eval,
-  keeping JavaScript string evaluation blocked.
-- Resolve Cesium's `meshoptimizer` import to its official decoder-only entry,
-  excluding four unused tools with eager WebAssembly initialization. The map's
-  `wasm-unsafe-eval` permission supports the retained decoder; JavaScript
-  `unsafe-eval` and inline scripts remain prohibited.
+  so the page keeps `script-src 'self'` without an eval exception.
+- Exclude compressed mesh support from this ellipsoid/raster/point profile.
+  The exact `meshoptimizer` import resolves to the build-only
+  `meshopt-unavailable.mjs` adapter, which reports unsupported and refuses
+  attempted decoding. The build rejects the dependency's five eager
+  WebAssembly initializers. No global browser API or CSP permission is changed.
 - Retain no upstream application shell, Vue, Pinia, voice, MCP, provider
   settings, public observations, routes, telemetry, share links or agent tools.
 - Remove the custom star catalog, star renderer, camera-recovery timers,
@@ -52,10 +53,24 @@ then `npm run build --prefix tools/dispatch-globe`. The lockfile pins Cesium
 `../cesium/manifest.json` records every staged asset's byte count and SHA-256.
 Pinned esbuild creates the narrow ESM engine bundle and rejects any
 `@cesium/widgets` or Knockout input. Aggregate and global Cesium bundles are
-excluded; the manifest also inventories the actual bundle inputs and the
-supported `meshoptimizer/decoder` resolver alias. The
+excluded; the manifest also inventories the actual bundle inputs. The
 no-string-code-generation test reproduces the old import failure and accepts
-the new engine without replacing `eval` or allowing JavaScript string evaluation.
+the new engine without replacing `eval` or weakening browser policy.
 
 Future upstream updates require deliberate source review and updating the
 revision and hashes above. No code or dependencies are updated at runtime.
+
+## Local coordinate search
+
+`coordinate-parser.js` is an unmodified copy of upstream
+`src/search/coordinateParser.js` at the same pinned revision. It imports no
+providers and makes no network requests. Dispatch calls it only to move the
+camera; input, coordinates and selection are not put into share links or browser
+storage. Place-name geocoding remains unconfigured.
+
+- Git blob: `948cc25e78c5d7efe1361a6f36205a743e55e51e`
+- Source and copied-file SHA-256:
+  `5ddb08af1affaff83ea04e7c065ab52e7832e4697e9f4158c01e00ece43065fe`
+
+The upstream MIT license and authorship apply. A test binds the copy to these
+bytes and exercises strict coordinate rejection rather than guessing a location.

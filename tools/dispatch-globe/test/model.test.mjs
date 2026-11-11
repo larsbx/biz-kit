@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { MAX_SNAPSHOT_BYTES, observationPresentation, parseSnapshot, participantLabel, validateSnapshot } from "../../../apps/dispatch/priv/static/js/maps/dispatch-map-model.js";
-import { snapshot } from "./fixtures.mjs";
+import { snapshot, capacitySnapshot } from "./fixtures.mjs";
 
 const NOW = Date.UTC(2026, 10, 11, 12);
 
@@ -19,7 +19,7 @@ test("valid snapshots retain only permitted fields and null positions", () => {
 
 test("schema, duplicate IDs, capacity and observation errors reject the entire snapshot", () => {
   const mutations = [
-    value => { value.schema_version = 2; },
+    value => { value.schema_version = 1; },
     value => { value.limit = 201; },
     value => { value.status = "guessed"; },
     value => { value.participants[1].participant_id = value.participants[0].participant_id.toUpperCase(); },
@@ -43,7 +43,7 @@ test("schema, duplicate IDs, capacity and observation errors reject the entire s
 });
 
 test("a capacity response has no private partial roster", () => {
-  const value = { ...snapshot(NOW), status: "capacity_exceeded", participants: [] };
+  const value = capacitySnapshot(NOW);
   assert.equal(validateSnapshot(value, NOW).participants.length, 0);
 });
 
@@ -99,4 +99,30 @@ test("runtime dependency and generated asset manifest remain pinned and local", 
   assert.ok(manifest.files.some(file => file.path === "Assets/Textures/NaturalEarthII/0/0/0.jpg"));
   assert.ok(!manifest.files.some(file => file.path === "Cesium.js"));
   assert.ok(manifest.files.every(file => /^[a-f0-9]{64}$/.test(file.sha256)));
+});
+
+test("scope, typed identities, coordinates and honest coverage are mandatory", () => {
+  const mutations = [
+    value => { delete value.scope; },
+    value => { value.scope.key = "role-name"; },
+    value => { value.scope.organization.kind = "participant"; },
+    value => { value.query.area = "viewport"; },
+    value => { value.coordinates.order = "lon_lat"; },
+    value => { value.coordinates.crs = "EPSG:3857"; },
+    value => { value.source.kind = "simulated_traffic"; },
+    value => { value.source.revision = "unknown"; },
+    value => { value.cursor.sequence = -1; },
+    value => { value.cursor.sequence = Number.MAX_SAFE_INTEGER + 1; },
+    value => { value.cursor.stream_id = "arbitrary"; },
+    value => { value.coverage.total = 200; },
+    value => { value.coverage.complete = false; },
+    value => { value.coverage.next_cursor = "some-more"; },
+    value => { value.work_access = "true"; },
+    value => { value.participants[0].ref.id = value.participants[1].participant_id; },
+    value => { value.participants[0].position.observation_ref.kind = "planned_stop"; }
+  ];
+  for (const mutate of mutations) {
+    const value = snapshot(NOW); mutate(value);
+    assert.throws(() => validateSnapshot(value, NOW), TypeError);
+  }
 });

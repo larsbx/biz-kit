@@ -38,16 +38,19 @@ defmodule DispatchWeb.FleetMapControllerTest do
 
     assert get_resp_header(conn, "x-frame-options") == ["DENY"]
     assert conn.resp_body =~ "id=\"dispatch-map-globe\""
+
+    assert conn.resp_body =~
+             "data-scope-key=\"#{Dispatch.Operations.LocationSnapshot.scope_key(ctx.tracker)}\""
+
     assert conn.resp_body =~ "/static/js/maps/dispatch-map.js"
     assert conn.resp_body =~ "/static/vendor/cesium/Widgets/widgets.css"
     refute conn.resp_body =~ "datastar.js"
     refute conn.resp_body =~ "live_position"
     refute conn.resp_body =~ "https://"
 
-    assert FleetMapController.content_security_policy() =~
-             "script-src 'self' 'wasm-unsafe-eval';"
+    assert FleetMapController.content_security_policy() =~ "script-src 'self';"
 
-    refute FleetMapController.content_security_policy() =~ "'unsafe-eval'"
+    refute FleetMapController.content_security_policy() =~ "unsafe-eval"
     refute FleetMapController.content_security_policy() =~ "script-src 'self' 'unsafe-inline'"
   end
 

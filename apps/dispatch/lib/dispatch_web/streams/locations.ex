@@ -12,28 +12,43 @@ defmodule DispatchWeb.Streams.Locations do
   alias Dispatch.Operations.{LocationDemand, LocationSnapshot}
   alias DispatchWeb.Datastar
 
-  @enforce_keys [:actor, :watching]
-  defstruct [:actor, :watching]
+  @enforce_keys [:actor, :watching, :cursor, :scope_key]
+  defstruct [:actor, :watching, :cursor, :scope_key]
 
   @spec open(Dispatch.Access.Actor.t(), keyword()) ::
           {:ok, %__MODULE__{}, iodata()} | {:error, :not_found}
   def open(actor, _opts \\ []) do
     with {:ok, result} <- LocationSnapshot.build(actor) do
       watching = synchronize(MapSet.new(), result.watch_ids)
-      session = %__MODULE__{actor: result.actor, watching: watching}
+
+      session = %__MODULE__{
+        actor: result.actor,
+        watching: watching,
+        cursor: result.snapshot.cursor,
+        scope_key: result.snapshot.scope.key
+      }
+
       {:ok, session, [Datastar.retry(3_000), event(result.snapshot)]}
     end
   end
 
   @impl true
+  def tick(%__MODULE__{cursor: %{sequence: sequence}}, _reason)
+      when sequence >= 9_007_199_254_740_991 do
+    LocationDemand.release_watches()
+    {:close, :unauthorized}
+  end
+
   def tick(%__MODULE__{} = session, _reason) do
-    case LocationSnapshot.build(session.actor) do
-      {:ok, result} ->
+    cursor = %{session.cursor | sequence: session.cursor.sequence + 1}
+
+    case LocationSnapshot.build(session.actor, cursor: cursor) do
+      {:ok, %{snapshot: %{scope: %{key: key}}} = result} when key == session.scope_key ->
         watching = synchronize(session.watching, result.watch_ids)
-        session = %{session | actor: result.actor, watching: watching}
+        session = %{session | actor: result.actor, watching: watching, cursor: cursor}
         {:emit, event(result.snapshot), session}
 
-      {:error, :not_found} ->
+      _refused_or_changed_scope ->
         LocationDemand.release_watches()
         {:close, :unauthorized}
     end

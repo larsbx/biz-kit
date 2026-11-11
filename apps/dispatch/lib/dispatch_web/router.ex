@@ -169,6 +169,7 @@ defmodule DispatchWeb.Router do
     get "/ui/participants/:participant_id/stream", StreamController, :participant
     get "/ui/operations/locations", FleetLocationsController, :index
     get "/ui/operations/locations/stream", FleetLocationsController, :stream
+    get "/ui/operations/locations/:participant_id/work", FleetLocationsController, :work
   end
 
   scope "/", DispatchWeb do
@@ -177,6 +178,7 @@ defmodule DispatchWeb.Router do
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/operations", PortalController, :operations
     get "/operations/map", FleetMapController, :index
+    get "/operations/loads/:load_id", OperationsLoadController, :show
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     post "/partner/stops/:stop_id/readiness-events", PartnerActionController, :readiness
     post "/partner/stops/:stop_id/document-references", PartnerActionController, :document

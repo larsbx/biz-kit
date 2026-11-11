@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "dispatch-fleet-workspace-v2",
+  "sources": {
+    "gods_eye_view": "14db73f201a0235da4f591648d9b6a9bf4fed87f",
+    "cesium": "1.138.0",
+    "esbuild": "0.28.2",
+    "d_patch_inspected": "51ab27bfca7e99ef47b11a3f88bffc24a53dd429"
+  },
+  "requirements": {
+    "operator": "Desktop Chromium with WebGL; authorized text and work details remain usable without WebGL.",
+    "narrow_layout": "390 CSS pixel viewport; browser emulation does not establish physical Android acceptance.",
+    "collection": "Existing signed d-patch location protocol. This profile adds no device or hardware-tracker protocol.",
+    "map_coverage": "Bundled Natural Earth imagery for global orientation. Street detail, geocoding, routing and terrain measurements are unavailable.",
+    "offline": "Static assets may be packaged locally; protected observations require current online authorization. No offline location cache."
+  },
+  "selected": [
+    "existing_dispatch_phoenix_service",
+    "existing_dispatch_storage_and_native_location_admission",
+    "pinned_gev_derived_viewer_and_cesium_engine",
+    "bundled_natural_earth_imagery",
+    "scoped_location_snapshots_and_demand_stream",
+    "read_only_selection_and_separately_authorized_work"
+  ],
+  "deferred": [
+    "geocoding_and_routing_provider",
+    "optimization",
+    "weather_and_cameras",
+    "shared_voice_and_agent_tools",
+    "historical_replay_and_private_saved_views"
+  ],
+  "omitted": [
+    "parallel_maplibre_application",
+    "gev_development_server",
+    "traccar_and_its_database",
+    "local_tiles_and_geocoding_services",
+    "unselected_valhalla_and_vroom_services",
+    "public_feed_pollers_and_noncommercial_gev_data",
+    "compressed_mesh_assets_and_eager_meshoptimizer_wasm",
+    "browser_location_persistence"
+  ],
+  "budgets": {
+    "staged_asset_bytes": 12582912,
+    "engine_bytes": 6291456,
+    "cold_same_origin_body_bytes": 12582912,
+    "cold_request_count": 200,
+    "first_observation_ready_ms": 20000,
+    "browser_js_heap_bytes": 268435456,
+    "snapshot_bytes": 262144,
+    "participants": 200,
+    "work_response_bytes": 65536,
+    "external_requests": 0,
+    "business_mutation_requests": 0,
+    "additional_runtime_server_processes": 0,
+    "additional_databases": 0
+  },
+  "evidence_boundary": "Budgets are acceptance limits chosen before this slice's measurements, not observed performance or service-level guarantees. Browser measurements use controlled observations and a loopback fixture. Phoenix/database authorization, field collection and deployment require their separate evidence. No legacy runtime or savings baseline is asserted."
+}

@@ -13,10 +13,8 @@ defmodule DispatchWeb.FleetMapController do
   # Cesium positions its canvas/widgets with style attributes and creates local
   # workers. CreditDisplay also injects one fixed stylesheet, whose exact
   # Cesium 1.138.0 bytes are covered by this hash and the real browser test.
-  # The pinned engine's mesh decoder initializes WebAssembly; its specific
-  # permission does not enable JavaScript eval or inline scripts.
   # These exceptions apply only to this page. All resources stay same-origin.
-  @csp "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; " <>
+  @csp "default-src 'self'; script-src 'self'; " <>
          "style-src 'self' 'sha256-W9isZ7K65dw04+sGbSAyiFtvwt94eXJiQXtiU8lmkRg='; " <>
          "style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; " <>
          "connect-src 'self'; font-src 'self'; worker-src 'self' blob:; " <>
@@ -31,7 +29,7 @@ defmodule DispatchWeb.FleetMapController do
       {:ok, actor} ->
         conn
         |> put_resp_header("content-security-policy", @csp)
-        |> render(:index, actor: actor)
+        |> render(:index, actor: actor, scope_key: LocationSnapshot.scope_key(actor))
 
       {:error, :not_found} ->
         send_resp(conn, 404, "")

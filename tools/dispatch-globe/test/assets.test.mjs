@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { CSP } from "./fixtures.mjs";
+import { MeshoptDecoder } from "../meshopt-unavailable.mjs";
 
 test("the emitted engine imports with string code generation disabled; the old aggregate fails", async () => {
   const temporary = await mkdtemp(path.join(tmpdir(), "dispatch-globe-no-eval-"));
@@ -36,7 +37,7 @@ test("the emitted engine imports with string code generation disabled; the old a
     assert.equal(result.widget, "function");
     assert.ok(!result.exports.includes("Viewer"));
     assert.ok(!result.exports.includes("knockout"));
-    assert.equal(result.exports.length, 14);
+    assert.ok(result.exports.includes("ScreenSpaceEventType"));
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
@@ -49,14 +50,40 @@ test("build inventory excludes the unused widget/Knockout graph and preserves at
   assert.equal(manifest.build.esbuild, "0.28.2");
   assert.ok(manifest.build.inputs.some(input => input.endsWith("/Widget/CesiumWidget.js")));
   assert.ok(manifest.build.inputs.every(input => !input.includes("@cesium/widgets") && !/knockout/i.test(input)));
-  assert.deepEqual(manifest.build.aliases, { meshoptimizer: "meshoptimizer/decoder" });
-  assert.deepEqual(manifest.build.inputs.filter(input => input.includes("/meshoptimizer/")), [
-    "node_modules/meshoptimizer/meshopt_decoder.mjs"
-  ]);
+  assert.ok(manifest.build.inputs.every(input => !/(?:^|\/)meshoptimizer\//.test(input)));
+  assert.ok(manifest.build.inputs.some(input => input.endsWith("meshopt-unavailable.mjs")));
   assert.ok(manifest.files.some(file => file.path === "LICENSE.md"));
   const css = await readFile(new URL("Widgets/widgets.css", root), "utf8");
   assert.match(css, /\.cesium-widget/);
   assert.doesNotMatch(css, /cesium-baseLayerPicker|cesium-animation|cesium-timeline/);
+});
+
+test("the observation engine does not initialize Wasm; the unadapted meshoptimizer graph does", async () => {
+  const temporary = await mkdtemp(path.join(tmpdir(), "dispatch-globe-no-wasm-"));
+  try {
+    const engine = path.join(temporary, "engine.mjs");
+    await writeFile(engine, await readFile(new URL("../../../apps/dispatch/priv/static/vendor/cesium/index.js", import.meta.url)));
+    const original = new URL("../node_modules/meshoptimizer/index.js", import.meta.url);
+    function probe(url) {
+      return spawnSync(process.execPath, ["--input-type=module", "-e", `
+        let attempts = 0;
+        WebAssembly.instantiate = () => { attempts++; return Promise.reject(new Error("Wasm disabled by test policy")); };
+        process.on("unhandledRejection", () => {});
+        await import(${JSON.stringify(url)});
+        await new Promise(resolve => setImmediate(resolve));
+        console.log(JSON.stringify({ attempts }));
+      `], { encoding: "utf8", timeout: 15000 });
+    }
+    const negative = probe(original.href);
+    assert.equal(negative.status, 0, negative.stderr);
+    assert.equal(JSON.parse(negative.stdout).attempts, 5, "negative control reproduces five eager Wasm initializations");
+    const focused = probe(pathToFileURL(engine).href);
+    assert.equal(focused.status, 0, focused.stderr);
+    assert.equal(JSON.parse(focused.stdout).attempts, 0);
+    assert.equal(MeshoptDecoder.supported, false);
+    await assert.rejects(MeshoptDecoder.ready, /Compressed mesh assets are unavailable/);
+    assert.throws(() => MeshoptDecoder.decodeGltfBuffer(), /Compressed mesh assets are unavailable/);
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
 test("the browser fixture enforces the exact production controller CSP", async () => {
@@ -67,6 +94,6 @@ test("the browser fixture enforces the exact production controller CSP", async (
   assert.equal(expression.replace(quoted, "").replaceAll("<>", "").trim(), "", "evaluate only a literal concatenation");
   const actual = [...expression.matchAll(quoted)].map(match => JSON.parse(match[0])).join("");
   assert.equal(CSP, actual);
-  assert.ok(actual.split(";").some(directive => directive.trim() === "script-src 'self' 'wasm-unsafe-eval'"));
-  assert.doesNotMatch(actual, /'unsafe-eval'/);
+  assert.ok(actual.split(";").some(directive => directive.trim() === "script-src 'self'"));
+  assert.doesNotMatch(actual, /unsafe-eval/);
 });
