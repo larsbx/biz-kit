@@ -1,0 +1,77 @@
+name: Economic planning — verification layer
+
+on:
+  pull_request:
+    paths:
+      - 'proof_bank/economic_planning/**'
+      - 'proof_bank/research_exchange/toolchains.lock.json'
+      - 'proof_bank/research_exchange/tooling/quint/**'
+      - 'proof_bank/research_exchange/tools/bootstrap.py'
+      - 'proof_bank/research_exchange/tools/runtime_identity.py'
+      - 'proof_bank/research_exchange/tools/source_snapshot.py'
+      - 'docs/architecture/2026-11-11-economic-planning-verification.md'
+      - 'docs/plans/2026-11-11-dispatch-spatial-workspace.md'
+      - '.github/workflows/economic-planning-verification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'proof_bank/economic_planning/**'
+      - 'proof_bank/research_exchange/toolchains.lock.json'
+      - 'proof_bank/research_exchange/tooling/quint/**'
+      - 'proof_bank/research_exchange/tools/bootstrap.py'
+      - 'proof_bank/research_exchange/tools/runtime_identity.py'
+      - 'proof_bank/research_exchange/tools/source_snapshot.py'
+      - 'docs/architecture/2026-11-11-economic-planning-verification.md'
+      - 'docs/plans/2026-11-11-dispatch-spatial-workspace.md'
+      - '.github/workflows/economic-planning-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: economic-planning-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PLANNING_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.1'
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            ${{ runner.temp }}/economic-planning-tools/*.tar.zst
+            ${{ runner.temp }}/economic-planning-tools/*.tar.gz
+            ${{ runner.temp }}/economic-planning-tools/*.tgz
+          key: economic-planning-archives-linux-x64-${{ hashFiles('proof_bank/research_exchange/toolchains.lock.json') }}
+      - name: Install and verify existing pinned proof tools
+        run: >-
+          python3 proof_bank/research_exchange/tools/bootstrap.py
+          --destination "$RUNNER_TEMP/economic-planning-tools"
+      - name: Prove contracts and reject deliberate countermodels
+        run: >-
+          python3 -I proof_bank/economic_planning/tools/verify.py
+          --expected-head "$PLANNING_SOURCE_HEAD"
+          --toolchain "$RUNNER_TEMP/economic-planning-tools"
+          --output "$RUNNER_TEMP/economic-planning-evidence"
+      - name: Preserve exact-source proof receipt and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: economic-planning-${{ env.PLANNING_SOURCE_HEAD }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/economic-planning-evidence
+          if-no-files-found: warn
+          retention-days: 30

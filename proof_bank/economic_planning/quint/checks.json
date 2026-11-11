@@ -1,0 +1,143 @@
+{
+  "model": "planning.qnt",
+  "init": "init",
+  "step": "step",
+  "invariant": "planningSafety",
+  "tests": [
+    "knownFutureEvidenceTest",
+    "availabilityAndBindingTest",
+    "multimodalSharedPoolTest",
+    "reverseModeOrderTest",
+    "unknownZeroAndWrongUnitsTest",
+    "allInAndCurrencyTest",
+    "totalCostReplayTest",
+    "invalidCostComponentsTest",
+    "dimensionalRolesTest",
+    "reachablePreludeTest",
+    "scenarioClassificationTest",
+    "frozenPublicationTest",
+    "missingEvidenceTest"
+  ],
+  "mutants": [
+    {
+      "name": "late_knowledge",
+      "step": "lateKnowledge",
+      "invariant": "knowledgeCutoff"
+    },
+    {
+      "name": "future_publication",
+      "step": "futurePublication",
+      "invariant": "knowledgeCutoff"
+    },
+    {
+      "name": "substituted_evidence",
+      "step": "substitutedEvidence",
+      "invariant": "evidenceBinding"
+    },
+    {
+      "name": "unpinned_revision",
+      "step": "unpinnedRevision",
+      "invariant": "evidenceBinding"
+    },
+    {
+      "name": "foreign_scope",
+      "step": "foreignEvidence",
+      "invariant": "scopeIsolation"
+    },
+    {
+      "name": "denied_read",
+      "step": "deniedRead",
+      "invariant": "readAuthority"
+    },
+    {
+      "name": "substituted_resource",
+      "step": "substitutedResource",
+      "invariant": "resourceBinding"
+    },
+    {
+      "name": "invented_capacity",
+      "step": "inventedCapacity",
+      "invariant": "resourceBinding"
+    },
+    {
+      "name": "early_capacity",
+      "step": "earlyCapacity",
+      "invariant": "effectiveCapacity"
+    },
+    {
+      "name": "outside_horizon",
+      "step": "outsideHorizon",
+      "invariant": "effectiveCapacity"
+    },
+    {
+      "name": "invented_cost",
+      "step": "inventedCost",
+      "invariant": "costSourceBinding"
+    },
+    {
+      "name": "unknown_capacity",
+      "step": "assumedUnknown",
+      "invariant": "unknownCapacity"
+    },
+    {
+      "name": "split_mode_pool",
+      "step": "splitModePool",
+      "invariant": "capacityConservation"
+    },
+    {
+      "name": "double_count_cost",
+      "step": "doubleCountCost",
+      "invariant": "componentDisjointness"
+    },
+    {
+      "name": "repeated_component",
+      "step": "repeatedComponent",
+      "invariant": "componentDisjointness"
+    },
+    {
+      "name": "mixed_currency",
+      "step": "mixedCurrency",
+      "invariant": "currencyIdentity"
+    },
+    {
+      "name": "scenario_downgrade",
+      "step": "downgradedScenario",
+      "invariant": "claimClassification"
+    },
+    {
+      "name": "derived_observation",
+      "step": "derivedObservation",
+      "invariant": "claimClassification"
+    },
+    {
+      "name": "rewritten_publication",
+      "step": "rewrittenPublication",
+      "invariant": "publicationImmutability"
+    },
+    {
+      "name": "future_nowcast",
+      "step": "futureNowcast",
+      "invariant": "horizonClassification"
+    },
+    {
+      "name": "operational_write",
+      "step": "operationalWrite",
+      "invariant": "noOperationalEffects"
+    },
+    {
+      "name": "physical_as_money",
+      "step": "physicalAsMoney",
+      "invariant": "monetaryCostRole"
+    },
+    {
+      "name": "money_as_capacity",
+      "step": "moneyAsCapacity",
+      "invariant": "resourceBinding"
+    },
+    {
+      "name": "replayed_total_cost",
+      "step": "replayedTotalCost",
+      "invariant": "costSourceUniqueness"
+    }
+  ]
+}
