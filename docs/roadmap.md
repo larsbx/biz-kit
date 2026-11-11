@@ -1,5 +1,23 @@
 # biz-kit roadmap
 
+## Dispatch spatial workspace and stack reduction — 2026-11-11
+
+The accepted [God's Eye View integration roadmap](plans/2026-11-11-dispatch-spatial-workspace.md)
+selects one spatial workspace over authorized Dispatch observations and existing
+business commands. GEV-00 through GEV-08 cover the source/deployment inventory,
+spatial contract and proof obligations, fleet layer, complete queries/planning,
+admitted actions, context, history/handoff and selective service retirement.
+Implementation and runtime acceptance remain pending.
+
+The intended auxiliary-service profiles retain six services initially, four
+after accepted hosted tiles/geocoding, and potentially two after native-only
+tracking permits Traccar and its dedicated database to retire. These counts
+exclude Dispatch, its storage, d-patch and GEV hosting; they are conditional
+targets, not measured savings or completed removals. Routing/optimization and
+the separate assignment-ledger migration retain their existing owners.
+The first implementation target is an authorized fleet view with freshness,
+accuracy, record links, revocation clearing and location-demand cleanup.
+
 ## Proof Bank application foundry — 2026-11-01
 
 The [Proof Bank B0 rollout](architecture/2026-11-01-proof-bank-rollout.md)
