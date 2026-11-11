@@ -1,7 +1,15 @@
-# Dispatch spatial workspace and stack reduction
+# Dispatch spatial workspace and minimal stack
 
 Date: 2026-11-11 (America/New_York).
-Status: **Accepted roadmap; implementation and service retirement pending.**
+Status: **Accepted roadmap; implementation pending. The legacy auxiliary stack
+was proposed only.**
+
+Owner clarification, 2026-11-11: the earlier auxiliary stack was **proposed,
+not implemented**. This corrects the operating-baseline inference in
+[PR #369](https://github.com/larsbx/biz-kit/pull/369). The work is to select and
+build the smaller stack directly; no legacy-service retirement sequence is
+required. Existing Dispatch application capabilities are identified separately
+below.
 
 ## Outcome and selected direction
 
@@ -12,16 +20,16 @@ shared tool catalog and a focused application profile. Preserve the field app
 and the existing business forms while integrating them with map selections.
 
 The intended lean deployment is GEV plus Dispatch and its existing durable
-storage, with routing and optimization enabled when the selected workflows need
-them. Hosted tiles and geocoding are the preferred simplification candidates;
-Traccar is optional for a fleet whose devices are fully served by d-patch's
-native collection path. Provider selection and actual service removal require
-the capability and recovery evidence below.
+storage. Select routing and optimization only when the workflows need them.
+Use suitable hosted tiles and geocoding to avoid implementing local providers.
+Add Traccar only if required device protocols are not covered by d-patch's
+native collection path. The unused parts of the earlier proposal can be omitted
+from the first build.
 
 This roadmap records the owner's direction to maximize useful GEV functionality
-while reducing duplicate application work and operating components. Its merge
-does not claim an integrated deployment, measured resource savings, physical
-device acceptance or completed removal. Implementation milestones remain open.
+while avoiding duplicate application work and unnecessary operating components.
+Its merge does not claim an integrated deployment, measured resource savings or
+physical-device acceptance. Implementation milestones remain open.
 
 ## 1. Source baseline and current limits
 
@@ -29,7 +37,7 @@ device acceptance or completed removal. Implementation milestones remain open.
 | --- | --- | --- |
 | [Biz-kit][biz-source] | `3e485d281b95e8f5eab4e5ac522ad3b73dec8944` | Dispatch board and native location admission exist; the participant map is scaffolding; geographic provider ports remain unconfigured |
 | [God's Eye View][gev-source] | `14db73f201a0235da4f591648d9b6a9bf4fed87f` | Reusable source components, external provider interfaces, layers, tool composition and presentation controls are available |
-| [Truck Dispatch][truck-source] | `7201e7102ab8bbbd99a59d7391a00e515dd6bc1c` | A six-service development deployment is defined; this is not a fresh inspection of the running host |
+| [Truck Dispatch][truck-source] | `7201e7102ab8bbbd99a59d7391a00e515dd6bc1c` | Design artifacts describe six proposed auxiliary services; the owner confirms that the legacy stack was not implemented |
 
 Refresh these revisions at implementation kickoff. Pin d-patch's actual client
 revision in cross-repository acceptance; this audit does not invent a client
@@ -50,21 +58,27 @@ head or reuse an older run as new integration evidence.
   acceptance is test-stack evidence, not physical-device or production evidence.
 - [Geo ports][geo-ports] require search, reverse lookup, routes and matrices.
   The inspected [unconfigured adapters][geo-unconfigured] refuse requests;
-  separate running provider containers do not establish selected Dispatch
+  proposed provider configuration does not establish implemented Dispatch
   adapters.
 - The [assignment-ledger slice][assignment-ledger] is implemented but the board
   still writes rows. Parity, command switching and writer fencing remain
   separate work. Spatial reads must use the currently authoritative state;
   actions must use the admitted command interface current at integration time.
 
-### Existing development deployment
+### Earlier proposed auxiliary stack
 
-The [composition][truck-compose] defines PostgreSQL/PostGIS, Traccar, Nominatim,
-Valhalla, VROOM and TileServer GL. The [operator guide][truck-operator] identifies
-Monaco routing/geocoding data and a Zurich tile sample. This is useful API and
-UI test infrastructure, not one coherent operating-area dataset. The
-[deployment script][truck-deploy] configures the dedicated PostgreSQL database for Traccar; verify actual
-consumers and retained data before treating it as removable.
+The [composition][truck-compose] names PostgreSQL/PostGIS, Traccar, Nominatim,
+Valhalla, VROOM and TileServer GL. Its [operator material][truck-operator] and
+[deployment script][truck-deploy] describe intended configuration, including a
+Traccar database and sample map datasets. For this roadmap these are proposal
+artifacts, not an implemented or operating baseline; deployment wording in those
+older documents does not override the owner's clarification.
+
+The separate MapLibre operations application was also part of the proposed
+direction. GEV lets us avoid building it. No existing Traccar history, auxiliary
+database consumers or live service shutdown is assumed. The implemented Dispatch
+board, native location admission and existing storage remain distinct from this
+unimplemented auxiliary proposal.
 
 ### Upstream integration limits
 
@@ -83,38 +97,40 @@ The [security model][gev-security] treats local MCP restrictions as transport
 controls, not Dispatch authentication. Provider and bundled-data requirements
 are recorded separately from the code license in [data sources][gev-data].
 
-## 2. Replacement and ownership matrix
+## 2. Selected implementation and avoided components
 
-| Capability or component | Selected treatment | Remaining owner or dependency | Evidence before replacement |
+| Component or capability | Selected treatment | Owner or dependency | Acceptance for the new implementation |
 | --- | --- | --- | --- |
-| General map workspace and planned MapLibre operations UI | Reuse GEV; avoid a second full spatial application | GEV profile and Dispatch entity layer | Intended operators complete the same tasks; textual alternatives and existing consumers remain covered |
-| Geographic search, drawing, layers and route display | Reuse native controls | Chosen provider adapters and Dispatch identities | Compatible results across all exposed search/route surfaces, including Directions |
-| Load entry, assignment forms and trip transitions | Retain and link first; integrate selectively later | Existing Dispatch command interface | Authorization, version, retry and admission parity for any new entry point |
-| Local TileServer GL | Candidate for removal through hosted imagery | Selected imagery provider; self-hosted option when required | Operating-area coverage, attribution, availability and any offline requirements satisfied |
-| Local Nominatim | Candidate for removal through hosted geocoding | Selected geocoder shared with backend uses | Forward/reverse search, expected volume and stored address/coordinate provenance verified |
-| Traccar | Optional for native-only tracking; retain for required hardware protocols | d-patch/Dispatch or an explicit tracker source adapter | Actual device, ingestion, retention, reconnect and field acceptance |
-| Dedicated Traccar PostgreSQL/PostGIS | Candidate only when its last consumer is retired | Retained history and verified storage destination | Live consumer inventory, preserved data, restore and retirement evidence |
-| Valhalla | Retain when routing is required | Routing engine behind Dispatch ports | Truck profile, constraints, matrices and provider-failure semantics where required |
-| VROOM | Retain when allocation/stop-order optimization is required | Optimization engine and Dispatch business inputs | Capacity, time-window, eligibility and commitment constraints exercised |
-| Dispatch durable storage, identity, consent and command admission | Retain; follow existing consolidation | Existing platform/domain owners | Governed by their existing migration and acceptance contracts |
+| Proposed MapLibre operations application | Avoid building a separate application; use GEV | GEV profile and Dispatch entity layer | Operators complete the spatial tasks with textual alternatives |
+| Geographic search, drawing, layers and route display | Reuse native GEV controls | Chosen provider adapters and Dispatch identities | Compatible results across exposed search/route surfaces, including Directions |
+| Implemented load entry, assignment forms and trip transitions | Reuse and link first; integrate selectively later | Existing Dispatch command interface | Authorization, version, retry and admission parity for new entry points |
+| Proposed local TileServer GL | Omit when selected hosted imagery meets the requirements | Selected imagery provider; self-hosted option only when needed | Operating-area coverage, attribution, availability and any offline requirements |
+| Proposed local Nominatim | Omit when selected hosted geocoding meets the requirements | Selected geocoder shared with backend uses | Forward/reverse search, expected volume and address/coordinate provenance |
+| Proposed Traccar | Add only for required hardware protocols | d-patch/Dispatch for native collection; tracker adapter if needed | Actual device, ingestion, retention, reconnect and field acceptance |
+| Proposed dedicated Traccar PostgreSQL/PostGIS | Omit with Traccar; provision only if the selected tracker needs it | Storage owner for any newly implemented tracker | Declared storage and recovery contract; no pre-existing tracking data assumed |
+| Proposed Valhalla | Select a routing engine when routing is required; Valhalla is a candidate | Routing provider behind Dispatch ports | Truck profiles, constraints, matrices and failure semantics where required |
+| Proposed VROOM | Select an optimizer when allocation/stop-order optimization is required; VROOM is a candidate | Optimization provider and Dispatch business inputs | Capacity, time-window, eligibility and commitment constraints |
+| Implemented Dispatch storage, identity, consent and command admission | Reuse; follow existing consolidation | Existing platform/domain owners | Existing migration and acceptance contracts |
 
-GEV replaces presentation work. Hosted services replace local provider hosting.
-Native Dispatch collection can make a parallel tracking service unnecessary.
-Keep those three claims separate in progress reports.
+The benefit is avoided implementation and a smaller chosen deployment. GEV
+supplies presentation; actual providers still supply maps, geocoding, routing
+and optimization. Reusing native Dispatch collection can avoid introducing a
+parallel tracker.
 
-### Counted deployment targets
+### Capability profiles for the first build
 
-| Profile target | Services retained from the six-service auxiliary composition | Conditions |
-| --- | ---: | --- |
-| Spatial interface adoption | 6 | Existing providers retained while GEV integration is verified |
-| Hosted cartography | 4 | Local tiles and Nominatim replaced by accepted providers |
-| Hosted cartography plus native-only tracking | 2 | Traccar and its dedicated database also retired; Valhalla and VROOM retained |
+| Profile | Components needed | Proposed components that can be omitted |
+| --- | --- | --- |
+| Fleet workspace | GEV, authorized Dispatch spatial reads, existing storage/native collection, selected map imagery | Separate MapLibre application, Traccar and its database; local tiles/geocoder when hosted providers suffice |
+| Route planning | Fleet workspace plus accepted geocoding/routing providers; optimizer only for optimization workflows | Any unselected local engine or solver; hosted providers remain external dependencies |
+| Hardware tracking option | Explicit protocol adapter, such as Traccar, and its required storage | Hardware-tracking services when all required devices use native collection |
+| Self-hosted cartography option | Local tiles/geocoding only for a demonstrated coverage, control or offline requirement | Local cartography services in the hosted-provider profile |
 
-The denominator excludes Dispatch, its storage, d-patch and GEV's serving/provider
-process. These are profile targets, not percentages of total system complexity
-or measured savings. Record deferred, disabled, migrated and decommissioned
-services separately. A fleet-view pilot may defer routing/optimization; it must
-then show those capabilities as unavailable rather than claiming replacement.
+These are design choices, not successive six-to-four-to-two service cutovers.
+Do not deploy all six proposed services merely to remove them later. Counts, if
+reported, must distinguish proposed components omitted from the build from
+actual measured runtime components. Routing/optimization deferred from the
+fleet-view pilot must be visibly unavailable until implemented.
 
 ## 3. Architecture and shared contracts
 
@@ -123,7 +139,7 @@ then show those capabilities as unavailable rather than claiming replacement.
 | Biz-kit / `apps/dispatch` | Authorized spatial reads, complete queries, typed observations, current business state, command entry points and their tests |
 | d-patch | Device identity, explicit collection consent, signed samples, offline/reconnect behavior and physical-device acceptance |
 | GEV integration package/profile | Rendering, selection, following, native controls, tool presentation and lifecycle cleanup; exact upstream pin and update procedure |
-| `truck-dispatch` | Optional provider deployment profiles, image/data pins, operating-area coverage, backup/restore and actual retirement |
+| `truck-dispatch` | Selected optional provider deployment profiles, image/data pins, operating-area coverage and recovery for components actually implemented |
 | Routing, optimization and map providers | Calculations and datasets under declared source, coverage and freshness contracts |
 
 Keep the canonical roadmap here and link implementation evidence from companion
@@ -197,33 +213,36 @@ endpoint.
 
 | ID | Deliverable | Dependencies | Status at roadmap adoption |
 | --- | --- | --- | --- |
-| GEV-00 | Source/deployment inventory and minimal application profile | Existing source contracts | Source baseline recorded; deployment inventory pending |
+| GEV-00 | Requirements, source pins and minimal application profile | Existing source contracts and owner correction | Source baseline recorded; profile selection pending |
 | GEV-01 | Spatial contract, proof obligations and authorized read service | GEV-00 | Planned |
 | GEV-02 | Fleet workspace and native controls | GEV-01 | Planned |
 | GEV-03 | Complete queries, geocoding and planning adapters | GEV-01, GEV-02 | Planned |
 | GEV-04 | Operational command integration | GEV-03 and current command-path acceptance | Planned |
 | GEV-05 | Route context, annotations and operating areas | GEV-02; GEV-03 for route correlation | Planned |
 | GEV-06 | History, private saved views and Director handoffs | GEV-01, GEV-02 and retained history | Planned |
-| GEV-07 | Measured deployment reduction and selective retirement | GEV-00, GEV-02 and each retained capability's acceptance | Planned |
+| GEV-07 | Minimal deployment and profile acceptance | GEV-00, GEV-02 and each selected capability's acceptance | Planned |
 | GEV-08 | Demand/capacity and business-network analysis | Relevant GEV-03/05/06 results and defined business metrics | Later extension |
 
 GEV-05 and GEV-06 can proceed independently after their prerequisites. GEV-07
-does not wait for every advanced feature; it waits for parity for the actual
-consumers of each retirement candidate. No calendar duration is claimed before
-the deployment and device inventory is complete.
+accepts the selected initial profile without waiting for every advanced feature.
+No legacy deployment, data migration or shutdown gate is a prerequisite for
+building this unimplemented auxiliary stack. Set delivery estimates after the
+profile and device requirements are selected.
 
-### GEV-00 — Inventory and focused profile
+### GEV-00 — Requirements and focused profile
 
-**Deliver:** exact source/build pins; current consumers and running services;
-dataset/provider coverage; declared device types; current data ownership; and
-one minimal profile with live operations, planning and review modes. Record
-the owning repository, build/update procedure and fallback for the GEV package.
+**Deliver:** exact source/build pins; required device types; provider and dataset
+coverage; data ownership for selected components; and one minimal application
+profile with live operations, planning and review modes. Record the owning
+repository and build/update procedure for the GEV package. Identify which
+features are required initially and which are optional or deferred.
 
-**Acceptance:** classify source availability, selected configuration, observed
-runtime and test evidence separately. Record startup time, bundle/network size,
-browser resource use and service resource use on representative hardware before
-claiming improvement. Set measurable budgets before the acceptance comparison.
-Inventory all consumers of the existing map code and tracking database.
+**Acceptance:** distinguish implemented Dispatch source capabilities from the
+earlier unimplemented auxiliary proposal. Record the selected providers and
+why each local component is needed. Set measurable startup, bundle/network,
+browser and service resource budgets before testing the new implementation.
+Measure that implementation directly; there is no measured legacy runtime to
+use as a before/after baseline.
 
 Activate fleet/current work first. Weather, cameras, street imagery and expensive
 effects are task-selected. Disabled layers must not register background feed
@@ -268,14 +287,14 @@ Representative browser/device tasks meet GEV-00 budgets.
 Any shared deployment uses the selected Biz-kit authentication and provider-access
 boundary. GEV's development server and local MCP restrictions do not establish
 multiuser identity or authorization. A local test deployment remains labeled
-as such; authenticated hosting is required before sharing protected fleet data,
-independently of whether any service is being retired.
+as such; authenticated hosting is required before sharing protected fleet data.
 
-Retire only the map scaffold and renderer dependencies whose consumers now pass
-parity. Existing business forms and field collection continue to work. Keep
-upstream simulated road traffic optional and clearly distinguished from Dispatch
-observations. No unrelated fleet, aerospace or simulation layer becomes a
-default requirement merely because upstream bundles it.
+Complete the spatial interface using GEV and omit the parallel MapLibre
+application from the implementation plan. Existing business forms, textual facts
+and native field collection continue to work. Keep upstream simulated road
+traffic optional and clearly distinguished from Dispatch observations. No
+unrelated fleet, aerospace or simulation layer becomes a default requirement
+merely because upstream bundles it.
 
 ### GEV-03 — Queries and planning
 
@@ -356,24 +375,27 @@ scene packs and evidence references have explicit disclosure rules; reauthorize
 each permitted record before building an export. Exercise expiry, revocation,
 missing records and a recipient with narrower access.
 
-### GEV-07 — Selective retirement
+### GEV-07 — Minimal deployment and profile acceptance
 
-**Deliver:** profile-specific deployment changes in `truck-dispatch`, accepted
-provider selections, consumer migration, retained-data handling, measured results
-and a reversible service shutdown procedure. Use the retirement record below.
+**Deliver:** a reproducible deployment containing only the selected components,
+accepted provider configurations, measured resource use and recovery procedures
+for the implementation actually built. Put optional local-provider configuration
+in `truck-dispatch`; the workspace can use hosted providers directly through
+the authorized service boundary. Use the selection record below.
 
-**Acceptance:** each removed service has a replacement or an explicitly deferred
-capability. Validate actual consumers and data, cold start, restart, provider
-failure, reconnection and restoration in the selected profile. Preserve image
-pins, source/dataset identities, secrets separation and the deployment's existing
-exposure policy. New web hosting authenticates users and provider access through
-the selected Biz-kit boundary; a GEV development server alone is not that host.
+**Acceptance:** every installed component has a declared required capability.
+Omitted or deferred functions remain explicit. Verify cold start, restart,
+provider failure, reconnection and recovery of actual persistent state. Pin
+images and datasets, separate secrets and authenticate shared hosting through
+the selected Biz-kit boundary. A GEV development server alone is not that host.
 
-Hosted tiles/geocoding can close their own gates independently of tracking.
-Traccar retirement additionally requires field acceptance for every needed
-device/behavior and reconciliation of retained observations. Its database is a
-separate retirement item after the last consumer is gone. Dispatch storage and
-the platform consolidation plan are not retired by this milestone.
+For a native-only fleet, do not install Traccar or its proposed database. Add a
+hardware-tracker path only when the selected device requirements justify it,
+with actual field acceptance. Likewise, implement local tiles/geocoding,
+Valhalla or VROOM only if selected for their required capability. No legacy
+tracking history reconciliation, last-consumer removal or old-service shutdown
+is assumed. Existing Dispatch storage and its separate consolidation work keep
+their own contracts.
 
 ### GEV-08 — Business-network analysis
 
@@ -386,15 +408,16 @@ creating a second marketplace interpretation.
 time horizon, completeness, commitments and assumptions. Candidate matching does
 not reserve capacity, accept an order or establish financial settlement. Add
 air/port/intermodal context only when actual shipment relationships need it.
-These features are not prerequisites for the first live workspace or justified
-auxiliary-service retirement.
+These features are not prerequisites for the first live workspace or its
+minimal deployment.
 
 ## 5. Acceptance and evidence ledger
 
 Each implementation PR updates the milestone status with its exact source head,
 test profile, result links and unresolved boundaries. Use these distinct labels:
-`planned`, `implemented`, `local-verified`, `hosted-verified`, `field-verified`,
-`deployed` and `retired`. A label for one capability does not promote another.
+`planned`, `implemented`, `local-verified`, `hosted-verified`, `field-verified`
+and `deployed`. Track component selection separately as `selected`, `optional`,
+`deferred` or `omitted`. A label for one capability does not promote another.
 
 | Evidence area | Required observation |
 | --- | --- |
@@ -405,7 +428,7 @@ test profile, result links and unresolved boundaries. Use these distinct labels:
 | Commands | Existing admission, current authority, versions, idempotency, concurrency and audit |
 | History and sharing | Authorized time range, gaps, receipt-time limits and recipient-specific restoration/export |
 | Packaging and operation | Pinned sources, disabled-feed inactivity, attribution, representative resource budgets and restart/fallback |
-| Retirement | Actual last-consumer removal, preserved history, successful recovery and recorded running-service state |
+| Minimal deployment | Only selected components installed; omitted capabilities explicit; actual runtime measurements and recovery verified |
 
 Reuse applicable location cross-repository, portal authentication, Dispatch
 database and command acceptance lanes. Add focused checks for the new adapters
@@ -428,60 +451,58 @@ relevant work, a routing/optimization provider returns a versioned candidate,
 the existing command interface admits the selected change, and another entitled
 operator restores a private work view under their own permissions.
 
-## 6. Retirement record and rollback
+## 6. Component selection and deployment acceptance record
 
-Record one row per component/profile at GEV-07. Empty evidence means pending.
+Record one row per component/profile during GEV-00 and update it with GEV-07
+implementation evidence. Empty evidence means pending, not implemented.
 
 | Field | Required content |
 | --- | --- |
-| Component and profile | Exact service, renderer or provider; operating area; declared enabled capabilities |
-| Existing consumers | Observed API/UI/device/job users and current configuration/source revisions |
-| Replacement or deferral | Named implementation/provider and capability parity; explicit unavailable functions |
-| State and retention | Data owner, source identities, export/archive or migration, remaining obligations |
+| Component and capability | Exact application, local service or hosted provider; operating area and required behavior |
+| Selection | Selected, optional, deferred or omitted; reason it is needed or can be avoided |
+| Owner and contract | Repository/provider, source/build revision, interface and declared dependencies |
+| State | Actual persistent state generated or used by the selected implementation, with owner and retention |
 | Acceptance | Exact-head local/hosted/field results and actual deployment observations as applicable |
-| Shutdown and recovery | Traffic/consumer switch, in-flight work, old-service shutdown, restore procedure and verified result |
-| Measured effect | Before/after service count, memory/CPU, startup, operational latency and external usage under the same workload |
-| Final status | Deferred, disabled, migrated or decommissioned; owner and date |
+| Recovery | Reproducible startup, provider failure handling and restore procedure for actual persistent state |
+| Measurements | Running components, memory/CPU, startup, operational latency and external usage for the tested workload |
+| Final status | Implementation/evidence state, owner and date |
 
-Switch consumers and reconcile in-flight samples/jobs before stopping a source.
-Preserve the original sample identities and ordering semantics across retries.
-Do not erase tracking/map state as a side effect of disabling a profile. Restore
-the prior provider configuration from pinned state when it is still compatible;
-after changed writes or migrations, preserve the new accepted history and follow
-the storage owner's recovery procedure. A stale database rollback is not recovery.
+The proposed auxiliary stack supplies no presumed data to migrate or services
+to shut down. Initial acceptance therefore concerns the new selected deployment.
+Preserve existing Dispatch state and its established recovery procedures.
 
-Remove an old map dependency only after all its consumers are covered, including
-non-GEV pages. Keep the source/history needed for audit and restoration according
-to its existing retention contract. Do not claim a service is retired from a
-documentation merge or a smaller Compose file alone.
+If later work identifies an actual running dependency outside this clarified
+baseline, record it separately and define the migration appropriate to that
+dependency. Do not turn a hypothetical discovery into a mandatory legacy
+migration phase for this roadmap.
 
 ## 7. Immediate implementation order
 
-1. Complete GEV-00's actual deployment/device inventory and pin the focused
-   application build. Record provider decisions and representative budgets.
+1. Complete GEV-00's minimal profile and device requirements; pin the GEV build,
+   choose providers and define representative performance/resource budgets.
 2. Implement GEV-01's contract/model and authorized read adapter with negative
    controls. Follow with GEV-02's fleet layer and the first acceptance scenario.
 3. Connect the chosen geocoding/routing services and complete operational queries
-   through GEV-03. Preserve current command entry points while their separate
-   ledger migration advances.
-4. Pursue hosted-cartography retirement as soon as its own evidence is complete;
-   decide native-only versus hardware tracking from actual device acceptance.
-   Add context, history and handoff independently behind their own gates.
+   through GEV-03. Preserve current Dispatch command entry points while their
+   separate ledger migration advances.
+4. Accept the minimal deployment through GEV-07 using only selected components.
+   Add hardware tracking, local cartography or optimization only when needed.
+   Context, history and handoff can advance independently behind their own gates.
 
-This sequence aims to replace unfinished spatial UI work first, then reduce
-operating components with explicit capability evidence. It does not require
-rebuilding the field app, replacing the business backend or enabling every
-upstream feed before the workspace is useful.
+Build the smaller architecture directly. The earlier auxiliary proposal does
+not need to be implemented, migrated or retired first.
 
 ## Sources
 
-The source baseline above is immutable. Implementation evidence should add new
-revision links without rewriting the meaning of this inspection.
+The source revisions above remain immutable; the interpretation of the legacy
+proposal is corrected by the owner's 2026-11-11 clarification. New implementation
+claims require new evidence and must not be inferred from the older deployment
+wording.
 
 - Dispatch contracts: [location][location-contract], [board][board-contract],
   [geographic ports][geo-ports] and [assignment-ledger migration][assignment-ledger].
-- Development deployment: [composition][truck-compose], [operator guide][truck-operator]
-  and [deployment script][truck-deploy].
+- Earlier auxiliary proposal artifacts: [composition][truck-compose],
+  [operator material][truck-operator] and [deployment script][truck-deploy].
 - GEV integration: [application][gev-application], [routing][gev-routes],
   [Directions][gev-directions], [history][gev-history], [security][gev-security]
   and [provider/data requirements][gev-data].

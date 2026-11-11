@@ -1,22 +1,24 @@
 # biz-kit roadmap
 
-## Dispatch spatial workspace and stack reduction — 2026-11-11
+## Dispatch spatial workspace and minimal stack — 2026-11-11
 
 The accepted [God's Eye View integration roadmap](plans/2026-11-11-dispatch-spatial-workspace.md)
 selects one spatial workspace over authorized Dispatch observations and existing
-business commands. GEV-00 through GEV-08 cover the source/deployment inventory,
-spatial contract and proof obligations, fleet layer, complete queries/planning,
-admitted actions, context, history/handoff and selective service retirement.
-Implementation and runtime acceptance remain pending.
+business commands. **Owner clarification: the earlier auxiliary stack was
+proposed, not implemented.** The plan avoids building unnecessary components;
+there is no six-to-four-to-two service retirement sequence.
 
-The intended auxiliary-service profiles retain six services initially, four
-after accepted hosted tiles/geocoding, and potentially two after native-only
-tracking permits Traccar and its dedicated database to retire. These counts
-exclude Dispatch, its storage, d-patch and GEV hosting; they are conditional
-targets, not measured savings or completed removals. Routing/optimization and
-the separate assignment-ledger migration retain their existing owners.
-The first implementation target is an authorized fleet view with freshness,
-accuracy, record links, revocation clearing and location-demand cleanup.
+GEV-00 through GEV-08 cover requirements and the minimal profile, the spatial
+contract and proof obligations, fleet layer, complete queries/planning, admitted
+actions, context, history/handoff and deployment acceptance. Use suitable hosted
+tiles/geocoding; add Traccar, local cartography, a routing engine or an optimizer
+only when the selected workflow requires them. Existing Dispatch storage,
+native collection and the separate assignment-ledger migration keep their
+current contracts.
+
+Implementation remains pending. The first target is an authorized fleet view
+with freshness, accuracy, record links, revocation clearing and location-demand
+cleanup, built directly on the selected minimal architecture.
 
 ## Proof Bank application foundry — 2026-11-01
 

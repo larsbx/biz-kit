@@ -8,9 +8,10 @@ validation, the machine API, and the server-rendered portal.
 
 The accepted [God's Eye View roadmap](../../docs/plans/2026-11-11-dispatch-spatial-workspace.md)
 reuses the upstream spatial interface through an authorized Dispatch projection,
-entity layer, shared tools and focused profile. The current participant map is
-scaffolding; the roadmap does not claim integrated deployment or service
-retirement. Native signed location collection, current command admission and
+entity layer, shared tools and focused profile. The earlier auxiliary stack was
+proposed, not implemented; select the minimal components directly instead of
+planning legacy-service retirement. The participant map remains scaffolding.
+Implemented native signed location collection, current command admission and
 the separate assignment-ledger migration retain their existing contracts.
 
 ## Local commands
