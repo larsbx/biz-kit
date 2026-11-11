@@ -32,6 +32,7 @@ function bodyBytes(value) { if (coldTracking) cold.cold_same_origin_body_bytes +
 function send(value, { preserveCursor = false } = {}) {
   let first;
   for (const [client, cursor] of clients) {
+    if (client.destroyed || client.writableEnded) continue;
     const frame = typeof value === "string" || preserveCursor ? value : { ...value, cursor: { stream_id: cursor.stream_id, sequence: ++cursor.sequence } };
     first ||= frame;
     client.write(bodyBytes(`event: dispatch-locations\ndata: ${typeof frame === "string" ? frame : JSON.stringify(frame)}\n\n`));
@@ -138,6 +139,7 @@ await page.addInitScript(() => {
 
 async function open() {
   for (const client of clients.keys()) client.end();
+  clients.clear();
   await page.goto(`${origin}/operations/map`, { waitUntil: "domcontentloaded" });
   await page.evaluate(async () => {
     const { Cesium } = await import("/static/vendor/gods-eye-view/viewer.js");
@@ -145,6 +147,17 @@ async function open() {
     window.__lastCameraDestination = null;
     window.__observedScene = null;
     window.__renderedFrames = 0;
+    window.__handledCursor = null;
+    // Acknowledge only after the real production handler has reconciled the
+    // frame. DOM entity counts or an existing detail link are not barriers.
+    const addListener = EventSource.prototype.addEventListener;
+    EventSource.prototype.addEventListener = function (type, listener, options) {
+      if (type !== "dispatch-locations") return addListener.call(this, type, listener, options);
+      return addListener.call(this, type, function (event) {
+        listener.call(this, event);
+        try { window.__handledCursor = JSON.parse(event.data).cursor; } catch {}
+      }, options);
+    };
     const render = Cesium.CesiumWidget.prototype.render;
     Cesium.CesiumWidget.prototype.render = function (...args) {
       window.__widget = this;
@@ -187,10 +200,21 @@ async function rendered(n) {
 }
 async function connected() {
   for (let i = 0; i < 100; i++) {
-    if (clients.size) return;
+    const active = [...clients.entries()].find(([client]) => !client.destroyed && !client.writableEnded);
+    if (active) {
+      await page.waitForFunction(id => window.__handledCursor?.stream_id === id, active[1].stream_id);
+      return;
+    }
     await new Promise(resolve => setTimeout(resolve, 25));
   }
   throw new Error("The browser did not establish an authorized stream");
+}
+async function sendAndWait(value, options) {
+  const frame = send(value, options);
+  assert.ok(frame?.cursor, "a current SSE connection must receive the test snapshot");
+  await page.waitForFunction(cursor => window.__handledCursor?.stream_id === cursor.stream_id &&
+    window.__handledCursor?.sequence === cursor.sequence, frame.cursor);
+  return frame;
 }
 async function selected(id = IDS[0]) {
   const index = IDS.indexOf(id);
@@ -198,15 +222,34 @@ async function selected(id = IDS[0]) {
   await page.waitForFunction(() => !document.getElementById("dispatch-map-selection").hidden);
 }
 async function workReady() { await page.waitForFunction(() => document.querySelector("#dispatch-map-work a") !== null); }
-async function waitHeld(count = 1) {
+async function cameraCenteredOn(id) {
+  const afterFrame = await page.evaluate(() => window.__renderedFrames);
+  await page.waitForFunction(({ id, afterFrame }) => {
+    const widget = window.__widget;
+    if (window.__renderedFrames <= afterFrame) return false;
+    const entity = widget.entities.getById(id);
+    if (!entity) return false;
+    const point = widget.scene.cartesianToCanvasCoordinates(entity.position.getValue());
+    return point && Math.abs(point.x - widget.canvas.clientWidth / 2) < 2 &&
+      Math.abs(point.y - widget.canvas.clientHeight / 2) < 2;
+  }, { id, afterFrame });
+}
+function heldMatches(entry, participantId, observationId) {
+  return (!participantId || entry.response.participant.id === participantId) &&
+    (!observationId || entry.response.observation_ref.id === observationId);
+}
+async function waitHeld(participantId, observationId) {
   for (let i = 0; i < 100; i++) {
-    if (heldWork.length >= count) return;
+    const active = heldWork.filter(entry => !entry.res.destroyed && !entry.res.writableEnded && heldMatches(entry, participantId, observationId));
+    if (active.length) return active;
     await new Promise(resolve => setTimeout(resolve, 25));
   }
   throw new Error("Expected a pending selected-work request");
 }
-function releaseHeld() {
-  for (const { res, response } of heldWork.splice(0)) {
+function releaseHeld(participantId, observationId) {
+  for (let i = heldWork.length - 1; i >= 0; i--) {
+    if (!heldMatches(heldWork[i], participantId, observationId)) continue;
+    const [{ res, response }] = heldWork.splice(i, 1);
     if (!res.destroyed) res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(response));
   }
 }
@@ -313,27 +356,46 @@ try {
   await page.locator("#dispatch-map-follow").click();
   await page.waitForFunction(id => window.__widget.trackedEntity?.id === id, IDS[0]);
   assert.equal(await page.locator("#dispatch-map-follow").getAttribute("aria-pressed"), "true");
+  const beforeFollow = await page.evaluate(() => ({ frame: window.__renderedFrames,
+    x: window.__widget.camera.positionWC.x, y: window.__widget.camera.positionWC.y, z: window.__widget.camera.positionWC.z }));
+  const newObservation = "0193be40-0000-7000-8000-000000000013";
+  const moved = snapshot(); moved.participants[0].position.observation_ref.id = newObservation;
+  moved.participants[0].position.lat = 47.62; moved.participants[0].position.lng = -122.34;
+  await sendAndWait(moved);
+  await page.waitForFunction(({ before, id }) => {
+    const point = window.__widget.camera.positionWC;
+    return window.__widget.trackedEntity?.id === id && window.__renderedFrames >= before.frame + 2 &&
+      Math.hypot(point.x - before.x, point.y - before.y, point.z - before.z) > 500;
+  }, { before: beforeFollow, id: IDS[0] });
+  await workReady();
   await page.screenshot({ path: path.join(artifacts, "dispatch-map-selected.png"), fullPage: true });
-  checks.push("actual marker selection exposes observation-bound work, real operator/stop links and honest planned-stop state; native follow tracks that entity");
+  checks.push("actual marker selection exposes observation-bound work, real operator/stop links and honest planned-stop state; native follow moves the camera after a changed observation");
 
-  const oldFrame = send(snapshot()); await workReady();
+  const oldFrame = await sendAndWait(snapshot()); await workReady();
   const omitted = snapshot(); omitted.participants[0].position = null;
-  send(omitted); await rendered(1);
+  await sendAndWait(omitted); await rendered(1);
   assert.equal(await page.locator("#dispatch-map-selection").isHidden(), true);
   assert.equal(await page.locator("#dispatch-map-work").innerText(), "");
   assert.equal(await page.evaluate(() => window.__widget.trackedEntity), undefined);
   assert.equal(await page.evaluate(() => window.__widget.entities.values.some(entity => entity.id.startsWith("stop:"))), false);
-  send(oldFrame, { preserveCursor: true });
-  await page.waitForTimeout(100);
+  await cameraCenteredOn(IDS[1]);
+  await sendAndWait(oldFrame, { preserveCursor: true });
   assert.equal(await count(), 1); assert.equal(await page.locator("#dispatch-map-selection").isHidden(), true);
   assert.match(await page.locator("#dispatch-map-participants").innerText(), /No visible location observation/);
-  checks.push("observation deletion clears selection, follow, stops and work; replaying an older same-stream snapshot cannot resurrect them");
+  checks.push("observation deletion clears selection, follow, stops and work and frames only the remaining observation; an older same-stream snapshot cannot resurrect them");
 
-  send(snapshot()); await rendered(2);
+  await sendAndWait(snapshot()); await rendered(2);
+  await page.locator("#dispatch-map-search").fill("47.61, -122.33");
+  await page.locator("#dispatch-map-search-form button").click();
+  assert.equal(await page.locator("#dispatch-map-selection").isHidden(), true);
+  await sendAndWait(omitted); await rendered(1); await cameraCenteredOn(IDS[1]);
+  checks.push("withdrawal also resets a camera previously focused on that point when no participant is selected");
+
+  await sendAndWait(snapshot()); await rendered(2);
   const rosterButton = page.locator("#dispatch-map-participants button").first();
   await rosterButton.focus();
   await page.evaluate(() => { window.__focusedRosterButton = document.activeElement; });
-  send(snapshot());
+  await sendAndWait(snapshot());
   await page.waitForTimeout(5100); // Cross a real age-only refresh, not a synthetic rerender.
   assert.equal(await page.evaluate(() => document.activeElement === window.__focusedRosterButton), true);
   await page.keyboard.press("Enter"); await workReady();
@@ -362,23 +424,27 @@ try {
   const restricted = snapshot(); restricted.work_access = false;
   await selected(); await workReady();
   await page.locator("#dispatch-map-work button").click();
-  send(restricted);
+  const changedAndRestricted = structuredClone(restricted);
+  changedAndRestricted.participants[0].position.observation_ref.id = "0193be40-0000-7000-8000-000000000014";
+  changedAndRestricted.participants[0].position.lat = 47.63;
+  changedAndRestricted.participants[0].position.lng = -122.35;
+  await sendAndWait(changedAndRestricted);
   await page.waitForFunction(() => document.getElementById("dispatch-map-work-status").textContent.includes("unavailable"));
   const safeCamera = await page.evaluate(() => {
     const point = window.__widget.scene.globe.ellipsoid.cartesianToCartographic(window.__lastCameraDestination);
     return { lat: point.latitude * 180 / Math.PI, lng: point.longitude * 180 / Math.PI };
   });
-  assert.ok(Math.abs(safeCamera.lat - 47.61) < 0.000001 && Math.abs(safeCamera.lng + 122.33) < 0.000001);
+  assert.ok(Math.abs(safeCamera.lat - 47.63) < 0.000001 && Math.abs(safeCamera.lng + 122.35) < 0.000001);
   assert.equal(await page.locator("#dispatch-map-selection").isHidden(), false);
   assert.equal(await page.locator("#dispatch-map-work").innerText(), "");
-  checks.push("work-only revocation removes stop coordinates and returns their camera view to the still-authorized observation");
+  checks.push("work-only revocation removes stop coordinates and returns their camera view to the current authorized observation, even when its fix changes simultaneously");
 
   await page.locator("#dispatch-map-clear").click();
-  workMode = "hold"; send(snapshot()); await selected(); await waitHeld();
-  send(restricted);
+  workMode = "hold"; await sendAndWait(snapshot()); await selected(); await waitHeld(IDS[0], OBSERVATION_IDS[0]);
+  await sendAndWait(restricted);
   await page.waitForFunction(() => document.getElementById("dispatch-map-work-status").textContent.includes("unavailable"));
   const requestsAtRevocation = workRequests.length;
-  releaseHeld(); await page.waitForTimeout(100);
+  releaseHeld(IDS[0], OBSERVATION_IDS[0]); await page.waitForTimeout(100);
   assert.equal(await page.locator("#dispatch-map-work").innerText(), "");
   assert.equal(await page.evaluate(() => window.__widget.entities.values.some(entity => entity.id.startsWith("stop:"))), false);
   assert.equal(workRequests.length, requestsAtRevocation);
@@ -386,11 +452,10 @@ try {
 
   // Two selected participants race; only the latest observation may render.
   await page.locator("#dispatch-map-clear").click();
-  workMode = "hold"; send(snapshot()); await selected(); await waitHeld();
-  await selected(IDS[1]); await waitHeld(2);
-  const staleHeld = heldWork.shift();
-  releaseHeld(); await workReady();
-  if (!staleHeld.res.destroyed) staleHeld.res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(staleHeld.response));
+  workMode = "hold"; await sendAndWait(snapshot()); await selected(); await waitHeld(IDS[0], OBSERVATION_IDS[0]);
+  await selected(IDS[1]); await waitHeld(IDS[1], OBSERVATION_IDS[1]);
+  releaseHeld(IDS[1], OBSERVATION_IDS[1]); await workReady();
+  releaseHeld(IDS[0], OBSERVATION_IDS[0]);
   await page.waitForTimeout(100);
   assert.equal(await page.locator("#dispatch-map-selected-name").innerText(), "South van");
   assert.match(await page.locator("#dispatch-map-selected-position").innerText(), /37\.77000/);
@@ -404,12 +469,12 @@ try {
     assert.equal(await page.locator("#dispatch-map-work").innerText(), "");
   }
   workMode = "ok";
-  assert.ok(workRequests.every(request => request.method === "GET" && request.search === "" && OBSERVATION_IDS.includes(request.observationId)));
+  assert.ok(workRequests.every(request => request.method === "GET" && request.search === "" && [...OBSERVATION_IDS, newObservation].includes(request.observationId)));
   checks.push("denied, stale-observation, oversized and wrong-scope detail fail closed; every detail request is a same-origin GET with the observation header");
 
   await page.locator("#dispatch-map-clear").click();
   const unsafeName = snapshot(); unsafeName.participants[0].public_name = "<img src=x onerror=alert(1)>";
-  send(unsafeName); await rendered(2);
+  await sendAndWait(unsafeName); await rendered(2);
   await page.waitForFunction(() => document.querySelector("#dispatch-map-participants button").textContent.startsWith("<img"));
   assert.equal(await page.locator("#dispatch-map-participants img").count(), 0);
   assert.deepEqual(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length })), { local: 0, session: 0 });
@@ -417,7 +482,7 @@ try {
   assert.ok(!attributes.includes("47.61") && !attributes.includes("-122.33"));
   checks.push("names remain text; private coordinates are absent from DOM attributes, URLs and browser storage");
 
-  send(snapshot()); await rendered(2); await selected(); await workReady();
+  await sendAndWait(snapshot()); await rendered(2); await selected(); await workReady();
   await page.setViewportSize({ width: 390, height: 844 });
   narrow = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth,
     selectedVisible: !document.getElementById("dispatch-map-selection").hidden,
@@ -442,7 +507,7 @@ try {
 
   mode = "ok"; await open(); await rendered(2); await connected();
   const wrongScope = snapshot(); wrongScope.scope.key = "d".repeat(64);
-  send(wrongScope); await rendered(0);
+  await sendAndWait(wrongScope); await rendered(0);
   await page.waitForFunction(() => document.getElementById("dispatch-map-status").textContent.includes("selected access changed"));
   assert.equal(await page.locator("#dispatch-map-participants li").count(), 0);
   checks.push("a live scope replacement clears and terminates without mixing organizations");
@@ -481,7 +546,7 @@ try {
   await page.evaluate(() => import("/static/js/maps/dispatch-map.js"));
   await page.waitForFunction(() => document.getElementById("dispatch-map-status").textContent.includes("access is unavailable"));
   assert.ok(snapshotRequests > beforeReload);
-  checks.push("BFCache restore requires fresh server authorization");
+  checks.push("simulated BFCache pagehide/pageshow lifecycle clears the view and requires fresh server authorization");
 
   mode = "ok";
   await context.route("**/static/vendor/cesium/index.js", route => route.abort());
@@ -504,7 +569,7 @@ try {
   assert.ok([...assets].some(asset => asset.includes("/Workers/")));
   checks.push("same-origin imagery/workers/assets only; selection, follow, filters and search issue no business mutations");
   const report = { passed: checks.length, checks, profile: profile.id,
-    environment: { browser: await browser.version(), viewport, renderer: webgl.renderer, fixture: "loopback synthetic observations; cold fresh browser context", bodyBytes: "uncompressed HTTP response bodies including initial SSE; measured through imagery readiness", heap: "Chromium performance.memory.usedJSHeapSize, JS heap only" },
+    environment: { browser: await browser.version(), viewport, renderer: webgl.renderer, fixture: "loopback synthetic observations; first application open in a new browser context after an isolated policy probe", bodyBytes: "uncompressed HTTP response bodies including initial SSE; measured through imagery readiness", heap: "Chromium performance.memory.usedJSHeapSize, JS heap only" },
     cold, budgets: profile.budgets, webgl, narrowEmulation: { ...narrow, physicalAndroidAcceptance: false },
     creditStyleHash: CREDIT_STYLE_HASH, externalRequests: external.length, businessMutationRequests: mutations.length,
     cspViolations: violations.length, browserErrors: errors.length };

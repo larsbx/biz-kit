@@ -90,6 +90,8 @@ vehicle identity, arrival, delivery or command admission.
    including their generation timestamps; they do not renew liveness.
 4. Every accepted snapshot replaces the roster. Absence removes a row or
    observation. Work details are cleared before any permitted fresh work read.
+   Withdrawn observations also cause a camera fit using only remaining visible
+   authorized positions, or a global reset if none remain.
 5. Wrong scope, unexpected stream identity, malformed data or failed currentness
    checks clear precise state. A lost connection clears immediately; a silent
    connection clears by the 45-second client deadline. Server heartbeat

@@ -132,9 +132,10 @@ export function mountDispatchMap(document = globalThis.document) {
   const work = createSelectedWork({ expectedScopeKey,
     onValue(value) {
       // A stop's camera location belongs to the separately authorized work.
-      // Return to the admitted observation before removing that work layer.
-      if (!value && selectedStopId && selectedId && !following) globe?.focus(selectedId);
+      // Reconcile the current snapshot before returning to its observation.
+      const restoreObservation = !value && selectedStopId && selectedId && !following;
       selectedWork = value; selectedStopId = null; renderWork();
+      if (restoreObservation) { refresh(); if (selectedId) globe?.focus(selectedId); }
     },
     onStatus(value) { ui["work-status"].textContent = WORK_MESSAGES[value] || WORK_MESSAGES.unavailable; }
   });

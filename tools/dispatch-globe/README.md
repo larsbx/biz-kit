@@ -66,8 +66,8 @@ browser fixture's policy with the literal production controller policy.
 The Playwright gate starts a loopback HTTP server serving the real static
 modules with synthetic observations, then runs the actual WebGL renderer. It
 observes real Cesium entity lifetimes, positions and uncertainty, verifies
-the credit-style CSP hash, tests empty/invalid/revoked states and the BFCache
-reload, and rejects external requests and unhandled errors. It exercises
+the credit-style CSP hash, tests empty/invalid/revoked states and simulated
+BFCache lifecycle handling, and rejects external requests and unhandled errors. It exercises
 selection/follow, planned-stop and record links, filtering, keyboard focus,
 local coordinate search, delayed work, permission loss and a 390-pixel layout.
 It also verifies the textual fallback when the renderer is unavailable. It does not stand in

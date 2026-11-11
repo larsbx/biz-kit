@@ -71,8 +71,11 @@ export function createGlobeView({ container, creditContainer, onSelect = () => {
   return {
     render(snapshot, now = Date.now(), selection = {}) {
       if (destroyed) return;
+      const previousSelection = selectedId;
       selectedId = selection.selectedId || null;
       following = !!selection.following;
+      const requestedFollow = following;
+      let removedObservation = false;
       const ids = new Set(); points = [];
       for (const participant of snapshot.participants) {
         const fix = participant.position;
@@ -101,12 +104,18 @@ export function createGlobeView({ container, creditContainer, onSelect = () => {
       }
       for (const [id, entity] of participantEntities) {
         if (ids.has(id)) continue;
+        removedObservation = true;
         if (viewer.trackedEntity === entity) stopFollowing();
         viewer.entities.remove(entity); participantEntities.delete(id);
       }
       if (points.length === 0) { clear(); return; }
+      // Reconcile first: a withdrawn observation or cleared selection must not
+      // leave its camera framing behind, even when other observations remain.
+      if (!hasFitted || removedObservation || (previousSelection && !selectedId)) {
+        fit(); hasFitted = true;
+      }
+      following = requestedFollow;
       viewer.trackedEntity = following && selectedId ? participantEntities.get(selectedId) : undefined;
-      if (!hasFitted) { fit(); hasFitted = true; }
       viewer.scene.requestRender();
     },
     renderWork(value, selectedStopId = null) {

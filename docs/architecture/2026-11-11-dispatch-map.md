@@ -109,6 +109,10 @@ removes absent or unauthorized positions. Disconnect, an invalid response and
 the liveness deadline clear observations, work details, selection and following.
 Reconnection starts with a fresh
 authorized read and has bounded retries. A refused read stops retries.
+When an individual observation is withdrawn, the camera is refitted using only
+the remaining visible authorized observations; removing its marker must not
+leave the camera at the withdrawn coordinate. Clearing selected work similarly
+returns to current permitted observations after scene reconciliation.
 
 The renderer uses observations without extrapolation, displays accuracy and
 age, labels mock observations, and reuses Dispatch's provider-independent
