@@ -136,6 +136,11 @@ unapproved axioms, incomplete finite exploration or missing counterexamples.
 Successful completion prints `ECONOMIC_PLANNING_VERIFICATION_PASSED`; the final
 `receipt.json` retains separate claims and check results.
 
+The executable Lean scenario stage has a bounded ten-minute allowance for
+module loading and execution on constrained runners. Acceptance still requires
+the exact ordered scenario inventory and a successful exit; a timeout fails the
+gate. Each subprocess receipt records its deadline and actual elapsed time.
+
 The [dedicated GitHub workflow](../../.github/workflows/economic-planning-verification.yml)
 checks the PR head explicitly and retains its receipt and complete logs. It
 does not claim that unrelated repository-wide workflows pass.

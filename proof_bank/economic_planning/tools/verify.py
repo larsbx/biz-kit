@@ -293,7 +293,7 @@ def main() -> int:
         path = output / f"{name}.log"
         path.write_text(log)
         return {"argv": list(map(str, argv)), "cwd": str(cwd), "exit_code": proc.returncode,
-                "seconds": round(time.monotonic() - start, 3), "log": path.name,
+                "seconds": round(time.monotonic() - start, 3), "timeout_seconds": timeout, "log": path.name,
                 "log_sha256": sha(path)}, log
 
     def require(name, entry, ok, evidence_class, detail=None):
@@ -359,7 +359,10 @@ def main() -> int:
             require(f"kernel_replay_{module.lower()}", entry, entry["exit_code"] == 0,
                     "fresh Lean kernel replay")
         expected_tests = unique_names(json.loads((lean_dir / "regressions.json").read_text())["tests"], "Lean regressions")
-        entry, log = run("lean_regressions", [paths["lean"], "-DwarningAsError=true", "--run", "Regression.lean"], lean_env, lean_dir)
+        # Imported-module paging in a constrained runner can dominate startup:
+        # the exact same 66-scenario program was observed to pass after 231 s.
+        # Keep a bounded execution allowance; a timeout never counts as a pass.
+        entry, log = run("lean_regressions", [paths["lean"], "-DwarningAsError=true", "--run", "Regression.lean"], lean_env, lean_dir, timeout=600)
         actual = re.findall(r"^PASS ([A-Za-z_][A-Za-z0-9_.]*)$", log, re.M)
         require("lean_regressions", entry, entry["exit_code"] == 0 and actual == expected_tests,
                 "executable synthetic Lean scenarios", {"tests": actual})
@@ -400,19 +403,22 @@ def main() -> int:
         weakened = output / "weakened-proof"
         weakened.mkdir()
         before = (lean_dir / "Proofs.lean").read_text()
+        # Use a leaf: the replay theorem now depends on the trace theorem, so
+        # weakening the latter would fail Proofs before reaching Contracts.
+        weakened_target = "replay_capacity_conservation"
         changed, count = re.subn(
-            r"(?ms)^theorem trace_capacity_conservation\b.*?(?=^theorem |^end EconomicPlanning)",
-            "theorem trace_capacity_conservation : True := by trivial\n\n", before, count=1)
+            rf"(?ms)^theorem {weakened_target}\b.*?(?=^theorem |^end EconomicPlanning)",
+            f"theorem {weakened_target} : True := by trivial\n\n", before, count=1)
         if count != 1:
             raise ValueError("cannot identify the deliberate theorem-weakening control")
         (weakened / "Proofs.lean").write_text(changed)
         weakened_env = dict(lean_env, LEAN_PATH=str(weakened) + os.pathsep + str(build))
         entry, log = run("weakened_proof_compiles", [paths["lean"], "-DwarningAsError=true", "-o", weakened / "Proofs.olean", "Proofs.lean"], weakened_env, weakened)
         require("weakened_proof_compiles", entry, entry["exit_code"] == 0,
-                "deliberate valid-but-weakened theorem")
+                "deliberate valid-but-weakened theorem", {"target": weakened_target})
         entry, log = run("weakened_contract_refused", [paths["lean"], "-DwarningAsError=true", "Contracts.lean"], weakened_env, lean_dir)
         require("weakened_contract_refused", entry, entry["exit_code"] == 1 and "type mismatch" in log.lower()
-                and "trace_capacity_conservation" in log,
+                and weakened_target in log,
                 "expected independent proposition-contract rejection")
 
         checks = json.loads((PACKAGE / "quint/checks.json").read_text())
