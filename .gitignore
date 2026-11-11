@@ -14,3 +14,7 @@ erl_crash.dump
 # Formal toolchain outputs
 _apalache-out/
 formal/lean/.lake/
+
+# Reproducible spatial acceptance evidence is uploaded by CI.
+/.artifacts/dispatch-spatial/
+/.artifacts/dispatch-spatial-runtime/

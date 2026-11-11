@@ -1,8 +1,8 @@
 # Dispatch spatial workspace and minimal stack
 
 Date: 2026-11-11 (America/New_York).
-Status: **Accepted roadmap; implementation pending. The legacy auxiliary stack
-was proposed only.**
+Status: **Accepted roadmap; initial implementation in draft PR #371. The legacy
+auxiliary stack was proposed only.**
 
 Owner clarification, 2026-11-11: the earlier auxiliary stack was **proposed,
 not implemented**. This corrects the operating-baseline inference in
@@ -39,7 +39,15 @@ physical-device acceptance. Implementation milestones remain open.
 | [God's Eye View][gev-source] | `14db73f201a0235da4f591648d9b6a9bf4fed87f` | Reusable source components, external provider interfaces, layers, tool composition and presentation controls are available |
 | [Truck Dispatch][truck-source] | `7201e7102ab8bbbd99a59d7391a00e515dd6bc1c` | Design artifacts describe six proposed auxiliary services; the owner confirms that the legacy stack was not implemented |
 
-Refresh these revisions at implementation kickoff. Pin d-patch's actual client
+Implementation kickoff rechecked Biz-kit main at
+`eae9f14b5533f660d1a48b9b438e5066f566beff` (the accepted proposal-only correction),
+GEV at the unchanged pin above and d-patch main at
+`51ab27bfca7e99ef47b11a3f88bffc24a53dd429`. The implementation builds on draft
+[#371](https://github.com/larsbx/biz-kit/pull/371), whose prior source head was
+`66074ab083e4ad6508d8b4c69ad1c90209b349f8`. These are source inspections, not new
+cross-repository or physical-device acceptance.
+
+Pin d-patch's actual client
 revision in cross-repository acceptance; this audit does not invent a client
 head or reuse an older run as new integration evidence.
 
@@ -435,7 +443,30 @@ database and command acceptance lanes. Add focused checks for the new adapters
 and GEV lifecycle, not a duplicate broad test platform. A synthetic client or
 browser emulator result stays labeled as such. Models, source inspection,
 hosted CI, physical-device tests and production observations are separate forms
-of evidence. This documentation change performs none of the runtime gates.
+of evidence. The roadmap adoption itself performed none of the runtime gates.
+Implementation evidence is tracked separately below.
+
+### Initial implementation follow-up
+
+Draft [PR #371](https://github.com/larsbx/biz-kit/pull/371) now contains the
+[selected profile](../../tools/dispatch-globe/profile.json),
+[V2 spatial contract](../architecture/2026-11-11-dispatch-spatial-contract.md),
+[workspace decision](../architecture/2026-11-11-dispatch-map.md) and
+[formal obligations](../../formal/DISPATCH_SPATIAL_SAFETY.md). The source pin and
+runtime results are recorded in workflow artifacts for the tested commit;
+changes to documentation alone do not promote hosted or field acceptance.
+
+| Milestone | Implemented scope in the draft | Remaining acceptance boundary |
+| --- | --- | --- |
+| GEV-00 | Pinned source/build profile, desktop and narrow-layout requirements, existing native collection, local imagery and explicit resource budgets | Physical devices and operating-area street/detail requirements remain unverified |
+| GEV-01 | V2 typed scoped observations, ordered complete snapshots, content identity, byte/roster limits, fresh demand, separately authorized observation-bound work, Lean/Quint and runtime tests | Not a general spatial query/history service or a transaction-wide database snapshot |
+| GEV-02 | Derived GEV globe/parser, one Dispatch observation layer, keyboard/marker selection, follow, local roster filters, work and planned-stop cards, operator record links, textual fallback | Partial milestone: full native composed controls, address search, work-wide filters and recorded next-stop progress remain open |
+| GEV-07 | Build and browser budget gates, same-origin assets, no added runtime service/database, explicit omitted components | Shared deployment, recovery and actual field-device acceptance remain open |
+
+The profile has no address geocoder, router or optimizer. Its bundled Natural
+Earth imagery provides coarse global orientation. It does not claim a
+street-level cartography service, all upstream GEV capabilities, a deployed
+fleet tracker or measured savings against the unimplemented auxiliary proposal.
 
 ### First substantial acceptance scenario
 

@@ -8,11 +8,56 @@ on:
       - 'apps/biz_kit_identity/**'
       - 'config/**'
       - 'mix.*'
+      - 'tools/dispatch-globe/**'
+      - 'formal/check_dispatch_spatial.sh'
+      - 'formal/lean/BizKitDispatchSpatial.lean'
+      - 'formal/lean/CheckDispatchSpatial.lean'
+      - 'formal/lean/lakefile.toml'
+      - 'formal/lean/lean-toolchain'
+      - 'formal/lean/install-toolchain.sh'
+      - 'formal/quint/dispatch_spatial*.qnt'
+      - 'tools/merchant_pilot/formal/install_apalache.sh'
       - '.github/workflows/dispatch-partners.yml'
 permissions:
   contents: read
 jobs:
+  dispatch-spatial-models:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bizkit-lean
+          key: lean-archive-linux-x64-${{ hashFiles('formal/lean/install-toolchain.sh', 'formal/lean/lean-toolchain') }}
+      - name: Install digest-verified Lean toolchain
+        run: |
+          bash formal/lean/install-toolchain.sh "$RUNNER_TEMP/dispatch-spatial-lean"
+          echo "$RUNNER_TEMP/dispatch-spatial-lean/bin" >> "$GITHUB_PATH"
+      - name: Install version-pinned Quint
+        run: |
+          npm install --prefix "$RUNNER_TEMP/dispatch-spatial-quint" --ignore-scripts --no-audit --no-fund @informalsystems/quint@0.32.0
+          echo "$RUNNER_TEMP/dispatch-spatial-quint/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install digest-verified Apalache
+        run: bash tools/merchant_pilot/formal/install_apalache.sh "$RUNNER_TEMP/dispatch-spatial-quint-home"
+      - name: Check spatial invariants, witnesses and deliberate unsafe controls
+        env:
+          QUINT_HOME: ${{ runner.temp }}/dispatch-spatial-quint-home
+          DISPATCH_SPATIAL_ARTIFACTS: .artifacts/dispatch-spatial
+        run: bash formal/check_dispatch_spatial.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dispatch-spatial-models
+          path: .artifacts/dispatch-spatial/
+          if-no-files-found: error
+
   dispatch-partners:
+    needs: dispatch-spatial-models
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
@@ -45,3 +90,51 @@ jobs:
       - name: Verify the machine contract and resource snapshots
         working-directory: apps/dispatch
         run: mix openapi.check && mix ash_postgres.generate_migrations --check
+      - name: Verify fleet map formatting
+        working-directory: apps/dispatch
+        run: >-
+          mix format --check-formatted
+          lib/dispatch/operations/location_snapshot.ex
+          lib/dispatch/operations/location_work.ex
+          lib/dispatch/operations/location_demand.ex
+          lib/dispatch_web/streams/locations.ex
+          lib/dispatch_web/controllers/fleet_locations_controller.ex
+          lib/dispatch_web/controllers/fleet_map_controller.ex
+          lib/dispatch_web/controllers/fleet_map_html.ex
+          lib/dispatch_web/controllers/operations_load_controller.ex
+          lib/dispatch_web/controllers/operations_load_html.ex
+          lib/dispatch_web/controllers/portal_html.ex
+          lib/dispatch_web/router.ex
+          test/dispatch/operations/location_snapshot_test.exs
+          test/dispatch/operations/location_work_test.exs
+          test/dispatch_web/fleet_locations_controller_test.exs
+          test/dispatch_web/fleet_map_controller_test.exs
+          test/dispatch_web/operations_load_controller_test.exs
+
+  dispatch-map-browser:
+    needs: dispatch-spatial-models
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/dispatch-globe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Install pinned build and browser-test dependencies
+        run: npm ci --ignore-scripts
+      - name: Stage same-origin globe assets
+        run: npm run build
+      - name: Check observation and transport boundaries
+        run: npm test
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Render the real globe under Dispatch's browser policy
+        run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dispatch-map-browser
+          path: tools/dispatch-globe/artifacts/
+          if-no-files-found: ignore
