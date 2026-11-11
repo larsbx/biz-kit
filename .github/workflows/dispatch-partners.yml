@@ -8,6 +8,7 @@ on:
       - 'apps/biz_kit_identity/**'
       - 'config/**'
       - 'mix.*'
+      - 'tools/dispatch-globe/**'
       - '.github/workflows/dispatch-partners.yml'
 permissions:
   contents: read
@@ -45,3 +46,45 @@ jobs:
       - name: Verify the machine contract and resource snapshots
         working-directory: apps/dispatch
         run: mix openapi.check && mix ash_postgres.generate_migrations --check
+      - name: Verify fleet map formatting
+        working-directory: apps/dispatch
+        run: >-
+          mix format --check-formatted
+          lib/dispatch/operations/location_snapshot.ex
+          lib/dispatch/operations/location_demand.ex
+          lib/dispatch_web/streams/locations.ex
+          lib/dispatch_web/controllers/fleet_locations_controller.ex
+          lib/dispatch_web/controllers/fleet_map_controller.ex
+          lib/dispatch_web/controllers/fleet_map_html.ex
+          lib/dispatch_web/controllers/portal_html.ex
+          lib/dispatch_web/router.ex
+          test/dispatch/operations/location_snapshot_test.exs
+          test/dispatch_web/fleet_locations_controller_test.exs
+          test/dispatch_web/fleet_map_controller_test.exs
+
+  dispatch-map-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/dispatch-globe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Install pinned build and browser-test dependencies
+        run: npm ci --ignore-scripts
+      - name: Stage same-origin globe assets
+        run: npm run build
+      - name: Check observation and transport boundaries
+        run: npm test
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Render the real globe under Dispatch's browser policy
+        run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dispatch-map-browser
+          path: tools/dispatch-globe/artifacts/
+          if-no-files-found: ignore

@@ -167,6 +167,8 @@ defmodule DispatchWeb.Router do
     # the same fragments to the same viewer.
     get "/ui/operations/stream", StreamController, :operations
     get "/ui/participants/:participant_id/stream", StreamController, :participant
+    get "/ui/operations/locations", FleetLocationsController, :index
+    get "/ui/operations/locations/stream", FleetLocationsController, :stream
   end
 
   scope "/", DispatchWeb do
@@ -174,6 +176,7 @@ defmodule DispatchWeb.Router do
 
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/operations", PortalController, :operations
+    get "/operations/map", FleetMapController, :index
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     post "/partner/stops/:stop_id/readiness-events", PartnerActionController, :readiness
     post "/partner/stops/:stop_id/document-references", PartnerActionController, :document

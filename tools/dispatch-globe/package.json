@@ -1,0 +1,15 @@
+{
+  "name": "dispatch-globe-assets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pinned, self-hosted Cesium assets for Dispatch's pared-down God's Eye View globe.",
+  "engines": { "node": ">=24.14.0 <25 || >=26 <27" },
+  "scripts": {
+    "build": "node stage-cesium.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "node test/browser.mjs"
+  },
+  "dependencies": { "cesium": "1.138.0" },
+  "devDependencies": { "playwright": "1.62.1" }
+}

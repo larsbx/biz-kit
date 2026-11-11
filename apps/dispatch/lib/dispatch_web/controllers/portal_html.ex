@@ -23,6 +23,9 @@ defmodule DispatchWeb.PortalHTML do
   def operations(assigns) do
     ~H"""
     <Layouts.root page_title="Operations" actor={@actor} assignments={@assignments}>
+      <p :if={Dispatch.Access.Actor.can?(@actor, "operations.location.precise.read")}>
+        <a href="/operations/map">Fleet map</a>
+      </p>
       <Operations.operations_page view={@view} />
     </Layouts.root>
     """
