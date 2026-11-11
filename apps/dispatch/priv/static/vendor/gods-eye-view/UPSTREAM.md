@@ -20,7 +20,11 @@ container. Dispatch adds its own observation renderer and authorized feed.
 
 ## Explicit reductions and adaptations
 
-- Resolve Cesium from its pinned, same-origin browser distribution.
+- Resolve Cesium from a pinned, same-origin bundle of explicit engine exports.
+- Replace the upstream `Viewer` construction with `CesiumWidget`, which owns
+  the scene, camera, entity display and imagery in this pinned version. This
+  removes the unused application widgets and their import-time Knockout eval,
+  so the page keeps `script-src 'self'` without an eval exception.
 - Retain no upstream application shell, Vue, Pinia, voice, MCP, provider
   settings, public observations, routes, telemetry, share links or agent tools.
 - Remove the custom star catalog, star renderer, camera-recovery timers,
@@ -42,7 +46,11 @@ From the repository root, run `npm ci --prefix tools/dispatch-globe --ignore-scr
 then `npm run build --prefix tools/dispatch-globe`. The lockfile pins Cesium
 1.138.0, matching the inspected upstream lockfile. The generated, ignored
 `../cesium/manifest.json` records every staged asset's byte count and SHA-256.
-The generated global Cesium bundle is excluded; only its ESM build is served.
+Pinned esbuild creates the narrow ESM engine bundle and rejects any
+`@cesium/widgets` or Knockout input. Aggregate and global Cesium bundles are
+excluded; the manifest also inventories the actual bundle inputs. The
+no-string-code-generation test reproduces the old import failure and accepts
+the new engine without replacing `eval` or weakening browser policy.
 
 Future upstream updates require deliberate source review and updating the
 revision and hashes above. No code or dependencies are updated at runtime.

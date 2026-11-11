@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFile, mkdir, stat } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -167,6 +167,21 @@ try {
   assert.equal(violations.length, 0, JSON.stringify(violations));
   checks.push("pinned credit style hash and strict production CSP");
 
+  const credits = await page.locator("#dispatch-map-credits").evaluate(outer => {
+    const inner = outer.querySelector(".cesium-widget-credits");
+    const row = outer.getBoundingClientRect();
+    const content = inner.getBoundingClientRect();
+    return {
+      height: content.height,
+      insideRow: content.top >= row.top - 1 && content.bottom <= row.bottom + 1,
+      color: getComputedStyle(inner).color,
+      rowColor: getComputedStyle(outer).color
+    };
+  });
+  assert.ok(credits.height > 0 && credits.insideRow, "visible attribution must stay in its reserved row");
+  assert.equal(credits.color, credits.rowColor);
+  checks.push("visible attribution stays in its row with the page foreground color");
+
   const omitted = snapshot(); omitted.participants[0].position = null;
   send(omitted); await rendered(1);
   assert.match(await page.locator("#dispatch-map-participants").innerText(), /No visible location observation/);
@@ -242,6 +257,18 @@ try {
   assert.ok([...assets].some(asset => asset.includes("/Workers/")));
   checks.push("same-origin imagery, workers and assets only");
   console.log(JSON.stringify({ passed: checks.length, checks, webgl, creditStyleHash: CREDIT_STYLE_HASH, externalRequests: external.length, cspViolations: violations.length, browserErrors: errors.length }, null, 2));
+} catch (error) {
+  await Promise.allSettled([
+    page.screenshot({ path: path.join(artifacts, "dispatch-map-failure.png"), fullPage: true }),
+    writeFile(path.join(artifacts, "failure.json"), JSON.stringify({
+      message: error.message,
+      completedChecks: checks,
+      cspViolations: violations,
+      browserErrors: errors,
+      externalRequests: external
+    }, null, 2))
+  ]);
+  throw error;
 } finally {
   await browser.close();
   for (const client of clients) client.end();

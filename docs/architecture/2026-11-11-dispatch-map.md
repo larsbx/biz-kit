@@ -15,7 +15,9 @@ The upstream source is `bilawalsidhu/gods-eye-view` at
 `14db73f201a0235da4f591648d9b6a9bf4fed87f`. Its source attribution, retained
 code and modifications are recorded beside the vendored module. Cesium is the
 only added browser runtime dependency and is pinned to `1.138.0`. Phoenix
-serves the staged browser distribution and local Natural Earth imagery.
+serves a narrow engine bundle and local Natural Earth imagery. The host uses
+`CesiumWidget`; the unused higher-level widgets and Knockout are excluded so
+module loading works under Dispatch's prohibition on evaluated JavaScript.
 
 The standalone GEV application, Vue/Pinia, public observation feeds, simulated
 traffic, voice, MCP, API-key management, provider proxies, sharing and cinematic
@@ -81,8 +83,9 @@ existing CSP. Required upstream attribution remains visible.
 
 ## Packaging and acceptance
 
-The asset package under `tools/dispatch-globe` locks the Cesium distribution
-and stages the required browser files into Dispatch's static assets. Generated
+The asset package under `tools/dispatch-globe` locks Cesium and a build-only
+esbuild version, bundles explicit engine exports, and stages the required
+browser files into Dispatch's static assets. Generated
 assets and `node_modules` are ignored by Git. Stage them before constructing a
 Dispatch release; Node is not needed by the running Phoenix service.
 

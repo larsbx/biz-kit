@@ -10,7 +10,10 @@ header a { color: #1d4ed8; }
 #dispatch-map-globe { position: relative; height: clamp(22rem, 58vh, 42rem); background: #0b1727; border-radius: 0.4rem; overflow: hidden; }
 #dispatch-map-globe canvas { display: block; }
 #dispatch-map-credits { min-height: 1.5rem; color: #4b5563; font-size: 0.75rem; }
+#dispatch-map-credits .cesium-widget-credits { position: static; color: inherit; font-size: inherit; text-shadow: none; }
 #dispatch-map-credits .cesium-credit-textContainer,
+#dispatch-map-credits .cesium-credit-text,
+#dispatch-map-credits .cesium-credit-wrapper a,
 #dispatch-map-credits .cesium-credit-expand-link { color: inherit; }
 #dispatch-map-participants { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 0.65rem; }
 #dispatch-map-participants li { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.8rem; border: 1px solid #d1d5db; border-radius: 0.35rem; }

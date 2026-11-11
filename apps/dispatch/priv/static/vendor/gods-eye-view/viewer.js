@@ -10,20 +10,9 @@ export function zoomOutLimit(fovy) {
   return radius / Math.sin(angular) - radius;
 }
 
-/** The GEV viewer's small, control-free presentation, with no external assets. */
+/** GEV's reduced scene options; CesiumWidget has no application controls. */
 export function applicationViewerOptions(creditContainer) {
   return {
-    timeline: false,
-    animation: false,
-    baseLayerPicker: false,
-    geocoder: false,
-    homeButton: false,
-    sceneModePicker: false,
-    navigationHelpButton: false,
-    fullscreenButton: false,
-    vrButton: false,
-    selectionIndicator: false,
-    infoBox: false,
     baseLayer: false,
     skyBox: false,
     skyAtmosphere: false,
@@ -39,7 +28,7 @@ export function applicationViewerOptions(creditContainer) {
 export function createApplicationViewer({ container, creditContainer }) {
   if (!container || !creditContainer) throw new TypeError("Viewer and credit containers are required");
   Cesium.buildModuleUrl.setBaseUrl(new URL("../cesium/", import.meta.url).href);
-  const viewer = new Cesium.Viewer(container, applicationViewerOptions(creditContainer));
+  const viewer = new Cesium.CesiumWidget(container, applicationViewerOptions(creditContainer));
   try {
     viewer.targetFrameRate = 30;
     if (globalThis.matchMedia?.("(pointer: coarse)").matches) {
