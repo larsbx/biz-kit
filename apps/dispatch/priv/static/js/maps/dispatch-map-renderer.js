@@ -27,8 +27,20 @@ export function createGlobeView({ container, creditContainer }) {
 
   function fit() {
     if (destroyed || points.length === 0) return;
+    // Use the current canvas aspect ratio before Cesium calculates the range.
+    // A fixed multiple of the radius crops points on a wide, short canvas.
+    viewer.resize();
     const sphere = Cesium.BoundingSphere.fromPoints(points);
-    viewer.camera.viewBoundingSphere(sphere, new Cesium.HeadingPitchRange(0, -Math.PI / 2, Math.max(20000, sphere.radius * 3)));
+    const shortestSide = Math.min(viewer.canvas.clientWidth, viewer.canvas.clientHeight);
+    // Reserve room for point outlines and labels, including their 24px offset.
+    const availableShare = Math.max(0.25, 1 - 96 / Math.max(1, shortestSide));
+    sphere.radius /= availableShare;
+    // Range zero asks Camera.viewBoundingSphere to fit both frustum axes.
+    viewer.camera.viewBoundingSphere(sphere, new Cesium.HeadingPitchRange(0, -Math.PI / 2, 0));
+    if (Cesium.Cartesian3.distance(viewer.camera.positionWC, sphere.center) < 20000) {
+      // Increase a close or single-point fit without reducing a wider fit.
+      viewer.camera.viewBoundingSphere(sphere, new Cesium.HeadingPitchRange(0, -Math.PI / 2, 20000));
+    }
     viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     viewer.scene.requestRender();
   }

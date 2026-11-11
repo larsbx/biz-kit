@@ -21,14 +21,24 @@ The lockfile pins all transitive dependencies. `cesium-entry.mjs` includes
 `CesiumWidget` and the engine types used by Dispatch. It excludes `Viewer` and
 the `@cesium/widgets` application UI, whose Knockout dependency evaluates code
 at import time even with visible widgets disabled. The build rejects that
-dependency graph, preserving the page's strict `script-src 'self'` policy.
+dependency graph, preserving the page's prohibition on JavaScript string
+evaluation. Cesium's mesh decoder eagerly initializes WebAssembly. The map
+allows that through `script-src 'self' 'wasm-unsafe-eval'`, while JavaScript
+`eval`, `Function` compilation and inline scripts remain blocked. The build
+resolves `meshoptimizer` to its official `meshoptimizer/decoder` export,
+excluding the unused encoder, simplifier, clusterizer and tangent generator.
 The asset script stages the engine bundle, prebuilt workers/assets, and only
 the core CesiumWidget stylesheet. It omits the aggregate/global bundles and
 unused widget styles. The generated ignored
 `apps/dispatch/priv/static/vendor/cesium/manifest.json` inventories byte sizes
-and SHA-256 hashes, plus the bundle's input inventory. No install-time scripts
-are needed. Include the generated
+and SHA-256 hashes, plus the bundle's input inventory and resolver alias. No
+install-time scripts are needed. Include the generated
 directory in deployment packaging; it is deliberately absent from Git.
+
+With the pinned lockfile, staged assets total 9,196,088 bytes across 318 files
+(excluding the manifest); the ESM bundle is 3,656,534 bytes. The decoder-only
+entry removes 120,769 bytes and four eager WebAssembly initializations from
+the focused engine bundle.
 
 ## Tests
 
@@ -38,9 +48,10 @@ late-result fences, revocation, login responses, hung requests and bounded
 reconnects. They require a staged asset manifest. An import gate disables
 string code generation in Node and checks the emitted engine, with the
 original aggregate bundle as a negative control that reproduces the failure.
-This catches the import-time defect without weakening browser CSP; the real
+This catches the import-time JavaScript evaluation defect; the real
 browser gate still establishes WebGL behavior. The tests also compare the
-browser fixture's policy with the literal production controller policy.
+browser fixture's policy with the literal production controller policy and
+exclude unused Meshoptimizer tools from the build graph.
 
 The Playwright gate starts a loopback HTTP server serving the real static
 modules with synthetic observations, then runs the actual WebGL renderer. It

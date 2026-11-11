@@ -58,6 +58,18 @@ const server = createServer(async (req, res) => {
       : SHELL;
     res.writeHead(200, { "Content-Type": "text/html" }).end(html); return;
   }
+  if (url.pathname === "/acceptance/policy") {
+    res.writeHead(200, { "Content-Type": "text/html" }).end('<!doctype html><script type="module" src="/acceptance/policy.js"></script>'); return;
+  }
+  if (url.pathname === "/acceptance/policy.js") {
+    res.writeHead(200, { "Content-Type": "application/javascript" }).end(`
+      let javascriptBlocked = false;
+      try { new Function("return 1")(); } catch (error) { javascriptBlocked = error.name === "EvalError"; }
+      let wasmAllowed = false;
+      try { await WebAssembly.compile(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])); wasmAllowed = true; } catch {}
+      window.__policyProbe = { javascriptBlocked, wasmAllowed };
+    `); return;
+  }
   res.writeHead(404).end();
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -103,6 +115,16 @@ async function open() {
     const { Cesium } = await import("/static/vendor/gods-eye-view/viewer.js");
     window.__entityCollections = new Map();
     window.__lastCameraDestination = null;
+    window.__observedScene = null;
+    window.__renderedFrames = 0;
+    const render = Cesium.CesiumWidget.prototype.render;
+    Cesium.CesiumWidget.prototype.render = function (...args) {
+      if (window.__observedScene !== this.scene) {
+        window.__observedScene = this.scene;
+        this.scene.postRender.addEventListener(() => window.__renderedFrames++);
+      }
+      return render.apply(this, args);
+    };
     const add = Cesium.EntityCollection.prototype.add;
     const removeAll = Cesium.EntityCollection.prototype.removeAll;
     Cesium.EntityCollection.prototype.add = function (entity) {
@@ -136,8 +158,33 @@ function send(value) {
 
 const checks = [];
 try {
+  // Exercise the real policy from a same-origin module, outside the debugger's
+  // evaluation APIs and separately from the map's zero-violation assertion.
+  const policyPage = await context.newPage();
+  try {
+    await policyPage.goto(`${origin}/acceptance/policy`);
+    await policyPage.waitForFunction(() => window.__policyProbe);
+    assert.deepEqual(await policyPage.evaluate(() => window.__policyProbe), {
+      javascriptBlocked: true, wasmAllowed: true
+    });
+  } finally {
+    await policyPage.close();
+  }
+  checks.push("map policy permits WebAssembly while blocking JavaScript string evaluation");
+
   await open(); await rendered(2);
   await page.waitForFunction(() => document.getElementById("dispatch-map-fit").disabled === false);
+  await page.waitForFunction(() => window.__renderedFrames >= 2 && window.__observedScene.globe.tilesLoaded);
+  const projected = await page.evaluate(() => {
+    const scene = window.__observedScene;
+    return [...window.__entityCollections.values()].flatMap(entries => [...entries.values()].map(entity => {
+      const point = scene.cartesianToCanvasCoordinates(entity.position.getValue());
+      return { x: point?.x, y: point?.y, width: scene.canvas.clientWidth, height: scene.canvas.clientHeight };
+    }));
+  });
+  assert.equal(projected.length, 2);
+  assert.ok(projected.every(point => point.x >= 32 && point.x <= point.width - 32 && point.y >= 32 && point.y <= point.height - 32),
+    `fit must keep both observed markers visible with margin: ${JSON.stringify(projected)}`);
   assert.match(await page.locator("#dispatch-map-participants").innerText(), /STALE.*MOCK/s);
   assert.equal(await page.locator("#dispatch-map-participants a").first().getAttribute("href"), `/operations/participants/${IDS[0]}`);
   const webgl = await page.locator("#dispatch-map-globe canvas").evaluate(canvas => {
@@ -147,7 +194,7 @@ try {
   assert.equal(webgl.available, true); assert.equal(webgl.lost, false);
   assert.ok(webgl.width > 100 && webgl.height > 100);
   await page.screenshot({ path: path.join(artifacts, "dispatch-map.png"), fullPage: true });
-  checks.push("real WebGL globe and observed accuracy/stale/mock presentation");
+  checks.push("loaded WebGL globe, visible fitted markers and accuracy/stale/mock presentation");
 
   await page.emulateMedia({ colorScheme: "dark" });
   assert.equal(await page.locator("body").evaluate(body => getComputedStyle(body).backgroundColor), "rgb(17, 24, 39)");

@@ -49,6 +49,10 @@ test("build inventory excludes the unused widget/Knockout graph and preserves at
   assert.equal(manifest.build.esbuild, "0.28.2");
   assert.ok(manifest.build.inputs.some(input => input.endsWith("/Widget/CesiumWidget.js")));
   assert.ok(manifest.build.inputs.every(input => !input.includes("@cesium/widgets") && !/knockout/i.test(input)));
+  assert.deepEqual(manifest.build.aliases, { meshoptimizer: "meshoptimizer/decoder" });
+  assert.deepEqual(manifest.build.inputs.filter(input => input.includes("/meshoptimizer/")), [
+    "node_modules/meshoptimizer/meshopt_decoder.mjs"
+  ]);
   assert.ok(manifest.files.some(file => file.path === "LICENSE.md"));
   const css = await readFile(new URL("Widgets/widgets.css", root), "utf8");
   assert.match(css, /\.cesium-widget/);
@@ -63,6 +67,6 @@ test("the browser fixture enforces the exact production controller CSP", async (
   assert.equal(expression.replace(quoted, "").replaceAll("<>", "").trim(), "", "evaluate only a literal concatenation");
   const actual = [...expression.matchAll(quoted)].map(match => JSON.parse(match[0])).join("");
   assert.equal(CSP, actual);
-  assert.ok(actual.split(";").some(directive => directive.trim() === "script-src 'self'"));
-  assert.doesNotMatch(actual, /unsafe-eval/);
+  assert.ok(actual.split(";").some(directive => directive.trim() === "script-src 'self' 'wasm-unsafe-eval'"));
+  assert.doesNotMatch(actual, /'unsafe-eval'/);
 });

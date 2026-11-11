@@ -76,8 +76,12 @@ No coordinates enter URL state, browser storage, analytics or server-rendered
 HTML. Participant links contain only their existing opaque identifiers.
 Every data response is `no-store`. The page has no operational write controls.
 
-Only this page allows Cesium's style attributes and local worker blobs through
-its CSP. Script sources stay same-origin, with no inline/evaluated JavaScript.
+Only this page allows Cesium's style attributes, local worker blobs and
+WebAssembly initialization through its CSP. Script sources stay same-origin,
+with no inline/evaluated JavaScript. The specific `wasm-unsafe-eval` permission
+is limited to WebAssembly by the [CSP specification](https://w3c.github.io/webappsec-csp/).
+The build selects Meshoptimizer's supported decoder-only entry, excluding
+its unused encoder, simplifier, clusterizer and tangent generator.
 Imagery, assets and data are same-origin; other portal pages retain their
 existing CSP. Required upstream attribution remains visible.
 

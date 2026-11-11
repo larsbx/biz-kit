@@ -43,7 +43,11 @@ defmodule DispatchWeb.FleetMapControllerTest do
     refute conn.resp_body =~ "datastar.js"
     refute conn.resp_body =~ "live_position"
     refute conn.resp_body =~ "https://"
-    refute FleetMapController.content_security_policy() =~ "unsafe-eval"
+
+    assert FleetMapController.content_security_policy() =~
+             "script-src 'self' 'wasm-unsafe-eval';"
+
+    refute FleetMapController.content_security_policy() =~ "'unsafe-eval'"
     refute FleetMapController.content_security_policy() =~ "script-src 'self' 'unsafe-inline'"
   end
 
@@ -55,6 +59,7 @@ defmodule DispatchWeb.FleetMapControllerTest do
     assert overview.status == 200
     refute overview.resp_body =~ "href=\"/operations/map\""
     refute hd(get_resp_header(overview, "content-security-policy")) =~ "style-src-attr"
+    refute hd(get_resp_header(overview, "content-security-policy")) =~ "wasm-unsafe-eval"
   end
 
   test "authorized operations navigation exposes the new view", ctx do

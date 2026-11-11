@@ -9,10 +9,13 @@ const packageRoot = path.join(here, "node_modules/cesium");
 const destination = path.resolve(here, "../../apps/dispatch/priv/static/vendor/cesium");
 const installed = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
 if (installed.version !== "1.138.0") throw new Error("Dispatch requires Cesium 1.138.0; run npm ci.");
+// Cesium uses only the decoder. The aggregate package also eagerly initializes
+// four unused WebAssembly tools, so resolve its supported decoder-only entry.
+const aliases = { meshoptimizer: "meshoptimizer/decoder" };
 
 // Build only the explicit engine exports. Cesium's aggregate browser bundle
 // includes the unused Viewer/Knockout UI, which evaluates code at import time
-// and cannot run under this page's no-eval CSP. CesiumWidget owns the same
+// and cannot run with JavaScript eval prohibited. CesiumWidget owns the same
 // scene, entity display, camera and imagery without importing that UI.
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
@@ -23,6 +26,7 @@ const result = await build({
   bundle: true,
   format: "esm",
   platform: "browser",
+  alias: aliases,
   target: "es2022",
   minify: true,
   treeShaking: true,
@@ -59,7 +63,7 @@ async function inventory(directory, prefix = "") {
 const files = await inventory(destination);
 const manifest = {
   package: "cesium", version: installed.version,
-  build: { entry: "cesium-entry.mjs", esbuild: esbuildVersion, inputs },
+  build: { entry: "cesium-entry.mjs", esbuild: esbuildVersion, aliases, inputs },
   files
 };
 await writeFile(path.join(destination, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
