@@ -3,8 +3,10 @@ from dataclasses import replace
 import base64
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
+import time
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -126,9 +128,29 @@ class DurableSourceTest(unittest.TestCase):
             config = Path(temporary) / "bridge.json"
             config.write_bytes(canonical({"database": str(store.path), "lean_root": str(lean),
                                          "receipt_key_base64": base64.b64encode(store.key).decode()}))
-            result = subprocess.run([sys.executable, str(ROOT / "worker.py"), "--config", str(config),
-                                     "--job-id", job, "--source-imports", str(imports)],
-                                    capture_output=True, text=True, timeout=360, check=True)
+            command = [sys.executable, str(ROOT / "worker.py"), "--config", str(config),
+                       "--job-id", job, "--source-imports", str(imports)]
+            # The private scratch directory appears only after environment validation.
+            scratch = Path(temporary) / "scratch"
+            scratch.mkdir()
+            with subprocess.Popen(command, env={**os.environ, "TMPDIR": str(scratch)},
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as worker:
+                try:
+                    deadline = time.monotonic() + 120
+                    while not list(scratch.glob("exchange-source-*/Submission.lean")):
+                        self.assertIsNone(worker.poll(), "worker exited before materialization")
+                        self.assertLess(time.monotonic(), deadline, "materialization did not start")
+                        time.sleep(0.01)
+                    worker.send_signal(signal.SIGINT)
+                    self.assertNotEqual(worker.wait(timeout=20), 0)
+                finally:
+                    if worker.poll() is None:
+                        worker.kill()
+            interrupted = store.inspect(job)
+            self.assertEqual((interrupted["version"], interrupted["effects"]), (0, []))
+            self.assertEqual(store.pending(), [job])
+            self.assertEqual(list(scratch.iterdir()), [])
+            result = subprocess.run(command, capture_output=True, text=True, timeout=360, check=True)
             self.assertEqual(loads(result.stdout)["status"], "accepted", store.inspect(job)["receipt"])
             receipt = store.inspect(job)["receipt"]
             self.assertEqual(store.commit(prepared, checked), receipt)
