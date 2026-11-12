@@ -1,4 +1,15 @@
-# Bounded MCP admission adapter — proposed changes
+# Bounded MCP admission adapter — implementation review
+
+## Current integration
+
+The November 12 integration imports the exact verified PR #336 core snapshot,
+replaces duplicated core pins with `CORE_SNAPSHOT.json`, and exercises the full
+four-tool stdio round trip. Both workflows use the selected core identity and
+run for changes to either package. See [INTEGRATION_ACCEPTANCE.md](INTEGRATION_ACCEPTANCE.md)
+for the current source, test and approval boundary. The evidence below remains
+the historical November 6 baseline; its counts and digest describe that baseline.
+
+## Historical November 6 baseline
 
 Prepared November 6, 2026 against main
 `83954f1fbffbee1df5fb25e69ab3b34bc92346e8` (PR #325).
@@ -10,7 +21,7 @@ retained as published, reviewed mathematical definitions; they are not a new
 monetary business model. Credit policy and its formal model require a separate
 review before issuance. This adapter has no monetary settlement operation.
 
-## Proposed implementation
+## Original implementation
 
 | Component | Implemented behavior |
 | --- | --- |
@@ -58,9 +69,9 @@ replay refused a different cached Lean tree at the runtime hash gate. The retry
 used the clean pinned installation and passed without changing source, runtime
 pins or acceptance rules. No failed stage was relabeled as a pass.
 
-The core source manifest remains unchanged at
+The original core source manifest was
 `b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564`.
-No new Lean theorem or Quint model is claimed for the adapter.
+The original adapter added no Lean theorem or Quint model.
 
 ## Adversarial coverage
 
@@ -109,7 +120,7 @@ credit allocation remain separately governed, nonmonetary work.
 The loopback HTTP/SQLite pilot in [#335](https://github.com/larsbx/biz-kit/pull/335)
 and the terminal rejection and refund extension in
 [#336](https://github.com/larsbx/biz-kit/pull/336) exercise durable transactions
-and disposable fixture credits. This draft targets `main` and keeps the MCP
-admission protocol independently reviewable. Connecting the two requires a
-separate representation and authorization review, including an update to the
-reviewed core pin if the proof package changes.
+and disposable fixture credits. The current integration includes those core
+sources beside the MCP adapter. Connecting the runtime paths still requires a
+representation and authorization review; source integration does not supply
+a durable MCP executor or authorize acceptance or credit issuance.

@@ -52,7 +52,7 @@ class Service:
         if isinstance(prepared, Reply):
             return prepared
         try:
-            checked = self.checker.check(prepared.profile, prepared.artifact)
+            decision = self.checker.check(prepared.profile, prepared.artifact)
         except PilotError as exc:
             return self.store.record_verification_failure(prepared, exc)
         self._pause(prepared)
@@ -65,7 +65,7 @@ class Service:
             if self.failpoint == "after_commit" and prepared.request_id == self.failpoint_request_id:
                 os._exit(87)
 
-        return self.store.commit_verification(prepared, checked,
+        return self.store.commit_verification(prepared, decision,
                                                before_commit=before_commit, after_commit=after_commit)
 
 

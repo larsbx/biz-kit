@@ -36,6 +36,12 @@
       "file": "negative/UnrecordedPayout.lean",
       "mode": "compile_rejection",
       "required_pattern": "proved that the proposition"
+    },
+    {
+      "id": "inconclusive-check-cannot-refund",
+      "file": "negative/InconclusiveRefund.lean",
+      "mode": "compile_rejection",
+      "required_pattern": "proved that the proposition"
     }
   ]
 }
