@@ -1,6 +1,6 @@
 # Bounded research exchange MCP adapter
 
-Source proposal for a nonprofit, open source collaborative research service.
+Bounded local admission implementation for a nonprofit, open source collaborative research service.
 Benefits are intended to be recognition and nonmonetary ecosystem credits.
 No awards or credits are issued by this adapter. Credit allocation, expiry,
 transferability and recognition governance remain policy decisions for review.
@@ -29,21 +29,55 @@ cannot reuse those keys. This is bounded local provisioning, not Internet OAuth.
 
 ## Reproduce without the umbrella or third-party dependencies
 
-Requires Elixir 1.19.0 and OTP 27.3.4 (`:json` is part of OTP).
+Requires Elixir 1.19.0 and OTP 27.3.4 (`:json` is part of OTP), Python 3.12+
+and a Git checkout. Run from the repository root. The selected historical core
+revision must be available locally; the first command fetches that exact revision.
 
 ```bash
+snapshot_tool=proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py
+git fetch --no-tags --depth=1 origin "$(python3 -B "$snapshot_tool" --print-revision)"
+python3 -B "$snapshot_tool"
+python3 -B -m unittest discover -s proof_bank/research_exchange_mcp/tools -p 'test_*.py' -v
 elixir proof_bank/research_exchange_mcp/test/format.exs --check
 mkdir -p /tmp/research-exchange-beams
 elixirc --warnings-as-errors -o /tmp/research-exchange-beams proof_bank/research_exchange_mcp/lib/research_exchange/*.ex
 elixir proof_bank/research_exchange_mcp/test/run.exs
-python3 proof_bank/research_exchange/tools/source_snapshot.py verify \
-  --expected-source-sha256 b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564
 ```
 
 The tests generate their own local credentials and start an actual local stdio
-subprocess. They never execute submitted Lean/Quint or call an external service.
+subprocess. The child completes initialization, tool discovery, all four tool
+calls, exact retries, conflicting-key refusals and retrieval of its actual
+submission/job receipts. Every receipt preserves the complete binding and
+keeps mathematical acceptance and credit issuance false. A separate shared-server
+wire-decoder test checks cross-principal access to records that really exist;
+two isolated child stores would not establish that authorization property.
+The suite does not execute submitted Lean/Quint or call an external service.
 For complete mathematical kernel acceptance, follow the separately pinned
 [core verification profile](../research_exchange/README.md).
+
+## Reviewed core identity
+
+[`CORE_SNAPSHOT.json`](CORE_SNAPSHOT.json) is the common source for the MCP
+receipt's core identity and both exchange CI workflows. It selects PR #336's
+reviewed source revision `d6c07ef7b57e844c3aaad8d2c7dff938098a71bf` and manifest
+`e46f8f6c12f790d6889085d072b58f92067004077a8b7f430abcb8433bbb0776`.
+The current core package is byte-identical to that snapshot, including its
+76 properties and terminal rejection/refund extension. This integration changes
+neither its manifest nor its proof/toolchain pins.
+
+The verifier checks the manifest stored at the named Git revision, its selected
+digest and every file in the current core inventory. It rejects stale pins,
+changed or extra source files, duplicate JSON keys and malformed identities.
+CI additionally requires the exchange sources to match the checked-out commit.
+The selected historical core revision and the current integration/workflow
+revision are separate provenance fields. Receipt identity alone does not claim
+that an MCP request executed the core.
+
+Both workflows trigger for either package, shared documentation or either
+workflow. The MCP job retains before/after source records and the actual test
+log; the core job requires all 12 proof/model/HTTP stages and retains its full
+receipt. The [integration acceptance contract](../../docs/proof-bank/research-exchange/INTEGRATION_ACCEPTANCE.md)
+records the intended boundary and remaining refinement work.
 
 ## Local transport configuration
 

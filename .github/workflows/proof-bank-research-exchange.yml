@@ -4,14 +4,18 @@ on:
   pull_request:
     paths:
       - 'proof_bank/research_exchange/**'
+      - 'proof_bank/research_exchange_mcp/**'
       - 'docs/proof-bank/research-exchange/**'
       - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-adapter.yml'
   push:
     branches: [main]
     paths:
       - 'proof_bank/research_exchange/**'
+      - 'proof_bank/research_exchange_mcp/**'
       - 'docs/proof-bank/research-exchange/**'
       - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-adapter.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,8 +30,6 @@ jobs:
     name: Research exchange complete verification
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      FRE_SOURCE_SHA256: 'c6e74348b4664e1a4f3c260557a8a1bc8707c40ed758c553ad8a8195be445924'
     defaults:
       run:
         working-directory: proof_bank/research_exchange
@@ -42,6 +44,13 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24.22.1'
+      - name: Verify the shared reviewed core identity
+        run: |
+          set -euo pipefail
+          snapshot_tool=../research_exchange_mcp/tools/verify_core_snapshot.py
+          git fetch --no-tags --depth=1 origin "$(python3 -B "$snapshot_tool" --print-revision)"
+          python3 -B "$snapshot_tool" --require-clean \
+            --github-env "$GITHUB_ENV" --output evidence/core-snapshot.json
       - name: Bind reviewed package to the exact Git revision
         env:
           FRE_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -64,6 +73,7 @@ jobs:
               'workflow_ref': os.environ['FRE_WORKFLOW_REF'],
               'workflow_sha': os.environ['FRE_WORKFLOW_SHA'],
               'source_sha256': hashlib.sha256(Path('SOURCE_MANIFEST.json').read_bytes()).hexdigest(),
+              'reviewed_core_revision': os.environ['FRE_CORE_REVISION'],
               'run_url': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
               'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
           }

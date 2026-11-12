@@ -97,10 +97,10 @@ defmodule ResearchExchange.AdapterTest do
   def rpc(method, p \\ %{}),
     do: %{"jsonrpc" => "2.0", "id" => 1, "method" => method, "params" => p}
 
-  def ready(pid) do
+  def ready(pid, token \\ @token) do
     {_, s} =
       MCP.handle(
-        MCP.new(pid, @token),
+        MCP.new(pid, token),
         rpc("initialize", %{
           "protocolVersion" => "2025-11-25",
           "clientInfo" => %{"name" => "test", "version" => "1"},
@@ -110,6 +110,43 @@ defmodule ResearchExchange.AdapterTest do
 
     {nil, s} = MCP.handle(s, %{"jsonrpc" => "2.0", "method" => "notifications/initialized"})
     s
+  end
+
+  defp stdio_request(port, id, method, params \\ %{}) do
+    request = rpc(method, params) |> Map.put("id", id)
+    assert Port.command(port, Evidence.canonical(request) <> "\n")
+
+    response =
+      receive do
+        {^port, {:data, {:eol, json}}} -> :json.decode(json)
+        {^port, {:data, {:noeol, _}}} -> flunk("stdio response exceeds the line bound")
+        {^port, {:exit_status, status}} -> flunk("stdio child exited with status #{status}")
+      after
+        10_000 -> flunk("stdio response timeout for #{method} (id #{id})")
+      end
+
+    assert response["jsonrpc"] == "2.0"
+    assert response["id"] == id
+    response
+  end
+
+  defp successful_tool(response) do
+    assert %{
+             "result" => %{
+               "isError" => false,
+               "structuredContent" => result,
+               "content" => content
+             }
+           } = response
+
+    assert content == [%{"type" => "text", "text" => Evidence.canonical(result)}]
+    result
+  end
+
+  defp assert_inert_receipt(receipt) do
+    assert Evidence.verify_receipt?(receipt, @receipt)
+    assert receipt["payload"]["mathematical_acceptance"] == false
+    assert receipt["payload"]["credit_issuance"] == false
   end
 
   test "discovery authenticates and filters inaccessible libraries", %{server: p} do
@@ -225,6 +262,65 @@ defmodule ResearchExchange.AdapterTest do
                "submission_id" => id,
                "idempotency_key" => "steal"
              })
+  end
+
+  test "shared-server wire decoding refuses another principal's existing records", %{server: p} do
+    # Two ordinary stdio children have separate stores. Share one server here so
+    # the refused records actually exist, while exercising the JSON wire decoder
+    # with two independently authenticated MCP sessions.
+    owner = ready(p)
+    other = ready(p, @other)
+
+    {submitted, _} =
+      Stdio.decode(
+        owner,
+        Evidence.canonical(rpc("tools/call", %{"name" => "proof_submit", "arguments" => args()}))
+      )
+
+    submission = successful_tool(submitted)
+    submission_id = submission["payload"]["id"]
+    request = %{"submission_id" => submission_id, "idempotency_key" => "owner-verify"}
+
+    {queued, _} =
+      Stdio.decode(
+        owner,
+        Evidence.canonical(
+          rpc("tools/call", %{"name" => "verification_request", "arguments" => request})
+        )
+      )
+
+    job = successful_tool(queued)
+    job_id = job["payload"]["id"]
+
+    for {tool, a} <- [
+          {"receipt_get", %{"id" => submission_id}},
+          {"receipt_get", %{"id" => job_id}},
+          {"verification_request", %{request | "idempotency_key" => "other-verify"}}
+        ] do
+      {response, _} =
+        Stdio.decode(
+          other,
+          Evidence.canonical(rpc("tools/call", %{"name" => tool, "arguments" => a}))
+        )
+
+      assert response["result"] == %{
+               "content" => [%{"type" => "text", "text" => "not_found"}],
+               "isError" => true
+             }
+    end
+
+    for {id, expected} <- [{submission_id, submission}, {job_id, job}] do
+      {response, _} =
+        Stdio.decode(
+          owner,
+          Evidence.canonical(
+            rpc("tools/call", %{"name" => "receipt_get", "arguments" => %{"id" => id}})
+          )
+        )
+
+      assert successful_tool(response) == expected
+      assert_inert_receipt(expected)
+    end
   end
 
   test "concurrent identical requests reserve exactly once", %{server: p} do
@@ -481,7 +577,7 @@ defmodule ResearchExchange.AdapterTest do
     assert r["result"] == %{}
   end
 
-  test "actual stdio subprocess completes authenticated discovery and submission" do
+  test "actual stdio subprocess completes all four tools with bound retries and receipts" do
     dir = Path.join(System.tmp_dir!(), "research-exchange-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
@@ -526,34 +622,120 @@ defmodule ResearchExchange.AdapterTest do
 
     on_exit(fn -> if Port.info(port), do: Port.close(port) end)
 
-    requests = [
-      rpc("initialize", %{
+    initialized =
+      stdio_request(port, 1, "initialize", %{
         "protocolVersion" => "2025-11-25",
         "clientInfo" => %{"name" => "wire", "version" => "1"},
         "capabilities" => %{}
-      }),
-      %{"jsonrpc" => "2.0", "method" => "notifications/initialized"},
-      rpc("tools/call", %{"name" => "library_discover", "arguments" => %{}}),
-      rpc("tools/call", %{"name" => "proof_submit", "arguments" => args()})
-    ]
+      })
 
-    Port.command(port, Enum.map(requests, &(Evidence.canonical(&1) <> "\n")))
+    assert initialized["result"]["protocolVersion"] == "2025-11-25"
 
-    results =
-      for _ <- 1..3 do
-        receive do
-          {^port, {:data, {:eol, json}}} -> :json.decode(json)
-          other -> flunk("unexpected child output #{inspect(other)}")
-        after
-          10_000 -> flunk("stdio response timeout")
-        end
-      end
+    assert Port.command(
+             port,
+             Evidence.canonical(%{"jsonrpc" => "2.0", "method" => "notifications/initialized"}) <>
+               "\n"
+           )
 
-    assert Enum.at(results, 0)["result"]["protocolVersion"] == "2025-11-25"
-    assert Enum.at(results, 1)["result"]["structuredContent"]["libraries"] |> length() == 1
-    r = Enum.at(results, 2)["result"]["structuredContent"]
-    assert Evidence.verify_receipt?(r, @receipt)
-    assert r["payload"]["binding"]["artifact_sha256"] == args()["artifact_sha256"]
+    listed = stdio_request(port, 2, "tools/list")
+
+    assert Enum.map(listed["result"]["tools"], & &1["name"]) == [
+             "library_discover",
+             "proof_submit",
+             "receipt_get",
+             "verification_request"
+           ]
+
+    call = fn id, tool, a ->
+      stdio_request(port, id, "tools/call", %{"name" => tool, "arguments" => a})
+    end
+
+    discovered = call.(3, "library_discover", %{}) |> successful_tool()
+
+    reviewed_core =
+      Path.expand("../CORE_SNAPSHOT.json", __DIR__) |> File.read!() |> :json.decode()
+
+    assert discovered["libraries"] == [c.libraries["lean-core"]]
+    assert discovered["core"] == reviewed_core
+    assert Server.core() == reviewed_core
+    assert discovered["benefits"]["issuance_enabled"] == false
+
+    submission = call.(4, "proof_submit", args()) |> successful_tool()
+    assert_inert_receipt(submission)
+    assert submission["payload"]["status"] == "submitted"
+    submission_id = submission["payload"]["id"]
+
+    binding = %{
+      "contributor" => "agent-a",
+      "library" => "lean-core",
+      "engine" => "lean",
+      "source_revision" => @revision,
+      "source_snapshot_sha256" => @hash,
+      "generation" => 1,
+      "target" => args()["target"],
+      "artifact_sha256" => args()["artifact_sha256"],
+      "environment_sha256" => c.libraries["lean-core"]["environment_sha256"],
+      "policy_sha256" => c.libraries["lean-core"]["policy_sha256"],
+      "core" => reviewed_core
+    }
+
+    assert submission["payload"]["binding"] == binding
+    assert call.(5, "proof_submit", args()) |> successful_tool() == submission
+
+    conflict = call.(6, "proof_submit", %{args() | "target" => "changed"})
+    assert conflict["result"]["isError"] == true
+
+    assert conflict["result"]["content"] == [
+             %{"type" => "text", "text" => "idempotency_conflict"}
+           ]
+
+    request = %{"submission_id" => submission_id, "idempotency_key" => "verify-1"}
+    cross_tool = call.(7, "verification_request", %{request | "idempotency_key" => "submit-1"})
+    assert cross_tool["result"]["isError"] == true
+
+    assert cross_tool["result"]["content"] == [
+             %{"type" => "text", "text" => "idempotency_conflict"}
+           ]
+
+    job = call.(8, "verification_request", request) |> successful_tool()
+    assert_inert_receipt(job)
+    assert job["payload"]["status"] == "queued_execution_disabled"
+
+    assert job["payload"]["details"] == %{
+             "reservation" => "memory-only-capacity-slot",
+             "credits_issued" => 0
+           }
+
+    job_id = job["payload"]["id"]
+    refute job_id == submission_id
+    job_binding = job["payload"]["binding"]
+    assert Map.take(job_binding, Map.keys(binding)) == binding
+
+    assert Enum.sort(Map.keys(job_binding)) ==
+             Enum.sort(Map.keys(binding) ++ ["submission_id", "nonce", "boot", "expires_at"])
+
+    assert job_binding["submission_id"] == submission_id
+    assert job_binding["nonce"] =~ ~r/\A[0-9a-f]{64}\z/
+    assert job_binding["boot"] =~ ~r/\A[0-9a-f]{32}\z/
+    assert is_integer(job_binding["expires_at"])
+    assert job_binding["expires_at"] > job["payload"]["recorded_at"]
+    assert call.(9, "verification_request", request) |> successful_tool() == job
+
+    duplicate =
+      call.(10, "verification_request", %{request | "idempotency_key" => "verify-again"})
+
+    assert duplicate["result"]["isError"] == true
+    assert duplicate["result"]["content"] == [%{"type" => "text", "text" => "already_requested"}]
+
+    read_submission = call.(11, "receipt_get", %{"id" => submission_id}) |> successful_tool()
+    read_job = call.(12, "receipt_get", %{"id" => job_id}) |> successful_tool()
+    assert read_submission == submission
+    assert read_job == job
+    assert_inert_receipt(read_submission)
+    assert_inert_receipt(read_job)
+
+    unavailable = call.(13, "accept", %{"trusted" => true})
+    assert unavailable["error"]["code"] == -32602
     Port.close(port)
   end
 end
