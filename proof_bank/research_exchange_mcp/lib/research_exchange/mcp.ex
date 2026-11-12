@@ -17,9 +17,10 @@ defmodule ResearchExchange.MCP do
     "verification_request" => ["idempotency_key", "submission_id"],
     "receipt_get" => ["id"]
   }
-  def new(server, token), do: %{server: server, token: token, phase: :new}
+  def new(server, token, backend \\ :memory),
+    do: %{server: server, token: token, phase: :new, backend: backend}
 
-  def tools do
+  def tools(backend \\ :memory) do
     for {name, keys} <- Enum.sort(@schemas) do
       properties =
         Map.new(keys, fn k ->
@@ -28,7 +29,7 @@ defmodule ResearchExchange.MCP do
 
       %{
         "name" => name,
-        "description" => description(name),
+        "description" => description(name, backend),
         "inputSchema" => %{
           "type" => "object",
           "properties" => properties,
@@ -39,15 +40,18 @@ defmodule ResearchExchange.MCP do
     end
   end
 
-  defp description("library_discover"), do: "Discover authorized, pinned library metadata."
+  defp description("library_discover", _), do: "Discover authorized, pinned library metadata."
 
-  defp description("proof_submit"),
+  defp description("proof_submit", _),
     do: "Store a bounded immutable proof artifact; does not execute it."
 
-  defp description("verification_request"),
+  defp description("verification_request", :durable),
+    do: "Queue the admitted export for trusted offline replay."
+
+  defp description("verification_request", :memory),
     do: "Reserve one in-memory verification slot; execution is disabled."
 
-  defp description("receipt_get"), do: "Read your canonical admission or observation receipt."
+  defp description("receipt_get", _), do: "Read your canonical admission or observation receipt."
 
   def handle(s, message) do
     id = if is_map(message), do: Map.get(message, "id"), else: nil
@@ -100,7 +104,7 @@ defmodule ResearchExchange.MCP do
     do: {error(id, -32002, "Initialize first"), s}
 
   defp request(s, id, "tools/list", p) when map_size(p) == 0,
-    do: {ok(id, %{"tools" => tools()}), s}
+    do: {ok(id, %{"tools" => tools(s.backend)}), s}
 
   defp request(s, id, "tools/call", %{"name" => name} = p)
        when map_size(p) == 1 or (map_size(p) == 2 and is_map_key(p, "arguments")) do
@@ -117,7 +121,7 @@ defmodule ResearchExchange.MCP do
 
       {:error, reason} ->
         {ok(id, %{
-           "content" => [%{"type" => "text", "text" => Atom.to_string(reason)}],
+           "content" => [%{"type" => "text", "text" => to_string(reason)}],
            "isError" => true
          }), s}
     end
