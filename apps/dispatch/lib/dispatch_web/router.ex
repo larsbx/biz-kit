@@ -174,6 +174,8 @@ defmodule DispatchWeb.Router do
 
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/operations", PortalController, :operations
+    get "/ui/restaurant-receipts", RestaurantReceiptController, :form
+    post "/ui/restaurant-receipts", RestaurantReceiptController, :submit
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     post "/partner/stops/:stop_id/readiness-events", PartnerActionController, :readiness
     post "/partner/stops/:stop_id/document-references", PartnerActionController, :document

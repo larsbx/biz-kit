@@ -13,7 +13,7 @@ defmodule CoopSubstrate.Procurement do
   Procurement batches are deliberately singleton in this first host.
   """
   alias CommerceCore.MerchantPilot.Workflow
-  alias CoopSubstrate.{Crypto, Log}
+  alias CoopSubstrate.{Crypto, Log, ProcurementDispatch}
   alias CoopSubstrate.Protocol.Envelope
 
   @clock Application.compile_env(:coop_substrate, :procurement_clock, System)
@@ -21,7 +21,10 @@ defmodule CoopSubstrate.Procurement do
   @business "ProcurementBusinessEnrolledV1"
   @command "ProcurementCommandAdmittedV1"
   @read "ProcurementSnapshotRequestV1"
-  @types [@grant, @business, @command, @read]
+  @route "ProcurementDispatchRouteV1"
+  @dispatch_request "ProcurementDispatchRequestedV1"
+  @dispatch_step "ProcurementDispatchStepV1"
+  @types [@grant, @business, @command, @read, @route, @dispatch_request, @dispatch_step]
   @fields %{
     "request" => ~w(buyer_business_id description quantity currency needed_by_ms consent_ref)a,
     "qualify" => ~w(evidence_ref)a,
@@ -37,7 +40,7 @@ defmodule CoopSubstrate.Procurement do
 
   def event?(type), do: type in @types
   def clock_ms, do: @clock.system_time(:millisecond)
-  def init, do: %{grants: %{}, businesses: %{}, requests: %{}, commands: %{}, events: %{}}
+  def init, do: %{grants: %{}, businesses: %{}, requests: %{}, commands: %{}, events: %{}, dispatch: ProcurementDispatch.init()}
   def state(gate), do: Map.get(gate, :procurement, init())
 
   def event_types do
@@ -53,7 +56,7 @@ defmodule CoopSubstrate.Procurement do
       @command => spec("procurement_operator", Map.merge(operator,
         %{"request_id" => :string, "command" => :any})),
       @read => spec("procurement_operator", operator)
-    }
+    } |> Map.merge(ProcurementDispatch.event_types(operator))
   end
 
   # Register through the existing extension registry BEFORE Log audits/replays.
@@ -79,6 +82,13 @@ defmodule CoopSubstrate.Procurement do
   def command(context, request_id, command) do
     signed(@command, context, Map.merge(operator_payload(context),
       %{"request_id" => request_id, "command" => command}))
+  end
+
+  def request_dispatch(context, request_id, version, pickup, dropoff, server \\ Log.server()) do
+    payload = Map.merge(operator_payload(context), %{"request_id" => request_id,
+      "expected_version" => version, "pickup_digest" => pickup, "dropoff_digest" => dropoff})
+    with {:ok, env} <- signed(@dispatch_request, context, payload),
+         {:ok, [_]} <- Log.append(env, server), do: :ok
   end
 
   def snapshot_request(context), do: signed(@read, context, operator_payload(context))
@@ -115,10 +125,16 @@ defmodule CoopSubstrate.Procurement do
       ch = env.chapter_id
       coop = env.payload["cooperative_id"]
       s = state(gate)
-      requests = for {{^ch, ^coop, _id}, row} <- s.requests, do: row
+      requests = for {{^ch, ^coop, _id} = key, row} <- s.requests do
+        if Map.has_key?(row, :dispatch),
+          do: Map.put(row, :dispatch_phase, ProcurementDispatch.handoff_phase(s, key)),
+          else: row
+      end
+      route = ProcurementDispatch.route(s, ch, coop)
+      site = if match?(%{active: true}, route), do: route.site
       businesses = for {{^ch, ^coop, id}, row} <- s.businesses, row.active, do: id
       {:ok, %{requests: Enum.sort_by(requests, &elem(&1.scope, 2)),
-        businesses: Enum.sort(businesses), grant_version: env.payload["grant_version"]}}
+        businesses: Enum.sort(businesses), dispatch_site: site, grant_version: env.payload["grant_version"]}}
     else
       true -> {:error, :read_request_already_appended}
       {:error, _} = error -> error
@@ -131,6 +147,10 @@ defmodule CoopSubstrate.Procurement do
     with :ok <- fresh(env, now), {:ok, _} <- transition(env, gate, now), do: :ok
   end
   def live_check(_, _), do: :ok
+
+  defp fresh(%Envelope{type: @dispatch_step, timestamp_ms: timestamp}, now) do
+    if abs(now - timestamp) <= 30_000, do: :ok, else: {:error, :stale_procurement_dispatch_step}
+  end
 
   defp fresh(env, now) do
     if env.timestamp_ms == div(now, 1_000) * 1_000,
@@ -220,6 +240,25 @@ defmodule CoopSubstrate.Procurement do
     end
   end
 
+  defp transition(%Envelope{type: @route} = env, gate, _now) do
+    with :ok <- governance(env, gate), :ok <- scope(env),
+         true <- id?(env.payload["key_id"]) or {:error, :invalid_dispatch_key},
+         do: ProcurementDispatch.configure(state(gate), env)
+  end
+
+  defp transition(%Envelope{type: @dispatch_request} = env, gate, now) do
+    with :ok <- operator(env, gate, now), :ok <- scope(env),
+         true <- id?(env.payload["request_id"]) or {:error, :invalid_request_id},
+         do: ProcurementDispatch.request(state(gate), env)
+  end
+
+  defp transition(%Envelope{type: @dispatch_step} = env, gate, now) do
+    with :ok <- scope(env),
+         do: ProcurementDispatch.step(state(gate), env, fn row, signed ->
+           apply_dispatch_fulfillment(row, signed, now)
+         end)
+  end
+
   defp transition(%Envelope{type: @command} = env, gate, now) do
     s = state(gate)
     p = env.payload
@@ -228,7 +267,8 @@ defmodule CoopSubstrate.Procurement do
          {:ok, c} <- decode_command(p["command"]),
          false <- Map.has_key?(s.commands, {request_key(env), c.id}),
          false <- Map.has_key?(s.events, env.event_id),
-         :ok <- businesses(env, c, s) do
+         :ok <- businesses(env, c, s),
+         :ok <- ProcurementDispatch.permit_commercial(s, request_key(env), c.action) do
       trusted = %{authorized: true, chapter_id: env.chapter_id,
         cooperative_id: p["cooperative_id"], request_id: p["request_id"],
         actor_id: p["operator_id"], now_ms: now}
@@ -246,6 +286,20 @@ defmodule CoopSubstrate.Procurement do
     end
   end
   defp transition(_, _, _), do: {:error, :snapshot_requests_are_not_log_events}
+
+  defp apply_dispatch_fulfillment(row, env, now) do
+    {chapter, cooperative, request} = row.scope
+    trusted = %{authorized: true, chapter_id: chapter, cooperative_id: cooperative,
+      request_id: request, actor_id: hd(env.signers).key_id, now_ms: now}
+    command = %{id: env.event_id, expected_version: row.version, action: :fulfill,
+      attrs: %{evidence_ref: "dispatch:" <> env.payload["proof_id"]}}
+
+    case apply_kernel(row, trusted, command) do
+      {:ok, fulfilled, :accepted} -> {:ok, fulfilled}
+      {:error, _} = error -> error
+      _ -> {:error, :procurement_dispatch_fulfillment_refused}
+    end
+  end
 
   # The procurement host includes CommerceCore in its release closure. Keep the
   # generic substrate compilable for unrelated narrow hosts; absent kernel is

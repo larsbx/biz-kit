@@ -598,6 +598,20 @@ if config_env() == :prod and restaurant_released? do
     server: true
 
   config :restaurant_host, :restaurant_file, require_env.("RESTAURANT_CONFIG_FILE")
+
+  if System.get_env("WORKOS_CLIENT_ID") do
+    config :restaurant_host, :identity_provider, "workos"
+  end
+
+  if staff = System.get_env("RESTAURANT_STAFF_PRINCIPALS") do
+    principals = staff |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+    unless Enum.all?(principals, &Regex.match?(~r/\Aprn_[a-z2-7]{26}\z/, &1)) do
+      raise "RESTAURANT_STAFF_PRINCIPALS must contain only Biz-kit principal IDs"
+    end
+
+    config :restaurant_host, :staff_principals, principals
+  end
 end
 
 # The shared config points Localize at the legacy eatsbot's locale cache
@@ -614,9 +628,10 @@ end
 # ── biz_kit_identity ────────────────────────────────────────────────────────
 # Native apps' sessions last until the person signs out, kept by hash in the
 # task host's Postgres so a restart does not end them
-# (docs/architecture/2026-10-21-native-sign-in.md). Both releases carry the
-# task host; tests of the apps that do not configure their own.
-if config_env() in [:dev, :prod] do
+# (docs/architecture/2026-10-21-native-sign-in.md). The biz_kit and orchestration
+# releases carry TaskHost; the narrow restaurant release uses its own store.
+# Tests of apps that do not carry TaskHost configure their own store as well.
+if config_env() in [:dev, :prod] and release_name != "restaurant" do
   config :biz_kit_identity,
     session_store: BizKit.Identity.PostgresSessionStore,
     session_repo: TaskHost.Repo
