@@ -3,18 +3,22 @@ on:
   pull_request:
     paths:
       - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
       - 'docs/proof-bank/research-exchange/**'
       - 'proof_bank/research_exchange/**'
       - '.github/workflows/research-exchange-adapter.yml'
       - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
   push:
     branches: [main]
     paths:
       - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
       - 'docs/proof-bank/research-exchange/**'
       - 'proof_bank/research_exchange/**'
       - '.github/workflows/research-exchange-adapter.yml'
       - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -93,4 +97,6 @@ jobs:
           path: ${{ runner.temp }}/research-exchange-mcp/
           if-no-files-found: error
           retention-days: 30
-      # The complete core workflow remains a separate gate.
+      # Complete core and durable bridge acceptance have dedicated workflows.
+      # This job checks memory/transport controls and the disposable offline
+      # replay pilot. Both durable profiles retain their own acceptance suites.

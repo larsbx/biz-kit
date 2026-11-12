@@ -1,12 +1,13 @@
 # Bounded MCP admission adapter — implementation review
 
-## Current integration
+## Source integration and durable follow-up
 
 The November 12 integration imports the exact verified PR #336 core snapshot,
 replaces duplicated core pins with `CORE_SNAPSHOT.json`, and exercises the full
-four-tool stdio round trip. Both workflows use the selected core identity and
-run for changes to either package. See [INTEGRATION_ACCEPTANCE.md](INTEGRATION_ACCEPTANCE.md)
-for the current source, test and approval boundary. The evidence below remains
+four-tool stdio round trip. The dedicated workflows use the selected core identity.
+See [INTEGRATION_ACCEPTANCE.md](INTEGRATION_ACCEPTANCE.md) for that milestone and
+[DURABLE_MCP_BRIDGE.md](DURABLE_MCP_BRIDGE.md) for the opt-in SQLite/exact-export
+execution follow-up and its separate proof, test and approval boundary. The evidence below remains
 the historical November 6 baseline; its counts and digest describe that baseline.
 
 ## Historical November 6 baseline

@@ -1,5 +1,5 @@
 defmodule ResearchExchange.Stdio do
-  @moduledoc "Bounded newline JSON-RPC transport for local admission backends."
+  @moduledoc "Bounded newline JSON-RPC transport with explicit local backend selection."
   alias ResearchExchange.{Durable, Evidence, MCP, Server}
   @max_line 131_072
   def main do
@@ -7,24 +7,35 @@ defmodule ResearchExchange.Stdio do
     # Operator-owned configuration is outside the repository and is never read
     # from MCP arguments. The launcher must protect both this file and its env.
     raw = System.fetch_env!("RESEARCH_EXCHANGE_CONFIG") |> File.read!() |> :json.decode()
-
+    {server, backend} = start_server(raw)
     token = System.fetch_env!("RESEARCH_EXCHANGE_TOKEN")
-
-    {backend, started} =
-      case Map.fetch(raw, "durable_database") do
-        {:ok, path} ->
-          {:durable, Durable.start_link(path, Base.decode64!(raw["receipt_key_base64"]))}
-
-        :error ->
-          {:memory, start_memory(raw)}
-      end
-
-    {:ok, server} = started
     {:ok, _} = Server.authenticate(server, token)
     loop(MCP.new(server, token, backend))
   end
 
-  defp start_memory(raw) do
+  defp start_server(%{"backend" => "durable"} = raw) do
+    true = Enum.sort(Map.keys(raw)) == ["backend", "bridge_config", "python_executable"]
+
+    {:ok, server} =
+      Durable.start_link(%{
+        config_path: raw["bridge_config"],
+        python_executable: raw["python_executable"]
+      })
+
+    {server, :durable}
+  end
+
+  defp start_server(%{"durable_database" => database} = raw) do
+    # The merged offline pilot keeps its existing configuration and semantics.
+    # Mixed selectors must not silently choose a different acceptance profile.
+    true = Enum.sort(Map.keys(raw)) == ["durable_database", "receipt_key_base64"]
+    {:ok, server} = Durable.start_link(database, Base.decode64!(raw["receipt_key_base64"]))
+    {server, :durable_pilot}
+  end
+
+  defp start_server(raw) when is_map(raw) do
+    true = Map.get(raw, "backend", "memory") == "memory"
+
     config = %{
       libraries: raw["libraries"],
       receipt_key: Base.decode64!(raw["receipt_key_base64"]),
@@ -42,7 +53,8 @@ defmodule ResearchExchange.Stdio do
         end)
     }
 
-    Server.start_link(config)
+    {:ok, server} = Server.start_link(config)
+    {server, :memory}
   end
 
   defp loop(s) do

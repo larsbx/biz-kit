@@ -8,6 +8,13 @@ pinned Lean kernel and lean4lean. The worker records a terminal
 `dual_checker_passed` or `profile_rejected` receipt. Timeout and inconclusive
 replay leave the job queued. Both receipt authority flags are always false.
 
+This pilot remains selected by its existing `durable_database` and
+`receipt_key_base64` configuration. The separate
+[durable bridge](../../research_exchange_bridge/README.md) uses
+`backend: "durable"`, `bridge_config`, and `python_executable` for automatic
+controlled replay and guarded terminal acceptance. Its database and receipt
+contract are separate from this pilot; mixed configuration fields are refused.
+
 The selected core is unchanged. The admission row maps its worker, generation,
 artifact SHA-256 and original times to `Candidate`. The SHA-256 of the
 qualified theorem name, source map hash, toolchain lock hash and policy hash

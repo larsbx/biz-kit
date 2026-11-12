@@ -15,8 +15,12 @@ production remote-agent identity, meter physical compute or issue service credit
 The [bounded MCP stdio adapter](../../../proof_bank/research_exchange_mcp/README.md)
 lives beside this pilot. Its four-tool admission cycle has its own executable
 suite and shares the reviewed core identity through `CORE_SNAPSHOT.json`.
-The [integration acceptance contract](INTEGRATION_ACCEPTANCE.md) distinguishes
-source/CI integration from the still-open durable MCP execution bridge.
+The [integration acceptance contract](INTEGRATION_ACCEPTANCE.md) records the
+PR #377 source/CI milestone. The opt-in [durable MCP bridge](DURABLE_MCP_BRIDGE.md)
+now connects the same interface to SQLite and controlled dual replay of the
+reviewed Lean export. Its separate representation proofs and runtime acceptance
+must pass at the proposed revision; general research-source execution remains
+outside that bounded profile.
 
 ## Executable definitions and evidence classes
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind the MCP receipt identity and both CI lanes to one reviewed core snapshot.
+"""Bind MCP receipt identity and exchange CI to one reviewed core snapshot.
 
 The historical revision identifies the reviewed core source, not the commit
 running this adapter. Verify its manifest against both the selected digest and
@@ -24,9 +24,11 @@ SOURCE_PATH = "proof_bank/research_exchange/SOURCE_MANIFEST.json"
 REVIEW_PATHS = [
     "proof_bank/research_exchange",
     "proof_bank/research_exchange_mcp",
+    "proof_bank/research_exchange_bridge",
     "docs/proof-bank/research-exchange",
     ".github/workflows/proof-bank-research-exchange.yml",
     ".github/workflows/research-exchange-adapter.yml",
+    ".github/workflows/research-exchange-durable-bridge.yml",
 ]
 
 sys.dont_write_bytecode = True
