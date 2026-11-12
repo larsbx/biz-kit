@@ -79,6 +79,8 @@ defmodule ProofBankCore.Portfolio do
      "Withdrawal of marketing consent must prevent future actions under superseded consent."},
     {"school_ops", :hosted, :conformance,
      "Curriculum source revisions must be pinned and staff task completion must not imply learner attainment."},
+    {"scf_core", :capability, :conformance,
+     "Accepted SCF postings must preserve debit-credit equality and closed-period entries, including during retries and reversals."},
     {"spruce_goose", :hosted, :manual,
      "Existing orchestration commands must not create a second writer during signed-ledger migration."},
     # Registered without review by owner decision (2026-11-09).

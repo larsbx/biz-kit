@@ -843,7 +843,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "3559d1d539ba3b2d4c3fbca0db12d41e57f029ff",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "2690e4edd13d93e4a7d287d3d8ed4f7fe4966b17",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -942,6 +942,49 @@
         "apps/sales_core/lib/sales_core/consent.ex": "7efd5bc6e3b437efe053f6f4452cf4dec88850e3",
         "apps/sales_core/lib/sales_core/pipeline.ex": "c6b149d85cf0cbdee1e88f184da6cd5ea5261d0b",
         "apps/sales_core/test/sales_core_test.exs": "f6a00f42dc0bfbc36fbcc971c4c8e4437a453a43"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "scf_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "registered_at_sha": "52b296c5ac3b4ac65e0e3ef167d2751a231165e3",
+      "category": "capability",
+      "intended_purpose": "In-memory Algerian SCF double-entry accounting in integer DZD centimes",
+      "intended_features": [
+        "Chart classes 1–7 with recognized account prefixes and DZD formatting",
+        "Entry validation with a nonblank supporting-document reference and equal debit and credit totals",
+        "Append-only posting by entry ID, monotonic period closure, reversal posting and date-windowed balances and trial balance",
+        "Dated TVA rate table, integer HT/TTC rounding and G50 TVA position from 4457 and 4456 account prefixes",
+        "Single-exercice compte de résultat par nature and bilan"
+      ],
+      "observed_code_paths": [
+        "apps/scf_core/lib/scf_core/chart.ex",
+        "apps/scf_core/lib/scf_core/entry.ex",
+        "apps/scf_core/lib/scf_core/ledger.ex",
+        "apps/scf_core/lib/scf_core/money.ex",
+        "apps/scf_core/lib/scf_core/statements.ex",
+        "apps/scf_core/lib/scf_core/tva.ex"
+      ],
+      "observed_test_path": "apps/scf_core/test/invariants_test.exs",
+      "audit_finding": "Characterized at registered_at_sha. The README and source exclude persistence and replay, multi-exercice carry-forward and result allocation, IBS/IRG/payroll, cash-flow statements, annexes, tax filings beyond the G50 TVA position, and multicurrency. Entry validation checks the presence of a document reference only. The TVA table has two dated rows; their legal applicability needs independent review. scf_core_test.exs contains example assertions for validation, posting, closure, reversal, TVA and statements. The property suite samples bounded ledgers over a fixed account subset and asserts trial-balance equality, bilan equality, TCR net income, posting-order independence and reversal cancellation with standard attributes. Ledger.reverse/3 merges caller attributes over the generated lines and admits distinct reversal IDs, so inverse and single-correction guarantees need explicit preconditions or an admission contract.",
+      "first_formal_obligation": "Establish that every reachable ledger preserves debit-credit equality and closed-period entries under posting, closure and reversal, with exact-retry idempotence and an explicit contract for when a reversal cancels the original. Establish separately that statement projections preserve their equations over the admitted account domain.",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/scf_core/lib/scf_core/chart.ex": "3d2090183387cd83db88fb2b53062c7b80b7aac9",
+        "apps/scf_core/lib/scf_core/entry.ex": "765f244e718cf72240e72047af9ae29bbc2c8a34",
+        "apps/scf_core/lib/scf_core/ledger.ex": "1ef284eb8f4774daf5b0182c295d5fdab5381382",
+        "apps/scf_core/lib/scf_core/money.ex": "ace3c184bdcf813c57e3d2eede650bfb7e9c466d",
+        "apps/scf_core/lib/scf_core/statements.ex": "86b024910166bbc1e5dc3e6da61e3bbcde0d5916",
+        "apps/scf_core/lib/scf_core/tva.ex": "a1b48a967748df3a7c911de21ea369c02bab170e",
+        "apps/scf_core/test/invariants_test.exs": "17b2aa6bea93949f7f1a4e9bbe8a8fd7ea68df04"
       }
     },
     {
