@@ -171,10 +171,10 @@ class Store:
                 hexadecimal(library["revision"], 40) and integer(library["generation"], 1),
                 "invalid_configuration")
         if source.is_source(profile):
-            require(profile == source.profile_for(library["environment_sha256"]) and
+            require(profile == source.profile_for(library["environment_sha256"], profile.get("policy")) and
                     library["revision"] == source.REVISION and
                     library["snapshot_sha256"] == profile["source_sha256"] and
-                    library["policy_sha256"] == sha(profile_canonical(source.POLICY)),
+                    library["policy_sha256"] == sha(profile_canonical(profile["policy"])),
                     "profile_identity_mismatch")
         else:
             validate_profile(profile)

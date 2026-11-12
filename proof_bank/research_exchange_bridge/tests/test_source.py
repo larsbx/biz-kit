@@ -9,13 +9,14 @@ import sys
 import time
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from research_exchange_bridge import source
 from research_exchange_bridge.common import BridgeError, ROOT, canonical, loads, sha
 from research_exchange_bridge.store import Store
 from research_exchange_bridge.tools.provision_source import install
 from adapter_pilot.checker import ControlledChecker, CheckedExport
+from adapter_pilot.common import canonical as profile_canonical
 
 
 class BoundaryTest(unittest.TestCase):
@@ -48,6 +49,42 @@ class BoundaryTest(unittest.TestCase):
                 source.run_stage([sys.executable, "-c", "import os,signal; os.kill(os.getpid(),signal.SIGTERM)"],
                                  directory, env)
             self.assertEqual(source.run_stage(["/usr/bin/printf", "recovered"], directory, env), b"recovered")
+
+    def test_export_budget_is_bound_to_the_stored_policy(self):
+        environment = "1" * 64
+        term = b"Nat.prime_two"
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            store = Store(root / "bridge.sqlite", b"x" * 32)
+            store.initialize()
+            for policy, wall_seconds in ((source.POLICY, 60), (source.EXTENDED_POLICY, 180)):
+                with self.subTest(wall_seconds=wall_seconds):
+                    profile = source.profile_for(environment, policy)
+                    library = {"id": f"source-{wall_seconds}", "engine": "lean",
+                               "revision": source.REVISION, "generation": 1,
+                               "snapshot_sha256": profile["source_sha256"],
+                               "environment_sha256": environment,
+                               "policy_sha256": sha(profile_canonical(policy))}
+                    store.provision_library(library, profile)
+                    with store.connection() as conn:
+                        stored = loads(store._library(conn, library["id"])["profile_json"])
+                    checker = Mock(spec=ControlledChecker)
+                    checker.paths = {"lean": "/unused/lean", "leanexport": "/unused/leanexport"}
+                    binding = {"artifact_sha256": sha(term), "target": source.TARGET,
+                               "environment_sha256": environment, "source_revision": source.REVISION}
+                    with patch.object(checker, "environment", return_value={}), \
+                         patch.object(source, "environment_identity", return_value=environment), \
+                         patch.object(source, "run_stage", side_effect=[
+                             b"", b"'submitted' does not depend on any axioms\n",
+                             BridgeError("source_timeout"),
+                         ]) as stage:
+                        with self.assertRaisesRegex(BridgeError, "source_timeout"):
+                            source.check_source(checker, root, stored, term, binding,
+                                                sha(profile_canonical(stored)))
+                    self.assertEqual(stage.call_args.kwargs["timeout"], wall_seconds)
+            invalid = {**source.EXTENDED_POLICY, "export_wall_seconds": 181}
+            with self.assertRaisesRegex(BridgeError, "profile_identity_mismatch"):
+                source.profile_for(environment, invalid)
 
     def test_dependency_fingerprint(self):
         with TemporaryDirectory() as temporary:
@@ -150,7 +187,7 @@ class DurableSourceTest(unittest.TestCase):
             self.assertEqual((interrupted["version"], interrupted["effects"]), (0, []))
             self.assertEqual(store.pending(), [job])
             self.assertEqual(list(scratch.iterdir()), [])
-            result = subprocess.run(command, capture_output=True, text=True, timeout=360, check=True)
+            result = subprocess.run(command, capture_output=True, text=True, timeout=480, check=True)
             self.assertEqual(loads(result.stdout)["status"], "accepted", store.inspect(job)["receipt"])
             receipt = store.inspect(job)["receipt"]
             self.assertEqual(store.commit(prepared, checked), receipt)
