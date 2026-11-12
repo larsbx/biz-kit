@@ -31,7 +31,8 @@ class Session:
         self.send({"method": "notifications/initialized"})
 
     def send(self, message):
-        self.process.stdin.write(canonical({"jsonrpc": "2.0", **message}) + b"\n")
+        frame = json.dumps({"jsonrpc": "2.0", **message}, ensure_ascii=False).encode("utf-8")
+        self.process.stdin.write(frame + b"\n")
         self.process.stdin.flush()
 
     def rpc(self, method, params):
@@ -192,6 +193,19 @@ example : committed.2.phase = .submitted ∧ committed.2.candidate = some row.ca
                 self.store.replay(self.checker)
             check.assert_not_called()
         self.assertIsNone(self.stored_job()["terminal"])
+
+    def test_utf8_artifact_and_null_argument(self):
+        artifact = "-- αβ é 漢字 🧪\n"
+        encoded = artifact.encode("utf-8")
+        with self.mcp() as mcp:
+            submit = self.submission(mcp, "expected")
+            mcp.call("proof_submit", {**submit, "artifact": None,
+                     "artifact_sha256": digest(b"nil")}, "invalid_artifact")
+            admitted = mcp.call("proof_submit", {**submit, "artifact": artifact,
+                                "artifact_sha256": digest(encoded)})
+            self.assertEqual(admitted["payload"]["binding"]["artifact_sha256"], digest(encoded))
+        with self.store.transaction(read_only=True) as db:
+            self.assertEqual(db.execute("SELECT artifact FROM admission").fetchone()[0], encoded)
 
     def test_revoked_in_flight_grant(self):
         _, _, _, queued = self.queue()
