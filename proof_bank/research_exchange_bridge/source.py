@@ -25,6 +25,7 @@ POLICY = {"allowed_axioms": ["Classical.choice", "Quot.sound", "propext"], "requ
           "grammar": "prime-two-term-v1", "source_bytes": 4096, "artifact_bytes": 16777216,
           "address_space_bytes": 6442450944, "cpu_seconds": 25, "wall_seconds": 60,
           "heartbeats": 20000, "rec_depth": 256}
+EXTENDED_POLICY = {**POLICY, "export_wall_seconds": 180}
 # Only reviewed constants, parentheses and ASCII whitespace can reach Lean.
 TERM = re.compile(rb"(?:Nat\.prime_two|id|[() \t])+")
 TOKENS = re.compile(rb"Nat\.prime_two|id|[()]")
@@ -37,11 +38,12 @@ def is_source(profile):
     return profile.get("schema") == SCHEMA
 
 
-def profile_for(environment):
+def profile_for(environment, policy=EXTENDED_POLICY):
     require(hexadecimal(environment), "profile_identity_mismatch")
+    require(policy in (POLICY, EXTENDED_POLICY), "profile_identity_mismatch")
     return {"schema": SCHEMA, "theorem": TARGET, "statement_sha256": sha(STATEMENT.encode()),
             "library_revision": REVISION, "source_sha256": sha(HEADER),
-            "toolchain_lock_sha256": environment, "policy": POLICY}
+            "toolchain_lock_sha256": environment, "policy": policy}
 
 
 def materialize(source):
@@ -141,7 +143,7 @@ def check_source(checker: ControlledChecker, root, profile, source, binding, pro
     require(root is not None, "source_worker_disabled")
     root = Path(root).resolve(strict=True)
     environment = environment_identity(checker, root)
-    require(profile == profile_for(environment) and environment == binding["environment_sha256"] and
+    require(profile == profile_for(environment, profile.get("policy")) and environment == binding["environment_sha256"] and
             REVISION == binding["source_revision"], "source_environment_mismatch")
     with TemporaryDirectory(prefix="exchange-source-") as scratch:
         directory = Path(scratch)
@@ -154,7 +156,8 @@ def check_source(checker: ControlledChecker, root, profile, source, binding, pro
         run_stage([paths["lean"], "-s", "32768", "-j", "1", "-o", "Submission.olean", "Submission.lean"], directory, env)
         (directory / "Audit.lean").write_text(f"module\nimport Submission\n#print axioms {TARGET}\n", encoding="ascii")
         axioms = audit_axioms(run_stage([paths["lean"], "-s", "32768", "-j", "1", "Audit.lean"], directory, env))
-        closure = run_stage([paths["leanexport"], "Submission", "--", TARGET], directory, env)
+        closure = run_stage([paths["leanexport"], "Submission", "--", TARGET], directory, env,
+                            timeout=profile["policy"].get("export_wall_seconds", POLICY["wall_seconds"]))
         require(0 < len(closure) < POLICY["artifact_bytes"], "source_resource_limit")
         closure_path = directory / "submission.export"
         closure_path.write_bytes(closure)

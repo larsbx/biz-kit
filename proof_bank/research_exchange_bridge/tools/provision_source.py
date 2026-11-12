@@ -16,7 +16,7 @@ from adapter_pilot.common import canonical as profile_canonical
 
 def install(store, checker, imports):
     profile = profile_for(environment_identity(checker, imports))
-    library = {"id": "lean-source-prime-two-v1", "engine": "lean", "revision": REVISION,
+    library = {"id": "lean-source-prime-two-v2", "engine": "lean", "revision": REVISION,
                "snapshot_sha256": profile["source_sha256"],
                "environment_sha256": profile["toolchain_lock_sha256"],
                "policy_sha256": sha(profile_canonical(profile["policy"])), "generation": 1}

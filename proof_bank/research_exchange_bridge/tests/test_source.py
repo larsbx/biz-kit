@@ -150,7 +150,7 @@ class DurableSourceTest(unittest.TestCase):
             self.assertEqual((interrupted["version"], interrupted["effects"]), (0, []))
             self.assertEqual(store.pending(), [job])
             self.assertEqual(list(scratch.iterdir()), [])
-            result = subprocess.run(command, capture_output=True, text=True, timeout=360, check=True)
+            result = subprocess.run(command, capture_output=True, text=True, timeout=480, check=True)
             self.assertEqual(loads(result.stdout)["status"], "accepted", store.inspect(job)["receipt"])
             receipt = store.inspect(job)["receipt"]
             self.assertEqual(store.commit(prepared, checked), receipt)
