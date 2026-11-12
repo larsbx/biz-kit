@@ -101,9 +101,11 @@ bin/restaurant daemon
 | Variable | For |
 | --- | --- |
 | `RESTAURANT_PUBLIC_BASE_URL` | the public URL; the live pages' websocket origin check compares against its host |
-| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | the signed session that holds a paired board |
+| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | signs the browser session for board pairing and customer sign-in |
 | `RESTAURANT_PORT` (default `4070`), `RESTAURANT_BIND_IP` (default `0.0.0.0`; `::` for IPv6, `127.0.0.1` behind a local proxy) | where it listens, behind a TLS-terminating proxy |
 | `RESTAURANT_CONFIG_FILE` | the restaurant file (below) |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `BIZKIT_IDENTITY_BINDINGS` | optional account sign-in using existing Biz-kit principal bindings. Register `<RESTAURANT_PUBLIC_BASE_URL>/auth/callback` with WorkOS. |
+| `RESTAURANT_STAFF_PRINCIPALS` | comma-separated Biz-kit principal IDs. When present, a board requires both pairing and staff sign-in. An empty list denies every staff principal. |
 | `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` | each device's 32-byte signing seed, base64; `<DEVICE_ID>` upper-cased with other characters as `_` |
 | `EVENTSTORE_*` | the ledger, as above |
 
@@ -174,6 +176,99 @@ Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 seed-variable names and device keys must be distinct in one restaurant.
 
 Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
+
+
+### Publish a menu or revoke a board key
+
+The restaurant file supplies menu revision 0. A governance publication
+replaces the complete menu, including ordering and any removed items. Read
+the current revision from `GET /api/restaurant-menu`, then save a command as
+JSON on the governance operator's machine. For the first publication:
+
+```json
+{
+  "merchant_id": "shop",
+  "expected_revision": 0,
+  "currency": "USD",
+  "items": [
+    {"id": "margherita", "sku": "MARG", "name": "Margherita",
+     "price_minor": 1250, "discount_minor": 250}
+  ]
+}
+```
+
+The optional discount is funded by the restaurant and applied to each unit
+before tax. The signed order keeps the original unit price and the applied
+line discount. Michigan's treatment of seller-funded discounts is described
+in [R 205.22](https://www.michigan.gov/taxes/-/media/Project/Websites/treasury/Rules/R_205-1_to_R_205-141_700772_7.pdf).
+An empty `items` list pauses new pickup orders.
+
+```sh
+mix restaurant.manage publish-menu menu.json --chapter chapter-genesis --server https://order.example
+```
+
+To revoke a board or storefront key, use the JSON
+`{"merchant_id":"shop","key_id":"k-board"}` with the same command, replacing
+`publish-menu` with `revoke-device`. Replace a revoked key by enrolling a new
+key ID. Both operations are available from an operator's release copy:
+
+```sh
+bin/restaurant eval 'RestaurantHost.ReleaseTasks.manage(["publish-menu", "menu.json", "--chapter", "chapter-genesis", "--server", "https://order.example"])'
+```
+
+The operator's copy uses `HARNESS_KEYS_DIR` as for enrollment. It verifies the
+held envelope against the local command before signing, and the running host
+submits the signature to the Log.
+
+### Automated restaurant delivery with Dispatch
+
+Set `"delivery_enabled": true` and `"delivery_site": "North building desk"`
+in the restaurant file. The site is the approved drop-off destination
+shown to signed-in customers. The initial profile runs one configured pickup
+and drop-off route with one authorized courier. Delivery is cash at handoff.
+
+Enroll a dedicated Dispatch key with
+`mix restaurant.manage grant-dispatch dispatch-key.json --chapter chapter-genesis --server https://order.example`.
+The JSON contains `merchant_id`, `tenant_id` (Dispatch UUID), `key_id` and
+`pubkey` (base64url without padding). The key can be revoked with
+`revoke-device`. The seed is a base64-encoded 32-byte seed in a protected
+file on the Dispatch machine.
+
+| Dispatch release variable | Value |
+| --- | --- |
+| `RESTAURANT_DISPATCH_AUTOMATED` | `true` starts the reconciler |
+| `RESTAURANT_DISPATCH_URL` | Restaurant HTTPS origin |
+| `RESTAURANT_DISPATCH_CHAPTER`, `RESTAURANT_DISPATCH_MERCHANT` | Enrolled restaurant scope |
+| `RESTAURANT_DISPATCH_TENANT`, `RESTAURANT_DISPATCH_KEY_ID` | Enrolled Dispatch tenant and key |
+| `RESTAURANT_DISPATCH_SEED_FILE` | Protected signing-seed file |
+| `RESTAURANT_DISPATCH_SERVICE_ROLE` | Organization-scoped Dispatch service role assignment UUID with the board's load, stop and trip capabilities |
+| `RESTAURANT_DISPATCH_COURIER` | Participant UUID for a courier holding a driving role in that organization |
+| `RESTAURANT_DISPATCH_SITE` | Exact restaurant `delivery_site` value |
+| `RESTAURANT_DISPATCH_PICKUP`, `RESTAURANT_DISPATCH_DROPOFF` | Approved Dispatch stop addresses |
+
+Provision the service assignment with the existing Dispatch `:grant` action
+during release setup. Use a dedicated `SERVICE` principal, the carrier's
+organization scope, and a dispatcher role definition. Dispatch revalidates
+this assignment for each write and records it in the audit trail.
+
+When a delivery order becomes ready, Dispatch creates the load and stops,
+plans the available courier's trip, submits signed acceptance, then activates
+the trip. A busy courier leaves the order queued. The restaurant ledger is
+the retry source after restart. Dispatch cancels a planned trip when kitchen
+cancellation wins before acceptance.
+
+At pickup the kitchen board shows a code to give the courier. At drop-off the
+customer shows the separate code from the order confirmation or account history.
+The courier signs into Dispatch and submits each code from
+`/ui/restaurant-receipts` against the active assignment. The restaurant ledger
+matches the signed receipt to the exact assignment, phase and code commitment.
+Dispatch completes the trip after the ledger records drop-off. Keep the
+restaurant endpoint secret stable while any issued codes are outstanding.
+
+The routine path requires no dispatcher RPC or document review. A revoked
+courier, changed route, or cancellation after accepted custody requires
+operator reconciliation. The pilot uses a fixed destination and does not
+collect customer addresses in checkout.
 
 ## Testing a deployment
 
