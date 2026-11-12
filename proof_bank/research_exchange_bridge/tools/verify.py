@@ -22,7 +22,8 @@ SOURCE_PATHS = ["proof_bank/research_exchange", "proof_bank/research_exchange_mc
                 ".github/workflows/research-exchange-adapter.yml",
                 ".github/workflows/research-exchange-durable-bridge.yml"]
 EXCLUDE = {".lake", "__pycache__", "evidence", "dist", "node_modules"}
-REQUIRED = ("proofs", "models", "reviewed_profile", "runtime_acceptance", "representation_conformance")
+REQUIRED = ("proofs", "models", "reviewed_profile", "runtime_acceptance",
+            "source_acceptance", "representation_conformance")
 
 
 def git(*args):
@@ -60,11 +61,13 @@ def main():
     parser.add_argument("--java-bin", required=True, type=Path)
     parser.add_argument("--quint-home", required=True, type=Path)
     parser.add_argument("--elixir", required=True, type=Path)
+    parser.add_argument("--source-imports", required=True, type=Path,
+                        help="Operator-built compiled imports for the pinned bounded Lean source profile")
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--expected-revision")
     parser.add_argument("--allow-dirty", action="store_true", help="Local development only; recorded as uncommitted evidence")
     args = parser.parse_args()
-    for name in ("lean_root", "quint_cli", "java_bin", "quint_home", "elixir"):
+    for name in ("lean_root", "quint_cli", "java_bin", "quint_home", "elixir", "source_imports"):
         setattr(args, name, getattr(args, name).resolve(strict=True))
     output = args.output_dir.resolve()
     if output.exists() and any(output.iterdir()):
@@ -74,7 +77,7 @@ def main():
     receipt = {"schema": "research-exchange/durable-bridge-verification/v1", "status": "failed",
                "required_stage_ids": list(REQUIRED), "stages": stages,
                "started_at": datetime.now(timezone.utc).isoformat(),
-               "scope": "exact-reviewed-export local SQLite/MCP bridge; no general source execution, public service or credit issuance"}
+               "scope": "reviewed-export and bounded-lean-source-v1 local SQLite/MCP profiles; no general source execution, public service or credit issuance"}
     before = None
     try:
         head = git("rev-parse", "HEAD")
@@ -90,6 +93,7 @@ def main():
         (output / "source-before.json").write_bytes(canonical(before) + b"\n")
         proof_output = output / "proofs"
         acceptance_output = output / "runtime"
+        source_output = output / "source"
         fixtures = output / "fixtures"
         commands = [
             ("proofs", [sys.executable, "-B", str(ROOT / "tools/check_bridge_proofs.py"),
@@ -102,8 +106,12 @@ def main():
             ("runtime_acceptance", [sys.executable, "-B", str(ROOT / "tools/run_acceptance.py"),
                                     "--lean-root", str(args.lean_root), "--fixtures", str(fixtures),
                                     "--elixir", str(args.elixir), "--output-dir", str(acceptance_output)]),
+            ("source_acceptance", [sys.executable, "-B", str(ROOT / "tools/run_source_acceptance.py"),
+                                   "--lean-root", str(args.lean_root), "--source-imports", str(args.source_imports),
+                                   "--elixir", str(args.elixir), "--output-dir", str(source_output)]),
             ("representation_conformance", [sys.executable, "-B", str(ROOT / "tools/run_conformance.py"),
                                              "--acceptance-evidence", str(acceptance_output),
+                                             "--acceptance-evidence", str(source_output),
                                              "--output-dir", str(output / "conformance")]),
         ]
         for identity, command in commands:

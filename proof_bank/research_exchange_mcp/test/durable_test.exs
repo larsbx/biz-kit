@@ -195,7 +195,7 @@ defmodule ResearchExchange.DurableTransportTest do
     assert Map.keys(memory) == Map.keys(pilot)
     assert map_size(durable) == 4
     assert memory["verification_request"] =~ "execution is disabled"
-    assert durable["verification_request"] =~ "exact operator-reviewed proof export"
+    assert durable["verification_request"] =~ "operator-provisioned library profile"
     assert durable["receipt_get"] =~ "durable"
     assert pilot["verification_request"] =~ "offline replay"
     assert pilot["receipt_get"] =~ "observation"

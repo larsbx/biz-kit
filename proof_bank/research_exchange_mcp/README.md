@@ -34,7 +34,7 @@ these contracts.
 | --- | --- | --- |
 | `library_discover` | `library:read` | List only authorized pinned library metadata |
 | `proof_submit` | `proof:submit` | Store immutable artifact text and bound submission receipt |
-| `verification_request` | `verification:request` | Reserve a memory-only slot by default; durable profiles queue the reviewed export for their configured replay path |
+| `verification_request` | `verification:request` | Reserve a memory-only slot by default; durable profiles queue verification under the operator-provisioned library profile |
 | `receipt_get` | `library:read` | Read a receipt belonging to the authenticated principal and accessible library |
 
 The operator provisions high-entropy credentials with principal, expiry, exact
