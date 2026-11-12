@@ -46,7 +46,7 @@ defmodule ResearchExchange.AdapterTest do
   end
 
   def args do
-    artifact = "theorem sample : True := True.intro\n"
+    artifact = "-- UTF-8 artifact: αβγ é\ntheorem sample : True := True.intro\n"
 
     %{
       "idempotency_key" => "submit-1",
@@ -235,6 +235,7 @@ defmodule ResearchExchange.AdapterTest do
 
     refute Evidence.verify_receipt?(r, @worker)
     assert Evidence.canonical(%{"z" => 1, "a" => [true, "é"]}) == ~s({"a":[true,"é"],"z":1})
+    assert Evidence.canonical(%{"missing" => nil}) == ~s({"missing":null})
 
     assert Evidence.hash("abc") ==
              "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
@@ -575,14 +576,18 @@ defmodule ResearchExchange.AdapterTest do
     assert r["error"]["code"] == -32600
     {r, _} = Stdio.decode(s, Evidence.canonical(rpc("ping")))
     assert r["result"] == %{}
+
+    {r, _} = Stdio.decode(s, ~s({"jsonrpc":"2.0","id":null,"method":"ping"}))
+    assert r["id"] == nil
+    assert Evidence.canonical(r) =~ ~s("id":null)
   end
 
-  test "actual stdio subprocess completes all four tools with bound retries and receipts" do
+  test "actual UTF-8 stdio subprocess completes all four tools and enforces byte limits" do
     dir = Path.join(System.tmp_dir!(), "research-exchange-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
     path = Path.join(dir, "operator.json")
-    c = config()
+    c = put_in(config(), [:tokens, Evidence.hash(@token), :principal], "agent-é-α")
 
     tokens =
       Map.new(c.tokens, fn {h, g} ->
@@ -666,7 +671,7 @@ defmodule ResearchExchange.AdapterTest do
     submission_id = submission["payload"]["id"]
 
     binding = %{
-      "contributor" => "agent-a",
+      "contributor" => c.tokens[Evidence.hash(@token)].principal,
       "library" => "lean-core",
       "engine" => "lean",
       "source_revision" => @revision,
@@ -736,6 +741,24 @@ defmodule ResearchExchange.AdapterTest do
 
     unavailable = call.(13, "accept", %{"trusted" => true})
     assert unavailable["error"]["code"] == -32602
-    Port.close(port)
+
+    oversized = Evidence.canonical(rpc("ping", %{"padding" => String.duplicate("α", 65_537)}))
+    assert byte_size(oversized) > 131_072
+    assert Port.command(port, oversized <> "\n")
+
+    receive do
+      {^port, {:data, {:eol, json}}} ->
+        assert json =~ ~s("id":null)
+        {error, _, ""} = :json.decode(json, :ok, %{null: nil})
+        assert error["id"] == nil
+        assert error["error"]["code"] == -32600
+
+      other ->
+        flunk("unexpected oversized-frame response #{inspect(other)}")
+    after
+      10_000 -> flunk("oversized UTF-8 frame was not refused")
+    end
+
+    if Port.info(port), do: Port.close(port)
   end
 end

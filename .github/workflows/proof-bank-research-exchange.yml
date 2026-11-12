@@ -5,17 +5,21 @@ on:
     paths:
       - 'proof_bank/research_exchange/**'
       - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
       - 'docs/proof-bank/research-exchange/**'
       - '.github/workflows/proof-bank-research-exchange.yml'
       - '.github/workflows/research-exchange-adapter.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
   push:
     branches: [main]
     paths:
       - 'proof_bank/research_exchange/**'
       - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
       - 'docs/proof-bank/research-exchange/**'
       - '.github/workflows/proof-bank-research-exchange.yml'
       - '.github/workflows/research-exchange-adapter.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
   workflow_dispatch:
 
 permissions:

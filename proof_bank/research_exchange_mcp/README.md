@@ -7,9 +7,13 @@ transferability and recognition governance remain policy decisions for review.
 There are no monetary prices, payments, payouts or monetary settlement APIs.
 
 This dependency-free Elixir package implements MCP **2025-11-25**, with a local
-stdio transport and four tools. It does not start automatically with Biz-kit,
-open a listening socket, download libraries, execute artifacts, or launch Lean
-or Quint. Libraries are operator-provisioned catalog entries, not live checkouts.
+stdio transport and four tools. It does not start automatically with Biz-kit or
+open a listening socket. Its default memory backend does not execute artifacts
+or launch Lean/Quint. The opt-in [durable bridge](../research_exchange_bridge/README.md)
+stores records in SQLite and replays only the existing reviewed Lean export with
+both controlled checkers. It requires explicit operator configuration and has its
+own proof/model/real-runtime acceptance workflow. Libraries are
+operator-provisioned catalog entries, not live checkouts.
 Mathlib and project libraries require separately reviewed snapshot/environment
 entries. Only metadata and bounded submitted UTF-8 text are served at this stage.
 
@@ -17,7 +21,7 @@ entries. Only metadata and bounded submitted UTF-8 text are served at this stage
 | --- | --- | --- |
 | `library_discover` | `library:read` | List only authorized pinned library metadata |
 | `proof_submit` | `proof:submit` | Store immutable artifact text and bound submission receipt |
-| `verification_request` | `verification:request` | Queue one capability-bound, memory-only capacity reservation |
+| `verification_request` | `verification:request` | Reserve a memory-only slot by default; opt-in durable mode queues the reviewed export checker |
 | `receipt_get` | `library:read` | Read a receipt belonging to the authenticated principal and accessible library |
 
 The operator provisions high-entropy credentials with principal, expiry, exact
@@ -44,7 +48,7 @@ elixirc --warnings-as-errors -o /tmp/research-exchange-beams proof_bank/research
 elixir proof_bank/research_exchange_mcp/test/run.exs
 ```
 
-The tests generate their own local credentials and start an actual local stdio
+The memory/transport tests generate their own local credentials and start an actual local stdio
 subprocess. The child completes initialization, tool discovery, all four tool
 calls, exact retries, conflicting-key refusals and retrieval of its actual
 submission/job receipts. Every receipt preserves the complete binding and
@@ -52,13 +56,15 @@ keeps mathematical acceptance and credit issuance false. A separate shared-serve
 wire-decoder test checks cross-principal access to records that really exist;
 two isolated child stores would not establish that authorization property.
 The suite does not execute submitted Lean/Quint or call an external service.
+The separate durable bridge acceptance suite drives the same Elixir launcher
+through Python, SQLite and actual dual replay, including process crash recovery.
 For complete mathematical kernel acceptance, follow the separately pinned
 [core verification profile](../research_exchange/README.md).
 
 ## Reviewed core identity
 
 [`CORE_SNAPSHOT.json`](CORE_SNAPSHOT.json) is the common source for the MCP
-receipt's core identity and both exchange CI workflows. It selects PR #336's
+receipt's core identity and all three exchange CI workflows. It selects PR #336's
 reviewed source revision `d6c07ef7b57e844c3aaad8d2c7dff938098a71bf` and manifest
 `e46f8f6c12f790d6889085d072b58f92067004077a8b7f430abcb8433bbb0776`.
 The current core package is byte-identical to that snapshot, including its
@@ -73,13 +79,14 @@ The selected historical core revision and the current integration/workflow
 revision are separate provenance fields. Receipt identity alone does not claim
 that an MCP request executed the core.
 
-Both workflows trigger for either package, shared documentation or either
-workflow. The MCP job retains before/after source records and the actual test
-log; the core job requires all 12 proof/model/HTTP stages and retains its full
-receipt. The [integration acceptance contract](../../docs/proof-bank/research-exchange/INTEGRATION_ACCEPTANCE.md)
-records the intended boundary and remaining refinement work.
+All three dedicated workflows trigger for any exchange package, shared
+documentation or exchange workflow. The MCP job retains before/after source
+records and its actual test log; the core job requires all 12 proof/model/HTTP
+stages; the durable bridge job requires its full five-stage profile. Each must
+pass at the same integration head. The [durable acceptance contract](../../docs/proof-bank/research-exchange/DURABLE_MCP_BRIDGE.md)
+records the implemented representation and remaining production obligations.
 
-## Local transport configuration
+## Memory backend configuration
 
 `bin/stdio.exs` reads `RESEARCH_EXCHANGE_CONFIG`, the absolute path to an
 operator-owned JSON configuration file, and `RESEARCH_EXCHANGE_TOKEN`, the
@@ -117,7 +124,7 @@ success claims, verifier trust, stop acknowledgments and settlement fields, are
 rejected. Each idempotency key is scoped to the principal across both writing
 tools. Exact retries return the original receipt; conflicting reuse fails.
 
-## Evidence and integration boundary
+## Memory backend evidence and integration boundary
 
 Every receipt binds contributor, library, source revision and snapshot digest,
 artifact digest, target, catalog generation, environment and policy digests,
@@ -145,8 +152,9 @@ always contain `mathematical_acceptance: false` and `credit_issuance: false`.
 No stop acknowledgment is synthesized. Capacity remains held for this process
 lifetime; there is no refund or settlement path.
 
-`ResearchExchange.Ports` defines the future durable transaction/outbox contract.
-It is deliberately not wired to a database or worker. Before execution, implement
+`ResearchExchange.Ports` defines a future general executor contract. The bounded
+durable export bridge uses its own fixed private channel and SQLite store; it
+does not implement this general worker/meter interface. Before general execution, implement
 an immutable source/artifact materializer, approved environment and license
 policy, network-disabled sandbox with CPU/memory/time/output limits, controlled
 Lean axiom/target checking and Quint commands, independently authenticated meter,
@@ -158,7 +166,10 @@ The adapter does **not** call the core's authority-bearing `Reward.accept` or
 `Reservation.settle`, nor provide a production refinement of those definitions.
 The four core binding fields are abstract natural-number identities; translating
 these concrete digest commitments into a collision-resistant identity registry
-and proving the persisted representation relation remains future work. The
+and proving the persisted representation relation for this memory backend remains
+future work. The opt-in durable bridge separately proves complete raw-field
+projection and guarded row-transition correspondence, with SQL and checker
+premises kept explicit. The
 existing reward/accounting arithmetic is historical formal machinery; using it
 for nonmonetary quotas requires a separately specified allocation policy.
 

@@ -4,6 +4,11 @@ Prepared November 12, 2026. This change integrates the already-verified closure
 core and the bounded MCP admission adapter on a branch from current main.
 Implementation review and approval remain separate from execution evidence.
 
+This document records the PR #377 source-integration milestone. The subsequent
+[durable MCP bridge](DURABLE_MCP_BRIDGE.md) implements the next bounded runtime
+and representation layer in a separate package. The boundary below describes
+the #377 baseline; use the follow-up contract for the opt-in durable mode.
+
 ## Exact selected source
 
 PR #336 was merged into the #335 feature branch after #335 reached main. This
@@ -72,7 +77,7 @@ records and its executable test log. An earlier component pass cannot replace
 these integration-revision records. Queued, failed and skipped runs remain
 distinct from acceptance.
 
-## Remaining proof and runtime boundary
+## Proof and runtime boundary at PR #377
 
 This milestone integrates sources, evidence identity and transport acceptance.
 The MCP adapter remains memory-only; the HTTP/SQLite pilot remains a separate

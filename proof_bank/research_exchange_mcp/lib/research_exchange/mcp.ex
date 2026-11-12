@@ -17,9 +17,10 @@ defmodule ResearchExchange.MCP do
     "verification_request" => ["idempotency_key", "submission_id"],
     "receipt_get" => ["id"]
   }
-  def new(server, token), do: %{server: server, token: token, phase: :new}
+  def new(server, token, backend \\ :memory) when backend in [:memory, :durable],
+    do: %{server: server, token: token, phase: :new, backend: backend}
 
-  def tools do
+  def tools(backend \\ :memory) do
     for {name, keys} <- Enum.sort(@schemas) do
       properties =
         Map.new(keys, fn k ->
@@ -28,7 +29,7 @@ defmodule ResearchExchange.MCP do
 
       %{
         "name" => name,
-        "description" => description(name),
+        "description" => description(name, backend),
         "inputSchema" => %{
           "type" => "object",
           "properties" => properties,
@@ -39,15 +40,22 @@ defmodule ResearchExchange.MCP do
     end
   end
 
-  defp description("library_discover"), do: "Discover authorized, pinned library metadata."
+  defp description("library_discover", _), do: "Discover authorized, pinned library metadata."
 
-  defp description("proof_submit"),
+  defp description("proof_submit", _),
     do: "Store a bounded immutable proof artifact; does not execute it."
 
-  defp description("verification_request"),
+  defp description("verification_request", :memory),
     do: "Reserve one in-memory verification slot; execution is disabled."
 
-  defp description("receipt_get"), do: "Read your canonical admission or observation receipt."
+  defp description("verification_request", :durable),
+    do: "Durably queue controlled replay of the exact operator-reviewed proof export."
+
+  defp description("receipt_get", :memory),
+    do: "Read your canonical admission or observation receipt."
+
+  defp description("receipt_get", :durable),
+    do: "Read your durable admission or terminal controlled-check receipt."
 
   def handle(s, message) do
     id = if is_map(message), do: Map.get(message, "id"), else: nil
@@ -87,7 +95,7 @@ defmodule ResearchExchange.MCP do
       {ok(id, %{
          "protocolVersion" => @protocol,
          "capabilities" => %{"tools" => %{"listChanged" => false}},
-         "serverInfo" => %{"name" => "research-exchange-bounded", "version" => "0.1.0"}
+         "serverInfo" => server_info(s.backend)
        }), %{s | phase: :initializing}}
     else
       {error(id, -32602, "Invalid initialize parameters"), s}
@@ -100,7 +108,7 @@ defmodule ResearchExchange.MCP do
     do: {error(id, -32002, "Initialize first"), s}
 
   defp request(s, id, "tools/list", p) when map_size(p) == 0,
-    do: {ok(id, %{"tools" => tools()}), s}
+    do: {ok(id, %{"tools" => tools(s.backend)}), s}
 
   defp request(s, id, "tools/call", %{"name" => name} = p)
        when map_size(p) == 1 or (map_size(p) == 2 and is_map_key(p, "arguments")) do
@@ -126,6 +134,12 @@ defmodule ResearchExchange.MCP do
   defp request(s, id, "tools/call", _), do: {error(id, -32602, "Invalid tool call"), s}
   defp request(s, id, _, _), do: {error(id, -32601, "Method not found"), s}
   defp ok(id, result), do: %{"jsonrpc" => "2.0", "id" => id, "result" => result}
+
+  defp server_info(:memory),
+    do: %{"name" => "research-exchange-bounded", "version" => "0.1.0"}
+
+  defp server_info(:durable),
+    do: %{"name" => "research-exchange-durable-local", "version" => "0.1.0"}
 
   def error(id, code, message),
     do: %{"jsonrpc" => "2.0", "id" => id, "error" => %{"code" => code, "message" => message}}

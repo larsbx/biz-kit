@@ -1,0 +1,8 @@
+{
+  "schema": "research-exchange-bridge/negative-controls/v1",
+  "compile_refusals": ["InconclusivePays.lean", "StaleVersionCommits.lean", "SubstitutedReceiptCommits.lean"],
+  "axiom_refusals": [
+    {"file": "UnsafeAxiom.lean", "module": "UnsafeAxiom", "target": "ResearchExchangeBridge.Negative.forgedAxiom", "forbidden": "ResearchExchangeBridge.Negative.attackerAuthority"},
+    {"file": "SorryExport.lean", "module": "SorryExport", "target": "ResearchExchangeBridge.Negative.forgedSorry", "forbidden": "sorryAx"}
+  ]
+}
