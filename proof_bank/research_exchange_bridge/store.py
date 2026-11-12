@@ -18,7 +18,7 @@ import time
 from .common import (BridgeError, CORE, MAX_ARTIFACT, MAX_ENTRIES, VERIFIER,
                      canonical, core_identity, digest, envelope, exact,
                      hexadecimal, integer, loads, require, sha, text, token_hash)
-from . import model
+from . import model, source
 from adapter_pilot.checker import CheckedExport, ControlledChecker, RejectedExport
 from adapter_pilot.common import (POLICY, PilotError, canonical as profile_canonical,
                                   source_identity, validate_profile)
@@ -167,15 +167,22 @@ class Store:
     def provision_library(self, library: dict, profile: dict):
         exact(library, ("id", "engine", "revision", "snapshot_sha256", "environment_sha256",
                         "policy_sha256", "generation"), "invalid_configuration")
-        validate_profile(profile)
         require(text(library["id"]) and library["engine"] == "lean" and
                 hexadecimal(library["revision"], 40) and integer(library["generation"], 1),
                 "invalid_configuration")
-        require(library["revision"] == self.core["revision"] and
-                library["snapshot_sha256"] == profile["source_sha256"] and
-                library["environment_sha256"] == profile["toolchain_lock_sha256"] and
-                library["policy_sha256"] == sha(profile_canonical(POLICY)) and
-                profile["source_files"] == source_identity(CORE), "profile_identity_mismatch")
+        if source.is_source(profile):
+            require(profile == source.profile_for(library["environment_sha256"]) and
+                    library["revision"] == source.REVISION and
+                    library["snapshot_sha256"] == profile["source_sha256"] and
+                    library["policy_sha256"] == sha(profile_canonical(source.POLICY)),
+                    "profile_identity_mismatch")
+        else:
+            validate_profile(profile)
+            require(library["revision"] == self.core["revision"] and
+                    library["snapshot_sha256"] == profile["source_sha256"] and
+                    library["environment_sha256"] == profile["toolchain_lock_sha256"] and
+                    library["policy_sha256"] == sha(profile_canonical(POLICY)) and
+                    profile["source_files"] == source_identity(CORE), "profile_identity_mismatch")
         with self.transaction() as connection:
             connection.execute("INSERT INTO bridge_libraries VALUES(?,?,?,?,1,0)",
                                (library["id"], canonical(library).decode(),
@@ -240,11 +247,11 @@ class Store:
         require(row is not None and row["enabled"] == 1, "forbidden")
         return row
 
-    def _receipt(self, status, identity, binding, version, details, accepted=False):
+    def _receipt(self, status, identity, binding, version, details, accepted=False, *, scope="exact-reviewed-export-only"):
         return envelope({"schema": "research-exchange/evidence/v1", "id": identity,
                          "status": status, "binding": binding, "recorded_at": self.clock(),
                          "state_version": version, "details": details,
-                         "acceptance_scope": "exact-reviewed-export-only",
+                         "acceptance_scope": scope,
                          "mathematical_acceptance": accepted, "credit_issuance": False}, self.key)
 
     def _replay(self, connection, grant, tool, args):
@@ -311,6 +318,13 @@ class Store:
                 integer(args["generation"], 1) and args["generation"] == catalog["generation"] and
                 args["target"] == profile["theorem"] and args["artifact_sha256"] == sha(artifact),
                 "invalid_or_stale_binding")
+        scope = "exact-reviewed-export-only"
+        if source.is_source(profile):
+            try:
+                source.materialize(artifact)
+            except BridgeError as error:
+                raise BridgeError("invalid_or_stale_binding") from error
+            scope = source.SCOPE
         previous, request_hash = self._replay(connection, grant, "proof_submit", args)
         if previous:
             return previous
@@ -322,7 +336,7 @@ class Store:
                    "policy_sha256": catalog["policy_sha256"], "core": self.core}
         identity = digest("research-exchange/durable-submission/v1",
                           {"nonce": secrets.token_hex(32), "binding": binding})
-        receipt = self._receipt("submitted", identity, binding, 0, {"storage": "sqlite-immutable-artifact"})
+        receipt = self._receipt("submitted", identity, binding, 0, {"storage": "sqlite-immutable-artifact"}, scope=scope)
         connection.execute("INSERT INTO bridge_submissions VALUES(?,?,?,?,?,?)",
                            (identity, grant["principal"], catalog["id"], canonical(binding).decode(), artifact,
                             canonical(receipt).decode()))
@@ -356,9 +370,12 @@ class Store:
         config = {"expected": flat, "profile": library["profile_sha256"], "verifier": authority["principal"], "reward": 1}
         state = model.initial(flat, authority["epoch"], grant["epoch"])
         identity = digest("research-exchange/durable-job/v1", {"binding": binding, "nonce": secrets.token_hex(32)})
+        source_profile = source.is_source(loads(library["profile_json"]))
+        scope = source.SCOPE if source_profile else "exact-reviewed-export-only"
+        reservation = "durable-source-slot" if source_profile else "durable-reviewed-export-slot"
         receipt = self._receipt("queued", identity, binding, 0,
-                                {"reservation": "durable-reviewed-export-slot", "profile_sha256": library["profile_sha256"],
-                                 "credits_issued": 0})
+                                {"reservation": reservation, "profile_sha256": library["profile_sha256"],
+                                 "credits_issued": 0}, scope=scope)
         connection.execute("INSERT INTO bridge_jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,0)",
                            (identity, sub["id"], grant["principal"], hashed, grant["epoch"], library["epoch"],
                             canonical(binding).decode(), canonical(config).decode(), canonical(state).decode(), 0,
@@ -367,9 +384,13 @@ class Store:
         self._remember(connection, grant, "verification_request", args, request_hash, receipt)
         return receipt
 
-    def pending(self):
+    def pending(self, *, include_source=True):
         with self.connection() as connection:
-            return [row[0] for row in connection.execute("SELECT job_id FROM bridge_outbox WHERE status='pending' ORDER BY job_id")]
+            rows = connection.execute(
+                "SELECT o.job_id,l.profile_json FROM bridge_outbox o JOIN bridge_jobs j ON j.id=o.job_id "
+                "JOIN bridge_submissions s ON s.id=j.submission_id JOIN bridge_libraries l ON l.id=s.library "
+                "WHERE o.status='pending' ORDER BY o.job_id")
+            return [row[0] for row in rows if include_source or not source.is_source(loads(row[1]))]
 
     def _joined(self, connection, job_id):
         row = connection.execute("SELECT * FROM bridge_jobs WHERE id=?", (job_id,)).fetchone()
@@ -413,7 +434,7 @@ class Store:
                             grant["epoch"], library["epoch"], row["request_token_hash"])
 
     def commit(self, prepared: Prepared, checked, *, failpoint=None):
-        require(type(checked) in (CheckedExport, RejectedExport), "checker_inconclusive")
+        require(type(checked) in (CheckedExport, RejectedExport, source.CheckedSource), "checker_inconclusive")
         with self.transaction() as connection:
             row, sub, grant, library, authority, binding, config, profile, state = self._joined(connection, prepared.job_id)
             require(prepared.submission_id == row["submission_id"] and prepared.binding_json == row["binding_json"] and
@@ -423,11 +444,15 @@ class Store:
                     prepared.token_hash == row["request_token_hash"], "stored_identity_mismatch")
             require(prepared.authority_epoch == authority["epoch"] and
                     prepared.requester_epoch == grant["epoch"] and prepared.library_epoch == library["epoch"], "stale_authority")
+            source_profile = source.is_source(profile)
+            require(source_profile == (type(checked) is source.CheckedSource), "checker_inconclusive")
+            if source_profile:
+                source.validate_evidence(checked.receipt, binding, profile, prepared.artifact)
             if row["terminal"]:
                 return loads(row["receipt_json"])
             require(prepared.version == row["version"], "stale_version")
             require(integer(row["version"] + 1), "capacity")
-            verdict = "accepted" if type(checked) is CheckedExport else "rejected"
+            verdict = "rejected" if type(checked) is RejectedExport else "accepted"
             wire = {"config": config, "state": state,
                     "identity": {"authenticated": True, "principal": authority["principal"], "requester": grant["principal"]},
                     "prepared": {"binding": self._flat(loads(prepared.binding_json)), "profile": prepared.profile_sha256,
@@ -440,7 +465,9 @@ class Store:
                        "fixture_effect": "one-local-unit-" + ("settlement" if verdict == "accepted" else "refund"),
                        "controlled_check": checked.receipt if verdict == "accepted" else
                        {"status": "rejected", "scope": "exact-reviewed-export-only", "reason": "export_profile_mismatch"}}
-            receipt = self._receipt(verdict, row["id"], binding, row["version"] + 1, details, verdict == "accepted")
+            scope = source.SCOPE if source_profile else "exact-reviewed-export-only"
+            receipt = self._receipt(verdict, row["id"], binding, row["version"] + 1, details,
+                                    verdict == "accepted", scope=scope)
             connection.execute("UPDATE bridge_jobs SET state_json=?,version=version+1,receipt_json=?,terminal=1 WHERE id=?",
                                (canonical(decision["state"]).decode(), canonical(receipt).decode(), row["id"]))
             connection.execute("INSERT INTO bridge_effects VALUES(?,?,?,?,?,?)",
@@ -462,7 +489,9 @@ class Store:
             if row is None or row["terminal"]:
                 return
             details = {"status": "inconclusive", "reason": code, "credits_issued": 0}
-            receipt = self._receipt("verification_inconclusive", job_id, loads(row["binding_json"]), row["version"], details)
+            scope = loads(row["receipt_json"])["payload"]["acceptance_scope"]
+            receipt = self._receipt("verification_inconclusive", job_id, loads(row["binding_json"]),
+                                    row["version"], details, scope=scope)
             connection.execute("UPDATE bridge_jobs SET receipt_json=? WHERE id=?", (canonical(receipt).decode(), job_id))
             connection.execute("UPDATE bridge_outbox SET status='paused' WHERE job_id=?", (job_id,))
             connection.execute("INSERT INTO bridge_attempts(job_id,observation_json) VALUES(?,?)", (job_id, canonical(details).decode()))
@@ -474,11 +503,16 @@ class Store:
             require(row["terminal"] == 0, "conflict")
             connection.execute("UPDATE bridge_outbox SET status='pending' WHERE job_id=?", (job_id,))
 
-    def execute_one(self, job_id, lean_root, *, failpoint=None, pause_path=None):
+    def execute_one(self, job_id, lean_root, *, source_root=None, failpoint=None, pause_path=None):
         try:
             prepared = self.prepare(job_id)
             checker = ControlledChecker(Path(lean_root))
-            checked = checker.check(loads(prepared.profile_json), prepared.artifact)
+            profile = loads(prepared.profile_json)
+            if source.is_source(profile):
+                checked = source.check_source(checker, source_root, profile, prepared.artifact,
+                                              loads(prepared.binding_json), prepared.profile_sha256)
+            else:
+                checked = checker.check(profile, prepared.artifact)
             if pause_path:
                 base = Path(pause_path)
                 base.with_suffix(base.suffix + ".ready").write_text(job_id)

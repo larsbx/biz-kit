@@ -49,7 +49,7 @@ defmodule ResearchExchange.MCP do
     do: "Reserve one in-memory verification slot; execution is disabled."
 
   defp description("verification_request", :durable),
-    do: "Durably queue controlled replay of the exact operator-reviewed proof export."
+    do: "Durably queue verification under the operator-provisioned library profile."
 
   defp description("verification_request", :durable_pilot),
     do: "Queue the admitted export for trusted offline replay."

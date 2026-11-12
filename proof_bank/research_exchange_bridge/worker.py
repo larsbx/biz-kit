@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--retry-inconclusive", action="store_true")
+    parser.add_argument("--source-imports", type=Path)
     args = parser.parse_args()
     require(hexadecimal(args.job_id))
     config = load_config(args.config)
@@ -26,7 +27,8 @@ def main():
         store.retry(args.job_id)
     failpoint = config.get("test_failpoint") if config.get("test_job_id", args.job_id) == args.job_id else None
     pause_path = config.get("test_pause_after_check") if config.get("test_pause_job_id", args.job_id) == args.job_id else None
-    store.execute_one(args.job_id, config["lean_root"], failpoint=failpoint, pause_path=pause_path)
+    store.execute_one(args.job_id, config["lean_root"], source_root=args.source_imports,
+                      failpoint=failpoint, pause_path=pause_path)
     observation = store.inspect(args.job_id)
     print(canonical({"job_id": args.job_id, "status": observation["receipt"]["payload"]["status"],
                      "version": observation["version"], "effects": len(observation["effects"])}).decode())

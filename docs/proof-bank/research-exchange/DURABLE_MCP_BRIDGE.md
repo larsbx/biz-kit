@@ -146,14 +146,8 @@ tests; they are not proved by the row theorem. Checker correctness and truth of
 the controlled checker result remain explicit premises. Both replay programs
 run on the same host, so this is not remote attestation or independent hardware.
 
-This milestone accepts only the existing reviewed Lean fixture export. It does
-not compile contributor source, materialize arbitrary mathlib/library snapshots,
-execute Quint submissions, provide UTCP, expose a network service, meter compute
-or activate service-credit policy.
-
-The next execution milestone is a source materializer and constrained compiler
-whose result binds the submitted source bytes, exact target statement, library
-and mathlib revisions, environment, axiom policy and exported closure. That
-requires its own representation obligations and substituted-source, wrong-target,
-resource-limit and crash/retry acceptance before expanding the admitted profile.
-Implementation review, merge and deployment remain separate decisions.
+The reviewed-export profile remains available. The separately provisioned
+[bounded Lean source profile](BOUNDED_LEAN_SOURCE.md) adds a local operator-run
+compiler for one theorem and one pinned mathlib environment. Its contract
+includes source materialization, dual closure replay, and refusal and recovery
+checks. Quint execution and UTCP exposure remain separate milestones.

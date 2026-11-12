@@ -1,4 +1,5 @@
 import ResearchExchangeBridge.Refinement
+import ResearchExchangeBridge.SourceBoundary
 
 set_option autoImplicit false
 
@@ -188,3 +189,39 @@ example (cfg : Config) (s : Row) (who : Identity) (p : Prepared)
   exact ResearchExchangeBridge.wrong_escrow_refused cfg s who p v h
 
 end ResearchExchangeBridge.FixedContracts
+
+
+namespace ResearchExchangeBridge.SourceBoundary.FixedContracts
+
+example (b : Binding) (allowed : List String) (e : Evidence)
+    (h : Admissible b allowed (some e)) :
+    e.binding.source = b.source ∧ e.binding.target = b.target ∧
+    e.binding.statement = b.statement ∧ e.binding.libraryRevision = b.libraryRevision ∧
+    e.binding.environment = b.environment ∧ e.binding.policy = b.policy :=
+  binds b allowed e h
+
+example (b : Binding) (allowed : List String) (e : Evidence)
+    (h : Admissible b allowed (some e)) : e.kernelClosure = e.independentClosure :=
+  replaysSameClosure b allowed e h
+
+example (b : Binding) (allowed : List String) (e : Evidence) (a : String)
+    (used : a ∈ e.axioms) (prohibited : a ∉ allowed) :
+    ¬ Admissible b allowed (some e) :=
+  prohibits b allowed e a used prohibited
+
+example (b : Binding) (allowed : List String) : ¬ Admissible b allowed none :=
+  incomplete b allowed
+
+example (cfg : Config) (s : Row) (who : Identity) (p : Prepared)
+    (statement : String) (allowed : List String) (result : Option Evidence)
+    (h : ¬ Admissible (expectedBinding p.binding statement) allowed result) :
+    advance cfg s who p statement allowed result = s :=
+  refusedStutters cfg s who p statement allowed result h
+
+example (cfg : Config) (s : Row) (who : Identity) (p : Prepared)
+    (statement : String) (allowed : List String) (result : Option Evidence)
+    (h : ¬ ready cfg s who {p with checked := true}) :
+    advance cfg s who p statement allowed result = s :=
+  staleStutters cfg s who p statement allowed result h
+
+end ResearchExchangeBridge.SourceBoundary.FixedContracts

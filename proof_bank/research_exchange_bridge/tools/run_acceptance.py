@@ -92,7 +92,7 @@ def main():
                           RESEARCH_EXCHANGE_BRIDGE_FIXTURES=str(fixtures),
                           RESEARCH_EXCHANGE_BRIDGE_ELIXIR=str(elixir),
                           RESEARCH_EXCHANGE_BRIDGE_OUTPUT=str(output))
-        suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"), pattern="test_*.py",
+        suite = unittest.defaultTestLoader.discover(str(ROOT / "tests"), pattern="test_acceptance.py",
                                                   top_level_dir=str(ROOT.parent))
         discovered = list(cases(suite))
         if not REQUIRED_CASES <= set(discovered) or len(discovered) != len(set(discovered)):

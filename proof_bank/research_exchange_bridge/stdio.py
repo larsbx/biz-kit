@@ -22,7 +22,7 @@ def serve(config, source, destination):
     def worker():
         while not stop.is_set():
             try:
-                for job_id in store.pending():
+                for job_id in store.pending(include_source=False):
                     if stop.is_set():
                         return
                     failpoint = config.get("test_failpoint") if config.get("test_job_id", job_id) == job_id else None
