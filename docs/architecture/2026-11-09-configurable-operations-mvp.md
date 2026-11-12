@@ -200,3 +200,34 @@ scopes before displaying the signed manifest, source evidence, and recorded
 Keel decision. This handoff requires the [Ship release-review implementation](https://github.com/larsbx/ship/compare/main...feature/biz-kit-release-review).
 Keel's authenticated decision export from Biz-kit governance remains a
 separate implementation step.
+
+### Signed Keel decision contract
+
+`Keel.ReleaseReview.issue/7` evaluates the supplied organization snapshot
+and ballots with Keel. Deploy and rollback use the separate capabilities
+`:deploy_release` and `:rollback_release`. A producer must obtain the
+organization, ballots, date and proposal binding from admitted governance
+data before invoking this function. The caller supplies an Ed25519 signing
+seed and key ID. Signing seeds stay with the producer.
+
+The signed record uses schema `biz-kit.keel.release-review.v1`. The
+preimage is the ASCII string representation of each field, separated and
+terminated by LF, in this order:
+
+```text
+schema repository key_id body verdict decision_date policy_sha256 ballots_sha256
+request_id action target inventory generation release release_sha256 graft_evidence
+```
+
+The decision date uses ISO 8601. Generation uses base-ten integer digits.
+The signature is 64 bytes encoded as lowercase hex. The policy hash is
+SHA-256 over deterministic Erlang external term bytes for the organization.
+The ballot hash uses the same encoding for the tuple of body, date, binding
+and votes. Those hashes identify the exact producer inputs.
+
+The signer covers the request UUID, action, inventory and generation,
+manifest digest, and Graft evidence ID. A Ship consumer must validate
+the closed schema, verify against a pinned issuer key, and check the
+current binding before displaying an authenticated decision. The existing
+Ship branch reads operator-recorded evidence, so this signed format
+requires a consumer update before the two branches can exchange it.

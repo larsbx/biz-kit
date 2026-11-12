@@ -1,0 +1,31 @@
+name: Keel release review contract
+
+on:
+  pull_request:
+    paths:
+      - 'apps/keel/**'
+      - '.github/workflows/keel-release-review.yml'
+  push:
+    branches: [feature/operations-release-review]
+
+permissions:
+  contents: read
+
+jobs:
+  release-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile Keel and test signed decisions
+        working-directory: apps/keel
+        run: |
+          git rev-parse HEAD
+          beams=$(mktemp -d)
+          trap 'rm -rf "$beams"' EXIT
+          elixirc --warnings-as-errors -o "$beams" lib/keel.ex lib/keel/*.ex
+          elixir -pa "$beams" -e 'ExUnit.start()' -r test/release_review_test.exs
