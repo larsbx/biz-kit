@@ -41,6 +41,12 @@
     "ResearchExchangeBridge.unchecked_refused",
     "ResearchExchangeBridge.wrong_profile_refused",
     "ResearchExchangeBridge.stale_version_refused",
-    "ResearchExchangeBridge.wrong_escrow_refused"
+    "ResearchExchangeBridge.wrong_escrow_refused",
+    "ResearchExchangeBridge.SourceBoundary.binds",
+    "ResearchExchangeBridge.SourceBoundary.replaysSameClosure",
+    "ResearchExchangeBridge.SourceBoundary.prohibits",
+    "ResearchExchangeBridge.SourceBoundary.incomplete",
+    "ResearchExchangeBridge.SourceBoundary.refusedStutters",
+    "ResearchExchangeBridge.SourceBoundary.staleStutters"
   ]
 }
