@@ -36,7 +36,13 @@ defmodule ResearchExchange.Durable do
     do: {:stop, :storage_unavailable, state}
 
   defp exchange(message, {port, key} = state) do
-    true = Port.command(port, :json.encode(message))
+    encoded =
+      :json.encode(message, fn
+        nil, _encoder -> "null"
+        value, encoder -> :json.encode_value(value, encoder)
+      end)
+
+    true = Port.command(port, encoded)
 
     receive do
       {^port, {:data, data}} ->
