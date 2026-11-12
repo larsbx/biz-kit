@@ -17,7 +17,7 @@ defmodule ResearchExchange.MCP do
     "verification_request" => ["idempotency_key", "submission_id"],
     "receipt_get" => ["id"]
   }
-  def new(server, token, backend \\ :memory) when backend in [:memory, :durable],
+  def new(server, token, backend \\ :memory) when backend in [:memory, :durable, :durable_pilot],
     do: %{server: server, token: token, phase: :new, backend: backend}
 
   def tools(backend \\ :memory) do
@@ -51,11 +51,17 @@ defmodule ResearchExchange.MCP do
   defp description("verification_request", :durable),
     do: "Durably queue controlled replay of the exact operator-reviewed proof export."
 
+  defp description("verification_request", :durable_pilot),
+    do: "Queue the admitted export for trusted offline replay."
+
   defp description("receipt_get", :memory),
     do: "Read your canonical admission or observation receipt."
 
   defp description("receipt_get", :durable),
     do: "Read your durable admission or terminal controlled-check receipt."
+
+  defp description("receipt_get", :durable_pilot),
+    do: "Read your canonical admission or observation receipt."
 
   def handle(s, message) do
     id = if is_map(message), do: Map.get(message, "id"), else: nil
@@ -125,7 +131,7 @@ defmodule ResearchExchange.MCP do
 
       {:error, reason} ->
         {ok(id, %{
-           "content" => [%{"type" => "text", "text" => Atom.to_string(reason)}],
+           "content" => [%{"type" => "text", "text" => to_string(reason)}],
            "isError" => true
          }), s}
     end
@@ -140,6 +146,8 @@ defmodule ResearchExchange.MCP do
 
   defp server_info(:durable),
     do: %{"name" => "research-exchange-durable-local", "version" => "0.1.0"}
+
+  defp server_info(:durable_pilot), do: server_info(:memory)
 
   def error(id, code, message),
     do: %{"jsonrpc" => "2.0", "id" => id, "error" => %{"code" => code, "message" => message}}

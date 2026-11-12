@@ -80,6 +80,12 @@ The outer configuration contains exactly:
 }
 ```
 
+The existing [disposable replay pilot](../research_exchange_mcp/durable/README.md)
+continues to use its separate `durable_database` and `receipt_key_base64`
+configuration and offline operator worker. Its observation receipts keep both
+authority flags false. These profiles have separate database and receipt
+contracts; configuration fields from the two profiles cannot be combined.
+
 Initialize MCP as documented in the [front-end guide](../research_exchange_mcp/README.md).
 Discover the catalog, submit the UTF-8 contents of `fixtures/expected.export` with
 its SHA-256 and the catalog's exact fields, then request verification using the

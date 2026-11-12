@@ -25,6 +25,14 @@ defmodule ResearchExchange.Stdio do
     {server, :durable}
   end
 
+  defp start_server(%{"durable_database" => database} = raw) do
+    # The merged offline pilot keeps its existing configuration and semantics.
+    # Mixed selectors must not silently choose a different acceptance profile.
+    true = Enum.sort(Map.keys(raw)) == ["durable_database", "receipt_key_base64"]
+    {:ok, server} = Durable.start_link(database, Base.decode64!(raw["receipt_key_base64"]))
+    {server, :durable_pilot}
+  end
+
   defp start_server(raw) when is_map(raw) do
     true = Map.get(raw, "backend", "memory") == "memory"
 

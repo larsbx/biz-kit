@@ -6,6 +6,14 @@ explicit in operator-owned configuration. The memory backend remains the default
 This document describes the implemented contract and required acceptance gates;
 hosted execution evidence and implementation approval remain separate records.
 
+The existing [disposable replay pilot](../../../proof_bank/research_exchange_mcp/durable/README.md)
+remains available through its `durable_database` and `receipt_key_base64`
+configuration. Its offline replay records observations with both authority flags
+false. This bridge is selected by the separate exact configuration
+`backend: "durable"`, `bridge_config`, and `python_executable`; it retains the
+guarded acceptance contract below. Mixed configuration fields are refused, and
+the two database formats and receipt semantics are not migrated or combined.
+
 ## Selected foundation and new source
 
 The core remains byte-identical to revision
@@ -110,7 +118,8 @@ repeat a possibly committed operation.
 Acceptance requires three successful dedicated workflows at the same head:
 
 1. The unchanged complete 12-stage core profile.
-2. The MCP memory/transport regression suite and source-identity refusal controls.
+2. The MCP memory/transport regression suite, source-identity refusal controls,
+   and the existing disposable pilot's Lean/Quint/real-replay acceptance.
 3. The new five-stage bridge profile: Lean proofs, independent Quint exploration
    and mutants, reviewed fixture preparation, real stdio/SQLite/checker acceptance,
    and compiled-Lean comparisons including actual committed database inputs and

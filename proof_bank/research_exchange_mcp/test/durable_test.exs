@@ -190,11 +190,15 @@ defmodule ResearchExchange.DurableTransportTest do
     assert MCP.tools() == MCP.tools(:memory)
     memory = Map.new(MCP.tools(:memory), &{&1["name"], &1["description"]})
     durable = Map.new(MCP.tools(:durable), &{&1["name"], &1["description"]})
+    pilot = Map.new(MCP.tools(:durable_pilot), &{&1["name"], &1["description"]})
     assert Map.keys(memory) == Map.keys(durable)
+    assert Map.keys(memory) == Map.keys(pilot)
     assert map_size(durable) == 4
     assert memory["verification_request"] =~ "execution is disabled"
     assert durable["verification_request"] =~ "exact operator-reviewed proof export"
     assert durable["receipt_get"] =~ "durable"
+    assert pilot["verification_request"] =~ "offline replay"
+    assert pilot["receipt_get"] =~ "observation"
 
     {pid, _} = child(echo())
 
@@ -211,5 +215,87 @@ defmodule ResearchExchange.DurableTransportTest do
 
     {response, _} = MCP.handle(MCP.new(pid, @token, :durable), initialize)
     assert response["result"]["serverInfo"]["name"] == "research-exchange-durable-local"
+    {response, _} = MCP.handle(MCP.new(pid, @token, :durable_pilot), initialize)
+    assert response["result"]["serverInfo"]["name"] == "research-exchange-bounded"
+  end
+
+  test "mixed durable configurations are refused before either backend starts" do
+    directory =
+      Path.join(
+        System.tmp_dir!(),
+        "research-exchange-selection-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(directory)
+    on_exit(fn -> File.rm_rf!(directory) end)
+    marker = Path.join(directory, "bridge-started")
+    pilot_marker = Path.join(directory, "pilot-started")
+    executable = Path.join(directory, "selection-child")
+    python = System.find_executable("python3")
+    assert python != nil
+
+    File.write!(
+      executable,
+      "#!#{python}\nimport pathlib\npathlib.Path(#{Evidence.canonical(marker)}).touch()\n"
+    )
+
+    File.chmod!(executable, 0o700)
+    pilot_executable = Path.join(directory, "python3")
+
+    File.write!(
+      pilot_executable,
+      "#!#{python}\nimport pathlib\npathlib.Path(#{Evidence.canonical(pilot_marker)}).touch()\n"
+    )
+
+    File.chmod!(pilot_executable, 0o700)
+    bridge_config = Path.join(directory, "bridge.json")
+    File.write!(bridge_config, "{}")
+    database = Path.join(directory, "pilot.db")
+
+    pilot = %{
+      "durable_database" => database,
+      "receipt_key_base64" => Base.encode64(String.duplicate("k", 32))
+    }
+
+    bridge = %{
+      "backend" => "durable",
+      "bridge_config" => bridge_config,
+      "python_executable" => executable
+    }
+
+    for config <- [Map.merge(pilot, bridge), Map.put(pilot, "backend", "memory")] do
+      path = Path.join(directory, "operator.json")
+      File.write!(path, Evidence.canonical(config))
+      launcher = Path.expand("../bin/stdio.exs", __DIR__)
+
+      port =
+        Port.open({:spawn_executable, System.find_executable("elixir")}, [
+          :binary,
+          :exit_status,
+          :stderr_to_stdout,
+          {:args, [launcher]},
+          {:env,
+           [
+             {~c"RESEARCH_EXCHANGE_CONFIG", String.to_charlist(path)},
+             {~c"RESEARCH_EXCHANGE_TOKEN", String.to_charlist(@token)},
+             {~c"PATH", String.to_charlist(directory <> ":" <> System.fetch_env!("PATH"))}
+           ]}
+        ])
+
+      on_exit(fn -> if Port.info(port), do: Port.close(port) end)
+      assert failed_start(port)
+      refute File.exists?(marker)
+      refute File.exists?(pilot_marker)
+      refute File.exists?(database)
+    end
+  end
+
+  defp failed_start(port) do
+    receive do
+      {^port, {:data, _}} -> failed_start(port)
+      {^port, {:exit_status, code}} -> code != 0
+    after
+      5_000 -> flunk("ambiguous backend configuration did not fail before startup")
+    end
   end
 end

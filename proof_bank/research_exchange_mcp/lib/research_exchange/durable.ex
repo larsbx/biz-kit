@@ -24,6 +24,10 @@ defmodule ResearchExchange.Durable do
 
   def start_link(config), do: GenServer.start_link(__MODULE__, config)
 
+  # Preserve the separately reviewed single-slot pilot's existing entry point.
+  # Its observations and offline worker remain distinct from this bridge.
+  def start_link(db, key), do: ResearchExchange.DurablePilot.start_link(db, key)
+
   @impl true
   def init(%{config_path: config_path, python_executable: python}) do
     Process.flag(:trap_exit, true)

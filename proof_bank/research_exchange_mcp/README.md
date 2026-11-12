@@ -9,19 +9,32 @@ There are no monetary prices, payments, payouts or monetary settlement APIs.
 This dependency-free Elixir package implements MCP **2025-11-25**, with a local
 stdio transport and four tools. It does not start automatically with Biz-kit or
 open a listening socket. Its default memory backend does not execute artifacts
-or launch Lean/Quint. The opt-in [durable bridge](../research_exchange_bridge/README.md)
-stores records in SQLite and replays only the existing reviewed Lean export with
-both controlled checkers. It requires explicit operator configuration and has its
-own proof/model/real-runtime acceptance workflow. Libraries are
-operator-provisioned catalog entries, not live checkouts.
+or launch Lean/Quint. Libraries are operator-provisioned catalog entries, not live
+checkouts.
 Mathlib and project libraries require separately reviewed snapshot/environment
-entries. Only metadata and bounded submitted UTF-8 text are served at this stage.
+entries. Catalog discovery serves pinned metadata, and submitted artifacts are
+bounded UTF-8 text.
+
+The operator selects one of three profiles; both durable profiles retain their
+existing configuration and receipt contracts. The authority flags below are
+`mathematical_acceptance` and `credit_issuance`:
+
+| Profile | Operator configuration | Execution and receipt scope |
+| --- | --- | --- |
+| Memory (default) | The memory fields below; optional `backend: "memory"` | Admission and observations only; both authority flags remain false. |
+| [Disposable SQLite replay pilot](durable/README.md) | Exactly `durable_database` and `receipt_key_base64` | A single slot with offline operator replay; terminal `dual_checker_passed` or `profile_rejected` observations keep both authority flags false. |
+| [Durable bridge](../research_exchange_bridge/README.md) | Exactly `backend: "durable"`, `bridge_config`, and `python_executable` | Automatic controlled dual replay, current-authority revalidation and atomic terminal commit; mathematical acceptance is restricted to the exact reviewed export and credit issuance remains false. |
+
+The two durable configuration formats cannot be combined, and
+`durable_database` cannot be used with an explicit `backend: "memory"` selector.
+Selecting a profile does not migrate databases or convert receipts between
+these contracts.
 
 | Tool | Required scope | Effect |
 | --- | --- | --- |
 | `library_discover` | `library:read` | List only authorized pinned library metadata |
 | `proof_submit` | `proof:submit` | Store immutable artifact text and bound submission receipt |
-| `verification_request` | `verification:request` | Reserve a memory-only slot by default; opt-in durable mode queues the reviewed export checker |
+| `verification_request` | `verification:request` | Reserve a memory-only slot by default; durable profiles queue the reviewed export for their configured replay path |
 | `receipt_get` | `library:read` | Read a receipt belonging to the authenticated principal and accessible library |
 
 The operator provisions high-entropy credentials with principal, expiry, exact
@@ -56,8 +69,10 @@ keeps mathematical acceptance and credit issuance false. A separate shared-serve
 wire-decoder test checks cross-principal access to records that really exist;
 two isolated child stores would not establish that authorization property.
 The suite does not execute submitted Lean/Quint or call an external service.
-The separate durable bridge acceptance suite drives the same Elixir launcher
-through Python, SQLite and actual dual replay, including process crash recovery.
+The disposable pilot and durable bridge each have a separate acceptance suite
+that drives the same Elixir launcher through Python, SQLite and actual dual
+replay, including process crash recovery. Run the corresponding guide to verify
+each durable profile; the memory/transport suite does not replace either one.
 For complete mathematical kernel acceptance, follow the separately pinned
 [core verification profile](../research_exchange/README.md).
 
@@ -80,9 +95,10 @@ revision are separate provenance fields. Receipt identity alone does not claim
 that an MCP request executed the core.
 
 All three dedicated workflows trigger for any exchange package, shared
-documentation or exchange workflow. The MCP job retains before/after source
-records and its actual test log; the core job requires all 12 proof/model/HTTP
-stages; the durable bridge job requires its full five-stage profile. Each must
+documentation or exchange workflow. The MCP job runs memory/transport controls
+and the disposable pilot's `durable/verify.sh`, preserving both suites' source
+records and actual logs; the core job requires all 12 proof/model/HTTP stages;
+the durable bridge job requires its full five-stage profile. Each must
 pass at the same integration head. The [durable acceptance contract](../../docs/proof-bank/research-exchange/DURABLE_MCP_BRIDGE.md)
 records the implemented representation and remaining production obligations.
 
