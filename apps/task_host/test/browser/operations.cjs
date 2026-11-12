@@ -92,7 +92,7 @@ async function bootstrap(browser) {
   await page.locator('#enrol-form').getByRole('button', { name: 'Request access' }).click();
   const pending = page.locator('#admin-enrolment .code');
   await pending.waitFor();
-  assert.equal(await page.locator('#admin-section').isVisible(), false);
+  assert.equal(await page.locator('.section-tile[data-section^="admin-"]:visible').count(), 0);
   say({ stage: 'bootstrap_pending', code: await pending.textContent() });
   assert.equal(await next(), 'inspected');
   await page.reload();
@@ -101,7 +101,7 @@ async function bootstrap(browser) {
 
   assert.equal(await next(), 'approved');
   await page.reload();
-  await page.locator('#admin-section').waitFor();
+  await page.locator('.section-tile[data-section="admin-0"]').waitFor();
   await page.locator('#admin-enrolment').filter({ hasText: 'This browser administers this chapter.' }).waitFor();
   await page.goto(`${base}/operations?provider=bootstrap`);
   await page.locator('#workspace-list [data-workspace="bootstrap-desk"]').waitFor();
