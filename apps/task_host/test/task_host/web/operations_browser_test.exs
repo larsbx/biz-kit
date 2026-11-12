@@ -16,11 +16,64 @@ defmodule TaskHost.Web.OperationsBrowserTest do
   import TaskHost.{IdentityFixtures, LedgerFixtures}
 
   alias BizKit.Identity.Principal
+  alias BizKit.Identity.Providers.Development
+  alias CoopSubstrate.Enrolments.Approver
   alias CoopSubstrate.Log
 
   @moduletag :browser
   @moduletag timeout: 180_000
   @script Path.expand("../../browser/operations.cjs", __DIR__)
+
+  test "a development browser gains Operations access after signed administrator enrolment" do
+    w = world()
+    principal = Principal.new_id()
+    base = serve!()
+    development_provider!(base, principal)
+    create_due!(w, "Synthetic bootstrap record", now() - 1_000)
+
+    configure!(%{
+      "schema_version" => 1,
+      "title" => "Synthetic operations",
+      "time_zone" => "Etc/UTC",
+      "workspaces" => [workspace(w, "bootstrap-desk", "Bootstrap desk", "Synthetic")]
+    })
+
+    before = Log.head()
+    assert {:error, {404, body}} = Approver.fetch(base, "ZZZZ-ZZZZ-ZZZZ")
+    assert %{"error" => "unknown_code"} = Jason.decode!(body)
+
+    port = browser!(base, w.chapter, "--bootstrap")
+    assert %{"stage" => "bootstrap_pending", "code" => code} = read!(port)
+    assert {:ok, details} = Approver.fetch(base, code)
+
+    assert %{
+             "chapter_id" => chapter,
+             "tenant_id" => tenant_id,
+             "project_id" => "project-1",
+             "principal_id" => ^principal,
+             "role" => "governance",
+             "label" => "Synthetic bootstrap browser",
+             "identity" => %{
+               "issuer" => "biz-kit-development",
+               "subject" => "synthetic-bootstrap"
+             }
+           } = details
+
+    assert chapter == w.chapter
+    assert tenant_id == tenant()
+    assert Log.head() == before
+    Port.command(port, "inspected\n")
+    assert %{"stage" => "bootstrap_still_pending"} = read!(port)
+    assert Log.head() == before
+
+    assert {:ok, %{"event_id" => _}} = Approver.approve(base, details, governance(w))
+    approved = Log.head()
+    assert approved != before
+    Port.command(port, "approved\n")
+    assert %{"stage" => "bootstrap_approved"} = read!(port)
+    assert Log.head() == approved
+    assert_exit!(port)
+  end
 
   test "custom workspaces retain scope, refuse private records and clear revoked reads" do
     providers!()
@@ -53,7 +106,7 @@ defmodule TaskHost.Web.OperationsBrowserTest do
       "time_zone" => "Etc/UTC",
       "workspaces" => [
         workspace(first, "workspace-a", "Custom <A> desk", "Alpha / any-work"),
-        workspace(second, "workspace-b", "Private B desk", "Beta / confidential")
+        workspace(second, "private-workspace-beta", "Private B desk", "Beta / confidential")
       ]
     })
 
@@ -80,6 +133,36 @@ defmodule TaskHost.Web.OperationsBrowserTest do
       "tenant_id" => tenant(),
       "project_id" => "project-1"
     }
+  end
+
+  defp development_provider!(base, principal) do
+    for {app, key, value} <- [
+          {:biz_kit_identity, :allow_development_provider, true},
+          {:biz_kit_identity, :providers,
+           %{"bootstrap" => {Development, subject: "synthetic-bootstrap"}}},
+          {:task_host, :public_url, base},
+          {:task_host, :after_login_path, "/app"}
+        ] do
+      previous = Application.fetch_env(app, key)
+      Application.put_env(app, key, value)
+
+      on_exit(fn ->
+        case previous do
+          {:ok, value} -> Application.put_env(app, key, value)
+          :error -> Application.delete_env(app, key)
+        end
+      end)
+    end
+
+    previous = Application.fetch_env(:biz_kit_identity, :bindings)
+    bind([{"biz-kit-development", "synthetic-bootstrap", principal}])
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:biz_kit_identity, :bindings, value)
+        :error -> Application.delete_env(:biz_kit_identity, :bindings)
+      end
+    end)
   end
 
   defp create_due!(w, title, due) do

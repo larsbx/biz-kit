@@ -12,6 +12,7 @@ on:
       - 'apps/biz_kit_identity/**'
       - 'apps/biz_kit_cluster/**'
       - 'config/**'
+      - 'deploy/papa-operations-dev/**'
       - 'mix.exs'
       - 'mix.lock'
       - '.github/workflows/operations-workspace-acceptance.yml'
@@ -39,6 +40,8 @@ jobs:
       - run: node desktop/tools/sync-task-tiles.mjs --check
       - run: node desktop/tools/check-ui.mjs
       - run: node --test apps/task_host/test/js/*.test.mjs
+      - name: Check deployment bootstrap shell contract
+        run: bash deploy/papa-operations-dev/test-bootstrap.sh
 
   host-and-browser:
     runs-on: ubuntu-24.04

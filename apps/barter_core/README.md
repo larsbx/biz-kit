@@ -48,6 +48,24 @@ optimization objectives, define a separate optimization contract and its
 bounded/verified algorithms rather than treating the slot assignment as
 globally optimal for all barter.
 
+## Bilateral cross-currency contractual setoff — inert preview only
+
+`BarterCore.CrossCurrencySetoff.propose/5` previews two businesses offsetting
+opposite-direction obligations **in different currencies** using an explicitly
+negotiated, reduced rational rate in **quote minor units per base minor unit**.
+It computes the largest exact-integer setoff, retains independent totals and
+residuals in each currency, and rejects any implicit rounding.
+
+This is **not** platform FX execution. The inputs, negotiated rate, contract and
+source evidence references are host assertions. The module does not verify
+business consents, admit a signed ledger event, discharge any debt, post a
+journal, transfer funds, or issue Hawala/bank instructions. Production
+commercial discharge and any non-prohibition classification remain separate.
+
+See the [cross-currency preview ADR](../../docs/architecture/2026-11-08-cross-currency-commercial-setoff-preview.md),
+the [Lean–Quint–Elixir proof bank](../../proof_bank/cross_currency_setoff/README.md),
+and [scoped legal profile](../../docs/architecture/2026-11-04-commercial-clearing-nonprohibition-profile.md).
+
 Run `cd apps/barter_core && mix test` under Elixir 1.19 / OTP 27.
 
 See [the updated ADR](../../docs/architecture/2026-10-26-direct-barter.md)

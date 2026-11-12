@@ -874,9 +874,9 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
-        "apps/restaurant_core/lib/restaurant_core/admission.ex": "04a1de89eb31a407177091458fc7cf20e6fa5d74",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex": "1d156b8b963925da95a6bc23840f5d654cecabfa",
         "apps/restaurant_core/lib/restaurant_core/kitchen.ex": "3e6118cdcf95d5486880d21dd5c33b118592482f",
-        "apps/restaurant_core/test/admission_test.exs": "6bb241ecf1d7f37edacce0940d64a8dfdbb33108"
+        "apps/restaurant_core/test/admission_test.exs": "24946d7a2e7874130b2d4c1d88d38b7003de1637"
       }
     },
     {
@@ -908,8 +908,8 @@
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
         "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
-        "apps/restaurant_host/lib/restaurant_host/orders.ex": "6484d887e3df43b993721519797c30313c230f1f",
-        "apps/restaurant_host/test/device_grants_test.exs": "1d7c4902612759051c5ff7ff2571aad4cbc2ae3e"
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "ffcaa7679b80d0c5b0fd57839285f1ffa635bfbd",
+        "apps/restaurant_host/test/device_grants_test.exs": "2c17ccdafdc0eba7328603dd3ac8473a7e1e6976"
       }
     },
     {
@@ -1068,7 +1068,7 @@
       "evidence_git_blobs": {
         "apps/procurement_host/lib/procurement_host/admission.ex": "2fd2528409078795551cb8974ddc594a967afc09",
         "apps/procurement_host/lib/procurement_host/auth.ex": "d4b867705b5eb607ea32c867fca03d3d2947a454",
-        "apps/procurement_host/lib/procurement_host/web.ex": "25fbb12e1c13b4ec28e30fe0e051ae283904f3c8",
+        "apps/procurement_host/lib/procurement_host/web.ex": "557a285616ac843c95819bd7594c443cea8c3577",
         "apps/procurement_host/test/admission_test.exs": "44bd8ceccaaa9cac2b5d62a373275c1d5195efb3"
       }
     },
@@ -1234,6 +1234,21 @@
       "registered": [],
       "refreshed_paths": [
         "apps/task_host/lib/task_host/web/auth_controller.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "dc85d1e1cf2dfc21aa1478855f2639804c5a28c0",
+      "date": "2026-11-12",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/procurement_host/lib/procurement_host/web.ex",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex",
+        "apps/restaurant_core/test/admission_test.exs",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/restaurant_host/test/device_grants_test.exs"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

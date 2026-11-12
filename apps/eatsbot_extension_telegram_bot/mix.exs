@@ -29,11 +29,11 @@ defmodule Eatsbot.Extensions.TelegramBot.MixProject do
       {:remote_ip, "~> 1.2"},
       {:ash_authentication, "~> 5.0-rc"},
       {:ash_authentication_phoenix, "~> 3.0-rc"},
-      {:ash_graphql, "~> 1.12.0"},
+      {:ash_graphql, "~> 1.13.0"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "~> 2.15.2"},
       {:ash, "~> 3.37.2"},
-      {:ash_admin, "~> 1.3.2"},
+      {:ash_admin, "~> 1.4.0"},
       {:phoenix, "~> 1.8"},
       {:eatsbot_core, in_umbrella: true},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}

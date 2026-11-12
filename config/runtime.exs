@@ -522,6 +522,57 @@ if config_env() == :prod do
   end
 end
 
+# Development builds hardcode their databases (apps/*/config) at compile time:
+# role postgres on localhost:5432 and the *_dev names. A development
+# deployment that shares a PostgreSQL cluster with something else names its own
+# databases here. Each applies only when set, so a plain `mix phx.server` is
+# unchanged. TLS stays off, as in development. Not DATABASE_URL or
+# SECRET_KEY_BASE: scripts/e2e-stack.sh sets those in development for
+# dispatch, and must not move SpruceGoose or the task host with them.
+if config_env() == :dev do
+  eventstore =
+    for {key, var} <- [
+          database: "EVENTSTORE_DATABASE",
+          username: "EVENTSTORE_USERNAME",
+          password: "EVENTSTORE_PASSWORD",
+          hostname: "EVENTSTORE_HOST",
+          port: "EVENTSTORE_PORT"
+        ],
+        value = System.get_env(var),
+        value not in [nil, ""],
+        do: {key, if(key == :port, do: String.to_integer(value), else: value)}
+
+  if eventstore != [] do
+    for store <- [CoopSubstrate.EventStore, CoopSubstrate.Records],
+        do: config(:coop_substrate, store, eventstore)
+  end
+
+  if url = System.get_env("SPRUCE_GOOSE_DATABASE_URL") do
+    config :spruce_goose, SpruceGoose.Repo, url: url
+  end
+
+  if url = System.get_env("TASK_HOST_DATABASE_URL") do
+    config :task_host, TaskHost.Repo, url: url
+  end
+
+  if secret_key_base = System.get_env("TASK_HOST_SECRET_KEY_BASE") do
+    config :task_host, TaskHost.Web.Endpoint, secret_key_base: secret_key_base
+  end
+
+  if level = System.get_env("LOG_LEVEL") do
+    config :logger, level: String.to_existing_atom(level)
+  end
+end
+
+# apps/dispatch/config sets the console formatter for the whole umbrella, but
+# releases without dispatch do not carry Dispatch.LogFormatter: every log line
+# would crash the formatter. Fall back to the default format there.
+unless Code.ensure_loaded?(Dispatch.LogFormatter) do
+  config :logger, :default_formatter,
+    format: "$time $metadata[$level] $message\n",
+    metadata: [:request_id, :correlation_id, :tenant_id]
+end
+
 # ── restaurant_host (the rebuilt eatsbot) ───────────────────────────────────
 # Its own variables, so the restaurant never shares Dispatch's URL or secret.
 # RESTAURANT_CONFIG_FILE names the restaurant file (RestaurantHost.Config);
@@ -547,20 +598,40 @@ if config_env() == :prod and restaurant_released? do
     server: true
 
   config :restaurant_host, :restaurant_file, require_env.("RESTAURANT_CONFIG_FILE")
+
+  if System.get_env("WORKOS_CLIENT_ID") do
+    config :restaurant_host, :identity_provider, "workos"
+  end
+
+  if staff = System.get_env("RESTAURANT_STAFF_PRINCIPALS") do
+    principals = staff |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+    unless Enum.all?(principals, &Regex.match?(~r/\Aprn_[a-z2-7]{26}\z/, &1)) do
+      raise "RESTAURANT_STAFF_PRINCIPALS must contain only Biz-kit principal IDs"
+    end
+
+    config :restaurant_host, :staff_principals, principals
+  end
 end
 
-# The shared config points Localize at the legacy eatsbot's locale cache, which
-# the restaurant release does not carry; Money then uses the bundled locale.
-if release_name == "restaurant" do
+# The shared config points Localize at the legacy eatsbot's locale cache
+# (apps/eatsbot/config/config.exs). A boot that does not carry eatsbot uses
+# Localize's bundled locale instead: the restaurant release, and a Mix run of an
+# app that only reaches Money through a core (`cd apps/coop_substrate && mix
+# test`, whose code path holds that app's dependencies only). Without this,
+# Localize refuses to start there ("unknown application: :eatsbot").
+if release_name == "restaurant" or
+     (is_nil(release_name) and :code.lib_dir(:eatsbot) == {:error, :bad_name}) do
   config :localize, otp_app: :localize
 end
 
 # ── biz_kit_identity ────────────────────────────────────────────────────────
 # Native apps' sessions last until the person signs out, kept by hash in the
 # task host's Postgres so a restart does not end them
-# (docs/architecture/2026-10-21-native-sign-in.md). Both releases carry the
-# task host; tests of the apps that do not configure their own.
-if config_env() in [:dev, :prod] do
+# (docs/architecture/2026-10-21-native-sign-in.md). The biz_kit and orchestration
+# releases carry TaskHost; the narrow restaurant release uses its own store.
+# Tests of apps that do not carry TaskHost configure their own store as well.
+if config_env() in [:dev, :prod] and release_name != "restaurant" do
   config :biz_kit_identity,
     session_store: BizKit.Identity.PostgresSessionStore,
     session_repo: TaskHost.Repo

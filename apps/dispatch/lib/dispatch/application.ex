@@ -32,9 +32,15 @@ defmodule Dispatch.Application do
           # into a burst of outbound fetches. Started after Finch, which it uses.
           Dispatch.Identity.Tokens.KeyStore,
           DispatchWeb.Endpoint
-        ]
+        ] ++ restaurant_children()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Dispatch.Supervisor)
+  end
+
+  defp restaurant_children do
+    for source <- [:restaurant, :procurement],
+        Dispatch.RestaurantAutomation.enabled?(source),
+        do: {Dispatch.RestaurantAutomation, source}
   end
 
   defp outbox_children do
@@ -58,13 +64,15 @@ defmodule Dispatch.Application do
   end
 
   defp tls_opts do
+    # Mint installs its HTTPS hostname matcher when verify_peer is enabled.
+    # Do not put customize_hostname_check in Finch's shared default: Finch
+    # 0.24 removes the options below for HTTP pools, but does not remove that
+    # SSL-only option, which makes an allowed loopback HTTP connection exit
+    # with :badarg in :gen_tcp. HTTPS retains peer, CA and hostname checks.
     [
       verify: :verify_peer,
       cacertfile: CAStore.file_path(),
-      depth: 3,
-      customize_hostname_check: [
-        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-      ]
+      depth: 3
     ]
   end
 
