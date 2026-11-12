@@ -87,6 +87,22 @@ mix compile
 dispatch's test database connects as the Postgres role `dispatch`; create it
 (`create role dispatch login superuser;`) on a fresh cluster.
 
+### Eatsbot delivery verification quickstart
+
+From the repository root, fetch the reviewed [delivery handoff PR #365](https://github.com/larsbx/biz-kit/pull/365) into your local object store. The runner tests the pinned commit by default and accepts an optional commit as its third argument.
+
+```bash
+git fetch origin refs/pull/365/head
+export BEAM_IMAGE='<your Elixir 1.19.0 / OTP 27.3.4 build image>'
+bash scripts/eatsbot-delivery-checks/run.sh . baseline
+bash scripts/eatsbot-delivery-checks/run.sh . launch
+bash scripts/eatsbot-delivery-checks/run.sh . quint
+```
+
+- `baseline` runs the order, fulfillment, restaurant, signed-ledger and host suites. `launch` probes checkout without a working Dispatch service and a pickup report received after cancellation. Expect `launch` to exit nonzero on the pinned revision because it reproduces the two launch blockers.
+- Both runtime modes require Docker, an image with Bash, Git, Elixir 1.19.0, OTP 27.3.4 and native build tools (including Rust/Cargo), and access to Mix dependency sources. They use disposable PostgreSQL 16 with no published port and synthetic orders and signing keys. Set `POSTGRES_IMAGE` to override `postgres:16`.
+- `quint` runs the checkout's formal coverage script. It requires Python 3, Quint and a working Apalache backend on the invoking machine.
+
 ### Historical import validation
 
 [PR #1](https://github.com/larsbx/biz-kit/pull/1), merged on October 9, reported
