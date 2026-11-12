@@ -7,11 +7,14 @@ transferability and recognition governance remain policy decisions for review.
 There are no monetary prices, payments, payouts or monetary settlement APIs.
 
 This dependency-free Elixir package implements MCP **2025-11-25**, with a local
-stdio transport and four tools. It does not start automatically with Biz-kit,
+stdio transport and four tools. The default in-memory backend does not start automatically with Biz-kit,
 open a listening socket, download libraries, execute artifacts, or launch Lean
 or Quint. Libraries are operator-provisioned catalog entries, not live checkouts.
 Mathlib and project libraries require separately reviewed snapshot/environment
 entries. Only metadata and bounded submitted UTF-8 text are served at this stage.
+
+The [disposable SQLite pilot](durable/README.md) opts into durable admission
+and offline dual-checker replay for one reviewed Lean export.
 
 | Tool | Required scope | Effect |
 | --- | --- | --- |

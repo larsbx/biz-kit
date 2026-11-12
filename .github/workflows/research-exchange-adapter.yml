@@ -21,7 +21,7 @@ permissions:
 jobs:
   executable-adapter:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -57,6 +57,34 @@ jobs:
             | tee "$RUNNER_TEMP/research-exchange-mcp/adapter-tests.log"
           python3 -B proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py --require-clean \
             --output "$RUNNER_TEMP/research-exchange-mcp/core-snapshot-after.json"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - name: Durable MCP admission and dual-checker replay
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          core=proof_bank/research_exchange
+          mcp=proof_bank/research_exchange_mcp
+          tools="$RUNNER_TEMP/durable-tools"
+          mkdir -p "$tools/quint"
+          python3 - "$core/toolchains.lock.json" "$tools" <<'PY'
+          import json, pathlib, subprocess, sys
+          lock = json.loads(pathlib.Path(sys.argv[1]).read_text())["downloads"]["lean"]
+          directory = pathlib.Path(sys.argv[2])
+          archive = directory / lock["archive"]
+          subprocess.run(["curl", "--fail", "--location", "--retry", "3",
+                          lock["url"], "-o", str(archive)], check=True)
+          subprocess.run(["sha256sum", "--check"], check=True,
+                         input=f"{lock['sha256']}  {archive}\n", text=True)
+          subprocess.run(["tar", "--zstd", "-xf", str(archive), "-C", str(directory)], check=True)
+          PY
+          cp "$core"/tooling/quint/package*.json "$tools/quint/"
+          npm ci --prefix "$tools/quint" --ignore-scripts --no-audit --no-fund
+          bash "$mcp/durable/verify.sh" "$tools/lean-4.35.0-linux" \
+            "$tools/quint/node_modules/@informalsystems/quint/dist/src/cli.js" \
+            "$RUNNER_TEMP/research-exchange-mcp/durable"
       - name: Preserve exact-revision MCP observations
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -65,5 +93,4 @@ jobs:
           path: ${{ runner.temp }}/research-exchange-mcp/
           if-no-files-found: error
           retention-days: 30
-      # Kernel acceptance remains the separate complete core workflow. This job
-      # does not run contributor artifacts, issue credits, or deploy anything.
+      # The complete core workflow remains a separate gate.

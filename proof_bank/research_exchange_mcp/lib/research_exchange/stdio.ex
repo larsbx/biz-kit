@@ -1,12 +1,29 @@
 defmodule ResearchExchange.Stdio do
-  @moduledoc "Bounded newline JSON-RPC transport; no network listener or execution."
-  alias ResearchExchange.{Evidence, MCP, Server}
+  @moduledoc "Bounded newline JSON-RPC transport for local admission backends."
+  alias ResearchExchange.{Durable, Evidence, MCP, Server}
   @max_line 131_072
   def main do
     # Operator-owned configuration is outside the repository and is never read
     # from MCP arguments. The launcher must protect both this file and its env.
     raw = System.fetch_env!("RESEARCH_EXCHANGE_CONFIG") |> File.read!() |> :json.decode()
 
+    token = System.fetch_env!("RESEARCH_EXCHANGE_TOKEN")
+
+    {backend, started} =
+      case Map.fetch(raw, "durable_database") do
+        {:ok, path} ->
+          {:durable, Durable.start_link(path, Base.decode64!(raw["receipt_key_base64"]))}
+
+        :error ->
+          {:memory, start_memory(raw)}
+      end
+
+    {:ok, server} = started
+    {:ok, _} = Server.authenticate(server, token)
+    loop(MCP.new(server, token, backend))
+  end
+
+  defp start_memory(raw) do
     config = %{
       libraries: raw["libraries"],
       receipt_key: Base.decode64!(raw["receipt_key_base64"]),
@@ -24,10 +41,7 @@ defmodule ResearchExchange.Stdio do
         end)
     }
 
-    {:ok, server} = Server.start_link(config)
-    token = System.fetch_env!("RESEARCH_EXCHANGE_TOKEN")
-    {:ok, _} = Server.authenticate(server, token)
-    loop(MCP.new(server, token))
+    Server.start_link(config)
   end
 
   defp loop(s) do
