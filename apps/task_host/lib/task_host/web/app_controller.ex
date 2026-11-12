@@ -19,7 +19,13 @@ defmodule TaskHost.Web.AppController do
     "operations.html" => "text/html",
     "operations.js" => "text/javascript",
     "operations-view.js" => "text/javascript",
-    "operations.css" => "text/css"
+    "operations.css" => "text/css",
+    "layout.js" => "text/javascript",
+    "divider.js" => "text/javascript",
+    "tiles.js" => "text/javascript",
+    "tiles.css" => "text/css",
+    "operations-tiles.js" => "text/javascript",
+    "project-tiles.js" => "text/javascript"
   }
 
   def index(conn, _params), do: serve(conn, "index.html")

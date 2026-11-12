@@ -1,3 +1,4 @@
+import { projectTiles } from "./project-tiles.js";
 // The minimal web view (docs/architecture/2026-10-18-decide.md): a project's
 // tasks and pending suggestions from the change feed; accept, edit then accept
 // (docs/architecture/2026-10-19-amend.md), or decline; each task's next
@@ -151,6 +152,7 @@ function render() {
   if (!focusedTask && requested && Object.hasOwn(view.tasks, requested)) {
     const target = document.getElementById(`task-${requested}`);
     if (target) {
+      projectTiles.reveal(target);
       focusedTask = true;
       target.scrollIntoView({ block: "center" });
       target.focus({ preventScroll: true });

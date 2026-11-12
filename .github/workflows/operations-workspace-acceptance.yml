@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'apps/task_host/**'
+      - 'desktop/ui/lib/layout.js'
+      - 'desktop/ui/lib/divider.js'
+      - 'desktop/tools/sync-task-tiles.mjs'
       - 'apps/task_core/**'
       - 'apps/coop_substrate/**'
       - 'apps/biz_kit_identity/**'
@@ -33,6 +36,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: node desktop/tools/sync-task-tiles.mjs --check
+      - run: node desktop/tools/check-ui.mjs
       - run: node --test apps/task_host/test/js/*.test.mjs
 
   host-and-browser:
@@ -97,6 +102,8 @@ jobs:
           node-version: 22
       - name: Install pinned browser
         run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Composable Operations and TaskHost browser interactions
+        run: NODE_PATH="$(npm root -g)" node apps/task_host/test/browser/tiles.cjs
       - name: Real identity, ledger and mobile browser acceptance
         working-directory: apps/task_host
         run: mix test test/task_host/web/operations_browser_test.exs --include browser

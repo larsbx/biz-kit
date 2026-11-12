@@ -1,3 +1,4 @@
+import { workViews } from "./operations-tiles.js";
 import {
   SnapshotState,
   taskRows,
@@ -221,6 +222,43 @@ function workflowCard(row) {
   );
 }
 
+function viewNodes(snapshot, tab, rows = taskRows(snapshot)) {
+  let nodes;
+  if (tab === "workflows") {
+    const query = options.query.trim().toLocaleLowerCase();
+    const workflows = workflowRows(
+      snapshot,
+      options.workspace,
+      options.category,
+    ).filter(
+      (r) =>
+        !query ||
+        [r.workflow.name, r.workflow.roadmap_name, r.workspace.label].some(
+          (v) =>
+            String(v ?? "")
+              .toLocaleLowerCase()
+              .includes(query),
+        ),
+    );
+    nodes = workflows.map(workflowCard);
+  } else
+    nodes = selectRows(rows, { ...options, tab }).map((row) =>
+      card(row, snapshot.time_zone),
+    );
+
+  return nodes;
+}
+
+function renderWorkViews(snapshot) {
+  for (const [tab, node] of workViews) {
+    const nodes = snapshot ? viewNodes(snapshot, tab) : [];
+    node.replaceChildren(...(nodes.length ? nodes : [empty(
+      snapshot ? "Nothing in this view" : "Your work will appear here",
+      snapshot ? "Choose another workspace or change your search." : unavailable,
+    )]));
+  }
+}
+
 function render() {
   const snapshot = state.value;
   const [title, description, heading] = tabs[options.tab];
@@ -234,6 +272,7 @@ function render() {
   }
   $("task-list").setAttribute("aria-busy", "false");
   if (!snapshot) {
+    renderWorkViews(null);
     $("operations-title").textContent = "Operations";
     document.title = "Operations · Biz-kit";
     $("workspace-list").replaceChildren();
@@ -274,6 +313,7 @@ function render() {
     day: "numeric",
   }).format(Date.now());
   $("time-zone").textContent = snapshot.time_zone;
+  renderWorkViews(snapshot);
   const rows = taskRows(snapshot);
   $("workspace-list").replaceChildren(
     workspaceButton("All workspaces", "", metrics(rows).active),
@@ -294,28 +334,7 @@ function render() {
   const counts = metrics(scoped);
   for (const id of ["today", "overdue", "review"])
     $(`metric-${id}`).textContent = String(counts[id]);
-  let nodes;
-  if (options.tab === "workflows") {
-    const query = options.query.trim().toLocaleLowerCase();
-    const workflows = workflowRows(
-      snapshot,
-      options.workspace,
-      options.category,
-    ).filter(
-      (r) =>
-        !query ||
-        [r.workflow.name, r.workflow.roadmap_name, r.workspace.label].some(
-          (v) =>
-            String(v ?? "")
-              .toLocaleLowerCase()
-              .includes(query),
-        ),
-    );
-    nodes = workflows.map(workflowCard);
-  } else
-    nodes = selectRows(rows, options).map((row) =>
-      card(row, snapshot.time_zone),
-    );
+  const nodes = viewNodes(snapshot, options.tab, rows);
 
   $("result-count").textContent =
     `${nodes.length} ${options.tab === "workflows" ? "workflows" : "tasks"}`;

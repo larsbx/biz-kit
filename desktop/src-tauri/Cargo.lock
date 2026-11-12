@@ -135,6 +135,7 @@ name = "biz-kit"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "gtk",
  "rand 0.8.8",
  "reqwest 0.12.28",
  "serde",
@@ -143,6 +144,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "wry",
 ]
 
 [[package]]
