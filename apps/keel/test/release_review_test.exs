@@ -17,7 +17,7 @@ defmodule Keel.ReleaseReviewTest do
     ])
   end
 
-  defp binding do
+  defp request_binding do
     %{
       "request_id" => "3c404f19-b31f-4709-a203-262d551ac925",
       "action" => "deploy",
@@ -35,7 +35,7 @@ defmodule Keel.ReleaseReviewTest do
     org = organization([:deploy_release])
 
     assert {:ok, %{"verdict" => "carried"} = record} =
-             ReleaseReview.issue(org, @body, %{reviewer: :yes}, @date, binding(), "review-key", seed)
+             ReleaseReview.issue(org, @body, %{reviewer: :yes}, @date, request_binding(), "review-key", seed)
 
     signature = Base.decode16!(record["signature"], case: :lower)
     assert :crypto.verify(:eddsa, :none, ReleaseReview.signing_bytes(record), signature, [
@@ -43,7 +43,7 @@ defmodule Keel.ReleaseReviewTest do
              :ed25519
            ])
 
-    for field <- Map.keys(binding()) ++ ~w(verdict policy_sha256 ballots_sha256) do
+    for field <- Map.keys(request_binding()) ++ ~w(verdict policy_sha256 ballots_sha256) do
       changed = Map.put(record, field, "substituted")
 
       refute :crypto.verify(:eddsa, :none, ReleaseReview.signing_bytes(changed), signature, [
@@ -53,12 +53,55 @@ defmodule Keel.ReleaseReviewTest do
     end
   end
 
+  test "OpenSSL verifies the producer output using the Ship wire format" do
+    {public, seed} = :crypto.generate_key(:eddsa, :ed25519)
+    binding = request_binding()
+
+    assert {:ok, record} =
+             ReleaseReview.issue(
+               organization([:deploy_release]),
+               @body,
+               %{reviewer: :yes},
+               @date,
+               binding,
+               "review-key",
+               seed
+             )
+
+    # Build the verifier's preimage independently from the producer encoder.
+    fields =
+      ~w(schema repository key_id body verdict decision_date policy_sha256 ballots_sha256) ++
+        ~w(request_id action target inventory generation release release_sha256 graft_evidence)
+
+    message = Enum.map_join(fields, "", &(to_string(Map.fetch!(record, &1)) <> "\n"))
+    directory = Path.join(System.tmp_dir!(), Base.url_encode64(:crypto.strong_rand_bytes(16)))
+    File.mkdir!(directory)
+    on_exit(fn -> File.rm_rf!(directory) end)
+
+    key_path = Path.join(directory, "issuer.der")
+    signature_path = Path.join(directory, "signature")
+    message_path = Path.join(directory, "message")
+    File.write!(key_path, Base.decode16!("302A300506032B6570032100") <> public)
+    File.write!(signature_path, Base.decode16!(record["signature"], case: :lower))
+    File.write!(message_path, message)
+
+    arguments = [
+      "pkeyutl", "-verify", "-pubin", "-keyform", "DER", "-inkey", key_path,
+      "-rawin", "-in", message_path, "-sigfile", signature_path
+    ]
+
+    assert {_, 0} = System.cmd("openssl", arguments, stderr_to_stdout: true)
+    File.write!(message_path, String.replace(message, "fixture-v1", "fixture-v2"))
+    assert {_, status} = System.cmd("openssl", arguments, stderr_to_stdout: true)
+    assert status != 0
+  end
+
   test "Keel computes the outcome and rejects malformed bindings or ballots" do
     {_, seed} = :crypto.generate_key(:eddsa, :ed25519)
     org = organization([:deploy_release])
 
     assert {:ok, %{"verdict" => "failed"}} =
-             ReleaseReview.issue(org, @body, %{reviewer: :no}, @date, binding(), "review-key", seed)
+             ReleaseReview.issue(org, @body, %{reviewer: :no}, @date, request_binding(), "review-key", seed)
 
     assert {:ok, %{"verdict" => "ultra_vires"}} =
              ReleaseReview.issue(
@@ -66,18 +109,18 @@ defmodule Keel.ReleaseReviewTest do
                @body,
                %{reviewer: :yes},
                @date,
-               Map.put(binding(), "action", "rollback"),
+               Map.put(request_binding(), "action", "rollback"),
                "review-key",
                seed
              )
 
-    for binding <- [Map.put(binding(), "verdict", "carried"), Map.delete(binding(), "action"),
-                    Map.put(binding(), "target", "other\ntarget")] do
+    for binding <- [Map.put(request_binding(), "verdict", "carried"), Map.delete(request_binding(), "action"),
+                    Map.put(request_binding(), "target", "other\ntarget")] do
       assert {:error, :invalid_release_review_input} =
                ReleaseReview.issue(org, @body, %{reviewer: :yes}, @date, binding, "review-key", seed)
     end
 
     assert {:error, :invalid_release_review_input} =
-             ReleaseReview.issue(org, @body, %{unknown: :yes}, @date, binding(), "review-key", seed)
+             ReleaseReview.issue(org, @body, %{unknown: :yes}, @date, request_binding(), "review-key", seed)
   end
 end

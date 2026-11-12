@@ -17,7 +17,7 @@ defmodule Keel.ReleaseReview do
 
   @doc "Evaluate an organization body and sign the exact bound outcome with Ed25519."
   def issue(%Org{} = org, body, votes, %Date{calendar: Calendar.ISO} = date, binding, key_id, seed)
-      when is_binary(seed) and byte_size(seed) == 32 do
+      when is_binary(seed) and byte_size(seed) == 32 and date.year in 1..9999 do
     with true <- matches?(body, @id) and matches?(key_id, @id),
          true <- valid_binding?(binding),
          %Body{} <- Org.get(org, body),
