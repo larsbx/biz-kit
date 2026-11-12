@@ -56,6 +56,15 @@
     "hypothetical_dependency_cannot_be_forecast",
     "published_snapshot_immutable",
     "published_snapshot_exact",
-    "operational_token_unchanged"
+    "operational_token_unchanged",
+    "replay_empty_is_only_initial",
+    "replay_success_matches_actual_transitions",
+    "replay_failure_returns_no_partial_plan",
+    "replay_rejected_prefix_cannot_recover",
+    "replay_unadmitted_capacity_refused",
+    "replay_late_knowledge_refused",
+    "replay_earlier_publication_preserved",
+    "replay_later_publication_captures_new_evidence",
+    "replay_host_token_preserved"
   ]
 }

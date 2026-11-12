@@ -104,6 +104,14 @@ def hypotheticalState := hypotheticalResult.getD opening
 def hypotheticalLine := { storage with source := hypothetical.ref, minorUnits := 30 }
 def physicalCurrencyState := (admitEvidence ctx ready (request physicalWithCurrency)).getD opening
 
+def completeActions : List Action :=
+  observedInputs.map (fun e => .evidence (request e)) ++
+    [.allocate sea, .allocate air, .cost allIn, .cost storage, .publish .nowcast]
+def rejectedActions := completeActions ++ [.allocate road]
+def extendedActions := completeActions ++ [.evidence (request hypothetical), .publish .scenario]
+def replayed := replay ctx opening.operationalToken completeActions
+def extendedReplay := replay ctx opening.operationalToken extendedActions
+
 def checks : List (String × Bool) := [
   ("observed_inputs_admitted", readyResult.isSome && decide (ready.evidence.length = 7)),
   ("known_future_announcement_admitted", decide (future ∈ ready.evidence)),
@@ -185,7 +193,23 @@ def checks : List (String × Bool) := [
   ("hypothetical_dependency_cannot_be_forecast", (publish forwardCtx hypotheticalState .forecast).isNone),
   ("published_snapshot_immutable", decide (syntheticState.publications = published.publications)),
   ("published_snapshot_exact", decide (published.publications = [certificate ctx bothCostState .nowcast])),
-  ("operational_token_unchanged", decide (syntheticState.operationalToken = opening.operationalToken))
+  ("operational_token_unchanged", decide (syntheticState.operationalToken = opening.operationalToken)),
+  ("replay_empty_is_only_initial", decide (replay ctx opening.operationalToken [] = some opening)),
+  ("replay_success_matches_actual_transitions", replayed.isSome && decide (replayed = publishedResult)),
+  ("replay_failure_returns_no_partial_plan", (replay ctx opening.operationalToken rejectedActions).isNone),
+  ("replay_rejected_prefix_cannot_recover", (replay ctx opening.operationalToken
+    (rejectedActions ++ [.publish .scenario])).isNone),
+  ("replay_unadmitted_capacity_refused", (replay ctx opening.operationalToken
+    [.allocate sea, .evidence (request cap), .publish .scenario]).isNone),
+  ("replay_late_knowledge_refused", (replay ctx opening.operationalToken
+    [.evidence (request lateReceipt), .publish .scenario]).isNone),
+  ("replay_earlier_publication_preserved", extendedReplay.isSome &&
+    decide ((extendedReplay.getD opening).publications.take 1 = published.publications)),
+  ("replay_later_publication_captures_new_evidence", extendedReplay.isSome &&
+    decide ((extendedReplay.getD opening).publications.length = 2) &&
+    decide ((extendedReplay.getD opening).evidence = observedInputs ++ [hypothetical])),
+  ("replay_host_token_preserved", replayed.isSome &&
+    decide ((replayed.getD opening).operationalToken = opening.operationalToken))
 ]
 
 end PlanningFixtures

@@ -1,4 +1,4 @@
-import EconomicPlanning
+import Replay
 
 namespace EconomicPlanning
 
@@ -398,5 +398,85 @@ theorem trace_costs_disjoint_currency {ctx : Context} {token : String} {s : Stat
     | refl => exact id
     | next _ _ accepted ih => exact fun hs => step_preserves_costs (ih hs) accepted
   exact generic h (initial_costs_safe ctx token)
+
+theorem trace_trans {ctx : Context} {first middle last : State}
+    (before : Trace ctx first middle) (after : Trace ctx middle last) : Trace ctx first last := by
+  induction after with
+  | refl => exact before
+  | next _ action accepted ih => exact .next ih action accepted
+
+theorem replayFrom_success_trace {ctx : Context} {first last : State} {actions : List Action}
+    (h : replayFrom ctx first actions = some last) : Trace ctx first last := by
+  induction actions generalizing first with
+  | nil =>
+    simp only [replayFrom, Option.some.injEq] at h
+    subst last
+    exact .refl first
+  | cons action rest ih =>
+    cases accepted : step ctx first action with
+    | none => simp [replayFrom, accepted] at h
+    | some next =>
+      have tail : replayFrom ctx next rest = some last := by
+        simpa only [replayFrom, accepted, Option.bind_some] using h
+      exact trace_trans (.next (.refl first) action accepted) (ih tail)
+
+theorem replay_success_trace {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s) : Trace ctx (initial token) s :=
+  replayFrom_success_trace h
+
+theorem replayFrom_append (ctx : Context) (s : State) (before after : List Action) :
+    replayFrom ctx s (before ++ after) =
+      (replayFrom ctx s before).bind (fun middle => replayFrom ctx middle after) := by
+  induction before generalizing s with
+  | nil => rfl
+  | cons action rest ih =>
+    cases hs : step ctx s action <;> simp [replayFrom, hs, ih]
+
+theorem replay_rejected_prefix {ctx : Context} {token : String} {before after : List Action}
+    (h : replay ctx token before = none) : replay ctx token (before ++ after) = none := by
+  simp only [replay, replayFrom_append] at *
+  simp [h]
+
+theorem replay_initial_empty (ctx : Context) (token : String) :
+    replay ctx token [] = some (initial token) := rfl
+
+theorem replay_capacity_safe {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s) : CapacitySafe ctx s :=
+  trace_preserves_capacity (initial_capacity_safe ctx token) (replay_success_trace h)
+
+theorem replay_capacity_conservation {ctx : Context} {token : String}
+    {actions : List Action} {s : State} (h : replay ctx token actions = some s)
+    (key : ResourceKey) (r : Resource) (cap : Nat)
+    (hr : ctx.resource key = some r) (hc : r.capacity = some cap) :
+    used s.allocations key ≤ cap ∧ cap - used s.allocations key + used s.allocations key = cap :=
+  trace_capacity_conservation (replay_success_trace h) key r cap hr hc
+
+theorem replay_unknown_capacity_unused {ctx : Context} {token : String}
+    {actions : List Action} {s : State} (h : replay ctx token actions = some s)
+    (key : ResourceKey) (r : Resource) (hr : ctx.resource key = some r)
+    (hc : r.capacity = none) : used s.allocations key = 0 :=
+  trace_unknown_capacity_unused (replay_success_trace h) key r hr hc
+
+theorem replay_sources_available {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s) : SourcesSafe ctx s :=
+  trace_sources_available (replay_success_trace h)
+
+theorem replay_costs_disjoint_currency {ctx : Context} {token : String}
+    {actions : List Action} {s : State} (h : replay ctx token actions = some s) : CostsSafe ctx s :=
+  trace_costs_disjoint_currency (replay_success_trace h)
+
+theorem replay_operational_token {ctx : Context} {token : String} {actions : List Action} {s : State}
+    (h : replay ctx token actions = some s) : s.operationalToken = token :=
+  trace_operational_token (replay_success_trace h)
+
+theorem replayFrom_publications_prefix {ctx : Context} {first last : State} {actions : List Action}
+    (h : replayFrom ctx first actions = some last) :
+    first.publications.IsPrefix last.publications :=
+  trace_publications_prefix (replayFrom_success_trace h)
+
+theorem replayFrom_preserves_published_certificate {ctx : Context}
+    {first last : State} {actions : List Action} (h : replayFrom ctx first actions = some last)
+    (cert : Certificate) (hc : cert ∈ first.publications) : cert ∈ last.publications :=
+  trace_preserves_published_certificate (replayFrom_success_trace h) cert hc
 
 end EconomicPlanning
