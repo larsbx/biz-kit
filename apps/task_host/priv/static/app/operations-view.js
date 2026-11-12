@@ -33,6 +33,16 @@ export function scopeKey(workspace) {
   ]);
 }
 
+export function validReleaseReviewUrl(value) {
+  return (
+    typeof value === "string" &&
+    value.length <= 420 &&
+    !/\s/.test(value) &&
+    /^https:\/\/[A-Za-z0-9][A-Za-z0-9.-]*\/biz-kit\/releases\/[a-z][a-z0-9-]{0,63}\/[a-z][a-z0-9-]{0,63}$/.test(value) &&
+    URL.canParse(value)
+  );
+}
+
 export function validateSnapshot(value) {
   const text = (v, max) =>
     typeof v === "string" && v.trim().length > 0 && v.length <= max;
@@ -58,6 +68,8 @@ export function validateSnapshot(value) {
       ![w.chapter_id, w.tenant_id, w.project_id].every(
         (part) => typeof part === "string" && safeSegment.test(part),
       ) ||
+      (Object.hasOwn(w, "release_review_url") &&
+        !validReleaseReviewUrl(w.release_review_url)) ||
       !record(w.view) ||
       !["tasks", "suggestions", "workflows"].every((kind) =>
         record(w.view[kind]),

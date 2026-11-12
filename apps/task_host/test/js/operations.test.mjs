@@ -79,6 +79,25 @@ test("configuration remains generic and exact scopes cannot be counted twice", (
   );
 });
 
+test("release review links accept only an exact HTTPS Ship review path", () => {
+  const url = "https://ship.example.com/biz-kit/releases/biz-kit-test/fixture-v1";
+  const input = (release_review_url) =>
+    snapshot(workspace("one", {}, { release_review_url }));
+  assert.equal(validateSnapshot(input(url)).workspaces[0].release_review_url, url);
+  for (const invalid of [
+    null,
+    "javascript:alert(1)",
+    url.replace("https:", "http:"),
+    url.replace("ship.example.com", "ship.example.com@other.example.com"),
+    url + "?token=secret",
+    url + "#approval",
+    url + "\n",
+    url.replace("/fixture-v1", "/%2e%2e/fixture-v1"),
+  ]) {
+    assert.throws(() => validateSnapshot(input(invalid)));
+  }
+});
+
 test("timezone dates follow real timezone data, including DST", () => {
   assert.equal(validTimeZone("America/New_York"), true);
   assert.equal(validTimeZone("../New_York"), false);

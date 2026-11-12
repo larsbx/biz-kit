@@ -184,3 +184,19 @@ runs these contracts separately from unrelated umbrella acceptance. Its source
 revision, compilation result and test results remain distinct from deployment
 evidence. No live installation, real family data or production writer cutover
 is established by a fixture-based test.
+
+## Biz-kit release review
+
+An Operations workspace can include a `release_review_url` pointing to an
+exact Ship release, for example
+`https://ship.example.com/biz-kit/releases/biz-kit-test/fixture-v1`.
+Configure an HTTPS Ship hostname distinct from Biz-kit. Update the workspace
+configuration when the release under review changes.
+
+Biz-kit exposes the **Review release in Ship** action only through the
+authorized workspace snapshot. The URL carries the target and release IDs.
+Ship separately authenticates the reviewer and checks its target and Graft
+scopes before displaying the signed manifest, source evidence, and recorded
+Keel decision. This handoff requires the [Ship release-review implementation](https://github.com/larsbx/ship/compare/main...feature/biz-kit-release-review).
+Keel's authenticated decision export from Biz-kit governance remains a
+separate implementation step.

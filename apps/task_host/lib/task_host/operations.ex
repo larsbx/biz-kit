@@ -17,11 +17,12 @@ defmodule TaskHost.Operations do
   alias CoopSubstrate.Feed.{Access, View}
 
   @config_fields ~w(schema_version title time_zone workspaces)
-  @workspace_fields ~w(id label category chapter_id tenant_id project_id)
+  @workspace_fields ~w(id label category chapter_id tenant_id project_id release_review_url)
   @required_workspace_fields ~w(id label chapter_id tenant_id project_id)
   @view_kinds [:tasks, :suggestions, :workflows]
   @max_workspaces 32
   @segment ~r/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/
+  @release_review ~r/\Ahttps:\/\/[A-Za-z0-9][A-Za-z0-9.-]*\/biz-kit\/releases\/[a-z][a-z0-9-]{0,63}\/[a-z][a-z0-9-]{0,63}\z/
   @zone ~r/\A[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*\z/
   @control ~r/[\x00-\x1f\x7f]/u
 
@@ -100,10 +101,16 @@ defmodule TaskHost.Operations do
     known_fields?(workspace, @workspace_fields) and
       Enum.all?(@required_workspace_fields, &Map.has_key?(workspace, &1)) and
       Enum.all?(~w(id chapter_id tenant_id project_id), &segment?(workspace[&1])) and
+      release_review?(workspace) and
       text?(workspace["label"], 120) and text?(Map.get(workspace, "category", "general"), 80)
   end
 
   defp workspace?(_workspace), do: false
+
+  defp release_review?(%{"release_review_url" => url}),
+    do: is_binary(url) and byte_size(url) <= 420 and Regex.match?(@release_review, url)
+
+  defp release_review?(_workspace), do: true
 
   defp unique?(workspaces) do
     length(Enum.uniq_by(workspaces, & &1["id"])) == length(workspaces) and

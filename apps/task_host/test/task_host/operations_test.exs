@@ -103,6 +103,29 @@ defmodule TaskHost.OperationsTest do
     end
   end
 
+  test "release review links follow the current workspace grant" do
+    url = "https://ship.example.com/biz-kit/releases/biz-kit-test/fixture-v1"
+    input = config([Map.put(workspace("a"), "release_review_url", url)])
+    granted = grant(gate(), "g-a", "principal-a", "chapter-a", "project-1")
+
+    assert {:ok, %{"workspaces" => [%{"release_review_url" => ^url}]}} =
+             Operations.snapshot(granted, "principal-a", input)
+
+    assert {:ok, %{"workspaces" => []}} = Operations.snapshot(granted, "principal-b", input)
+
+    for invalid <- [
+          nil,
+          "javascript:alert(1)",
+          url <> "?token=secret",
+          url <> "#approval",
+          "https://ship.example.com@other.example.com/biz-kit/releases/test/v1",
+          String.replace(url, "/fixture-v1", "/../fixture-v1")
+        ] do
+      assert {:error, :invalid_operations_config} =
+               Operations.normalize(config([Map.put(workspace("a"), "release_review_url", invalid)]))
+    end
+  end
+
   test "duplicate ids and duplicate scopes are refused instead of double-counted" do
     assert {:error, :invalid_operations_config} =
              Operations.normalize(config([workspace("same"), workspace("same", "chapter-b")]))

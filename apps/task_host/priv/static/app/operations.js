@@ -357,6 +357,13 @@ function render() {
             href: projectLink(w, { provider }),
             textContent: "Open workspace →",
           }),
+          w.release_review_url
+            ? el("a", {
+                href: w.release_review_url,
+                rel: "noreferrer",
+                textContent: "Review release in Ship →",
+              })
+            : null,
         ),
       ),
   );
