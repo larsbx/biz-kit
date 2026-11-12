@@ -101,6 +101,7 @@ async function bootstrap(browser) {
 
   assert.equal(await next(), 'approved');
   await page.reload();
+  await page.getByRole('combobox', { name: 'Add section', exact: true }).selectOption('admin-0');
   await page.locator('.section-tile[data-section="admin-0"]').waitFor();
   await page.locator('#admin-enrolment').filter({ hasText: 'This browser administers this chapter.' }).waitFor();
   await page.goto(`${base}/operations?provider=bootstrap`);
