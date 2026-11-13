@@ -372,6 +372,13 @@
         "invariant": "obligation",
         "witness": "obligationWitness"
       }
+    ],
+    "scf_core": [
+      {
+        "lean": "BizKitScf",
+        "theorem": "obligation",
+        "note": "Unbounded validated-entry ledger model: reachable debit-credit equality, frozen closed-period prefixes and monotone closure, exact-retry idempotence, and accountwise cancellation for a fresh open-date reversal without line overrides. Separate income and balance-sheet equations over the admitted chart partition; balance-sheet equality requires a zero-sum trial balance. Includes checked admission witnesses and counterexamples. Elixir refinement, parsing, projection extraction and single-correction admission are not claimed."
+      }
     ]
   },
   "uncovered": []
