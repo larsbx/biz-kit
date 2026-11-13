@@ -1,0 +1,58 @@
+name: Producer capital inert preview acceptance
+
+on:
+  pull_request:
+    paths:
+      - "apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex"
+      - "apps/coop_substrate/test/producer_capital_preview_test.exs"
+      - "docs/architecture/2026-11-13-producer-capital-integration.md"
+      - "docs/architecture/2026-11-13-hanbali-commercial-contract-taxonomy.md"
+      - "docs/architecture/2026-11-07-diminishing-producer-equity.md"
+      - "proof_bank/producer_capital/README.md"
+      - ".github/workflows/producer-capital-preview.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex"
+      - "apps/coop_substrate/test/producer_capital_preview_test.exs"
+      - "docs/architecture/2026-11-13-producer-capital-integration.md"
+      - ".github/workflows/producer-capital-preview.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pure-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Show exact revision and inputs
+        run: |
+          git rev-parse HEAD
+          sha256sum \
+            apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex \
+            apps/coop_substrate/test/producer_capital_preview_test.exs
+      - name: Pure assertions with no database or financial runtime
+        run: |
+          elixir \
+            -r apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex \
+            -e 'ExUnit.start(); Code.require_file("apps/coop_substrate/test/producer_capital_preview_test.exs")'
+      - name: Ensure exact formatter output
+        run: |
+          mix format --check-formatted \
+            apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex \
+            apps/coop_substrate/test/producer_capital_preview_test.exs
+      - name: Changes have no new settlement writer or API
+        shell: bash
+        run: |
+          test -f apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex
+          ! grep -E 'Log\.append|TigerBeetle|Finances\.|Hawala\.execute|HTTPoison' \
+            apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex
