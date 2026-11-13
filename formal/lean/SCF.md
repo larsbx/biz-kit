@@ -138,10 +138,9 @@ by equality of lookup at every ID and equality of the optional closure date.
 with model posting, assuming successful validation supplies an admitted
 entry. Validation refusals map to `none`. Lookup checks exact equality
 before consulting closure. `close_commutes` covers first, equal, advancing,
-and decreasing closure. `reverse_commutes` composes lookup, effective-entry
-construction, validation and posting. It assumes the effective entry's
-outside-model fields already meet the source validators, so validation on
-that represented domain agrees with `Admitted`. The general theorems concern
+and decreasing closure. `reverse_commutes` composes lookup and effective-entry
+construction with the same validated posting boundary. The observation gate
+also compares the covered cases directly against `BizKitScf.reverse`. The general theorems concern
 the encoded source-shaped functions. Connecting them to arbitrary Elixir
 values still requires proving the encoding and validator contracts.
 

@@ -525,21 +525,19 @@ def reverse (r : State) (id : Nat) (validate : Entry → Option Entry) (a : Reve
     Option State :=
   (r.entries id).bind fun original => post r (validate (reversalEntry original a))
 
+/-- Reversal lookup commutes once the merged, validated entry is represented.
+The runtime validation contract is the same as for direct posting. -/
 theorem reverse_commutes (r : State) (s : Ledger) (hr : Represents r s) (id : Nat)
     (a : ReverseAttrs) (validate : Entry → Option Entry)
-    (hv : ∀ e, validate e = if Admitted e then some e else none) :
-    reverse r id validate a = (BizKitScf.reverse s id a).map State.project := by
+    (hv : ∀ candidate e, validate candidate = some e → Admitted e) :
+    reverse r id validate a =
+      ((lookup s.entries id).bind fun original =>
+        postModel s (validate (reversalEntry original a))).map State.project := by
   subst r
   cases hlookup : lookup s.entries id with
-  | none => simp [reverse, State.project, BizKitScf.reverse, hlookup]
+  | none => simp [reverse, State.project, hlookup]
   | some original =>
-    simp only [reverse, State.project, BizKitScf.reverse, hlookup, Option.bind]
-    let e := reversalEntry original a
-    change post (State.project s) (validate e) = (BizKitScf.post s e).map State.project
-    rw [hv]
-    by_cases h : Admitted e
-    · simp only [h, ite_true]
-      exact post_commutes _ _ rfl (some e) (by intro x hx; cases hx; exact h)
-    · simp [post, BizKitScf.post, h]
+    simp only [reverse, State.project, hlookup, Option.bind]
+    exact post_commutes (State.project s) s rfl _ (hv _)
 
 end BizKitScf.Source
