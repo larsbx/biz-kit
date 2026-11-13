@@ -129,6 +129,10 @@ defmodule CoopSubstrate.Log do
   def procurement_snapshot(%Envelope{} = request, server \\ @server),
     do: GenServer.call(server, {:procurement_snapshot, request})
 
+  @doc "Read-only procurement contract review under the current operator grant."
+  def procurement_contract_review(%Envelope{} = request, server \\ @server),
+    do: GenServer.call(server, {:procurement_contract_review, request})
+
   # -- read API (straight from the store; no serialization needed) -------------
 
   @doc """
@@ -445,6 +449,10 @@ defmodule CoopSubstrate.Log do
 
   def handle_call({:procurement_snapshot, request}, _from, state) do
     {:reply, CoopSubstrate.Procurement.read_snapshot(request, state.gate), state}
+  end
+
+  def handle_call({:procurement_contract_review, request}, _from, state) do
+    {:reply, CoopSubstrate.Procurement.read_contract_review(request, state.gate), state}
   end
 
   def handle_call({:federation_effect, context, request, effect}, _from, state) do
