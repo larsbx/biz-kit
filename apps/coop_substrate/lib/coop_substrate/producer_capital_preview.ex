@@ -119,18 +119,23 @@ defmodule CoopSubstrate.ProducerCapitalPreview do
   defp valid_positions?(p) do
     rows = p.positions
 
-    Enum.all?(rows, fn row ->
-      exact?(row, @position_keys) and id?(row.owner_business_id) and
-        is_list(row.serials) and row.serials != [] and
-        Enum.all?(row.serials, &is_integer/1)
-    end) and
+    well_formed =
+      Enum.all?(rows, fn row ->
+        exact?(row, @position_keys) and id?(row.owner_business_id) and
+          is_list(row.serials) and row.serials != [] and
+          Enum.all?(row.serials, &is_integer/1)
+      end)
+
+    if well_formed do
+      serials = rows |> Enum.flat_map(& &1.serials) |> Enum.sort()
+
       Enum.uniq_by(rows, & &1.owner_business_id) == rows and
-      Enum.any?(rows, &(&1.owner_business_id == p.producer_business_id)) and
-      length(rows) >= 2 and
-      rows
-      |> Enum.flat_map(& &1.serials)
-      |> Enum.sort()
-      |> Kernel.==(Enum.to_list(0..(p.issued_units - 1)))
+        Enum.any?(rows, &(&1.owner_business_id == p.producer_business_id)) and
+        length(rows) >= 2 and
+        serials == Enum.to_list(0..(p.issued_units - 1))
+    else
+      false
+    end
   end
 
   defp valid_buyout(p, t, now) do
