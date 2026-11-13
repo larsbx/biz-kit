@@ -98,7 +98,7 @@ All three dedicated workflows trigger for any exchange package, shared
 documentation or exchange workflow. The MCP job runs memory/transport controls
 and the disposable pilot's `durable/verify.sh`, preserving both suites' source
 records and actual logs; the core job requires all 12 proof/model/HTTP stages;
-the durable bridge job requires its full five-stage profile. Each must
+the durable bridge job requires its full six-stage profile. Each must
 pass at the same integration head. The [durable acceptance contract](../../docs/proof-bank/research-exchange/DURABLE_MCP_BRIDGE.md)
 records the implemented representation and remaining production obligations.
 
