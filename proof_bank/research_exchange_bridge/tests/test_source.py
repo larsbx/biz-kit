@@ -78,9 +78,10 @@ class BoundaryTest(unittest.TestCase):
                              b"", b"'submitted' does not depend on any axioms\n",
                              BridgeError("source_timeout"),
                          ]) as stage:
-                        with self.assertRaisesRegex(BridgeError, "source_timeout"):
+                        with self.assertRaisesRegex(source.SourceStageError, "source_timeout") as refused:
                             source.check_source(checker, root, stored, term, binding,
                                                 sha(profile_canonical(stored)))
+                    self.assertEqual(refused.exception.stage, "export")
                     self.assertEqual(stage.call_args.kwargs["timeout"], wall_seconds)
             invalid = {**source.EXTENDED_POLICY, "export_wall_seconds": 181}
             with self.assertRaisesRegex(BridgeError, "profile_identity_mismatch"):
@@ -146,6 +147,7 @@ class DurableSourceTest(unittest.TestCase):
                     store.execute_one(job, lean, source_root=imports)
                 refused = store.inspect(job)
                 self.assertEqual(refused["receipt"]["payload"]["details"]["reason"], reason)
+                self.assertEqual(refused["receipt"]["payload"]["details"]["stage"], "compile")
                 self.assertEqual((refused["version"], refused["effects"]), (0, []))
 
             store.retry(job)
