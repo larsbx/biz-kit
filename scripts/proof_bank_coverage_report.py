@@ -54,7 +54,7 @@ def markdown(report: dict) -> str:
     lines = [
         "# Proof Bank — first-party coverage (source-lead report)",
         "",
-        f"Catalog baseline: \`{report['catalog_source_sha']}\`",
+        f"Catalog baseline: `{report['catalog_source_sha']}`",
         "",
         f"Applications: **{report['applications']}**; platform + apps: **{report['catalog_entries']}**.",
         f"Entries containing a test-file lead: **{report['entries_with_test_leads']}**.",
@@ -71,7 +71,7 @@ def markdown(report: dict) -> str:
         # alter table structure, and avoid presenting paths as hyperlinks.
         safe = lambda value: str(value).replace("|", "&#124;").replace("\n", " ")
         lines.append(
-            f"| \`{safe(r['app'])}\` | {safe(r['priority'])} | "
+            f"| `{safe(r['app'])}` | {safe(r['priority'])} | "
             f"{safe(r['test_file'] or 'none identified')} | {safe(r['review_status'])} | "
             f"{safe(r['test_status'])} | {safe(r['proof_status'])} | {safe(r['runtime_status'])} |"
         )
