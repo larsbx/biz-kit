@@ -66,7 +66,7 @@ class PersistedResultTests(unittest.TestCase):
             (export / "committed.json").write_bytes(conformance.canonical(observation))
             with self.assertRaises(ValueError):
                 conformance.collect_observations([export, source])
-            (source / "summary.json").write_bytes(conformance.canonical({"status": "passed", "tests": 7}))
+            (source / "summary.json").write_bytes(conformance.canonical({"status": "passed", "tests": 9}))
             with self.assertRaises(ValueError):
                 conformance.collect_observations([export, source])
             (source / "committed.json").write_bytes(conformance.canonical({"database_observation": observation}))

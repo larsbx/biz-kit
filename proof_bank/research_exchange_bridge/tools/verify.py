@@ -129,16 +129,20 @@ def main():
                     raise ValueError("Compiled representation executable differs from cold proof evidence")
                 command += ["--lean-command", str(executable), "--expected-lean-sha256", executable_digest]
             start = time.monotonic_ns()
+            # Source acceptance includes real replays for both persisted policies
+            # and interruption recovery; v2's five stage wall budgets total 420s.
+            timeout_seconds = 1800 if identity == "source_acceptance" else 1200
             log = output / (identity + ".log")
             cwd = ROOT.parent / "research_exchange" if identity == "reviewed_profile" else REPO
             try:
                 with log.open("wb") as stream:
                     run = subprocess.run(command, cwd=cwd, stdout=stream, stderr=subprocess.STDOUT,
-                                         timeout=1200, check=False)
+                                         timeout=timeout_seconds, check=False)
                 code = run.returncode
             except subprocess.TimeoutExpired:
                 code = -1
             stage = {"id": identity, "command": command, "exit_code": code,
+                     "timeout_seconds": timeout_seconds,
                      "elapsed_ns": time.monotonic_ns() - start,
                      "status": "passed" if code == 0 else "failed", "log": log.name,
                      "log_sha256": sha(log.read_bytes())}

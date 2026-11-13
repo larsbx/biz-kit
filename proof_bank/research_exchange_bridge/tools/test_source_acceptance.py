@@ -17,8 +17,9 @@ class SourceGateTests(unittest.TestCase):
     # This independent inventory prevents deletion of a case from the runner
     # from weakening the gate and its controls in the same change.
     expected = ["test_materialization", "test_prohibited_axiom_report", "test_process_bounds",
-                "test_dependency_fingerprint", "test_guarded_replay_and_recovery",
-                "test_mcp_source_roundtrip_binds_real_replay", "test_mcp_source_binding_and_profile_refusals"]
+                "test_dependency_fingerprint", "test_export_budget_is_bound_to_the_stored_policy",
+                "test_guarded_replay_and_recovery", "test_mcp_source_roundtrip_binds_real_replay",
+                "test_mcp_legacy_source_profile_keeps_policy_and_replay", "test_mcp_source_binding_and_profile_refusals"]
 
     def result(self):
         return SimpleNamespace(executed_cases=list(self.expected), testsRun=len(self.expected),

@@ -54,9 +54,13 @@ with compiled Lean, including their persisted post-states and effects. Each
 profile must supply actual committed observations; a passing test summary alone
 does not satisfy that requirement.
 
-The source stage requires all seven registered cases with zero skips, including
+The source stage requires all nine registered cases with zero skips, including
 real MCP initialization, discovery, source submission, asynchronous admission,
-operator-selected compilation and dual replay, restart and receipt retrieval.
+operator-selected compilation and dual replay, restart and receipt retrieval
+for both the original v1 and newly provisioned v2 policies. The stored-policy
+control checks their respective 60/180-second export wall budgets; actual MCP
+replays also verify that each profile's catalog, policy and receipt identities
+survive unchanged.
 It retains the real worker SIGINT/recovery control and records the pinned import
 and runtime identities before and after the suite. Missing prerequisites fail
 acceptance. The aggregate source-after inventory runs after both profiles and

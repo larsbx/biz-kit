@@ -145,6 +145,11 @@ The source stage checks an independent required-case inventory and refuses any
 skipped, omitted, duplicated or failing case. Its prerequisites and replay
 evidence are mandatory. Source compilation and MCP tests run inside the aggregate
 before/after inventory; preparation of the pinned import bundle precedes it.
+The nine source cases include actual successful MCP replays under both the
+original v1 policy and the default v2 policy. V1 retains its 60-second export
+budget; v2 has a distinct policy digest and 180-second export budget. The
+policy-dispatch control checks these persisted values separately from the real
+replay cases. Other resource bounds and the receipt scope are unchanged.
 
 The independent Quint model is finite safety evidence with explicit domains and
 queue exhaustion. Its named-invariant counterexamples test the claimed guards.

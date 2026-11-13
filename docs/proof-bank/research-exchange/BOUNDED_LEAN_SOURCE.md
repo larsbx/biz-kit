@@ -1,6 +1,6 @@
 # Verify a submitted Lean proof term
 
-The local `lean-source-prime-two-v1` library accepts a Lean proof term for
+The local `lean-source-prime-two-v2` library accepts a Lean proof term for
 `submitted : Nat.Prime 2`. Its environment is Lean 4.35.0 from the existing
 research-exchange toolchain lock and mathlib commit
 `56a005855ea17e0b0958f73ec801ae140b0a1679`. The mathlib checkout's committed
@@ -45,13 +45,15 @@ environment. The [complete bridge verifier](../../../proof_bank/research_exchang
 requires this source stage with `--source-imports` and records it at the selected
 clean Git revision.
 
-The seven registered tests cover materialization, prohibited axioms, actual
-process bounds, dependency fingerprints, real interrupted-worker recovery,
-actual MCP source admission through terminal receipt retrieval, and source
-binding/profile refusal controls. The successful MCP case checks the submitted
+The nine registered tests cover materialization, prohibited axioms, actual
+process bounds, dependency fingerprints, persisted-policy budget selection,
+real interrupted-worker recovery, actual MCP source admission through terminal
+receipt retrieval for both v1 and v2, and source binding/profile refusal controls.
+Both successful MCP cases check the submitted
 bytes, materialized module, fixed statement, environment, policy, target,
 mathlib revision, both checker closure digests, and actual Elixir receipt MAC
-verification. Sanitized transcripts, receipts and actual SQLite observations
+verification. They also require the persisted catalog, profile and policy
+identities to remain unchanged. Sanitized transcripts, receipts and actual SQLite observations
 are retained. The imported environment is hashed before and after the suite.
 
 For a disposable bridge, run `tools/provision_source.py` with the operator's
@@ -71,7 +73,10 @@ correctness, checker correctness and SHA-256 collision resistance are premises.
 
 The worker uses a private temporary directory and a fixed executable sequence.
 Source size, token count, nesting, Lean heartbeats and recursion, address space,
-CPU time, wall time and per-file output are bounded. Timeout kills the child
+CPU time, wall time and per-file output are bounded. Export has a 180-second wall
+budget for cold dependency reads. Other subprocess stages have 60 seconds.
+Existing v1 libraries retain their original 60-second export budget and policy
+identity. Provision v2 with a fresh grant to use the extended budget. Timeout kills the child
 process group. A hard worker interruption can leave scratch files or a bounded
 child until its resource limit or natural exit. A later worker starts in a
 fresh directory and rechecks the immutable source. After an inconclusive attempt,

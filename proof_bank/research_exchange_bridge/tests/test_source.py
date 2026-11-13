@@ -13,7 +13,7 @@ import sys
 import time
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from research_exchange_bridge import source
 from research_exchange_bridge.common import BridgeError, ROOT, canonical, loads, sha
@@ -21,6 +21,7 @@ from research_exchange_bridge.store import Store
 from research_exchange_bridge.tests.test_acceptance import MCPClient
 from research_exchange_bridge.tools.provision_source import install
 from adapter_pilot.checker import ControlledChecker, CheckedExport, RejectedExport
+from adapter_pilot.common import canonical as profile_canonical
 
 
 class BoundaryTest(unittest.TestCase):
@@ -54,6 +55,42 @@ class BoundaryTest(unittest.TestCase):
                                  directory, env)
             self.assertEqual(source.run_stage(["/usr/bin/printf", "recovered"], directory, env), b"recovered")
 
+    def test_export_budget_is_bound_to_the_stored_policy(self):
+        environment = "1" * 64
+        term = b"Nat.prime_two"
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            store = Store(root / "bridge.sqlite", b"x" * 32)
+            store.initialize()
+            for policy, wall_seconds in ((source.POLICY, 60), (source.EXTENDED_POLICY, 180)):
+                with self.subTest(wall_seconds=wall_seconds):
+                    profile = source.profile_for(environment, policy)
+                    library = {"id": f"source-{wall_seconds}", "engine": "lean",
+                               "revision": source.REVISION, "generation": 1,
+                               "snapshot_sha256": profile["source_sha256"],
+                               "environment_sha256": environment,
+                               "policy_sha256": sha(profile_canonical(policy))}
+                    store.provision_library(library, profile)
+                    with store.connection() as conn:
+                        stored = loads(store._library(conn, library["id"])["profile_json"])
+                    checker = Mock(spec=ControlledChecker)
+                    checker.paths = {"lean": "/unused/lean", "leanexport": "/unused/leanexport"}
+                    binding = {"artifact_sha256": sha(term), "target": source.TARGET,
+                               "environment_sha256": environment, "source_revision": source.REVISION}
+                    with patch.object(checker, "environment", return_value={}), \
+                         patch.object(source, "environment_identity", return_value=environment), \
+                         patch.object(source, "run_stage", side_effect=[
+                             b"", b"'submitted' does not depend on any axioms\n",
+                             BridgeError("source_timeout"),
+                         ]) as stage:
+                        with self.assertRaisesRegex(BridgeError, "source_timeout"):
+                            source.check_source(checker, root, stored, term, binding,
+                                                sha(profile_canonical(stored)))
+                    self.assertEqual(stage.call_args.kwargs["timeout"], wall_seconds)
+            invalid = {**source.EXTENDED_POLICY, "export_wall_seconds": 181}
+            with self.assertRaisesRegex(BridgeError, "profile_identity_mismatch"):
+                source.profile_for(environment, invalid)
+
     def test_dependency_fingerprint(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -71,7 +108,7 @@ class BoundaryTest(unittest.TestCase):
 @unittest.skipUnless(os.environ.get("EXCHANGE_SOURCE_IMPORTS") and os.environ.get("EXCHANGE_LEAN_ROOT"),
                      "set EXCHANGE_SOURCE_IMPORTS and EXCHANGE_LEAN_ROOT for real acceptance")
 class DurableSourceTest(unittest.TestCase):
-    def mcp_instance(self):
+    def mcp_instance(self, *, legacy=False):
         """Private operator provision; all research-agent actions use stdio below."""
         self.lean = Path(os.environ["EXCHANGE_LEAN_ROOT"]).resolve(strict=True)
         self.imports = Path(os.environ["EXCHANGE_SOURCE_IMPORTS"]).resolve(strict=True)
@@ -87,7 +124,22 @@ class DurableSourceTest(unittest.TestCase):
         self.checker = ControlledChecker(self.lean)
         self.store = Store(self.instance / "bridge.sqlite", self.key)
         self.store.initialize()
-        self.library = install(self.store, self.checker, self.imports)
+        if legacy:
+            # Persist the original operator profile explicitly: the current
+            # provisioning default must not rewrite an existing v1 library.
+            profile = source.profile_for(source.environment_identity(self.checker, self.imports), source.POLICY)
+            self.library = {"id": "lean-source-prime-two-v1", "engine": "lean", "revision": source.REVISION,
+                            "snapshot_sha256": profile["source_sha256"],
+                            "environment_sha256": profile["toolchain_lock_sha256"],
+                            "policy_sha256": sha(profile_canonical(source.POLICY)), "generation": 1}
+            self.store.provision_library(self.library, profile)
+        else:
+            self.library = install(self.store, self.checker, self.imports)
+        with self.store.connection() as connection:
+            stored = self.store._library(connection, self.library["id"])
+            self.profile_json = stored["profile_json"]
+            self.profile_sha256 = stored["profile_sha256"]
+        self.profile = loads(self.profile_json)
         self.store.provision_grant(self.token, "source-researcher", [self.library["id"]],
                                    ["library:read", "proof:submit", "verification:request"], 4_000_000_000)
         self.config_path = self.instance / "bridge.json"
@@ -112,6 +164,8 @@ class DurableSourceTest(unittest.TestCase):
         evidence = {
             "schema": "research-exchange/durable-runtime-case/v1",
             "test": self._testMethodName, "scope": source.SCOPE,
+            "library": self.library, "stored_profile": self.profile,
+            "stored_profile_sha256": self.profile_sha256,
             "submitted_source": self.term.decode("ascii"), "events": self.events,
             "database_observations": [
                 {"job_id": job, "observation": self.store.inspect(job)} for job in self.jobs],
@@ -181,6 +235,21 @@ class DurableSourceTest(unittest.TestCase):
 
     def test_mcp_source_roundtrip_binds_real_replay(self):
         self.mcp_instance()
+        self.assertEqual(self.library["id"], "lean-source-prime-two-v2")
+        self.assertEqual(self.profile["policy"], source.EXTENDED_POLICY)
+        self.assertEqual(self.library["policy_sha256"], sha(profile_canonical(source.EXTENDED_POLICY)))
+        self.assert_mcp_roundtrip()
+
+    def test_mcp_legacy_source_profile_keeps_policy_and_replay(self):
+        self.mcp_instance(legacy=True)
+        self.assertEqual(self.library["id"], "lean-source-prime-two-v1")
+        self.assertEqual(self.profile["policy"], source.POLICY)
+        self.assertNotIn("export_wall_seconds", self.profile["policy"])
+        self.assertEqual(self.library["policy_sha256"],
+                         "b9e0d9d9b78c53323dd258936e81fcbd725c58cae3c7a86f692150a6f09a792f")
+        self.assert_mcp_roundtrip()
+
+    def assert_mcp_roundtrip(self):
         client = self.client()
         tools = client.request("tools/list")["result"]["tools"]
         self.assertEqual({tool["name"] for tool in tools},
@@ -199,7 +268,7 @@ class DurableSourceTest(unittest.TestCase):
         command = [sys.executable, str(ROOT / "worker.py"), "--config", str(self.config_path),
                    "--job-id", job, "--source-imports", str(self.imports)]
         started = time.monotonic_ns()
-        result = subprocess.run(command, capture_output=True, text=True, timeout=360, check=False)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=480, check=False)
         self.events.append({"operator_worker": "explicit-source-imports", "returncode": result.returncode,
                             "argv": command, "duration_ns": time.monotonic_ns() - started,
                             "stdout": result.stdout, "stderr": result.stderr})
@@ -209,10 +278,13 @@ class DurableSourceTest(unittest.TestCase):
         accepted = self.success(restarted.tool("receipt_get", {"id": job}))
         self.assert_receipt(accepted, accepted=True)
         self.assertEqual(accepted["payload"]["status"], "accepted")
+        self.assertEqual(queued["payload"]["details"]["profile_sha256"], self.profile_sha256)
+        self.assertEqual(accepted["payload"]["details"]["profile_sha256"], self.profile_sha256)
         self.assertEqual(accepted["payload"]["binding"], queued["payload"]["binding"])
         self.assertEqual({key: value for key, value in queued["payload"]["binding"].items()
                           if key != "submission_id"}, submitted["payload"]["binding"])
         binding = accepted["payload"]["binding"]
+        self.assertEqual(binding["library"], self.library["id"])
         checked = accepted["payload"]["details"]["controlled_check"]
         self.assertEqual(checked["schema"], source.SCHEMA)
         self.assertEqual(checked["scope"], source.SCOPE)
@@ -246,6 +318,11 @@ class DurableSourceTest(unittest.TestCase):
         self.assertEqual((effect["kind"], effect["before_version"], effect["after_version"]), ("accepted", 0, 1))
         self.assertEqual(loads(effect["receipt_json"]), accepted)
         self.assertEqual(observed["sqlite"], {"journal_mode": "wal", "synchronous": 2, "foreign_keys": 1})
+        with self.store.connection() as connection:
+            stored = self.store._library(connection, self.library["id"])
+            self.assertEqual(stored["profile_json"], self.profile_json)
+            self.assertEqual(stored["profile_sha256"], self.profile_sha256)
+            self.assertEqual(loads(stored["catalog_json"]), self.library)
 
         # Verify real Python-issued source receipts with the actual Elixir
         # verifier; every substituted proof identity must invalidate its MAC.
@@ -403,7 +480,7 @@ class DurableSourceTest(unittest.TestCase):
             self.assertEqual((interrupted["version"], interrupted["effects"]), (0, []))
             self.assertEqual(store.pending(), [job])
             self.assertEqual(list(scratch.iterdir()), [])
-            result = subprocess.run(command, capture_output=True, text=True, timeout=360, check=True)
+            result = subprocess.run(command, capture_output=True, text=True, timeout=480, check=True)
             self.assertEqual(loads(result.stdout)["status"], "accepted", store.inspect(job)["receipt"])
             receipt = store.inspect(job)["receipt"]
             self.assertEqual(store.commit(prepared, checked), receipt)

@@ -23,11 +23,14 @@ REQUIRED_CASES = frozenset({
     "test_prohibited_axiom_report",
     "test_process_bounds",
     "test_dependency_fingerprint",
+    "test_export_budget_is_bound_to_the_stored_policy",
     "test_guarded_replay_and_recovery",
     "test_mcp_source_roundtrip_binds_real_replay",
+    "test_mcp_legacy_source_profile_keeps_policy_and_replay",
     "test_mcp_source_binding_and_profile_refusals",
 })
 MCP_CASES = ("test_mcp_source_roundtrip_binds_real_replay",
+             "test_mcp_legacy_source_profile_keeps_policy_and_replay",
              "test_mcp_source_binding_and_profile_refusals")
 
 
@@ -69,11 +72,12 @@ def validate_evidence(output, environment):
         evidence = loads((output / "cases" / (name + ".json")).read_bytes())
         if evidence.get("test") != name or not evidence.get("clients"):
             raise ValueError("real MCP case evidence is missing: " + name)
-    success = loads((output / "cases" / (MCP_CASES[0] + ".json")).read_bytes())
-    if not any(item["observation"]["effects"] and
-               item["observation"]["receipt"]["payload"]["mathematical_acceptance"] is True
-               for item in success["database_observations"]):
-        raise ValueError("real MCP source acceptance must retain its committed SQLite observation")
+    for name in MCP_CASES[:2]:
+        success = loads((output / "cases" / (name + ".json")).read_bytes())
+        if not any(item["observation"]["effects"] and
+                   item["observation"]["receipt"]["payload"]["mathematical_acceptance"] is True
+                   for item in success["database_observations"]):
+            raise ValueError("both source policy variants must retain their real MCP committed SQLite observations")
 
 
 def main():
