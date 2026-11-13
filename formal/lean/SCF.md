@@ -118,3 +118,66 @@ the account-parser and per-account balance-extraction correspondence needed to
 instantiate the statement theorems. A single-correction admission policy, if
 desired, needs an explicit owner-approved contract and implementation change.
 The characterization catalog's review and conformance statuses are unchanged.
+
+## Source-pinned ledger correspondence
+
+The source observation gate uses the four Git blobs listed above. They
+match PR #387 at `71d346e79826781d556a651252fe7c5946a65acb`. The gate hashes
+the working files before loading them. The proof layer in
+`BizKitScf.Source` relates an encoded entries map to the existing list model
+by equality of lookup at every ID and equality of the optional closure date.
+
+| Elixir representation | Lean representation and obligation |
+| --- | --- |
+| Map accepted by `Entry.new/1` | The normalized struct supplies the fields. Ignore discarded keys and apply the default label before comparing entries. Success must imply `Admitted`. |
+| ID and retry equality | Use an injective ID encoding. Metadata encodes the journal, piece, and exact label term, including non-string labels. Date, ordered lines, and all metadata must preserve the struct's exact equality. |
+| Ledger map and closure | All encoded key lookups match Lean lookup. Start empty and insert only fresh IDs. Relate the closure boundary and preserve the order used by the date comparison. |
+| Reversal attributes | Look up the original first. Encode the effective journal, piece, and label after merging caller attributes over the generated defaults. Represent omitted lines by `none`, and validated replacements by `some`. Explicit invalid overrides such as `lines: nil` are runtime refusals. |
+
+`post_commutes` proves that the source-shaped lookup and insertion commute
+with model posting, assuming successful validation supplies an admitted
+entry. Validation refusals map to `none`. Lookup checks exact equality
+before consulting closure. `close_commutes` covers first, equal, advancing,
+and decreasing closure. `reverse_commutes` composes lookup, effective-entry
+construction, validation and posting. It assumes the effective entry's
+outside-model fields already meet the source validators, so validation on
+that represented domain agrees with `Admitted`. The general theorems concern
+the encoded source-shaped functions. Connecting them to arbitrary Elixir
+values still requires proving the encoding and validator contracts.
+
+Run `bash formal/lean/check_scf_correspondence.sh` from a checkout with the
+pinned Lean toolchain and Elixir on PATH. It runs the actual Elixir entry
+points, asserts error payloads, and generates propositions from observed
+states for Lean to check with `by decide`. The fixtures use increasing
+numeric string IDs, two distinct accounts, and valid ISO dates around leap
+day. Their serialization keeps line order and encodes the entire metadata
+tuple as deterministic external-term bytes in hex. The traces check equal
+and changed retries after close, validation precedence, closure regression,
+unknown and closed-period reversals, a repeated retry with the same
+reversal ID, a second distinct reversal ID, and caller line overrides.
+Runtime-only refusals also exercise fields outside the Lean domain. The
+two cancellation counterexamples in the model have corresponding runtime
+observations. Both runtime behaviors are permitted by the inspected source.
+
+### Remaining obligations for runtime statements
+
+- **Parser and account identity.** Prove that the actual regex and
+  longest-listed-prefix lookup imply the model's admitted partition. Include
+  anchoring, byte length, subaccounts and the distinct identity of full
+  account strings. Show that runtime class and prefix selectors select the
+  corresponding bucket, including that the bilan's prefix 14 is unreachable
+  through normal posting. Do not collapse distinct accounts sharing a prefix.
+- **Dates.** Establish a supported calendar and valid date domain. Prove that
+  the chosen encoding preserves exact struct equality for retries and date
+  order for posting and closure. Prove that both window bounds are inclusive
+  and that a missing bound leaves that side unbounded. A Date struct match
+  alone does not establish these properties for arbitrary constructed dates.
+- **Balances.** For each selected account, prove that runtime movements sum
+  the selected entries' debits and credits and that balance extraction
+  preserves their signed difference, with missing keys interpreted as zero.
+  Prove the sum of extracted signed balances is zero from the selected
+  ledger's debit-credit equality. Apply the class 4/5 sign split after
+  per-account aggregation. Then establish correspondence between the
+  runtime statement formulas and the existing Lean projections, including
+  current-result allocation and the distinction between TCR windows and
+  bilan's as-of window.

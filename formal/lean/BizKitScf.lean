@@ -456,3 +456,90 @@ theorem missing_result_counterexample :
       totalAssets bs ≠ (-group .capital bs - group .debt bs - tiersNegative bs) := by decide
 
 end BizKitScf
+
+namespace BizKitScf.Source
+
+/-- Source-shaped state after encoding. Lookup represents the entries map;
+the Lean ledger retains a list so that existing induction applies. -/
+structure State where
+  entries : Nat → Option Entry
+  closedThrough : Option Nat
+
+def State.project (s : Ledger) : State := ⟨lookup s.entries, s.closedThrough⟩
+
+def Represents (r : State) (s : Ledger) : Prop := r = State.project s
+
+/-- Source branches after Entry.new. The Option argument models the validation
+boundary. The admission premise below is the contract on its success result. -/
+def post (r : State) (validated : Option Entry) : Option State := do
+  let e ← validated
+  match r.entries e.id with
+  | some old => if old = e then some r else none
+  | none =>
+    if (r.closedThrough.map (fun d => decide (d < e.date))).getD true then
+      some { r with entries := fun id => if e.id = id then some e else r.entries id }
+    else none
+
+def postModel (s : Ledger) (validated : Option Entry) : Option Ledger :=
+  validated.bind (BizKitScf.post s)
+
+theorem post_commutes (r : State) (s : Ledger) (hr : Represents r s)
+    (validated : Option Entry) (hv : ∀ e, validated = some e → Admitted e) :
+    post r validated = (postModel s validated).map State.project := by
+  subst r
+  cases validated with
+  | none => rfl
+  | some e =>
+    have valid := hv e rfl
+    cases s with
+    | mk es through =>
+      cases h : lookup es e.id with
+      | some old =>
+        by_cases same : old = e <;>
+          simp [post, postModel, State.project, BizKitScf.post, valid, h, same]
+      | none =>
+        cases through with
+        | none => simp [post, postModel, State.project, BizKitScf.post, valid, h, Open, lookup]
+        | some old =>
+          by_cases opened : old < e.date <;>
+            simp [post, postModel, State.project, BizKitScf.post, valid, h, Open, lookup, opened]
+
+def close (r : State) (through : Nat) : Option State :=
+  if (r.closedThrough.map (fun d => decide (d ≤ through))).getD true then
+    some { r with closedThrough := some through }
+  else none
+
+theorem close_commutes (r : State) (s : Ledger) (hr : Represents r s) (through : Nat) :
+    close r through = (BizKitScf.close s through).map State.project := by
+  subst r
+  cases s with
+  | mk es old =>
+    cases old with
+    | none => rfl
+    | some old =>
+      by_cases h : old ≤ through <;> simp [close, State.project, BizKitScf.close, h]
+
+/-- The validation input is the effective entry after the source merges
+caller attributes over reversal defaults. Invalid effective entries refuse. -/
+def reverse (r : State) (id : Nat) (validate : Entry → Option Entry) (a : ReverseAttrs) :
+    Option State :=
+  (r.entries id).bind fun original => post r (validate (reversalEntry original a))
+
+theorem reverse_commutes (r : State) (s : Ledger) (hr : Represents r s) (id : Nat)
+    (a : ReverseAttrs) (validate : Entry → Option Entry)
+    (hv : ∀ e, validate e = if Admitted e then some e else none) :
+    reverse r id validate a = (BizKitScf.reverse s id a).map State.project := by
+  subst r
+  cases hlookup : lookup s.entries id with
+  | none => simp [reverse, State.project, BizKitScf.reverse, hlookup]
+  | some original =>
+    simp only [reverse, State.project, BizKitScf.reverse, hlookup, Option.bind]
+    let e := reversalEntry original a
+    change post (State.project s) (validate e) = (BizKitScf.post s e).map State.project
+    rw [hv]
+    by_cases h : Admitted e
+    · simp only [h, ite_true]
+      exact post_commutes _ _ rfl (some e) (by intro x hx; cases hx; exact h)
+    · simp [post, BizKitScf.post, h]
+
+end BizKitScf.Source
