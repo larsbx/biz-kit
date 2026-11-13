@@ -41,7 +41,7 @@ defmodule Mix.Tasks.Coop.Owner.Succeed do
     end
 
     [principal, chapter] = positional
-    base = opts[:server] || System.get_env("BIZKIT_URL", "http://127.0.0.1:4000")
+    base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
 
     with :ok <- segment(chapter),
          {:ok, successors} <- parse_successors(Keyword.get_values(opts, :successor)),

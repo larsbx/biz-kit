@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Coop.Offboard do
   principal holds in that project when the ledger admits it. If it stops
   part-way, running it again offboards the rest. Does not start the
   application. `--server` defaults to `$BIZKIT_URL`, then
-  `http://127.0.0.1:4000`.
+  `http://127.0.0.1:4001`, the task host.
   """
 
   use Mix.Task
@@ -31,7 +31,7 @@ defmodule Mix.Tasks.Coop.Offboard do
       List.first(positional) ||
         Mix.raise("usage: mix coop.offboard <PRINCIPAL_ID> [--server URL] [--yes]")
 
-    base = opts[:server] || System.get_env("BIZKIT_URL", "http://127.0.0.1:4000")
+    base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
 
     with {:ok, signer} <- Ops.load_signer("governance"),
          {:ok, details} <- Offboarder.fetch(base, principal, signer) do

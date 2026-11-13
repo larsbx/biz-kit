@@ -963,6 +963,30 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
       }
     },
 
+    # -- Commercial setoff V1: signatures bind exact open source IDs and terms.
+    # This is an inert PROPOSAL ONLY: no debt discharge, reservation or payment.
+    # Legal effect, corporate agency and source history provenance are NOT
+    # established by this business-log admission.
+    "CommercialSetoffIntentRecordedV1" => %{
+      required_roles: ["party_a", "party_b"],
+      disclosure_class: :bilateral,
+      stream: {:payload_field, "commercial-setoff-intents", "intent_id"},
+      payload: %{
+        required: %{
+          "intent_id" => :string,
+          "party_a" => :string,
+          "party_b" => :string,
+          "denomination" => :string,
+          "sources" => :any,
+          "source_terms_digest" => :hash,
+          "a_to_b" => :int,
+          "b_to_a" => :int,
+          "setoff" => :int
+        },
+        optional: %{}
+      }
+    },
+
     # -- Phase 10B: governance recovery rotation (docs/phase10b_plan.md;
     # SUBSTRATE §8 / 08 §10.3). A lost key is not a lost identity: an
     # approved R item (identity evidence), a governance signature against
@@ -1087,8 +1111,8 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
     @builtin_types
     |> Map.merge(TaskCore.Admission.event_types())
     |> Map.merge(RestaurantCore.Admission.event_types())
+    |> Map.merge(DispatchCore.Admission.event_types())
     |> Map.merge(CoopSubstrate.GroupBuys.event_types())
     |> Map.merge(CoopSubstrate.FederationAuthority.event_types())
-    |> Map.merge(Application.get_env(:coop_substrate, :extra_event_types, %{}))
-  end
-end
+    |> Map.merge(CoopSubstrate.CommercialAdmission.event_types())
+    |> Map.merge(CoopSubstrate.WriterFence.event_types())

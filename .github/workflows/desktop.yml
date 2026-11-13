@@ -76,7 +76,19 @@ jobs:
           WEBKIT_DISABLE_DMABUF_RENDERER: '1'
           WEBKIT_DISABLE_COMPOSITING_MODE: '1'
           NO_AT_BRIDGE: '1'
-        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' python3 tests/panel-state-native.py src-tauri/target/release/biz-kit --service-owner-fixture
+        run: |
+          set -euo pipefail
+          tls=$(mktemp -d)
+          trust="/usr/local/share/ca-certificates/biz-kit-procurement-test-$$.crt"
+          trap 'sudo rm -f "$trust"; sudo update-ca-certificates >/dev/null; rm -rf "$tls"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=biz-kit-procurement-test \
+            -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+            -keyout "$tls/key.pem" -out "$tls/cert.pem"
+          sudo install -m 0644 "$tls/cert.pem" "$trust"
+          sudo update-ca-certificates
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' \
+            python3 tests/panel-state-native.py src-tauri/target/release/biz-kit --service-owner-fixture \
+            --procurement-tls "$tls/cert.pem" "$tls/key.pem"
 
       - name: Collect exact-source installers and checksums
         shell: bash

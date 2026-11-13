@@ -63,6 +63,10 @@ pub struct Settings {
     pub protected_paths: Vec<String>,
     pub checks: Vec<Check>,
     pub dispatch: Option<Dispatch>,
+    pub procurement_origin: Option<String>,
+    /// The task host's Operations page, shown in the Operations tile.
+    /// Defaults to `<dispatch.auth>/operations` (`src/operations.rs`).
+    pub operations_url: Option<String>,
 }
 
 impl Default for Settings {
@@ -77,6 +81,8 @@ impl Default for Settings {
             protected_paths: vec![],
             checks: vec![],
             dispatch: None,
+            procurement_origin: None,
+            operations_url: None,
         }
     }
 }

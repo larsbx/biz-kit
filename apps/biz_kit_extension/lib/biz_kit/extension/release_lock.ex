@@ -47,7 +47,49 @@ defmodule BizKit.Extension.ReleaseLock do
   extension ID. A commit supplied by an untrusted caller is not source proof.
   """
   @spec build([module()], map()) :: {:ok, [lock_item()]} | {:error, term()}
-  def build(modules, source_commits) when is_map(source_commits) do
+  def build(modules, source_commits) do
+    with {:ok, _catalog, locked} <- prepare(modules, source_commits) do
+      {:ok, locked}
+    end
+  end
+
+  @doc """
+  Refuse a changed/replaced module or source pin without a newly reviewed lock.
+
+  A matching lock only confirms descriptor/source-pin consistency; it is not
+  durable governance approval or proof that the supplied source SHA is genuine.
+  """
+  @spec verify([module()], map(), term()) :: {:ok, [lock_item()]} | {:error, term()}
+  def verify(modules, source_commits, expected_lock) do
+    with {:ok, _catalog, locked} <- verify_release(modules, source_commits, expected_lock) do
+      {:ok, locked}
+    end
+  end
+
+  @doc """
+  Return the same validated catalog snapshot that was checked against the lock.
+
+  A host can publish these descriptors without running manifest callbacks a
+  second time. The host supplies trusted modules, source pins and reviewed lock.
+  """
+  @spec reviewed_catalog([module()], map(), term()) :: {:ok, [map()]} | {:error, term()}
+  def reviewed_catalog(modules, source_commits, expected_lock) do
+    with {:ok, catalog, _locked} <- verify_release(modules, source_commits, expected_lock) do
+      {:ok, catalog}
+    end
+  end
+
+  defp verify_release(modules, source_commits, expected_lock) when is_list(expected_lock) do
+    with {:ok, catalog, locked} <- prepare(modules, source_commits) do
+      if locked == expected_lock,
+        do: {:ok, catalog, locked},
+        else: {:error, :unreviewed_or_stale_release_lock}
+    end
+  end
+
+  defp verify_release(_, _, _), do: {:error, :invalid_release_lock}
+
+  defp prepare(modules, source_commits) when is_map(source_commits) do
     with {:ok, catalog} <- Catalog.build(modules),
          :ok <- validate_source_commits(catalog, source_commits) do
       locked =
@@ -63,28 +105,11 @@ defmodule BizKit.Extension.ReleaseLock do
           }
         end)
 
-      {:ok, locked}
+      {:ok, catalog, locked}
     end
   end
 
-  def build(_, _), do: {:error, :invalid_source_commits}
-
-  @doc """
-  Refuse a changed/replaced module or source pin without a newly reviewed lock.
-
-  A matching lock only confirms descriptor/source-pin consistency; it is not
-  durable governance approval or proof that the supplied source SHA is genuine.
-  """
-  @spec verify([module()], map(), term()) :: {:ok, [lock_item()]} | {:error, term()}
-  def verify(modules, source_commits, expected_lock) when is_list(expected_lock) do
-    with {:ok, current} <- build(modules, source_commits) do
-      if current == expected_lock,
-        do: {:ok, current},
-        else: {:error, :unreviewed_or_stale_release_lock}
-    end
-  end
-
-  def verify(_, _, _), do: {:error, :invalid_release_lock}
+  defp prepare(_, _), do: {:error, :invalid_source_commits}
 
   defp validate_source_commits(catalog, pins) do
     ids = Enum.map(catalog, & &1.manifest.id)

@@ -116,13 +116,14 @@ integrations, follow the example plus these rules:
 - Quote components sum to `all_in_minor`. Currency must agree with the request and order. This v1
   model supports supplier-funded fees only; nonzero buyer-direct fees and other fee payers are refused.
   Gross order revenue excludes pass-through taxes. Fee agreements describe terms; `orders.fees`
-  describes realized gross supplier-paid fees and actual reversals, with `null` for unknown fees.
+  describes realized gross supplier-paid fees and actual reversals. Use the fee's **Unknown (null)**
+  checkbox if either amount is unknown. Enter both amounts for a known fee.
 - Costs use one pool per `(order_id or null, role, currency)`. Each `items` entry has a unique stable
   expense ID, `kind`, nullable `minor`, `incurred_at`, `evidence_ref`. The same expense cannot appear
   in another pool. Review all applicable categories before setting `complete=true`. A complete empty
   pool attests zero; a missing pool, incomplete review or unknown amount exports `null`. Order costs
   must share its currency. Unknown unallocated cost pools are explicitly emitted for every used
-  currency/role; omission never implies zero. When no service store exists, its order cost/fee must
+  currency/role, including qualified requests without quotes; omission never implies zero. When no service store exists, its order cost/fee must
   be zero; this does not imply that all unallocated service-store pilot expense is zero.
 - Provider-verified refunds have unique IDs and evidence references, and remain separate from costs.
   Full refunds and reversed fees preserve incurred expenses and historical paid/delivered realization.

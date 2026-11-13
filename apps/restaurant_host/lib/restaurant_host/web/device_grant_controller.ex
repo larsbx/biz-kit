@@ -8,7 +8,7 @@ defmodule RestaurantHost.Web.DeviceGrantController do
   use Phoenix.Controller, formats: [:json]
 
   alias CoopSubstrate.Governance.{Authorization, Read}
-  alias RestaurantHost.{DeviceGrants, Restaurant}
+  alias RestaurantHost.{DeviceGrants, Management, Restaurant}
 
   def show(conn, %{"device" => device}) do
     case DeviceGrants.details(Restaurant.current(), device) do
@@ -27,14 +27,40 @@ defmodule RestaurantHost.Web.DeviceGrantController do
          true <- chapter == r.chapter and merchant == r.merchant,
          :ok <- authorize(conn, key_id, chapter),
          {:ok, held} <- DeviceGrants.prepare(r, device, key_id) do
-      conn
-      |> put_status(201)
-      |> json(%{
-        id: held.id,
-        type: held.type,
-        signing_bytes: Base.url_encode64(held.signing_bytes, padding: false),
-        expires_at: held.expires_at
-      })
+      held_response(conn, held)
+    else
+      {:error, _} = error -> refuse(conn, error)
+      _ -> refuse(conn, {:error, :bad_request})
+    end
+  end
+
+  def menu(conn, _) do
+    r = Restaurant.current() |> Restaurant.published_menu()
+    json(conn, %{chapter_id: r.chapter, merchant_id: r.merchant, revision: r.menu_revision})
+  end
+
+  def prepare_management(conn, _) do
+    r = Restaurant.current()
+
+    with %{"operation" => operation} <- conn.path_params,
+         %{"governance_key_id" => key_id, "chapter_id" => chapter, "payload" => payload} = body <-
+           conn.body_params,
+         true <- map_size(body) == 3 and DeviceGrants.identifier?(key_id) and is_map(payload),
+         true <- chapter == r.chapter,
+         :ok <- authorize(conn, key_id, chapter),
+         {:ok, held} <- Management.prepare(r, operation, payload, key_id) do
+      held_response(conn, held)
+    else
+      {:error, _} = error -> refuse(conn, error)
+      _ -> refuse(conn, {:error, :bad_request})
+    end
+  end
+
+  def submit_management(conn, _) do
+    with %{"operation" => operation, "id" => id} <- conn.path_params,
+         {:ok, signature} <- signature(conn.body_params),
+         {:ok, env} <- Management.submit(Restaurant.current(), operation, id, signature) do
+      admitted_response(conn, env)
     else
       {:error, _} = error -> refuse(conn, error)
       _ -> refuse(conn, {:error, :bad_request})
@@ -43,16 +69,37 @@ defmodule RestaurantHost.Web.DeviceGrantController do
 
   def submit(conn, _params) do
     with %{"device" => device, "id" => id} <- conn.path_params,
-         %{"signature" => sig} = body <- conn.body_params,
-         true <- map_size(body) == 1 and is_binary(sig),
-         {:ok, <<_::512>> = signature} <- Base.url_decode64(sig, padding: false),
+         {:ok, signature} <- signature(conn.body_params),
          {:ok, env} <- DeviceGrants.submit(Restaurant.current(), device, id, signature) do
-      conn |> put_status(201) |> json(%{event_id: env.event_id, global_seq: env.global_seq})
+      admitted_response(conn, env)
     else
       {:error, _} = error -> refuse(conn, error)
       _ -> refuse(conn, {:error, :bad_request})
     end
   end
+
+  defp signature(%{"signature" => sig} = body) when map_size(body) == 1 and is_binary(sig) do
+    case Base.url_decode64(sig, padding: false) do
+      {:ok, <<_::512>> = signature} -> {:ok, signature}
+      _ -> {:error, :bad_request}
+    end
+  end
+
+  defp signature(_), do: {:error, :bad_request}
+
+  defp held_response(conn, held) do
+    conn
+    |> put_status(201)
+    |> json(%{
+      id: held.id,
+      type: held.type,
+      signing_bytes: Base.url_encode64(held.signing_bytes, padding: false),
+      expires_at: held.expires_at
+    })
+  end
+
+  defp admitted_response(conn, env),
+    do: conn |> put_status(201) |> json(%{event_id: env.event_id, global_seq: env.global_seq})
 
   # Authenticate preparation as well as the final event. Otherwise anyone
   # knowing the public governance key ID could evict an operator's live holds.

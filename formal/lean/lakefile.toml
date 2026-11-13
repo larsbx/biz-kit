@@ -1,6 +1,6 @@
 name = "BizKitEventProofs"
 version = "0.1.0"
-defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDriverExclusivity", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce"]
+defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDriverExclusivity", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission"]
 
 [[lean_lib]]
 name = "BizKitLeases"
@@ -28,3 +28,9 @@ name = "BizKitDriverExclusivity"
 
 [[lean_lib]]
 name = "BizKitCommerce"
+
+[[lean_lib]]
+name = "BizKitCommercialSetoff"
+
+[[lean_lib]]
+name = "BizKitCommercialAdmission"

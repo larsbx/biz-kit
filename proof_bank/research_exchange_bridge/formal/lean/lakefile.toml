@@ -1,0 +1,14 @@
+name = "researchExchangeBridge"
+version = "0.1.0"
+defaultTargets = ["ResearchExchangeBridge", "bridge_trace"]
+
+[[require]]
+name = "researchExchange"
+path = "../../../research_exchange/formal/lean"
+
+[[lean_lib]]
+name = "ResearchExchangeBridge"
+
+[[lean_exe]]
+name = "bridge_trace"
+root = "Main"

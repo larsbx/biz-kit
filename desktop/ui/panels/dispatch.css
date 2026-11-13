@@ -1,0 +1,48 @@
+/* Dispatch panel (panels/dispatch.js). Shared classes come from style.css / panels.css. */
+.dispatch-board {
+  display: grid;
+  grid-template-columns: minmax(18rem, 24rem) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@container (max-width: 760px) {
+  .dispatch-board { grid-template-columns: 1fr; }
+}
+.dispatch-list { display: flex; flex-direction: column; gap: 6px; }
+.dispatch-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dispatch-detail h3 { margin: 0; }
+.dispatch-new { display: flex; flex-direction: column; gap: 6px; }
+.dispatch-new h3 { margin: 0; }
+.dispatch-load {
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  padding: .6rem .75rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.dispatch-load.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.dispatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  align-items: end;
+}
+.dispatch-grid label { display: flex; flex-direction: column; gap: 3px; font-size: .92rem; color: var(--muted); }
+.dispatch-grid .wide { grid-column: span 2; }
+.dispatch-grid input, .dispatch-grid select { width: 100%; box-sizing: border-box; }
+.dispatch-stops { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.dispatch-stops li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.dispatch-detail table { margin-top: 6px; }
+.dispatch-sub { color: var(--muted); font-size: .85rem; }
+.dispatch-actions { justify-content: flex-end; }
+.dispatch-chips { display: inline-flex; gap: 4px; }
+.dispatch-q { width: 13rem; }
+.dispatch-pre { text-align: left; margin-top: 8px; white-space: pre; }

@@ -1,0 +1,112 @@
+name: Operations workspace acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/task_host/**'
+      - 'desktop/ui/lib/layout.js'
+      - 'desktop/ui/lib/divider.js'
+      - 'desktop/tools/sync-task-tiles.mjs'
+      - 'apps/task_core/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/biz_kit_identity/**'
+      - 'apps/biz_kit_cluster/**'
+      - 'config/**'
+      - 'deploy/papa-operations-dev/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - '.github/workflows/operations-workspace-acceptance.yml'
+  push:
+    branches: [main]
+
+concurrency:
+  group: operations-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  browser-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node desktop/tools/sync-task-tiles.mjs --check
+      - run: node desktop/tools/check-ui.mjs
+      - run: node --test apps/task_host/test/js/*.test.mjs
+      - name: Check deployment bootstrap shell contract
+        run: bash deploy/papa-operations-dev/test-bootstrap.sh
+
+  host-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record exact source revision
+        run: git rev-parse HEAD
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.1'
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Compile the task host and its dependencies
+        working-directory: apps/task_host
+        run: mix compile --warnings-as-errors
+      - name: Check operations Elixir formatting
+        working-directory: apps/task_host
+        run: >-
+          mix format --check-formatted
+          lib/task_host/operations.ex
+          lib/task_host/web/operations_controller.ex
+          lib/task_host/web/app_controller.ex
+          lib/task_host/web/router.ex
+          test/task_host/operations_test.exs
+          test/task_host/web/operations_test.exs
+          test/task_host/web/operations_browser_test.exs
+      - name: Initialize canonical event stores
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
+      - name: Create the task-host session database
+        working-directory: apps/task_host
+        run: mix ecto.create && mix ecto.migrate
+      - name: Configuration, scope and HTTP acceptance
+        working-directory: apps/task_host
+        run: mix test test/task_host/operations_test.exs test/task_host/web/operations_test.exs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned browser
+        run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Composable Operations and TaskHost browser interactions
+        run: NODE_PATH="$(npm root -g)" node apps/task_host/test/browser/tiles.cjs
+      - name: Real identity, ledger and mobile browser acceptance
+        working-directory: apps/task_host
+        run: mix test test/task_host/web/operations_browser_test.exs --include browser

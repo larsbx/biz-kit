@@ -13,8 +13,8 @@ defmodule RestaurantHost.OrdersTest do
     assert Enum.map(priced.lines, &{&1.item_id, &1.quantity, minor(&1.subtotal)}) ==
              [{"margherita", 2, 2500}, {"pepperoni", 1, 1400}]
 
-    # 8.25% of 39.00 is 3.2175, half-up to 3.22.
-    assert {minor(priced.subtotal), minor(priced.tax), minor(priced.total)} == {3900, 322, 4222}
+    # Michigan: 6% of 39.00 is 2.34.
+    assert {minor(priced.subtotal), minor(priced.tax), minor(priced.total)} == {3900, 234, 4134}
     assert Orders.price(r, %{"calzone" => 1}) == {:error, :unknown_item}
   end
 
@@ -24,7 +24,7 @@ defmodule RestaurantHost.OrdersTest do
     {:ok, id} = Orders.place(r, %{"margherita" => 2}, "Ada", "key-1")
     assert {:ok, ^id} = Orders.place(r, %{"margherita" => 2}, "Ada", "key-1")
 
-    assert [%{id: ^id, state: :placed, pickup_name: "Ada", total: 2706, fulfillment: :pickup}] =
+    assert [%{id: ^id, state: :placed, pickup_name: "Ada", total: 2650, fulfillment: :pickup}] =
              Orders.list(r)
 
     assert Orders.place(r, %{}, "Ada", "key-2") == {:error, :no_lines}

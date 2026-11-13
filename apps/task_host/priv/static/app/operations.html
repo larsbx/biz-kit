@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="same-origin" />
+    <title>Operations · Biz-kit</title>
+    <link rel="stylesheet" href="/app/operations.css" />
+    <script type="module" src="/app/operations.js"></script>
+    <link rel="stylesheet" href="/app/tiles.css" />
+  </head>
+  <body>
+    <a href="#main" class="skip-link">Skip to work</a>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <a class="brand" href="/operations" aria-label="Operations home"
+          ><span class="brand-mark" aria-hidden="true">b</span
+          ><span>biz-kit<span class="brand-sub">OPERATIONS</span></span></a
+        >
+        <div class="sidebar-heading">Your workspaces</div>
+        <nav id="workspace-list" aria-label="Workspaces"></nav>
+        <div class="sidebar-footer">
+          <p>One view of your work.</p>
+          <button id="settings" class="quiet" type="button">
+            Workspace settings
+          </button>
+        </div>
+      </aside>
+      <div class="content">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow">WORKSPACE</span
+            ><strong id="operations-title">Operations</strong>
+          </div>
+          <div class="topbar-actions">
+            <span id="session-label" class="subtle"></span>
+            <button id="settings-top" type="button" class="quiet">
+              Settings
+            </button>
+            <button id="refresh" type="button" class="quiet">Refresh</button>
+            <a
+              id="sign-in"
+              class="button primary"
+              href="/auth/workos/login"
+              hidden
+              >Sign in</a
+            >
+            <button id="sign-out" type="button" class="quiet" hidden>
+              Sign out
+            </button>
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <section class="page-heading">
+            <div>
+              <p id="date-label" class="eyebrow"></p>
+              <h1 id="view-title">Today</h1>
+              <p id="view-description" class="subtle">
+                A clear view of the work that needs your attention.
+              </p>
+            </div>
+            <div class="status-box">
+              <span id="status" role="status" aria-live="polite"
+                >Connecting…</span
+              ><span id="time-zone" class="subtle"></span>
+            </div>
+          </section>
+          <section class="metrics" aria-label="Work summary">
+            <div class="metric">
+              <span>On your radar today</span
+              ><strong id="metric-today">—</strong
+              ><span class="metric-note">Due, scheduled, or in progress</span>
+            </div>
+            <div class="metric">
+              <span>Past due</span><strong id="metric-overdue">—</strong
+              ><span class="metric-note">Unfinished work with a deadline</span>
+            </div>
+            <div class="metric">
+              <span>Awaiting review</span><strong id="metric-review">—</strong
+              ><span class="metric-note">Evidence submitted for review</span>
+            </div>
+          </section>
+          <section class="work-panel" aria-label="Work">
+            <div class="toolbar">
+              <label class="search-label"
+                ><span class="sr-only">Search work</span
+                ><input
+                  id="search"
+                  type="search"
+                  placeholder="Search work…"
+                  autocomplete="off"
+                  maxlength="160"
+              /></label>
+              <label class="category-label"
+                ><span class="sr-only">Category</span
+                ><select id="category-filter">
+                  <option value="">All categories</option>
+                </select></label
+              >
+            </div>
+            <nav id="view-tabs" class="tabs" aria-label="Work views">
+              <button type="button" data-tab="today" aria-current="page">
+                Today
+              </button>
+              <button type="button" data-tab="upcoming">Upcoming</button>
+              <button type="button" data-tab="all">All work</button>
+              <button type="button" data-tab="review">Review</button>
+              <button type="button" data-tab="unscheduled">Unscheduled</button>
+              <button type="button" data-tab="completed">Closed</button>
+              <button type="button" data-tab="workflows">Workflows</button>
+            </nav>
+            <div class="list-heading">
+              <h2 id="list-title">Today’s work</h2>
+              <span id="result-count" class="subtle"></span>
+            </div>
+            <div id="task-list" aria-live="polite" aria-busy="true"></div>
+          </section>
+          <section
+            id="workspace-actions"
+            class="workspace-actions"
+            aria-label="Open workspaces"
+          ></section>
+          <footer class="page-footer">
+            <span>Biz-kit Operations</span
+            ><span
+              >Changes refresh every 15 seconds while this page is
+              visible.</span
+            >
+          </footer>
+        </main>
+      </div>
+    </div>
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+      <div class="dialog-heading">
+        <h2 id="settings-title">Workspace settings</h2>
+        <button id="close-settings" type="button" class="quiet">Close</button>
+      </div>
+      <p>
+        Names, categories, timezone, and connected projects are configured by
+        your administrator. Each workspace uses the project’s existing access
+        permissions.
+      </p>
+      <div id="settings-content"></div>
+    </dialog>
+  </body>
+</html>

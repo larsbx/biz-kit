@@ -116,7 +116,7 @@ jobs:
           apps/spruce_goose/lib/spruce_goose/release_tasks.ex
           scripts/release_smoke.exs
           apps/coop_substrate/test/run_readiness_order_test.exs
-          apps/spruce_goose/test/spruce_goose/web/todo_test.exs
+          apps/task_host/test/task_host/web/todo_test.exs
           apps/coop_substrate/test/task_readiness_commands_test.exs
           apps/coop_substrate/lib/coop_substrate/tasks.ex
           apps/coop_substrate/lib/coop_substrate/buzz/tasks.ex
@@ -144,15 +144,15 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/feed/access.ex
           apps/coop_substrate/lib/coop_substrate/feed/nonces.ex
           apps/coop_substrate/test/feed_access_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/feed_controller.ex
-          apps/spruce_goose/lib/spruce_goose/web/router.ex
-          apps/spruce_goose/lib/spruce_goose/web/project_ownership_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/project_ownership_test.exs
-          apps/spruce_goose/test/spruce_goose/web/feed_test.exs
+          apps/task_host/lib/task_host/web/feed_controller.ex
+          apps/task_host/lib/task_host/web/router.ex
+          apps/task_host/lib/task_host/web/project_ownership_controller.ex
+          apps/task_host/test/task_host/web/project_ownership_test.exs
+          apps/task_host/test/task_host/web/feed_test.exs
           apps/spruce_goose/config/test.exs
-          apps/spruce_goose/lib/spruce_goose/web/auth_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/auth_test.exs
-          apps/spruce_goose/test/support/ledger_fixtures.ex
+          apps/task_host/lib/task_host/web/auth_controller.ex
+          apps/task_host/test/task_host/web/auth_test.exs
+          apps/task_host/test/support/ledger_fixtures.ex
           apps/biz_kit_identity/mix.exs
           apps/biz_kit_identity/lib/biz_kit/identity.ex
           apps/biz_kit_identity/lib/biz_kit/identity/application.ex
@@ -165,23 +165,23 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/commands.ex
           apps/task_core/lib/task_core/decisions.ex
           apps/coop_substrate/test/commands_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/command_controller.ex
-          apps/spruce_goose/lib/spruce_goose/web/app_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/command_test.exs
-          apps/spruce_goose/test/spruce_goose/web/browser_test.exs
+          apps/task_host/lib/task_host/web/command_controller.ex
+          apps/task_host/lib/task_host/web/app_controller.ex
+          apps/task_host/test/task_host/web/command_test.exs
+          apps/task_host/test/task_host/web/browser_test.exs
           apps/coop_substrate/lib/coop_substrate/run_readiness.ex
-          apps/spruce_goose/lib/spruce_goose/web/run_readiness_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/run_readiness_test.exs
-          apps/spruce_goose/test/support/ledger_fixtures.ex
-          apps/spruce_goose/test/support/identity_fixtures.ex
+          apps/task_host/lib/task_host/web/run_readiness_controller.ex
+          apps/task_host/test/task_host/web/run_readiness_test.exs
+          apps/task_host/test/support/ledger_fixtures.ex
+          apps/task_host/test/support/identity_fixtures.ex
           apps/coop_substrate/lib/coop_substrate/enrolments.ex
           apps/coop_substrate/lib/coop_substrate/enrolments/approver.ex
           apps/coop_substrate/lib/mix/tasks/coop.enrol.ex
           apps/coop_substrate/test/enrolments_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/requests.ex
-          apps/spruce_goose/lib/spruce_goose/web/device_controller.ex
-          apps/spruce_goose/lib/spruce_goose/web/enrolment_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/device_test.exs
+          apps/task_host/lib/task_host/web/requests.ex
+          apps/task_host/lib/task_host/web/device_controller.ex
+          apps/task_host/lib/task_host/web/enrolment_controller.ex
+          apps/task_host/test/task_host/web/device_test.exs
           apps/coop_substrate/lib/coop_substrate/devices.ex
           apps/coop_substrate/lib/coop_substrate/devices/revoker.ex
           apps/coop_substrate/lib/coop_substrate/governance/client.ex
@@ -191,9 +191,9 @@ jobs:
           apps/coop_substrate/lib/coop_substrate/projections/tasks.ex
           apps/coop_substrate/test/support/task_histories.ex
           apps/coop_substrate/test/support/task_timing_fixtures.ex
-          apps/spruce_goose/lib/spruce_goose/web/grant_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/revocation_test.exs
-          apps/spruce_goose/test/support/ledger_fixtures.ex
+          apps/task_host/lib/task_host/web/grant_controller.ex
+          apps/task_host/test/task_host/web/revocation_test.exs
+          apps/task_host/test/support/ledger_fixtures.ex
           apps/spruce_goose/mix.exs
           apps/spruce_goose/config/config.exs
           apps/coop_substrate/lib/coop_substrate/offboarding.ex
@@ -210,15 +210,15 @@ jobs:
           apps/coop_substrate/lib/mix/tasks/coop.offboard.ex
           apps/coop_substrate/test/offboarding_test.exs
           apps/coop_substrate/test/task_suggestions_properties_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/principal_controller.ex
-          apps/spruce_goose/lib/spruce_goose/web/requests.ex
-          apps/spruce_goose/lib/spruce_goose/web/router.ex
-          apps/spruce_goose/test/spruce_goose/web/offboarding_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/rate_limit.ex
-          apps/spruce_goose/lib/spruce_goose/web/rate_limit/counts.ex
-          apps/spruce_goose/test/spruce_goose/web/rate_limit_test.exs
+          apps/task_host/lib/task_host/web/principal_controller.ex
+          apps/task_host/lib/task_host/web/requests.ex
+          apps/task_host/lib/task_host/web/router.ex
+          apps/task_host/test/task_host/web/offboarding_test.exs
+          apps/task_host/lib/task_host/web/rate_limit.ex
+          apps/task_host/lib/task_host/web/rate_limit/counts.ex
+          apps/task_host/test/task_host/web/rate_limit_test.exs
           apps/spruce_goose/lib/spruce_goose/application.ex
-          apps/spruce_goose/lib/spruce_goose/web/endpoint.ex
+          apps/task_host/lib/task_host/web/endpoint.ex
           apps/biz_kit_cluster/mix.exs
           apps/biz_kit_cluster/lib/biz_kit/cluster.ex
           apps/biz_kit_cluster/lib/biz_kit/cluster/application.ex
@@ -229,21 +229,21 @@ jobs:
           apps/biz_kit_identity/test/cluster_sessions_test.exs
           apps/task_core/lib/task_core/steps.ex
           apps/coop_substrate/test/lifecycle_test.exs
-          apps/spruce_goose/test/spruce_goose/web/lifecycle_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/artifact_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/upload_test.exs
+          apps/task_host/test/task_host/web/lifecycle_test.exs
+          apps/task_host/lib/task_host/web/artifact_controller.ex
+          apps/task_host/test/task_host/web/upload_test.exs
           apps/coop_substrate/test/artifact_quota_test.exs
           apps/coop_substrate/lib/coop_substrate/artifact_custody/quota.ex
           apps/coop_substrate/test/execution_test.exs
-          apps/spruce_goose/test/spruce_goose/web/execution_test.exs
+          apps/task_host/test/task_host/web/execution_test.exs
           apps/coop_substrate/lib/coop_substrate/cancellation.ex
           apps/coop_substrate/test/support/execution_fixtures.ex
           apps/coop_substrate/test/cancel_reopen_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/task_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/cancel_test.exs
+          apps/task_host/lib/task_host/web/task_controller.ex
+          apps/task_host/test/task_host/web/cancel_test.exs
           apps/coop_substrate/lib/coop_substrate/administrators.ex
-          apps/spruce_goose/lib/spruce_goose/web/administrator_controller.ex
-          apps/spruce_goose/test/spruce_goose/web/administration_test.exs
+          apps/task_host/lib/task_host/web/administrator_controller.ex
+          apps/task_host/test/task_host/web/administration_test.exs
           apps/coop_substrate/test/own_devices_test.exs
           apps/coop_substrate/test/chapter_projects_test.exs
           apps/coop_substrate/lib/coop_substrate/records.ex
@@ -270,16 +270,16 @@ jobs:
           apps/coop_substrate/test/task_hierarchy_test.exs
           apps/spruce_goose/lib/spruce_goose/release_tasks.ex
           scripts/release_smoke.exs
-          apps/spruce_goose/lib/spruce_goose/web/blueprint_controller.ex
-          apps/spruce_goose/lib/spruce_goose/web/requests.ex
-          apps/spruce_goose/lib/spruce_goose/web/command_controller.ex
-          apps/spruce_goose/lib/spruce_goose/web/administrator_controller.ex
-          apps/spruce_goose/lib/mix/tasks/coop.blueprint.ex
-          apps/spruce_goose/test/spruce_goose/web/blueprint_test.exs
+          apps/task_host/lib/task_host/web/blueprint_controller.ex
+          apps/task_host/lib/task_host/web/requests.ex
+          apps/task_host/lib/task_host/web/command_controller.ex
+          apps/task_host/lib/task_host/web/administrator_controller.ex
+          apps/task_host/lib/mix/tasks/coop.blueprint.ex
+          apps/task_host/test/task_host/web/blueprint_test.exs
           apps/coop_substrate/lib/coop_substrate/feed/view.ex
           apps/coop_substrate/test/support/task_histories.ex
           apps/coop_substrate/test/change_feed_view_test.exs
-          apps/spruce_goose/test/spruce_goose/web/browser_test.exs
+          apps/task_host/test/task_host/web/browser_test.exs
           apps/task_core/lib/task_core/admission.ex
           apps/task_core/lib/task_core/state.ex
           apps/task_core/lib/task_core/steps.ex
@@ -302,7 +302,7 @@ jobs:
           apps/dispatch/lib/dispatch/accounts/validations/known_constraints.ex
           apps/biz_kit_identity/lib/biz_kit/identity/native_logins.ex
           apps/biz_kit_identity/test/native_sign_in_test.exs
-          apps/spruce_goose/test/spruce_goose/web/native_sign_in_test.exs
+          apps/task_host/test/task_host/web/native_sign_in_test.exs
           apps/dispatch/lib/dispatch/identity/tokens/biz_kit_session.ex
           apps/dispatch/test/dispatch/identity/biz_kit_session_test.exs
           apps/spruce_goose/test/dispatch_runtime_config_test.exs
@@ -314,8 +314,8 @@ jobs:
           apps/biz_kit_identity/mix.exs
           apps/biz_kit_identity/test/session_revocation_race_test.exs
           apps/biz_kit_identity/test/support/paused_session_store.ex
-          apps/spruce_goose/test/native_session_revocation_test.exs
-          apps/spruce_goose/lib/spruce_goose/web/native_session_store.ex
+          apps/task_host/test/task_host/native_session_revocation_test.exs
+          apps/biz_kit_identity/lib/biz_kit/identity/postgres_session_store.ex
           apps/spruce_goose/priv/repo/migrations/20261021120000_create_identity_native_sessions.exs
           apps/dispatch/lib/dispatch/accounts/device_keys.ex
           apps/dispatch/lib/dispatch_web/controllers/device_controller.ex
@@ -391,6 +391,11 @@ jobs:
       - name: Test identity
         working-directory: apps/biz_kit_identity
         run: mix test
+      # SpruceGoose's web surface (docs/architecture/2026-11-09-task-host.md):
+      # sign-in, the web view's API, signed commands and the change feed.
+      - name: Test the task host
+        working-directory: apps/task_host
+        run: mix ecto.create && mix ecto.migrate && mix test
       - name: Create and migrate orchestration database
         working-directory: apps/spruce_goose
         run: mix ecto.create && mix ecto.migrate
@@ -422,16 +427,16 @@ jobs:
         with:
           node-version: 22
       - name: Test the web view's modules
-        run: node --test apps/spruce_goose/test/js/*.test.mjs
+        run: node --test apps/task_host/test/js/*.test.mjs
       - name: Install Playwright and Chromium
         run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
       - name: Test the workflow in a browser
-        working-directory: apps/spruce_goose
+        working-directory: apps/task_host
         run: mix test --only browser
 
   release-smoke:
-    # The production orchestration release (the ledger and SpruceGoose,
-    # without dispatch): built, migrated twice, booted, its web view served,
+    # The production orchestration release (the ledger, the task host and
+    # SpruceGoose, without dispatch): built, migrated twice, booted, its web view served,
     # and task commands admitted and refused on its own ledger
     # (scripts/release-smoke.sh, docs/deploy.md).
     runs-on: ubuntu-24.04

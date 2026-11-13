@@ -36,7 +36,7 @@ defmodule CoopSubstrate.Log do
 
   alias CoopSubstrate.Canonical
   alias CoopSubstrate.Crypto
-  alias CoopSubstrate.Projections.Membership, as: Gate
+  alias CoopSubstrate.Projections.AdmissionGate, as: Gate
   alias CoopSubstrate.Protocol.Envelope
   alias CoopSubstrate.Protocol.StreamRoot
   alias CoopSubstrate.Protocol.TypeRegistry
@@ -59,6 +59,7 @@ defmodule CoopSubstrate.Log do
 
   @impl true
   def init(_opts) do
+    :ok = CoopSubstrate.Procurement.register_types!()
     {head, gate, links} = recover()
     :ok = repair_links(links)
     {:ok, %{head: head, gate: gate}}
@@ -103,7 +104,7 @@ defmodule CoopSubstrate.Log do
   end
 
   @doc """
-  The validity-gate state at the head: the Membership fold the appender admits
+  The validity-gate state at the head: the combined fold the appender admits
   against. A copy, for read-side decisions that must agree with admission.
   """
   @spec gate(GenServer.server()) :: map()
@@ -123,6 +124,10 @@ defmodule CoopSubstrate.Log do
         {:federation_effect, context, request, effect},
         :infinity
       )
+
+  @doc "Current-authority private procurement snapshot, checked in the appender."
+  def procurement_snapshot(%Envelope{} = request, server \\ @server),
+    do: GenServer.call(server, {:procurement_snapshot, request})
 
   # -- read API (straight from the store; no serialization needed) -------------
 
@@ -438,6 +443,10 @@ defmodule CoopSubstrate.Log do
 
   def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
 
+  def handle_call({:procurement_snapshot, request}, _from, state) do
+    {:reply, CoopSubstrate.Procurement.read_snapshot(request, state.gate), state}
+  end
+
   def handle_call({:federation_effect, context, request, effect}, _from, state) do
     result = CoopSubstrate.FederationFence.run(context, state.head, state.gate, request, effect)
     {:reply, result, state}
@@ -461,6 +470,20 @@ defmodule CoopSubstrate.Log do
   end
 
   defp duplicate(envelopes, gate) do
+    case CoopSubstrate.CommercialAdmission.duplicate(envelopes, gate) do
+      :new -> procurement_duplicate(envelopes, gate)
+      result -> result
+    end
+  end
+
+  defp procurement_duplicate(envelopes, gate) do
+    case CoopSubstrate.Procurement.duplicate(envelopes, gate) do
+      :new -> existing_duplicate(envelopes, gate)
+      result -> result
+    end
+  end
+
+  defp existing_duplicate(envelopes, gate) do
     case CoopSubstrate.GroupBuys.duplicate(envelopes, gate.group_buys) do
       :new -> CoopSubstrate.Tasks.duplicate(envelopes, gate.orchestration)
       result -> result
@@ -468,8 +491,11 @@ defmodule CoopSubstrate.Log do
   end
 
   defp append_verified(envelopes, head, gate, state) do
-    with :ok <- verify_validity(envelopes, gate),
-         {:ok, assigned, new_head} <- assign_chains(envelopes, head),
+    # Tentative assignment is pure. Full source-record hashes must be identical
+    # during ordered batch validation and committed/recovery folds. No state is
+    # published until validation, encoding and expected-version persistence pass.
+    with {:ok, assigned, new_head} <- assign_chains(envelopes, head),
+         :ok <- verify_validity(assigned, gate),
          {:ok, event_data} <- encode_batch(assigned),
          :ok <- persist(event_data, head.global_seq) do
       link_batch(assigned, head)
@@ -532,19 +558,19 @@ defmodule CoopSubstrate.Log do
   # against the gate state — the pure Membership fold of the log so far —
   # advanced through the batch in order so event N sees N-1. Rejection aborts
   # the whole batch before persistence; the advanced gate is recomputed from
-  # the assigned envelopes only after the append succeeds. (The gate fold
-  # never reads log-assigned fields, so folding unassigned envelopes here is
-  # sound.) A project's owner must be eligible after the whole batch, not after
-  # each event, so one batch can replace an owner and end the old owner's
-  # eligibility in either order (TaskCore.Admission.check_batch/2); a breach is
-  # reported against the batch's last event.
+  # the assigned envelopes only after the append succeeds. Assignment is now
+  # tentative and precedes this check: commercial provenance reads full-record
+  # hashes, so pre-commit and replay folds must see identical chain fields.
+  # Defer cross-task constraints (e.g. never disable the last owner) to the
+  # batch's final state so a governed rotation (disable + enable) is atomic.
   defp verify_validity(envelopes, gate) do
     envelopes
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, Map.put(gate, :defer_transition, true)}, fn {env, index},
                                                                            {:ok, gate} ->
       result =
-        with :ok <- CoopSubstrate.GroupBuys.live_check(env, gate),
+        with :ok <- CoopSubstrate.Procurement.live_check(env, gate),
+             :ok <- CoopSubstrate.GroupBuys.live_check(env, gate),
              do: TypeRegistry.validity_check(env, gate)
 
       case result do

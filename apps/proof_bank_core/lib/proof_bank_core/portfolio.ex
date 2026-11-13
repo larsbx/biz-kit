@@ -68,6 +68,9 @@ defmodule ProofBankCore.Portfolio do
     # order_core, restaurant_core and restaurant_host at the next milestone.
     {"order_core", :capability, :conformance,
      "Order authorization must precede state inspection, and no lifecycle state may assert payment or settlement."},
+    # Registered without review by owner decision (2026-11-08).
+    {"procurement_host", :hosted, :conformance,
+     "A command must be re-signed only after an explicit pre-append clock refusal, and never after an outcome that may have committed."},
     {"restaurant_core", :capability, :conformance,
      "A restaurant event must be admitted only when signed by a device a governance grant authorized for that action."},
     {"restaurant_host", :hosted, :conformance,
@@ -76,8 +79,13 @@ defmodule ProofBankCore.Portfolio do
      "Withdrawal of marketing consent must prevent future actions under superseded consent."},
     {"school_ops", :hosted, :conformance,
      "Curriculum source revisions must be pinned and staff task completion must not imply learner attainment."},
+    {"scf_core", :capability, :conformance,
+     "Accepted SCF postings must preserve debit-credit equality and closed-period entries, including during retries and reversals."},
     {"spruce_goose", :hosted, :manual,
      "Existing orchestration commands must not create a second writer during signed-ledger migration."},
+    # Registered without review by owner decision (2026-11-09).
+    {"task_host", :hosted, :conformance,
+     "A held command must be appended only with its owner's signature over exactly the bytes held, and only once."},
     {"task_core", :foundation, :conformance,
      "Task transitions must refuse stale versions and preserve signed approval and review requirements."},
     {"proof_bank_core", :foundation, :conformance,

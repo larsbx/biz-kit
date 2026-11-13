@@ -14,7 +14,8 @@ import.
 | `keel` | `apps/keel` | `larsbx/keel` | Company-structure primitives: pure functions, no runtime |
 | `coop_substrate` | `apps/coop_substrate` | `larsbx/coop_substrate` | Signed, append-only event ledger and capital accounts (Rust NIF via rustler) |
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
-| `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | Task/workflow views, web/MCP endpoint, and the legacy orchestration writer |
+| `task_host` | `apps/task_host` | `apps/spruce_goose`'s web layer | Sign-in (`/auth`), the task web view, its signed commands and the change feed, over the ledger ([decision](docs/architecture/2026-11-09-task-host.md)) |
+| `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | The legacy orchestration writer and its CLI service, until decommission |
 | `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database. An imported copy: `larsbx/eatsbot` stays the authoritative, independently evolving product, and production deploys from there |
 | `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
 
@@ -36,6 +37,7 @@ Shared apps developed in this umbrella:
 | `commerce_core` | `apps/commerce_core` | Commercial pricing, merchant-scoped catalog projection and read-only Eatsbot adapter |
 | `inventory_core` | `apps/inventory_core` | Pure scoped stock, reservations, transfers and deterministic replay (no live writer) |
 | `order_core` | `apps/order_core` | Money-free order core: merchant-neutral lifecycle and placement (idempotency, one order per cart) |
+| `scf_core` | `apps/scf_core` | Pure Algerian accounting under the Système Comptable Financier: chart, ledger, TVA/G50, bilan and compte de résultat |
 | `restaurant_host` | `apps/restaurant_host` | The rebuilt eatsbot's host: cash-only LiveView storefront and kitchen board over the signed Log |
 | `restaurant_core` | `apps/restaurant_core` | Money-free restaurant layer: kitchen stages, signed-event admission and the pinned legacy order fixtures |
 | `fulfillment_core` | `apps/fulfillment_core` | Cross-domain transport handoff protocol with Eatsbot/Dispatch adapters |
@@ -76,6 +78,7 @@ mix compile
 (cd apps/biz_kit_cluster  && mix test)
 (cd apps/dispatch       && mix test)                      # unit tier
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
+(cd apps/task_host      && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 (cd apps/eatsbot        && MIX_ENV=test mix ash.setup && ADMIN_API_KEY=test mix test)
 (cd apps/school_ops     && mix test)                        # no database required
@@ -83,6 +86,22 @@ mix compile
 
 dispatch's test database connects as the Postgres role `dispatch`; create it
 (`create role dispatch login superuser;`) on a fresh cluster.
+
+### Eatsbot delivery verification quickstart
+
+From the repository root, fetch the reviewed [delivery handoff PR #365](https://github.com/larsbx/biz-kit/pull/365) into your local object store. The runner tests the pinned commit by default and accepts an optional commit as its third argument.
+
+```bash
+git fetch origin refs/pull/365/head
+export BEAM_IMAGE='<your Elixir 1.19.0 / OTP 27.3.4 build image>'
+bash scripts/eatsbot-delivery-checks/run.sh . baseline
+bash scripts/eatsbot-delivery-checks/run.sh . launch
+bash scripts/eatsbot-delivery-checks/run.sh . quint
+```
+
+- `baseline` runs the order, fulfillment, restaurant, signed-ledger and host suites. `launch` probes checkout without a working Dispatch service and a pickup report received after cancellation. Expect `launch` to exit nonzero on the pinned revision because it reproduces the two launch blockers.
+- Both runtime modes require Docker, an image with Bash, Git, Elixir 1.19.0, OTP 27.3.4 and native build tools (including Rust/Cargo), and access to Mix dependency sources. They use disposable PostgreSQL 16 with no published port and synthetic orders and signing keys. Set `POSTGRES_IMAGE` to override `postgres:16`.
+- `quint` runs the checkout's formal coverage script. It requires Python 3, Quint and a working Apalache backend on the invoking machine.
 
 ### Historical import validation
 
@@ -110,7 +129,7 @@ The root [mix.exs](mix.exs) defines both profiles from the same source and lock:
 
 | Release | Includes | Build |
 | --- | --- | --- |
-| `orchestration` | Ledger, identity, cluster and SpruceGoose; excludes Dispatch | `MIX_ENV=prod mix release orchestration` |
+| `orchestration` | Ledger, identity, cluster, the task host and SpruceGoose; excludes Dispatch | `MIX_ENV=prod mix release orchestration` |
 | `biz_kit` | The above plus Dispatch and Keel | `MIX_ENV=prod mix release biz_kit` |
 
 [docs/deploy.md](docs/deploy.md) describes settings, migration limits and
@@ -128,8 +147,8 @@ production writers have been consolidated.
   SpruceGoose's isolated runtime tests use inert peer settings
   (`SpruceGoose.UmbrellaRuntime`); those fixtures are not deployment evidence.
 - Dispatch and SpruceGoose still read shared `DATABASE_URL`, `POOL_SIZE` and
-  `SECRET_KEY_BASE` variables, and their HTTP listeners both default to 4000
-  (`PORT` / `MCP_PORT`). Their conflicting tables and migration histories
+  `SECRET_KEY_BASE` variables. Dispatch listens on `PORT` (4000), the task
+  host on `TASK_HOST_PORT` (4001). Their conflicting tables and migration histories
   prevent a safe shared-schema deployment. Isolation is a migration boundary;
   the selected destination is one reconciled database, not permanent separate
   authorities. See the [database contract](docs/architecture/2026-10-11-single-source-of-truth.md#commands-and-projections)
@@ -155,6 +174,17 @@ production writers have been consolidated.
   d-patch field app's DTOs are held to a copy of it.
 
 ## Roadmap
+
+### Configurable operations workspace
+
+`/operations` in `task_host` provides Today, Upcoming, active work, evidence
+review, closed tasks and workflow templates over authorized canonical project
+views. Configure the title, timezone, workspace labels, categories and exact
+project mappings with `TASK_HOST_OPERATIONS_CONFIG`; see
+[the operations MVP contract](docs/architecture/2026-11-09-configurable-operations-mvp.md)
+and [example configuration](config/operations.example.json).
+This first increment reuses existing signed task actions. Assignment, recurring
+execution and purchasing additions remain later stages of the documented MVP.
 
 [docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
 in what order, the remaining consolidation steps, and open questions.

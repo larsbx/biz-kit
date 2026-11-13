@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "title": "Operations",
+  "time_zone": "Etc/UTC",
+  "workspaces": [
+    {
+      "id": "workspace-a",
+      "label": "Workspace A",
+      "category": "general",
+      "chapter_id": "chapter-a",
+      "tenant_id": "tenant-a",
+      "project_id": "project-a"
+    },
+    {
+      "id": "workspace-b",
+      "label": "Workspace B",
+      "category": "general",
+      "chapter_id": "chapter-b",
+      "tenant_id": "tenant-b",
+      "project_id": "project-b"
+    }
+  ]
+}

@@ -1,7 +1,36 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "description": "The app's own webview. The Operations page (a remote origin in a child webview) is deliberately not named.",
+  "permissions": [
+    "core:default",
+    "allow-app-info",
+    "allow-run-on",
+    "allow-preview-command",
+    "allow-list-units",
+    "allow-unit-action-script",
+    "allow-host-health",
+    "allow-list-scripts",
+    "allow-run-script",
+    "allow-list-configs",
+    "allow-read-config",
+    "allow-diff-config",
+    "allow-write-config",
+    "allow-dispatch-status",
+    "allow-dispatch-sign-in",
+    "allow-dispatch-sign-out",
+    "allow-dispatch-request",
+    "allow-open-procurement",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "allow-operations-status",
+    "allow-operations-place",
+    "allow-operations-hide",
+    "allow-operations-reload"
+  ],
+  "webviews": [
+    "main"
+  ]
 }

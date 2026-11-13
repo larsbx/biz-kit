@@ -5,9 +5,29 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Hanbali commercial contract taxonomy — 2026-11-13](2026-11-13-hanbali-commercial-contract-taxonomy.md):
+  sourced contract families, intra-school choices and contemporary composites
+  mapped to the at-cost producer cooperative; proposed evidence, admission and
+  implementation requirements. Includes a [primary source register](2026-11-13-hanbali-contract-sources.md).
+  Recording the specification does not activate financial or contractual effects.
+- [Dispatch spatial workspace and minimal stack — 2026-11-11](../plans/2026-11-11-dispatch-spatial-workspace.md):
+  accepted GEV-00–08 roadmap for God's Eye View reuse, authorized spatial data,
+  planning, history and minimal deployment. The earlier auxiliary stack was
+  proposed only; omit unneeded components from the first build. Implementation
+  and field acceptance remain pending.
+- [Task host — 2026-11-09](2026-11-09-task-host.md): SpruceGoose's web
+  surface (`/auth`, the task view, its commands and the feed) rehosted on
+  `apps/task_host`; native sessions kept; `/mcp` and the OAuth2 issuer dropped.
+- [Dispatch assignments on the ledger — 2026-11-09](2026-11-09-dispatch-assignments-on-the-ledger.md):
+  first Dispatch slice of consolidation step 4; the assignment lifecycle as
+  signed, admitted events, with equipment exclusivity at the append gate. The
+  board does not use it yet.
 - [SpruceGoose decommission checklist — 2026-11-06](2026-11-06-sprucegoose-decommission.md):
   proposed; surfaces to rehost, the authority cutover, history kept as inert
   audit data, and what is not migrated.
+- [Eatsbot decommission checklist — 2026-11-07](2026-11-07-eatsbot-decommission.md):
+  proposed; the 10-28 plan restated for the rebuilt eatsbot: surfaces to
+  rehost or drop, single-writer cutover, open obligations, and R0–R6 status.
 - [PostgreSQL event log, Redis operations and TigerBeetle — 2026-10-30](2026-10-30-postgres-event-log-redis-consolidation.md):
   selected staged EventStore-library replacement, Redis/Oban/Kafka consolidation,
   SQL priorities, legacy retirement and compatibility/recovery gates; implementation pending.
@@ -22,6 +42,7 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
   proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
   with R0–R6 source inventory, migration, authorization, cutover and archive gates.
+  Its exit conditions are restated by the 2026-11-07 checklist.
 - [ExtensionV1 semantic upgrade assessment — 2026-11-02](2026-11-02-extension-upgrade-compatibility.md):
   fail-closed V1 compatibility and review-required changes; no deployment approval.
 - [ExtensionV1 source-pinned release lock — 2026-11-02](2026-11-02-extension-source-lock.md):

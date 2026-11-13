@@ -4,7 +4,8 @@ on:
     paths:
       - 'apps/task_core/**'
       - 'apps/coop_substrate/**'
-      - 'apps/spruce_goose/**'
+      - 'apps/task_host/**'
+      - 'apps/biz_kit_identity/**'
       - '.github/workflows/project-ownership-acceptance.yml'
   push:
     branches: [main]
@@ -56,8 +57,8 @@ jobs:
           apps/coop_substrate/test/owner_succession_test.exs
           apps/coop_substrate/test/project_ownership_backfill_test.exs
           apps/coop_substrate/test/chapter_projects_test.exs
-          apps/spruce_goose/test/spruce_goose/web/project_ownership_test.exs
-          apps/spruce_goose/test/spruce_goose/web/ownership_browser_test.exs
+          apps/task_host/test/task_host/web/project_ownership_test.exs
+          apps/task_host/test/task_host/web/ownership_browser_test.exs
       - name: TaskCore ownership invariants
         working-directory: apps/task_core
         run: mix test test/ownership_test.exs
@@ -67,19 +68,19 @@ jobs:
           mix test test/owner_succession_test.exs test/project_ownership_backfill_test.exs
           test/owner_succession_cli_test.exs test/owner_backfill_cli_test.exs
           test/chapter_projects_test.exs
-      - name: Create and migrate orchestration database
-        working-directory: apps/spruce_goose
+      - name: Create and migrate the task host's database
+        working-directory: apps/task_host
         run: mix ecto.create && mix ecto.migrate
       - name: Signed ownership HTTP acceptance
-        working-directory: apps/spruce_goose
-        run: mix test test/spruce_goose/web/project_ownership_test.exs test/spruce_goose/web/administration_test.exs
+        working-directory: apps/task_host
+        run: mix test test/task_host/web/project_ownership_test.exs test/task_host/web/administration_test.exs
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Pure browser contracts
-        run: node --test apps/spruce_goose/test/js/*.test.mjs
+        run: node --test apps/task_host/test/js/*.test.mjs
       - name: Install pinned browser
         run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
       - name: Real governance browser acceptance
-        working-directory: apps/spruce_goose
-        run: mix test test/spruce_goose/web/ownership_browser_test.exs --only browser
+        working-directory: apps/task_host
+        run: mix test test/task_host/web/ownership_browser_test.exs --only browser
