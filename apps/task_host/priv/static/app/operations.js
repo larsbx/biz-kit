@@ -376,6 +376,16 @@ function render() {
             href: projectLink(w, { provider }),
             textContent: "Open workspace →",
           }),
+          w.has_infrastructure_review === true
+            ? el(
+                "p",
+                {},
+                el("a", {
+                  href: `/operations/workspaces/${encodeURIComponent(w.id)}/infrastructure-review`,
+                  textContent: "Review infrastructure evidence",
+                }),
+              )
+            : null,
         ),
       ),
   );

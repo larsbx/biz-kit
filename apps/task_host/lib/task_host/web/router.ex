@@ -24,6 +24,13 @@ defmodule TaskHost.Web.Router do
     get("/app", AppController, :index)
     get("/app/:file", AppController, :file)
     get("/operations", AppController, :operations)
+
+    get(
+      "/operations/workspaces/:workspace_id/infrastructure-review",
+      InfrastructureReviewController,
+      :show
+    )
+
     get("/api/v1/operations", OperationsController, :index)
     post("/api/v1/commands/:id", CommandController, :submit)
     post("/api/v1/devices/challenges/:id", DeviceController, :prove)
