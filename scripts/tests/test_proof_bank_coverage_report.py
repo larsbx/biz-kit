@@ -15,7 +15,7 @@ spec.loader.exec_module(module)
 
 
 def blob(data):
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 
 class CoverageReportTest(unittest.TestCase):
