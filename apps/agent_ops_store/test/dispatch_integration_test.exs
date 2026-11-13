@@ -81,6 +81,45 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
         if Process.get(:revoke_on_read) == ticks,
           do: Process.put(:fixture_state, revoke_read(current))
 
+        case Process.get(:proof_bank_mutation) do
+          {^ticks, :task_version} ->
+            Process.put(
+              :fixture_state,
+              put_in(current, [:tasks, {"chapter1", "tenant1", "project1", "task1"}, :version], 3)
+            )
+
+          {^ticks, :operator_revoked} ->
+            Process.put(
+              :fixture_state,
+              TaskCore.State.handle_event(
+                %{
+                  event_id: "proof-bank-operator-revoked",
+                  type: "TaskOperatorRevokedV1",
+                  chapter_id: "chapter1",
+                  payload: %{
+                    "tenant_id" => "tenant1",
+                    "project_id" => "project1",
+                    "authorization_event_id" => "operator1"
+                  }
+                },
+                current
+              )
+            )
+
+          {^ticks, :profile_digest_changed} ->
+            Process.put(
+              :registry,
+              put_in(
+                Process.get(:registry),
+                ["local", :manifest, "parameters", "backend"],
+                "changed-after-claim"
+              )
+            )
+
+          _ ->
+            :ok
+        end
+
         {:ok,
          %{
            state: Process.get(:fixture_state),
@@ -275,6 +314,7 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     Process.put(:context_reads, 0)
     Process.delete(:revoke_on_read)
     Process.delete(:reject_reference)
+    Process.delete(:proof_bank_mutation)
 
     profiles = %{
       "local" => profile("local", LocalWorker),
@@ -393,6 +433,49 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert Process.get(:launches) == []
     assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
     assert row.phase == "cancel_requested"
+  end
+
+  test "a task revision after the durable claim fences both adapters before launch", %{
+    conn: conn
+  } do
+    Process.put(:proof_bank_mutation, {2, :task_version})
+
+    assert {:error, :authority_changed_after_claim} =
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
+
+    assert Process.get(:launches) == []
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
+    assert row.phase == "cancel_requested"
+    assert row.attempts == 1
+    assert {:error, :stale_agent_run_task} = Coordinator.prepare(run_key("run1"), Host)
+  end
+
+  test "operator grant revocation after the durable claim prevents a launch", %{conn: conn} do
+    Process.put(:proof_bank_mutation, {2, :operator_revoked})
+
+    assert {:error, :authority_changed_after_claim} =
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
+
+    assert Process.get(:launches) == []
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
+    assert row.phase == "cancel_requested"
+    assert {:error, :agent_run_operator_revoked} = Coordinator.prepare(run_key("run1"), Host)
+  end
+
+  test "profile manifest mutation after a claim cannot launch under the old digest", %{
+    conn: conn
+  } do
+    Process.put(:proof_bank_mutation, {2, :profile_digest_changed})
+
+    assert {:error, :authority_changed_after_claim} =
+             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
+
+    assert Process.get(:launches) == []
+    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
+    assert row.phase == "cancel_requested"
+
+    assert {:error, :execution_profile_digest_mismatch} =
+             Coordinator.prepare(run_key("run1"), Host)
   end
 
   test "ambiguous launch acknowledgment remains leased, never automatically retried", %{
