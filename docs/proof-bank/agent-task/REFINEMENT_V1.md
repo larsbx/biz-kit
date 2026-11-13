@@ -68,8 +68,12 @@ Define a guarded relationship among:
 - **AT-5:** a produced candidate never implies approval, completed task,
   accepted proof or business side effect.
 
+`formal/lean/BizKitAgentTask.lean` models the exact two-phase
+preflight/claim/recheck guard and contains an unguarded counterexample.
 `formal/lean/BizKitLeases.lean`, task lifecycle Quint models, and host
-PostgreSQL tests are leads, **not** a proven composition theorem. Prove the
+PostgreSQL tests are complementary evidence, **not** a universal
+implementation-refinement theorem. A checked proof of the guarded model
+does not establish the actual PostgreSQL host correspondence. Prove the
 formal model's safety under explicit fairness/crash assumptions, then
 establish its correspondence to all supported runtime paths and actual
 authorization snapshots. A SQL lease alone cannot close the gap between
@@ -87,3 +91,11 @@ existing workflow; it adds no redundant pipeline or deployable service.
 All status claims remain **not established** until exact-head CI completes.
 No credentials, financial writes, plugin activation or production coordinator
 are introduced.
+
+## Formal checking integration
+
+The repo-pinned Lean 4.35 pipeline builds `BizKitAgentTask`, freshly replays
+its declarations in the Lean kernel, and includes it in the axiom audit.
+A proof about the abstract post-claim guard is a separate evidence class
+from the real integration tests; both must succeed at the **same exact head**.
+No new trusted axiom, proof bypass, or production authority is introduced.
