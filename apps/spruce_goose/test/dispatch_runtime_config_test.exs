@@ -25,7 +25,6 @@ defmodule SpruceGoose.DispatchRuntimeConfigTest do
         [
           {"DATABASE_URL", "ecto://rehearsal:rehearsal@127.0.0.1/rehearsal"},
           {"TOKEN_SIGNING_SECRET", String.duplicate("x", 64)},
-          {"SPRUCE_GOOSE_MCP_ENABLED", "false"},
           {"OUTBOX_DISPATCHER_ENABLED", "false"},
           {"SPRUCE_GOOSE_OBAN_ENABLED", "false"},
           {"SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR", "configured-genesis"}
@@ -42,7 +41,7 @@ defmodule SpruceGoose.DispatchRuntimeConfigTest do
     assert output =~ "verifier=Dispatch.Identity.Tokens.BizKitSession"
     assert output =~ "oidc_issuer=nil"
     # Native sessions last until signed out, across restarts.
-    assert output =~ "session_store=SpruceGoose.Web.NativeSessionStore"
+    assert output =~ "session_store=BizKit.Identity.PostgresSessionStore"
   end
 
   test "the OIDC verifier still refuses to start without its issuer" do

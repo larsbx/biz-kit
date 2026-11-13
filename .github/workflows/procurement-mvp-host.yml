@@ -2,6 +2,8 @@ name: Procurement MVP host
 on:
   pull_request:
     paths:
+      - 'apps/dispatch/**'
+      - 'apps/dispatch_core/**'
       - 'apps/procurement_host/**'
       - 'apps/coop_substrate/**'
       - 'apps/commerce_core/**'
@@ -9,6 +11,7 @@ on:
       - 'apps/task_core/**'
       - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
+      - 'apps/fulfillment_core/**'
       - 'apps/agent_core/**'
       - 'apps/agent_ops_store/**'
       - 'apps/group_buy_core/**'

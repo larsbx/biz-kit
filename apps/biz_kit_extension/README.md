@@ -66,6 +66,11 @@ trusted host must independently attest its checkout/build and obtain current
 governance approval before enabling real behavior. See the
 [release-lock design](../../docs/architecture/2026-11-02-extension-source-lock.md).
 
+A trusted host can pass `reviewed_release: %{source_commits: pins, lock: reviewed}`
+to `Registry.start_link/1`. Startup refuses stale or incomplete review inputs.
+The registry uses the exact manifest snapshot it verified and starts with
+every descriptor hidden. Local reconciliation only changes metadata visibility.
+
 ## Upgrade compatibility review (portable)
 
 `BizKit.Extension.Upgrade.assess/2` compares canonical V1 manifests

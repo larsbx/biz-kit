@@ -1,7 +1,7 @@
 defmodule BizKit.Extension.RegistryTest do
   use ExUnit.Case, async: true
 
-  alias BizKit.Extension.Registry
+  alias BizKit.Extension.{Registry, ReleaseLock}
 
   defmodule Base do
     @behaviour BizKit.Extension
@@ -55,6 +55,65 @@ defmodule BizKit.Extension.RegistryTest do
 
     @impl true
     def manifest, do: %{BizKit.Extension.RegistryTest.Base.manifest() | version: "1.0.0"}
+  end
+
+  defmodule Changing do
+    @behaviour BizKit.Extension
+
+    @impl true
+    def manifest do
+      manifest = BizKit.Extension.RegistryTest.Base.manifest()
+
+      case Process.put(__MODULE__, :called) do
+        nil -> manifest
+        :called -> %{manifest | version: "1.3.0"}
+      end
+    end
+  end
+
+  @pins %{"example" => String.duplicate("a", 40)}
+
+  test "reviewed startup exposes only the verified manifest snapshot after reconciliation" do
+    assert {:ok, lock} = ReleaseLock.build([Base], @pins)
+    release = %{source_commits: @pins, lock: lock}
+    assert {:ok, host} = Registry.start_link(modules: [Changing], reviewed_release: release)
+    assert Registry.visible(host) == []
+    assert {:error, :not_visible} = Registry.lookup(host, "example")
+    assert {:ok, ["example"]} = Registry.reconcile(host, ["example"])
+    assert {:ok, %{version: "1.2.0"}} = Registry.lookup(host, "example")
+    GenServer.stop(host)
+  end
+
+  test "reviewed startup refuses drift and incomplete configuration before registration" do
+    assert {:ok, lock} = ReleaseLock.build([Base], @pins)
+    release = %{source_commits: @pins, lock: lock}
+    opts = [name: __MODULE__, modules: [Base]]
+
+    assert {:error, :unreviewed_or_stale_release_lock} =
+             Registry.start_link(
+               opts ++
+                 [
+                   reviewed_release: %{
+                     release
+                     | source_commits: %{"example" => String.duplicate("b", 40)}
+                   }
+                 ]
+             )
+
+    assert {:error, :unreviewed_or_stale_release_lock} =
+             Registry.start_link(
+               name: __MODULE__,
+               modules: [Old],
+               reviewed_release: release
+             )
+
+    assert {:error, :invalid_reviewed_release} =
+             Registry.start_link(opts ++ [reviewed_release: %{lock: lock}])
+
+    assert {:error, :invalid_reviewed_release} =
+             Registry.start_link(opts ++ [reviewed_release: release, reviewed_release: release])
+
+    assert Process.whereis(__MODULE__) == nil
   end
 
   test "registered compiled descriptors start hidden, even when installed" do

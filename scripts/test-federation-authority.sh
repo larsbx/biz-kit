@@ -6,8 +6,8 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
-for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core agent_core agent_ops_store \
-  group_buy_core inventory_core federation_core federation_service; do
+for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core agent_core agent_ops_store \
+  group_buy_core inventory_core federation_core federation_service commerce_core dispatch_core; do
   cp -R "$root/apps/$app" "$stage/apps/"
 done
 cp "$root/mix.lock" "$stage/mix.lock"

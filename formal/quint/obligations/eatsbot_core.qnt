@@ -9,10 +9,10 @@
 // GUARDED: the history row is written atomically with the state change.
 // Steps are drawn only from the table, which models valid?/2 (enforced).
 // Abstracted: states as names; history as the state it replays to.
-// FINDING: the code records history in Ash.Changeset.after_transaction, i.e.
-// after the state commit and outside its transaction. A crash or error there
-// leaves a committed state with no history row, so replay diverges. The
-// atomic rule (GUARDED) is the intended one; the code matches the control.
+// Enforced: UpdateHistory writes the history row in Ash.Changeset.after_action,
+// inside the state change's transaction, so a failed history write rolls the
+// state back (DeliveryTest "a state change whose history row fails to write
+// is not committed"). Telemetry stays in after_transaction (on commit only).
 module eatsbot_core_spec {
   const GUARDED: bool
   pure val EDGES = Set(

@@ -29,9 +29,9 @@ printf '%s\n' "$revision" | tee "$receipts/revision.txt"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
-for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core agent_core \
+for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core agent_core \
   agent_ops_store group_buy_core inventory_core federation_core federation_service \
-  commerce_core procurement_host; do
+  commerce_core dispatch_core procurement_host; do
   cp -R "$root/apps/$app" "$stage/apps/"
 done
 cp "$root/config/config.exs" "$root/config/procurement_runtime.exs" "$stage/config/"
@@ -46,7 +46,7 @@ bash "$root/tests/procurement_mvp/check.sh" 2>&1 | tee "$receipts/kernel.log"
 cd "$stage"
 MIX_ENV=test mix deps.get --check-locked
 MIX_ENV=test mix compile --warnings-as-errors 2>&1 | tee "$receipts/compile.log"
-(cd apps/coop_substrate; mix test test/procurement_test.exs test/log_test.exs test/envelope_test.exs --warnings-as-errors) \
+(cd apps/coop_substrate; mix test test/procurement_test.exs test/procurement_dispatch_policy_test.exs test/log_test.exs test/envelope_test.exs --warnings-as-errors) \
   2>&1 | tee "$receipts/ledger-tests.log"
 (cd apps/procurement_host; mix test --warnings-as-errors) 2>&1 | tee "$receipts/http-tests.log"
 MIX_ENV=prod mix deps.get --check-locked

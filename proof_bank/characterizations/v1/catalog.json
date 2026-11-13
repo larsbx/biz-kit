@@ -249,7 +249,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "e2f099b45d8c932ab137c293738a3e1028651e90",
+        "mix.exs": "df9dc78c16bb737af6d121841dfc40e905992920",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -345,7 +345,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
-        "apps/dispatch/lib/dispatch/operations/board.ex": "9b39439c521ec723625f31f28d02f4770e18061d",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "62fb826ed46e3c65ccaf7b01d8c982f9b4748960",
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
       }
     },
@@ -749,7 +749,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/keel/lib/keel/invariants.ex": "cd525419de5a4f47d8a17975b1d3abe28f88e6ce",
+        "apps/keel/lib/keel/invariants.ex": "34a2989c87ccf67284d39df0097d1c1dd6f43480",
         "apps/keel/lib/keel/decision.ex": "5064abc54b309a7b84faed531a9a330f32c96a73",
         "apps/keel/test/conformance_test.exs": "2de5b753d5fc09fcb9bf855bb008e96ec3a2186b"
       }
@@ -843,7 +843,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "adc7fb24a1daadb64b5cdfd4e6be85fee79bf32b",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "2690e4edd13d93e4a7d287d3d8ed4f7fe4966b17",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -874,9 +874,9 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
-        "apps/restaurant_core/lib/restaurant_core/admission.ex": "04a1de89eb31a407177091458fc7cf20e6fa5d74",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex": "1d156b8b963925da95a6bc23840f5d654cecabfa",
         "apps/restaurant_core/lib/restaurant_core/kitchen.ex": "3e6118cdcf95d5486880d21dd5c33b118592482f",
-        "apps/restaurant_core/test/admission_test.exs": "6bb241ecf1d7f37edacce0940d64a8dfdbb33108"
+        "apps/restaurant_core/test/admission_test.exs": "24946d7a2e7874130b2d4c1d88d38b7003de1637"
       }
     },
     {
@@ -908,8 +908,8 @@
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
         "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
-        "apps/restaurant_host/lib/restaurant_host/orders.ex": "f9579a3911e3a28ac76c39603b12f037a1a5532f",
-        "apps/restaurant_host/test/device_grants_test.exs": "1d7c4902612759051c5ff7ff2571aad4cbc2ae3e"
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "ffcaa7679b80d0c5b0fd57839285f1ffa635bfbd",
+        "apps/restaurant_host/test/device_grants_test.exs": "2c17ccdafdc0eba7328603dd3ac8473a7e1e6976"
       }
     },
     {
@@ -942,6 +942,49 @@
         "apps/sales_core/lib/sales_core/consent.ex": "7efd5bc6e3b437efe053f6f4452cf4dec88850e3",
         "apps/sales_core/lib/sales_core/pipeline.ex": "c6b149d85cf0cbdee1e88f184da6cd5ea5261d0b",
         "apps/sales_core/test/sales_core_test.exs": "f6a00f42dc0bfbc36fbcc971c4c8e4437a453a43"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "scf_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "registered_at_sha": "52b296c5ac3b4ac65e0e3ef167d2751a231165e3",
+      "category": "capability",
+      "intended_purpose": "In-memory Algerian SCF double-entry accounting in integer DZD centimes",
+      "intended_features": [
+        "Chart classes 1–7 with recognized account prefixes and DZD formatting",
+        "Entry validation with a nonblank supporting-document reference and equal debit and credit totals",
+        "Append-only posting by entry ID, monotonic period closure, reversal posting and date-windowed balances and trial balance",
+        "Dated TVA rate table, integer HT/TTC rounding and G50 TVA position from 4457 and 4456 account prefixes",
+        "Single-exercice compte de résultat par nature and bilan"
+      ],
+      "observed_code_paths": [
+        "apps/scf_core/lib/scf_core/chart.ex",
+        "apps/scf_core/lib/scf_core/entry.ex",
+        "apps/scf_core/lib/scf_core/ledger.ex",
+        "apps/scf_core/lib/scf_core/money.ex",
+        "apps/scf_core/lib/scf_core/statements.ex",
+        "apps/scf_core/lib/scf_core/tva.ex"
+      ],
+      "observed_test_path": "apps/scf_core/test/invariants_test.exs",
+      "audit_finding": "Characterized at registered_at_sha. The README and source exclude persistence and replay, multi-exercice carry-forward and result allocation, IBS/IRG/payroll, cash-flow statements, annexes, tax filings beyond the G50 TVA position, and multicurrency. Entry validation checks the presence of a document reference only. The TVA table has two dated rows; their legal applicability needs independent review. scf_core_test.exs contains example assertions for validation, posting, closure, reversal, TVA and statements. The property suite samples bounded ledgers over a fixed account subset and asserts trial-balance equality, bilan equality, TCR net income, posting-order independence and reversal cancellation with standard attributes. Ledger.reverse/3 merges caller attributes over the generated lines and admits distinct reversal IDs, so inverse and single-correction guarantees need explicit preconditions or an admission contract.",
+      "first_formal_obligation": "Establish that every reachable ledger preserves debit-credit equality and closed-period entries under posting, closure and reversal, with exact-retry idempotence and an explicit contract for when a reversal cancels the original. Establish separately that statement projections preserve their equations over the admitted account domain.",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/scf_core/lib/scf_core/chart.ex": "3d2090183387cd83db88fb2b53062c7b80b7aac9",
+        "apps/scf_core/lib/scf_core/entry.ex": "765f244e718cf72240e72047af9ae29bbc2c8a34",
+        "apps/scf_core/lib/scf_core/ledger.ex": "1ef284eb8f4774daf5b0182c295d5fdab5381382",
+        "apps/scf_core/lib/scf_core/money.ex": "ace3c184bdcf813c57e3d2eede650bfb7e9c466d",
+        "apps/scf_core/lib/scf_core/statements.ex": "86b024910166bbc1e5dc3e6da61e3bbcde0d5916",
+        "apps/scf_core/lib/scf_core/tva.ex": "a1b48a967748df3a7c911de21ea369c02bab170e",
+        "apps/scf_core/test/invariants_test.exs": "17b2aa6bea93949f7f1a4e9bbe8a8fd7ea68df04"
       }
     },
     {
@@ -1001,8 +1044,8 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/spruce_goose/lib/spruce_goose/actors.ex": "a33b0bf900ab778b50a65701f4722397ca800958",
-        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "d710a25373fe846a0cfc3ae4e49fb7d770bb0d9a",
-        "apps/spruce_goose/test/authority_runtime_test.exs": "7ccba2dbfb78867713276f9f914c5f203b8e7b0e"
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "7798e2e33b670c2bccfa0483d0200ce0d9d79850",
+        "apps/spruce_goose/test/authority_runtime_test.exs": "85879d3948f48304bad734d7c1a575d8dd8a2784"
       }
     },
     {
@@ -1035,6 +1078,76 @@
         "apps/task_core/lib/task_core/admission.ex": "fde86025a69bae06969fcc1e6c27dd0ef13b5b9a",
         "apps/task_core/lib/task_core/agent_runs.ex": "e2cea02be4c1e7f2d28e829d1eb09c85e7b45844",
         "apps/task_core/test/agent_runs_test.exs": "74e16f5dc07bac66e82a9a72a6452560c09a7f19"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "procurement_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Procurement coordinator console over CoopSubstrate.Procurement and the signed Log",
+      "intended_features": [
+        "Coordinator sign-in",
+        "Request, quote and order commands",
+        "Bounded clock-boundary re-signing"
+      ],
+      "observed_code_paths": [
+        "apps/procurement_host/lib/procurement_host/admission.ex",
+        "apps/procurement_host/lib/procurement_host/auth.ex",
+        "apps/procurement_host/lib/procurement_host/web.ex"
+      ],
+      "observed_test_path": "apps/procurement_host/test/admission_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-08); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "A command is re-signed only after an explicit pre-append clock-boundary refusal, at most three attempts, and never after an outcome that may have committed",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "29aad2442197fb934043ff49d89c905758b5ba3c",
+      "evidence_git_blobs": {
+        "apps/procurement_host/lib/procurement_host/admission.ex": "2fd2528409078795551cb8974ddc594a967afc09",
+        "apps/procurement_host/lib/procurement_host/auth.ex": "d4b867705b5eb607ea32c867fca03d3d2947a454",
+        "apps/procurement_host/lib/procurement_host/web.ex": "557a285616ac843c95819bd7594c443cea8c3577",
+        "apps/procurement_host/test/admission_test.exs": "44bd8ceccaaa9cac2b5d62a373275c1d5195efb3"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "task_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Sign-in, the task web view, its signed commands and the change feed over the signed Log, rehosted from SpruceGoose",
+      "intended_features": [
+        "Human and native sign-in",
+        "Device-signed task commands",
+        "Change feed"
+      ],
+      "observed_code_paths": [
+        "apps/task_host/lib/task_host/web/command_controller.ex",
+        "apps/task_host/lib/task_host/web/requests.ex",
+        "apps/task_host/lib/task_host/web/auth_controller.ex"
+      ],
+      "observed_test_path": "apps/task_host/test/task_host/web/command_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-09); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "The host appends a held command only with its owner's signature over exactly the bytes held, once, before the hold expires",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "d2f293fe6abb9aa8ea512160af02e1cd07645d14",
+      "evidence_git_blobs": {
+        "apps/task_host/lib/task_host/web/command_controller.ex": "40f24af1b2898c8811b1fd4b5e6dca219a3bc7c6",
+        "apps/task_host/lib/task_host/web/requests.ex": "67111e3e64dcb8ef3f8d8b8233d8bce0d3b1a8f2",
+        "apps/task_host/lib/task_host/web/auth_controller.ex": "22173f86d570815c3a164383bb9ab4e5565b86f3",
+        "apps/task_host/test/task_host/web/command_test.exs": "a7fbe14b7ed5ce6aa45cb942a310dba66c4c41f9"
       }
     }
   ],
@@ -1072,6 +1185,113 @@
       "registered": [],
       "refreshed_paths": [
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "4c030846756c4b6a2944048d7608ec0615892ae0",
+      "date": "2026-11-06",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "e43337353bd8adbb015881740135e1e30dda43c4",
+      "date": "2026-11-07",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/keel/lib/keel/invariants.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "0d903ae26db7f10bceba43890289ead9cf2595c4",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex",
+        "apps/spruce_goose/test/authority_runtime_test.exs",
+        "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "29aad2442197fb934043ff49d89c905758b5ba3c",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "procurement_host"
+      ],
+      "refreshed_paths": [],
+      "renamed": {},
+      "meaning": "Registered without characterization; pinned bytes are the registration evidence"
+    },
+    {
+      "at_sha": "9708b2828277dcc34a19061bae387bf260700948",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "d2f293fe6abb9aa8ea512160af02e1cd07645d14",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "task_host"
+      ],
+      "refreshed_paths": [],
+      "renamed": {},
+      "meaning": "Registered without characterization; pinned bytes are the registration evidence"
+    },
+    {
+      "at_sha": "50be07baf860110fbcf347e90c80a18df09ec000",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex",
+        "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "58140f4934bc27ddc6684bbf4c27e0a99fee7b8d",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/task_host/lib/task_host/web/auth_controller.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "dc85d1e1cf2dfc21aa1478855f2639804c5a28c0",
+      "date": "2026-11-12",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/procurement_host/lib/procurement_host/web.ex",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex",
+        "apps/restaurant_core/test/admission_test.exs",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/restaurant_host/test/device_grants_test.exs"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

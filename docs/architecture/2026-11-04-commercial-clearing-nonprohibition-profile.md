@@ -16,11 +16,11 @@ A commercial proposal, contractual discharge and external financial settlement a
 Only the following profile is eligible for a non-prohibition assessment:
 
 - Parties are two separately identified businesses acting as principals on their **own**, authentic, existing reciprocal receivables/payables. Natural persons may act only through authenticated, currently scoped business agency.
-- Each obligation is source-owned, identifiable, revision-bound, denominated in the **same** currency, and acknowledged by its debtor and creditor. No cross-currency conversion or automatic third-party transfer.
+- Each obligation is source-owned, identifiable, revision-bound, denominated in its **original** currency and acknowledged by its debtor and creditor. Same-currency setoff remains the existing profile. **Cross-currency bilateral setoff previews are also permitted as inert proposals** with expressly agreed rational valuation terms and no automatic third-party transfer or platform-operated FX. A non-prohibition conclusion for actual cross-currency discharge requires an activity- and jurisdiction-scoped assessment.
 - The platform offers read-only accounting, matching and unsigned proposals. Any actual bilateral discharge requires independently evidenced agreement and authorization by both businesses, without implied consent.
 - Each party retains its business-accounting authority. No platform custody, platform receipt/transmission of value, pooled customer monetary balances, transferable trade credits, redeemable network units, unilateral third-party payouts, remittance orders, or standalone financial settlement writer.
 - Residual payments, if any, are performed by each payer via separately approved bank/provider arrangements. The commercial clearing system neither holds balances nor instructs payment on the payer's behalf.
-- The pilot is limited to jurisdictions **actually assessed**. Domestic-only is a profile constraint, **not** an automatic exemption. International, three-or-more-party netting, assignment chains, crypto settlement, FX and transferable credit require separate legal and technical profiles.
+- The pilot is limited to jurisdictions **actually assessed**. Domestic-only is a profile constraint, **not** an automatic exemption. Contractual cross-currency valuation without FX execution is distinguished from **operator-operated currency exchange**. International transactions, three-or-more-party netting, assignment chains, crypto settlement, operator-operated FX and transferable credit require separate legal and technical profiles.
 
 The platform shall not claim this profile from a marketing name such as "barter", "commercial clearing", "noncustodial" or "hawala". Assess observable operations, including the platform's ability to direct value, the actual legal entities, contractual rights and economic effects.
 
@@ -55,7 +55,7 @@ These are **screening starting points**; they do not resolve relevant state rule
 
 The source-binding and admission program in issue #299 remains a **ledger-integrity** requirement for an event that changes books, not a proof of legality. Technical acceptance should verify:
 
-1. A `proposal` remains unsigned, non-admitted, non-discharge and non-settlement, with no platform custody, payment instruction, FX, transferable balance or new financial writer.
+1. A `proposal` remains unsigned, non-admitted, non-discharge and non-settlement, with no platform custody, payment instruction, **FX execution**, transferable balance or new financial writer. Cross-currency previews may include an explicit agreed rational quote with unambiguous minor-unit directions, complete original obligation references and per-currency conservation, but no computed exchange or payment effect.
 2. A purported `discharged` event requires a complete canonical original-source ID/revision/hash set, separate current-key consents, business agency claims, the applicable agreement, and the existing serialized business-log admission. Duplicate source claims, altered same-total obligations and competing writers must fail.
 3. Eligibility for an activated profile is lost when a controlling fact, jurisdiction, agency grant, policy decision or capability changes. `undetermined` and `prohibited` fail closed for irreversible external effects; an inert proposal can instead return HOLD for review.
 4. No historical `NettingExecuted` signature is reinterpreted as binding exact source IDs. The stricter source-bound profile must refuse legacy aggregate-only admission while preserving historical replay.
@@ -66,6 +66,7 @@ The source-binding and admission program in issue #299 remains a **ledger-integr
 - **Documentation milestone:** the profile and applicability record exist; this does **not** grant production permission, change any ledger write path, or close audit #290 or P0 issue #299.
 - **Inert pilot:** allow accounting and unsigned proposal previews, explicitly labeling any classification as `undetermined` until independently grounded.
 - **Bilateral admission:** require source-specific authorization, mutual agreed contractual effect and serializable no-double-discharge, with any legally triggered registration/authorization in place before activation.
-- **Expanded profiles:** evaluate multilateral assignment/novation, cross-border reciprocal delivery, provider flows, crypto and transferable credits separately before any such operation is offered.
+- **Cross-currency bilateral preview:** the [separate exact-arithmetic contract](2026-11-08-cross-currency-commercial-setoff-preview.md) is allowed as an inert, two-principal pure proposal, not an approved operator FX activity, legal discharge or production authorization.
+- **Expanded profiles:** evaluate contractual cross-currency *admission*, multilateral assignment/novation, cross-border reciprocal delivery, operator-operated FX, provider flows, crypto and transferable credits separately before any such operation is offered.
 
 This decision supersedes broader language in prior planning drafts that could be read as requiring a universal proof of lawful discharge or individual counsel approval on every invoice. It **does not** waive actually applicable legal, sanctions, licensing or source-accounting requirements.

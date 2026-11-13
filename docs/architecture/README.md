@@ -5,6 +5,18 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Dispatch spatial workspace and minimal stack — 2026-11-11](../plans/2026-11-11-dispatch-spatial-workspace.md):
+  accepted GEV-00–08 roadmap for God's Eye View reuse, authorized spatial data,
+  planning, history and minimal deployment. The earlier auxiliary stack was
+  proposed only; omit unneeded components from the first build. Implementation
+  and field acceptance remain pending.
+- [Task host — 2026-11-09](2026-11-09-task-host.md): SpruceGoose's web
+  surface (`/auth`, the task view, its commands and the feed) rehosted on
+  `apps/task_host`; native sessions kept; `/mcp` and the OAuth2 issuer dropped.
+- [Dispatch assignments on the ledger — 2026-11-09](2026-11-09-dispatch-assignments-on-the-ledger.md):
+  first Dispatch slice of consolidation step 4; the assignment lifecycle as
+  signed, admitted events, with equipment exclusivity at the append gate. The
+  board does not use it yet.
 - [SpruceGoose decommission checklist — 2026-11-06](2026-11-06-sprucegoose-decommission.md):
   proposed; surfaces to rehost, the authority cutover, history kept as inert
   audit data, and what is not migrated.

@@ -28,25 +28,6 @@ config :ash, disable_async?: true
 
 config :phoenix, :json_library, Jason
 
-# The MCP/OAuth endpoint is opt-in. SpruceGoose stays CLI-first: nothing binds
-# a port unless SPRUCE_GOOSE_MCP_ENABLED is set (see config/runtime.exs).
-config :spruce_goose, :start_web_endpoint, false
-
-# Loopback-only by default. Exposing this endpoint off-host is a separate,
-# governed security decision.
-config :spruce_goose, SpruceGoose.Web.Endpoint,
-  adapter: Bandit.PhoenixAdapter,
-  url: [host: "127.0.0.1"],
-  http: [ip: {127, 0, 0, 1}, port: 4000],
-  server: false,
-  render_errors: [formats: [json: SpruceGoose.Web.ErrorJSON], layout: false]
-
-# Requests per client per window (SpruceGoose.Web.RateLimit). Behind a reverse
-# proxy, list its addresses in `trusted_proxies` so clients are told apart.
-config :spruce_goose, SpruceGoose.Web.RateLimit,
-  limits: %{sign_in: {30, 60_000}, capability: {60, 60_000}, api: {600, 60_000}},
-  trusted_proxies: []
-
 config :spruce_goose, Oban,
   repo: SpruceGoose.Repo,
   queues: [outbox: 1]
@@ -67,21 +48,6 @@ config :spruce_goose, :allow_legacy_hierarchy_mutation, false
 config :spruce_goose, :start_cli_service, false
 config :spruce_goose, :cli_socket_path, nil
 config :spruce_goose, :cli_request_timeout, 30_000
-# Configuration, not a source default. These were hardcoded fallbacks inside
-# SpruceGoose.Blueprints.ForgejoVerifier, which meant production ran against
-# whatever was compiled in and no deployment could say otherwise without an
-# override that did not exist. runtime.exs takes the environment.
-config :spruce_goose,
-       :forgejo_api_url,
-       "https://ubuntu-8gb-hil-1.tail2188e6.ts.net:8448/api/v1"
-
-config :spruce_goose,
-       :forgejo_read_token_file,
-       "/home/admin-papa/.config/sprucegoose/forgejo-read-token"
-
-# A blueprint manifest is a small YAML file. The verifier refuses anything
-# larger rather than buffering it.
-config :spruce_goose, :blueprint_max_bytes, 1_048_576
 
 # No default. runtime.exs sets this for every environment that evaluates it;
 # the sprucegoose-direct escript does not, and a world-writable /tmp default

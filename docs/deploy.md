@@ -10,7 +10,7 @@ Date: 2026-10-20. The shortest path to a running deployment.
 
 | Release | Applications | Boots in production when |
 | --- | --- | --- |
-| `orchestration` | the ledger (`coop_substrate`), identity, cluster, SpruceGoose (web view, API, CLI service) | the settings below are set |
+| `orchestration` | the ledger (`coop_substrate`), identity, cluster, the task host (`task_host`: sign-in, web view, API, change feed), SpruceGoose (CLI service, until it retires) | the settings below are set |
 | `biz_kit` | all of the above, plus `dispatch` and `keel` | dispatch's integrations are configured too |
 | `eatsbot` | `eatsbot` and its `eatsbot_*` siblings | `DATABASE_URL`, `SECRET_KEY_BASE`, `GEOCODING_TOKEN`, `TOKEN_SIGNING_SECRET` are set |
 | `restaurant` | the ledger and the rebuilt eatsbot's host (`restaurant_host`) | the [restaurant settings](#the-restaurant-release) are set |
@@ -52,13 +52,15 @@ MIX_ENV=prod mix deps.get --only prod
 MIX_ENV=prod mix release orchestration
 # copy _build/prod/rel/orchestration to the host (it includes ERTS), then:
 bin/orchestration eval "SpruceGoose.ReleaseTasks.migrate()"   # before every start; idempotent
+bin/orchestration eval "TaskHost.ReleaseTasks.migrate()"      # likewise
 bin/orchestration daemon                                       # or a systemd unit running `start`
 ```
 
-`SpruceGoose.ReleaseTasks.migrate/0`:
-1. creates and initializes the ledger's event store database, if needed;
-2. creates SpruceGoose's database, if needed;
-3. applies pending migrations.
+Each migrate task creates and initializes the ledger's event store database
+if needed, creates its own database if needed, and applies pending
+migrations. The task host's only table holds native apps' sessions; pointed
+at SpruceGoose's database (the default, `DATABASE_URL`), it finds the table
+already there and every signed-in device stays signed in.
 
 Migrations never run on boot.
 
@@ -66,13 +68,14 @@ Migrations never run on boot.
 
 | Variable | For |
 | --- | --- |
-| `DATABASE_URL`, `DATABASE_SSL` (default `true`), `DATABASE_CA_CERT_FILE` | SpruceGoose's database |
+| `DATABASE_URL`, `DATABASE_SSL` (default `true`), `DATABASE_CA_CERT_FILE` | SpruceGoose's database, and the task host's unless `TASK_HOST_DATABASE_URL` names another |
 | `EVENTSTORE_HOST`, `EVENTSTORE_PORT`, `EVENTSTORE_DATABASE`, `EVENTSTORE_USERNAME`, `EVENTSTORE_PASSWORD` | the ledger |
-| `SECRET_KEY_BASE` (≥ 64 bytes), `TOKEN_SIGNING_SECRET`, `OAUTH2_SIGNING_SECRET` | sessions and tokens |
+| `SECRET_KEY_BASE` (≥ 64 bytes), `TOKEN_SIGNING_SECRET` | sessions and tokens |
 | `SPRUCE_GOOSE_EXPECTED_GENESIS_ACTOR` | the first operator SpruceGoose's registry accepts |
-| `SPRUCE_GOOSE_MCP_ENABLED=true`, `MCP_PORT`, `SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS` | serve the web view and API, on loopback only. Put a reverse proxy in front, and list it in `SPRUCE_GOOSE_TRUSTED_PROXIES` |
+| `TASK_HOST_PORT` (default `4001`; `MCP_PORT` if set) | the task host's sign-in, web view and API, on loopback only. Put a reverse proxy in front, and list it in `SPRUCE_GOOSE_TRUSTED_PROXIES` |
 | `SPRUCE_GOOSE_PUBLIC_URL`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `BIZKIT_IDENTITY_BINDINGS` | sign-in (`docs/architecture/2026-10-18-identity.md`) |
-| `ARTIFACT_STORE_ROOT` (default `/var/lib/sprucegoose/artifacts`) | uploaded evidence, SOPs and inputs |
+| `COOP_ARTIFACT_DIR` | the bytes ledger custody receipts name (uploaded evidence, SOPs and inputs). Unset, `priv/artifacts` under the release's working directory: set it, and keep the bytes with it when moving |
+| `ARTIFACT_STORE_ROOT` (default `/var/lib/sprucegoose/artifacts`) | SpruceGoose's legacy artifact store |
 | `BIZKIT_CLUSTER_NODES`, `RELEASE_DISTRIBUTION`, `RELEASE_NODE`, `RELEASE_COOKIE` | several nodes (`docs/architecture/2026-10-19-cluster.md`) |
 | `SPRUCE_GOOSE_OBAN_ENABLED` (default `true`) | SpruceGoose's job queue |
 
@@ -98,9 +101,11 @@ bin/restaurant daemon
 | Variable | For |
 | --- | --- |
 | `RESTAURANT_PUBLIC_BASE_URL` | the public URL; the live pages' websocket origin check compares against its host |
-| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | the signed session that holds a paired board |
+| `RESTAURANT_SECRET_KEY_BASE` (≥ 64 bytes) | signs the browser session for board pairing and customer sign-in |
 | `RESTAURANT_PORT` (default `4070`), `RESTAURANT_BIND_IP` (default `0.0.0.0`; `::` for IPv6, `127.0.0.1` behind a local proxy) | where it listens, behind a TLS-terminating proxy |
 | `RESTAURANT_CONFIG_FILE` | the restaurant file (below) |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `BIZKIT_IDENTITY_BINDINGS` | optional account sign-in using existing Biz-kit principal bindings. Register `<RESTAURANT_PUBLIC_BASE_URL>/auth/callback` with WorkOS. |
+| `RESTAURANT_STAFF_PRINCIPALS` | comma-separated Biz-kit principal IDs. When present, a board requires both pairing and staff sign-in. An empty list denies every staff principal. |
 | `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` | each device's 32-byte signing seed, base64; `<DEVICE_ID>` upper-cased with other characters as `_` |
 | `EVENTSTORE_*` | the ledger, as above |
 
@@ -171,6 +176,99 @@ Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 seed-variable names and device keys must be distinct in one restaurant.
 
 Then pair a board by opening `/board/pair/<board>/<secret>` on it once.
+
+
+### Publish a menu or revoke a board key
+
+The restaurant file supplies menu revision 0. A governance publication
+replaces the complete menu, including ordering and any removed items. Read
+the current revision from `GET /api/restaurant-menu`, then save a command as
+JSON on the governance operator's machine. For the first publication:
+
+```json
+{
+  "merchant_id": "shop",
+  "expected_revision": 0,
+  "currency": "USD",
+  "items": [
+    {"id": "margherita", "sku": "MARG", "name": "Margherita",
+     "price_minor": 1250, "discount_minor": 250}
+  ]
+}
+```
+
+The optional discount is funded by the restaurant and applied to each unit
+before tax. The signed order keeps the original unit price and the applied
+line discount. Michigan's treatment of seller-funded discounts is described
+in [R 205.22](https://www.michigan.gov/taxes/-/media/Project/Websites/treasury/Rules/R_205-1_to_R_205-141_700772_7.pdf).
+An empty `items` list pauses new pickup orders.
+
+```sh
+mix restaurant.manage publish-menu menu.json --chapter chapter-genesis --server https://order.example
+```
+
+To revoke a board or storefront key, use the JSON
+`{"merchant_id":"shop","key_id":"k-board"}` with the same command, replacing
+`publish-menu` with `revoke-device`. Replace a revoked key by enrolling a new
+key ID. Both operations are available from an operator's release copy:
+
+```sh
+bin/restaurant eval 'RestaurantHost.ReleaseTasks.manage(["publish-menu", "menu.json", "--chapter", "chapter-genesis", "--server", "https://order.example"])'
+```
+
+The operator's copy uses `HARNESS_KEYS_DIR` as for enrollment. It verifies the
+held envelope against the local command before signing, and the running host
+submits the signature to the Log.
+
+### Automated restaurant delivery with Dispatch
+
+Set `"delivery_enabled": true` and `"delivery_site": "North building desk"`
+in the restaurant file. The site is the approved drop-off destination
+shown to signed-in customers. The initial profile runs one configured pickup
+and drop-off route with one authorized courier. Delivery is cash at handoff.
+
+Enroll a dedicated Dispatch key with
+`mix restaurant.manage grant-dispatch dispatch-key.json --chapter chapter-genesis --server https://order.example`.
+The JSON contains `merchant_id`, `tenant_id` (Dispatch UUID), `key_id` and
+`pubkey` (base64url without padding). The key can be revoked with
+`revoke-device`. The seed is a base64-encoded 32-byte seed in a protected
+file on the Dispatch machine.
+
+| Dispatch release variable | Value |
+| --- | --- |
+| `RESTAURANT_DISPATCH_AUTOMATED` | `true` starts the reconciler |
+| `RESTAURANT_DISPATCH_URL` | Restaurant HTTPS origin |
+| `RESTAURANT_DISPATCH_CHAPTER`, `RESTAURANT_DISPATCH_MERCHANT` | Enrolled restaurant scope |
+| `RESTAURANT_DISPATCH_TENANT`, `RESTAURANT_DISPATCH_KEY_ID` | Enrolled Dispatch tenant and key |
+| `RESTAURANT_DISPATCH_SEED_FILE` | Protected signing-seed file |
+| `RESTAURANT_DISPATCH_SERVICE_ROLE` | Organization-scoped Dispatch service role assignment UUID with the board's load, stop and trip capabilities |
+| `RESTAURANT_DISPATCH_COURIER` | Participant UUID for a courier holding a driving role in that organization |
+| `RESTAURANT_DISPATCH_SITE` | Exact restaurant `delivery_site` value |
+| `RESTAURANT_DISPATCH_PICKUP`, `RESTAURANT_DISPATCH_DROPOFF` | Approved Dispatch stop addresses |
+
+Provision the service assignment with the existing Dispatch `:grant` action
+during release setup. Use a dedicated `SERVICE` principal, the carrier's
+organization scope, and a dispatcher role definition. Dispatch revalidates
+this assignment for each write and records it in the audit trail.
+
+When a delivery order becomes ready, Dispatch creates the load and stops,
+plans the available courier's trip, submits signed acceptance, then activates
+the trip. A busy courier leaves the order queued. The restaurant ledger is
+the retry source after restart. Dispatch cancels a planned trip when kitchen
+cancellation wins before acceptance.
+
+At pickup the kitchen board shows a code to give the courier. At drop-off the
+customer shows the separate code from the order confirmation or account history.
+The courier signs into Dispatch and submits each code from
+`/ui/restaurant-receipts` against the active assignment. The restaurant ledger
+matches the signed receipt to the exact assignment, phase and code commitment.
+Dispatch completes the trip after the ledger records drop-off. Keep the
+restaurant endpoint secret stable while any issued codes are outstanding.
+
+The routine path requires no dispatcher RPC or document review. A revoked
+courier, changed route, or cancellation after accepted custody requires
+operator reconciliation. The pilot uses a fixed destination and does not
+collect customer addresses in checkout.
 
 ## Testing a deployment
 
