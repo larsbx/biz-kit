@@ -71,6 +71,7 @@ defmodule CoopSubstrate.Protocol.Validity do
   """
 
   alias CoopSubstrate.Capital.AccrualRules
+  alias CoopSubstrate.CommercialSetoffAdmission
   alias CoopSubstrate.Constants
   alias CoopSubstrate.Dispatch
   alias CoopSubstrate.Finance
@@ -82,7 +83,8 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
   def check(%Envelope{} = env, gate) do
-    with :ok <- check_role_keys(env, gate) do
+    with :ok <- check_role_keys(env, gate),
+         :ok <- CommercialSetoffAdmission.check_existing_rail(env, gate) do
       type_check(env, gate)
     end
   end
@@ -116,7 +118,12 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @commercial_admission_types Map.keys(CommercialSetoffAdmission.event_types())
   @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+  defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_admission_types do
+    CommercialSetoffAdmission.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
     CoopSubstrate.WriterFence.check(env, gate)
   end
