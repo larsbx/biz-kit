@@ -180,3 +180,25 @@ observations. Both runtime behaviors are permitted by the inspected source.
   runtime statement formulas and the existing Lean projections, including
   current-result allocation and the distinction between TCR windows and
   bilan's as-of window.
+
+## Statement inputs
+
+`Source.signedBalances_net` proves that subtracting each account's credit
+from debit and suppressing zero rows preserves the grand signed sum.
+`Source.window_balance_sheet` applies the bilan equation when the selected
+entries are admitted and the movement fold conserves their debit and credit
+totals separately.
+
+The runtime gate checks the canonical two-digit prefix partition with
+representative suffix lengths, both inclusive date boundaries, zero-row
+suppression, and statement results over distinct bank subaccounts of opposite
+sign. The Lean observations use canonical decimal account strings and valid
+ISO dates. The source also accepts `"512\n"` via the regex's final-newline
+behavior and keeps it distinct from `"512"` as a ledger key. The runtime
+test records this behavior. A general account encoding must preserve full
+binary identity and prove classification under the actual parser.
+
+Universal correspondence still needs per-account movement-fold correctness,
+date ordering and selection across the supported runtime domain, and
+agreement of the actual statement selectors with the encoded buckets.
+Conservation of grand totals alone cannot establish per-account balances.
