@@ -5,6 +5,11 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Hanbali commercial contract taxonomy — 2026-11-13](2026-11-13-hanbali-commercial-contract-taxonomy.md):
+  sourced contract families, intra-school choices and contemporary composites
+  mapped to the at-cost producer cooperative; proposed evidence, admission and
+  implementation requirements. Includes a [primary source register](2026-11-13-hanbali-contract-sources.md).
+  Recording the specification does not activate financial or contractual effects.
 - [Dispatch spatial workspace and minimal stack — 2026-11-11](../plans/2026-11-11-dispatch-spatial-workspace.md):
   accepted GEV-00–08 roadmap for God's Eye View reuse, authorized spatial data,
   planning, history and minimal deployment. The earlier auxiliary stack was
