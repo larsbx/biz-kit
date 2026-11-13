@@ -25,7 +25,7 @@ defmodule Eatsbot.Extensions.Kafka.MixProject do
   defp deps do
     [
       # The extension owns its explicit producer client; no default KafkaEx worker.
-      {:kafka_ex, "~> 1.1.2", runtime: false},
+      {:kafka_ex, "~> 1.2.0", runtime: false},
       {:eatsbot_core, in_umbrella: true}
     ]
   end
