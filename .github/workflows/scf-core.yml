@@ -20,13 +20,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27.3.4"
           elixir-version: "1.19.0"
       - name: Pure SCF ledger, TVA and statement tests
-        run: mix test
-        working-directory: apps/scf_core
+        run: |
+          scratch=$(mktemp -d)
+          trap 'rm -rf "$scratch"' EXIT
+          cp -R apps/scf_core/. "$scratch/"
+          cp mix.lock "$scratch/mix.lock"
+          cd "$scratch"
+          MIX_ENV=test mix deps.get --check-locked
+          mix test
       - name: Check formatting
         run: |
           mix format mix.exs "lib/**/*.ex" "test/**/*.exs"

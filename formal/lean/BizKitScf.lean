@@ -541,3 +541,42 @@ theorem reverse_commutes (r : State) (s : Ledger) (hr : Represents r s) (id : Na
     exact post_commutes (State.project s) s rfl _ (hv _)
 
 end BizKitScf.Source
+
+namespace BizKitScf.Source
+
+/-- A row of the per-account movement map after date-window selection. -/
+structure MovementRow where
+  account : Account
+  debit : Int
+  credit : Int
+
+def signedBalances (rows : List MovementRow) : List Balance :=
+  rows.filterMap fun row =>
+    if row.debit = row.credit then none
+    else some ⟨row.account, row.debit - row.credit⟩
+
+/-- Zero-row suppression preserves the grand signed total. -/
+theorem signedBalances_net (rows : List MovementRow) :
+    trialNet (signedBalances rows) =
+      (rows.map MovementRow.debit).sum - (rows.map MovementRow.credit).sum := by
+  induction rows with
+  | nil => rfl
+  | cons row rows ih =>
+    by_cases h : row.debit = row.credit
+    · simp [signedBalances, h, trialNet] at ih ⊢
+      omega
+    · simp [signedBalances, h, trialNet] at ih ⊢
+      omega
+
+/-- The remaining source obligation is conservation of both movement totals
+when folding the selected entries into account rows. -/
+theorem window_balance_sheet (entries : List Entry) (rows : List MovementRow)
+    (valid : ∀ e ∈ entries, Admitted e)
+    (debit : (rows.map MovementRow.debit).sum = ledgerDebits entries)
+    (credit : (rows.map MovementRow.credit).sum = ledgerCredits entries) :
+    totalAssets (signedBalances rows) = totalLiabilities (signedBalances rows) := by
+  apply balance_sheet_equation
+  rw [signedBalances_net, debit, credit, admitted_totals entries valid]
+  exact Int.sub_self _
+
+end BizKitScf.Source
