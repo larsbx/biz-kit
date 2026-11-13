@@ -25,8 +25,12 @@ jobs:
           otp-version: "27.3.4"
           elixir-version: "1.19.0"
       - name: Pure SCF ledger, TVA and statement tests
-        run: mix test
-        working-directory: apps/scf_core
+        run: |
+          cp -R apps/scf_core "$RUNNER_TEMP/scf_core"
+          cp mix.lock "$RUNNER_TEMP/scf_core/mix.lock"
+          cd "$RUNNER_TEMP/scf_core"
+          MIX_ENV=test mix deps.get
+          mix test
       - name: Check formatting
         run: |
           mix format mix.exs "lib/**/*.ex" "test/**/*.exs"
