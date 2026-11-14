@@ -53,6 +53,43 @@ The module does not produce signed event bytes, a journal entry, a debit/credit 
 
 **Never route this proposal through the old single-denomination `NettingExecuted` rail.** Source-commitment event design and legacy bypass closure (#299) must precede *any* actual commercial discharge admission.
 
+## Inert dual-consent source-commitment slice (2026-11-14)
+
+`BarterCore.CrossCurrencyConsent.prepare/5` is a new **unsigned**
+domain-separated contract over a previously verified
+`CrossCurrencySetoff.propose/5` candidate. It binds the complete preview's
+`terms_hash` (including the negotiated quote/base minor-unit rational,
+exact proposed reductions, residuals and source assertions), the chapter and
+intent ID, both original source IDs and revisions, each supplied 32-byte
+original-event digest, and the two independently named principal key IDs and
+Ed25519 public keys.
+
+Both businesses can sign the **same** bytes independently. The pure
+`verify/7` reconstructs the full commitment using the *separately supplied*
+current preview, source hashes and business key registry, then validates both
+Ed25519 signatures. It refuses same-total source substitution, changed
+denominations, edited rate terms, altered source digests, key rotation,
+missing/wrong signatures, expired terms, and fabricated outcomes. It does
+not accept a signature over legacy `NettingExecuted` as a signature over
+this new domain.
+
+**Critical nonclaim:** callers must authenticate the external source-history
+digest and current corporate/agency authority before relying on either.
+A cryptographically valid signature over a caller-asserted invoice is not
+proof of the invoice, business power to contract or a legally effective
+setoff. The new module has *no* ledger append, registration, reservation,
+journal, FX execution, payment or discharge function. Its emitted status
+remains `inert_cryptographic_consents_only` even after both signatures
+verify. No legal non-prohibition classification is issued.
+
+The signed canonical business reviewer and reservation changes in
+[PR #392](https://github.com/larsbx/biz-kit/pull/392) are a separate
+**same-currency, no-discharge** program: their signed-core schema cannot be
+implicitly extended or recast as a cross-currency admission. Any later
+cross-currency business event must introduce a distinct reviewed version,
+bind the rate + its legal terms directly to the signed source lineage, and
+inherit/retest the existing source-fence and protected legacy-rail controls.
+
 ## Next bounded acceptance: actual contractual discharge
 
 Separately develop a versioned cross-currency commercial business event on the existing serial business log, using the protections in #299. It must bind:
