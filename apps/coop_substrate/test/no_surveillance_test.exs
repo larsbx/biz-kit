@@ -93,6 +93,7 @@ defmodule CoopSubstrate.NoSurveillanceTest do
       # operators and reviewers, never to a suggester
       # (docs/architecture/2026-10-19-execution.md): submitter and reviewer.
       {:evidence, 3} => :bilateral,
+      {:evidence, 4} => :bilateral,
       {:read, 3} => :bilateral
     },
     CoopSubstrate.Cockpit => %{
