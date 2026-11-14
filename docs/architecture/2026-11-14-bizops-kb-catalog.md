@@ -20,7 +20,8 @@ document an approved executable workflow.
 
 - `apps/bizops_kb`: dependency-free read-only catalog and integrity checks.
 - `priv/content`: exact Markdown from upstream commit
-  `ca356e34e6b1c4a2fb9f576c34196ca3bf13beee`; 216 documents, 93,482 bytes.
+  `8749d8db1abd3145b22c6a27da2cc49a41c303fe`; 216 documents, 106,105 bytes,
+  including the revised October 30 source-custody decision.
 - `priv/catalog.json`: deterministic stable IDs, original paths, categories,
   byte sizes, SHA-256 digests, and Git blob identities.
 - `priv/source-proof.json`: the exact upstream Git commit and complete tree
@@ -52,10 +53,16 @@ still fails against the retained source proof. These are identity checks, not
 a proof that the content is true, current, licensed for another recipient, or
 approved as a procedure.
 
-Runtime reads verify both document hashes and size, reject duplicate IDs/paths,
+Default runtime reads first bind the packaged manifest to its compiled SHA-256,
+then verify both document hashes and size, reject duplicate IDs/paths,
 traversal and content symlinks, and resolve documents only through catalog IDs.
 If any source bytes are missing or inconsistent, the host reports the catalog
 unavailable. It does not serve a silently partial or substituted source.
+Changing document bytes and recomputing their manifest hashes cannot bypass
+the compiled pin. Replacing the source snapshot requires review and rebuilding
+the app. Trusted library callers may explicitly load another root without that
+package pin; the HTTP host uses only the pinned default. Relocating identical
+package bytes uses `load_packaged(root)` and retains the same pin.
 
 ## Access and rendering
 
@@ -77,7 +84,7 @@ publication/access/withdrawal semantics and separate acceptance.
 ## Relationship to existing architecture
 
 The [shared storage contract](2026-10-30-postgres-event-log-redis-consolidation.md)
-and upstream source-custody ADR continue to govern operational authority.
+and [revised upstream source-custody ADR][custody] continue to govern operational authority.
 This feature introduces no log, database, Redis index, scheduler, financial
 writer, SOP approval, or execution port. Git retains the editable source.
 The code-review/release path publishes a fixed reference copy only.
@@ -90,6 +97,33 @@ decommission and PostgreSQL backend replacement.
 Existing artifact custody is task-bound; it is not widened to become a vault
 upload API. Existing TaskCore blueprints/readiness remain the later workflow
 integration seam.
+
+The migration assigns integration responsibilities as follows. These boundaries
+do not imply that knowledge-specific admission or distribution commands already
+exist.
+
+| Responsibility | Integration owner and requirement |
+| --- | --- |
+| Editable source and attribution | `bizops-kb` Git history; retain the exact repository, commit, tree, path and blob identity. An ownership move must be decided explicitly. |
+| Authentication and principals | `BizKit.Identity`; use current sessions and canonical principal bindings. |
+| Reference UI and source verification | `task_host` hosts this catalog and the existing blueprint source-verification interface. |
+| Adopted task and SOP rules | `TaskCore`; bind reviewed SOP versions and required inputs when a workflow is explicitly adopted. |
+| Operational admission and replay | `CoopSubstrate.Log`; future knowledge publication and withdrawal commands must join the common signed history. |
+| Task-bound evidence bytes | `CoopSubstrate.ArtifactCustody`, configured through `COOP_ARTIFACT_DIR`; do not treat the reference import as an upload grant. |
+| SQL and Redis | Shared projections and rebuildable operational data; neither becomes editable source custody or an independent authority. |
+
+The retired `/mcp` endpoint and local OAuth issuer are not integration targets.
+Copying this pinned, attributed corpus is independent of the remaining SpruceGoose
+decommission. Before any operational writer cutover, account for that workflow's
+active readers, installations, retained history, withdrawal state and replay;
+do not infer retirement of every legacy obligation from this reference import.
+
+This reader has no live upstream subscription or per-document withdrawal writer.
+Revoking the session or all configured workspace grants prevents subsequent API
+reads. Withdrawing a document from the published reference snapshot requires a
+reviewed import and rebuild. Previously delivered bytes cannot be recalled.
+Current document/installation policy and signed withdrawal admission remain
+requirements for a future governed distribution adapter.
 
 ## Next increment: one explicitly adopted workflow
 
@@ -116,3 +150,5 @@ dependency and checks anonymous/no-workspace/revoked access, GET API behavior,
 and the existing Operations flows. Record the evaluated source revision and
 actual workflow outcomes; passing the pure catalog checks alone is not hosted
 or deployment evidence.
+
+[custody]: https://github.com/larsbx/bizops-kb/blob/8749d8db1abd3145b22c6a27da2cc49a41c303fe/docs/decisions/2026-10-30-source-custody-and-platform-storage.md

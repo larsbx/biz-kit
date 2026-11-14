@@ -14,9 +14,9 @@ grant is inferred from the import.
 | Item | Value |
 | --- | --- |
 | Authoring repository | `larsbx/bizops-kb` |
-| Pinned revision | `ca356e34e6b1c4a2fb9f576c34196ca3bf13beee` |
-| Source tree | `7a29785f90feca8871da0b14b6fcd76401fc8278` |
-| Imported Markdown bytes | 93,482 |
+| Pinned revision | `8749d8db1abd3145b22c6a27da2cc49a41c303fe` |
+| Source tree | `79f146858c5d9d850df69b67294cb3fabf131bd1` |
+| Imported Markdown bytes | 106,105 |
 | Resolved wiki links | 45 |
 | Operational meaning | Shared reference material; no SOP adoption or execution authority |
 
@@ -24,6 +24,11 @@ Many entries are filing-category scaffolds. Longer procedures record particular
 deployment or commercial choices at their source revision. Their presence does
 not establish current implementation, production acceptance, or approval to
 perform an action. Current business policies still govern actual workflows.
+
+This revision includes the [updated October 30 source-custody decision][custody].
+The 214 numbered notes are unchanged from the initial import; the source README
+and decision now describe the migration to Biz-kit. The existing shared-reference
+publication scope is unchanged.
 
 The app has no network client, database, writer, worker, or agent invocation.
 The host requires a current Operations session and access to a configured
@@ -34,12 +39,21 @@ publication design before they are added.
 
 ## Read API
 
-`BizOpsKB.Catalog.load/1` reads the manifest and verifies every retained
-document's SHA-256, Git blob identity, size, path, and UTF-8 encoding. It refuses
+`BizOpsKB.Catalog.load/0` binds the packaged manifest to its compiled SHA-256
+before verifying every retained document's SHA-256, Git blob identity, size,
+path, and UTF-8 encoding. Coordinated edits to a document and its recorded hashes
+cannot retain the packaged source identity. It refuses
 the complete catalog if any document is missing or inconsistent. The catalogue
 supports bounded text search, area/category filtering, stable-ID lookup, and
 unambiguous Obsidian wiki-link resolution. It never evaluates Markdown or
 metadata as code.
+
+`load_packaged(root)` applies the same compiled pin to relocated package bytes.
+The explicit `load(root: root)` API remains available for trusted callers that
+select a different snapshot, including test fixtures; that call does not establish
+the packaged source pin. The HTTP host uses the pinned default and accepts no
+request-selected root or digest. A deliberate source refresh requires review and
+recompilation.
 
 The standalone source checker additionally verifies the exact upstream Git
 commit and reconstructs its complete tree. The source proof records identities
@@ -87,6 +101,14 @@ Authoring remains in `bizops-kb`; `priv/content` is a generated copy. Git review
 publishes this fixed reference snapshot. No live SpruceGoose permission,
 promotion receipt, or distribution obligation is transferred by this import.
 
+Source custody, current reader access, and operational approval remain separate.
+There is no live upstream subscription or per-document withdrawal command in
+this reader. Revoking all configured workspace access or the identity session
+refuses subsequent API reads. Withdrawing one published document requires a
+reviewed snapshot update and host rebuild; previously delivered bytes cannot be
+recalled. A future governed distribution adapter needs explicit publication,
+installation policy, withdrawal, and replay acceptance through the common log.
+
 ## Workflow follow-up
 
 The deployment procedure `24.12` and its owner sign-off `24.12d` are a concrete
@@ -95,3 +117,5 @@ at a safe ASCII source path, bind exact SOP bytes through TaskCore readiness,
 and use signed admission plus existing evidence review. The original vault
 paths remain intact. A retrieved document and a generated draft workflow never
 substitute for that adoption step.
+
+[custody]: https://github.com/larsbx/bizops-kb/blob/8749d8db1abd3145b22c6a27da2cc49a41c303fe/docs/decisions/2026-10-30-source-custody-and-platform-storage.md

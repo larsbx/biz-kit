@@ -24,9 +24,10 @@ import tempfile
 REPOSITORY = "larsbx/bizops-kb"
 DEFAULT_ROOT = Path(__file__).resolve().parents[2] / "apps/bizops_kb/priv"
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
-JD = re.compile(r"^(\d{2}\.\d{2}[a-z]?)\s+(.+)$")
+JD = re.compile(r"^([0-9]{2}\.[0-9]{2}[a-z]?)\s+(.+)$")
 AREA = re.compile(r"^\d{2}-\d{2} ")
 MAX_METADATA_BYTES = 2 * 1024 * 1024
+MAX_METADATA_DEPTH = 32
 MAX_DOCUMENT_BYTES = 1024 * 1024
 MAX_TOTAL_BYTES = 16 * 1024 * 1024
 MAX_DOCUMENTS = 1000
@@ -81,7 +82,29 @@ def read_bounded_regular(path: Path, limit: int) -> bytes:
 
 
 def read_json(path: Path):
-    return json.loads(read_bounded_regular(path, MAX_METADATA_BYTES).decode("utf-8"), object_pairs_hook=unique_object)
+    body = read_bounded_regular(path, MAX_METADATA_BYTES)
+    # Bound nesting before the decoder, independently of the interpreter's
+    # recursion setting. Quoted and escaped brackets are ordinary source text.
+    depth, quoted, escaped = 0, False, False
+    for byte in body:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif byte == 92:
+                escaped = True
+            elif byte == 34:
+                quoted = False
+        elif byte == 34:
+            quoted = True
+        elif byte in (91, 123):
+            depth += 1
+            require(depth <= MAX_METADATA_DEPTH, "metadata nesting exceeds limit")
+        elif byte in (93, 125):
+            depth -= 1
+    try:
+        return json.loads(body.decode("utf-8"), object_pairs_hook=unique_object)
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as error:
+        raise InvalidSnapshot("invalid UTF-8 or JSON metadata") from error
 
 
 def write_json(path: Path, value) -> None:
@@ -214,7 +237,20 @@ def check(root: Path) -> dict:
 
 
 def git(source: Path, *args: str) -> bytes:
-    return subprocess.run(["git", "-C", str(source), *args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+    # Source reads must use the requested object, not a replacement ref, an
+    # inherited alternate repository, or a lazy network fetch for missing data.
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                        "GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0",
+                        "GIT_OPTIONAL_LOCKS": "0"})
+    try:
+        return subprocess.run(["git", "--no-replace-objects", "-C", str(source), *args],
+                              check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              env=environment, timeout=30).stdout
+    except subprocess.TimeoutExpired as error:
+        raise InvalidSnapshot("Git object read exceeded its 30-second deadline") from error
+    except OSError as error:
+        raise InvalidSnapshot("Git object reader could not be started") from error
 
 
 def import_snapshot(source: Path, revision: str, root: Path) -> dict:
