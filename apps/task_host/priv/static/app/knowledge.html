@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Reference library · Biz-kit</title>
+    <link rel="stylesheet" href="/app/operations.css" />
+    <link rel="stylesheet" href="/app/knowledge.css" />
+    <script type="module" src="/app/knowledge.js"></script>
+  </head>
+  <body>
+    <a href="#main" class="skip-link">Skip to reference library</a>
+    <div class="shell knowledge-shell">
+      <aside class="sidebar" aria-label="Library navigation">
+        <a id="operations-home" class="brand" href="/operations" aria-label="Operations home">
+          <span class="brand-mark" aria-hidden="true">b</span>
+          <span>biz-kit<span class="brand-sub">OPERATIONS</span></span>
+        </a>
+        <a id="back-to-operations" class="library-back" href="/operations">← Back to work</a>
+        <div class="sidebar-heading">Browse by area</div>
+        <nav id="area-list" aria-label="Knowledge areas"></nav>
+        <div class="sidebar-footer">
+          <p>Published reference snapshot</p>
+          <a id="source-revision" hidden target="_blank" rel="noopener noreferrer"></a>
+        </div>
+      </aside>
+      <div class="content">
+        <header class="topbar">
+          <div><span class="eyebrow">BIZOPS</span><strong>Reference library</strong></div>
+          <div class="topbar-actions">
+            <button id="refresh" type="button" class="quiet">Refresh</button>
+            <a id="sign-in" class="button primary" href="/auth/workos/login" hidden>Sign in</a>
+            <button id="sign-out" type="button" class="quiet" hidden>Sign out</button>
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <section class="page-heading">
+            <div>
+              <p class="eyebrow">GUIDES, PROCEDURES &amp; REFERENCE</p>
+              <h1>Find how your operations work</h1>
+              <p class="subtle">Procedures require separate workflow approval.</p>
+            </div>
+            <span id="status" role="status" aria-live="polite">Connecting…</span>
+          </section>
+          <form id="search-form" class="library-toolbar" role="search">
+            <label class="library-search"><span class="sr-only">Search reference library</span>
+              <input id="search" type="search" placeholder="Search documents, IDs, or a procedure…" maxlength="160" autocomplete="off" />
+            </label>
+            <label><span class="sr-only">Category</span>
+              <select id="category-filter"><option value="">All categories</option></select>
+            </label>
+            <button class="button" type="submit">Search</button>
+          </form>
+          <section id="library-browser" class="library-browser" aria-label="Reference documents">
+            <div class="library-results">
+              <div class="list-heading"><h2 id="list-title">Documents</h2><span id="result-count" class="subtle"></span></div>
+              <div id="document-list" aria-live="polite" aria-busy="true"></div>
+              <nav class="pagination" aria-label="Document pages">
+                <button id="previous" type="button" class="quiet" disabled>Previous</button>
+                <span id="page-label" class="subtle"></span>
+                <button id="next" type="button" class="quiet" disabled>Next</button>
+              </nav>
+            </div>
+            <article id="document-panel" class="document-panel" hidden aria-labelledby="document-title">
+              <button id="close-document" type="button" class="quiet">← Documents</button>
+              <p id="document-category" class="eyebrow"></p>
+              <h2 id="document-title" tabindex="-1"></h2>
+              <p id="document-path" class="document-path"></p>
+              <a id="document-source" target="_blank" rel="noopener noreferrer">View original source</a>
+              <div id="document-body" class="markdown-body"></div>
+            </article>
+          </section>
+          <footer class="page-footer"><span>Biz-kit Operations</span><span>Reference content · reading creates no tasks or approvals</span></footer>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

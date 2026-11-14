@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'apps/task_host/**'
+      - 'apps/bizops_kb/**'
+      - 'scripts/bizops-kb/**'
       - 'desktop/ui/lib/layout.js'
       - 'desktop/ui/lib/divider.js'
       - 'desktop/tools/sync-task-tiles.mjs'
@@ -88,10 +90,13 @@ jobs:
           lib/task_host/infrastructure_review.ex
           lib/task_host/web/infrastructure_review_controller.ex
           lib/task_host/web/operations_controller.ex
+          lib/task_host/web/knowledge_controller.ex
           lib/task_host/web/app_controller.ex
           lib/task_host/web/router.ex
           test/task_host/operations_test.exs
           test/task_host/web/operations_test.exs
+          test/task_host/web/knowledge_test.exs
+          test/task_host/web/knowledge_browser_test.exs
           test/task_host/web/infrastructure_review_test.exs
           test/task_host/web/operations_browser_test.exs
       - name: Initialize canonical event stores
@@ -106,6 +111,7 @@ jobs:
           mix test test/task_host/operations_test.exs
           test/task_host/web/operations_test.exs
           test/task_host/web/infrastructure_review_test.exs
+          test/task_host/web/knowledge_test.exs
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -115,4 +121,6 @@ jobs:
         run: NODE_PATH="$(npm root -g)" node apps/task_host/test/browser/tiles.cjs
       - name: Real identity, ledger and mobile browser acceptance
         working-directory: apps/task_host
-        run: mix test test/task_host/web/operations_browser_test.exs --include browser
+        run: >-
+          mix test test/task_host/web/operations_browser_test.exs
+          test/task_host/web/knowledge_browser_test.exs --include browser

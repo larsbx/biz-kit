@@ -1,0 +1,1109 @@
+{
+  "commit_base64": "dHJlZSA3YTI5Nzg1ZjkwZmVjYTg4NzFkYTBiMTRiNmZjZDc2NDAxZmM4Mjc4CnBhcmVudCBhY2Y3MDUxZTBmNzg3NjY0NDAxMjRkYjk3YWJhZmYzMjhmNzdkYjlhCnBhcmVudCA1NzZlZDg4YjVlZGRmNzI0YmIxMTY0YmYzNDU4NTc1Nzg1MjE0NGI1CmF1dGhvciBsYXJzYnggPGxhcnNiZW5kaXhlbkBnbWFpbC5jb20+IDE3OTMzODM4MTAgLTA3MDAKY29tbWl0dGVyIEdpdEh1YiA8bm9yZXBseUBnaXRodWIuY29tPiAxNzkzMzgzODEwIC0wNzAwCmdwZ3NpZyAtLS0tLUJFR0lOIFBHUCBTSUdOQVRVUkUtLS0tLQogCiB3c0ZjQkFBQkNBQVFCUUpxNU4yQ0NSQzFhUTd1dTVVaGxBQUE3bGtRQURwWWRGMWtWUkVjc2cwc2N4OHFlb3VBCiBZMUtYVWpkaXowcDN5T0JPMjhBWXlibURmdlBLY3FWZkRSWjlIUWU3NC9IcVZsbDhWaGdsSU9YM3NFVVVsd0J5CiBrRjloQ2E4U1dzdTQ5R2tMQWhJS3RKQU9yTW1DL0lKWHVtc1JpbXVmb0hoM2xsSTdobTFWbUQvM0lTMmwzQncyCiBpalRpdXZMTm1XZitpSEJrOXJRK28wZ2FQRXJRZlpoZy9yWUx1Mmdyb1AzeERwblVWM0drbUxPUHVrdUx2dmxTCiBVcUNraGh3ekFrdHd2Z0M1bE16Q1VOZ0hhc2IyQk51Sk9YV1VBcWljN1RkV1JYYjlQcU1sK08vbXVwS1pTYy9wCiBtOWZIbXRxSXJXQWZCRkRodEtMVVdwbVlvVDA1T1krVWZBNTJHSVVzTkF0YWhvbjV5eHQxUENTcWV1cFkxYURrCiB4MFRkbGxINHJPc1pTb2xZVGlCa2kxNlZlMWpxQTFhc0p2TkRiR2hGa2lhcGNub0tudkd1eEpYa1Jrd0xTb1NTCiBLY2VldmVXeVd3N3JOaWovdG1DN2U3ekR4OW0wVi90SzIwZENVc0dHY0FadEtxVFIxTVIrVkNMOEZ1cm9IZzFBCiBvRDBBbkJjZVFLTUExZ0RHQmxsTG5NSGhPeC8xRHorekJuV2RNZDFIZVpPZmNlV21La3pHTDdjclFFTWpDTnA0CiBtMW1uczYxVnIvWmk5cFNtRk56cmp2NW02V3ZnMlczaGRJS1JtT3FDZnJhbS9EY2IwQ05hZ0hOTmlFdUM0K2tPCiA3aDB2MmhVSGhUSExOOUNUTms2UE0rMlJhaGFvZ3ZXbG43ZVdVTk9WdGxkNUVhTnkxVGJ3MGdoNXE2MWtBMElPCiB1ZVEzbkVydHc2UXBvdjMzdFVQdwogPVVxYU4KIC0tLS0tRU5EIFBHUCBTSUdOQVRVUkUtLS0tLQogCgpNZXJnZSBwdWxsIHJlcXVlc3QgIzYgZnJvbSBsYXJzYngvZG9jcy9wbGF0Zm9ybS1zdG9yYWdlLXJvbGVzLTIwMjYxMDMwCgpkb2NzOiBkZWZpbmUgc2hhcmVkIHN0b3JhZ2UgYW5kIGRlbGl2ZXJ5IHJlc3BvbnNpYmlsaXRpZXM=",
+  "entries": [
+    {
+      "mode": "100644",
+      "path": ".gitignore",
+      "sha": "159402c0950894f9b3b79fe462a99eb7061630df"
+    },
+    {
+      "mode": "100644",
+      "path": ".obsidian/app.json",
+      "sha": "5b0e6b470419cb1ed8d3cb20f89e5d6ab2c0fa97"
+    },
+    {
+      "mode": "100644",
+      "path": ".obsidian/appearance.json",
+      "sha": "d9dd377e10ea6f854f6a36c131d43c07ea19a565"
+    },
+    {
+      "mode": "100644",
+      "path": ".obsidian/core-plugins.json",
+      "sha": "b977c255c1bc40dd9f39dcd754761304ef0eb719"
+    },
+    {
+      "mode": "100644",
+      "path": "00-09 System-management area/00 System-management category ⚙️/00.00 JDex for the Small Business System 📇.md",
+      "sha": "3c01b98c0b9f98286add4cf9db4f9db14501e441"
+    },
+    {
+      "mode": "100644",
+      "path": "00-09 System-management area/00 System-management category ⚙️/00.01 Inbox for the Small Business System 📥.md",
+      "sha": "a6dbf9a12dc63304636d621b01a3b4d5f86bbde0"
+    },
+    {
+      "mode": "100644",
+      "path": "00-09 System-management area/00 System-management category ⚙️/00.02 Task & project management for the Small Business System 🤹.md",
+      "sha": "c8c454de3f3728f7df43e096d29d7b92624b9062"
+    },
+    {
+      "mode": "100644",
+      "path": "00-09 System-management area/00 System-management category ⚙️/00.03 Templates for the Small Business System 📁.md",
+      "sha": "b712f6236fa758da2956292c504c3a2b746e2c3e"
+    },
+    {
+      "mode": "100644",
+      "path": "00-09 System-management area/00 System-management category ⚙️/00.04 Links for the Small Business System 🔗.md",
+      "sha": "9399cef79c5aa8029f19c37e90d6740f1207a5ce"
+    },
+    {
+      "mode": "100644",
+      "path": "00-09 System-management area/00 System-management category ⚙️/00.09 Archive for the Small Business System 🏛️.md",
+      "sha": "37d6fbca10d975194fd984ff22a8854a293bc1a6"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.01 Inbox for category 11.md",
+      "sha": "9cccbbcd4b64b9e90832e2e1e2a0640516c3f929"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.09 Archive for category 11.md",
+      "sha": "fda0f5ab2c904fa0b774c65e59441139b634786e"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.10 ■ Official documents 🗂.md",
+      "sha": "e5e0014d90a6dd87f0053dc1e4d775107be6b638"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.11 Structure & registrations.md",
+      "sha": "80966b581ae77422c688add2872597fa82e8bc55"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.12 Licences, permits, & accreditations.md",
+      "sha": "788d41e06a872575baa0805d37aa705161ea7a5f"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.13 Compliance.md",
+      "sha": "1102fb4383fe461ee665acedd0842983ceb0f6c0"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.14 Other legal matters.md",
+      "sha": "05b9b500f3a0043c6a4a3b575b89685738be80da"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.15 Selling it or closing it.md",
+      "sha": "360a0502cfb390023a4d0b43e65908bb3c3d23df"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.20 ■ Planning, contingencies, & insurance 🧭.md",
+      "sha": "60fa9bc808b90cf007bcc37518fce86f5576107b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.21 Business plan.md",
+      "sha": "e261c821a00998583926b83d109c3d9c1bda80d2"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.22 Business insurance, incidents, & claims.md",
+      "sha": "2475dc3d5860ebcc0bebd8474b82b000d92b94b5"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.23 Risk & emergency management plans.md",
+      "sha": "99b34dfe8cf032ec843a972ed260c6578a261748"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.24 Collected wisdom & analysis.md",
+      "sha": "02776965477599b96118407b108ed34a83b06c62"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.30 ■ Behaviours, ethics, & culture 👍.md",
+      "sha": "ef6bf8c519b70515fffd0f2b2c43ee6541275b8e"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.31 Internal policies.md",
+      "sha": "8959ffc54b90d9239c403feddd5268d64c575df0"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.32 External policies.md",
+      "sha": "060bf100b73e5063cc838e487b824bb179b74063"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.33 Dispute resolution.md",
+      "sha": "6f73f80ef405c5c04f54fd6ba15a6456d5539b98"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.40 ■ Our people 🦸.md",
+      "sha": "4a19de2d635435923b1b6141b85c049dbeb4e4a3"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.41 Hiring.md",
+      "sha": "8c728fc538d305ff9570dc1766d2ba775671ffde"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.42 Staff record keeping.md",
+      "sha": "3ab9f6b289d8dee3046c2d86fb52dcad657345a7"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.43 Formal reviews.md",
+      "sha": "f04f365de95ad0c7ba30f575ee6718c194b5f541"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.44 Farewells.md",
+      "sha": "cf77abf5db1c49c7474917b4792c5db257e7e5f3"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.45 Animals as staff.md",
+      "sha": "cfc366f794dfe0688e50780e3082bf1e22cb4cd7"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.50 ■ Training & professional development 🎓.md",
+      "sha": "5dcb5b26af00377f6cbfd566dcb2206ada1c1991"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.51 Mandatory training.md",
+      "sha": "c8af2ccd7fa91173b604b203569e42b8cf4b17e1"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.52 Optional training.md",
+      "sha": "d3b44ea3ae4ea2a098645846c62f939d70c2aa31"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.53 Other learning & self-improvement.md",
+      "sha": "6674734e9369f81f30d9da44a634377129b99ea6"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.60 ■ Other people & organisations 🤝.md",
+      "sha": "fe2e4c928e06296eafea6eb96828ab22fd3cad83"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.61 Professional bodies.md",
+      "sha": "d49ffd1f52178b6d5e6f93f75bb255c7d3d46863"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.62 Seeking advice & support.md",
+      "sha": "e3a534661c899b9030d5fe2b23fcbed06012ad3f"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.63 Networking & new business.md",
+      "sha": "981971fc445f19b61f9f32caadfb4be81ac1391f"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/11 The business & its people 🙋/11.90 ■ Library – The business & its people 📚.md",
+      "sha": "ae9e58ffb8447aed2c7b0c7edb744b2a091bc33b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.01 Inbox for category 12.md",
+      "sha": "a68163dec2409a3ab0fe9ec69ee3a0a20141fcd2"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.09 Archive for category 12.md",
+      "sha": "0d3868a7851d6a484f8073a907c57ac060762ce0"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.10 ■ Fixed locations 🏢.md",
+      "sha": "0581ea1600957fdc9b3771eac9c967859de5971f"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.11 Official property documents.md",
+      "sha": "b4d65f5fb74551ee82c9faa5e6e4955151f21f91"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.12 Office insurance, incidents, & claims.md",
+      "sha": "dc8130788b017a446ea3478dd11ca2247ae85120"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.13 Rates, taxes, & fees.md",
+      "sha": "fb12a4a035310bef37764e6df70d02077ec75079"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.14 Property fit-outs, renovations, & improvements.md",
+      "sha": "49c61aca369072b1a1aff243e5c54f8e0bd7a934"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.15 Property repairs & maintenance.md",
+      "sha": "38844965a8c718473bbfcbe187aaa5f6c73cb1dd"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.16 Moving.md",
+      "sha": "b47f9b613043fab09be6a4d177dd6f08e34ac10b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.20 ■ Back office equipment & operations ⛔️.md",
+      "sha": "2d59163b2c51e3007a36e9bdd59b5bfe02b3ba4b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.21 Keep the back-office lights on.md",
+      "sha": "6a89b0a73f95cd202458b1b9f39af3462f9bfc8b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.22 Keep us secure.md",
+      "sha": "2fbe45021a9bcd50f8ddd368e1d51063de0e58ca"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.23 Keep it nice for us.md",
+      "sha": "edc16aea491905ea40a78ea52c218841d76c82fb"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.24 Keep the back office well equipped.md",
+      "sha": "c9b1e2c59ff8c9b583a60f1a2aeb0a7399d437ce"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.25 Keep us fed and watered.md",
+      "sha": "d25af479edb6738433c4c1fa16a18cbb18e9e2a6"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.26 Keep us posted.md",
+      "sha": "06b2e27508331a3fce82edea59986646d3c26745"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.30 ■ Front office equipment & operations 🛎️.md",
+      "sha": "98757f5d75260ff9317d99123f4fd0f264e6eb67"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.31 Keep the front-office lights on.md",
+      "sha": "c029a97de1725f532f735f6cfd07aec0a80ab61b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.32 Keep our customers secure.md",
+      "sha": "525e21bee37f1fd5784fee6e90cc2a7a7e0a9bbc"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.33 Keep it nice for our customers.md",
+      "sha": "648d31062b585eb9b103cf129183d1ff5194986d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.34 Keep the front office well equipped.md",
+      "sha": "e5f226d97c5dc2de3f4e6767885e30f2e4750106"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.35 Keep our customers fed and watered.md",
+      "sha": "29bfe64f2c4a017a71977efd749ab42b1fd9a19e"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.40 ■ Getting around 🚚.md",
+      "sha": "bcb2ca0901ae186ed7915c2a4c873229430a1254"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.41 Official vehicle documents.md",
+      "sha": "4f43ebe2403fb2f5e97bfce1556b8d486959c8f3"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.42 Vehicle insurance, incidents, & claims.md",
+      "sha": "4435a70df32eab2ad165c8fa8f1c7a9dcb305872"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.43 Permits, tolls, fees, & other running expenses.md",
+      "sha": "61064387c8f790a20f2e66d3a710397ae86623dd"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.44 Vehicle fit-outs, renovations, & improvements.md",
+      "sha": "b6451cbe6b1015e3164edcc44060ecfa3f7ff283"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.45 Vehicle repairs & maintenance.md",
+      "sha": "74018d4bce61a3b8496c5a8c89992f5f44fb3326"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.46 Public or shared transport & other 'informal' vehicles.md",
+      "sha": "2466e9c5a777cf72a9852e646912d65f8c552691"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.50 ■ The community 🧩.md",
+      "sha": "170f728ef7681888d058304ff1204d066438fd07"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.51 Your business & local neighbourhood.md",
+      "sha": "759713cbd6490cad71060724c0c1b268793d8f34"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.52 Your business & city, state, & country.md",
+      "sha": "7f1d26b7fc9930fdb2097228397242b1ea758597"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.53 Your business & planet.md",
+      "sha": "a3aaf0f4f2cb49930f1cb6917ab4702f7de2ba76"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/12 Where I trade & how I get around 🗺/12.90 ■ Library – Where I trade & how I get around 📚.md",
+      "sha": "bbdf3c9f14bfe8102ee510616aef0bf62bd2dae8"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.01 Inbox for category 13.md",
+      "sha": "c85c78be7eaf3cf154cbed7edd47c2582dfbec12"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.09 Archive for category 13.md",
+      "sha": "58fdf6447cb82e1ea04dc31e0abcdebefd0ec743"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.10 ■ Plan, protect, & reflect 🧘.md",
+      "sha": "6defbde4e8c63641e6afad45815f912f0201080a"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.11 Financial planning.md",
+      "sha": "69bafdc2eace34db5c2c60762c7c8bba888d48a9"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.12 Financial insurance, incidents, & claims.md",
+      "sha": "82dfff2ab6660ce27c5cb3861c79c9e14d924834"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.13 Reports & reviews.md",
+      "sha": "c211fcd01a745a9689042deb502997089bab2b62"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.14 Financial catch-all.md",
+      "sha": "a2a450ee3e31c4d3f28331ba4e6e3ed1986deaea"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.20 ■ Income 🤑.md",
+      "sha": "0713f713692c224ba44cf5142c977c4fc556e8a6"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.21 Inbox and processing of income.md",
+      "sha": "9b3ea9ae6f01d156e1af34097ac008fe627152eb"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.22 Accounts that deliver income.md",
+      "sha": "a404aa3acb7f777c24c87bf5c5ffdf0adc8c222c"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.23 Invoices & sales for your work.md",
+      "sha": "1cdc4f41702ff3e8818d4139aeb6960c0e0eac0f"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.24 Passive income.md",
+      "sha": "d1898ab25a6b6d924aa8eca8cf709ba14fab4478"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.25 Assistance, grants, & gifts.md",
+      "sha": "ddf81dff8bb33e32e519f5fe7ddd0018f0c81d4d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.26 Sale of assets.md",
+      "sha": "6eb7ae82447529bb0fa062138ffc6b659ac1b663"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.30 ■ Expenses 🛍️.md",
+      "sha": "d94f5f3473718ae6480671e31a084d396e30992d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.31 Inbox and processing of expenses.md",
+      "sha": "9585584de7e8115f43631884009cd3106a9fb484"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.32 Accounts that handle expenses.md",
+      "sha": "0d28acd301c429558a6ee5b70121b751ab268f6e"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.33 Receipts.md",
+      "sha": "70ef0ec132e9a69796b0829f8381eeb3e26c002e"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.34 Payroll.md",
+      "sha": "7ce7bda5c5965ae1a33f269fc9b21dc031c45b56"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.35 Subscriptions, memberships, & other recurring expenses.md",
+      "sha": "e5b32b9899ad1c5cc36af80b891fc3e678c2c13a"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.40 ■ Assets 📈.md",
+      "sha": "33ce1c743d128f0ae156f3a21ce03d44d46fd91d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.41 Inbox and processing of assets.md",
+      "sha": "a346649763174b4e222c1bbc083179f4d24709b8"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.42 Accounts that handle cash.md",
+      "sha": "c549021c73fd4c1fe55113ff314e8b3813bec531"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.43 Investments.md",
+      "sha": "c601a6144eea1623fc96135f19d1a689d3eebd84"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.44 Fixed assets.md",
+      "sha": "1cd33aae61dd1adaa6d79613a426f5a0eb2f0b96"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.45 Current assets.md",
+      "sha": "4d90486a62fb48e201df098c604a9e225d191087"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.46 Intangible assets.md",
+      "sha": "7bda5b723cf7ae91c180b89ea0da8a609381e4d5"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.50 ■ Liabilities 💸.md",
+      "sha": "a16d589bc043b7265185addd66de02e4f752a4de"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.51 Inbox and processing of liabilities.md",
+      "sha": "291fc6332db1bd316811a64d6020098956dc9c6a"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.52 Cash loan accounts.md",
+      "sha": "afe0aa2448d444cbf737e10bfc87b5fe2a280168"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.53 Non-cash loan accounts.md",
+      "sha": "8229db4955a8751b984c6e9a495ac0c04e87a0d2"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.54 Bills.md",
+      "sha": "235be82b89ba34543bc8cc23e711a52bc0e4cc4b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.55 Fines & penalties.md",
+      "sha": "31ab5f7d3cc2f676602d0cb9182c62dc7f9c53e3"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.60 ■ Reconciliation & returns 🧮.md",
+      "sha": "22398db69bf0b4247ae5f4f1e6f996bc5d064600"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.61 Inbox and processing of government taxes.md",
+      "sha": "7285fe38d0a6e9b1acc73256c022970a00153afe"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.62 Accounts that handle tax.md",
+      "sha": "bcc1180aedf00028df040fbdc37808896d46d06c"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.63 Dividends.md",
+      "sha": "7a9470e95b20f0261c12d24cd2ee30231d356c88"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.64 Equity.md",
+      "sha": "bed323832b5e4a5d89059b06fa3c48a190fd0a47"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/13 Money earned, spent, saved, & owed 💰/13.90 ■ Library – Money earned, spent, saved, & owed 📚.md",
+      "sha": "fdf7ccb1cd750aa8d8940b318962d6655cb3b582"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.01 Inbox for category 14.md",
+      "sha": "d0fb61730712a58cb2fe31505649f170811f8f50"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.09 Archive for category 14.md",
+      "sha": "3f2552796b94abd2e98cfc549b2f8b14df21e785"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.10 ■ Computers & other devices 🖥️.md",
+      "sha": "0587e682cc4f4f9cde12b7f92ba72b9e0e4964bf"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.11 Computers & servers.md",
+      "sha": "06acefcb9b5fa2d3997e47be89736a551424b3e9"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.12 Mobile devices.md",
+      "sha": "7bf1793dcd4a6c55db36202fb3494b49a7d8171b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.13 Network devices.md",
+      "sha": "9c7dc1c27606204dfc2386092635b45246c73896"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.14 Accessories.md",
+      "sha": "c9882db1a5b3231b8e33ec8f6b327d1a9500e969"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.20 ■ Storage, data, & backups 🗃️.md",
+      "sha": "05d23186ce19deeb9e78c5b0f593943cbc7fdcd4"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.21 Storage.md",
+      "sha": "322a80efff9e4fbba9a580ac2ce16ca5a44d0228"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.22 Data.md",
+      "sha": "14aeea521abbbbd71f244f44469a2bcc9ee5a528"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.23 Backups & recovery.md",
+      "sha": "4dbf1635c2a94bab4ff1b4d68a19bc9569259fe2"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.30 ■ Software, services, & support 💾.md",
+      "sha": "c69ccc6bbd2ee78e46304beeef080799abacb5cc"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.31 Internal software & services.md",
+      "sha": "fa1ab414c9eb9c38fc9eb24e772ff70e2cf4978d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.31a Postfix business email automation roadmap.md",
+      "sha": "7f39ceb93e39d856b1b24ee55f6e8546eee640b2"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.32 External software & services.md",
+      "sha": "082224998c4c01fd5f3b370f057d02ca608791e5"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.33 Support contracts.md",
+      "sha": "7778e246e7aa7ddded6cf9c1bb33b67f644a9d19"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.40 ■ Accounts, cybersecurity, & policies 🔐.md",
+      "sha": "b1083bd984adea873baaf552a2ac237340345a06"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.41 Accounts, passwords, & access.md",
+      "sha": "12215474861a2a28e01aaa82b272a6a256e0ac91"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.42 Technical cybersecurity.md",
+      "sha": "63284f7eb8870e2758f01873708efd222e493de8"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.43 Behavioural cybersecurity.md",
+      "sha": "3eddf8f5fd20ec695ee145164e2f124b6410d89d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.44 Cyber insurance, incidents, & claims.md",
+      "sha": "1b8e84e4b17a7be25fdc18dfe69b05a162417d4f"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.50 ■ Our online presence 🌏.md",
+      "sha": "8f352b7df38f35eabcbccdff324264a3704db2b6"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.51 Domain & DNS management.md",
+      "sha": "924eadabc260e25cd825843a573e35528ff629b4"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.52 Websites, blogs, & communities.md",
+      "sha": "de842fae4f724c8f2dbc97875bd8d616b3417a45"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.53 Social media.md",
+      "sha": "e6ae786e5f58a37df9f7d0bd81053ef27339746b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.54 Electronic mailing lists & updates.md",
+      "sha": "963aa8d7e1077569a69adb51ff809a0333cf3932"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.90 ■ Library – Technology 📚.md",
+      "sha": "a83c1cb8dedc064032bf4c2defcbb7a2e4565b0d"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/14 Technology 💻/14.91 Lists of online resources.md",
+      "sha": "db2338415f304750d206ba1d70f8ad02c32b66ac"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.01 Inbox for category 15.md",
+      "sha": "749ff22826f2cf399d174a0671391b7fa90e88ec"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.09 Archive for category 15.md",
+      "sha": "600b701d2d5fbf1ea1d90b3b311f8fa986e6329b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.10 ■ Administration & checklists ✅.md",
+      "sha": "924a8d4ea92897eeec594706123f79fb64abbfb7"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.11 Important documents & lists.md",
+      "sha": "ea18842d1f1b3563760339c43a12775e496a2a0b"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.12 Travel insurance & claims.md",
+      "sha": "26a160cfa8787967bc22dee1586b77b1aae4d1c7"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.13 Loyalty programs.md",
+      "sha": "b9a56c1f53c1ccbd93fe254b181b8738922874c0"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.14 Going-away checklists.md",
+      "sha": "09bff554b41d91964daf490090d8a5486b2d5f69"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.20 ■ Social club 🥳.md",
+      "sha": "dfef1857e5246316e3a1cd38dd5a910243fbc7af"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.21 Informal onsite activities.md",
+      "sha": "c1a2c9c2b2cfe53d26a737243889305e9ca44062"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.22 Informal offsite activities.md",
+      "sha": "f6fad4b509c7ae4b19334fcb1fa4f9a52c3c0bec"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.30 ■ Our events 🏨.md",
+      "sha": "09f4cbfa57250c1676310116c493a713cfbdd7c5"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.31 Formal onsite events.md",
+      "sha": "12d6e741aca6dd66d3314f4113678aee741435e7"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.32 Formal offsite events.md",
+      "sha": "b37020b1ae4577f5f7e626a068c68a50c0b06684"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.40 ■ Short or routine trips 🚉.md",
+      "sha": "c33cb06b16bfd9d3645a97f9e56896fc34fe851c"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.41 All short trips.md",
+      "sha": "cf4cac25455c566ed31f7cd80295fff682b0aa07"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.50 ■ Longer trips 🛫.md",
+      "sha": "7a4fd0cbe594565b18f28b7ccc2730a1375d1648"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.51 Longer trips from the past.md",
+      "sha": "4356b0697206120657e45a1b435c8a5df7fd2a3e"
+    },
+    {
+      "mode": "100644",
+      "path": "10-19 Business administration/15 Travel, events, & social ☕️/15.90 ■ Library – Travel, events, & social 📚.md",
+      "sha": "813bba979d745da82f2b50915c5f353e78f6e7c4"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/21 Products & services 💈/21.01 Inbox for category 21.md",
+      "sha": "e34e1ab4d5087b970ea1f0479a64e97e6f204781"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/21 Products & services 💈/21.09 Archive for category 21.md",
+      "sha": "5b5cc9ba39d7a32e83359d3afcc21a8ac7d153c1"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/21 Products & services 💈/21.11 List of all products & services.md",
+      "sha": "166ddf6b214e0eabd3cc77e288a6babc691064c3"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/22 Suppliers & vendors 🧑‍🌾/22.01 Inbox for category 22.md",
+      "sha": "927d2c0c55aaaf3f6befeecc118fbb0c57bb899c"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/22 Suppliers & vendors 🧑‍🌾/22.09 Archive for category 22.md",
+      "sha": "af996678ad06a7b335efabb023a63fbb6fe670e9"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/22 Suppliers & vendors 🧑‍🌾/22.11 List of all suppliers & vendors.md",
+      "sha": "787c752e40c9290b04001ebb297a0bb9b62e5125"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/23 Equipment & machines 🛠/23.01 Inbox for category 23.md",
+      "sha": "c7c28ad99e98791e844aaa20baac2e897b873c11"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/23 Equipment & machines 🛠/23.09 Archive for category 23.md",
+      "sha": "0502b7047cc1cc400d07a1741239c9c50da322d4"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/23 Equipment & machines 🛠/23.11 List of all equipment & machines.md",
+      "sha": "0a8d6b677963b8bc23abdc18ee8042bdc4cf6a0d"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.01 Inbox for category 24.md",
+      "sha": "02cdbe3f357a7f01406e961c5584464ef4cd080d"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.09 Archive for category 24.md",
+      "sha": "99e5f97a35bd6d24b1c3cb237a7f30f8404cee23"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.11 List of all processes & procedures.md",
+      "sha": "09db10c9e97bfca44c2ec4789a41d152255048e0"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12 Hermes assistant on-site deployment.md",
+      "sha": "5ef018022c8d5e26c13efd6c013784c70e398fdf"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12a Hermes assistant admin runbook.md",
+      "sha": "963be50920b50a9c4a88945617e74b7a0175e716"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12b Hermes assistant quick cards.md",
+      "sha": "0de445822853593b64ccf9b331156485d3e7b10f"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12c Hermes assistant training session.md",
+      "sha": "e3f61bcff5b03919007d796f044324c2bf8e9ca1"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12d Hermes assistant owner sign-off.md",
+      "sha": "b2c94dff2a29e45dd4aa06dc7ec92b65cbcd4495"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12e Hermes assistant hosting model.md",
+      "sha": "520594418f84aaf09374ef481962eca51c5d838e"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.12f Hermes assistant office file plane.md",
+      "sha": "e288d3b48d250f05d6b89232a6052375f0193b3f"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/24 Processes & procedures 📋/24.13 Hermes assistant channel topology tests.md",
+      "sha": "ab27041ae540b4db2b71636c62556cb3c3453958"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/25 Inventory & stock 📊/25.01 Inbox for category 25.md",
+      "sha": "1c2eb293002497613482acd9df59ce584d905cc4"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/25 Inventory & stock 📊/25.09 Archive for category 25.md",
+      "sha": "6a63d0e83d7f1b53ce47c0d68be32ab19b496d8b"
+    },
+    {
+      "mode": "100644",
+      "path": "20-29 Products, suppliers, equipment, processes, & inventory/25 Inventory & stock 📊/25.11 List of all inventory & stock.md",
+      "sha": "f6e95662cdff08a8b935baaea586bddf6d4e72e7"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/31 Marketing, PR, & communications 📣/31.01 Inbox for category 31.md",
+      "sha": "6f4ab436ee73ce5e7422df7c1c22b6ad222e8530"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/31 Marketing, PR, & communications 📣/31.09 Archive for category 31.md",
+      "sha": "2b2ea9d6574b6f28fef2c624a8b22edcd3f5c952"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/31 Marketing, PR, & communications 📣/31.11 List of all marketing, PR, & communications.md",
+      "sha": "6602040e5724a737c1e1a2e29a1ccd0c99243da3"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/31 Marketing, PR, & communications 📣/31.12 Promo notifier with counter NFC-QR attribution.md",
+      "sha": "9169fe8358ab28f8437e3d86b93c473980118de4"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/32 Sales channels 🛒/32.01 Inbox for category 32.md",
+      "sha": "51a8c7ed2fe8362cc187bf9ebd65963583721eb8"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/32 Sales channels 🛒/32.09 Archive for category 32.md",
+      "sha": "d20be7fedacc43182e6d99a2e506bf8ae79998f8"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/32 Sales channels 🛒/32.11 List of all sales channels.md",
+      "sha": "856686130320f334a31afe4e3859161b6495e28f"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/33 Customers & clients 💎/33.01 Inbox for category 33.md",
+      "sha": "6dd31e771d6ff9366e3ab107d287a8946305a375"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/33 Customers & clients 💎/33.09 Archive for category 33.md",
+      "sha": "04de383a74885625e761e686aefbc52fee4344f2"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/33 Customers & clients 💎/33.11 List of all customers & clients.md",
+      "sha": "cfe7115287a59fe6b2873a15d61b09d3b759a1a2"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/34 Orders & jobs 🏭/34.01 Inbox for category 34.md",
+      "sha": "0f7a2002c5b8e97541baae2213b117ed1754b0fa"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/34 Orders & jobs 🏭/34.09 Archive for category 34.md",
+      "sha": "90aeba159b3f70043d60f3d1d9c2c9001a195748"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/34 Orders & jobs 🏭/34.11 List of all orders & jobs.md",
+      "sha": "3c1a31ed0261ce60e70a37d4f4a06dcb08240ca9"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/35 Shipping & fulfillment 📦/35.01 Inbox for category 35.md",
+      "sha": "977c0d711d610005b006ca2f8484a2942a4bb4aa"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/35 Shipping & fulfillment 📦/35.09 Archive for category 35.md",
+      "sha": "0b04cbd7705f4487cf291729e9a6e014b3bdfa63"
+    },
+    {
+      "mode": "100644",
+      "path": "30-39 Marketing, channels, customers, orders, & shipping/35 Shipping & fulfillment 📦/35.11 List of all shipping & fulfillment details.md",
+      "sha": "8eefcfc835f54b3ba2a97357c0d9b412b2f5be43"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/41 Design elements 🌈/41.01 Inbox for category 41.md",
+      "sha": "190df0547bc033c3fa2d28b9d518f24332c7e486"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/41 Design elements 🌈/41.09 Archive for category 41.md",
+      "sha": "b1b6ab0a391c605fe1dabd2ef4a0e5b8938c6903"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/41 Design elements 🌈/41.11 My first design element.md",
+      "sha": "5f9a311f78bd62fe75dc150f45ff868f36f94daa"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/42 Words 🔠/42.01 Inbox for category 42.md",
+      "sha": "299de527f6340f3e489d44350c18cfb6876dbaeb"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/42 Words 🔠/42.09 Archive for category 42.md",
+      "sha": "4df0951fbafffbe0da592d1d79ff2188b620e38d"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/42 Words 🔠/42.11 My first words.md",
+      "sha": "a4e381356e0e6132ca919d9ee1faa39501615689"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/43 Images 🖼/43.01 Inbox for category 43.md",
+      "sha": "43eab5469ba61163068c71b69e422f8db4807018"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/43 Images 🖼/43.09 Archive for category 43.md",
+      "sha": "f032e24d5f5891488bdc316475e08fbdaa0d4cf0"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/43 Images 🖼/43.11 My first images.md",
+      "sha": "770dcb066aead1001c0597472323e12927761073"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/44 Audio & music 🎤/44.01 Inbox for category 44.md",
+      "sha": "f6c99caa448a6d601515d2696aca2fe40c0aa0ef"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/44 Audio & music 🎤/44.09 Archive for category 44.md",
+      "sha": "7e4215cc6aafaca73e8b340e856a17d71e57828f"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/44 Audio & music 🎤/44.11 My first audio.md",
+      "sha": "654a89fb33324a365e24afc8e5b8e5da4883c61f"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/45 Video & animation 🎬/45.01 Inbox for category 45.md",
+      "sha": "342182945a989b7829271a71abb060706ab2803b"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/45 Video & animation 🎬/45.09 Archive for category 45.md",
+      "sha": "03419a397ae19f43d1b3292c9301863ca2843864"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/45 Video & animation 🎬/45.11 My first video.md",
+      "sha": "bc126ee0a8fe4ff610420ab922e3b87a4e475fa8"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/46 Platform-specific instructions ℹ️/46.01 Inbox for category 46.md",
+      "sha": "df870ae773e8f860799900681f8e39c6eea56d3e"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/46 Platform-specific instructions ℹ️/46.09 Archive for category 46.md",
+      "sha": "6ab4845bb32f68452a7252b897a5eeea278a7580"
+    },
+    {
+      "mode": "100644",
+      "path": "40-49 Library of creative inputs/46 Platform-specific instructions ℹ️/46.11 My first platform.md",
+      "sha": "5a12b5a72e00cc5f68fc28bf185fd72b9cdb784a"
+    },
+    {
+      "mode": "100644",
+      "path": "README.md",
+      "sha": "ef9370d715a050bcd20f5875bbb48e6ec12d2125"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/decisions/2026-10-30-source-custody-and-platform-storage.md",
+      "sha": "e310de9344f195e21f04a936505265e83c038e78"
+    }
+  ],
+  "repository": "larsbx/bizops-kb",
+  "revision": "ca356e34e6b1c4a2fb9f576c34196ca3bf13beee",
+  "schema": 1,
+  "tree": "7a29785f90feca8871da0b14b6fcd76401fc8278"
+}

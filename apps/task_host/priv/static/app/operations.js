@@ -12,9 +12,15 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const state = new SnapshotState();
-const options = { workspace: "", category: "", query: "", tab: "today" };
 const params = new URLSearchParams(location.search);
 const provider = params.get("provider") || "workos";
+const options = {
+  workspace: params.get("workspace") || "",
+  category: params.get("category") || "",
+  query: params.get("q") || "",
+  tab: ["today", "upcoming", "all", "review", "unscheduled", "completed", "workflows"].includes(params.get("tab")) ? params.get("tab") : "today",
+};
+$("search").value = options.query;
 let request = null;
 let poll = null;
 let signedOut = false;
@@ -260,6 +266,11 @@ function renderWorkViews(snapshot) {
 }
 
 function render() {
+  const navigation = new URLSearchParams({ provider });
+  for (const [key, value] of [["workspace", options.workspace], ["category", options.category], ["q", options.query], ["tab", options.tab]]) {
+    if (value) navigation.set(key, value);
+  }
+  $("knowledge-link").href = `/operations/knowledge?${new URLSearchParams({ provider, back: navigation.toString() })}`;
   const snapshot = state.value;
   const [title, description, heading] = tabs[options.tab];
   $("view-title").textContent = title;
@@ -423,7 +434,7 @@ async function refresh() {
       );
     const value = await response.json();
     if (!state.accept(generation, value)) return;
-    if (previousPrincipal !== value.principal) resetFilters();
+    if (previousPrincipal !== null && previousPrincipal !== value.principal) resetFilters();
     previousPrincipal = value.principal;
     lastUpdated = Date.now();
     $("sign-in").hidden = true;

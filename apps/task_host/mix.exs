@@ -36,6 +36,8 @@ defmodule TaskHost.MixProject do
       {:coop_substrate, in_umbrella: true},
       # Task rules and projections the web view reads.
       {:task_core, in_umbrella: true},
+      # Reviewed source snapshot; reference reads confer no task authority.
+      {:bizops_kb, in_umbrella: true},
       # Sign-in, sessions and their Postgres store.
       {:biz_kit_identity, in_umbrella: true},
       # Rate-limit counts are one per cluster.

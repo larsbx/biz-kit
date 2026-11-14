@@ -5,9 +5,9 @@ platform, with three release profiles: `biz_kit`, `orchestration` and `eatsbot`.
 The domain apps below were imported with their full history, so `git log` and
 `git blame` work under each directory: the first four with `git subtree`,
 eatsbot with `git filter-repo` (see below).
-The read-only `school_ops` curriculum app is a version-pinned content
-snapshot: it records its upstream commit rather than claiming a subtree history
-import.
+The read-only `school_ops` curriculum and `bizops_kb` business reference apps
+use version-pinned content snapshots: each records its upstream commit rather
+than claiming a subtree history import.
 
 | App | Path | Imported from | Role |
 | --- | --- | --- | --- |
@@ -45,6 +45,7 @@ Shared apps developed in this umbrella:
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
 | `school_ops` | `apps/school_ops` | School domain: K–12 curriculum catalog, lesson/assessment review, and TaskCore-based staff workflows |
+| `bizops_kb` | `apps/bizops_kb` | Read-only Johnny.Decimal business reference catalog, source verification, search and linked documents in Operations |
 
 Mix requires umbrella directory names to equal OTP application names, hence
 `coop_substrate`, `spruce_goose` and the `eatsbot_*` siblings. eatsbot's
@@ -54,8 +55,9 @@ commits that touched it keep their authors, dates and messages.
 
 Not included, by design: the Android, web and e2e clients of `d-patch`
 (separate clients of this backend); `agent-runtime-platform` (Python and
-Podman sandbox, reached through dispatch's Hermes adapter); `bizops-kb`
-(content, not code); `truck-shop` and `spruce` (optional, see below).
+Podman sandbox, reached through dispatch's Hermes adapter); `truck-shop` and
+`spruce` (optional, see below). `bizops-kb` remains the source authoring
+repository; its reviewed Markdown snapshot is included as reference content.
 
 ## Toolchain
 
@@ -185,6 +187,25 @@ project mappings with `TASK_HOST_OPERATIONS_CONFIG`; see
 and [example configuration](config/operations.example.json).
 This first increment reuses existing signed task actions. Assignment, recurring
 execution and purchasing additions remain later stages of the documented MVP.
+
+### Business knowledge inside Operations
+
+Open **Knowledge** from `/operations`, or visit `/operations/knowledge`, to
+browse the 216 imported business reference documents by Johnny.Decimal area
+and category. Search the text, follow internal links, and inspect each
+document's source revision. Access uses the existing Operations session and
+workspace gate.
+
+The catalog is a shared reference library. Importing a procedure does not
+approve it as an SOP, create a task, send a message, or run an agent. Selected
+procedures can later be authored as explicit TaskCore blueprints and adopted
+through existing signed workflow controls.
+
+Source: `larsbx/bizops-kb` at
+`ca356e34e6b1c4a2fb9f576c34196ca3bf13beee`. The import retains source bytes,
+stable IDs, and an offline Git commit/tree proof. For update and verification
+commands, see [the catalog README](apps/bizops_kb/README.md) and
+[the integration contract](docs/architecture/2026-11-14-bizops-kb-catalog.md).
 
 [docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
 in what order, the remaining consolidation steps, and open questions.
