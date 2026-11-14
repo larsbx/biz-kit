@@ -3,6 +3,8 @@ name: Producer capital inert preview acceptance
 on:
   pull_request:
     paths:
+      - ".formatter.exs"
+      - "apps/coop_substrate/.formatter.exs"
       - "apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex"
       - "apps/coop_substrate/test/producer_capital_preview_test.exs"
       - "docs/architecture/2026-11-13-producer-capital-integration.md"
@@ -13,6 +15,8 @@ on:
   push:
     branches: [main]
     paths:
+      - ".formatter.exs"
+      - "apps/coop_substrate/.formatter.exs"
       - "apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex"
       - "apps/coop_substrate/test/producer_capital_preview_test.exs"
       - "docs/architecture/2026-11-13-producer-capital-integration.md"
@@ -25,6 +29,8 @@ jobs:
   pure-preview:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      PRODUCER_CAPITAL_FORMATTER: apps/coop_substrate/.formatter.exs
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,6 +44,8 @@ jobs:
         run: |
           git rev-parse HEAD
           sha256sum \
+            .github/workflows/producer-capital-preview.yml \
+            apps/coop_substrate/.formatter.exs \
             apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex \
             apps/coop_substrate/test/producer_capital_preview_test.exs
       - name: Pure assertions with no database or financial runtime
@@ -47,12 +55,47 @@ jobs:
             -e 'ExUnit.start(); Code.require_file("apps/coop_substrate/test/producer_capital_preview_test.exs")'
       - name: Ensure exact formatter output
         run: |
-          mix format --check-formatted \
+          # Use the owning app's actual rules. The umbrella formatter also
+          # traverses unrelated apps whose Ash/Phoenix imports need dependencies.
+          mix format --dot-formatter "$PRODUCER_CAPITAL_FORMATTER" --check-formatted \
             apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex \
             apps/coop_substrate/test/producer_capital_preview_test.exs
+      - name: Reject malformed formatting and accept its correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          control_dir="$(mktemp -d)"
+          trap 'rm -rf "$control_dir"' EXIT
+          printf '%s\n' 'defmodule FormatterNegativeControl do' 'def value,do: 1' 'end' \
+            > "$control_dir/malformed.exs"
+
+          if mix format --dot-formatter "$PRODUCER_CAPITAL_FORMATTER" --check-formatted \
+            "$control_dir/malformed.exs" > "$control_dir/format.log" 2>&1; then
+            echo "::error::Formatter accepted malformed formatting"
+            exit 1
+          else
+            format_status=$?
+          fi
+          cat "$control_dir/format.log"
+          test "$format_status" -eq 1
+          grep -Fq 'mix format failed due to --check-formatted.' "$control_dir/format.log"
+          grep -Fq 'malformed.exs' "$control_dir/format.log"
+
+          mix format --dot-formatter "$PRODUCER_CAPITAL_FORMATTER" "$control_dir/malformed.exs"
+          mix format --dot-formatter "$PRODUCER_CAPITAL_FORMATTER" --check-formatted \
+            "$control_dir/malformed.exs"
+          echo "Formatter control rejected malformed input and accepted its correction"
       - name: Changes have no new settlement writer or API
         shell: bash
         run: |
+          set -euo pipefail
           test -f apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex
-          ! grep -E 'Log\.append|TigerBeetle|Finances\.|Hawala\.execute|HTTPoison' \
-            apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex
+          if grep -E 'Log\.append|TigerBeetle|Finances\.|Hawala\.execute|HTTPoison' \
+            apps/coop_substrate/lib/coop_substrate/producer_capital_preview.ex; then
+            echo "::error::Producer preview contains a forbidden settlement writer or API reference"
+            exit 1
+          else
+            boundary_status=$?
+            test "$boundary_status" -eq 1
+          fi
+          echo "No forbidden settlement writer or API references found"
