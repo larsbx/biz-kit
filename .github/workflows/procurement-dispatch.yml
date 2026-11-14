@@ -10,6 +10,7 @@ on:
       - 'apps/biz_kit_cluster/**'
       - 'apps/biz_kit_extension/**'
       - 'apps/commerce_core/**'
+      - 'apps/barter_core/**'
       - 'apps/task_core/**'
       - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
