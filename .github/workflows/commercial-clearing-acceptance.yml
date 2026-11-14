@@ -4,6 +4,16 @@ on:
   pull_request:
     paths:
       - "apps/barter_core/**"
+      - "apps/coop_substrate/mix.exs"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
+      - "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex"
+      - "apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_admission.ex"
+      - "apps/coop_substrate/test/support/cross_currency_provenance_fixture.ex"
+      - "apps/coop_substrate/test/cross_currency_provenance_test.exs"
+      - "apps/coop_substrate/test/signing_domain_test.exs"
+      - "docs/architecture/2026-11-14-cross-currency-source-provenance-fixture.md"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
@@ -26,6 +36,16 @@ on:
     branches: [main]
     paths:
       - "apps/barter_core/**"
+      - "apps/coop_substrate/mix.exs"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/lib/coop_substrate/signed_consumer_source.ex"
+      - "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex"
+      - "apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_admission.ex"
+      - "apps/coop_substrate/test/support/cross_currency_provenance_fixture.ex"
+      - "apps/coop_substrate/test/cross_currency_provenance_test.exs"
+      - "apps/coop_substrate/test/signing_domain_test.exs"
+      - "docs/architecture/2026-11-14-cross-currency-source-provenance-fixture.md"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
@@ -116,6 +136,9 @@ jobs:
           apps/coop_substrate/test/commercial_setoff_intent_test.exs
           apps/coop_substrate/lib/coop_substrate/commercial_source_lineage.ex
           apps/coop_substrate/test/commercial_source_lineage_test.exs
+          apps/coop_substrate/test/support/cross_currency_provenance_fixture.ex
+          apps/coop_substrate/test/cross_currency_provenance_test.exs
+          apps/coop_substrate/test/signing_domain_test.exs
       - name: Signed bilateral source, admission, replay and restart controls
         working-directory: apps/coop_substrate
         # The standalone dependency graph includes Localize without Eatsbot.
@@ -131,3 +154,5 @@ jobs:
           test/commercial_source_lineage_test.exs
           test/netting_execution_test.exs
           test/obligation_rail_test.exs
+          test/cross_currency_provenance_test.exs
+          test/signing_domain_test.exs
