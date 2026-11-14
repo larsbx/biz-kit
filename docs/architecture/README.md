@@ -5,6 +5,11 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Producer cooperative capital integration — 2026-11-13](2026-11-13-producer-capital-integration.md):
+  versioned inert membership ($250 annual) and producer-asset unit-buyout
+  previews, source-bound proposal digests, legacy patronage/SCF boundaries,
+  Hanbali taxonomy and Lean/Quint proof-bank conformance gaps. No issuance,
+  buyout, payment, distribution or legal authority is activated.
 - [Hanbali commercial contract taxonomy — 2026-11-13](2026-11-13-hanbali-commercial-contract-taxonomy.md):
   sourced contract families, intra-school choices and contemporary composites
   mapped to the at-cost producer cooperative; proposed evidence, admission and

@@ -24,7 +24,7 @@ class NativeBrowser(Browser):
 
     def open_procurement(self):
         main = self.webdriver("GET", self.base + "/window")
-        panel = '.entry[data-panel=procurement]'
+        panel = '.side-item[data-panel=procurement]'
         until(lambda: self.js("return !!document.querySelector(arguments[0])", panel), "desktop Procurement entry")
         self.js("document.querySelector(arguments[0]).click()", panel)
         launcher = '[data-panel=procurement].tile button:not(.icon-btn)'

@@ -27,6 +27,10 @@ const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
     await next();
     await page.reload();
     await page.getByText('This browser administers this chapter.').waitFor();
+    const openSection = label => page.getByLabel('Add section', { exact: true }).selectOption({ label });
+    await openSection('Projects of this chapter');
+    await openSection('A person in this chapter');
+    await openSection('Connection status');
     await page.locator('#projects').getByText('Accountable owner: owner', { exact: false }).first().waitFor();
 
     const lookup = async () => {
@@ -90,6 +94,7 @@ const say = obj => process.stdout.write(JSON.stringify(obj) + '\n');
     say({ stage: 'succeeded' });
     await next();
 
+    await openSection('Projects needing an accountable owner');
     await page.getByRole('button', { name: 'Refresh ownerless projects' }).click();
     const legacy = page.locator('#ownerless-projects .held').filter({ hasText: `${tenant} / old-project` });
     await legacy.waitFor();
