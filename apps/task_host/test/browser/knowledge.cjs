@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const readline = require('node:readline');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const [base, serialized] = process.argv.slice(2);
 const reference = JSON.parse(serialized);
 const input = readline.createInterface({ input: process.stdin });
@@ -110,10 +111,57 @@ async function mobile(page) {
     });
     assert.deepEqual(safe, { images: 0, scripts: 0, unsafe: false, table: 1, injected: false });
 
+    // A source document offers only a read-only preview. The real download
+    // responses retain the reviewed bytes and create no ledger activity.
+    const workflowId = 'office-assistant-onboarding-v1';
+    const previewResponse = await page.request.get(`${base}/api/v1/operations/knowledge/workflows/${workflowId}`);
+    assert.equal(previewResponse.status(), 200);
+    const preview = await previewResponse.json();
+    assert.equal(preview.read_only, true);
+    assert.equal(preview.workflow.read_only, true);
+    await page.goto(`${base}/operations/knowledge?provider=second&doc=24.12&query=24.12`);
+    await page.locator('#document-workflows [data-workflow-id]').waitFor();
+    await page.locator(`#document-workflows [data-workflow-id="${workflowId}"]`).click();
+    await page.locator('#workflow-title').filter({ hasText: preview.workflow.title }).waitFor();
+    assert.equal(new URL(page.url()).searchParams.get('query'), '24.12');
+    assert.equal(new URL(page.url()).searchParams.get('workflow'), workflowId);
+    assert.equal(await page.locator('.workflow-step').count(), preview.workflow.tasks.length);
+    assert.equal(preview.workflow.tasks.length, 8);
+    assert.ok((await page.locator('#workflow-body').textContent()).includes('Reviewing or downloading it creates no work.'));
+    assert.ok((await page.locator('#workflow-body').textContent()).includes('An operator creates a run separately.'));
+    await page.locator('.workflow-provenance summary').click();
+    for (const source of preview.workflow.sources) {
+      assert.ok((await page.locator('.workflow-provenance').textContent()).includes(source.sha256));
+    }
+    for (const [kind, label, expectedDigest] of [
+      ['manifest', 'Download manifest', preview.workflow.adoption.manifest_sha256],
+      ['sop', 'Download SOP', preview.workflow.sop.sha256],
+    ]) {
+      const link = page.locator('#workflow-body').getByRole('link', { name: label, exact: true });
+      assert.equal(await link.getAttribute('href'), `/api/v1/operations/knowledge/workflows/${workflowId}/${kind}?expected_sha256=${expectedDigest}`);
+      const [download] = await Promise.all([page.waitForEvent('download'), link.click()]);
+      assert.equal(await download.failure(), null);
+      const bytes = fs.readFileSync(await download.path());
+      assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), expectedDigest);
+      await download.delete();
+    }
+    assert.equal(await page.getByRole('button', { name: /run workflow|start workflow|adopt workflow|approve procedure/i }).count(), 0);
+    await mobile(page);
+    if (process.env.KNOWLEDGE_SCREENSHOT_DIR) {
+      await page.locator('#workflow-title').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(process.env.KNOWLEDGE_SCREENSHOT_DIR, 'knowledge-workflow-mobile.png') });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.screenshot({ path: path.join(process.env.KNOWLEDGE_SCREENSHOT_DIR, 'knowledge-workflow-desktop.png') });
+      await page.setViewportSize({ width: 390, height: 844 });
+    }
+
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     await page.locator('#status').filter({ hasText: 'Signed out' }).waitFor();
     assert.equal(await page.locator('[data-document-id]').count(), 0);
     assert.equal(await page.locator('#document-body').textContent(), '');
+    assert.equal(await page.locator('#workflow-body').textContent(), '');
+    assert.equal(await page.locator('[data-workflow-id]').count(), 0);
     assert.equal((await page.request.get(`${base}/api/v1/operations/knowledge`)).status(), 401);
     await signIn(page, 'kb-browser');
     await page.goto(`${base}/operations/knowledge?provider=second`);
@@ -134,6 +182,9 @@ async function mobile(page) {
     assert.equal(await page.locator('[data-document-id]').count(), 0);
     assert.equal(await page.locator('#document-body').textContent(), '');
     assert.equal((await page.request.get(`${base}/api/v1/operations/knowledge/documents/${reference.id}`)).status(), 403);
+    for (const suffix of ['', '/manifest', '/sop']) {
+      assert.equal((await page.request.get(`${base}/api/v1/operations/knowledge/workflows/${workflowId}${suffix}`)).status(), 403);
+    }
     assert.deepEqual(errors, []);
     say({ stage: 'knowledge_revoked' });
   } finally { await browser.close(); input.close(); }

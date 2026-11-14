@@ -19,10 +19,15 @@ defmodule TaskCore.Hierarchy do
       tasks for the definitions it depends on, and its inputs are the names
       it requires: the readiness governance later defines for it must keep
       both, binding only the digests and the SOP (`TaskCore.Readiness`).
+      When the workflow declares a readiness contract, its SOP, version and
+      source digests are already fixed. The run also binds its manifest input
+      to this adoption's exact digest. Later blueprint adoption cannot change
+      the contract of an existing run.
   """
 
   alias TaskCore.{Admission, Blueprint, State, TaskLifecycle, Workflow}
   alias TaskCore.Blueprint.Source
+  alias TaskCore.Blueprint.ReadinessContract
 
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @source %{
@@ -169,17 +174,23 @@ defmodule TaskCore.Hierarchy do
       |> Map.put(:name, blueprint["project"]["name"])
       |> Map.update!(:roadmaps, &apply_roadmaps(&1, blueprint, env.event_id))
 
+    revision =
+      %{scope: scope, source: source, blueprint: blueprint}
+      |> bind_contracts(blueprint, p["manifest_digest"])
+
     state
-    |> put_in([:blueprints, Access.key(env.event_id)], %{
-      scope: scope,
-      source: source,
-      blueprint: blueprint
-    })
+    |> put_in([:blueprints, Access.key(env.event_id)], revision)
     |> put_in([:hierarchy, Access.key(scope)], project)
   end
 
   def handle_event(%{type: "TaskWorkflowInstantiatedV1", payload: p} = env, state) do
     {:ok, tasks} = plan(state, p)
+
+    contract =
+      get_in(state.blueprints[p["revision_event_id"]], [
+        :readiness_contracts,
+        {p["roadmap_key"], p["workflow_id"]}
+      ])
 
     tasks
     |> Enum.reduce(state, fn definition, acc ->
@@ -196,15 +207,19 @@ defmodule TaskCore.Hierarchy do
             review: nil
           }
         })
-        |> Map.put(:blueprint, %{
-          run_event_id: env.event_id,
-          revision_event_id: p["revision_event_id"],
-          roadmap_key: p["roadmap_key"],
-          workflow_id: p["workflow_id"],
-          definition_id: definition["id"],
-          predecessor_ids: definition["predecessor_ids"],
-          artifact_requirements: definition["artifact_requirements"]
-        })
+        |> Map.put(
+          :blueprint,
+          %{
+            run_event_id: env.event_id,
+            revision_event_id: p["revision_event_id"],
+            roadmap_key: p["roadmap_key"],
+            workflow_id: p["workflow_id"],
+            definition_id: definition["id"],
+            predecessor_ids: definition["predecessor_ids"],
+            artifact_requirements: definition["artifact_requirements"]
+          }
+          |> bind_readiness(contract)
+        )
 
       put_in(acc, [:tasks, Access.key(key(env, definition["task_id"]))], task)
     end)
@@ -240,6 +255,28 @@ defmodule TaskCore.Hierarchy do
   end
 
   def keeps_blueprint(_task, _predecessor_ids, _requirements), do: :ok
+
+  @doc "Require any immutable readiness contract retained from the run's adopted blueprint."
+  def keeps_readiness_contract(%{blueprint: %{readiness_contract: contract}}, payload),
+    do: ReadinessContract.check(contract, payload)
+
+  def keeps_readiness_contract(_task, _payload), do: :ok
+
+  defp bind_contracts(revision, blueprint, manifest_digest) do
+    contracts =
+      for {roadmap, workflow} <- Blueprint.workflows(blueprint),
+          %{} = contract <- [workflow["readiness_contract"]],
+          into: %{},
+          do: {{roadmap, workflow["id"]}, ReadinessContract.bind(contract, manifest_digest)}
+
+    if map_size(contracts) == 0,
+      do: revision,
+      else: Map.put(revision, :readiness_contracts, contracts)
+  end
+
+  defp bind_readiness(blueprint, nil), do: blueprint
+
+  defp bind_readiness(blueprint, contract), do: Map.put(blueprint, :readiness_contract, contract)
 
   defp key(%{chapter_id: ch, payload: p}, task_id),
     do: {ch, p["tenant_id"], p["project_id"], task_id}

@@ -18,7 +18,8 @@ document an approved executable workflow.
 
 ## Delivered boundary
 
-- `apps/bizops_kb`: dependency-free read-only catalog and integrity checks.
+- `apps/bizops_kb`: read-only catalog, integrity checks and TaskCore workflow
+  previews. TaskCore is its only app dependency.
 - `priv/content`: exact Markdown from upstream commit
   `8749d8db1abd3145b22c6a27da2cc49a41c303fe`; 216 documents, 106,105 bytes,
   including the revised October 30 source-custody decision.
@@ -85,9 +86,10 @@ publication/access/withdrawal semantics and separate acceptance.
 
 The [shared storage contract](2026-10-30-postgres-event-log-redis-consolidation.md)
 and [revised upstream source-custody ADR][custody] continue to govern operational authority.
-This feature introduces no log, database, Redis index, scheduler, financial
-writer, SOP approval, or execution port. Git retains the editable source.
-The code-review/release path publishes a fixed reference copy only.
+The reference import introduces no log, database, Redis index, scheduler,
+financial writer, or execution port. Git retains the editable source.
+The code-review/release path publishes a fixed reference copy; operational
+adoption uses the separate signed workflow controls described below.
 
 The legacy SpruceGoose knowledge table migration is not reused as a working
 catalog or a source of permission. No legacy promotion/distribution receipt
@@ -95,12 +97,11 @@ is migrated or retired. This feature is independent of the larger writer
 decommission and PostgreSQL backend replacement.
 
 Existing artifact custody is task-bound; it is not widened to become a vault
-upload API. Existing TaskCore blueprints/readiness remain the later workflow
-integration seam.
+upload API. TaskCore blueprints/readiness are the workflow integration seam.
 
 The migration assigns integration responsibilities as follows. These boundaries
-do not imply that knowledge-specific admission or distribution commands already
-exist.
+do not imply that catalog publication, installation policy or withdrawal
+commands already exist.
 
 | Responsibility | Integration owner and requirement |
 | --- | --- |
@@ -108,7 +109,7 @@ exist.
 | Authentication and principals | `BizKit.Identity`; use current sessions and canonical principal bindings. |
 | Reference UI and source verification | `task_host` hosts this catalog and the existing blueprint source-verification interface. |
 | Adopted task and SOP rules | `TaskCore`; bind reviewed SOP versions and required inputs when a workflow is explicitly adopted. |
-| Operational admission and replay | `CoopSubstrate.Log`; future knowledge publication and withdrawal commands must join the common signed history. |
+| Operational admission and replay | `CoopSubstrate.Log`; existing signed workflow adoption uses the common history. Future catalog publication and withdrawal commands must use it as well. |
 | Task-bound evidence bytes | `CoopSubstrate.ArtifactCustody`, configured through `COOP_ARTIFACT_DIR`; do not treat the reference import as an upload grant. |
 | SQL and Redis | Shared projections and rebuildable operational data; neither becomes editable source custody or an independent authority. |
 
@@ -125,21 +126,19 @@ reviewed import and rebuild. Previously delivered bytes cannot be recalled.
 Current document/installation policy and signed withdrawal admission remain
 requirements for a future governed distribution adapter.
 
-## Next increment: one explicitly adopted workflow
+## Workflow increment
 
-Use `24.12` (office deployment) and `24.12d` (owner sign-off) as the first
-candidate. Review which procedures are current, then author a schema-2
-blueprint with explicit tasks, dependencies, required inputs, and individually
-reviewable completion criteria. Retain that YAML at its own exact source path
-and revision. The current blueprint source parser accepts ASCII-safe paths;
-use a manifest path such as `workflows/office-onboarding.yaml` instead of
-renaming vault notes or falsely claiming generated YAML is the original
-Markdown blob.
+The [workflow increment](2026-11-14-bizops-kb-workflows.md) implements the first
+eight-task adaptation of `24.12` and `24.12d`, with a preview and retained
+artifacts at ASCII-safe paths. The authored manifest is a separate Git blob
+from the original Markdown. An optional TaskCore contract binds its exact SOP
+and inputs through ordinary readiness admission. Explicit signed adoption is
+available from a verified local Git checkout; run creation remains separate.
 
-Adopt through the existing governance-signed blueprint command. Bind the exact
-SOP digest/version and input digests through readiness. Execution, evidence
-review, and completion follow existing task controls. An agent may propose a
-workflow draft; reading the catalog grants no permission to run it.
+This increment also selects upstream revision `8749d8db`, incorporating the
+revised SpruceGoose migration custody policy and README. Only those two source
+documents changed from the first import at `ca356e34`; the two procedures used
+by the workflow remain byte-identical. Source authorship remains in `bizops-kb`.
 
 ## Acceptance
 

@@ -36,9 +36,15 @@ defmodule TaskCore.Blueprint do
   so it is also a ledger scope segment. `depends_on` names tasks of the same
   workflow (`TaskCore.Dag`); `artifact_requirements` names the inputs a task
   needs, whose digests are bound per task when its readiness is defined.
+
+  A workflow may additionally pin those digests and its SOP through the
+  versioned `readiness_contract` (`TaskCore.Blueprint.ReadinessContract`). Its
+  tasks all require the declared source inputs plus `workflow_manifest`.
+  Omitting the contract preserves the original schema-2 behavior.
   """
 
   alias TaskCore.{Dag, DoD}
+  alias TaskCore.Blueprint.ReadinessContract
 
   @schema_version 2
   @limits %{roadmaps: 32, workflows: 32, tasks: 64, depends_on: 32, artifact_requirements: 32}
@@ -102,15 +108,38 @@ defmodule TaskCore.Blueprint do
   defp roadmap(_), do: {:error, "roadmap must be a mapping"}
 
   defp workflow(%{} = w) do
-    with :ok <- exact_keys(w, ~w(id name tasks), [], "workflow"),
+    with :ok <- exact_keys(w, ~w(id name tasks), ~w(readiness_contract), "workflow"),
          {:ok, id} <- identifier(w["id"], "workflow id"),
          {:ok, name} <- name(w["name"], "workflow name"),
          {:ok, tasks} <- list(w["tasks"], :tasks, "workflow #{id} tasks", &task/1),
          :ok <- Dag.validate(tasks) |> prefixed("workflow #{id}"),
-         do: {:ok, %{"id" => id, "name" => name, "tasks" => tasks}}
+         {:ok, contract} <- readiness_contract(w, tasks, id) do
+      normalized = %{"id" => id, "name" => name, "tasks" => tasks}
+
+      {:ok,
+       if(contract,
+         do: Map.put(normalized, "readiness_contract", contract),
+         else: normalized
+       )}
+    end
   end
 
   defp workflow(_), do: {:error, "workflow must be a mapping"}
+
+  defp readiness_contract(workflow, tasks, id) do
+    case Map.fetch(workflow, "readiness_contract") do
+      :error ->
+        {:ok, nil}
+
+      {:ok, value} ->
+        with {:ok, contract} <- ReadinessContract.normalize(value),
+             :ok <- ReadinessContract.task_inputs(contract, tasks) do
+          {:ok, contract}
+        else
+          {:error, message} -> {:error, "workflow #{id}: #{message}"}
+        end
+    end
+  end
 
   defp task(%{} = t) do
     with :ok <-

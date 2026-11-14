@@ -34,6 +34,9 @@ defmodule TaskHost.Web.Router do
 
     get("/api/v1/operations", OperationsController, :index)
     get("/api/v1/operations/knowledge", KnowledgeController, :index)
+    get("/api/v1/operations/knowledge/workflows/:id", KnowledgeController, :workflow)
+    get("/api/v1/operations/knowledge/workflows/:id/manifest", KnowledgeController, :manifest)
+    get("/api/v1/operations/knowledge/workflows/:id/sop", KnowledgeController, :sop)
 
     get(
       "/api/v1/operations/knowledge/documents/:id",

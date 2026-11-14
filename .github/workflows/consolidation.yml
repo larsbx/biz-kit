@@ -260,6 +260,8 @@ jobs:
           apps/task_core/test/lesson_workflow_test.exs
           apps/task_core/lib/task_core/workflow.ex
           apps/task_core/lib/task_core/blueprint/source.ex
+          apps/task_core/lib/task_core/blueprint/readiness_contract.ex
+          apps/task_core/test/readiness_contract_test.exs
           apps/spruce_goose/test/workflow_plan_test.exs
           apps/task_core/test/workflow_test.exs
           apps/task_core/test/fixtures/curriculum.exs

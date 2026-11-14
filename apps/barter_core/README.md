@@ -66,6 +66,16 @@ See the [cross-currency preview ADR](../../docs/architecture/2026-11-08-cross-cu
 the [Lean–Quint–Elixir proof bank](../../proof_bank/cross_currency_setoff/README.md),
 and [scoped legal profile](../../docs/architecture/2026-11-04-commercial-clearing-nonprohibition-profile.md).
 
+The independent `BarterCore.CrossCurrencyConsent` module can prepare
+and verify **two Ed25519 signatures** over exactly the same cross-currency
+proposal, source IDs/revisions, **externally supplied** original source-event
+digests, current principal key identifiers and agreed valuation terms. It
+recomputes the source/rate proposal, validates exact commitments and rejects
+substituted same-total claims, stale proposals, altered rate, changed keys and
+partial signatures. This does **not** authenticate source history or corporate
+agency; it neither posts nor discharges commercial debts. The separate signed
+business review/reservation admission is not automatically reusable for FX.
+
 Run `cd apps/barter_core && mix test` under Elixir 1.19 / OTP 27.
 
 See [the updated ADR](../../docs/architecture/2026-10-26-direct-barter.md)

@@ -91,11 +91,16 @@ jobs:
           lib/task_host/web/infrastructure_review_controller.ex
           lib/task_host/web/operations_controller.ex
           lib/task_host/web/knowledge_controller.ex
+          lib/task_host/blueprints/local_git_verifier.ex
+          lib/task_host/blueprints/source_verifier.ex
+          lib/mix/tasks/coop.blueprint.ex
           lib/task_host/web/app_controller.ex
           lib/task_host/web/router.ex
           test/task_host/operations_test.exs
           test/task_host/web/operations_test.exs
           test/task_host/web/knowledge_test.exs
+          test/task_host/web/knowledge_adoption_test.exs
+          test/task_host/local_git_blueprint_verifier_test.exs
           test/task_host/web/knowledge_browser_test.exs
           test/task_host/web/infrastructure_review_test.exs
           test/task_host/web/operations_browser_test.exs
@@ -112,6 +117,10 @@ jobs:
           test/task_host/web/operations_test.exs
           test/task_host/web/infrastructure_review_test.exs
           test/task_host/web/knowledge_test.exs
+          test/task_host/web/knowledge_adoption_test.exs
+          test/task_host/local_git_blueprint_verifier_test.exs
+          test/task_host/web/blueprint_test.exs
+          test/task_host/web/run_readiness_test.exs
       - uses: actions/setup-node@v4
         with:
           node-version: 22

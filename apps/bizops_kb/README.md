@@ -1,4 +1,4 @@
-# Business knowledge catalog
+# Business knowledge catalog and workflow previews
 
 The Johnny.Decimal business reference library from `larsbx/bizops-kb`, available
 inside the Operations workspace at `/operations/knowledge`.
@@ -31,6 +31,7 @@ and decision now describe the migration to Biz-kit. The existing shared-referenc
 publication scope is unchanged.
 
 The app has no network client, database, writer, worker, or agent invocation.
+Workflow validation uses the portable `task_core` app.
 The host requires a current Operations session and access to a configured
 workspace. This is one shared, intentionally published reference corpus;
 folder names and terms such as "restricted" in procedure text are not document
@@ -55,12 +56,23 @@ the packaged source pin. The HTTP host uses the pinned default and accepts no
 request-selected root or digest. A deliberate source refresh requires review and
 recompilation.
 
+The compiled catalog pin does not cover `priv/workflows`; workflow definitions
+are validated separately, and signed adoption verifies their exact Biz-kit Git
+commit and manifest bytes.
+
 The standalone source checker additionally verifies the exact upstream Git
 commit and reconstructs its complete tree. The source proof records identities
 for non-Markdown source files without copying their bodies. Git object identity
 binds this imported content to the chosen revision; it does not establish
 semantic correctness or procedural approval, and the checker does not claim a
 separate signing-key trust decision.
+
+`BizOpsKB.Workflows` verifies the authored schema-2 workflow and its retained
+SOP bundle against the selected catalog. The preview includes the tasks,
+dependencies, individual completion criteria, source documents and exact input
+digests. The manifest is JSON, a YAML-compatible representation accepted by the
+existing blueprint reader. Downloaded bytes are the bytes whose digests appear
+in the preview.
 
 ## Verify
 
@@ -78,6 +90,10 @@ node --test apps/task_host/test/js/knowledge.test.mjs
 The catalog test fixture supplies an explicit content root, so this verification
 does not need the umbrella's runtime dependencies. HTTP/session acceptance runs
 in the existing Operations workspace workflow with PostgreSQL and TaskHost.
+With the normal umbrella dependencies installed, `cd apps/bizops_kb && mix test`
+also exercises workflow validation. The dedicated BizOps acceptance workflow
+compiles TaskCore outside the umbrella and runs both suites without downloading
+the host's dependencies.
 
 ## Update from the authoring repository
 
@@ -97,6 +113,12 @@ changes. Review the resulting source revision and document diff in a biz-kit
 PR. Update the recorded counts and pinned-source test when deliberately moving
 to a new source revision.
 
+The current update selects the November 14 custody revision: only the upstream
+README and custody decision changed from the first imported revision. The
+procedures `24.12` and `24.12d` retain their original bytes. A future catalog
+revision makes a workflow unavailable unless its SOP bundle and source contract
+are deliberately reviewed together; it never substitutes newer source bytes.
+
 Authoring remains in `bizops-kb`; `priv/content` is a generated copy. Git review
 publishes this fixed reference snapshot. No live SpruceGoose permission,
 promotion receipt, or distribution obligation is transferred by this import.
@@ -109,13 +131,29 @@ reviewed snapshot update and host rebuild; previously delivered bytes cannot be
 recalled. A future governed distribution adapter needs explicit publication,
 installation policy, withdrawal, and replay acceptance through the common log.
 
-## Workflow follow-up
+## Office assistant onboarding workflow
 
-The deployment procedure `24.12` and its owner sign-off `24.12d` are a concrete
-candidate for a later reviewed workflow. Author a real schema-2 YAML blueprint
-at a safe ASCII source path, bind exact SOP bytes through TaskCore readiness,
-and use signed admission plus existing evidence review. The original vault
-paths remain intact. A retrieved document and a generated draft workflow never
-substitute for that adoption step.
+Open **Workflow previews** in the library, or follow the related workflow from
+`24.12` or `24.12d`. The version-1 adaptation has eight tasks: owner scope,
+preflight, discovery, office setup, staff enrollment, training, admin handoff and
+owner acceptance. Owner Part A precedes setup; Part B follows the witnessed
+tests and handoff. Original product names remain in the source documents, and
+the first task requires the owner to confirm the current stack and scope.
+
+The authored manifest is
+[`priv/workflows/office-assistant-onboarding-v1.json`](priv/workflows/office-assistant-onboarding-v1.json).
+Its optional TaskCore readiness contract pins both original source digests and
+the versioned SOP bundle. At signed adoption, TaskCore also binds the exact
+manifest digest; generic readiness commands cannot change these inputs.
+
+Governance can adopt a reviewed manifest from an explicitly selected commit
+using `mix coop.blueprint --source-checkout /path/to/biz-kit`. The local Git
+verifier hashes the commit, directory trees and blob, so working-tree edits
+cannot replace the selected manifest. Adoption, operator run creation,
+readiness, scoped artifact custody, SOP acknowledgement, evidence review and
+completion retain their existing separate commands. No task is created by
+browsing or downloading a preview.
+
+See [the workflow contract and adoption instructions](../../docs/architecture/2026-11-14-bizops-kb-workflows.md).
 
 [custody]: https://github.com/larsbx/bizops-kb/blob/8749d8db1abd3145b22c6a27da2cc49a41c303fe/docs/decisions/2026-10-30-source-custody-and-platform-storage.md
