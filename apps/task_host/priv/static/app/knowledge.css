@@ -1,0 +1,59 @@
+.knowledge-shell { grid-template-columns: 250px minmax(0, 1fr); }
+.library-back { padding: 0 12px; text-decoration: none; font-weight: 600; }
+#area-list { display: flex; flex-direction: column; gap: 4px; }
+#area-list .workspace-button { line-height: 1.4; font-size: 13px; }
+.library-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.library-toolbar input, .library-toolbar select { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.library-search { flex: 1; min-width: 160px; }
+.library-toolbar label:has(select) { max-width: 280px; min-width: 140px; }
+.library-toolbar button { padding: 12px 20px; border: 1px solid var(--accent); color: white; background: var(--accent); border-radius: 8px; }
+.library-browser { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
+.library-browser.reading { grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.6fr); }
+.library-results, .document-panel { min-width: 0; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.library-results .list-heading { padding: 20px; margin: 0; }
+.document-card { display: block; padding: 18px 20px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.document-card:hover, .document-card[aria-current="page"] { background: var(--soft); }
+.document-card h3 { font-size: 16px; line-height: 1.4; margin: 4px 0 6px; }
+.document-card p { font-size: 13px; color: var(--muted); margin: 7px 0 0; }
+.document-card .eyebrow { font-size: 9px; letter-spacing: 0.6px; }
+.pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px; gap: 8px; border-top: 1px solid var(--line); }
+.document-panel { padding: 26px; overflow-wrap: anywhere; }
+.document-panel > .eyebrow { margin-top: 24px; }
+#document-title { font-size: clamp(22px, 3vw, 32px); line-height: 1.25; margin: 10px 0; }
+.document-path { color: var(--muted); font-size: 12px; margin: 10px 0; }
+#document-source { display: inline-block; font-size: 13px; margin-bottom: 20px; }
+.markdown-body { border-top: 1px solid var(--line); padding-top: 20px; font-size: 14px; line-height: 1.7; }
+.markdown-body h2, .markdown-body h3, .markdown-body h4 { line-height: 1.3; margin: 1.4em 0 0.6em; }
+.markdown-body h2 { font-size: 23px; }
+.markdown-body h3 { font-size: 19px; }
+.markdown-body p { white-space: pre-line; }
+.markdown-body ul, .markdown-body ol { padding-left: 25px; }
+.markdown-body li { margin: 5px 0; }
+.markdown-body pre { overflow: auto; white-space: pre; background: #f3f5f3; border: 1px solid var(--line); padding: 14px; border-radius: 7px; font-size: 12px; }
+.markdown-body code { font-size: 0.9em; background: #f0f3f0; padding: 2px 4px; border-radius: 3px; }
+.markdown-body pre code { padding: 0; }
+.markdown-body blockquote { margin-left: 0; padding: 10px 16px; border-left: 3px solid #86b7a3; background: var(--soft); white-space: pre-line; }
+.markdown-body hr { border: 0; border-top: 1px solid var(--line); margin: 25px 0; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.markdown-body table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.markdown-body th, .markdown-body td { padding: 9px 12px; text-align: left; border: 1px solid var(--line); min-width: 90px; }
+.markdown-body th { background: var(--soft); }
+.unresolved-reference { border-bottom: 1px dotted var(--muted); color: var(--muted); }
+.source-metadata { color: var(--muted); font-size: 12px; }
+.source-metadata summary { cursor: pointer; }
+.knowledge-shell #status { font-size: 12px; color: var(--muted); max-width: 250px; }
+.knowledge-shell #status.error { color: var(--warn); }
+@media (max-width: 1100px) { .library-browser.reading { grid-template-columns: minmax(0, 1fr); } .library-browser.reading .library-results { display: none; } }
+@media (max-width: 760px) {
+  .knowledge-shell { grid-template-columns: minmax(0, 1fr); }
+  .knowledge-shell .sidebar { padding: 18px; gap: 15px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .knowledge-shell .sidebar .sidebar-heading, .knowledge-shell .sidebar-footer { display: none; }
+  #area-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; gap: 5px; }
+  #area-list .workspace-button { width: auto; flex: 0 0 155px; padding: 8px; font-size: 11px; }
+  .library-toolbar { flex-wrap: wrap; gap: 8px; }
+  .library-search { flex: 1 0 100%; }
+  .library-toolbar label:has(select) { flex: 1; max-width: none; min-width: 0; }
+  .document-panel { padding: 18px; }
+  .knowledge-shell .page-heading { align-items: start; }
+  .knowledge-shell .topbar { flex-wrap: wrap; gap: 12px; }
+}
