@@ -4,6 +4,7 @@ import {
   externalLink, headingId, knowledgeLink, operationsReturnLink, searchURL,
   validateCatalogResponse, KnowledgeState, categories, markdownBlocks,
   inlineParts, renderMarkdown,
+  workflowLink, workflowArtifactURL, validateWorkflowResponse,
 } from "../../priv/static/app/knowledge-view.js";
 
 const snapshot = () => ({
@@ -27,6 +28,43 @@ test("a late read cannot repopulate the library after revocation, logout or hidi
   const current = state.begin(); assert.equal(state.accept(current, snapshot()), true);
   state.document = { body: "a document" }; state.clear();
   assert.equal(state.value, null); assert.equal(state.document, null);
+  state.workflow = { tasks: [{ title: "a preview" }] }; state.clear();
+  assert.equal(state.workflow, null);
+});
+
+test("workflow navigation and downloads stay local and preserve library filters", () => {
+  const url = new URL(workflowLink("office-assistant-onboarding-v1", { query: "24.12", area: "Operations", offset: 40, provider: "second" }), "https://host.test");
+  assert.equal(url.pathname, "/operations/knowledge");
+  assert.equal(url.searchParams.get("workflow"), "office-assistant-onboarding-v1");
+  assert.equal(url.searchParams.has("doc"), false);
+  assert.equal(url.searchParams.get("offset"), "40");
+  assert.equal(url.searchParams.get("query"), "24.12");
+  const digest = "a".repeat(64);
+  assert.equal(workflowArtifactURL("office-assistant-onboarding-v1", "sop", digest), `/api/v1/operations/knowledge/workflows/office-assistant-onboarding-v1/sop?expected_sha256=${digest}`);
+  for (const [id, kind] of [["../../private", "manifest"], ["valid", "run"], ["valid", "../sop"]]) assert.equal(workflowArtifactURL(id, kind, digest), null);
+  for (const invalid of [undefined, null, "", "A".repeat(64), "a".repeat(63), `${digest}&another=value`]) {
+    assert.equal(workflowArtifactURL("valid", "manifest", invalid), null);
+  }
+});
+
+test("workflow preview requires matching identity/source and bounded inert task definitions", () => {
+  const value = {
+    schema_version: 1, read_only: true, principal: "reader", source: { revision: "a".repeat(40) },
+    workflow: { id: "office-v1", title: "Office setup", read_only: true,
+      sources: [{ id: "24.12", title: "Deployment", sha256: "b".repeat(64) }],
+      tasks: [{ id: "review", title: "Review", depends_on: [], definition_of_done: [{ id: "evidence", description: "Reviewed source" }] },
+        { id: "signoff", title: "Sign off", depends_on: ["review"], definition_of_done: [{ id: "record", description: "Independent review" }] }],
+      adoption: { commit_required: true, manifest_sha256: "c".repeat(64) }, required_inputs: { source: "b".repeat(64) }, sop: { sha256: "d".repeat(64) } },
+  };
+  assert.equal(validateWorkflowResponse(value, "reader", "a".repeat(40)), value);
+  assert.throws(() => validateWorkflowResponse(value, "another-reader", "a".repeat(40)));
+  assert.throws(() => validateWorkflowResponse(value, "reader", "e".repeat(40)));
+  for (const change of [
+    { read_only: false }, { adoption: { commit_required: false, manifest_sha256: "c".repeat(64) } },
+    { tasks: [{ ...value.workflow.tasks[0], depends_on: ["unknown"] }] },
+    { tasks: [{ ...value.workflow.tasks[0], definition_of_done: [] }] },
+    { sources: [{ id: "24.12", title: "Deployment", sha256: "unverified" }] },
+  ]) assert.throws(() => validateWorkflowResponse({ ...value, workflow: { ...value.workflow, ...change } }, "reader", "a".repeat(40)));
 });
 
 test("only explicit HTTP(S) URLs without credentials or control characters become external links", () => {

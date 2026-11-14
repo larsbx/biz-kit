@@ -3,8 +3,8 @@ defmodule BizOpsKB.CatalogTest do
 
   alias BizOpsKB.Catalog
 
-  @revision "ca356e34e6b1c4a2fb9f576c34196ca3bf13beee"
-  @tree "7a29785f90feca8871da0b14b6fcd76401fc8278"
+  @revision "8749d8db1abd3145b22c6a27da2cc49a41c303fe"
+  @tree "79f146858c5d9d850df69b67294cb3fabf131bd1"
   @bundle Path.expand("../priv", __DIR__)
 
   setup do

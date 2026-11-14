@@ -18,9 +18,10 @@ document an approved executable workflow.
 
 ## Delivered boundary
 
-- `apps/bizops_kb`: dependency-free read-only catalog and integrity checks.
+- `apps/bizops_kb`: read-only catalog, integrity checks and TaskCore workflow
+  previews. TaskCore is its only app dependency.
 - `priv/content`: exact Markdown from upstream commit
-  `ca356e34e6b1c4a2fb9f576c34196ca3bf13beee`; 216 documents, 93,482 bytes.
+  `8749d8db1abd3145b22c6a27da2cc49a41c303fe`; 216 documents, 106,105 bytes.
 - `priv/catalog.json`: deterministic stable IDs, original paths, categories,
   byte sizes, SHA-256 digests, and Git blob identities.
 - `priv/source-proof.json`: the exact upstream Git commit and complete tree
@@ -88,24 +89,21 @@ is migrated or retired. This feature is independent of the larger writer
 decommission and PostgreSQL backend replacement.
 
 Existing artifact custody is task-bound; it is not widened to become a vault
-upload API. Existing TaskCore blueprints/readiness remain the later workflow
-integration seam.
+upload API. TaskCore blueprints/readiness are the workflow integration seam.
 
-## Next increment: one explicitly adopted workflow
+## Workflow increment
 
-Use `24.12` (office deployment) and `24.12d` (owner sign-off) as the first
-candidate. Review which procedures are current, then author a schema-2
-blueprint with explicit tasks, dependencies, required inputs, and individually
-reviewable completion criteria. Retain that YAML at its own exact source path
-and revision. The current blueprint source parser accepts ASCII-safe paths;
-use a manifest path such as `workflows/office-onboarding.yaml` instead of
-renaming vault notes or falsely claiming generated YAML is the original
-Markdown blob.
+The [workflow increment](2026-11-14-bizops-kb-workflows.md) implements the first
+eight-task adaptation of `24.12` and `24.12d`, with a preview and retained
+artifacts at ASCII-safe paths. The authored manifest is a separate Git blob
+from the original Markdown. An optional TaskCore contract binds its exact SOP
+and inputs through ordinary readiness admission. Explicit signed adoption is
+available from a verified local Git checkout; run creation remains separate.
 
-Adopt through the existing governance-signed blueprint command. Bind the exact
-SOP digest/version and input digests through readiness. Execution, evidence
-review, and completion follow existing task controls. An agent may propose a
-workflow draft; reading the catalog grants no permission to run it.
+This increment also selects upstream revision `8749d8db`, incorporating the
+revised SpruceGoose migration custody policy and README. Only those two source
+documents changed from the first import at `ca356e34`; the two procedures used
+by the workflow remain byte-identical. Source authorship remains in `bizops-kb`.
 
 ## Acceptance
 

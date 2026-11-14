@@ -31,7 +31,7 @@ class SnapshotTest(unittest.TestCase):
         result = snapshot.check(self.root)
         self.assertEqual(result["documents"], 216)
         self.assertEqual(result["wikilinks"], 45)
-        self.assertEqual(result["revision"], "ca356e34e6b1c4a2fb9f576c34196ca3bf13beee")
+        self.assertEqual(result["revision"], "8749d8db1abd3145b22c6a27da2cc49a41c303fe")
 
     def test_changed_content_cannot_rewrite_its_catalog_hash_to_pass(self):
         catalog = self.read("catalog.json")

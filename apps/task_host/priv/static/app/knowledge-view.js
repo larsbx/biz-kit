@@ -45,6 +45,46 @@ export function searchURL({ query = "", area = "", category = "", offset = 0, li
   return `/api/v1/operations/knowledge?${params}`;
 }
 
+export function workflowLink(id, options = {}) {
+  const [path, query] = knowledgeLink(null, options).split("?");
+  const params = new URLSearchParams(query);
+  if (opaqueId.test(id ?? "")) params.set("workflow", id);
+  return `${path}?${params}`;
+}
+
+export function workflowArtifactURL(id, kind, expectedDigest) {
+  if (!opaqueId.test(id ?? "") || !["manifest", "sop"].includes(kind) ||
+      typeof expectedDigest !== "string" || !/^[0-9a-f]{64}$/.test(expectedDigest)) return null;
+  return `/api/v1/operations/knowledge/workflows/${encodeURIComponent(id)}/${kind}?${new URLSearchParams({ expected_sha256: expectedDigest })}`;
+}
+
+export function validateWorkflowResponse(value, principal, revision) {
+  const workflow = value?.workflow;
+  if (!record(value) || value.schema_version !== 1 || value.read_only !== true ||
+      value.principal !== principal || value.source?.revision !== revision ||
+      !record(workflow) || workflow.read_only !== true || !opaqueId.test(workflow.id ?? "") ||
+      typeof workflow.title !== "string" || !Array.isArray(workflow.tasks) ||
+      !workflow.tasks.length || workflow.tasks.length > 64 || !Array.isArray(workflow.sources) ||
+      !record(workflow.adoption) || workflow.adoption.commit_required !== true ||
+      !/^[0-9a-f]{64}$/.test(workflow.adoption.manifest_sha256 ?? "") ||
+      !record(workflow.required_inputs) || !Object.entries(workflow.required_inputs).every(([name, digest]) =>
+        opaqueId.test(name) && /^[0-9a-f]{64}$/.test(digest)) ||
+      !record(workflow.sop) || !/^[0-9a-f]{64}$/.test(workflow.sop.sha256 ?? "")) {
+    throw new Error("The workflow preview is invalid.");
+  }
+  const ids = new Set(workflow.tasks.map(task => task.id));
+  if (ids.size !== workflow.tasks.length || !workflow.tasks.every(task => record(task) &&
+      opaqueId.test(task.id ?? "") && typeof task.title === "string" &&
+      Array.isArray(task.depends_on) && task.depends_on.every(id => ids.has(id)) &&
+      Array.isArray(task.definition_of_done) && task.definition_of_done.length > 0 &&
+      task.definition_of_done.every(criterion => record(criterion) && typeof criterion.id === "string" && typeof criterion.description === "string")) ||
+      !workflow.sources.every(source => record(source) && opaqueId.test(source.id ?? "") &&
+        typeof source.title === "string" && /^[0-9a-f]{64}$/.test(source.sha256 ?? ""))) {
+    throw new Error("The workflow preview is invalid.");
+  }
+  return value;
+}
+
 export function validateCatalogResponse(value) {
   if (!record(value) || value.schema_version !== 1 || typeof value.principal !== "string" || !value.principal ||
       !record(value.catalog) || value.catalog.read_only !== true || !Array.isArray(value.catalog.areas) ||
@@ -61,7 +101,7 @@ export function validateCatalogResponse(value) {
 }
 
 export class KnowledgeState {
-  constructor() { this.generation = 0; this.value = null; this.document = null; }
+  constructor() { this.generation = 0; this.value = null; this.document = null; this.workflow = null; }
   begin() { return ++this.generation; }
   current(generation) { return this.generation === generation; }
   accept(generation, value) {
@@ -69,7 +109,7 @@ export class KnowledgeState {
     this.value = validateCatalogResponse(value);
     return true;
   }
-  clear() { this.generation++; this.value = null; this.document = null; }
+  clear() { this.generation++; this.value = null; this.document = null; this.workflow = null; }
 }
 
 export function categories(areas, selectedArea = "") {
