@@ -163,6 +163,14 @@ jobs:
           apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex
           apps/biz_kit_identity/test/identity_test.exs
           apps/coop_substrate/lib/coop_substrate/commands.ex
+          apps/coop_substrate/lib/coop_substrate/knowledge.ex
+          apps/task_core/lib/task_core/knowledge.ex
+          apps/task_core/test/knowledge_test.exs
+          apps/task_host/lib/task_host/project_knowledge_suggestions.ex
+          apps/task_host/lib/task_host/web/project_knowledge_controller.ex
+          apps/task_host/test/task_host/project_knowledge_suggestions_test.exs
+          apps/task_host/test/task_host/web/project_knowledge_test.exs
+          apps/task_host/test/task_host/web/project_knowledge_browser_test.exs
           apps/task_core/lib/task_core/decisions.ex
           apps/coop_substrate/test/commands_test.exs
           apps/task_host/lib/task_host/web/command_controller.ex
