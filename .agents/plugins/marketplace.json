@@ -1,0 +1,20 @@
+{
+  "name": "biz-kit-repository",
+  "interface": {
+    "displayName": "Biz-Kit repository"
+  },
+  "plugins": [
+    {
+      "name": "biz-kit",
+      "source": {
+        "source": "local",
+        "path": "./plugins/biz-kit"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
