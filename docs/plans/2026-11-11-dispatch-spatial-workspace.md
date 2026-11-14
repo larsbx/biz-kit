@@ -221,7 +221,7 @@ endpoint.
 | GEV-05 | Route context, annotations and operating areas | GEV-02; GEV-03 for route correlation | Planned |
 | GEV-06 | History, private saved views and Director handoffs | GEV-01, GEV-02 and retained history | Planned |
 | GEV-07 | Minimal deployment and profile acceptance | GEV-00, GEV-02 and each selected capability's acceptance | Planned |
-| GEV-08 | Demand/capacity and business-network analysis | Relevant GEV-03/05/06 results and defined business metrics | Later extension |
+| GEV-08 | Multimodal economic nowcasting, forecasting and capacity scenarios | Verification layer first; relevant GEV-03/05/06 results and defined business metrics for integration | Inert verification slice in development; application integration later |
 
 GEV-05 and GEV-06 can proceed independently after their prerequisites. GEV-07
 accepts the selected initial profile without waiting for every advanced feature.
@@ -399,17 +399,33 @@ their own contracts.
 
 ### GEV-08 — Business-network analysis
 
-**Deliver later:** spatial qualified-demand/capacity views, consolidation
-candidates, supplier service areas and collection-point scenarios. Use the
-existing business definitions and demand-first pilot metrics rather than
-creating a second marketplace interpretation.
+**Accepted expanded scope, 2026-11-11:** combine the spatial workspace with the
+academic economics simulations for nowcasts, forecasts, capacity and investment
+projections. Include road, air, sea, rail, inland waterways and intermodal
+facilities; production and storage; relevant physical/environmental phenomena;
+fuel and energy prices; global markets and central-bank activity; geopolitics;
+commodities and precious metals. The owner's explicit multimodal scope
+supersedes the earlier conditional air/port-only extension wording.
 
-**Acceptance:** each metric and recommendation identifies its authorized source,
-time horizon, completeness, commitments and assumptions. Candidate matching does
-not reserve capacity, accept an order or establish financial settlement. Add
-air/port/intermodal context only when actual shipment relationships need it.
-These features are not prerequisites for the first live workspace or its
-minimal deployment.
+**Verification first:** follow the
+[economic-planning contract and EPV-01–05 sequence](../architecture/2026-11-11-economic-planning-verification.md).
+The initial [Proof Bank package](../../proof_bank/economic_planning/README.md)
+is an inert source/evidence, capacity, cost and publication kernel. It can be
+verified independently of the still-open spatial application changes.
+
+**Deliver subsequently:** spatial qualified-demand/capacity views, source-bound
+economic estimates, consolidation and supplier alternatives, scenario comparison
+and capacity-project projections. Reuse existing business definitions and
+demand-first pilot metrics where applicable.
+
+**Acceptance:** each metric identifies authorized sources and revisions, issue
+and effective times, horizon, completeness, commitments, uncertainty and
+assumptions. Preserve unknown versus zero, physical versus deliverable capacity,
+and observed facts versus derived estimates and conditional scenarios. Evaluate
+predictive accuracy separately from formal admission proofs. Candidate matching
+does not reserve capacity, accept an order or establish financial settlement.
+These features remain independent of the first live workspace's minimal
+deployment, and add no separate service or datastore by default.
 
 ## 5. Acceptance and evidence ledger
 
