@@ -1,6 +1,6 @@
 import {
   KnowledgeState, categories, externalLink, knowledgeLink, operationsReturnLink,
-  renderMarkdown, searchURL,
+  renderMarkdown, searchURL, workflowLink, workflowArtifactURL, validateWorkflowResponse,
 } from "./knowledge-view.js";
 
 const $ = (id) => document.getElementById(id);
@@ -16,13 +16,14 @@ const options = {
   provider, back, query: initial.get("query") || "", area: initial.get("area") || "",
   category: initial.get("category") || "", offset: offsetFrom(initial), limit: 40,
 };
-let selected = initial.get("doc") || null;
+let selectedWorkflow = initial.get("workflow") || null;
+let selected = selectedWorkflow ? null : initial.get("doc") || null;
 let request = null;
 let poll = null;
 let signedOut = false;
 let logoutPending = false;
 let debounce = null;
-let focusDocument = !!selected;
+let focusDocument = !!(selected || selectedWorkflow);
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -41,15 +42,28 @@ function empty(message) {
 }
 
 function hideDocument() {
+  state.document = null;
   $("document-panel").hidden = true;
   $("library-browser").classList.remove("reading");
-  for (const id of ["document-body", "document-title", "document-path", "document-category"]) $(id).replaceChildren();
+  for (const id of ["document-body", "document-title", "document-path", "document-category", "document-workflows"]) $(id).replaceChildren();
   $("document-source").removeAttribute("href");
 }
 
+function hideWorkflow() {
+  state.workflow = null;
+  $("workflow-panel").hidden = true;
+  $("workflow-title").replaceChildren();
+  $("workflow-body").replaceChildren();
+  $("library-browser").classList.remove("reading");
+}
+
+function hideDetails() { hideDocument(); hideWorkflow(); }
+
 function clear(message) {
   state.clear();
-  hideDocument();
+  hideDetails();
+  $("workflow-previews").hidden = true;
+  $("workflow-list").replaceChildren();
   $("area-list").replaceChildren();
   $("document-list").replaceChildren(empty(message));
   $("category-filter").replaceChildren(el("option", { value: "", textContent: "All categories" }));
@@ -64,17 +78,23 @@ function clear(message) {
 }
 
 function setLocation(push = false) {
-  const url = knowledgeLink(selected, options);
+  const url = selectedWorkflow ? workflowLink(selectedWorkflow, options) : knowledgeLink(selected, options);
   if (url !== location.pathname + location.search) history[push ? "pushState" : "replaceState"]({}, "", url);
 }
 
 function navigate(id, anchor = "") {
   selected = id;
+  selectedWorkflow = null;
   focusDocument = true;
-  hideDocument();
+  hideDetails();
   setLocation(true);
   if (anchor) history.replaceState({}, "", location.pathname + location.search + anchor);
   refresh();
+}
+
+function navigateWorkflow(id) {
+  selectedWorkflow = id; selected = null; focusDocument = true;
+  hideDetails(); setLocation(true); refresh();
 }
 
 function areaButton(label, id, count) {
@@ -84,10 +104,23 @@ function areaButton(label, id, count) {
   button.dataset.area = id;
   button.setAttribute("aria-pressed", String(options.area === id));
   button.onclick = () => {
-    options.area = id; options.category = ""; options.offset = 0; selected = null;
-    hideDocument(); setLocation(true); refresh();
+    options.area = id; options.category = ""; options.offset = 0; selected = null; selectedWorkflow = null;
+    hideDetails(); setLocation(true); refresh();
   };
   return button;
+}
+
+function workflowCard(workflow) {
+  const link = el("a", { className: "workflow-preview-card", href: workflowLink(workflow.id, options) },
+    el("strong", { textContent: workflow.title }),
+    el("span", { textContent: `${workflow.task_count} steps · Version ${workflow.version} · Preview` }));
+  link.dataset.workflowId = workflow.id;
+  if (selectedWorkflow === workflow.id) link.setAttribute("aria-current", "page");
+  link.onclick = (event) => {
+    if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); navigateWorkflow(workflow.id);
+  };
+  return link;
 }
 
 function documentCard(doc) {
@@ -126,6 +159,10 @@ function renderList() {
   $("source-revision").textContent = `${source.repository} · ${source.revision.slice(0, 12)}`;
   $("source-revision").hidden = !sourceURL;
   if (sourceURL) $("source-revision").href = sourceURL;
+  const workflows = Array.isArray(state.value.workflows) ? state.value.workflows : [];
+  $("workflow-previews").hidden = !workflows.length && state.value.workflows_available !== false;
+  $("workflow-list").replaceChildren(...(state.value.workflows_available === false ?
+    [empty("Workflow previews are unavailable. Reference documents remain available.")] : workflows.map(workflowCard)));
 }
 
 function renderDocument(value) {
@@ -154,6 +191,7 @@ function renderDocument(value) {
   if (href) $("document-source").href = href;
   else $("document-source").removeAttribute("href");
   renderMarkdown($("document-body"), doc.body, { ...options, links: doc.links });
+  $("document-workflows").replaceChildren(...(Array.isArray(value.workflows) ? value.workflows.map(workflowCard) : []));
   if (focusDocument) {
     focusDocument = false;
     $("document-title").focus({ preventScroll: true });
@@ -161,6 +199,71 @@ function renderDocument(value) {
     let target = null;
     try { target = anchor ? document.getElementById(decodeURIComponent(anchor)) : null; } catch { /* malformed anchor stays inert */ }
     (target || $("document-panel")).scrollIntoView({ block: "start" });
+  }
+}
+
+function renderWorkflow(value) {
+  if (!value) { hideWorkflow(); return; }
+  if (value.missing || value.unavailable) {
+    hideWorkflow(); $("workflow-panel").hidden = false; $("library-browser").classList.add("reading");
+    $("workflow-title").textContent = "Workflow preview unavailable";
+    $("workflow-body").replaceChildren(empty(value.unavailable ?
+      "This workflow could not be verified. Reference documents remain available." :
+      "This workflow is not included in the current snapshot."));
+    return;
+  }
+  validateWorkflowResponse(value, state.value.principal, state.value.catalog.source.revision);
+  const workflow = value.workflow;
+  if (workflow.id !== selectedWorkflow) throw new Error("The workflow preview is invalid.");
+  state.workflow = workflow;
+  $("workflow-panel").hidden = false;
+  $("library-browser").classList.add("reading");
+  $("workflow-title").textContent = workflow.title;
+  const names = new Map(workflow.tasks.map(task => [task.id, task.title]));
+  const tasks = workflow.tasks.map(task => el("li", { className: "workflow-step" },
+    el("h3", { textContent: task.title }),
+    task.description ? el("p", { textContent: task.description }) : null,
+    el("p", { className: "workflow-dependencies", textContent: task.depends_on.length ?
+      `After: ${task.depends_on.map(id => names.get(id) || id).join("; ")}` : "No predecessor steps." }),
+    el("strong", { textContent: "Evidence to finish" }),
+    el("ul", {}, ...task.definition_of_done.map(criterion => el("li", { textContent: criterion.description })))));
+  const sourceNodes = workflow.sources.map(source => {
+    const link = el("a", { href: knowledgeLink(source.id, options), textContent: `${source.id} · ${source.title}` });
+    link.dataset.knowledgeLink = "true";
+    const external = externalLink(source.source_url);
+    return el("li", { className: "workflow-source" }, link,
+      external ? el("p", {}, el("a", { href: external, target: "_blank", rel: "noopener noreferrer", textContent: "Original source" })) : null,
+      el("code", { textContent: `SHA-256 ${source.sha256}` }));
+  });
+  const adoption = workflow.adoption;
+  const fields = [
+    ["Manifest repository", adoption.repository], ["Manifest path", adoption.path],
+    ["Project", adoption.project_key], ["Roadmap", adoption.roadmap_key], ["Workflow", adoption.workflow_id],
+    ["Manifest SHA-256", adoption.manifest_sha256], ["SOP SHA-256", workflow.sop.sha256],
+    ["SOP version", workflow.sop.version],
+  ];
+  const details = el("details", { className: "workflow-provenance" },
+    el("summary", { textContent: "Sources and adoption details" }),
+    el("p", { textContent: "Pin the manifest repository's full commit before governance adoption." }),
+    el("dl", {}, ...fields.flatMap(([label, value]) => [el("dt", { textContent: label }), el("dd", { textContent: String(value ?? "") })])),
+    el("h3", { textContent: "Required inputs" }),
+    el("dl", {}, ...Object.entries(workflow.required_inputs).flatMap(([name, digest]) =>
+      [el("dt", { textContent: name }), el("dd", { textContent: digest })])),
+    el("h3", { textContent: "Source documents" }), el("ul", {}, ...sourceNodes));
+  const downloads = el("div", { className: "workflow-downloads" },
+    el("a", { className: "button", href: workflowArtifactURL(workflow.id, "manifest", adoption.manifest_sha256), textContent: "Download manifest" }),
+    el("a", { className: "button", href: workflowArtifactURL(workflow.id, "sop", workflow.sop.sha256), textContent: "Download SOP" }));
+  $("workflow-body").replaceChildren(
+    el("p", { className: "subtle", textContent: `${workflow.tasks.length} steps · Version ${workflow.version}` }),
+    typeof workflow.summary === "string" ? el("p", { textContent: workflow.summary }) : el("span"),
+    el("div", { className: "workflow-notice" },
+      el("p", { textContent: "This is a draft workflow. Reviewing or downloading it creates no work." }),
+      el("p", { textContent: "A governance signer adopts an exact revision for the intended project. An operator creates a run separately." }),
+      el("p", { textContent: "Exact source documents and the workflow manifest must be available before a task can start." })),
+    downloads, el("h3", { textContent: "Proposed steps" }), el("ol", { className: "workflow-steps" }, ...tasks), details);
+  if (focusDocument) {
+    focusDocument = false; $("workflow-title").focus({ preventScroll: true });
+    $("workflow-panel").scrollIntoView({ block: "start" });
   }
 }
 
@@ -186,13 +289,21 @@ async function refresh() {
   $("refresh").disabled = true;
   $("document-list").setAttribute("aria-busy", "true");
   try {
+    const selectedURL = selectedWorkflow ? `/api/v1/operations/knowledge/workflows/${encodeURIComponent(selectedWorkflow)}` :
+      selected ? `/api/v1/operations/knowledge/documents/${encodeURIComponent(selected)}` : null;
     const [catalog, detail] = await Promise.all([
       fetchJSON(searchURL(options), controller),
-      selected ? fetchJSON(`/api/v1/operations/knowledge/documents/${encodeURIComponent(selected)}`, controller)
-        .catch((error) => { if (error.status === 404) return { missing: true }; throw error; }) : null,
+      selectedURL ? fetchJSON(selectedURL, controller)
+        .catch((error) => {
+          if (error.status === 404) return { missing: true };
+          if (selectedWorkflow && error.status === 503) return { unavailable: true };
+          throw error;
+        }) : null,
     ]);
     if (!state.accept(generation, catalog)) return;
-    renderList(); renderDocument(detail);
+    renderList();
+    if (selectedWorkflow) { hideDocument(); renderWorkflow(detail); }
+    else { hideWorkflow(); renderDocument(detail); }
     $("sign-in").hidden = true; $("sign-out").hidden = false;
     status(`Source ${catalog.catalog.source.revision.slice(0, 12)} · ${catalog.catalog.total} documents`);
   } catch (error) {
@@ -210,8 +321,8 @@ async function refresh() {
 function search() {
   clearTimeout(debounce);
   options.query = $("search").value;
-  options.offset = 0; selected = null;
-  hideDocument(); setLocation(); refresh();
+  options.offset = 0; selected = null; selectedWorkflow = null;
+  hideDetails(); setLocation(); refresh();
 }
 
 $("search").value = options.query;
@@ -223,8 +334,10 @@ $("category-filter").onchange = () => { options.category = $("category-filter").
 $("previous").onclick = () => { options.offset = Math.max(0, options.offset - options.limit); setLocation(); refresh(); };
 $("next").onclick = () => { options.offset += options.limit; setLocation(); refresh(); };
 $("refresh").onclick = () => { if (!logoutPending) { signedOut = false; refresh(); } };
-$("close-document").onclick = () => { selected = null; hideDocument(); setLocation(true); refresh(); };
-$("document-body").onclick = (event) => {
+$("close-document").onclick = $("close-workflow").onclick = () => {
+  selected = null; selectedWorkflow = null; hideDetails(); setLocation(true); refresh();
+};
+const followReference = (event) => {
   const link = event.target.closest("a[data-knowledge-link]");
   if (!link || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const url = new URL(link.href, location.href);
@@ -232,6 +345,7 @@ $("document-body").onclick = (event) => {
   const id = url.searchParams.get("doc");
   if (id && id !== selected) { event.preventDefault(); navigate(id, url.hash); }
 };
+$("document-body").onclick = $("workflow-body").onclick = followReference;
 
 $("sign-out").onclick = async () => {
   if (logoutPending) return;
@@ -249,9 +363,9 @@ $("sign-out").onclick = async () => {
 
 window.addEventListener("popstate", () => {
   const params = new URLSearchParams(location.search);
-  selected = params.get("doc"); options.query = params.get("query") || "";
+  selectedWorkflow = params.get("workflow"); selected = selectedWorkflow ? null : params.get("doc"); options.query = params.get("query") || "";
   options.area = params.get("area") || ""; options.category = params.get("category") || ""; options.offset = offsetFrom(params);
-  $("search").value = options.query; focusDocument = !!selected; refresh();
+  $("search").value = options.query; focusDocument = !!(selected || selectedWorkflow); refresh();
 });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { request?.abort(); clearTimeout(debounce); clear("Return to refresh the reference library."); }
