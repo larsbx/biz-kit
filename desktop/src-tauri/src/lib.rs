@@ -17,6 +17,7 @@ mod exec;
 mod health;
 mod operations;
 mod procurement;
+mod procurement_settings;
 mod scripts;
 mod services;
 mod settings;
@@ -46,6 +47,8 @@ pub fn run() {
             dispatch::dispatch_sign_out,
             dispatch::dispatch_request,
             procurement::open_procurement,
+            procurement_settings::procurement_connection,
+            procurement_settings::save_procurement_connection,
             operations::operations_status,
             operations::operations_place,
             operations::operations_hide,
