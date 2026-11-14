@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
 const LABEL: &str = "procurement";
 
-fn host_url(raw: &str) -> Result<Url, String> {
+pub(crate) fn host_url(raw: &str) -> Result<Url, String> {
     let invalid =
         "Set procurementOrigin to an HTTPS origin, such as https://procurement.example.org.";
     let url = Url::parse(raw).map_err(|_| invalid.to_string())?;
@@ -34,7 +34,7 @@ pub async fn open_procurement(app: AppHandle) -> Result<(), String> {
     let settings = crate::settings::load()?;
     let raw = settings
         .procurement_origin
-        .ok_or("Procurement is not configured. Set procurementOrigin in config.json.")?;
+        .ok_or("Procurement is not configured. Save its server address in the Procurement panel.")?;
     let origin = host_url(&raw)?;
 
     if let Some(window) = app.get_webview_window(LABEL) {
@@ -44,6 +44,8 @@ pub async fn open_procurement(app: AppHandle) -> Result<(), String> {
                 "Close the existing Procurement window before opening a different server.".into(),
             );
         }
+        window.show().map_err(|error| error.to_string())?;
+        window.unminimize().map_err(|error| error.to_string())?;
         return window.set_focus().map_err(|error| error.to_string());
     }
 
