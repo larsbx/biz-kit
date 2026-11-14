@@ -6,16 +6,33 @@ on:
       - "proof_bank/cross_currency_setoff/**"
       - "apps/barter_core/**"
       - "apps/coop_substrate/**/commercial_setoff*"
+      - "config/**"
+      - "apps/*/config/**"
+      - ".formatter.exs"
+      - "apps/*/.formatter.exs"
+      - "mix.exs"
+      - "mix.lock"
       - "formal/lean/install-toolchain.sh"
       - "formal/lean/lean-toolchain"
+      - ".github/workflows/barter-core.yml"
+      - ".github/workflows/commercial-clearing-acceptance.yml"
       - ".github/workflows/cross-currency-setoff-proof.yml"
   push:
     branches: [main]
     paths:
       - "proof_bank/cross_currency_setoff/**"
       - "apps/barter_core/**"
+      - "apps/coop_substrate/**/commercial_setoff*"
+      - "config/**"
+      - "apps/*/config/**"
+      - ".formatter.exs"
+      - "apps/*/.formatter.exs"
+      - "mix.exs"
+      - "mix.lock"
       - "formal/lean/install-toolchain.sh"
       - "formal/lean/lean-toolchain"
+      - ".github/workflows/barter-core.yml"
+      - ".github/workflows/commercial-clearing-acceptance.yml"
       - ".github/workflows/cross-currency-setoff-proof.yml"
   workflow_dispatch:
 

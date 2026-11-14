@@ -155,7 +155,7 @@ defmodule BarterCore.CrossCurrencySetoffFormalTest do
   test "same scalar sum does not justify combining or swapping currencies" do
     {quote, base, rate} = claims()
     assert {:ok, plan} = preview(quote, base, rate)
-    [eur, usd] = plan.totals_by_currency
+    assert [eur, usd] = plan.totals_by_currency
 
     aggregate = %{
       currency: "USD",
