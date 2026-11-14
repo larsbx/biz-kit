@@ -18,27 +18,16 @@ defmodule Dispatch.ProcurementDeliveryTest do
 
   use CoopSubstrate.LogCase, async: false
 
-  import Plug.Conn
-  import Plug.Test
-
   alias CoopSubstrate.{Canonical, Log, Procurement, ProcurementTestClock, RestaurantDeliveryWork}
   alias CoopSubstrate.Protocol.Envelope
   alias Dispatch.Access.Actor
-  alias Dispatch.Accounts.RoleAssignment
   alias Dispatch.Fleet.{Assignment, Load}
   alias Dispatch.{RestaurantAutomation, RestaurantDelivery, RestaurantReceipts}
-  alias Dispatch.Support.{ConcurrentSessions, Fixtures, PortalIdentity}
+  alias Dispatch.Support.{ConcurrentSessions, DeliveryPortal, Fixtures, PortalIdentity}
   alias ProcurementHost.Dispatch, as: Handoff
 
   @moduletag :integration
   @moduletag :procurement_dispatch
-  @portal_path "/ui/restaurant-receipts"
-  @session Plug.Session.init(
-             store: :cookie,
-             key: "_dispatch_session",
-             signing_salt: "5xJq0pQe",
-             encryption_salt: "Nn4vT2kA"
-           )
 
   setup_all do
     :ok = Procurement.register_types!()
@@ -75,7 +64,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     end
 
     courier_role = Fixtures.assignment(tenant, carrier, courier, "DRIVER")
-    service = service_role(tenant)
+    service = DeliveryPortal.service_role(tenant)
     {:ok, service_actor} = Actor.from_assignment(service)
 
     context = %{
@@ -203,7 +192,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert Log.head().global_seq == before + 1
     assert row(c, "order-1").accepted_quote == accepted_quote
 
-    page = login(c.user, c.courier_role)
+    page = DeliveryPortal.login(c.user, c.courier_role)
     assert page.resp_body =~ trip.id
     picked_up = receipt(page, trip, "picked_up", code(c, "order-1", "picked_up"))
     assert picked_up.status == 200
@@ -244,7 +233,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert row(c, "order-2").dispatch_phase == :requested
     assert row(c, "order-2").accepted_quote == quote2
 
-    page = login(c.user, c.courier_role)
+    page = DeliveryPortal.login(c.user, c.courier_role)
     page = receipt(page, first, "picked_up", code(c, "order-1", "picked_up"))
     assert page.status == 200
     page = receipt(page, first, "delivered", code(c, "order-1", "delivered"))
@@ -276,7 +265,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
         definition: c.courier_role.role_definition
       )
 
-    stranger_page = login(stranger_user, stranger_role)
+    stranger_page = DeliveryPortal.login(stranger_user, stranger_role)
     refute stranger_page.resp_body =~ trip.id
     head = Log.head()
 
@@ -284,7 +273,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
              422
 
     assert Log.head() == head
-    page = login(c.user, c.courier_role)
+    page = DeliveryPortal.login(c.user, c.courier_role)
     assert receipt(page, trip, "picked_up", code(c, "another-order", "picked_up")).status == 422
     assert receipt(page, trip, "delivered", code(c, "order-1", "delivered")).status == 422
     assert Log.head() == head
@@ -375,7 +364,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert trip.id == planned.id
     assert_committed_trip(c, id, trip, :ACTIVE)
 
-    page = login(c.user, c.courier_role)
+    page = DeliveryPortal.login(c.user, c.courier_role)
     page = receipt(page, trip, "picked_up", code(c, id, "picked_up"))
     assert page.status == 200
     assert row(c, id).dispatch_phase == :in_transit
@@ -634,23 +623,6 @@ defmodule Dispatch.ProcurementDeliveryTest do
            )
   end
 
-  defp service_role(tenant) do
-    definition = Fixtures.role_definition(tenant, "DISPATCHER")
-
-    RoleAssignment
-    |> Ash.Changeset.for_create(:grant, %{
-      tenant_id: tenant,
-      principal_type: :SERVICE,
-      principal_id: Ash.UUID.generate(),
-      organization_id: tenant,
-      role_definition_id: definition.id,
-      scope_type: :ORGANIZATION,
-      starts_at: DateTime.add(DateTime.utc_now(), -60)
-    })
-    |> Ash.create!(authorize?: false, tenant: tenant)
-    |> Ash.load!([:role_definition], authorize?: false, tenant: tenant)
-  end
-
   defp revoke!(role, tenant) do
     role
     |> Ash.Changeset.for_update(:revoke, %{})
@@ -684,70 +656,9 @@ defmodule Dispatch.ProcurementDeliveryTest do
     response
   end
 
-  defp portal(method, path, params \\ %{}, previous \\ nil) do
-    Plug.CSRFProtection.delete_csrf_token()
-    request = conn(method, path, params)
-
-    request = %{
-      request
-      | secret_key_base: Application.fetch_env!(:dispatch, DispatchWeb.Endpoint)[:secret_key_base]
-    }
-
-    request = if previous, do: recycle_cookies(request, previous), else: request
-
-    request
-    |> Plug.RequestId.call(Plug.RequestId.init(assign_as: :correlation_id))
-    |> Plug.Session.call(@session)
-    |> fetch_session()
-    |> DispatchWeb.Router.call(DispatchWeb.Router.init([]))
-  end
-
-  defp csrf(page),
-    do: Regex.run(~r/name="_csrf_token" value="([^"]+)"/, page.resp_body) |> Enum.at(1)
-
-  defp login(user, role) do
-    form = portal(:get, "/login")
-
-    signed_in =
-      portal(
-        :post,
-        "/session",
-        %{"_csrf_token" => csrf(form), "token" => PortalIdentity.token_for(user.oidc_subject)},
-        form
-      )
-
-    assert signed_in.status == 302
-    choose = portal(:get, "/select-role", %{}, signed_in)
-    assert choose.status == 200
-
-    selected =
-      portal(
-        :post,
-        "/select-role",
-        %{"_csrf_token" => csrf(choose), "role_assignment_id" => role.id},
-        choose
-      )
-
-    assert selected.status == 302
-    page = portal(:get, @portal_path, %{}, selected)
-    assert page.status == 200
-    page
-  end
-
   defp receipt(page, trip, phase, code) do
     tick()
-
-    portal(
-      :post,
-      @portal_path,
-      %{
-        "_csrf_token" => csrf(page),
-        "assignment_id" => trip.id,
-        "phase" => phase,
-        "handoff_token" => code
-      },
-      page
-    )
+    DeliveryPortal.receipt(page, trip, phase, code)
   end
 
   defp run_worker_until(predicate) do
