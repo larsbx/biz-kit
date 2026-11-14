@@ -1,7 +1,8 @@
 # Local durable MCP execution bridge
 
 This opt-in package connects the four existing MCP tools to SQLite and the
-reviewed Lean export checker. It is a standalone local acceptance pilot, with no
+reviewed Lean export checker and the separately provisioned bounded Lean source
+profile. It is a standalone local acceptance pilot, with no
 automatic Biz-kit startup or network listener. The default MCP backend remains
 memory-only. See the [proof and acceptance contract](../../docs/proof-bank/research-exchange/DURABLE_MCP_BRIDGE.md)
 for the exact representation theorem, implemented behavior and remaining premises.
@@ -11,7 +12,9 @@ for the exact representation theorem, implemented behavior and remaining premise
 Use the unchanged core toolchain lock: Lean 4.35.0, Quint 0.33.1, Apalache 0.62.4,
 JRE 21.0.13+9, Node 24.22.1, npm 11.9.0, Python 3.12, plus exact Elixir 1.19.0 /
 OTP 27.3.4. Follow the [core bootstrap instructions](../research_exchange/README.md)
-to obtain the checked distributions. Run from a clean repository root:
+to obtain the checked distributions. Prepare the pinned mathlib import bundle
+with the [source-profile instructions](../../docs/proof-bank/research-exchange/BOUNDED_LEAN_SOURCE.md).
+Run from a clean repository root:
 
 ```bash
 snapshot_tool=proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py
@@ -20,6 +23,7 @@ python3 -B "$snapshot_tool" --require-clean
 python3 -B -m unittest discover -s proof_bank/research_exchange_bridge/tools -p 'test_*.py' -v
 
 BRIDGE_TOOLS=/absolute/path/to/research-exchange-tools
+SOURCE_IMPORTS=/absolute/path/to/exchange-source-imports
 python3 -B proof_bank/research_exchange_bridge/tools/verify.py \
   --expected-revision "$(git rev-parse HEAD)" \
   --lean-root "$BRIDGE_TOOLS/lean-4.35.0-linux" \
@@ -27,10 +31,13 @@ python3 -B proof_bank/research_exchange_bridge/tools/verify.py \
   --java-bin "$BRIDGE_TOOLS/jdk-21.0.13+9-jre/bin/java" \
   --quint-home "$BRIDGE_TOOLS/quint-home" \
   --elixir "$(command -v elixir)" \
+  --source-imports "$SOURCE_IMPORTS" \
   --output-dir /absolute/path/to/new-bridge-evidence
 ```
 
-All five stages are required; the output directory must be new or empty. The
+All six stages are required: cold proofs, Quint models, reviewed export fixture
+preparation, export runtime acceptance, source runtime acceptance, and compiled
+representation conformance. The output directory must be new or empty. The
 receipt records source identity before and after execution and hashes the
 evidence. Cold proof builds occur in isolated source copies; generated build
 workspaces are not evidence artifacts. The separate complete core workflow and
@@ -42,7 +49,22 @@ outcomes, shared-store authorization, pending-work recovery, lost-response
 retries, revocation/regrant after checking, competing prepared workers, and
 process exits on both sides of commit. Secret configuration, raw tokens and
 database files are not copied into the evidence. The conformance stage compares
-generated cases and actual committed database wire records with compiled Lean.
+generated cases and actual committed database wire records from both profiles
+with compiled Lean, including their persisted post-states and effects. Each
+profile must supply actual committed observations; a passing test summary alone
+does not satisfy that requirement.
+
+The source stage requires all nine registered cases with zero skips, including
+real MCP initialization, discovery, source submission, asynchronous admission,
+operator-selected compilation and dual replay, restart and receipt retrieval
+for both the original v1 and newly provisioned v2 policies. The stored-policy
+control checks their respective 60/180-second export wall budgets; actual MCP
+replays also verify that each profile's catalog, policy and receipt identities
+survive unchanged.
+It retains the real worker SIGINT/recovery control and records the pinned import
+and runtime identities before and after the suite. Missing prerequisites fail
+acceptance. The aggregate source-after inventory runs after both profiles and
+conformance.
 
 ## Start a disposable local instance
 
@@ -93,11 +115,14 @@ returned submission ID. The target is
 `ResearchExchange.Adapter.expected_fixture`. Poll `receipt_get` with the returned
 job ID for the terminal receipt. The queued acknowledgement is not acceptance.
 
-`mathematical_acceptance: true` is restricted to successful dual replay of the
-exact reviewed export followed by the guarded durable commit. The receipt names
-that scope and retains checker outputs. `credit_issuance` remains false. Submitted
-Lean source, alternate theorem exports, arbitrary mathlib code and Quint programs
-do not become accepted just because they are well formed or carry matching hashes.
+For this reviewed-export instance, `mathematical_acceptance: true` requires
+successful dual replay of the exact reviewed export followed by the guarded
+durable commit. The receipt names that scope and retains checker outputs.
+The separately provisioned source library accepts only the documented term
+fragment for `submitted : Nat.Prime 2`, with its own `bounded-lean-source-v1`
+receipt scope and explicit operator worker. `credit_issuance` remains false for
+both profiles. Arbitrary mathlib source and Quint programs are outside these
+profiles.
 
 ## Recovery and trusted administration
 

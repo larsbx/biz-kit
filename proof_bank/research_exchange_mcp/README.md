@@ -34,7 +34,7 @@ these contracts.
 | --- | --- | --- |
 | `library_discover` | `library:read` | List only authorized pinned library metadata |
 | `proof_submit` | `proof:submit` | Store immutable artifact text and bound submission receipt |
-| `verification_request` | `verification:request` | Reserve a memory-only slot by default; durable profiles queue the reviewed export for their configured replay path |
+| `verification_request` | `verification:request` | Reserve a memory-only slot by default; durable profiles queue verification under the operator-provisioned library profile |
 | `receipt_get` | `library:read` | Read a receipt belonging to the authenticated principal and accessible library |
 
 The operator provisions high-entropy credentials with principal, expiry, exact
@@ -98,7 +98,7 @@ All three dedicated workflows trigger for any exchange package, shared
 documentation or exchange workflow. The MCP job runs memory/transport controls
 and the disposable pilot's `durable/verify.sh`, preserving both suites' source
 records and actual logs; the core job requires all 12 proof/model/HTTP stages;
-the durable bridge job requires its full five-stage profile. Each must
+the durable bridge job requires its full six-stage profile. Each must
 pass at the same integration head. The [durable acceptance contract](../../docs/proof-bank/research-exchange/DURABLE_MCP_BRIDGE.md)
 records the implemented representation and remaining production obligations.
 

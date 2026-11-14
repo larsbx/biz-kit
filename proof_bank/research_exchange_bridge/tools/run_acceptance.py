@@ -50,6 +50,24 @@ def cases(suite):
             yield entry.id().rsplit(".", 1)[-1]
 
 
+def beam_identity(elixir, environment):
+    """Both real MCP profiles require the same pinned transport runtime."""
+    if not os.access(elixir, os.X_OK):
+        raise ValueError("the required Elixir executable is unavailable")
+    identity_code = (
+        'root = :code.root_dir() |> List.to_string(); '
+        'release = :erlang.system_info(:otp_release) |> List.to_string(); '
+        'otp = File.read!(Path.join([root, "releases", release, "OTP_VERSION"])) |> String.trim(); '
+        'IO.puts(:json.encode(%{"elixir" => System.version(), "otp" => otp}))'
+    )
+    version = subprocess.run([str(elixir), "-e", identity_code], env=environment,
+                             capture_output=True, text=True, timeout=20, check=True)
+    beam = json.loads(version.stdout)
+    if beam != {"elixir": "1.19.0", "otp": "27.3.4"}:
+        raise ValueError("the required Elixir 1.19.0 / OTP 27.3.4 runtime is not selected")
+    return beam
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lean-root", required=True, type=Path)
@@ -68,25 +86,13 @@ def main():
         lean = args.lean_root.resolve(strict=True)
         fixtures = args.fixtures.resolve(strict=True)
         elixir = args.elixir.resolve(strict=True)
-        if not os.access(elixir, os.X_OK):
-            raise ValueError("the required Elixir executable is unavailable")
         fixture_files = {name: fixtures / name for name in ("profile.json", "expected.export", "alternate.export")}
         fixture_hashes = {name: sha(path.read_bytes()) for name, path in fixture_files.items()}
         checker = ControlledChecker(lean)
         tools = checker.identities()
         environment = dict(os.environ)
         environment["PATH"] = str(elixir.parent) + os.pathsep + environment.get("PATH", "")
-        identity_code = (
-            'root = :code.root_dir() |> List.to_string(); '
-            'release = :erlang.system_info(:otp_release) |> List.to_string(); '
-            'otp = File.read!(Path.join([root, "releases", release, "OTP_VERSION"])) |> String.trim(); '
-            'IO.puts(:json.encode(%{"elixir" => System.version(), "otp" => otp}))'
-        )
-        version = subprocess.run([str(elixir), "-e", identity_code], env=environment,
-                                 capture_output=True, text=True, timeout=20, check=True)
-        beam = json.loads(version.stdout)
-        if beam != {"elixir": "1.19.0", "otp": "27.3.4"}:
-            raise ValueError("the required Elixir 1.19.0 / OTP 27.3.4 runtime is not selected")
+        beam = beam_identity(elixir, environment)
         os.environ.update(environment)
         os.environ.update(RESEARCH_EXCHANGE_BRIDGE_LEAN_ROOT=str(lean),
                           RESEARCH_EXCHANGE_BRIDGE_FIXTURES=str(fixtures),
@@ -102,9 +108,11 @@ def main():
             result = unittest.TextTestRunner(stream=log, verbosity=2).run(suite)
         summary.update(tests=result.testsRun, skips=len(result.skipped),
                        failures=len(result.failures), errors=len(result.errors),
+                       expected_failures=len(result.expectedFailures), unexpected_successes=len(result.unexpectedSuccesses),
                        fixture_sha256=fixture_hashes, checker_sha256=tools,
                        beam=beam, python=sys.version.split()[0])
-        if result.wasSuccessful() and result.testsRun > 0 and not result.skipped:
+        if (result.wasSuccessful() and result.testsRun > 0 and not result.skipped and
+                not result.expectedFailures and not result.unexpectedSuccesses):
             summary["status"] = "passed"
         else:
             print((output / "acceptance.log").read_text()[-12_000:], file=sys.stderr)

@@ -282,7 +282,7 @@ class Store:
                     "SELECT catalog_json FROM bridge_libraries WHERE enabled=1 ORDER BY id")
                     if loads(row[0])["id"] in loads(grant["libraries_json"])]
                 return {"libraries": libraries, "core": self.core,
-                        "execution": "durable-exact-reviewed-export-only",
+                        "execution": "durable-operator-provisioned-profiles",
                         "benefits": {"purpose": "nonprofit-open-source-research", "recognition": "proposed",
                                      "ecosystem_credits": "nonmonetary-policy-pending", "issuance_enabled": False}}
             if tool == "proof_submit":

@@ -2,6 +2,7 @@
 from copy import deepcopy
 import importlib.util
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 spec = importlib.util.spec_from_file_location("bridge_conformance", Path(__file__).with_name("run_conformance.py"))
@@ -54,6 +55,24 @@ class PersistedResultTests(unittest.TestCase):
         changed["effects"] *= 2
         with self.assertRaises(ValueError):
             conformance.validate_observation(changed, wire, result)
+
+    def test_each_required_profile_needs_actual_commit_evidence(self):
+        wire, _, observation = self.fixture()
+        observation["effects"][0]["wire_json"] = conformance.canonical(wire).decode()
+        with TemporaryDirectory() as temporary:
+            export, source = Path(temporary) / "export", Path(temporary) / "source"
+            export.mkdir()
+            source.mkdir()
+            (export / "committed.json").write_bytes(conformance.canonical(observation))
+            with self.assertRaises(ValueError):
+                conformance.collect_observations([export, source])
+            (source / "summary.json").write_bytes(conformance.canonical({"status": "passed", "tests": 9}))
+            with self.assertRaises(ValueError):
+                conformance.collect_observations([export, source])
+            (source / "committed.json").write_bytes(conformance.canonical({"database_observation": observation}))
+            observed, counts = conformance.collect_observations([export, source])
+            self.assertEqual(len(observed), 2)
+            self.assertEqual([entry["committed_observations"] for entry in counts], [1, 1])
 
 
 if __name__ == "__main__":
