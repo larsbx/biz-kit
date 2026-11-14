@@ -35,6 +35,9 @@ export const previewCommand = (host, script) => invoke("preview_command", { host
 export const runOn = (host, script) => invoke("run_on", { host, script });
 
 export const openProcurement = () => invoke("open_procurement");
+export const procurementStatus = () => invoke("procurement_status");
+export const saveProcurementOrigin = (origin, expectedRevision) =>
+  invoke("save_procurement_origin", { origin, expectedRevision });
 
 /** Run a local script, streaming each line to `onLine`; resolves when it has been started. */
 export function runScript(path, args, onLine) {

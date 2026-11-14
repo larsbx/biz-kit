@@ -252,11 +252,33 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
 
                 if procurement:
                     origin, unexpected = procurement
-                    launcher = '[data-panel=procurement].tile button:not(.icon-btn)'
+                    launcher = '[data-panel=procurement].tile [data-procurement-open]'
+                    save_address = '[data-panel=procurement].tile [data-procurement-save]'
                     click('.side-item[data-panel=procurement]')
-                    click(launcher)
-                    until(lambda: js("return document.querySelector('[data-panel=procurement].tile [role=alert]')?.textContent.includes('not configured')"), "missing procurement config")
-                    config_path.write_text(json.dumps(dict(config_data, procurementOrigin=origin)))
+                    # Use a full tile so controls remain clickable after the earlier resize tests.
+                    click('.tile[data-panel=procurement] [aria-label="Zoom"]')
+                    until(lambda: js("const b=document.querySelector(arguments[0]);return b && !b.disabled", save_address), "connection setup ready")
+                    assert js("return document.querySelector(arguments[0]).disabled", launcher), "missing origin did not require setup"
+                    js("document.querySelector('[aria-label=\"Procurement server address\"]').value=arguments[0]", origin)
+                    click(save_address)
+                    until(lambda: js("return !!document.querySelector('.tile-confirm .btn.go')"), "connection review")
+                    assert js("return document.querySelector('.tile-confirm pre').textContent.includes(arguments[0])", origin)
+                    # Cancellation must leave the existing config byte-for-byte untouched.
+                    before_connection = config_path.read_bytes()
+                    click('.tile-confirm .actions .btn:first-child')
+                    assert config_path.read_bytes() == before_connection
+                    until(lambda: js("return !document.querySelector(arguments[0]).disabled", save_address), "cancelled connection review")
+                    click(save_address)
+                    until(lambda: js("return !!document.querySelector('.tile-confirm .btn.go')"), "second connection review")
+                    click('.tile-confirm .btn.go')
+                    until(lambda: js("return !document.querySelector('.tile-confirm') && !document.querySelector(arguments[0]).disabled", launcher), "connection saved through UI")
+                    saved_connection = json.loads(config_path.read_text())
+                    assert saved_connection.pop("procurementOrigin") == origin + "/"
+                    assert saved_connection == config_data, "connection setup changed unrelated settings"
+                    # Reload the desktop and recover the persisted address, without injecting it.
+                    request("POST", base + "/refresh", {})
+                    until(lambda: js("const b=document.querySelector(arguments[0]);return b && !b.disabled", launcher), "persisted launcher after reload")
+                    print("PASS: visible Procurement setup, cancellation, reviewed save and persisted connection", flush=True)
                     main = request("GET", base + "/window")
                     click(launcher)
                     handles = until(lambda: (rows if len(rows := request("GET", base + "/window/handles")) == 2 else None), "procurement window")
@@ -288,6 +310,8 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
 
                     for command, args in [
                         ("app_info", {}),
+                        ("procurement_status", {}),
+                        ("save_procurement_origin", {"origin": origin, "expectedRevision": "not-authorized"}),
                         ("read_config", {"host": "local", "path": str(fixture)}),
                         ("run_on", {"host": "local", "script": "printf unexpected"}),
                     ]:

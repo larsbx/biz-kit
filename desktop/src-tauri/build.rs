@@ -17,6 +17,8 @@ fn main() {
         "dispatch_sign_out",
         "dispatch_request",
         "open_procurement",
+        "procurement_status",
+        "save_procurement_origin",
         "operations_status",
         "operations_place",
         "operations_hide",
