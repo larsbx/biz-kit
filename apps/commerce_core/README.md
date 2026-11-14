@@ -40,6 +40,11 @@ In tests, the helper starts Localize's currency loader using the bundled
 English locale cache owned by Localize itself, without starting Eatsbot's web,
 database, or queue services. Production CommerceCore code never calls Eatsbot.
 
+The portable Eatsbot compatibility workflow uses Elixir 1.18 and OTP 26.
+The offline [Merchant Pilot](../../tools/merchant_pilot/README.md) requires
+OTP 27+ for its strict JSON codec. Its tests are skipped on OTP 26 and run
+in the OTP 27 standalone package workflow.
+
 The only declared runtime dependency is `ex_money`. This kernel does not
 depend on Eatsbot, Dispatch, SchoolOps, Ash resources, storage, network,
 tenant-specific policies or the umbrella runtime. Its source lives inside

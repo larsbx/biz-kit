@@ -60,7 +60,7 @@ jobs:
         run: |
           set -eu
           cd "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
-          mix deps.get
+          MIX_ENV=test mix deps.get
           MIX_ENV=test mix compile --warnings-as-errors
       - name: Consume the copied package from an unrelated Mix project
         shell: bash
