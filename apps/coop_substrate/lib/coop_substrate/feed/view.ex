@@ -80,16 +80,11 @@ defmodule CoopSubstrate.Feed.View do
     }
   end
 
-  def select(gate, {chapter, tenant, project} = scope, principal) do
+  def select(gate, {_, _, _} = scope, principal) do
     o = gate.orchestration
 
     %{
-      tasks:
-        for(
-          {{^chapter, ^tenant, ^project, id}, task} <- o.tasks,
-          into: %{},
-          do: {id, task(task)}
-        ),
+      tasks: tasks(gate, scope),
       suggestions:
         for({id, s} <- o.suggestions, in_scope?(s, scope), into: %{}, do: {id, suggestion(s)}),
       delegations:
@@ -109,6 +104,13 @@ defmodule CoopSubstrate.Feed.View do
       devices: Map.new(Devices.of(gate, principal, scope), &{&1.id, Map.delete(&1, :id)}),
       workflows: workflows(o, scope)
     }
+  end
+
+  @doc "The existing project task projection, before transport-specific field selection."
+  def tasks(gate, {chapter, tenant, project}) do
+    for {{^chapter, ^tenant, ^project, id}, record} <- gate.orchestration.tasks, into: %{} do
+      {id, task(record)}
+    end
   end
 
   # Every workflow the project's blueprints define, under the revision now

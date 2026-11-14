@@ -110,6 +110,10 @@ defmodule CoopSubstrate.Log do
   @spec gate(GenServer.server()) :: map()
   def gate(server \\ @server), do: GenServer.call(server, :gate)
 
+  @doc "The current gate and its exact revision, obtained in a single appender call."
+  @spec read_snapshot(GenServer.server()) :: {map(), {non_neg_integer(), binary() | nil}}
+  def read_snapshot(server \\ @server), do: GenServer.call(server, :read_snapshot)
+
   @doc """
   Trusted host subscription effect under current signed authority. The SQL
   connection must target this ledger's database/schema. The effect must be a
@@ -446,6 +450,9 @@ defmodule CoopSubstrate.Log do
   end
 
   def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
+
+  def handle_call(:read_snapshot, _from, %{head: head, gate: gate} = state),
+    do: {:reply, {gate, {head.global_seq, head.global_hash}}, state}
 
   def handle_call({:procurement_snapshot, request}, _from, state) do
     {:reply, CoopSubstrate.Procurement.read_snapshot(request, state.gate), state}

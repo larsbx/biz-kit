@@ -12,6 +12,7 @@ defmodule TaskHost.Web.ExecutionTest do
   alias BizKit.Identity.Principal
   alias CoopSubstrate.{Crypto, Log}
   alias CoopSubstrate.Harness.Artifacts
+  alias TaskHost.PluginBridgeFixtures, as: Bridge
 
   setup do
     providers!()
@@ -28,6 +29,7 @@ defmodule TaskHost.Web.ExecutionTest do
     bind([
       {"https://idp.test", "sub-person", person},
       {"https://idp.test", "sub-reviewer", reviewer},
+      {Bridge.issuer(), "reviewer", reviewer},
       {"https://idp.test", "sub-stranger", stranger}
     ])
 
@@ -195,6 +197,76 @@ defmodule TaskHost.Web.ExecutionTest do
              })
 
     assert task(w).state == "completed"
+  end
+
+  test "the plugin returns current submission pins and keeps evidence bytes in custody", w do
+    report = "Private report #{w.chapter}"
+    {digest, receipt} = submitted!(w, report)
+    current = task(w)
+    previous = Application.get_env(:task_host, :operations)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:task_host, :operations, previous),
+        else: Application.delete_env(:task_host, :operations)
+    end)
+
+    Application.put_env(:task_host, :operations, %{
+      "schema_version" => 1,
+      "workspaces" => [
+        %{
+          "id" => "evidence",
+          "label" => "Evidence",
+          "chapter_id" => w.chapter,
+          "tenant_id" => tenant(),
+          "project_id" => "project-1"
+        }
+      ]
+    })
+
+    Bridge.configure!(external_endpoint: true, workspace_ids: ["evidence"])
+    Bridge.introspect(fn "reviewer-token" -> Bridge.claims("reviewer") end)
+    Req.Test.set_req_test_to_shared()
+    on_exit(fn -> Req.Test.set_req_test_to_private() end)
+    base = serve!()
+    head = Log.head()
+
+    response =
+      Req.post!(base <> "/mcp",
+        auth: {:bearer, "reviewer-token"},
+        headers: [{"accept", "application/json, text/event-stream"}],
+        json: %{
+          jsonrpc: "2.0",
+          id: "evidence-http",
+          method: "tools/call",
+          params: %{
+            name: "get_task_evidence",
+            arguments: %{workspace_id: "evidence", task_id: "task-1"}
+          }
+        }
+      )
+
+    assert response.status == 200
+    assert response.headers["cache-control"] == ["no-store"]
+
+    assert %{
+             "id" => "evidence-http",
+             "result" => %{"structuredContent" => %{"access" => "private", "source" => source}}
+           } = response.body
+
+    assert source == %{
+             "kind" => "ledger_evidence_metadata",
+             "task" => %{
+               "task_id" => "task-1",
+               "version" => current.version,
+               "source_event_id" => current.last_event_id
+             },
+             "submission_event_id" => current.dod.submission.event_id,
+             "criteria" => %{"report" => %{"sha256" => digest, "custody_receipt_id" => receipt}}
+           }
+
+    refute Jason.encode!(response.body) =~ report
+    assert Log.head() == head
   end
 
   test "failed and repeated uploads preserve quota and a signed receipt recovers missing bytes",

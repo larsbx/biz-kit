@@ -104,6 +104,18 @@ defmodule TaskHost.Operations do
 
   def snapshot(_gate, _principal, _config), do: {:error, :unauthorized}
 
+  @doc "Resolve a configured workspace under the same ACL as the Operations view."
+  def workspace(gate, principal, config, workspace_id) do
+    with {:ok, config} <- normalize(config),
+         %{} = workspace <- Enum.find(config["workspaces"], &(&1["id"] == workspace_id)),
+         {:ok, reader} <- reader(gate, principal, scope(workspace)) do
+      {:ok, workspace, reader}
+    else
+      nil -> {:error, :no_grant}
+      {:error, _} = error -> error
+    end
+  end
+
   @doc "Resolve the configured review through the workspace's current read grant."
   def infrastructure_review(gate, principal, config, workspace_id) do
     with {:ok, config} <- normalize(config),
@@ -116,13 +128,12 @@ defmodule TaskHost.Operations do
     end
   end
 
-  defp authorized?(gate, principal, scope) do
-    case Access.for_principal(gate.orchestration, principal, scope) do
-      {:ok, _reader} ->
-        true
+  defp authorized?(gate, principal, scope), do: match?({:ok, _}, reader(gate, principal, scope))
 
-      {:error, :no_grant} ->
-        match?({:ok, _reader}, Access.for_administrator(gate, principal, scope))
+  defp reader(gate, principal, scope) do
+    case Access.for_principal(gate.orchestration, principal, scope) do
+      {:ok, _reader} = result -> result
+      {:error, :no_grant} -> Access.for_administrator(gate, principal, scope)
     end
   end
 
