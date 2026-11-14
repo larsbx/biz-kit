@@ -134,6 +134,43 @@ def check_observations(inputs: list[tuple[int, ...]], outputs: list[tuple[int, .
             raise ValueError("unexpected status")
 
 
+def check_suite_receipt(report: object, expected_files: list[str]) -> dict[str, object]:
+    """Require one complete, unfiltered ExUnit inventory with no missing tests.
+
+    The total follows the current suite; adding tests must not break a constant
+    count, and a zero-test/filtered/aborted run must not count as acceptance.
+    The ordinary unfiltered `mix test` remains responsible for discovery.
+    """
+    keys = {"schema", "suite_started", "suite_finished", "interrupted",
+            "declared", "started", "finished"}
+    if (not isinstance(report, dict) or set(report) != keys or
+            report["schema"] != "bizkit.cross-currency.barter-suite.v1" or
+            type(report["suite_started"]) is not int or report["suite_started"] != 1 or
+            type(report["suite_finished"]) is not int or report["suite_finished"] != 1 or
+            report["interrupted"] is not False or
+            not all(isinstance(report[key], list) for key in ["declared", "started", "finished"])):
+        raise ValueError("incomplete or malformed Barter suite receipt")
+    declared, started, finished = report["declared"], report["started"], report["finished"]
+    if not declared or not expected_files or len(set(expected_files)) != len(expected_files):
+        raise ValueError("empty or duplicate Barter suite inventory")
+    if any(not isinstance(row, dict) or set(row) != {"id", "file"} or
+           not all(isinstance(row[key], str) and row[key] for key in ["id", "file"])
+           for row in declared):
+        raise ValueError("malformed declared Barter tests")
+    ids = [row["id"] for row in declared]
+    if len(set(ids)) != len(ids) or {row["file"] for row in declared} != set(expected_files):
+        raise ValueError("duplicate tests or incomplete Barter test file coverage")
+    if (not all(isinstance(item, str) for item in started) or
+            len(started) != len(ids) or set(started) != set(ids)):
+        raise ValueError("not every declared Barter test started exactly once")
+    if (any(not isinstance(row, dict) or set(row) != {"id", "status"} or
+            not isinstance(row["id"], str) or row["status"] != "passed" for row in finished) or
+            len(finished) != len(ids) or {row["id"] for row in finished} != set(ids)):
+        raise ValueError("not every declared Barter test passed exactly once")
+    return {"tests": len(ids), "failures": 0, "skipped": 0, "excluded": 0,
+            "files": sorted(expected_files), "status": "passed"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-head", required=True)
@@ -338,11 +375,17 @@ def main() -> int:
         receipt["quint"] = json.loads(quint_check.stdout)
         with tempfile.TemporaryDirectory(prefix="setoff-mix-build-") as mix_build:
             env["MIX_BUILD_PATH"] = mix_build
-            suite = run("barter-suite", [str(binaries["mix"]), "test"], cwd=ROOT / "apps/barter_core")
+            suite_receipt = output / "barter-suite.json"
+            env["BARTER_SUITE_RECEIPT"] = str(suite_receipt)
+            run("barter-suite", [str(binaries["elixir"]),
+                "-r", str(PROJECT / "elixir/suite_receipt.exs"),
+                str(binaries["mix"]), "test", "--formatter", "ExUnit.CLIFormatter",
+                "--formatter", "CrossCurrencySetoff.SuiteReceipt"], cwd=ROOT / "apps/barter_core")
         env.pop("MIX_BUILD_PATH", None)
-        summary = re.search(r"(?m)^55 tests, 0 failures\s*$", suite.stdout)
-        if not summary or re.search(r"\b(?:skipped|excluded)\b", suite.stdout):
-            raise RuntimeError("expected all 55 Barter tests to execute without failures or exclusions")
+        env.pop("BARTER_SUITE_RECEIPT", None)
+        expected_files = [p.relative_to(ROOT / "apps/barter_core").as_posix()
+                          for p in sorted((ROOT / "apps/barter_core/test").rglob("*_test.exs"))]
+        receipt["barter_suite"] = check_suite_receipt(json.loads(suite_receipt.read_text()), expected_files)
         run("barter-format", [str(binaries["elixir"].with_name("mix")), "format", "--check-formatted", "mix.exs", "lib/**/*.ex", "test/**/*.exs", "../../proof_bank/cross_currency_setoff/elixir/*.exs"], cwd=ROOT / "apps/barter_core")
         commercial = [f"../coop_substrate/{folder}/commercial_setoff{suffix}.{ext}" for folder, ext in [("lib/coop_substrate", "ex"), ("test", "exs")] for suffix in (["", "_proof", "_sources"] if ext == "ex" else ["_test", "_proof_test", "_sources_test"])]
         run("commercial-scoped-format", [str(binaries["elixir"].with_name("mix")), "format", "--check-formatted", *commercial], cwd=ROOT / "apps/barter_core")
