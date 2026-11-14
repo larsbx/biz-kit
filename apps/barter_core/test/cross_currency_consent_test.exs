@@ -80,8 +80,16 @@ defmodule BarterCore.CrossCurrencyConsentTest do
     }
 
     {:ok, proof} = Consent.prepare(plan, @chapter, hashes, members, @now)
-    ctx = %{a: a, b: b, plan: plan, hashes: hashes, members: members,
-            proof: proof, a_seed: a_seed, b_seed: b_seed}
+    ctx = %{
+      a: a,
+      b: b,
+      plan: plan,
+      hashes: hashes,
+      members: members,
+      proof: proof,
+      a_seed: a_seed,
+      b_seed: b_seed
+    }
     Map.put(ctx, :signatures, sign(proof, ctx))
   end
 
@@ -100,8 +108,10 @@ defmodule BarterCore.CrossCurrencyConsentTest do
     assert ctx.proof.status == :unsigned_inert_source_bound_proposal
     assert length(ctx.proof.sources) == 2
     assert Enum.map(ctx.proof.sources, & &1.source_id) == Enum.sort([ctx.a.id, ctx.b.id])
-    assert String.starts_with?(ctx.proof.signing_bytes,
-             "biz-kit/cross-currency-source-consent/v1\0")
+    assert String.starts_with?(
+             ctx.proof.signing_bytes,
+             "biz-kit/cross-currency-source-consent/v1\0"
+           )
 
     assert {:ok, same} = Consent.prepare(ctx.plan, @chapter, ctx.hashes, ctx.members, @now)
     assert same == ctx.proof
@@ -123,7 +133,7 @@ defmodule BarterCore.CrossCurrencyConsentTest do
                ctx.signatures, @now)
   end
 
-  test "changed original source-event hashes or source versions invalidate the signed terms", ctx do
+  test "altered original event hashes or source revisions invalidate the signed terms", ctx do
     hashes = Map.put(ctx.hashes, ctx.b.id, :crypto.hash(:sha256, "replacement-history"))
     assert {:error, :stale_or_substituted_consent_terms} = verify(ctx, hashes: hashes)
 
@@ -133,7 +143,7 @@ defmodule BarterCore.CrossCurrencyConsentTest do
     assert {:error, :stale_or_substituted_consent_terms} = verify(ctx, plan: revised)
   end
 
-  test "mutated negotiated rational, currencies and agreement references invalidate consent", ctx do
+  test "changed rate, currency and agreement references invalidate consent", ctx do
     for new_rate <- [
           %{rate() | numerator: 13},
           %{rate() | agreement_ref: "different-agreement"},
