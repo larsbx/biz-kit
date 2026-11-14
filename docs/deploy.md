@@ -24,9 +24,11 @@ SpruceGoose sections skip it.
 Production eatsbot is not deployed from here: Fly deploys it from
 `larsbx/eatsbot`, which remains the source of truth (see the
 [modular platform decision](architecture/2026-10-24-modular-business-platform.md)).
-Moving production to this release is a separate, tested cutover; until then
-this release exists for building and testing, and must not run as a second
-writer against eatsbot's production database.
+The replacement is the separate `restaurant` release described below. The
+umbrella `eatsbot` release exists for legacy build and compatibility checks.
+Keep production order writes on the existing deployment until the
+[cutover gates](architecture/2026-11-07-eatsbot-decommission.md#migration-status-as-of-november-14-2026)
+are met. The replacement starts with an empty restaurant ledger.
 
 The Telegram bot reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK` (the full
 `https://…/telegram` URL) at boot. Setting `TELEGRAM_WEBHOOK` also requires
