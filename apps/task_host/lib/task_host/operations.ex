@@ -15,6 +15,7 @@ defmodule TaskHost.Operations do
   """
 
   alias CoopSubstrate.Feed.{Access, View}
+  alias TaskCore.Knowledge
   alias TaskHost.InfrastructureReview
 
   @config_fields ~w(schema_version title time_zone workspaces)
@@ -79,12 +80,21 @@ defmodule TaskHost.Operations do
           # whitelist also excludes delegations and custody receipts.
           view = gate |> View.select(scope) |> Map.take(@view_kinds)
 
+          knowledge =
+            Map.new(Knowledge.counts(gate.orchestration, scope), fn {status, count} ->
+              {status <> "_count", count}
+            end)
+
           case Map.pop(workspace, "infrastructure_review") do
             {nil, workspace} ->
-              Map.put(workspace, "view", view)
+              Map.merge(workspace, %{"view" => view, "knowledge" => knowledge})
 
             {_review, workspace} ->
-              Map.merge(workspace, %{"view" => view, "has_infrastructure_review" => true})
+              Map.merge(workspace, %{
+                "view" => view,
+                "knowledge" => knowledge,
+                "has_infrastructure_review" => true
+              })
           end
         end
 

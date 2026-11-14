@@ -121,6 +121,11 @@ defmodule TaskHost.Web.Router do
     post("/blueprints/:held_id", BlueprintController, :apply)
     post("/runs/:run_event_id/readiness", RunReadinessController, :prepare)
     post("/runs/:run_event_id/readiness/:held_id", RunReadinessController, :define)
+    get("/knowledge", ProjectKnowledgeController, :index)
+    get("/knowledge/suggestions", ProjectKnowledgeController, :suggestions)
+    get("/knowledge/:candidate_id", ProjectKnowledgeController, :show)
+    post("/knowledge/:candidate_id/reviews", ProjectKnowledgeController, :prepare)
+    post("/knowledge/:candidate_id/reviews/:held_id", ProjectKnowledgeController, :submit)
     get("/devices/:key_id", DeviceController, :status)
   end
 end

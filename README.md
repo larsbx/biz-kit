@@ -211,6 +211,17 @@ commands, see [the catalog README](apps/bizops_kb/README.md) and
 For source-bound workflow adoption, see
 [the workflow increment](docs/architecture/2026-11-14-bizops-kb-workflows.md).
 
+**Project knowledge** also populates automatically from completed tasks with
+accepted evidence and currently adopted workflows. Drafts enter a project
+review queue; an administrator's signed approval makes the exact reviewed
+revision eligible for suggestions beside Operations tasks and workflows.
+Rejections persist, changed sources require another review, and withdrawals
+remove suggestions. Workspace cards link to the queue and show its counts.
+Company-derived knowledge retains the project's access controls and is not
+published into the shared reference catalog. See
+[automatic population and approval](docs/architecture/2026-11-14-project-knowledge.md)
+for source eligibility, review semantics and API boundaries.
+
 [docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
 in what order, the remaining consolidation steps, and open questions.
 

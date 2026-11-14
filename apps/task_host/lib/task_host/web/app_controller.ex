@@ -24,6 +24,8 @@ defmodule TaskHost.Web.AppController do
     "knowledge.js" => "text/javascript",
     "knowledge-view.js" => "text/javascript",
     "knowledge.css" => "text/css",
+    "project-knowledge.js" => "text/javascript",
+    "project-knowledge.css" => "text/css",
     "layout.js" => "text/javascript",
     "divider.js" => "text/javascript",
     "tiles.js" => "text/javascript",
