@@ -15,9 +15,10 @@ defmodule TaskHost.Operations do
   """
 
   alias CoopSubstrate.Feed.{Access, View}
+  alias TaskHost.InfrastructureReview
 
   @config_fields ~w(schema_version title time_zone workspaces)
-  @workspace_fields ~w(id label category chapter_id tenant_id project_id)
+  @workspace_fields ~w(id label category chapter_id tenant_id project_id infrastructure_review)
   @required_workspace_fields ~w(id label chapter_id tenant_id project_id)
   @view_kinds [:tasks, :suggestions, :workflows]
   @max_workspaces 32
@@ -77,7 +78,14 @@ defmodule TaskHost.Operations do
           # No device enumeration is needed by this read-only view. The
           # whitelist also excludes delegations and custody receipts.
           view = gate |> View.select(scope) |> Map.take(@view_kinds)
-          Map.put(workspace, "view", view)
+
+          case Map.pop(workspace, "infrastructure_review") do
+            {nil, workspace} ->
+              Map.put(workspace, "view", view)
+
+            {_review, workspace} ->
+              Map.merge(workspace, %{"view" => view, "has_infrastructure_review" => true})
+          end
         end
 
       {:ok, Map.put(config, "workspaces", workspaces)}
@@ -85,6 +93,18 @@ defmodule TaskHost.Operations do
   end
 
   def snapshot(_gate, _principal, _config), do: {:error, :unauthorized}
+
+  @doc "Resolve the configured review through the workspace's current read grant."
+  def infrastructure_review(gate, principal, config, workspace_id) do
+    with {:ok, config} <- normalize(config),
+         %{"infrastructure_review" => review} = workspace <-
+           Enum.find(config["workspaces"], &(&1["id"] == workspace_id)),
+         true <- authorized?(gate, principal, scope(workspace)) do
+      {:ok, review}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
 
   defp authorized?(gate, principal, scope) do
     case Access.for_principal(gate.orchestration, principal, scope) do
@@ -100,7 +120,9 @@ defmodule TaskHost.Operations do
     known_fields?(workspace, @workspace_fields) and
       Enum.all?(@required_workspace_fields, &Map.has_key?(workspace, &1)) and
       Enum.all?(~w(id chapter_id tenant_id project_id), &segment?(workspace[&1])) and
-      text?(workspace["label"], 120) and text?(Map.get(workspace, "category", "general"), 80)
+      text?(workspace["label"], 120) and text?(Map.get(workspace, "category", "general"), 80) and
+      (not Map.has_key?(workspace, "infrastructure_review") or
+         InfrastructureReview.valid?(workspace["infrastructure_review"]))
   end
 
   defp workspace?(_workspace), do: false

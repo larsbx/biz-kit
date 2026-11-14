@@ -468,7 +468,9 @@ if task_host_released? do
         end
     end
 
-  config :task_host, :operations, operations
+  config :task_host,
+    operations: operations,
+    keel_review_manifest: System.get_env("TASK_HOST_KEEL_REVIEW_MANIFEST")
 end
 
 if config_env() == :prod and task_host_released? do

@@ -85,11 +85,14 @@ jobs:
         run: >-
           mix format --check-formatted
           lib/task_host/operations.ex
+          lib/task_host/infrastructure_review.ex
+          lib/task_host/web/infrastructure_review_controller.ex
           lib/task_host/web/operations_controller.ex
           lib/task_host/web/app_controller.ex
           lib/task_host/web/router.ex
           test/task_host/operations_test.exs
           test/task_host/web/operations_test.exs
+          test/task_host/web/infrastructure_review_test.exs
           test/task_host/web/operations_browser_test.exs
       - name: Initialize canonical event stores
         working-directory: apps/coop_substrate
@@ -99,7 +102,10 @@ jobs:
         run: mix ecto.create && mix ecto.migrate
       - name: Configuration, scope and HTTP acceptance
         working-directory: apps/task_host
-        run: mix test test/task_host/operations_test.exs test/task_host/web/operations_test.exs
+        run: >-
+          mix test test/task_host/operations_test.exs
+          test/task_host/web/operations_test.exs
+          test/task_host/web/infrastructure_review_test.exs
       - uses: actions/setup-node@v4
         with:
           node-version: 22
