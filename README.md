@@ -204,9 +204,10 @@ source pins. Governance may explicitly adopt its reviewed manifest through the
 existing signed workflow controls; operator run creation remains a separate step.
 
 Source: `larsbx/bizops-kb` at
-`8749d8db1abd3145b22c6a27da2cc49a41c303fe`. The import retains source bytes,
-stable IDs, and an offline Git commit/tree proof. For update and verification
-commands, see [the catalog README](apps/bizops_kb/README.md) and
+`8749d8db1abd3145b22c6a27da2cc49a41c303fe`, including the revised October 30
+source-custody decision for the SpruceGoose migration. The import retains
+source bytes, stable IDs, and an offline Git commit/tree proof. For update and
+verification commands, see [the catalog README](apps/bizops_kb/README.md) and
 [the integration contract](docs/architecture/2026-11-14-bizops-kb-catalog.md).
 For source-bound workflow adoption, see
 [the workflow increment](docs/architecture/2026-11-14-bizops-kb-workflows.md).

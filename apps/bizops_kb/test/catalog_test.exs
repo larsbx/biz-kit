@@ -17,7 +17,7 @@ defmodule BizOpsKB.CatalogTest do
   end
 
   test "bundled source inventory loads with the recorded revision and all 216 Markdown files" do
-    assert {:ok, catalog} = Catalog.load(root: @bundle)
+    assert {:ok, catalog} = Catalog.load_packaged(@bundle)
 
     assert %{
              "total" => 216,
@@ -32,6 +32,84 @@ defmodule BizOpsKB.CatalogTest do
     assert String.contains?(url, "/blob/#{@revision}/")
     refute String.contains?(url, " ")
     assert Catalog.search(catalog, query: "24.12a")["total"] > 0
+
+    assert {:ok, decision_id} =
+             Catalog.resolve_link(
+               catalog,
+               "docs/decisions/2026-10-30-source-custody-and-platform-storage.md"
+             )
+
+    assert {:ok, %{"body" => decision}} = Catalog.document(catalog, decision_id)
+
+    for retained_owner <- [
+          "2026-11-14",
+          "TaskCore",
+          "CoopSubstrate",
+          "BizKit.Identity",
+          "task_host"
+        ] do
+      assert decision =~ retained_owner
+    end
+
+    assert decision =~ "SpruceGoose is being retired"
+    assert decision =~ "read-only import"
+  end
+
+  test "packaged loads reject coordinated body and manifest substitution at the old advertised pin",
+       %{
+         root: root
+       } do
+    copy = Path.join(root, "packaged")
+    File.cp_r!(@bundle, copy)
+    assert {:ok, original} = Catalog.load_packaged(copy)
+    assert {:ok, document} = Catalog.document(original, "24.12a")
+    forged = "FORGED SOURCE OUTSIDE THE ADVERTISED COMMIT\n"
+    File.write!(Path.join([copy, "content", document["path"]]), forged)
+
+    manifest = copy |> Path.join("catalog.json") |> File.read!() |> JSON.decode!()
+
+    documents =
+      Enum.map(manifest["documents"], fn
+        %{"id" => "24.12a"} = record ->
+          record
+          |> Map.put("title", "Forged source")
+          |> Map.put("size", byte_size(forged))
+          |> Map.put("sha256", hash(:sha256, forged))
+          |> Map.put(
+            "blob_sha",
+            hash(:sha, ["blob ", Integer.to_string(byte_size(forged)), <<0>>, forged])
+          )
+
+        record ->
+          record
+      end)
+
+    write_manifest(copy, %{manifest | "documents" => documents})
+    assert {:error, :content_mismatch} = Catalog.load_packaged(copy)
+
+    # This explicit option is a trusted alternate-snapshot API, not the host
+    # loader. It demonstrates why consistency alone cannot establish a pin.
+    assert {:ok, alternate} = Catalog.load(root: copy)
+    assert alternate.source["revision"] == @revision
+    assert {:ok, %{"body" => ^forged}} = Catalog.document(alternate, "24.12a")
+  end
+
+  test "packaged loads reject source metadata changes while unchanged relocated bytes load", %{
+    root: root
+  } do
+    copy = Path.join(root, "packaged")
+    File.cp_r!(@bundle, copy)
+    assert {:ok, _} = Catalog.load_packaged(copy)
+    original = copy |> Path.join("catalog.json") |> File.read!() |> JSON.decode!()
+
+    for manifest <- [
+          %{original | "revision" => String.duplicate("a", 40)},
+          %{original | "tree" => String.duplicate("b", 40)},
+          %{original | "repository" => "somewhere/else"}
+        ] do
+      write_manifest(copy, manifest)
+      assert {:error, :content_mismatch} = Catalog.load_packaged(copy)
+    end
   end
 
   test "search uses verified text, stable ordering, exact filters and metadata-only results", %{
