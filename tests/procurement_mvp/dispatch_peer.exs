@@ -1,5 +1,6 @@
 # Test-only peer for the packaged procurement lifecycle. Run from staged
 # apps/dispatch with MIX_ENV=test mix run --no-start <script> <private-config>.
+# The independent acceptance archive also embeds this fixture for bundled eval.
 # Every invocation owns a fresh VM and commits Dispatch operations to PostgreSQL.
 # The packaged procurement host remains the only canonical business appender.
 defmodule ProcurementAcceptance.DispatchPeer do
@@ -31,9 +32,9 @@ defmodule ProcurementAcceptance.DispatchPeer do
     try do
       result = run(argv)
 
-      emit(
-        Map.merge(result, %{ok: true, source_os_pid: System.pid(), no_canonical_appender: true})
-      )
+      observation = %{ok: true, source_os_pid: System.pid(), no_canonical_appender: true}
+      observation = if packaged?(), do: Map.put(observation, :bundled_erts, true), else: observation
+      emit(Map.merge(result, observation))
     rescue
       error ->
         # Exceptions can contain private parameters. Keep the runner diagnostic
@@ -61,7 +62,7 @@ defmodule ProcurementAcceptance.DispatchPeer do
 
   defp run([config_file]) do
     Process.put(:peer_stage, "guard")
-    ensure!(Mix.env() == :test and Mix.Project.config()[:app] == :dispatch)
+    execution_scope!()
     ensure!(System.get_env("PROCUREMENT_DISPATCH_ACCEPTANCE") == "disposable-local-postgres")
     ensure!(System.get_env("MIX_TEST_PARTITION") in [nil, ""])
 
@@ -70,7 +71,7 @@ defmodule ProcurementAcceptance.DispatchPeer do
       ensure!(System.get_env(variable) in [nil, "false"])
     end
 
-    # --no-start is required: validate every input before starting the peer.
+    # Both Mix --no-start and bundled eval leave startup to this guarded fixture.
     ensure!(:dispatch not in started_apps())
     no_ledger!()
     # The adapter must register its own signing schema. A co-resident host or
@@ -79,6 +80,16 @@ defmodule ProcurementAcceptance.DispatchPeer do
     database = database_scope!()
     config = config_file |> private_json!() |> validate_config!()
     scope = scope(config, database)
+
+    case config["action"] do
+      "migrate" -> migrate!()
+      _ -> run_dispatch(config, scope, database)
+    end
+  end
+
+  defp run(_), do: raise(ArgumentError, "one private configuration file is required")
+
+  defp run_dispatch(config, scope, database) do
     state = if config["action"] == "bootstrap", do: nil, else: load_state!(config, scope)
 
     Process.put(:peer_stage, "start_dispatch")
@@ -100,9 +111,13 @@ defmodule ProcurementAcceptance.DispatchPeer do
           "cleanup" ->
             cleanup(config, state)
 
+          "tls_probe" ->
+            tls_probe(config, state)
+
           action when action in ["worker", "receipt"] ->
             world = owned_world!(state)
             configure_route(config, state)
+            if packaged?(), do: trust!(config["origin"], certificate(config, "tls.crt"))
             if action == "worker", do: worker(config, state), else: receipt(config, state, world)
         end
 
@@ -113,13 +128,49 @@ defmodule ProcurementAcceptance.DispatchPeer do
     end
   end
 
-  defp run(_), do: raise(ArgumentError, "one private configuration file is required")
+  defp packaged?, do: System.get_env("RELEASE_NAME") == "dispatch_acceptance"
+
+  defp execution_scope! do
+    if packaged?() do
+      root = System.fetch_env!("DISPATCH_ACCEPTANCE_ROOT")
+      ensure!(File.cwd!() == root)
+      ensure!(Application.get_env(:dispatch, :environment) == :test)
+      ensure!(:mix not in started_apps())
+      ensure!(List.starts_with?(Path.split(List.to_string(:code.root_dir())), Path.split(root)))
+
+      beam = Dispatch.Application |> :code.which() |> List.to_string()
+      ensure!(List.starts_with?(Path.split(beam), Path.split(Path.join(root, "lib"))))
+    else
+      ensure!(apply(Mix, :env, []) == :test and apply(Mix.Project, :config, [])[:app] == :dispatch)
+    end
+  end
+
+  defp migrate! do
+    Process.put(:peer_stage, "migrate")
+
+    {:ok, versions, _} =
+      Ecto.Migrator.with_repo(Repo, fn repo ->
+        Ecto.Migrator.run(repo, :up, all: true)
+      end)
+
+    ensure!(versions != [])
+    no_ledger!()
+    %{action: "migrate", applied_migrations: length(versions)}
+  end
 
   defp validate_config!(config) when is_map(config) do
     extras =
       case config["action"] do
         "bootstrap" -> []
         "cleanup" -> []
+        "migrate" ->
+          ensure!(packaged?())
+          []
+
+        "tls_probe" ->
+          ensure!(packaged?())
+          ~w(probe_origin expected_tls_error)
+
         "worker" -> ["order_id"]
         "receipt" -> ~w(order_id phase handoff_token)
         _ -> raise ArgumentError, "invalid peer action"
@@ -139,20 +190,15 @@ defmodule ProcurementAcceptance.DispatchPeer do
     for key <- ~w(site pickup dropoff),
         do: ensure!(text?(config[key], if(key == "site", do: 120, else: 500)))
 
-    ensure!(is_binary(config["origin"]))
+    origin!(config["origin"], if(packaged?(), do: "https", else: "http"))
+    if packaged?(), do: certificate(config, "tls.crt")
 
-    %URI{
-      scheme: "http",
-      host: "127.0.0.1",
-      port: port,
-      path: path,
-      query: nil,
-      fragment: nil,
-      userinfo: nil
-    } = URI.parse(config["origin"])
+    if config["action"] == "tls_probe" do
+      origin!(config["probe_origin"], "https")
+      ensure!(config["expected_tls_error"] in ["unknown_ca", "hostname_check_failed"])
 
-    ensure!(port in 1..65_535 and path in [nil, ""])
-    ensure!(config["origin"] == "http://127.0.0.1:#{port}")
+      ensure!(config["probe_origin"] != config["origin"])
+    end
 
     if config["action"] in ["worker", "receipt"], do: ensure!(order_id?(config["order_id"]))
 
@@ -167,19 +213,77 @@ defmodule ProcurementAcceptance.DispatchPeer do
 
   defp validate_config!(_), do: raise(ArgumentError, "invalid peer configuration")
 
+  defp origin!(origin, scheme) do
+    %URI{scheme: ^scheme, host: "127.0.0.1", port: port} = URI.parse(origin)
+    ensure!(port in 1..65_535 and origin == "#{scheme}://127.0.0.1:#{port}")
+  end
+
   defp database_scope! do
-    url = System.get_env("DATABASE_URL")
-    ensure!(is_binary(url))
+    url = System.fetch_env!("DATABASE_URL")
     uri = URI.parse(url)
     ensure!(uri.scheme in ["ecto", "postgres", "postgresql"])
     ensure!(uri.host in ["localhost", "127.0.0.1", "::1"])
-    ensure!(uri.path == "/dispatch_test" and uri.port in [nil, 5432])
     ensure!(is_nil(uri.query) and is_nil(uri.fragment))
     config = Repo.config()
-    ensure!(config[:database] == "dispatch_test")
-    ensure!(config[:hostname] in ["localhost", "127.0.0.1", "::1"])
-    ensure!(config[:port] in [nil, 5432] and config[:pool] == Sandbox)
-    %{"host" => config[:hostname], "port" => config[:port] || 5432, "database" => "dispatch_test"}
+
+    if packaged?() do
+      ensure!(uri.host == "127.0.0.1" and uri.port in 1..65_535)
+      ensure!(Regex.match?(~r/\A\/dispatch_acceptance_[0-9a-f]{12}\z/, uri.path))
+    else
+      ensure!(uri.path == "/dispatch_test" and uri.port in [nil, 5432])
+    end
+
+    database = String.trim_leading(uri.path, "/")
+    ensure!(config[:database] == database and config[:pool] == Sandbox)
+
+    if packaged?() do
+      ensure!(config[:hostname] == uri.host and config[:port] == uri.port)
+    else
+      ensure!(config[:hostname] in ["localhost", "127.0.0.1", "::1"])
+      ensure!(config[:port] in [nil, 5432])
+    end
+    %{"host" => config[:hostname], "port" => config[:port] || 5432, "database" => database}
+  end
+
+  defp certificate(config, name) do
+    path = Path.join(Path.dirname(config["state_file"]), name)
+    private_file!(path, 16_384)
+    path
+  end
+
+  defp trust!(origin, ca_file) do
+    {:ok, %{default_pool_config: %{conn_opts: connection}}} =
+      Registry.meta(Dispatch.Finch, :config)
+
+    transport = Keyword.fetch!(connection, :transport_opts)
+    ensure!(Keyword.fetch!(transport, :verify) == :verify_peer)
+
+    connection = Keyword.put(connection, :transport_opts, Keyword.put(transport, :cacertfile, ca_file))
+    :ok = Finch.start_pool(Dispatch.Finch, Finch.Pool.new(origin), conn_opts: connection)
+  end
+
+  defp tls_probe(config, state) do
+    origin = config["probe_origin"]
+    expected = config["expected_tls_error"]
+    configure_route(%{config | "origin" => origin}, state)
+
+    if expected == "hostname_check_failed" do
+      trust!(origin, certificate(config, "wrong-tls.crt"))
+    end
+
+    {:ok, route} = RestaurantDelivery.configuration(:procurement)
+    {:error, %{reason: {:tls_alert, {alert, detail}}}} = RestaurantDelivery.work(route, "")
+
+    refusal =
+      case alert do
+        :unknown_ca -> "unknown_ca"
+        alert when alert in [:bad_certificate, :handshake_failure] ->
+          ensure!(to_string(detail) =~ "hostname_check_failed")
+          "hostname_check_failed"
+      end
+
+    ensure!(refusal == expected)
+    %{action: "tls_probe", tls_refusal: refusal}
   end
 
   defp scope(config, database) do
@@ -190,6 +294,14 @@ defmodule ProcurementAcceptance.DispatchPeer do
     config
     |> Map.take(@scope_fields)
     |> Map.merge(%{"database" => database, "seed_file_sha256" => fingerprint})
+    |> then(fn scope ->
+      if packaged?() do
+        digest = :crypto.hash(:sha256, File.read!(certificate(config, "tls.crt")))
+        Map.put(scope, "tls_ca_sha256", Base.encode16(digest, case: :lower))
+      else
+        scope
+      end
+    end)
   end
 
   defp bootstrap(config, scope) do
@@ -349,18 +461,14 @@ defmodule ProcurementAcceptance.DispatchPeer do
     snapshot = trip_snapshot!(config, state)
     page = login(world.user, world.driver)
 
-    response =
-      portal(
-        :post,
-        @portal_path,
-        %{
-          "_csrf_token" => csrf(page),
-          "assignment_id" => snapshot.assignment_id,
-          "phase" => config["phase"],
-          "handoff_token" => config["handoff_token"]
-        },
-        page
-      )
+    fields = %{
+      "assignment_id" => snapshot.assignment_id,
+      "phase" => config["phase"],
+      "handoff_token" => config["handoff_token"]
+    }
+
+    refusals = if packaged?(), do: courier_refusals!(fields, page), else: %{}
+    response = portal(:post, @portal_path, Map.put(fields, "_csrf_token", csrf(page)), page)
 
     ensure!(response.status in [200, 422])
     ensure!(response.status == 200 == String.contains?(response.resp_body, "Handoff recorded."))
@@ -369,6 +477,22 @@ defmodule ProcurementAcceptance.DispatchPeer do
     # Only offline inspection of the packaged business ledger establishes it.
     trip_snapshot!(config, state)
     |> Map.merge(%{action: "receipt", portal_status: response.status, phase: config["phase"]})
+    |> Map.merge(refusals)
+  end
+
+  defp courier_refusals!(fields, page) do
+    anonymous = portal(:get, @portal_path)
+    ensure!(anonymous.status == 302 and get_resp_header(anonymous, "location") == ["/login"])
+
+    try do
+      portal(:post, @portal_path, fields, page)
+      raise "missing CSRF token was admitted"
+    rescue
+      error in [Plug.Conn.WrapperError] ->
+        ensure!(match?(%Plug.CSRFProtection.InvalidCSRFTokenError{}, error.reason))
+    end
+
+    %{unauthenticated_denied: true, missing_csrf_denied: true}
   end
 
   defp trip_snapshot!(config, state) do
@@ -558,4 +682,5 @@ defmodule ProcurementAcceptance.DispatchPeer do
   end
 end
 
-ProcurementAcceptance.DispatchPeer.main(System.argv())
+input = System.get_env("DISPATCH_ACCEPTANCE_INPUT")
+ProcurementAcceptance.DispatchPeer.main(if input, do: [input], else: System.argv())

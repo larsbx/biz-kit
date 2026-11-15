@@ -2,6 +2,12 @@
 # Runs only against explicitly opted-in disposable loopback test databases.
 set -euo pipefail
 
+case "$#:${1:-}" in
+  0:) packaged_only=false ;;
+  1:--packaged-only) packaged_only=true ;;
+  *) echo "Usage: $0 [--packaged-only]" >&2; exit 2 ;;
+esac
+
 export MIX_ENV=test
 export PROCUREMENT_ENABLED=false
 export BIZKIT_BUNDLED_TEST_LOCALE=true
@@ -13,17 +19,29 @@ export PROCUREMENT_DISPATCH_AUTOMATED=false
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 revision=$(git -C "$root" rev-parse HEAD)
-receipts="$root/.artifacts/procurement-dispatch/$revision"
+gate=procurement-dispatch
+if "$packaged_only"; then
+  gate=procurement-dispatch-packaged
+  umask 077
+fi
+receipts="$root/.artifacts/$gate/$revision"
 mkdir -p "$receipts"
-# Even a rejected rerun must not leave an older success as its apparent result.
+if "$packaged_only"; then
+  command -v flock >/dev/null || { echo "Required tool missing: flock" >&2; exit 1; }
+  exec 9>"$receipts/run.lock"
+  flock -n 9 || { echo "Packaged acceptance is already running at $revision" >&2; exit 1; }
+fi
+# A failed preflight must clear any earlier success for this gate.
 rm -f "$receipts/result.json" "$receipts/packaged/receipt.json" \
-  "$receipts/procurement-release.tar.gz" "$receipts/artifact.sha256"
+  "$receipts/procurement-release.tar.gz" "$receipts/dispatch-acceptance-release.tar.gz" \
+  "$receipts/artifact.sha256"
 printf '%s\n' "$revision" > "$receipts/revision.txt"
-for tool in python3 elixir mix openssl createdb dropdb pg_dump pg_restore tar sha256sum; do
+for tool in python3 elixir mix rustc cargo openssl createdb dropdb pg_dump pg_restore tar sha256sum; do
   command -v "$tool" >/dev/null || { echo "Required tool missing: $tool" >&2; exit 1; }
 done
-python3 - <<'PY'
+python3 - "$packaged_only" <<'PY'
 import os
+import sys
 from urllib.parse import urlsplit
 
 if os.environ.get("PROCUREMENT_DISPATCH_ACCEPTANCE") != "disposable-local-postgres":
@@ -31,6 +49,13 @@ if os.environ.get("PROCUREMENT_DISPATCH_ACCEPTANCE") != "disposable-local-postgr
 loopback = {"localhost", "127.0.0.1", "::1"}
 if os.environ.get("EVENTSTORE_HOST", "localhost") not in loopback:
     raise SystemExit("The canonical ledger test database must be on loopback")
+if sys.argv[1] == "true":
+    if os.environ.get("EVENTSTORE_HOST", "127.0.0.1") != "127.0.0.1":
+        raise SystemExit("Packaged Dispatch acceptance requires IPv4 loopback PostgreSQL")
+    if not all(os.environ.get(name) for name in ("EVENTSTORE_USERNAME", "EVENTSTORE_PASSWORD")):
+        raise SystemExit("The disposable PostgreSQL role and password are required")
+    raise SystemExit(0)
+
 url = urlsplit(os.environ.get("DATABASE_URL", ""))
 if (url.scheme not in {"ecto", "postgres", "postgresql"} or url.hostname not in loopback
         or url.path != "/dispatch_test" or url.port not in {None, 5432}
@@ -46,7 +71,9 @@ paths=(apps config native mix.exs mix.lock tests/procurement_mvp \
 git -C "$root" diff --quiet HEAD -- "${paths[@]}"
 test -z "$(git -C "$root" ls-files --others --exclude-standard -- "${paths[@]}")"
 test -s "$root/tests/procurement_mvp/test_dispatch_release_controls.py"
-python3 -m unittest discover -s "$root/tests/procurement_mvp" -p test_dispatch_release_controls.py -v \
+control=test_dispatch_release_controls.py
+if "$packaged_only"; then control=test_packaged_dispatch_controls.py; fi
+python3 -m unittest discover -s "$root/tests/procurement_mvp" -p "$control" -v \
   2>&1 | tee "$receipts/runner-controls.log"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
@@ -65,24 +92,37 @@ cp -R "$root/native" "$stage/"
 printf '%s\n' "$revision" > "$stage/SOURCE_REVISION"
 printf '[inputs: []]\n' > "$stage/.formatter.exs"
 cd "$stage"
-{ elixir --version; python3 --version; pg_dump --version; pg_restore --version; openssl version; } \
+{ elixir --version; python3 --version; pg_dump --version; pg_restore --version; openssl version; rustc --version; } \
   > "$receipts/toolchain.txt"
 mix deps.get --check-locked 2>&1 | tee "$receipts/dependencies.log"
-mix compile --warnings-as-errors 2>&1 | tee "$receipts/compile.log"
+# Compile-time config reads these variables. Neither archive should retain the
+# runner's database credentials. Each release receives its own URL at runtime.
+without_database=(env -u DATABASE_URL -u EVENTSTORE_USERNAME -u EVENTSTORE_PASSWORD
+  -u EVENTSTORE_HOST -u EVENTSTORE_PORT -u MIX_TEST_PARTITION)
+if "$packaged_only"; then
+  cp "$root/config/dispatch_acceptance_runtime.exs" "$stage/config/"
+  "${without_database[@]}" mix release dispatch_acceptance 2>&1 | tee "$receipts/dispatch-release-build.log"
+  dispatch_release=_build/test/rel/dispatch_acceptance
+  mkdir "$dispatch_release/acceptance"
+  cp "$root/tests/procurement_mvp/dispatch_peer.exs" "$dispatch_release/acceptance/"
+  cp SOURCE_REVISION "$dispatch_release/"
+  tar -C _build/test/rel -czf "$receipts/dispatch-acceptance-release.tar.gz" dispatch_acceptance
+else
+  mix compile --warnings-as-errors 2>&1 | tee "$receipts/compile.log"
 
-# The existing alias recreates only coop_substrate_eventstore_test and verifies
-# #353's two-signer rejection against the actual appender before the worker run.
-(cd apps/coop_substrate; mix test test/procurement_test.exs test/procurement_dispatch_policy_test.exs --warnings-as-errors) \
-  2>&1 | tee "$receipts/signer-count.log"
-(cd apps/dispatch; mix ash.setup --quiet; mix test --include integration --warnings-as-errors) \
-  2>&1 | tee "$receipts/dispatch.log"
-(cd apps/dispatch; mix test \
-  --include integration --warnings-as-errors integration_test/procurement_delivery_test.exs) \
-  2>&1 | tee "$receipts/worker.log"
-(cd apps/dispatch; mix openapi.check; mix ash_postgres.generate_migrations --check) \
-  2>&1 | tee "$receipts/contracts.log"
+  # The existing alias recreates only coop_substrate_eventstore_test and verifies
+  # #353's two-signer rejection against the actual appender before the worker run.
+  (cd apps/coop_substrate; mix test test/procurement_test.exs test/procurement_dispatch_policy_test.exs --warnings-as-errors) \
+    2>&1 | tee "$receipts/signer-count.log"
+  (cd apps/dispatch; mix ash.setup --quiet; mix test --include integration --warnings-as-errors) \
+    2>&1 | tee "$receipts/dispatch.log"
+  (cd apps/dispatch; mix test \
+    --include integration --warnings-as-errors integration_test/procurement_delivery_test.exs) \
+    2>&1 | tee "$receipts/worker.log"
+  (cd apps/dispatch; mix openapi.check; mix ash_postgres.generate_migrations --check) \
+    2>&1 | tee "$receipts/contracts.log"
 
-python3 - "$receipts" "$revision" <<'PY'
+  python3 - "$receipts" "$revision" <<'PY'
 import hashlib
 import json
 import re
@@ -113,14 +153,26 @@ result = {
 }
 (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
 PY
+fi
 
-# Build only the procurement release. Dispatch stays a separately running source
-# process, with its test fixtures, and is not promoted to a packaged worker.
+# Both gates execute the same production-profile Procurement release.
 cp "$root/config/procurement_runtime.exs" "$stage/config/"
 MIX_ENV=prod mix deps.get --check-locked 2>&1 | tee "$receipts/release-dependencies.log"
-MIX_ENV=prod mix release procurement --overwrite 2>&1 | tee "$receipts/release-build.log"
+MIX_ENV=prod "${without_database[@]}" mix release procurement --overwrite 2>&1 | tee "$receipts/release-build.log"
 printf '%s\n' "$revision" > _build/prod/rel/procurement/SOURCE_REVISION
 tar -C _build/prod/rel -czf "$receipts/procurement-release.tar.gz" procurement
+if "$packaged_only"; then
+  (cd "$receipts"; sha256sum procurement-release.tar.gz dispatch-acceptance-release.tar.gz > artifact.sha256)
+  PROCUREMENT_RELEASE_ACCEPTANCE=disposable-local-postgres \
+    python3 "$root/tests/procurement_mvp/packaged_dispatch_acceptance.py" \
+      --procurement-archive "$receipts/procurement-release.tar.gz" \
+      --dispatch-archive "$receipts/dispatch-acceptance-release.tar.gz" \
+      --revision "$revision" --receipts "$receipts/packaged" \
+    2>&1 | tee "$receipts/packaged-acceptance.log"
+  test -s "$receipts/packaged/receipt.json"
+  exit 0
+fi
+
 sha256sum "$receipts/procurement-release.tar.gz" > "$receipts/artifact.sha256"
 
 # Both opt-ins apply only after the disposable database preflight above. The

@@ -148,6 +148,10 @@ def validate_receipt(value: dict, revision: str, artifact_sha256: str) -> None:
     release.validate_receipt({"kind": "procurement-packaged-acceptance-v1", "revision": value.get("revision"),
                               "artifact_sha256": value.get("artifact_sha256"), "trust": value.get("trust"),
                               "checks": value.get("host_checks")}, revision, artifact_sha256)
+    validate_dispatch_evidence(value, revision)
+
+
+def validate_dispatch_evidence(value: dict, revision: str) -> None:
     checks = value.get("dispatch_checks")
     release.require(isinstance(checks, dict) and set(checks) == CHECKS
                     and all(result is True for result in checks.values()),
@@ -195,10 +199,9 @@ class DispatchDelivery:
         private_json(self.input, dict(self.config, action=action, **fields))
         self.counter += 1
         log_path = self.harness.receipts / f"dispatch-{self.counter:02d}-{action}.log"
-        fixture = Path(__file__).with_name("dispatch_peer.exs").resolve()
         with log_path.open("w") as log:
-            child = subprocess.Popen(["mix", "run", "--no-start", "--no-compile", str(fixture), str(self.input)],
-                                     cwd=self.project, env=self.env, stdout=log, stderr=subprocess.STDOUT,
+            child = subprocess.Popen(self.peer_command(), cwd=self.project, env=self.env,
+                                     stdout=log, stderr=subprocess.STDOUT,
                                      start_new_session=True)
             try:
                 code = child.wait(timeout=120)
@@ -221,19 +224,30 @@ class DispatchDelivery:
         self.observations.append(dict(result, action=action))
         return result
 
+    def peer_command(self) -> list[str]:
+        fixture = Path(__file__).with_name("dispatch_peer.exs").resolve()
+        return ["mix", "run", "--no-start", "--no-compile", str(fixture), str(self.input)]
+
     def prepare(self):
         release.require((self.project / "mix.exs").is_file(), "Dispatch source project missing")
         marker = self.project.parents[1] / "SOURCE_REVISION"
         release.require(marker.read_text().strip() == self.revision, "staged Dispatch source revision mismatch")
+        self.prepare_identity()
+
+    def prepare_identity(self):
         release.require(not list((self.harness.root / "lib").glob("dispatch-[0-9]*")),
-                        "this gate expects a separate source Dispatch, not Dispatch inside procurement")
+                        "the Procurement archive must not contain Dispatch")
         self.checks["source_revision_bound"] = True
         self.seed.write_bytes(base64.b64encode(bytes.fromhex(self.harness.env["PROCUREMENT_FIXTURE_DISPATCH_SEED"])))
         self.seed.chmod(0o600)
+        self.prepare_database()
         self.identity = self.peer("bootstrap")
         for key in ("tenant_id", "courier_id", "service_role_id", "courier_role_id"):
             release.require(uuid_value(self.identity.get(key)), "invalid actual Dispatch fixture identity: " + key)
         self.harness.env["PROCUREMENT_FIXTURE_DISPATCH_TENANT"] = self.identity["tenant_id"]
+
+    def prepare_database(self):
+        """The source gate uses the disposable database migrated by its source setup."""
 
     def same_trip(self, result: dict, status: str):
         release.require(result.get("status") == status and result.get("load_count") == 1
@@ -344,8 +358,8 @@ class DispatchDelivery:
         self.restored = restored
         self.checks["restored_delivery_binding"] = True
 
-    def receipt(self, host: dict) -> dict:
-        result = {"kind": KIND, "execution_kind": EXECUTION, "revision": host["revision"],
+    def evidence(self, host: dict) -> dict:
+        return {"kind": KIND, "execution_kind": EXECUTION, "revision": host["revision"],
                   "artifact_sha256": host["artifact_sha256"], "trust": host["trust"],
                   "host_checks": host["checks"], "dispatch_checks": self.checks,
                   "packaged_dispatch_worker": False, "live_delivery": False, "transport": TRANSPORT,
@@ -359,6 +373,8 @@ class DispatchDelivery:
                   "scope": "synthetic identities; bundled procurement ERTS plus separate source Dispatch VMs; "
                            "actual service assignment and authenticated courier Router; no external IdP, "
                            "graphical courier, packaged Dispatch or deployment acceptance"}
+    def receipt(self, host: dict) -> dict:
+        result = self.evidence(host)
         validate_receipt(result, self.revision, host["artifact_sha256"])
         return result
 
@@ -381,7 +397,8 @@ def main():
     receipt_path.unlink(missing_ok=True)
     peer_env = peer_environment(dict(os.environ))
     result = release.acceptance(args.archive.resolve(), args.revision, destination,
-        delivery_factory=lambda harness: DispatchDelivery(harness, args.dispatch_project.resolve(), args.revision, peer_env))
+        delivery_factory=lambda harness, _origin: DispatchDelivery(
+            harness, args.dispatch_project.resolve(), args.revision, peer_env))
     result["log_sha256"] = {path.name: release.digest(path) for path in sorted(destination.glob("*.log"))}
     validate_receipt(result, args.revision, release.digest(args.archive.resolve()))
     receipt_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
