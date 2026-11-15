@@ -142,16 +142,19 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshotTest do
     assert result.sources[@usd].currency == "USD"
     assert result.sources[@eur].currency == "EUR"
     assert result.sources[@usd].revision == 1
+
     assert result.members[@alice] == %{
              key_id: ctx.alice.signer.key_id,
              pubkey: ctx.alice.signer.pubkey
            }
+
     assert result.members[@bob].pubkey == ctx.bob.signer.pubkey
 
     {:ok, source_core} = Envelope.signing_bytes(a)
 
     assert result.sources[@usd].original_signed_core_digest ==
              :crypto.hash(:sha256, source_core)
+
     assert :ok = Log.verify_chains()
     assert Log.head() == original_head
   end
@@ -191,7 +194,8 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshotTest do
     assert Log.gate().obligations[{@chapter, @eur}].open == true
   end
 
-  test "same-value substitute has distinct original IDs and cannot reuse the old source hash", ctx do
+  test "same-value substitute has distinct original IDs and cannot reuse the old source hash",
+       ctx do
     pair!(ctx)
     {:ok, before} = snapshot()
 
@@ -244,8 +248,10 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshotTest do
   test "same denomination, nonreciprocal and missing sources fail closed", ctx do
     pair!(ctx, "USD")
     assert {:error, :same_currency_use_original_setoff} = snapshot()
+
     assert {:error, :missing_or_closed_original_source} =
              Snapshot.snapshot(@chapter, {@usd, "https://missing.example/obligations/x"})
+
     assert {:error, :invalid_source_pair} = Snapshot.snapshot(@chapter, {@usd, @usd})
     assert {:error, :invalid_request} = Snapshot.snapshot("", {@usd, @eur})
   end
