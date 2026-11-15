@@ -76,6 +76,33 @@ machine. It uses a temporary home and stand-ins for PostgreSQL, systemd, curl
 and the release. It checks installer paths and permissions, repeat installs,
 missing-helper failure, and approval command sequencing and exit propagation.
 
+### Packaged release acceptance
+
+On a disposable Linux host with a systemd user manager, install the packaged
+development release with the installer above. Use a local PostgreSQL cluster
+and fresh synthetic keys, workspace and task records. Configure the workspace
+in `operations.json` before running the check. In the deployment env file set
+`BIZKIT_DEVELOPMENT_SIGN_IN=bootstrap=synthetic-bootstrap` and bind
+`biz-kit-development` / `synthetic-bootstrap` to a fresh synthetic principal.
+Restart the service to load those settings.
+
+With Node, Playwright and Chromium installed, run on that host from a directory
+where Node can resolve `playwright`:
+
+```sh
+bash deploy/papa-operations-dev/accept-packaged-bootstrap.sh --isolated-synthetic \
+  chapter-genesis synthetic-tenant synthetic-project synthetic-desk 'Synthetic task'
+```
+
+Use the IDs and task title from the fixture. The script checks the running
+unit, loopback socket and deployment database configuration, then uses the
+installed helper to inspect and sign the browser's synthetic request. It
+restarts the user service and checks that the browser still sees the workspace
+and task. Start with a fresh principal or restore the fixture before repeating
+a run that reached signed approval.
+
+### Manual browser check
+
 For browser acceptance, use an isolated development instance with fresh
 synthetic governance keys, identity and records. Verify the listener is on
 `127.0.0.1:4001` and the release uses the three dedicated databases. Before

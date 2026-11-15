@@ -64,7 +64,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex": "06eab3bc9af56b882f7a6936db47dbcd9738a47a",
+        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex": "d7f4c578847b0b99cd9bfd3909046fe76b010bfa",
         "apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex": "709c146ed4c824cd4d3ce027654d544843f780ad",
         "apps/agent_ops_store/test/coordinator_test.exs": "c7a03d7467ddc740c35631147851d3e33fd61630"
       }
@@ -249,7 +249,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "df9dc78c16bb737af6d121841dfc40e905992920",
+        "mix.exs": "61ae2370d901306cc1ef7e07dd158bee67112556",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -1075,7 +1075,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "apps/task_core/lib/task_core/admission.ex": "fde86025a69bae06969fcc1e6c27dd0ef13b5b9a",
+        "apps/task_core/lib/task_core/admission.ex": "77646f692247e70eebdfff341275c7e33c3b6c78",
         "apps/task_core/lib/task_core/agent_runs.ex": "e2cea02be4c1e7f2d28e829d1eb09c85e7b45844",
         "apps/task_core/test/agent_runs_test.exs": "74e16f5dc07bac66e82a9a72a6452560c09a7f19"
       }
@@ -1292,6 +1292,19 @@
         "apps/restaurant_core/test/admission_test.exs",
         "apps/restaurant_host/lib/restaurant_host/orders.ex",
         "apps/restaurant_host/test/device_grants_test.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "401d7aa03dc72db32c933b26ce556a260552807d",
+      "date": "2026-11-15",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex",
+        "apps/task_core/lib/task_core/admission.ex",
+        "mix.exs"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
