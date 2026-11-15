@@ -100,6 +100,48 @@ defmodule ProcurementHost.HTTPTest do
     assert work(RestaurantDeliveryWork.sign(%{scope | source: :restaurant}, "", signer.seed)).status == 403
   end
 
+  test "coordinator records a fixed reward, sourcing quote, closeout and external evidence", %{f: f} do
+    source = ProcurementFixture.event(f, "ProcurementBusinessEnrolledV1", %{
+      "cooperative_id" => "coop", "business_id" => "source", "active" => true,
+      "evidence_ref" => "source-enrollment", "expected_version" => 0
+    })
+    assert {:ok, [_]} = Log.append(source)
+    session = request(:get, "/requests", %{}, login())
+    commands = [
+      {"request", %{"buyer_business_id" => "buyer", "description" => "Replacement pump", "quantity" => "1",
+        "currency" => "USD", "needed_by_ms" => "2030-01-01T12:00", "consent_ref" => "buyer-consent"},
+        ~s(action="/requests/bounty-request/post_bounty")},
+      {"post_bounty", %{"reward_minor" => "5000", "maximum_total_minor" => "90000",
+        "terms_ref" => "private-bounty-terms"}, "Fixed reward: 5000 USD minor units"},
+      {"qualify", %{"evidence_ref" => "qualified"}, ~s(action="/requests/bounty-request/sourced_quote")},
+      {"sourced_quote", %{"quote_id" => "q", "merchant_business_id" => "merchant", "revision" => "1",
+        "total_minor" => "85000", "currency" => "USD", "expires_at_ms" => "2030-01-01T11:00",
+        "source_ref" => "supplier-quote", "sourcing_business_id" => "source", "sourcing_ref" => "attribution"},
+        "All-in including reward: 90000 USD minor units"},
+      {"accept", %{"quote_id" => "q", "revision" => "1", "buyer_business_id" => "buyer",
+        "evidence_ref" => "buyer-selected-quote"}, "Awarded, awaiting fulfillment"},
+      {"fulfill", %{"evidence_ref" => "item-delivered"}, "Awaiting closeout evidence"},
+      {"confirm_bounty", %{"evidence_ref" => "buyer-closeout"}, "Earned. Sourcing business: source"},
+      {"bounty_payment_evidence", %{"evidence_ref" => "accounts-payable-evidence"}, "External payment evidence recorded"}
+    ]
+
+    last = Enum.reduce(Enum.with_index(commands), session, fn {{action, attrs, expected}, version}, previous ->
+      params = Map.merge(attrs, %{"_csrf_token" => csrf(previous), "command_id" => "bounty-#{version}",
+        "expected_version" => to_string(version)})
+      result = request(:post, "/requests/bounty-request/" <> action, params, previous)
+      assert result.status == 303
+      detail = request(:get, "/requests/bounty-request", %{}, result)
+      assert detail.status == 200
+      assert detail.resp_body =~ expected
+      detail
+    end)
+
+    refute last.resp_body =~ ~s(action="/requests/bounty-request/bounty_payment_evidence")
+    assert {:ok, %{requests: [%{payment_evidence: [], bounty: %{award: %{
+      payment_ref: "accounts-payable-evidence"
+    }}}]}} = Procurement.snapshot(f.context)
+  end
+
   defp work(input) do
     c = conn(:post, "/api/procurement-dispatch/work", IO.iodata_to_binary(:json.encode(input)))
     c = Plug.Conn.put_req_header(c, "content-type", "application/json")

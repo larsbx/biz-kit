@@ -227,6 +227,73 @@ defmodule CoopSubstrate.ProcurementTest do
     assert row.phase in [:accepted, :cancelled]
   end
 
+  test "one sourcing award survives replay and a delivery receipt cannot earn twice", %{f: f} do
+    enroll_source = fn active, version ->
+      F.event(f, "ProcurementBusinessEnrolledV1", %{
+        "cooperative_id" => "coop", "business_id" => "source", "active" => active,
+        "evidence_ref" => "source-enrollment", "expected_version" => version
+      })
+    end
+    assert {:ok, [_]} = Log.append(enroll_source.(true, 0))
+
+    submit = fn request_id, action, version, attrs, id ->
+      Procurement.submit(f.context, request_id, F.command(action, version, attrs, id))
+    end
+    prepare = fn request_id ->
+      actions = [
+        {"request", F.request(f)},
+        {"post_bounty", %{"reward_minor" => 500, "maximum_total_minor" => 13000, "terms_ref" => "bounty-terms"}},
+        {"qualify", %{"evidence_ref" => "qualification"}},
+        {"sourced_quote", Map.merge(F.quote_attrs(f), %{
+          "sourcing_business_id" => "source", "sourcing_ref" => "private-attribution"
+        })},
+        {"sourced_quote", Map.merge(F.quote_attrs(f), %{
+          "quote_id" => "quote-2", "sourcing_business_id" => "source", "sourcing_ref" => "alternate-attribution"
+        })}
+      ]
+      for {{action, attrs}, version} <- Enum.with_index(actions) do
+        assert {:ok, _} = submit.(request_id, action, version, attrs, nil)
+      end
+    end
+    prepare.("wanted-1")
+
+    assert {:ok, [_]} = Log.append(enroll_source.(false, 1))
+    assert {:error, {:reject, 0, :business_not_enrolled}} =
+             submit.("wanted-1", "accept", 5, F.acceptance(), nil)
+    assert {:ok, [_]} = Log.append(enroll_source.(true, 2))
+
+    results =
+      ["quote-1", "quote-2"]
+      |> Enum.map(fn quote_id ->
+        Task.async(fn ->
+          submit.("wanted-1", "accept", 5, %{F.acceptance() | "quote_id" => quote_id}, quote_id)
+        end)
+      end)
+      |> Enum.map(&Task.await(&1, 10_000))
+    assert [{:error, {:reject, 0, :stale_version}}, {:ok, accepted}] = Enum.sort(results)
+    winner = accepted.payload["command"]["attrs"]["quote_id"]
+
+    assert {:ok, _} = submit.("wanted-1", "fulfill", 6, %{"evidence_ref" => "delivery-1"}, nil)
+    assert {:ok, confirmed} =
+             submit.("wanted-1", "confirm_bounty", 7, %{"evidence_ref" => "closeout-1"}, nil)
+    before = Procurement.state(Log.gate())
+    :ok = restart_log()
+    assert Procurement.state(Log.gate()) == before
+    assert {:ok, ^confirmed} =
+             submit.("wanted-1", "confirm_bounty", 7, %{"evidence_ref" => "closeout-1"}, nil)
+    assert {:ok, %{requests: [%{bounty: %{award: %{quote_id: ^winner, quote_revision: 1,
+             delivery_ref: "delivery-1", closeout_ref: "closeout-1"}}}]}} = Procurement.snapshot(f.context)
+
+    prepare.("wanted-2")
+    assert {:ok, _} = submit.("wanted-2", "accept", 5, F.acceptance(), nil)
+    assert {:ok, _} = submit.("wanted-2", "fulfill", 6, %{"evidence_ref" => "delivery-1"}, nil)
+    head = Log.head()
+    assert {:error, {:reject, 0, :bounty_evidence_already_used}} =
+             submit.("wanted-2", "confirm_bounty", 7, %{"evidence_ref" => "closeout-2"}, nil)
+    assert Log.head() == head
+    assert :ok = Log.verify_chains()
+  end
+
   test "old signed time cannot revive an expired quote or session", %{f: f} do
     :ok = F.quoted(f)
     {:ok, env} = Procurement.command(f.context, "request-1", F.command("accept", 3, F.acceptance()))

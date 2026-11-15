@@ -1,15 +1,21 @@
 defmodule ProcurementHost.HTML do
   @moduledoc false
+  alias CommerceCore.MerchantPilot.SourcingBounty
   alias CoopSubstrate.ULID
+  @quote_fields ~w(quote_id merchant_business_id revision total_minor currency expires_at_ms source_ref)
   @fields %{
     "request" => ~w(buyer_business_id description quantity currency needed_by_ms consent_ref),
     "qualify" => ~w(evidence_ref),
-    "quote" => ~w(quote_id merchant_business_id revision total_minor currency expires_at_ms source_ref),
+    "quote" => @quote_fields,
+    "sourced_quote" => @quote_fields ++ ~w(sourcing_business_id sourcing_ref),
+    "post_bounty" => ~w(reward_minor maximum_total_minor terms_ref),
+    "confirm_bounty" => ~w(evidence_ref),
+    "bounty_payment_evidence" => ~w(evidence_ref),
     "accept" => ~w(quote_id revision buyer_business_id evidence_ref),
     "fulfill" => ~w(evidence_ref), "cancel" => ~w(evidence_ref),
     "dispute" => ~w(evidence_ref), "payment_evidence" => ~w(evidence_ref)
   }
-  @integers ~w(quantity revision total_minor)
+  @integers ~w(quantity revision total_minor reward_minor maximum_total_minor)
   @dates ~w(needed_by_ms expires_at_ms)
 
   def escape(v) do
@@ -57,7 +63,7 @@ defmodule ProcurementHost.HTML do
       escape(inspect(r.request, pretty: true)) <> "</pre>"
     quotes = "<h2>Current merchant quote revisions</h2>" <> Enum.map_join(Enum.sort(r.quotes), fn {_id, q} ->
       "<section><p>#{escape(q.quote_id)} / revision #{q.revision}: #{q.total_minor} #{escape(q.currency)} minor units</p><pre>" <>
-      escape(inspect(q, pretty: true)) <> "</pre>" <>
+      escape(inspect(q, pretty: true)) <> "</pre>" <> bounty_total(r[:bounty], q) <>
       if(r.phase == :qualified,
         do: form(id, r.version, "accept", %{"quote_id" => q.quote_id, "revision" => q.revision,
           "buyer_business_id" => r.request.buyer_business_id}, businesses), else: "") <> "</section>"
@@ -77,12 +83,63 @@ defmodule ProcurementHost.HTML do
       :disputed -> ["payment_evidence"]
       _ -> []
     end
-    summary <> quotes <> frozen <> Enum.map_join(actions, &form(id, r.version, &1,
-      if(&1 == "quote", do: %{"currency" => r.request.currency}, else: %{}), businesses)) <>
+    summary <> bounty_summary(r) <> quotes <> frozen <>
+      Enum.map_join(actions ++ bounty_actions(r), &form(id, r.version, &1,
+        if(&1 in ["quote", "sourced_quote"], do: %{"currency" => r.request.currency}, else: %{}),
+        businesses)) <>
       "<h2>Evidence and command history</h2><pre>" <>
       escape(inspect(%{acceptance: r.acceptance_ref, outcome: r.outcome_ref,
         payment: r.payment_evidence, commands: r.receipts}, pretty: true, limit: :infinity)) <> "</pre>"
   end
+
+  defp bounty_total(%{} = terms, %{sourcing_business_id: _} = quote) do
+    "<p>Sourcing reward: #{terms.reward_minor}. All-in including reward: " <>
+      "#{SourcingBounty.all_in_total(terms, quote)} #{escape(quote.currency)} minor units.</p>"
+  end
+
+  defp bounty_total(_, _), do: ""
+
+  defp bounty_summary(%{bounty: terms} = row) do
+    currency = escape(row.request.currency)
+    "<section><h2>Sourcing bounty</h2><p>Fixed reward: #{terms.reward_minor} #{currency} minor units. " <>
+      "All-in cap: #{terms.maximum_total_minor} #{currency} minor units.</p>" <>
+      "<p>Terms reference: #{escape(terms.terms_ref)}</p>" <> bounty_status(terms.award, row.phase) <>
+      "</section>"
+  end
+
+  defp bounty_summary(_), do: ""
+
+  defp bounty_status(nil, _), do: "<p>No sourcing award recorded.</p>"
+
+  defp bounty_status(award, phase) do
+    status = cond do
+      phase == :disputed -> "Disputed"
+      phase == :cancelled -> "Cancelled"
+      award.payment_ref -> "External payment evidence recorded"
+      award.closeout_ref -> "Earned"
+      award.delivered_on_time -> "Awaiting closeout evidence"
+      award.delivery_ref -> "Delivery missed the bounty deadline"
+      true -> "Awarded, awaiting fulfillment"
+    end
+
+    "<p>#{status}. Sourcing business: #{escape(award.sourcing_business_id)}. " <>
+      "Quote: #{escape(award.quote_id)} / revision #{award.quote_revision}.</p>"
+  end
+
+  defp bounty_actions(%{phase: :qualified, bounty: _}), do: ["sourced_quote"]
+
+  defp bounty_actions(%{phase: :fulfilled, bounty: %{award: %{closeout_ref: closeout, payment_ref: nil}}})
+       when is_binary(closeout), do: ["bounty_payment_evidence"]
+
+  defp bounty_actions(%{phase: :fulfilled, bounty: %{award: %{delivered_on_time: true, closeout_ref: nil}}}),
+    do: ["confirm_bounty"]
+
+  defp bounty_actions(%{phase: phase, quotes: quotes} = row) when phase in [:requested, :qualified] do
+    if map_size(quotes) == 0 and not Map.has_key?(row, :bounty), do: ["post_bounty"], else: []
+  end
+
+  defp bounty_actions(_), do: []
+
   def dispatch(%{phase: :accepted, dispatch: %{site: site}, dispatch_phase: phase} = row, _, context) do
     id = elem(row.scope, 2)
     phase_label = escape(phase)
@@ -108,16 +165,34 @@ defmodule ProcurementHost.HTML do
   end
 
   def form(id, version, action, fixed, businesses) do
-    "<form method=\"post\" action=\"/requests/#{escape(id)}/#{escape(action)}\"><h3>#{escape(String.replace(action, "_", " "))}</h3>" <>
+    label = action_label(action)
+    "<form method=\"post\" action=\"/requests/#{escape(id)}/#{escape(action)}\"><h3>#{escape(label)}</h3>" <>
     csrf() <> hidden("command_id", ULID.generate()) <> hidden("expected_version", version) <>
+    bounty_instructions(action) <>
     Enum.map_join(@fields[action], fn name ->
       if Map.has_key?(fixed, name), do: hidden(name, fixed[name]), else: input(name, businesses)
-    end) <> "<button>Record #{escape(String.replace(action, "_", " "))}</button></form>"
+    end) <> "<button>Record #{escape(label)}</button></form>"
   end
+
+  defp action_label("post_bounty"), do: "sourcing bounty terms"
+  defp action_label("confirm_bounty"), do: "bounty closeout"
+  defp action_label(action), do: String.replace(action, "_", " ")
+
+  defp bounty_instructions("post_bounty"),
+    do: "<p>Enter the fixed reward and maximum buyer total including the reward, both in minor units.</p>"
+
+  defp bounty_instructions("sourced_quote"),
+    do: "<p>Enter the landed supplier quote with disclosed fees, before adding the sourcing reward.</p>"
+
+  defp bounty_instructions("confirm_bounty"),
+    do: "<p>Record buyer closeout evidence after the agreed return and dispute conditions are satisfied.</p>"
+
+  defp bounty_instructions(_), do: ""
+
   defp input(name, businesses) do
     label = escape(String.replace(name, "_", " "))
     field = cond do
-      name in ~w(buyer_business_id merchant_business_id) ->
+      name in ~w(buyer_business_id merchant_business_id sourcing_business_id) ->
         "<select name=\"#{name}\" required>" <> Enum.map_join(businesses,
           &"<option value=\"#{escape(&1)}\">#{escape(&1)}</option>") <> "</select>"
       name == "description" -> "<textarea name=\"description\" maxlength=\"2000\" required></textarea>"
