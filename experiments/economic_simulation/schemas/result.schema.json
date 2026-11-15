@@ -55,6 +55,9 @@
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
+        "model_source_scope": {
+          "type": "string"
+        },
         "python_version": {
           "type": "string"
         },
@@ -72,6 +75,7 @@
         "source_revision",
         "source_tree_dirty",
         "model_source_sha256",
+        "model_source_scope",
         "python_version",
         "randomness",
         "calibration"

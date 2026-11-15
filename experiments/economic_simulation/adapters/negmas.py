@@ -68,7 +68,12 @@ def run_negotiation(
         def propose(self, state, dest=None):
             price = self.price_at(state.step)
             events.append(
-                {"round": state.step + 1, "party": self.role, "kind": "offer", "price": price}
+                {
+                    "round": state.step + 1,
+                    "party": self.role,
+                    "kind": "offer",
+                    "price": price,
+                }
             )
             return (price,)
 
@@ -82,9 +87,7 @@ def run_negotiation(
             )
             threshold = self.price_at(state.step)
             accepted = valid and (
-                offer[0] <= threshold
-                if self.role == "buyer"
-                else offer[0] >= threshold
+                offer[0] <= threshold if self.role == "buyer" else offer[0] >= threshold
             )
             events.append(
                 {
@@ -128,7 +131,9 @@ def run_negotiation(
         raise RuntimeError(f"NegMAS negotiation failed: {state.error_details}")
     agreement = None if state.agreement is None else {"price": int(state.agreement[0])}
     if agreement is not None and not seller_floor <= agreement["price"] <= buyer_limit:
-        raise RuntimeError("NegMAS returned an agreement outside the parties' reservation prices")
+        raise RuntimeError(
+            "NegMAS returned an agreement outside the parties' reservation prices"
+        )
     rounds_executed = max((event["round"] for event in events), default=0)
     if rounds_executed > max_rounds:
         raise RuntimeError("NegMAS exceeded the configured round bound")
@@ -139,11 +144,15 @@ def run_negotiation(
         "adapter": "negmas_bilateral_price",
         "model_version": "1",
         "framework": {
-            "name": "negmas", "version": NEGMAS_VERSION, "license": "AGPL-3.0-or-later"
+            "name": "negmas",
+            "version": NEGMAS_VERSION,
+            "license": "AGPL-3.0-or-later",
         },
         "parameters": {
-            "seed": seed, "buyer_limit": buyer_limit,
-            "seller_floor": seller_floor, "max_rounds": max_rounds,
+            "seed": seed,
+            "buyer_limit": buyer_limit,
+            "seller_floor": seller_floor,
+            "max_rounds": max_rounds,
         },
         "status": "agreement" if agreement is not None else "no_agreement",
         "agreement": agreement,

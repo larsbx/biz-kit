@@ -16,7 +16,11 @@ def integer(name: str, value, minimum: int, maximum: int) -> int:
 
 
 def probability(name: str, value) -> float:
-    if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
+    if (
+        type(value) not in (int, float)
+        or not math.isfinite(value)
+        or not 0 <= value <= 1
+    ):
         raise ValueError(f"{name} must be a finite probability in [0, 1]")
     return float(value)
 

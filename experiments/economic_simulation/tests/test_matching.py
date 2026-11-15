@@ -55,7 +55,9 @@ class MatchingTests(unittest.TestCase):
                 seen.add(source)
         self.assertEqual(plan["matched_count"], len(seen))
 
-    def test_every_directed_graph_on_at_most_four_nodes_against_permutation_oracle(self):
+    def test_every_directed_graph_on_at_most_four_nodes_against_permutation_oracle(
+        self,
+    ):
         for size in range(5):
             nodes = [f"n{i}" for i in range(size)]
             possible = list(itertools.permutations(nodes, 2))
@@ -65,7 +67,9 @@ class MatchingTests(unittest.TestCase):
                 for maximum in (None, 2, 3, 4):
                     plan = pack_cycles(nodes, edges, max_cycle_length=maximum)
                     if plan["matched_count"] != expected[maximum]:
-                        self.fail(f"incorrect optimum: {nodes=}, {edges=}, {maximum=}, {plan=}")
+                        self.fail(
+                            f"incorrect optimum: {nodes=}, {edges=}, {maximum=}, {plan=}"
+                        )
                     self.assert_valid_plan(plan, nodes, edges, maximum)
 
     def test_unrestricted_five_and_six_party_cycles_are_not_capped_at_four(self):
@@ -97,7 +101,9 @@ class MatchingTests(unittest.TestCase):
                 shuffled_nodes, shuffled_edges = nodes.copy(), edges.copy()
                 generator.shuffle(shuffled_nodes)
                 generator.shuffle(shuffled_edges)
-                self.assertEqual(pack_cycles(shuffled_nodes, shuffled_edges, maximum), expected)
+                self.assertEqual(
+                    pack_cycles(shuffled_nodes, shuffled_edges, maximum), expected
+                )
 
     def test_budget_is_exact_reproducible_and_never_returns_partial_optimal(self):
         nodes = ["a", "b", "c", "d", "e"]
@@ -113,7 +119,9 @@ class MatchingTests(unittest.TestCase):
                 error = caught.exception
                 self.assertLessEqual(error.work_units, required - 1)
                 self.assertGreater(error.attempted_work_units, required - 1)
-                errors.append((error.stage, error.work_units, error.attempted_work_units))
+                errors.append(
+                    (error.stage, error.work_units, error.attempted_work_units)
+                )
             self.assertEqual(errors[0], errors[1])
 
     def test_no_fixed_node_limit_for_isolated_slots(self):
@@ -138,13 +146,27 @@ class MatchingTests(unittest.TestCase):
         self.assertEqual(result["cycles"], [nodes])
 
     def test_invalid_nodes_edges_and_duplicates_are_rejected(self):
-        cases = [("abc", []), (["a"], ()), (["a", "a"], []), ([""], []), ([" a"], []),
-                 (["a b"], []), (["a\nb"], []), (["a\x00b"], []), (["a\u200bb"], []),
-                 ([None], []), ([7], []), (["a"], [("a", "a")]), (["a"], [("a", "b")]),
-                 (["a", "b"], [("a", "b"), ("a", "b")]),
-                 (["a", "b"], [("a", "b"), ["a", "b"]]), (["a", "b"], ["ab"]),
-                 (["a", "b"], [("a",)]), (["a", "b"], [("a", "b", "a")]),
-                 (["a", "b"], [("a", [])])]
+        cases = [
+            ("abc", []),
+            (["a"], ()),
+            (["a", "a"], []),
+            ([""], []),
+            ([" a"], []),
+            (["a b"], []),
+            (["a\nb"], []),
+            (["a\x00b"], []),
+            (["a\u200bb"], []),
+            ([None], []),
+            ([7], []),
+            (["a"], [("a", "a")]),
+            (["a"], [("a", "b")]),
+            (["a", "b"], [("a", "b"), ("a", "b")]),
+            (["a", "b"], [("a", "b"), ["a", "b"]]),
+            (["a", "b"], ["ab"]),
+            (["a", "b"], [("a",)]),
+            (["a", "b"], [("a", "b", "a")]),
+            (["a", "b"], [("a", [])]),
+        ]
         for nodes, edges in cases:
             with self.subTest(nodes=nodes, edges=edges):
                 with self.assertRaises(InvalidGraphError):

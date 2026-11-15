@@ -23,8 +23,10 @@ class MatchingBudgetExceeded(RuntimeError):
         self.work_units = work_units
         self.attempted_work_units = attempted_work_units
         self.stage = stage
-        super().__init__(f"matching work budget {work_budget} exhausted at {stage} "
-                         f"({work_units} completed units; {attempted_work_units} required)")
+        super().__init__(
+            f"matching work budget {work_budget} exhausted at {stage} "
+            f"({work_units} completed units; {attempted_work_units} required)"
+        )
 
 
 @dataclass(slots=True)
@@ -45,9 +47,15 @@ def _validate_graph(nodes, edges, budget):
     seen = set()
     for node in nodes:
         budget.take("validate-node")
-        if not (isinstance(node, str) and node and node.isprintable()
-                and not any(character.isspace() for character in node)):
-            raise InvalidGraphError("node IDs must be nonempty printable tokens without whitespace")
+        if not (
+            isinstance(node, str)
+            and node
+            and node.isprintable()
+            and not any(character.isspace() for character in node)
+        ):
+            raise InvalidGraphError(
+                "node IDs must be nonempty printable tokens without whitespace"
+            )
         if node in seen:
             raise InvalidGraphError(f"duplicate node ID: {node!r}")
         seen.add(node)
@@ -69,7 +77,9 @@ def _validate_graph(nodes, edges, budget):
         pairs.add(pair)
     ordered = sorted(seen)
     index = {node: position for position, node in enumerate(ordered)}
-    return ordered, {(index[source], index[destination]) for source, destination in pairs}
+    return ordered, {
+        (index[source], index[destination]) for source, destination in pairs
+    }
 
 
 def _assignment_cycles(count, edges, budget):
@@ -101,8 +111,13 @@ def _assignment_cycles(count, edges, budget):
                 budget.take("assignment-relax")
                 if used[candidate]:
                     continue
-                cost = (1 if source == candidate else
-                        0 if (source - 1, candidate - 1) in edges else count + 1)
+                cost = (
+                    1
+                    if source == candidate
+                    else 0
+                    if (source - 1, candidate - 1) in edges
+                    else count + 1
+                )
                 slack = cost - row_potential[source] - column_potential[candidate]
                 if slack < minimum_slack[candidate]:
                     minimum_slack[candidate] = slack
@@ -145,7 +160,9 @@ def _assignment_cycles(count, edges, budget):
             path.append(current)
             current = destinations[current]
         if current != start:
-            raise RuntimeError("internal assignment error: assignment is not a permutation")
+            raise RuntimeError(
+                "internal assignment error: assignment is not a permutation"
+            )
         if len(path) > 1:
             cycles.append(tuple(path))
     return sorted(cycles)
@@ -177,7 +194,9 @@ def _bounded_cycles(count, edges, maximum, budget):
             next_neighbors[-1] += 1
             if destination == start and len(path) >= 2:
                 candidates.append(tuple(path))
-            elif destination > start and destination not in present and len(path) < limit:
+            elif (
+                destination > start and destination not in present and len(path) < limit
+            ):
                 path.append(destination)
                 present.add(destination)
                 next_neighbors.append(0)
@@ -241,9 +260,12 @@ def _bounded_cycles(count, edges, maximum, budget):
     return sorted(selected)
 
 
-def pack_cycles(nodes: list[str], edges: list[tuple[str, str]],
-                max_cycle_length: int | None = None,
-                work_budget: int = 250_000) -> dict:
+def pack_cycles(
+    nodes: list[str],
+    edges: list[tuple[str, str]],
+    max_cycle_length: int | None = None,
+    work_budget: int = 250_000,
+) -> dict:
     """Exactly maximize matched slot count; do not evaluate utility or delivery.
 
     IDs are unique printable tokens without whitespace; URI-style IDs work.
@@ -259,17 +281,27 @@ def pack_cycles(nodes: list[str], edges: list[tuple[str, str]],
     """
     if type(work_budget) is not int or work_budget <= 0:
         raise InvalidGraphError("work_budget must be a positive integer")
-    if max_cycle_length is not None and (type(max_cycle_length) is not int or max_cycle_length < 2):
+    if max_cycle_length is not None and (
+        type(max_cycle_length) is not int or max_cycle_length < 2
+    ):
         raise InvalidGraphError("max_cycle_length must be None or an integer >= 2")
     budget = _Budget(work_budget)
     ordered, indexed = _validate_graph(nodes, edges, budget)
-    algorithm = "hungarian_assignment" if max_cycle_length is None else "exhaustive_cycle_packing_dp"
+    algorithm = (
+        "hungarian_assignment"
+        if max_cycle_length is None
+        else "exhaustive_cycle_packing_dp"
+    )
     if not indexed:
         cycles = []
     elif max_cycle_length is None:
         cycles = _assignment_cycles(len(ordered), indexed, budget)
     else:
         cycles = _bounded_cycles(len(ordered), indexed, max_cycle_length, budget)
-    return {"cycles": [[ordered[node] for node in cycle] for cycle in cycles],
-            "matched_count": sum(map(len, cycles)), "status": "optimal",
-            "algorithm": algorithm, "work_units": budget.used}
+    return {
+        "cycles": [[ordered[node] for node in cycle] for cycle in cycles],
+        "matched_count": sum(map(len, cycles)),
+        "status": "optimal",
+        "algorithm": algorithm,
+        "work_units": budget.used,
+    }

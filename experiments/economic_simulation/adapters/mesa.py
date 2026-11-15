@@ -19,7 +19,9 @@ def run_mesa_demo(
     steps = integer("steps", steps, 1, 365)
     agents = integer("agents", agents, 0, 1000)
     response_probability = probability("response_probability", response_probability)
-    withdrawal_probability = probability("withdrawal_probability", withdrawal_probability)
+    withdrawal_probability = probability(
+        "withdrawal_probability", withdrawal_probability
+    )
     mesa = require_runtime("mesa", MESA_VERSION, "mesa")
 
     class Business(mesa.Agent):
@@ -59,9 +61,13 @@ def run_mesa_demo(
                 {
                     "step": self.day,
                     "eligible_at_start": eligible,
-                    "withdrawals": sum(event["kind"] == "withdrawn" for event in events),
+                    "withdrawals": sum(
+                        event["kind"] == "withdrawn" for event in events
+                    ),
                     "responses": sum(event["kind"] == "responded" for event in events),
-                    "no_response": sum(event["kind"] == "no_response" for event in events),
+                    "no_response": sum(
+                        event["kind"] == "no_response" for event in events
+                    ),
                     "active_at_end": len(self.agents),
                 }
             )

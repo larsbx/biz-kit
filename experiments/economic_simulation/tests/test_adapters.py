@@ -44,17 +44,27 @@ class AdapterValidationTests(unittest.TestCase):
             (run_negotiation, {"max_rounds": True}),
             (run_negotiation, {"max_rounds": 1001}),
         ]
-        with patch("importlib.metadata.version", side_effect=AssertionError("runtime loaded")):
+        with patch(
+            "importlib.metadata.version", side_effect=AssertionError("runtime loaded")
+        ):
             for function, parameters in cases:
                 with self.subTest(function=function.__name__, parameters=parameters):
                     with self.assertRaises(ValueError):
                         function(**parameters)
 
     def test_missing_runtime_has_actionable_install_message(self):
-        with patch("importlib.metadata.version", side_effect=importlib.metadata.PackageNotFoundError):
-            for function, extra in ((run_mesa_demo, "mesa"), (run_negotiation, "negmas")):
+        with patch(
+            "importlib.metadata.version",
+            side_effect=importlib.metadata.PackageNotFoundError,
+        ):
+            for function, extra in (
+                (run_mesa_demo, "mesa"),
+                (run_negotiation, "negmas"),
+            ):
                 with self.subTest(extra=extra):
-                    with self.assertRaisesRegex(AdapterDependencyError, f"--extra {extra}"):
+                    with self.assertRaisesRegex(
+                        AdapterDependencyError, f"--extra {extra}"
+                    ):
                         function()
 
     def test_unreviewed_runtime_version_rejected(self):
@@ -64,7 +74,9 @@ class AdapterValidationTests(unittest.TestCase):
                     function()
 
 
-@unittest.skipUnless(HAS_MESA, "Install the frozen mesa or research extra for real Mesa checks")
+@unittest.skipUnless(
+    HAS_MESA, "Install the frozen mesa or research extra for real Mesa checks"
+)
 class MesaAdapterTests(unittest.TestCase):
     def test_seeded_runs_are_identical_and_json_serializable(self):
         first = run_mesa_demo(seed=42)
@@ -75,18 +87,34 @@ class MesaAdapterTests(unittest.TestCase):
         self.assertFalse(first["evidence_boundary"]["response_is_qualified_quote"])
 
     def test_all_response_and_all_withdrawal_boundaries(self):
-        responses = run_mesa_demo(steps=3, agents=4, response_probability=1, withdrawal_probability=0)
-        self.assertEqual(responses["summary"], {"responses": 12, "withdrawals": 0, "active_at_end": 4})
-        withdrawals = run_mesa_demo(steps=3, agents=4, response_probability=1, withdrawal_probability=1)
-        self.assertEqual(withdrawals["summary"], {"responses": 0, "withdrawals": 4, "active_at_end": 0})
-        self.assertEqual([row["eligible_at_start"] for row in withdrawals["daily"]], [4, 0, 0])
+        responses = run_mesa_demo(
+            steps=3, agents=4, response_probability=1, withdrawal_probability=0
+        )
+        self.assertEqual(
+            responses["summary"],
+            {"responses": 12, "withdrawals": 0, "active_at_end": 4},
+        )
+        withdrawals = run_mesa_demo(
+            steps=3, agents=4, response_probability=1, withdrawal_probability=1
+        )
+        self.assertEqual(
+            withdrawals["summary"],
+            {"responses": 0, "withdrawals": 4, "active_at_end": 0},
+        )
+        self.assertEqual(
+            [row["eligible_at_start"] for row in withdrawals["daily"]], [4, 0, 0]
+        )
 
     def test_daily_participation_conservation(self):
-        result = run_mesa_demo(seed=19, steps=20, agents=30, withdrawal_probability=0.15)
+        result = run_mesa_demo(
+            seed=19, steps=20, agents=30, withdrawal_probability=0.15
+        )
         active = 30
         for day in result["daily"]:
             self.assertEqual(day["eligible_at_start"], active)
-            self.assertEqual(day["responses"] + day["no_response"] + day["withdrawals"], active)
+            self.assertEqual(
+                day["responses"] + day["no_response"] + day["withdrawals"], active
+            )
             active -= day["withdrawals"]
             self.assertEqual(day["active_at_end"], active)
         self.assertEqual(result["summary"]["active_at_end"], active)
@@ -100,7 +128,9 @@ class MesaAdapterTests(unittest.TestCase):
         self.assertEqual(result["summary"]["responses"], 0)
 
 
-@unittest.skipUnless(HAS_NEGMAS, "Install the frozen negmas or research extra for real NegMAS checks")
+@unittest.skipUnless(
+    HAS_NEGMAS, "Install the frozen negmas or research extra for real NegMAS checks"
+)
 class NegmasAdapterTests(unittest.TestCase):
     def test_seeded_runs_are_identical_and_json_serializable(self):
         first = run_negotiation(seed=42)
@@ -122,11 +152,15 @@ class NegmasAdapterTests(unittest.TestCase):
 
     def test_nonoverlapping_reservations_terminate_without_agreement(self):
         for rounds in (1, 2, 20):
-            result = run_negotiation(seed=7, buyer_limit=79, seller_floor=80, max_rounds=rounds)
+            result = run_negotiation(
+                seed=7, buyer_limit=79, seller_floor=80, max_rounds=rounds
+            )
             self.assertIsNone(result["agreement"])
             self.assertEqual(result["status"], "no_agreement")
             self.assertEqual(result["rounds_executed"], rounds)
-            self.assertEqual(result["termination_reason"], "incompatible_reservation_prices")
+            self.assertEqual(
+                result["termination_reason"], "incompatible_reservation_prices"
+            )
 
     def test_single_round_and_independence_from_unrelated_random_draws(self):
         before = random.getstate()
