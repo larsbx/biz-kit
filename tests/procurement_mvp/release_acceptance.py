@@ -9,6 +9,7 @@ approval. No receipt is written unless every required check completes.
 from __future__ import annotations
 
 import argparse
+import calendar
 from contextlib import ExitStack
 import hashlib
 import http.client
@@ -408,7 +409,12 @@ def lifecycle(browser: Browser, token: str, checks: dict, dispatch) -> tuple[str
     checks["obsolete_quote_denied"] = True
     current = Forms(browser.page(request_path)).one("/accept", suffix=True)
     browser.submit(current, {"evidence_ref": "synthetic-buyer-acceptance"})
-    outcome_ref = dispatch(request_path)
+    # Keep the complete original quote as independently supplied form input.
+    # A delivery adapter must preserve more than its revision and total.
+    accepted_quote = dict(quote, revision=2, total_minor=12500, currency="USD",
+                          source_ref="synthetic-quote-2",
+                          expires_at_ms=calendar.timegm(time.strptime(future, "%Y-%m-%dT%H:%M")) * 1000)
+    outcome_ref = dispatch(request_path, accepted_quote)
     page = browser.page(request_path)
     require("fulfilled" in page and "Frozen accepted quote" in page and "12500" in page,
             "fulfilled frozen quote absent")
@@ -422,7 +428,8 @@ def lifecycle(browser: Browser, token: str, checks: dict, dispatch) -> tuple[str
     return request_path, original, outcome_ref
 
 
-def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None, tls_pair=None) -> dict:
+def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None, tls_pair=None,
+               delivery_factory=None) -> dict:
     env = database_environment(dict(os.environ))
     for executable in ("createdb", "dropdb", "pg_dump", "pg_restore", "openssl"):
         require(shutil.which(executable) is not None, f"required tool unavailable: {executable}")
@@ -431,6 +438,8 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
     receipts.mkdir(parents=True, exist_ok=True)
     os.umask(0o077)
     require((desktop_deb is None) == (tls_pair is None), "native acceptance requires a package and a trusted TLS pair")
+    require(delivery_factory is None or desktop_deb is None,
+            "separate Dispatch acceptance does not claim graphical courier or Tauri coverage")
     with ExitStack() as stack:
         directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="bizkit-procurement-"))
         work = Path(directory)
@@ -452,10 +461,16 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
                    PROCUREMENT_FIXTURE_DISPATCH_SEED=secrets.token_hex(32))
         harness = Harness(root, work, receipts, env)
         tls = None
+        delivery = None
         try:
             harness.create_database(database)
             harness.run([harness.executable, "eval", "ProcurementHost.ReleaseTasks.migrate()"], label="migrate")
             checks["migration"] = True
+            if delivery_factory is not None:
+                delivery = delivery_factory(harness)
+                # The real Dispatch tenant must exist before the offline route
+                # enrollment. The host remains the only canonical appender.
+                delivery.prepare()
             seeded = harness.fixture("seed")
             if tls_pair is None:
                 certificate, key = work / "tls.crt", work / "tls.key"
@@ -475,7 +490,9 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
 
                 browser = stack.enter_context(packaged_browser(desktop_deb, origin, observations, work, receipts))
             path, retry, outcome_ref = lifecycle(
-                browser, token, checks, lambda path: dispatch_handoff(browser, path, harness, origin, certificate))
+                browser, token, checks,
+                (lambda path, quote: delivery.handoff(browser, path, quote)) if delivery is not None else
+                (lambda path, quote: dispatch_handoff(browser, path, harness, origin, certificate)))
             harness.stop()
             before = harness.fixture("inspect")
             expected = {"id": path.rsplit("/", 1)[1], "dispatch_phase": "delivered", "outcome_ref": outcome_ref,
@@ -485,6 +502,8 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
             # Five coordinator commands, one queue request and three Dispatch steps.
             require(before["global_seq"] == seeded["global_seq"] + 9,
                     "refusals or retries produced unexpected ledger writes")
+            if delivery is not None:
+                delivery.verify(before)
             checks["dispatch_handoff"] = True
             checks["exact_retry_inert"] = True
             harness.start()
@@ -512,6 +531,8 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
                          "--dbname=" + restored, str(backup)], label="restore")
             env.update(EVENTSTORE_DATABASE=restored, PROCUREMENT_DATA_DIR=str(work / "restored-data"))
             require(harness.fixture("inspect") == revoked, "restored head/hash/replayed records differ")
+            if delivery is not None:
+                delivery.verify_restored(revoked)
             checks["backup_restore_equal"] = True
             harness.start()
             denied = Forms(browser.page("/login")).one("/login")
@@ -527,11 +548,17 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
             if desktop_deb is not None:
                 receipt.update(kind="procurement-packaged-tauri-acceptance-v1", desktop=browser.identity,
                                scope="packaged Linux Tauri/WebKit and ERTS over synthetic loopback HTTPS/SQL")
+            if delivery is not None:
+                receipt = delivery.receipt(receipt)
         finally:
-            if tls is not None:
-                tls.shutdown()
-                tls.server_close()
-            harness.cleanup()
+            try:
+                if delivery is not None:
+                    delivery.cleanup()
+            finally:
+                if tls is not None:
+                    tls.shutdown()
+                    tls.server_close()
+                harness.cleanup()
     return receipt
 
 

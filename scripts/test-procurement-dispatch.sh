@@ -16,9 +16,10 @@ revision=$(git -C "$root" rev-parse HEAD)
 receipts="$root/.artifacts/procurement-dispatch/$revision"
 mkdir -p "$receipts"
 # Even a rejected rerun must not leave an older success as its apparent result.
-rm -f "$receipts/result.json"
+rm -f "$receipts/result.json" "$receipts/packaged/receipt.json" \
+  "$receipts/procurement-release.tar.gz" "$receipts/artifact.sha256"
 printf '%s\n' "$revision" > "$receipts/revision.txt"
-for tool in python3 elixir mix; do
+for tool in python3 elixir mix openssl createdb dropdb pg_dump pg_restore tar sha256sum; do
   command -v "$tool" >/dev/null || { echo "Required tool missing: $tool" >&2; exit 1; }
 done
 python3 - <<'PY'
@@ -40,9 +41,13 @@ if os.environ.get("MIX_TEST_PARTITION"):
 PY
 
 if [ -n "${SOURCE_REVISION:-}" ]; then test "$SOURCE_REVISION" = "$revision"; fi
-paths=(apps config native mix.exs mix.lock scripts/test-procurement-dispatch.sh .github/workflows/procurement-dispatch.yml)
+paths=(apps config native mix.exs mix.lock tests/procurement_mvp \
+  scripts/test-procurement-dispatch.sh .github/workflows/procurement-dispatch.yml)
 git -C "$root" diff --quiet HEAD -- "${paths[@]}"
 test -z "$(git -C "$root" ls-files --others --exclude-standard -- "${paths[@]}")"
+test -s "$root/tests/procurement_mvp/test_dispatch_release_controls.py"
+python3 -m unittest discover -s "$root/tests/procurement_mvp" -p test_dispatch_release_controls.py -v \
+  2>&1 | tee "$receipts/runner-controls.log"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
@@ -57,9 +62,11 @@ done
 cp "$root/config/config.exs" "$stage/config/"
 cp "$root/mix.exs" "$root/mix.lock" "$stage/"
 cp -R "$root/native" "$stage/"
+printf '%s\n' "$revision" > "$stage/SOURCE_REVISION"
 printf '[inputs: []]\n' > "$stage/.formatter.exs"
 cd "$stage"
-{ elixir --version; python3 --version; } > "$receipts/toolchain.txt"
+{ elixir --version; python3 --version; pg_dump --version; pg_restore --version; openssl version; } \
+  > "$receipts/toolchain.txt"
 mix deps.get --check-locked 2>&1 | tee "$receipts/dependencies.log"
 mix compile --warnings-as-errors 2>&1 | tee "$receipts/compile.log"
 
@@ -88,8 +95,11 @@ for name in ("signer-count.log", "dispatch.log", "worker.log"):
     if (not re.search(r"\b[1-9][0-9]* tests?, 0 failures\b", log)
             or re.search(r"\b[1-9][0-9]* invalid\b", log)):
         raise SystemExit(f"Missing nonempty passing test summary: {name}")
-logs = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-        for p in sorted(out.iterdir()) if p.is_file() and p.name != "result.json"}
+# Packaged execution has its own receipt. Never sweep a prior packaged build
+# or its logs into this source-worker result just because the directory exists.
+source_files = ("revision.txt", "toolchain.txt", "runner-controls.log", "dependencies.log",
+                "compile.log", "signer-count.log", "dispatch.log", "worker.log", "contracts.log")
+logs = {name: hashlib.sha256((out / name).read_bytes()).hexdigest() for name in source_files}
 result = {
     "revision": sys.argv[2],
     "execution_kind": "source-dispatch-worker-postgresql",
@@ -103,5 +113,26 @@ result = {
 }
 (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
 PY
-echo "Real Dispatch worker, assignment and courier-session acceptance: $receipts"
-echo "Synthetic fixture; packaged procurement HTTPS/Tauri checks remain separately reported."
+
+# Build only the procurement release. Dispatch stays a separately running source
+# process, with its test fixtures, and is not promoted to a packaged worker.
+cp "$root/config/procurement_runtime.exs" "$stage/config/"
+MIX_ENV=prod mix deps.get --check-locked 2>&1 | tee "$receipts/release-dependencies.log"
+MIX_ENV=prod mix release procurement --overwrite 2>&1 | tee "$receipts/release-build.log"
+printf '%s\n' "$revision" > _build/prod/rel/procurement/SOURCE_REVISION
+tar -C _build/prod/rel -czf "$receipts/procurement-release.tar.gz" procurement
+sha256sum "$receipts/procurement-release.tar.gz" > "$receipts/artifact.sha256"
+
+# Both opt-ins apply only after the disposable database preflight above. The
+# Python driver owns the packaged host process and its separate test databases.
+PROCUREMENT_RELEASE_ACCEPTANCE=disposable-local-postgres \
+PROCUREMENT_DISPATCH_ACCEPTANCE=disposable-local-postgres \
+python3 "$root/tests/procurement_mvp/dispatch_release_acceptance.py" \
+  --archive "$receipts/procurement-release.tar.gz" --revision "$revision" \
+  --receipts "$receipts/packaged" --dispatch-project "$stage/apps/dispatch" \
+  2>&1 | tee "$receipts/packaged-acceptance.log"
+test -s "$receipts/result.json"
+test -s "$receipts/packaged/receipt.json"
+echo "Source Dispatch worker acceptance: $receipts/result.json"
+echo "Packaged procurement with separate source Dispatch: $receipts/packaged/receipt.json"
+echo "Disposable fixture; packaged Dispatch and graphical courier acceptance remain separate."
