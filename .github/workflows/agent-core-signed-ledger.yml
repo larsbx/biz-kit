@@ -1,0 +1,121 @@
+name: AgentCore signed launch acceptance
+
+on:
+  pull_request:
+    paths:
+      - "apps/agent_core/**"
+      - "apps/agent_ops_store/**"
+      - "apps/task_core/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - "config/**"
+      - "mix.lock"
+      - ".github/workflows/agent-core-signed-ledger.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/agent_core/**"
+      - "apps/agent_ops_store/**"
+      - "apps/task_core/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - "config/**"
+      - "mix.lock"
+      - ".github/workflows/agent-core-signed-ledger.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-launch-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      AGENT_LAUNCH_STAGE: ${{ runner.temp }}/biz-kit-signed-agent-launch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record the actual source and prepare its isolated dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy"
+          git rev-parse HEAD > "$AGENT_LAUNCH_STAGE/source-revision.txt"
+          for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core \
+            agent_core agent_ops_store group_buy_core inventory_core federation_core federation_service \
+            commerce_core dispatch_core barter_core; do
+            cp -R "apps/$app" "$AGENT_LAUNCH_STAGE/apps/"
+          done
+          cp config/config.exs "$AGENT_LAUNCH_STAGE/config/config.exs"
+          cp mix.lock "$AGENT_LAUNCH_STAGE/mix.lock"
+          cp -R deploy/agent-core "$AGENT_LAUNCH_STAGE/deploy/"
+          cat > "$AGENT_LAUNCH_STAGE/mix.exs" <<'EOF'
+          defmodule SignedAgentLaunchHarness.MixProject do
+            use Mix.Project
+            def project, do: [apps_path: "apps", deps: []]
+          end
+          EOF
+          printf '[inputs: []]\n' > "$AGENT_LAUNCH_STAGE/.formatter.exs"
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile locked signed-launch dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          elixir --version
+          rustc --version
+          mix deps.get --check-locked
+          mix compile --warnings-as-errors
+      - name: Check launch-boundary and acceptance formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          mix format --check-formatted \
+            apps/task_core/lib/task_core/dispatcher.ex \
+            apps/task_core/test/dispatcher_test.exs \
+            apps/agent_ops_store/lib/agent_ops_store/coordinator.ex \
+            apps/agent_ops_store/lib/agent_ops_store/postgres.ex \
+            apps/agent_ops_store/test/postgres_test.exs \
+            apps/agent_ops_store/test/dispatch_integration_test.exs \
+            apps/coop_substrate/test/agent_event_acceptance_test.exs \
+            apps/coop_substrate/test/support/agent_staging_fixture.ex \
+            apps/coop_substrate/test/support/agent_staging_sql.ex
+      - name: Verify genuine signed authority, SQL fences and session recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
+          for seed in 1 9173; do
+            mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs \
+              --warnings-as-errors --trace --seed "$seed" \
+              | tee "$AGENT_LAUNCH_STAGE/signed-launch-$seed.log"
+          done
+      - name: Retain revision and complete acceptance logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentcore-signed-launch-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/source-revision.txt
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/signed-launch-*.log
+          if-no-files-found: error
