@@ -6,8 +6,9 @@ defmodule ResearchExchange.Server do
   """
   use GenServer
   alias ResearchExchange.Evidence, as: E
-  @core_revision "83954f1fbffbee1df5fb25e69ab3b34bc92346e8"
-  @core_source "b22af2eb8fa3c7822faf6fac0d1cadd5cd0f65698865007671a5af48f9f50564"
+  @core_snapshot_path Path.expand("../../CORE_SNAPSHOT.json", __DIR__)
+  @external_resource @core_snapshot_path
+  @core_snapshot @core_snapshot_path |> File.read!() |> :json.decode()
   @max_artifact 65_536
   @max_entries 128
 
@@ -23,7 +24,7 @@ defmodule ResearchExchange.Server do
 
   def revoke(pid, token_hash), do: GenServer.call(pid, {:revoke, token_hash})
   def job(pid, id, worker_key), do: GenServer.call(pid, {:job, id, worker_key})
-  def core, do: %{"revision" => @core_revision, "source_manifest_sha256" => @core_source}
+  def core, do: @core_snapshot
 
   @impl true
   def init(config) do

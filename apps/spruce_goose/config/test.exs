@@ -77,8 +77,6 @@ config :logger, level: :warning
 
 config :spruce_goose, Oban, testing: :manual
 
-
-
 config :spruce_goose, :start_outbox_dispatcher, false
 
 # The boot-time SOP adoption check is exercised directly in

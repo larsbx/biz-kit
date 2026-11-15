@@ -19,7 +19,11 @@ defmodule ResearchExchange.Evidence do
   def canonical(xs) when is_list(xs),
     do: IO.iodata_to_binary(["[", Enum.intersperse(Enum.map(xs, &canonical/1), ","), "]"])
 
-  def canonical(x) when is_binary(x) or is_integer(x) or is_boolean(x) or is_nil(x),
+  # OTP's JSON encoder treats Elixir nil as an ordinary atom (the string
+  # "nil"). Normalize JSON null explicitly rather than authenticating that text.
+  def canonical(nil), do: "null"
+
+  def canonical(x) when is_binary(x) or is_integer(x) or is_boolean(x),
     do: IO.iodata_to_binary(:json.encode(x))
 
   def hash(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)

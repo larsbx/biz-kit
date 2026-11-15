@@ -19,11 +19,24 @@ defmodule TaskHost.Web.AppController do
     "operations.html" => "text/html",
     "operations.js" => "text/javascript",
     "operations-view.js" => "text/javascript",
-    "operations.css" => "text/css"
+    "operations.css" => "text/css",
+    "knowledge.html" => "text/html",
+    "knowledge.js" => "text/javascript",
+    "knowledge-view.js" => "text/javascript",
+    "knowledge.css" => "text/css",
+    "project-knowledge.js" => "text/javascript",
+    "project-knowledge.css" => "text/css",
+    "layout.js" => "text/javascript",
+    "divider.js" => "text/javascript",
+    "tiles.js" => "text/javascript",
+    "tiles.css" => "text/css",
+    "operations-tiles.js" => "text/javascript",
+    "project-tiles.js" => "text/javascript"
   }
 
   def index(conn, _params), do: serve(conn, "index.html")
   def operations(conn, _params), do: serve(conn, "operations.html")
+  def knowledge(conn, _params), do: serve(conn, "knowledge.html")
 
   def file(conn, %{"file" => file}) when is_map_key(@files, file), do: serve(conn, file)
   def file(conn, _params), do: send_resp(conn, 404, "")

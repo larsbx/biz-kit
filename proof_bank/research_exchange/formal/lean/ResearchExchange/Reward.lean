@@ -10,7 +10,7 @@ structure Config where
   deriving DecidableEq, Repr
 
 inductive Phase where
-  | open | leased | submitted | accepted
+  | open | leased | submitted | accepted | rejected
   deriving DecidableEq, BEq, Repr
 
 structure State where
@@ -38,7 +38,8 @@ def participant (cfg : Config) (worker : Nat) : Prop :=
 instance (cfg : Config) (worker : Nat) : Decidable (participant cfg worker) :=
   inferInstanceAs (Decidable (worker = cfg.workerA ∨ worker = cfg.workerB))
 
-def tick (s : State) (delta : Nat) : State := { s with now := s.now + delta }
+def tick (s : State) (delta : Nat) : State :=
+  if s.phase = .rejected then s else { s with now := s.now + delta }
 
 def lease (cfg : Config) (s : State) (worker deadline : Nat) : State :=
   if participant cfg worker ∧ s.now < deadline ∧ s.candidate = none ∧
@@ -104,7 +105,7 @@ def safe (cfg : Config) (s : State) : Prop :=
 theorem candidate_immutable (cfg : Config) (s : State) (a : Action) (c : Candidate)
     (h : s.candidate = some c) : (step cfg s a).candidate = some c := by
   cases a with
-  | tick d => exact h
+  | tick d => simp only [step, tick]; split <;> exact h
   | lease w d => simp only [step, lease]; split <;> exact h
   | submit w g b artifact =>
     simp only [step, submit]
@@ -178,7 +179,7 @@ theorem accept_preserves_total (cfg : Config) (s : State) (t : Bool) (e : Candid
 theorem step_preserves_total (cfg : Config) (s : State) (a : Action) :
     total (step cfg s a) = total s := by
   cases a with
-  | tick d => rfl
+  | tick d => simp only [step, tick]; split <;> rfl
   | lease w d => simp only [step, lease]; split <;> rfl
   | submit w g b artifact => simp only [step, submit]; split <;> rfl
   | accept t e => exact accept_preserves_total cfg s t e
@@ -187,7 +188,7 @@ theorem step_preserves_safe (cfg : Config) (s : State) (a : Action)
     (hs : safe cfg s) : safe cfg (step cfg s a) := by
   rcases hs with ⟨hp, hv⟩
   cases a with
-  | tick d => exact ⟨hp, hv⟩
+  | tick d => simp only [step, tick]; split <;> exact ⟨hp, hv⟩
   | lease w d => simp only [step, lease]; split <;> exact ⟨hp, hv⟩
   | submit w g b artifact =>
     simp only [step, submit]
@@ -211,9 +212,11 @@ theorem step_preserves_safe (cfg : Config) (s : State) (a : Action)
 theorem acceptance_independent_of_clock (cfg : Config) (s : State) (d : Nat)
     (t : Bool) (e : Candidate) :
     accept cfg (tick s d) t e = tick (accept cfg s t e) d := by
-  unfold tick
-  unfold accept
-  split <;> rfl
+  by_cases hr : s.phase = .rejected
+  · simp [tick, accept, hr]
+  · simp only [tick, hr, ite_false]
+    unfold accept
+    split <;> simp
 
 /-- A valid timely submission remains accepted after arbitrary delay. -/
 theorem submitted_can_accept_after_delay (cfg : Config) (s : State)

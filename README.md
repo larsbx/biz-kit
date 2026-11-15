@@ -5,9 +5,9 @@ platform, with three release profiles: `biz_kit`, `orchestration` and `eatsbot`.
 The domain apps below were imported with their full history, so `git log` and
 `git blame` work under each directory: the first four with `git subtree`,
 eatsbot with `git filter-repo` (see below).
-The read-only `school_ops` curriculum app is a version-pinned content
-snapshot: it records its upstream commit rather than claiming a subtree history
-import.
+The read-only `school_ops` curriculum and `bizops_kb` business reference apps
+use version-pinned content snapshots: each records its upstream commit rather
+than claiming a subtree history import.
 
 | App | Path | Imported from | Role |
 | --- | --- | --- | --- |
@@ -45,6 +45,7 @@ Shared apps developed in this umbrella:
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
 | `school_ops` | `apps/school_ops` | School domain: K–12 curriculum catalog, lesson/assessment review, and TaskCore-based staff workflows |
+| `bizops_kb` | `apps/bizops_kb` | Read-only Johnny.Decimal business reference catalog, source verification, search and linked documents in Operations |
 
 Mix requires umbrella directory names to equal OTP application names, hence
 `coop_substrate`, `spruce_goose` and the `eatsbot_*` siblings. eatsbot's
@@ -54,8 +55,9 @@ commits that touched it keep their authors, dates and messages.
 
 Not included, by design: the Android, web and e2e clients of `d-patch`
 (separate clients of this backend); `agent-runtime-platform` (Python and
-Podman sandbox, reached through dispatch's Hermes adapter); `bizops-kb`
-(content, not code); `truck-shop` and `spruce` (optional, see below).
+Podman sandbox, reached through dispatch's Hermes adapter); `truck-shop` and
+`spruce` (optional, see below). `bizops-kb` remains the source authoring
+repository; its reviewed Markdown snapshot is included as reference content.
 
 ## Toolchain
 
@@ -86,6 +88,22 @@ mix compile
 
 dispatch's test database connects as the Postgres role `dispatch`; create it
 (`create role dispatch login superuser;`) on a fresh cluster.
+
+### Eatsbot delivery verification quickstart
+
+From the repository root, fetch the reviewed [delivery handoff PR #365](https://github.com/larsbx/biz-kit/pull/365) into your local object store. The runner tests the pinned commit by default and accepts an optional commit as its third argument.
+
+```bash
+git fetch origin refs/pull/365/head
+export BEAM_IMAGE='<your Elixir 1.19.0 / OTP 27.3.4 build image>'
+bash scripts/eatsbot-delivery-checks/run.sh . baseline
+bash scripts/eatsbot-delivery-checks/run.sh . launch
+bash scripts/eatsbot-delivery-checks/run.sh . quint
+```
+
+- `baseline` runs the order, fulfillment, restaurant, signed-ledger and host suites. `launch` probes checkout without a working Dispatch service and a pickup report received after cancellation. Expect `launch` to exit nonzero on the pinned revision because it reproduces the two launch blockers.
+- Both runtime modes require Docker, an image with Bash, Git, Elixir 1.19.0, OTP 27.3.4 and native build tools (including Rust/Cargo), and access to Mix dependency sources. They use disposable PostgreSQL 16 with no published port and synthetic orders and signing keys. Set `POSTGRES_IMAGE` to override `postgres:16`.
+- `quint` runs the checkout's formal coverage script. It requires Python 3, Quint and a working Apalache backend on the invoking machine.
 
 ### Historical import validation
 
@@ -169,6 +187,41 @@ project mappings with `TASK_HOST_OPERATIONS_CONFIG`; see
 and [example configuration](config/operations.example.json).
 This first increment reuses existing signed task actions. Assignment, recurring
 execution and purchasing additions remain later stages of the documented MVP.
+
+### Business knowledge inside Operations
+
+Open **Knowledge** from `/operations`, or visit `/operations/knowledge`, to
+browse the 216 imported business reference documents by Johnny.Decimal area
+and category. Search the text, follow internal links, and inspect each
+document's source revision. Access uses the existing Operations session and
+workspace gate.
+
+The catalog is a shared reference library. Importing a procedure does not
+approve it as an SOP, create a task, send a message, or run an agent. The
+**Office assistant onboarding** workflow preview adapts procedures `24.12` and
+`24.12d` into eight tasks with dependencies, completion criteria and exact
+source pins. Governance may explicitly adopt its reviewed manifest through the
+existing signed workflow controls; operator run creation remains a separate step.
+
+Source: `larsbx/bizops-kb` at
+`8749d8db1abd3145b22c6a27da2cc49a41c303fe`, including the revised October 30
+source-custody decision for the SpruceGoose migration. The import retains
+source bytes, stable IDs, and an offline Git commit/tree proof. For update and
+verification commands, see [the catalog README](apps/bizops_kb/README.md) and
+[the integration contract](docs/architecture/2026-11-14-bizops-kb-catalog.md).
+For source-bound workflow adoption, see
+[the workflow increment](docs/architecture/2026-11-14-bizops-kb-workflows.md).
+
+**Project knowledge** also populates automatically from completed tasks with
+accepted evidence and currently adopted workflows. Drafts enter a project
+review queue; an administrator's signed approval makes the exact reviewed
+revision eligible for suggestions beside Operations tasks and workflows.
+Rejections persist, changed sources require another review, and withdrawals
+remove suggestions. Workspace cards link to the queue and show its counts.
+Company-derived knowledge retains the project's access controls and is not
+published into the shared reference catalog. See
+[automatic population and approval](docs/architecture/2026-11-14-project-knowledge.md)
+for source eligibility, review semantics and API boundaries.
 
 [docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
 in what order, the remaining consolidation steps, and open questions.

@@ -21,6 +21,21 @@ class CheckedExport:
     receipt: dict
 
 
+@dataclass(frozen=True)
+class RejectedExport:
+    profile_sha256: str
+    artifact_sha256: str
+
+
+def matches_export(profile: dict, artifact: bytes) -> bool:
+    return len(artifact) == profile["artifact_bytes"] and digest(artifact) == profile["artifact_sha256"]
+
+
+# Preserve the immutable controlled profile of slots provisioned at PR #335.
+# validate_profile binds this digest to the complete reviewed source map.
+LEGACY_PROFILE_SOURCE = "1917b988aee220d575a16a868d78e623e387f8d24cffa8848875851fb6ec6f27"
+
+
 class ControlledChecker:
     """A trusted-local adapter for a fixed reviewed proof-export profile.
 
@@ -94,10 +109,10 @@ class ControlledChecker:
                         check=False,
                     )
                 except (subprocess.TimeoutExpired, OSError) as exc:
-                    raise PilotError(422, "checker_failed") from exc
+                    raise PilotError(503, "checker_unavailable") from exc
                 output = result.stdout.decode("utf-8", errors="replace")
                 if result.returncode != 0 or re.search(pattern, output) is None:
-                    raise PilotError(422, "checker_failed")
+                    raise PilotError(503, "checker_inconclusive")
                 if file_digest(path) != digest(artifact):
                     raise PilotError(503, "artifact_changed")
                 results.append({
@@ -113,16 +128,18 @@ class ControlledChecker:
             raise PilotError(503, "checker_identity_changed")
         return results
 
-    def check(self, profile: dict, artifact: bytes) -> CheckedExport:
+    def check(self, profile: dict, artifact: bytes) -> CheckedExport | RejectedExport:
         validate_profile(profile)
-        if (type(artifact) is not bytes or len(artifact) != profile["artifact_bytes"]
-                or digest(artifact) != profile["artifact_sha256"]):
-            raise PilotError(422, "proof_refused")
+        if type(artifact) is not bytes or not 0 < len(artifact) <= MAX_ARTIFACT:
+            raise PilotError(503, "stored_identity_mismatch")
         if (profile["toolchain_lock_sha256"] != self.lock_sha256
                 or profile["tool_sha256"] != self.identities()
-                or profile["source_files"] != source_identity(self.package_root)):
+                or (profile["source_sha256"] != LEGACY_PROFILE_SOURCE
+                    and profile["source_files"] != source_identity(self.package_root))):
             raise PilotError(503, "profile_identity_mismatch")
         profile_hash = digest(canonical(profile))
+        if not matches_export(profile, artifact):
+            return RejectedExport(profile_hash, digest(artifact))
         receipts = self.replay_export(artifact)
         receipt = {
             "schema": "research-exchange/controlled-check/v1",

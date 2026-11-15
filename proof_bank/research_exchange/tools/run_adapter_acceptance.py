@@ -13,6 +13,7 @@ import sys
 import time
 import unittest
 
+REQUIRED_TEST_COUNT = 27
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -50,11 +51,11 @@ def main() -> int:
     expected = suite.countTestCases()
     started = time.monotonic()
     result = unittest.TextTestRunner(verbosity=2, resultclass=RecordedResult).run(suite)
-    passed = (expected > 0 and result.testsRun == expected and result.wasSuccessful()
+    passed = (expected == REQUIRED_TEST_COUNT and result.testsRun == expected and result.wasSuccessful()
               and not result.skipped and not result.expectedFailures and not result.unexpectedSuccesses
               and len(result.records) == expected and all(r["status"] == "passed" for r in result.records))
     summary = {"schema": "research-exchange/adapter-acceptance/v1",
-               "status": "passed" if passed else "failed", "expected_tests": expected,
+               "status": "passed" if passed else "failed", "expected_tests": REQUIRED_TEST_COUNT,
                "tests_run": result.testsRun, "skipped": len(result.skipped), "cases": result.records,
                "finished_at": datetime.now(timezone.utc).isoformat(),
                "duration_seconds": time.monotonic() - started,

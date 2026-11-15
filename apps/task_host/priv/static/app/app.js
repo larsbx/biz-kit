@@ -1,3 +1,4 @@
+import { projectTiles } from "./project-tiles.js";
 // The minimal web view (docs/architecture/2026-10-18-decide.md): a project's
 // tasks and pending suggestions from the change feed; accept, edit then accept
 // (docs/architecture/2026-10-19-amend.md), or decline; each task's next
@@ -17,6 +18,10 @@
 
 import { decode, hex } from "./cbor.js";
 import * as device from "./device.js";
+import {
+  ProjectKnowledgeQueue, KnowledgeSuggestions, projectKnowledgePath,
+  knowledgeReviewCommand, knowledgeReviewRequest,
+} from "./project-knowledge.js";
 import {
   applyFrame,
   base64url,
@@ -78,6 +83,34 @@ let governing = false;
 let deciding = false;
 let focusedTask = false;
 
+const knowledgeSuggestions = new KnowledgeSuggestions({ principal: () => me, provider: params.get("provider") || "workos" });
+let knowledgeQueue = null;
+try {
+  if (scope.every(Boolean)) knowledgeQueue = new ProjectKnowledgeQueue({
+    container: $("project-knowledge"), scope, principal: () => me,
+    canReview: () => !!pair && governing && !deciding,
+    decide: reviewKnowledge, selectedId: params.get("knowledge"), status: params.get("knowledge_status") || "pending",
+  });
+} catch { $("project-knowledge").textContent = "Choose a valid project to read its knowledge."; }
+
+async function reviewKnowledge(candidate, decision, reason) {
+  const expected = knowledgeReviewCommand(scope, candidate, decision, reason);
+  const path = `${projectKnowledgePath(scope)}/${encodeURIComponent(candidate.id)}/reviews`;
+  const result = await signAndSubmit(
+    () => governed("POST", path, knowledgeReviewRequest(expected, keyId)),
+    expected,
+    (prepared) => `${path}/${encodeURIComponent(prepared.id)}`,
+  );
+  if (result) knowledgeSuggestions.refreshOpen();
+  return result;
+}
+
+function refreshProjectKnowledge() {
+  if (!me || document.hidden) return;
+  knowledgeQueue?.refresh();
+  knowledgeSuggestions.refreshOpen();
+}
+
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   Object.assign(node, attrs);
@@ -104,6 +137,7 @@ async function postJSON(path, body) {
 // -- rendering ---------------------------------------------------------------------
 
 function render() {
+  knowledgeSuggestions.beginRender();
   const tasks = Object.entries(view.tasks).sort(([a], [b]) => a.localeCompare(b));
   $("tasks").replaceChildren(
     ...(tasks.length
@@ -126,6 +160,7 @@ function render() {
             todoControls(id, t),
             stepControl(id, t),
             otherControls(id, t),
+            knowledgeSuggestions.disclosure(scope, { task_id: id }),
           ),
         )
       : [el("p", { className: "muted", textContent: "None yet." })]),
@@ -144,6 +179,8 @@ function render() {
   renderDelegations();
   renderHistory();
   renderDevices();
+  knowledgeSuggestions.endRender();
+  knowledgeQueue?.render();
 
   // The Operations read view opens this existing signed action surface.
   // The query selects a card, never an action, key, or authorization grant.
@@ -151,6 +188,7 @@ function render() {
   if (!focusedTask && requested && Object.hasOwn(view.tasks, requested)) {
     const target = document.getElementById(`task-${requested}`);
     if (target) {
+      projectTiles.reveal(target);
       focusedTask = true;
       target.scrollIntoView({ block: "center" });
       target.focus({ preventScroll: true });
@@ -309,6 +347,7 @@ function renderWorkflows() {
         ...runs(view)
           .filter((r) => r.blueprint.roadmap_key === w.roadmap_key && r.blueprint.workflow_id === w.workflow_id)
           .map(runRow),
+        knowledgeSuggestions.disclosure(scope, { roadmap_key: w.roadmap_key, workflow_id: w.workflow_id }),
       );
     }),
   );
@@ -1298,6 +1337,7 @@ async function start() {
   }
   me = (await signedIn.json()).principal;
   $("who").textContent = `Signed in as ${me}`;
+  refreshProjectKnowledge();
 
   try {
     pair = await device.load();
@@ -1337,6 +1377,7 @@ function follow() {
     backoff = 1000;
     render();
     if (keyId && changedKinds(frame).has("devices")) enrolment();
+    refreshProjectKnowledge();
   });
   feed.onopen = () => {
     live = true;
@@ -1349,6 +1390,8 @@ function follow() {
     live = false;
     view = emptyView();
     cursor = 0;
+    knowledgeQueue?.clear("Your project access ended. Reconnect to read knowledge.");
+    knowledgeSuggestions.clear("Your project access ended. Reconnect to read knowledge.");
     render();
     if (keyId) enrolment();
     status("No access to this project's feed yet; retrying…", true);
@@ -1366,5 +1409,21 @@ function follow() {
     lost();
   };
 }
+
+let knowledgePoll = setInterval(refreshProjectKnowledge, 30_000);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    knowledgeQueue?.clear(); knowledgeSuggestions.clear();
+  } else { render(); refreshProjectKnowledge(); }
+});
+window.addEventListener("pagehide", () => {
+  clearInterval(knowledgePoll); knowledgeQueue?.clear(); knowledgeSuggestions.clear();
+});
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    clearInterval(knowledgePoll); knowledgePoll = setInterval(refreshProjectKnowledge, 30_000);
+    render(); refreshProjectKnowledge();
+  }
+});
 
 start();

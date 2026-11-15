@@ -63,6 +63,19 @@
     "ResearchExchange.Adapter.reachable_settlement_consistency",
     "ResearchExchange.Adapter.reachable_conservation",
     "ResearchExchange.Adapter.reachable_at_most_one_payout",
-    "ResearchExchange.Adapter.reachable_settlement_immutable"
+    "ResearchExchange.Adapter.reachable_settlement_immutable",
+    "ResearchExchange.Closure.rejection_iff",
+    "ResearchExchange.Closure.refund_effect",
+    "ResearchExchange.Closure.candidate_immutable",
+    "ResearchExchange.Closure.conservation",
+    "ResearchExchange.Closure.terminal_inertia",
+    "ResearchExchange.Closure.rejected_reward_is_inert",
+    "ResearchExchange.Closure.unavailable_is_inert",
+    "ResearchExchange.Closure.revoked_cannot_refund",
+    "ResearchExchange.Closure.stale_cannot_refund",
+    "ResearchExchange.Closure.rejection_retry_after_crash",
+    "ResearchExchange.Closure.reachable_conservation_and_history",
+    "ResearchExchange.Closure.reachable_rejection_inertia",
+    "ResearchExchange.Closure.exactly_one_refund_no_payout_on_rejected_suffix"
   ]
 }

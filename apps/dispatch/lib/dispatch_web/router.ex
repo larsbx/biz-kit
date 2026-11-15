@@ -179,6 +179,8 @@ defmodule DispatchWeb.Router do
     get "/operations", PortalController, :operations
     get "/operations/map", FleetMapController, :index
     get "/operations/loads/:load_id", OperationsLoadController, :show
+    get "/ui/restaurant-receipts", RestaurantReceiptController, :form
+    post "/ui/restaurant-receipts", RestaurantReceiptController, :submit
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     post "/partner/stops/:stop_id/readiness-events", PartnerActionController, :readiness
     post "/partner/stops/:stop_id/document-references", PartnerActionController, :document

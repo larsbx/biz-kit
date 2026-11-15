@@ -1,5 +1,6 @@
 import unittest
 import hashlib
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from importlib.util import module_from_spec, spec_from_file_location
@@ -35,6 +36,41 @@ class AuditTest(unittest.TestCase):
                 **data, "records": [dict(base,id="foo",evidence_git_blobs={"apps/foo/mix.exs":"0"*40}),data["records"][1]]
             })))
             self.assertIn("missing/unsafe", str(module.audit(root, {**data, "records": [dict(base,id="foo", observed_code_paths=["../secret"]), data["records"][1]]})))
+
+class ScfInventoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = source.parents[1]
+        catalog = cls.root / "proof_bank/characterizations/v1/catalog.json"
+        cls.data = json.loads(catalog.read_text(encoding="utf-8"))
+
+    def test_missing_scf_core_record_fails_real_inventory_audit(self):
+        self.assertEqual([], module.audit(self.root, self.data))
+        records = [record for record in self.data["records"] if record["id"] != "scf_core"]
+        self.assertEqual(
+            ["app drift: missing=['scf_core'], extra=[]"],
+            module.audit(self.root, {**self.data, "records": records}),
+        )
+
+    def test_fabricated_scf_core_statuses_fail_independently(self):
+        fabricated = {
+            "review_status": "approved",
+            "test_result": "passed",
+            "implementation_conformance": "verified",
+            "proof_status": "proven",
+            "runtime_conformance": "verified",
+        }
+        for field, value in fabricated.items():
+            with self.subTest(field=field):
+                records = [
+                    {**record, field: value} if record["id"] == "scf_core" else record
+                    for record in self.data["records"]
+                ]
+                self.assertEqual(
+                    [f"scf_core: invalid status {field}"],
+                    module.audit(self.root, {**self.data, "records": records}),
+                )
+
 
 class RefreshTest(unittest.TestCase):
     def setUp(self):

@@ -39,6 +39,8 @@ defmodule RestaurantHost.World do
       merchant: "shop",
       currency: :USD,
       jurisdiction: "US-MI",
+      delivery_enabled: Keyword.get(opts, :delivery_enabled, false),
+      delivery_site: opts[:delivery_site],
       menu: [
         %{id: "margherita", name: "Margherita", sku: "MARG", price_minor: 1250},
         %{id: "pepperoni", name: "Pepperoni", sku: "PEPP", price_minor: 1400}

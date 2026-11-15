@@ -12,3 +12,8 @@ end
 # Keep Dispatch and TaskHost credentials out of Phoenix request logs. Phoenix
 # matches substrings, so "code" also covers "code_verifier".
 config :phoenix, :filter_parameters, ~w(password token authorization secret code state signature)
+
+# Narrow ledger and Dispatch jobs do not carry the legacy Eatsbot locale cache.
+if config_env() == :test and System.get_env("BIZKIT_BUNDLED_TEST_LOCALE") == "true" do
+  config :localize, otp_app: :localize
+end

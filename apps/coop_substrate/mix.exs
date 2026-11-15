@@ -40,6 +40,8 @@ defmodule CoopSubstrate.MixProject do
       # Cross-boundary signed replay acceptance; no production dependency.
       {:agent_ops_store, in_umbrella: true, only: :test},
       {:commerce_core, in_umbrella: true, only: :test, runtime: false},
+      # Inert cross-currency provenance acceptance; no production dependency.
+      {:barter_core, in_umbrella: true, only: :test, runtime: false},
       {:federation_service, in_umbrella: true, only: :test},
       {:group_buy_core, in_umbrella: true},
       {:inventory_core, in_umbrella: true},
