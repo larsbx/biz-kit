@@ -468,6 +468,20 @@ if task_host_released? do
         end
     end
 
+  # No bridge routes respond until all OAuth resource settings are present.
+  config :task_host, :plugin_bridge, %{
+    resource: System.get_env("BIZKIT_PLUGIN_MCP_RESOURCE"),
+    issuer: System.get_env("BIZKIT_PLUGIN_OAUTH_ISSUER"),
+    introspection_url: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_URL"),
+    client_id: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_CLIENT_ID"),
+    client_secret: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_CLIENT_SECRET"),
+    workspace_ids:
+      "BIZKIT_PLUGIN_WORKSPACE_IDS"
+      |> System.get_env("")
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+  }
+
   config :task_host,
     operations: operations,
     keel_review_manifest: System.get_env("TASK_HOST_KEEL_REVIEW_MANIFEST")

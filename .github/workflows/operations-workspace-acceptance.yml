@@ -87,6 +87,13 @@ jobs:
         run: >-
           mix format --check-formatted
           lib/task_host/operations.ex
+          lib/task_host/plugin_bridge/auth.ex
+          lib/task_host/plugin_bridge/tools.ex
+          lib/task_host/web/endpoint.ex
+          lib/task_host/web/plugin_bridge.ex
+          test/support/plugin_bridge_fixtures.ex
+          test/task_host/web/plugin_bridge_test.exs
+          test/task_host/web/execution_test.exs
           lib/task_host/project_knowledge_suggestions.ex
           lib/task_host/infrastructure_review.ex
           lib/task_host/web/infrastructure_review_controller.ex
@@ -128,6 +135,8 @@ jobs:
           test/task_host/local_git_blueprint_verifier_test.exs
           test/task_host/web/blueprint_test.exs
           test/task_host/web/run_readiness_test.exs
+          test/task_host/web/plugin_bridge_test.exs
+          test/task_host/web/execution_test.exs
       - uses: actions/setup-node@v4
         with:
           node-version: 22
