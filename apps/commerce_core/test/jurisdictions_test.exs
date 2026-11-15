@@ -43,7 +43,12 @@ defmodule CommerceCore.Tax.JurisdictionsTest do
 
   test "Treasury's penny-notice example: $3.39 → $0.20, and the half-cent boundary" do
     {:ok, mi} = Jurisdictions.profile("US-MI")
-    tax = fn cents -> {:ok, t} = Tax.flat(:USD, mi, [m(cents)], m(0)); minor(t.total) end
+
+    tax = fn cents ->
+      {:ok, t} = Tax.flat(:USD, mi, [m(cents)], m(0))
+      minor(t.total)
+    end
+
     # $3.39 × 6% = $0.2034 → third decimal 3 → $0.20.
     assert tax.(339) == 20
     # $0.75 × 6% = $0.045 → 5 → up to $0.05; $0.74 × 6% = $0.0444 → 4 → $0.04.

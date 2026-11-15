@@ -6,6 +6,7 @@ on:
       - 'apps/task_core/**'
       - 'apps/order_core/**'
       - 'apps/commerce_core/**'
+      - 'tools/merchant_pilot/**'
       - 'apps/restaurant_core/**'
       - 'apps/inventory_core/**'
       - 'apps/fulfillment_core/**'
@@ -44,9 +45,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/business-core-vendor"
           cp -R "apps/${{ matrix.app }}" "$RUNNER_TEMP/business-core-vendor/${{ matrix.app }}"
           # In-umbrella sibling dependencies resolve as ../<app> outside it too.
-          for sibling in order_core restaurant_core; do
+          for sibling in order_core restaurant_core fulfillment_core; do
             [ -d "$RUNNER_TEMP/business-core-vendor/$sibling" ] || cp -R "apps/$sibling" "$RUNNER_TEMP/business-core-vendor/"
           done
+          # CommerceCore's merchant pilot tests read the pilot tool's shared
+          # fixtures at ../../../tools/merchant_pilot from its test directory,
+          # which is $RUNNER_TEMP/tools/merchant_pilot once the package is copied.
+          if [ "${{ matrix.app }}" = commerce_core ]; then
+            mkdir -p "$RUNNER_TEMP/tools"
+            cp -R tools/merchant_pilot "$RUNNER_TEMP/tools/"
+          fi
       - name: Resolve the package's own dependencies and compile
         shell: bash
         run: |

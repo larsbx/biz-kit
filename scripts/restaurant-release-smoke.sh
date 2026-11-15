@@ -64,6 +64,19 @@ for device in storefront board-1; do
     "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.grant([\"$device\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"
 done
 
+cat > "$work/menu.json" <<JSON
+{
+  "merchant_id": "shop",
+  "expected_revision": 0,
+  "currency": "USD",
+  "items": [{"id": "margherita", "name": "Margherita special", "sku": "MARG",
+             "price_minor": 1250, "discount_minor": 250}]
+}
+JSON
+HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
+  "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.manage([\"publish-menu\", \"$work/menu.json\", \"--chapter\", \"$chapter\", \"--server\", \"$url\"])"
+curl -fs "$url/" | grep -q "Margherita special"
+
 out=$("$release" rpc "Code.eval_file(\"$PWD/scripts/restaurant_release_smoke.exs\")")
 echo "$out"
 grep -q "^SMOKE OK" <<<"$out"

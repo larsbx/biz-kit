@@ -1,5 +1,5 @@
 defmodule SpruceGoose.Workflows do
-  use Ash.Domain, extensions: [AshAi]
+  use Ash.Domain
 
   # `:when_requested` rather than Ash's `:by_default`. Every write reaches these
   # resources through `SpruceGoose.Authz`, which always passes `authorize?: true`
@@ -8,21 +8,6 @@ defmodule SpruceGoose.Workflows do
   # in the suite working without rewriting each one to opt out.
   authorization do
     authorize(:when_requested)
-  end
-
-  # Read-only MCP tool surface.
-  #
-  # SpruceGoose is the authoritative task substrate, so the MCP server
-  # deliberately exposes only `:read` actions. Lifecycle transitions
-  # (propose/queue/ready/start/done/cancel) stay behind the governed CLI
-  # where SOP-gate enforcement and evidence linking live. Widening this
-  # surface to mutating actions is a separate security decision.
-  tools do
-    tool(:list_tasks, SpruceGoose.Workflows.Task, :read)
-    tool(:list_projects, SpruceGoose.Workflows.Project, :read)
-    tool(:list_roadmaps, SpruceGoose.Workflows.Roadmap, :read)
-    tool(:list_workflows, SpruceGoose.Workflows.Workflow, :read)
-    tool(:list_todos, SpruceGoose.Workflows.Todo, :read)
   end
 
   resources do

@@ -27,6 +27,7 @@ defmodule RestaurantHost.MixProject do
     [
       # The rebuilt eatsbot's rules: the kitchen workflow and signed admission.
       {:restaurant_core, in_umbrella: true},
+      {:biz_kit_identity, in_umbrella: true},
       # Menu, pricing and tax: the device prices an order before signing it.
       {:commerce_core, in_umbrella: true},
       # The signed Log every order step is admitted through.

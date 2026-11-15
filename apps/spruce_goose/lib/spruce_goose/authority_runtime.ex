@@ -5,6 +5,9 @@ defmodule SpruceGoose.AuthorityRuntime do
   The thin socket client does not load this application. A compiled escript or
   `mix run` does, so the marker prevents accidental writes to retained rollback
   databases while the named remote host is authoritative.
+
+  It fails closed: a missing, unreadable or empty marker refuses execution.
+  Only a marker reading `local` allows it.
   """
 
   def ensure_local_execution_allowed do
@@ -17,7 +20,9 @@ defmodule SpruceGoose.AuthorityRuntime do
 
     case File.read(path) do
       {:error, :enoent} ->
-        :ok
+        {:error,
+         "authority host marker #{path} is missing; refusing direct execution " <>
+           "(write `local` to it on the authoritative host)"}
 
       {:ok, value} ->
         delegated(value)

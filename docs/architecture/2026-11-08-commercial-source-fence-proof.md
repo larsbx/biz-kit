@@ -111,8 +111,12 @@ endpoint and no need for bank access.
 The source-fence workflow pins Quint 0.32.0 and the repository's
 checksum-verified Lean 4.35.0 toolchain. Require Quint typecheck, sampled
 safety, bounded verification, positive reachability, and unsafe mutation
-counterexamples. Lean must compile and replay in the kernel without admitted
-lemmas; the main formal-coverage workflow also includes a full axiom audit.
+counterexamples. The dedicated Lean gate compiles and replays the module in a
+fresh kernel, then imports it to execute nine checks and inventory the
+transitive axioms of every compiled module declaration. The allowlist is
+`propext`, `Classical.choice`, and `Quot.sound`, matching the broader formal
+gate. The executable checks exercise the imported transition separately from
+the proof audit. Both jobs log the checked-out revision and input hashes.
 BarterCore CI covers deterministic reference-transaction negatives.
 
 Do not mark #299 resolved or activate commercial settlement based on this
@@ -127,8 +131,39 @@ The first merged proof branch (#340) had **failed Lean elaboration** because
 apparently subsequent `sorry` reports followed that failure and were **not
 kernel acceptance**. Its dedicated bounded Quint job passed. Its BarterCore
 tests reported 43 passes and no test failures, but the formatting gate failed.
-The follow-on PR #342 replaces the unsupported finite-set definitions with
-explicit two-source boolean-membership state and applies the hosted formatter
-patch. This correction does not strengthen legal authority or imply production
-admission; exact-head Lean, fresh kernel audit, and Barter formatting must
-pass before the repair can be described as verified.
+The follow-on PR #342 replaced the unsupported finite-set definitions with
+explicit two-source Boolean membership and applied the hosted formatter
+patch. At interim head `0e1976a88cbb5c1178565568cd53422211d195bb`, the
+dedicated [source-fence run][failed-scope] and [formal run][failed-formal]
+still failed because Lean could not synthesize `Decidable (Ready ...)`.
+Quint passed independently.
+
+The tested final PR head `580ff3ae4c836161944298947088543873543993`
+registered an executable instance that unfolds `Ready` and composes Lean's
+decisions for Boolean equality, pair inequality and conjunction. This uses
+the same instance-registration pattern as [PSC PR #520][psc-520]. The
+proposition, transition and all 17 theorem declarations and proofs are
+unchanged from the interim revision. At the final PR head, the dedicated
+[Lean and Quint jobs][passed-scope], [broader formal jobs][passed-formal], and
+[Barter tests and formatting][passed-barter] passed. The broader Lean job
+audited 43 compiled source-fence declarations. PR #342 was already merged
+as `de8bbc70728e0d2471341beae623bada88fe6d94`. The receipts above are for
+the tested PR head. Separate EventStore, Consolidation, Location, Portal,
+and Proof Bank failures do not enter the source-fence acceptance result.
+
+For arbitrary finite source collections, prove that canonicalization
+preserves the exact set, that admission requires a nonempty duplicate-free
+collection and verifies every source, and that atomic consumption excludes
+every later overlap in any position. For #299, prove the existing signed
+append path refines the durable source and intent fences. Revalidate
+authenticated source versions and authority at commit, preserve atomicity
+through concurrent writes, lost replies and restart, and close the legacy
+aggregate-only route for the protected profile while preserving historical
+replay. These obligations remain separate from this two-source acceptance.
+
+[failed-scope]: https://github.com/larsbx/biz-kit/actions/runs/42526047985
+[failed-formal]: https://github.com/larsbx/biz-kit/actions/runs/42526048074
+[passed-scope]: https://github.com/larsbx/biz-kit/actions/runs/42544791809
+[passed-formal]: https://github.com/larsbx/biz-kit/actions/runs/42544791783
+[passed-barter]: https://github.com/larsbx/biz-kit/actions/runs/42544791791
+[psc-520]: https://github.com/larsbx/pisot-substitution-conjecture-research/pull/520

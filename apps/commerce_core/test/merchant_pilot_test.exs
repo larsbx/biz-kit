@@ -124,6 +124,27 @@ defmodule CommerceCore.MerchantPilotTest do
     assert baseline(report(Map.update!(b, "costs", &(&1 ++ [pool]))), "servicing_store") == 20
   end
 
+  test "qualified request currencies retain unknown costs without quotes or orders" do
+    b =
+      intake()
+      |> row("requests", 0, ["data", "currency"], "CAD")
+      |> then(fn bundle ->
+        Enum.reduce(~w(invitations quotes orders costs), bundle, &Map.put(&2, &1, []))
+      end)
+
+    {s, _} = Intake.export!(b)
+
+    expected =
+      for currency <- ~w(CAD USD), role <- ~w(merchant servicing_store platform) do
+        %{"currency" => currency, "role" => role, "minor" => nil}
+      end
+
+    assert s["unallocated_costs"] == expected
+
+    assert %{"CAD" => %{"merchant" => %{"unallocated_cost_minor" => nil}}} =
+             get_in(Scorecard.score!(s), ["economics", "by_currency"])
+  end
+
   test "full refund and fee reversals preserve incurred costs" do
     b = row(intake(), "orders", 0, ["data", "refunds", Access.at(0), "minor"], 10000)
 
@@ -389,10 +410,10 @@ defmodule CommerceCore.MerchantPilotTest do
   end
 
   test "fees of unknown amount withhold only dependent roles" do
-    s = row(snapshot(), "orders", 0, ["fees", "platform"], nil)
+    b = row(intake(), "orders", 0, ["data", "fees", "platform"], nil)
 
     roles =
-      get_in(Scorecard.score!(s, include_orders: true), [
+      get_in(report(b), [
         "economics",
         "orders",
         Access.at(0),

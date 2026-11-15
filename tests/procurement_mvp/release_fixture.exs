@@ -2,8 +2,37 @@
 # Run through bin/procurement eval. Never exposes an HTTP bootstrap or keeps a
 # governance key in the long-running host. Must not run beside a live appender.
 defmodule ProcurementReleaseFixture do
-  alias CoopSubstrate.{Crypto, Log, Procurement}
+  alias CoopSubstrate.{Canonical, Crypto, Log, Procurement, ProcurementDispatch, RestaurantDeliveryWork}
   alias CoopSubstrate.Protocol.Envelope
+
+  @tenant "11111111-1111-1111-1111-111111111111"
+  @dispatch_key "acceptance-dispatch"
+  @site "Synthetic north dock"
+
+  # The machine fixture only signs. It never starts a second appender.
+  def sign do
+    :ok = Procurement.register_types!()
+    seed = dispatch_seed()
+    scope = %{source: :procurement, chapter: System.fetch_env!("PROCUREMENT_CHAPTER"),
+      merchant: System.fetch_env!("PROCUREMENT_COOPERATIVE"),
+      tenant: @tenant, key_id: @dispatch_key}
+
+    body =
+      case Jason.decode!(System.fetch_env!("PROCUREMENT_FIXTURE_INPUT")) do
+        "work" -> RestaurantDeliveryWork.sign(scope, "", seed)
+        payload ->
+          signer = %{role: "procurement_dispatch", key_id: @dispatch_key,
+            pubkey: Crypto.pubkey_from_seed(seed)}
+          payload = Map.merge(payload, %{"cooperative_id" => scope.merchant, "tenant_id" => @tenant})
+          {:ok, event} = Envelope.new(type: "ProcurementDispatchStepV1", chapter_id: scope.chapter,
+            timestamp_ms: System.system_time(:millisecond), payload: payload, signers: [signer])
+          {:ok, signed} = Envelope.sign(event, @dispatch_key, seed)
+          {:ok, record} = Canonical.encode(Envelope.full_record_term(signed))
+          %{"record" => Base.url_encode64(record, padding: false)}
+      end
+
+    report(body)
+  end
 
   def run do
     unless System.get_env("PROCUREMENT_RELEASE_ACCEPTANCE") == "disposable-local-postgres" and
@@ -26,8 +55,11 @@ defmodule ProcurementReleaseFixture do
       _ -> raise "unknown fixture mode"
     end
 
-    IO.puts("PROCUREMENT_FIXTURE_JSON:" <> Jason.encode!(inspect_ledger(context)))
+    report(inspect_ledger(context))
   end
+
+  defp report(value), do: IO.puts("PROCUREMENT_FIXTURE_JSON:" <> Jason.encode!(value))
+  defp dispatch_seed, do: Base.decode16!(System.fetch_env!("PROCUREMENT_FIXTURE_DISPATCH_SEED"), case: :mixed)
 
   defp seed(context) do
     unless Log.head().global_seq == 0, do: raise("refusing to seed an existing ledger")
@@ -44,6 +76,12 @@ defmodule ProcurementReleaseFixture do
         "active" => true, "evidence_ref" => "synthetic-enrollment", "expected_version" => 0
       })
     end
+
+    admit(context, "ProcurementDispatchRouteV1", %{
+      "cooperative_id" => context.cooperative_id, "tenant_id" => @tenant, "site" => @site,
+      "key_id" => @dispatch_key, "pubkey" => {:bytes, Crypto.pubkey_from_seed(dispatch_seed())},
+      "active" => true, "expected_version" => 0
+    })
   end
 
   defp authority(context, active, expected) do
@@ -91,9 +129,11 @@ defmodule ProcurementReleaseFixture do
     state = Procurement.state(Log.gate())
     grant = Map.fetch!(state.grants,
       {context.chapter_id, context.cooperative_id, context.operator_id})
-    requests = state.requests |> Enum.sort() |> Enum.map(fn {_scope, row} ->
+    requests = state.requests |> Enum.sort() |> Enum.map(fn {scope, row} ->
       quote = row.accepted_quote
       %{
+        id: elem(scope, 2), dispatch_phase: ProcurementDispatch.handoff_phase(state, scope),
+        outcome_ref: row.outcome_ref,
         phase: Atom.to_string(row.phase), version: row.version,
         command_count: map_size(row.receipts),
         quote_revision: if(quote, do: quote.revision),
@@ -109,4 +149,6 @@ defmodule ProcurementReleaseFixture do
   end
 end
 
-ProcurementReleaseFixture.run()
+if System.get_env("PROCUREMENT_FIXTURE_MODE") == "sign",
+  do: ProcurementReleaseFixture.sign(),
+  else: ProcurementReleaseFixture.run()

@@ -43,7 +43,7 @@ defmodule Mix.Tasks.Coop.Owner.Backfill do
     end
 
     [chapter, tenant, project, principal] = positions
-    base = opts[:server] || System.get_env("BIZKIT_URL", "http://127.0.0.1:4000")
+    base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
 
     with {:ok, device} <- device(opts),
          {:ok, signer} <- Ops.load_signer("governance") do

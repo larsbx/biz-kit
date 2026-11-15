@@ -82,7 +82,8 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
   def check(%Envelope{} = env, gate) do
-    with :ok <- check_role_keys(env, gate) do
+    with :ok <- CoopSubstrate.CommercialAdmission.fence(env, gate),
+         :ok <- check_role_keys(env, gate) do
       type_check(env, gate)
     end
   end
@@ -112,9 +113,21 @@ defmodule CoopSubstrate.Protocol.Validity do
   # the registration keeps a new type from being registered but left unchecked.
   @task_types Map.keys(TaskCore.Admission.event_types())
   @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
+  @dispatch_types Map.keys(DispatchCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @commercial_types Map.keys(CoopSubstrate.CommercialAdmission.event_types())
+  @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_types do
+    CoopSubstrate.CommercialAdmission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
+    CoopSubstrate.WriterFence.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
     CoopSubstrate.FederationAuthority.check(env, gate)
   end
@@ -129,6 +142,10 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @restaurant_types do
     RestaurantCore.Admission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @dispatch_types do
+    DispatchCore.Admission.check(env, gate)
   end
 
   defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do

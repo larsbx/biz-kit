@@ -67,7 +67,12 @@ defmodule ProcurementHost.HTML do
     actions = case r.phase do
       :requested -> ["qualify", "cancel"]
       :qualified -> ["quote", "cancel"]
-      :accepted -> ["fulfill", "cancel", "dispute", "payment_evidence"]
+      :accepted ->
+        case r[:dispatch_phase] do
+          nil -> ["fulfill", "cancel", "dispute", "payment_evidence"]
+          :requested -> ["cancel", "payment_evidence"]
+          _ -> ["payment_evidence"]
+        end
       :fulfilled -> ["dispute", "payment_evidence"]
       :disputed -> ["payment_evidence"]
       _ -> []
@@ -78,6 +83,30 @@ defmodule ProcurementHost.HTML do
       escape(inspect(%{acceptance: r.acceptance_ref, outcome: r.outcome_ref,
         payment: r.payment_evidence, commands: r.receipts}, pretty: true, limit: :infinity)) <> "</pre>"
   end
+  def dispatch(%{phase: :accepted, dispatch: %{site: site}, dispatch_phase: phase} = row, _, context) do
+    id = elem(row.scope, 2)
+    phase_label = escape(phase)
+    pickup = if phase == :accepted, do: code(context, id, "picked_up"), else: ""
+    dropoff = code(context, id, "delivered")
+    "<section><h2>Dispatch</h2><p>#{escape(site)} · #{phase_label}</p>#{pickup}#{dropoff}</section>"
+  end
+
+  def dispatch(%{phase: :accepted} = row, site, _context) when is_binary(site) do
+    path = "/requests/" <> URI.encode(elem(row.scope, 2), &URI.char_unreserved?/1) <> "/dispatch"
+    ~s(<form method="post" action="#{escape(path)}"><h3>Dispatch to #{escape(site)}</h3>) <>
+      csrf() <> hidden("expected_version", row.version) <> "<button>Queue Dispatch handoff</button></form>"
+  end
+
+  def dispatch(%{dispatch_phase: :delivered}, _, _),
+    do: "<section><h2>Dispatch</h2><p>Delivery recorded against this order.</p></section>"
+
+  def dispatch(_, _, _), do: ""
+
+  defp code(context, id, phase) do
+    label = if phase == "picked_up", do: "Pickup code", else: "Drop-off code"
+    "<p>#{label} <code>#{escape(ProcurementHost.Dispatch.code(context, id, phase))}</code></p>"
+  end
+
   def form(id, version, action, fixed, businesses) do
     "<form method=\"post\" action=\"/requests/#{escape(id)}/#{escape(action)}\"><h3>#{escape(String.replace(action, "_", " "))}</h3>" <>
     csrf() <> hidden("command_id", ULID.generate()) <> hidden("expected_version", version) <>

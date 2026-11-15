@@ -63,7 +63,8 @@ defmodule CommerceCore.MerchantPilot.Intake do
     end)
 
     codes =
-      (Enum.map(quote_rows, & &1["currency"]) ++ Enum.map(Map.keys(costs), &elem(&1, 2)))
+      (Enum.map(Map.values(admitted), & &1["currency"]) ++
+         Enum.map(quote_rows, & &1["currency"]) ++ Enum.map(Map.keys(costs), &elem(&1, 2)))
       |> Enum.uniq()
       |> Enum.sort()
 

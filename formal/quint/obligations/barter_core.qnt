@@ -7,9 +7,9 @@
 // `company_takes_title: false` and `:requires_independent_authorized_local_admission`.
 // They never change ownership. The `admit` action stands for the host's
 // separate admission, which needs the provider's signature.
-// Finding: barter_core only enforces the preview half. It contains no
-// admission path, which its moduledoc leaves to the host; this models that
-// intended rule.
+// Holds by construction: no code in the repo transfers barter assets. The
+// cores only preview, and no host calls BarterCore; any future host must add
+// a separately signed admission (the `admit` action) before a transfer.
 // Abstracted: two assets and three participants, a cycle as one swap of owners.
 // GUARDED switches off the preview's no-effect rule: the control applies the
 // planned legs to ownership.

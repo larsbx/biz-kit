@@ -651,7 +651,7 @@
                 "fields": {
                   "gross_minor": {
                     "type": "integer",
-                    "nullable": true
+                    "nullable": false
                   },
                   "reversed_minor": {
                     "type": "integer",
@@ -665,7 +665,7 @@
                 "fields": {
                   "gross_minor": {
                     "type": "integer",
-                    "nullable": true
+                    "nullable": false
                   },
                   "reversed_minor": {
                     "type": "integer",

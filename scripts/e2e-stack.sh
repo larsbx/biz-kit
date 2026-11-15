@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command for the stack d-patch's end-to-end tests run against
 # (docs/architecture/2026-10-21-end-to-end-stack.md): fresh databases, the
-# e2e fixtures, then dispatch on :4000 and SpruceGoose's /auth on 127.0.0.1:4001.
+# e2e fixtures, then dispatch on :4000 and the task host's /auth on 127.0.0.1:4001.
 #
 #   scripts/e2e-stack.sh            prepare, then run in the foreground
 #   scripts/e2e-stack.sh --prepare  prepare only
@@ -33,6 +33,7 @@ prepare() {
     mix event_store.create --quiet && mix event_store.init --quiet)
   # --force-drop: a server stopped a moment ago may still hold connections.
   (cd apps/spruce_goose && mix ecto.drop --quiet --force-drop && mix ecto.create --quiet && mix ecto.migrate --quiet)
+  (cd apps/task_host && mix ecto.drop --quiet --force-drop && mix ecto.create --quiet && mix ecto.migrate --quiet)
   (cd apps/dispatch && mix ecto.drop --quiet --force-drop && mix ash.setup --quiet)
   # `mix phx.server` below starts every umbrella app; eatsbot needs its database.
   (cd apps/eatsbot && mix ecto.drop --quiet --force-drop && mix ash.setup --quiet)
@@ -53,15 +54,12 @@ export BIZKIT_DEVELOPMENT_SIGN_IN="$(field development_sign_in)"
 export BIZKIT_IDENTITY_BINDINGS="$(field bindings)"
 # The field app, and the desktop app's loopback listener (desktop/src-tauri/src/dispatch.rs).
 export BIZKIT_NATIVE_REDIRECT_URIS="com.dispatch.driver:/oauth2redirect,http://127.0.0.1:47811/callback"
-export SPRUCE_GOOSE_MCP_ENABLED=true
 # Every person signs in from 127.0.0.1 within a minute (config/runtime.exs).
 export SPRUCE_GOOSE_SIGN_IN_LIMIT="${SPRUCE_GOOSE_SIGN_IN_LIMIT:-600}"
-export MCP_PORT="${MCP_PORT:-4001}"
+export TASK_HOST_PORT="${TASK_HOST_PORT:-4001}"
 # Where a browser reaches /auth, and where the development provider sends it
 # back: the Android emulator reaches the host as 10.0.2.2.
-export SPRUCE_GOOSE_PUBLIC_URL="${SPRUCE_GOOSE_PUBLIC_URL:-http://127.0.0.1:${MCP_PORT}}"
+export SPRUCE_GOOSE_PUBLIC_URL="${SPRUCE_GOOSE_PUBLIC_URL:-http://127.0.0.1:${TASK_HOST_PORT}}"
 export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(printf 'e2e-only-%.0s' {1..8})}"
-# Required by SpruceGoose's MCP surface, which these tests do not use.
-export SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS="00000000-0000-4000-8000-000000000001=00000000-0000-4000-8000-000000000002"
 
 exec mix phx.server

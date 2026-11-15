@@ -15,19 +15,17 @@ config :bcrypt_elixir, log_rounds: 1
 # on every call while the subject under test stays the behaviour, not the
 # permission. `test/actors_test.exs` names restricted actors explicitly.
 config :spruce_goose, :default_actor, "test-system"
-config :spruce_goose, :authority_host_marker, "/nonexistent/sprucegoose-test-authority-marker"
+# The marker check fails closed, so the suite runs as the authoritative host.
+config :spruce_goose,
+       :authority_host_marker,
+       Path.expand("../test/fixtures/authority-host-local", __DIR__)
+
 config :spruce_goose, :allow_unbound_task_admission, true
 config :spruce_goose, :allow_legacy_hierarchy_mutation, true
 
 config :spruce_goose,
        :systemwide_sop_path,
        Path.expand("../test/fixtures/systemwide-sop.md", __DIR__)
-
-# Loopback-only test endpoint; not started unless a test asks for it.
-config :spruce_goose, SpruceGoose.Web.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4002],
-  server: false,
-  secret_key_base: String.duplicate("test-only-secret-key-base-", 4)
 
 # Test-database connection, environment-driven.
 #
@@ -78,18 +76,6 @@ end
 config :logger, level: :warning
 
 config :spruce_goose, Oban, testing: :manual
-
-# Short, so the change feed's idle path (tick and heartbeat) runs in tests.
-config :spruce_goose, :feed_heartbeat_ms, 200
-config :spruce_goose, :secure_cookies, false
-
-# Every request in the suite comes from loopback; RateLimitTest sets its own.
-config :spruce_goose, SpruceGoose.Web.RateLimit,
-  limits: %{
-    sign_in: {1_000_000, 60_000},
-    capability: {1_000_000, 60_000},
-    api: {1_000_000, 60_000}
-  }
 
 config :spruce_goose, :start_outbox_dispatcher, false
 
