@@ -25,9 +25,10 @@ The existence of the harness is not a passing execution result: consult the
 exact-head workflow and retained receipts.
 
 The process boundary exposed a missing adapter initialization: procurement's
-delivery envelope is an extension schema registered by ProcurementHost. The
-earlier source suite started that host in Dispatch's VM, while an independent
-Dispatch VM had no such registration. The procurement signing branch now calls
+delivery envelope is an extension schema registered by the canonical Log during
+startup. The earlier source suite started that Log and ProcurementHost in
+Dispatch's VM, while an independent Dispatch VM had no such registration.
+The procurement signing branch now calls
 the existing Procurement.register_types!/0 before constructing its envelope.
 This registers pure schema data and starts neither the host nor the ledger. The
 peer requires that schema to be absent at fresh startup, so the combined gate
@@ -83,7 +84,8 @@ legacy receipt kind. The combined runner injects a distinct delivery driver:
    procurement:<chapter>:<cooperative>:<order>. A fresh worker VM must reuse them.
 5. Reject the drop-off code at pickup, then accept the correct pickup through
    the assigned courier's authenticated portal route. Stop the host and inspect
-   the two actual signed custody steps.
+   the two actual signed custody steps. Preserve the original qualification
+   evidence in outcome_ref while in transit; delivery replaces it with its proof.
 6. Restart the packaged host and run another fresh Dispatch VM. Compare the
    complete canonical snapshot and the committed assignment. In-transit custody
    must survive without another append or replacement assignment.

@@ -122,8 +122,8 @@ defmodule Dispatch.RestaurantDelivery do
       case Map.get(config, :source, :restaurant) do
         :restaurant -> {"RestaurantDeliveryStepV1", "restaurant_dispatch", "merchant_id"}
         :procurement ->
-          # A standalone Dispatch VM does not start ProcurementHost, which
-          # normally registers these extension types before ledger replay.
+          # A standalone Dispatch VM does not start the canonical Log, which
+          # normally registers procurement's extension types before replay.
           # Register signing schemas only; never start another business Log.
           :ok = CoopSubstrate.Procurement.register_types!()
           {"ProcurementDispatchStepV1", "procurement_dispatch", "cooperative_id"}

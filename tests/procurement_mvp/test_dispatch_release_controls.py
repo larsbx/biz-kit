@@ -66,6 +66,23 @@ class BindingTests(unittest.TestCase):
     def test_complete_binding(self):
         self.validate(detail())
 
+    def test_in_transit_preserves_the_original_qualification_evidence(self):
+        value = detail()
+        value["steps"] = value["steps"][:2]
+        value["event_types"] = value["event_types"][:-1]
+        value["ledger"].update(global_seq=13, verified_event_count=13)
+        row = value["ledger"]["requests"][0]
+        row.update(dispatch_phase="in_transit", phase="accepted", version=6,
+                   command_count=5, outcome_ref="original-qualification")
+        args = dict(phase="in_transit", operations=["accept", "picked_up"], proof_digests=DIGESTS)
+        with self.assertRaises(RuntimeError):
+            combined.validate_detail(value, TRIP, QUOTE, **args)
+        combined.validate_detail(value, TRIP, QUOTE, **args, prior_outcome_ref="original-qualification")
+        for wrong in (None, "another-outcome"):
+            row["outcome_ref"] = wrong
+            with self.subTest(wrong=wrong), self.assertRaises(RuntimeError):
+                combined.validate_detail(value, TRIP, QUOTE, **args, prior_outcome_ref="original-qualification")
+
     def test_each_original_quote_field_matters(self):
         for key in QUOTE:
             value = detail()

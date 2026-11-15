@@ -83,7 +83,8 @@ def uuid_value(value: object) -> bool:
 
 
 def validate_detail(detail: dict, trip: dict, quote: dict, *, phase: str,
-                    operations: list[str], proof_digests: dict[str, str], revoked: bool = False) -> None:
+                    operations: list[str], proof_digests: dict[str, str], revoked: bool = False,
+                    prior_outcome_ref: str | None = None) -> None:
     """Bind verified canonical events to the actual SQL assignment, not UUID-shaped fixtures."""
     rows = detail.get("requests")
     release.require(isinstance(rows, list) and len(rows) == 1, "expected exactly one canonical business order")
@@ -126,9 +127,11 @@ def validate_detail(detail: dict, trip: dict, quote: dict, *, phase: str,
                             and payload.get("proof_digest") == expected_digest,
                             "signed custody proof is not bound to the presented handoff code")
     delivered = phase == "delivered"
+    release.require(delivered or isinstance(prior_outcome_ref, str) and bool(prior_outcome_ref),
+                    "in-transit inspection requires the original commercial outcome evidence")
     expected_order = {
         "id": trip["order_id"], "dispatch_phase": phase,
-        "outcome_ref": "dispatch:" + steps[-1]["payload"]["proof_id"] if delivered else None,
+        "outcome_ref": "dispatch:" + steps[-1]["payload"]["proof_id"] if delivered else prior_outcome_ref,
         "phase": "fulfilled" if delivered else "accepted", "version": 7 if delivered else 6,
         "command_count": 6 if delivered else 5, "quote_revision": quote["revision"],
         "quote_total_minor": quote["total_minor"], "payment_evidence_count": 0,
@@ -295,7 +298,8 @@ class DispatchDelivery:
         self.checks["authenticated_pickup"] = True
         custody = self.offline()
         validate_detail(custody, self.trip, quote, phase="in_transit",
-                        operations=["accept", "picked_up"], proof_digests=self.proof_digests)
+                        operations=["accept", "picked_up"], proof_digests=self.proof_digests,
+                        prior_outcome_ref=original["ledger"]["requests"][0]["outcome_ref"])
         # Both participants have now stopped/restarted. A fresh peer must
         # reconcile committed SQL without a new trip or a new ledger event.
         self.same_trip(self.peer("worker", order_id=order), "ACTIVE")
