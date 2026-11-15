@@ -45,7 +45,6 @@ jobs:
       MIX_ENV: test
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
-      AGENT_LAUNCH_STAGE: ${{ runner.temp }}/biz-kit-signed-agent-launch
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,6 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export AGENT_LAUNCH_STAGE="$RUNNER_TEMP/biz-kit-signed-agent-launch"
+          printf 'AGENT_LAUNCH_STAGE=%s\n' "$AGENT_LAUNCH_STAGE" >> "$GITHUB_ENV"
           git rev-parse HEAD
           mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy"
           git rev-parse HEAD > "$AGENT_LAUNCH_STAGE/source-revision.txt"
