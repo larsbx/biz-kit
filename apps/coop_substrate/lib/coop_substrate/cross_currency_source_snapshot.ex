@@ -55,8 +55,7 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshot do
       {:ok,
        %{
          chapter_id: chapter,
-         source_hashes:
-           Map.new(sources, fn {id, source} -> {id, source.source_event_hash} end),
+         source_hashes: Map.new(sources, fn {id, source} -> {id, source.source_event_hash} end),
          sources: sources,
          members: members,
          observed_head: head_before,
@@ -90,7 +89,7 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshot do
         {:error, :same_currency_use_original_setoff}
 
       not (a[:debtor_id] == b[:creditor_id] and a[:creditor_id] == b[:debtor_id] and
-             a[:debtor_id] != a[:creditor_id]) ->
+               a[:debtor_id] != a[:creditor_id]) ->
         {:error, :not_reciprocal_business_sources}
 
       not (is_binary(a[:denomination]) and is_binary(b[:denomination]) and
@@ -135,8 +134,9 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshot do
          {:ok, stream} <-
            TypeRegistry.stream_id("ObligationRecorded", chapter, %{"obligation_id" => id}),
          {:ok, [%Envelope{} = event]} <- Log.read_stream(stream),
-         true <- event.type == "ObligationRecorded" and event.chapter_id == chapter and
-                   event.stream_seq == 1 and event.payload["obligation_id"] == id,
+         true <-
+           event.type == "ObligationRecorded" and event.chapter_id == chapter and
+             event.stream_seq == 1 and event.payload["obligation_id"] == id,
          :ok <- Envelope.verify(event),
          :ok <- same_original_terms(event.payload, row),
          {:ok, signed_bytes} <- Envelope.signing_bytes(event),
