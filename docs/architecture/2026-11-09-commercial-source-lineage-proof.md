@@ -1,8 +1,10 @@
 # Commercial Signed Source Lineage — Formal Safety Plan
 
-Status: **proposed proof model**, pending exact-head hosted Lean/Quint acceptance.
-This is a dedicated proof track stacked on the source-read-projection
-implementation in PR #345. It does not authorize commercial discharge.
+Status: **proof and signed-log fixture correspondence candidate**, pending
+exact-head hosted Lean/Quint and PostgreSQL acceptance. PR #345 was merged;
+this continuation is reconciled against current main and its protected
+source-bound reservation profile from PR #351. No contractual discharge
+or financial settlement is authorized.
 
 ## Scope
 
@@ -64,3 +66,19 @@ exact-revision acceptance remain separate required gates.
 The authoritative discharge and legal classification requirements tracked
 in issue #299 remain open; no source-proof accomplishment should be reported
 as a licensed settlement, accepted funds, or money transfer.
+
+## Reconciliation against current main (November 15, 2026)
+
+This branch preserves all current-main protected admission, procurement,
+and formal proof modules and adds the historical model and fixture slice
+without rewriting `CommercialAdmission` or weakening legacy-event fences.
+The six fixture histories are generated from the exact Lean `replay`
+semantics and compared with actual signed, durable source-history projections
+on a non-protected chapter, including restart and refused duplicate claims.
+Protected chapters retain the PR #351 source-reservation controls.
+
+The model is still a read-projection correspondence exercise; it does not
+prove the current `CommercialAdmission` V2 source reservation refines the
+Lean model, nor does it verify enterprise agency, independently authenticated
+trade performance, legally effective discharge, banking access or tax/legal
+classification. Those remain separate acceptance obligations under #299.
