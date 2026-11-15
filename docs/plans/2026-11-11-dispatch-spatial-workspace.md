@@ -1,7 +1,7 @@
 # Dispatch spatial workspace and minimal stack
 
 Date: 2026-11-11 (America/New_York).
-Status: **Accepted roadmap; initial implementation in draft PR #371. The legacy
+Status: **Accepted roadmap; initial implementation in open PR #371. The legacy
 auxiliary stack was proposed only.**
 
 Owner clarification, 2026-11-11: the earlier auxiliary stack was **proposed,
@@ -448,7 +448,7 @@ Implementation evidence is tracked separately below.
 
 ### Initial implementation follow-up
 
-Draft [PR #371](https://github.com/larsbx/biz-kit/pull/371) now contains the
+[PR #371](https://github.com/larsbx/biz-kit/pull/371) now contains the
 [selected profile](../../tools/dispatch-globe/profile.json),
 [V2 spatial contract](../architecture/2026-11-11-dispatch-spatial-contract.md),
 [workspace decision](../architecture/2026-11-11-dispatch-map.md) and
@@ -456,17 +456,45 @@ Draft [PR #371](https://github.com/larsbx/biz-kit/pull/371) now contains the
 runtime results are recorded in workflow artifacts for the tested commit;
 changes to documentation alone do not promote hosted or field acceptance.
 
-| Milestone | Implemented scope in the draft | Remaining acceptance boundary |
+| Milestone | Implemented scope in the PR | Remaining acceptance boundary |
 | --- | --- | --- |
 | GEV-00 | Pinned source/build profile, desktop and narrow-layout requirements, existing native collection, local imagery and explicit resource budgets | Physical devices and operating-area street/detail requirements remain unverified |
 | GEV-01 | V2 typed scoped observations, ordered complete snapshots, content identity, byte/roster limits, fresh demand, separately authorized observation-bound work, Lean/Quint and runtime tests | Not a general spatial query/history service or a transaction-wide database snapshot |
-| GEV-02 | Derived GEV globe/parser, one Dispatch observation layer, keyboard/marker selection, follow, local roster filters, work and planned-stop cards, operator record links, textual fallback | Partial milestone: full native composed controls, address search, work-wide filters and recorded next-stop progress remain open |
+| GEV-02 | Derived GEV globe, native decimal/DMS/geo URI/UTM/MGRS/full Plus Code search, one Dispatch observation layer, keyboard/marker selection, follow, local roster filters, work and planned-stop cards, operator record links, textual fallback | Partial milestone: full native composed controls, address search, work-wide filters and recorded next-stop progress remain open |
 | GEV-07 | Build and browser budget gates, same-origin assets, no added runtime service/database, explicit omitted components | Shared deployment, recovery and actual field-device acceptance remain open |
 
 The profile has no address geocoder, router or optimizer. Its bundled Natural
 Earth imagery provides coarse global orientation. It does not claim a
 street-level cartography service, all upstream GEV capabilities, a deployed
 fleet tracker or measured savings against the unimplemented auxiliary proposal.
+
+#### 2026-11-15 continuation — native search formats
+
+The continuation starts from PR head `7347e14550e907f496734e4947fd81f707093999`,
+which incorporated main `be306bab645ea70e0b4405eed1662d02456654ca`.
+The latest GEV source was rechecked at
+[`cb3be34283bb91acface03d19c5a3ada157064dc`](https://github.com/bilawalsidhu/gods-eye-view/tree/cb3be34283bb91acface03d19c5a3ada157064dc).
+Its newly added DMS, UTM, MGRS and full Plus Code parsing is reused as three
+exact, attributed modules; the viewer retains its earlier pin. This adds no
+package, geocoder, provider request, running service or database.
+
+Dispatch refuses UTM S shorthand because northern latitude band S and southern
+hemisphere notation can identify different locations. It explains the supported
+alternatives, labels grid representative points and Plus Code area centers,
+and keeps search within the existing camera-only and scope-erasure contract.
+The [workspace decision](../architecture/2026-11-11-dispatch-map.md) records the
+supported formats and limits; the profile and vendor provenance bind the source.
+Parser reference vectors, refusal checks and actual browser camera assertions
+extend the existing formal-before-runtime acceptance workflow. The results for
+this candidate belong to its own run and must not be inferred from the earlier
+feature head's acceptance.
+
+GEV-03 remains open. The next provider-free query increment should use a distinct
+authorized server query over the complete active-participant population,
+scope/query-bound keyset cursors and honest current-page coverage. Preserve the
+live map's 200-participant refusal. Area membership must use the latest eligible
+observation; missing eligible geometry stays unknown. Client-only GEV analyst
+filters cannot supply complete-fleet answers.
 
 ### First substantial acceptance scenario
 

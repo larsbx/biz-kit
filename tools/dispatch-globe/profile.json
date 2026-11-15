@@ -3,6 +3,7 @@
   "id": "dispatch-fleet-workspace-v2",
   "sources": {
     "gods_eye_view": "14db73f201a0235da4f591648d9b6a9bf4fed87f",
+    "gods_eye_view_search": "cb3be34283bb91acface03d19c5a3ada157064dc",
     "cesium": "1.138.0",
     "esbuild": "0.28.2",
     "d_patch_inspected": "51ab27bfca7e99ef47b11a3f88bffc24a53dd429"
@@ -20,7 +21,8 @@
     "pinned_gev_derived_viewer_and_cesium_engine",
     "bundled_natural_earth_imagery",
     "scoped_location_snapshots_and_demand_stream",
-    "read_only_selection_and_separately_authorized_work"
+    "read_only_selection_and_separately_authorized_work",
+    "pinned_gev_local_decimal_dms_geo_utm_mgrs_full_plus_code_search"
   ],
   "deferred": [
     "geocoding_and_routing_provider",

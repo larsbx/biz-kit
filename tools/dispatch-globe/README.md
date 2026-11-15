@@ -56,6 +56,10 @@ late-result fences, revocation, login responses, hung requests and bounded
 reconnects. They also check V2 scope, typed references, complete coverage,
 strictly increasing stream cursors, selected-work observation bindings,
 independent work authority, cancellation races and coordinate-parser provenance.
+The separately pinned native search modules cover decimal, DMS, geo URI, UTM,
+MGRS and full Plus Codes. Tests use fixed reference coordinates and strict
+refusals, including Dispatch's UTM S ambiguity boundary; MGRS and Plus Code
+precision never supplies an observed accuracy value.
 They require a staged asset manifest. An import gate disables
 string code generation in Node and checks the emitted engine, with the
 original aggregate bundle as a negative control that reproduces the failure.
@@ -69,7 +73,9 @@ observes real Cesium entity lifetimes, positions and uncertainty, verifies
 the credit-style CSP hash, tests empty/invalid/revoked states and simulated
 BFCache lifecycle handling, and rejects external requests and unhandled errors. It exercises
 selection/follow, planned-stop and record links, filtering, keyboard focus,
-local coordinate search, delayed work, permission loss and a 390-pixel layout.
+local coordinate search in every supported format, preservation of selection
+on refused input, actual camera coordinates, delayed work, permission loss and
+a 390-pixel layout with the coordinate help expanded.
 It also verifies the textual fallback when the renderer is unavailable. It does not stand in
 for the separate Phoenix/PostgreSQL authorization and stream tests.
 

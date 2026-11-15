@@ -1,6 +1,7 @@
 # Dispatch fleet spatial workspace
 
 Date: 2026-11-11.
+Updated: 2026-11-15 — native coordinate-format search.
 
 ## Decision and scope
 
@@ -12,9 +13,12 @@ The observations describe reporting
 devices; assigning a person to a vehicle does not establish that vehicle's
 physical position.
 
-The upstream source is `bilawalsidhu/gods-eye-view` at
-`14db73f201a0235da4f591648d9b6a9bf4fed87f`. Its source attribution, retained
-code and modifications are recorded beside the vendored module. Cesium is the
+The viewer source is `bilawalsidhu/gods-eye-view` at
+`14db73f201a0235da4f591648d9b6a9bf4fed87f`. The three native search modules are
+separately pinned to `cb3be34283bb91acface03d19c5a3ada157064dc` (2026-11-15).
+Source attribution, exact hashes, retained code and modifications are recorded
+in [UPSTREAM.md](../../apps/dispatch/priv/static/vendor/gods-eye-view/UPSTREAM.md).
+Cesium is the
 only added browser runtime dependency and is pinned to `1.138.0`. Phoenix
 serves a narrow engine bundle and local Natural Earth imagery. The host uses
 `CesiumWidget`; the unused higher-level widgets and Knockout are excluded so
@@ -120,8 +124,9 @@ freshness thresholds: gray at 120 seconds and `STALE` at 300 seconds. The
 provider label describes what the device reported; it is not independent proof
 of physical location. Position freshness does not authorize a business action.
 
-No coordinates enter URL state, browser storage, analytics or server-rendered
-HTML. Participant links contain only their existing opaque identifiers.
+No private coordinates enter URL state, browser storage, analytics or
+server-rendered HTML. The shell's coordinate help contains public, fixed format
+examples only. Participant links contain only their existing opaque identifiers.
 Every data response is `no-store`. The page has no operational write controls.
 
 Only this page allows Cesium's style attributes and local worker blobs through
@@ -132,9 +137,37 @@ existing CSP. Required upstream attribution remains visible.
 Keyed roster controls preserve keyboard focus across ordinary refreshes.
 Selection and follow use an explicit Dispatch participant entity. Local
 coordinate search reuses GEV's pinned parser; it moves the camera without
-calling a public geocoder or changing the selected business record. Work
+calling a public geocoder or changing business records. A successful search
+clears the previous selection, work and follow state; a refused search preserves
+them. Work
 fetches have their own cancellation generation and a 15-second deadline.
 Unauthorized or changed observation details cannot survive a new snapshot.
+
+### Native coordinate search
+
+The search accepts decimal latitude/longitude, explicit degree-minute-second
+notation, the existing two-dimensional WGS84 `geo:` subset, UTM, MGRS at
+100 m through 1 m resolution, and full Plus Codes. The viewer and its dependency
+versions are unchanged; the search upgrade adds three pure, attributed modules
+and no npm dependency or running service. Short Plus Codes never infer a
+reference place from the camera, a participant or device location.
+
+The separate `dispatch-map-search.js` boundary limits input to 160 characters,
+rechecks finite WGS84 output and refuses bare `S` in the UTM grammar. Upstream
+prefers northern latitude band S when it fits, even though the same northing
+can describe the southern hemisphere. Dispatch declines both interpretations
+and explains the alternative notations. Southern decimal/DMS coordinates,
+southern UTM with its actual latitude band (for example H), and MGRS band S
+remain supported. The upstream modules themselves remain byte-identical.
+
+Search result text identifies MGRS as a grid reference point and full Plus Codes
+as area centers, including coarse padded codes. Upstream uses cell centers for
+100 m and 10 m MGRS and the cell corner for 1 m MGRS. No accuracy value or
+observation is inferred from input precision. The camera uses the decoded
+point at its existing orientation zoom; it does not frame the entire encoded
+grid cell or imply street-map detail. Keyboard-accessible help explains these
+formats and limitations. Scope loss clears input, result text and the camera;
+a later search cannot restore the cleared private view.
 
 ## Packaging and acceptance
 

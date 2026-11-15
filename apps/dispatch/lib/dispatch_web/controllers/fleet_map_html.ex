@@ -56,8 +56,8 @@ defmodule DispatchWeb.FleetMapHTML do
                   type="text"
                   maxlength="160"
                   autocomplete="off"
-                  placeholder="Latitude, longitude or geo: URI"
-                  aria-describedby="dispatch-map-search-status"
+                  placeholder="Decimal, DMS, UTM, MGRS or Plus Code"
+                  aria-describedby="dispatch-map-search-help dispatch-map-search-status"
                 />
               </label>
               <button type="submit">Go</button>
@@ -65,6 +65,27 @@ defmodule DispatchWeb.FleetMapHTML do
             <p id="dispatch-map-search-status" role="status" aria-live="polite">
               Coordinate search runs locally. Place-name search is not configured.
             </p>
+            <details id="dispatch-map-search-help">
+              <summary>Supported coordinate formats</summary>
+              <p>Use WGS84 coordinates in one of these forms:</p>
+              <ul>
+                <li>Decimal latitude, longitude: <code>47.61, -122.33</code></li>
+                <li>Degrees, minutes, seconds (DMS): <code>47°36′36″N 122°19′48″W</code></li>
+                <li>Two-dimensional geo URI: <code>geo:47.61,-122.33</code></li>
+                <li>UTM zone, latitude band, easting, northing: <code>18T 585651 4511369</code></li>
+                <li>MGRS with 3–5 digits per axis: <code>18T WL 85650 11369</code></li>
+                <li>Full Plus Code: <code>849VCWC8+R9</code></li>
+              </ul>
+              <p>
+                UTM S shorthand is declined because S can identify a northern latitude band or the
+                southern hemisphere. Use another notation for that reference. Short Plus Codes
+                require a reference place and are not accepted.
+              </p>
+              <p>
+                MGRS searches navigate to a representative grid point; full Plus Codes navigate to
+                the encoded area's center. Input precision does not establish observation accuracy.
+              </p>
+            </details>
             <div id="dispatch-map-globe" aria-label="Observed participant locations"></div>
             <div id="dispatch-map-credits"></div>
             <section id="dispatch-map-selection" aria-labelledby="dispatch-map-selection-title" hidden>

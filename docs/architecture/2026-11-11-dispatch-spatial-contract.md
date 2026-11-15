@@ -1,6 +1,6 @@
 # Dispatch spatial read contract, version 2
 
-Date: 2026-11-11. Implementation: [draft PR #371](https://github.com/larsbx/biz-kit/pull/371).
+Date: 2026-11-11. Implementation: [PR #371](https://github.com/larsbx/biz-kit/pull/371).
 See the [workspace decision](2026-11-11-dispatch-map.md),
 [selected profile](../../tools/dispatch-globe/profile.json) and
 [formal obligations](../../formal/DISPATCH_SPATIAL_SAFETY.md).
@@ -160,6 +160,17 @@ camera. It does not geocode addresses, query a provider, change authority or
 create a location observation. No private state is put in navigation links,
 DOM data attributes, browser persistence, analytics or public feeds. Actual
 coordinate facts remain available as text to authorized readers.
+
+The 2026-11-15 search increment supports decimal, DMS, the existing `geo:`
+subset, UTM, MGRS and full Plus Codes through separately pinned native GEV
+modules. A Dispatch boundary refuses UTM S shorthand to avoid a northern-band
+versus southern-hemisphere guess. It preserves southern coordinates and MGRS
+band S. Search text identifies grid representative points and Plus Code area
+centers; input precision never becomes observed accuracy. Rejected input leaves
+selection, follow and camera commands intact. Successful input clears the old
+selection/work/follow before navigating. The wire protocol and observation
+authority are unchanged; [the workspace decision](2026-11-11-dispatch-map.md)
+records the complete local-search contract.
 
 The [profile](../../tools/dispatch-globe/profile.json) pins the viewer, engine
 and build dependency and declares package/network/browser budgets before

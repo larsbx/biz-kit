@@ -412,14 +412,64 @@ try {
   await page.locator("#dispatch-map-location-filter").selectOption("stale"); await rendered(1);
   assert.equal(await page.locator("#dispatch-map-participants li:not([hidden]) button").innerText(), "South van");
   await page.locator("#dispatch-map-location-filter").selectOption("all"); await rendered(2);
-  await page.locator("#dispatch-map-search").fill("47.61, -122.33");
-  await page.locator("#dispatch-map-search-form button").click();
-  assert.match(await page.locator("#dispatch-map-search-status").innerText(), /changes only the camera/);
-  assert.equal(new URL(page.url()).search, "");
-  await page.locator("#dispatch-map-search").fill("Seattle");
-  await page.locator("#dispatch-map-search-form button").click();
-  assert.match(await page.locator("#dispatch-map-search-status").innerText(), /No geocoder request was sent/);
-  checks.push("local filters show complete-snapshot counts and clear excluded selection; pinned coordinate search moves only the camera without geocoding");
+  checks.push("local filters show complete-snapshot counts and clear excluded selection");
+
+  await selected(); await workReady();
+  await page.locator("#dispatch-map-follow").click();
+  await cameraCenteredOn(IDS[0]);
+  const beforeRefusal = await page.evaluate(() => ({
+    destination: window.__lastCameraDestination,
+    work: document.getElementById("dispatch-map-work").textContent,
+    entities: window.__widget.entities.values.map(entity => entity.id).sort()
+  }));
+  for (const query of ["54S 383000 3950000", "56S 334900 6252291", "CWC8+R9", "Seattle"]) {
+    await page.locator("#dispatch-map-search").fill(query);
+    await page.locator("#dispatch-map-search-form button").click();
+    assert.match(await page.locator("#dispatch-map-search-status").innerText(), /UTM S can mean|No geocoder request was sent/);
+    assert.equal(await page.locator("#dispatch-map-follow").getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator("#dispatch-map-selection").isHidden(), false);
+    assert.equal(await page.evaluate(() => window.__widget.trackedEntity?.id), IDS[0]);
+    assert.deepEqual(await page.evaluate(() => ({
+      destination: window.__lastCameraDestination,
+      work: document.getElementById("dispatch-map-work").textContent,
+      entities: window.__widget.entities.values.map(entity => entity.id).sort()
+    })), beforeRefusal, query);
+  }
+  checks.push("ambiguous UTM S, short Plus Codes and place names leave camera commands, follow, selection, work and entities intact");
+
+  const observedBeforeSearch = await page.evaluate(() => [...window.__entityCollections.values()].flatMap(entries =>
+    [...entries.values()].map(entity => ({ id: entity.id, position: entity.position.getValue() }))));
+  const searchCases = [
+    ["47.61, -122.33", 47.61, -122.33, null],
+    ["47°36′36″N 122°19′48″W", 47.61, -122.33, null],
+    ["geo:39.7392,-104.9903", 39.7392, -104.9903, null],
+    ["56H 334900 6252291", -33.856779654, 151.215294266, null],
+    ["18T WL 85650 11369", 40.748817061, -73.985437913, /MGRS grid reference point/],
+    ["849VCWC8+R9", 37.4220625, -122.0840625, /Full Plus Code area center/],
+    ["9R000000+", 60, 150, /Full Plus Code area center/]
+  ];
+  for (const [query, lat, lon, label] of searchCases) {
+    await page.locator("#dispatch-map-search").fill(query);
+    await page.locator("#dispatch-map-search").press("Enter");
+    const status = await page.locator("#dispatch-map-search-status").innerText();
+    assert.match(status, /changes only the camera/);
+    if (label) assert.match(status, label);
+    const actual = await page.evaluate(() => ({
+      lat: window.__widget.camera.positionCartographic.latitude * 180 / Math.PI,
+      lon: window.__widget.camera.positionCartographic.longitude * 180 / Math.PI
+    }));
+    assert.ok(Math.abs(actual.lat - lat) < 0.00001 && Math.abs(actual.lon - lon) < 0.00001,
+      `${query} must move the actual camera to its decoded point: ${JSON.stringify(actual)}`);
+    assert.equal(await page.locator("#dispatch-map-selection").isHidden(), true);
+    assert.equal(await page.evaluate(() => window.__widget.trackedEntity), undefined);
+    assert.equal(await page.locator("#dispatch-map-work").innerText(), "");
+    assert.equal(await page.evaluate(() => window.__widget.entities.values.some(entity => entity.id.startsWith("stop:"))), false);
+    assert.deepEqual(await page.evaluate(() => [...window.__entityCollections.values()].flatMap(entries =>
+      [...entries.values()].map(entity => ({ id: entity.id, position: entity.position.getValue() })))), observedBeforeSearch);
+    assert.equal(new URL(page.url()).search, "");
+    assert.equal(new URL(page.url()).hash, "");
+  }
+  checks.push("decimal, DMS, geo URI, UTM, MGRS and full Plus Codes move the actual camera to checked WGS84 points without changing observations; grid and area-center semantics are visible");
 
   const restricted = snapshot(); restricted.work_access = false;
   await selected(); await workReady();
@@ -484,14 +534,17 @@ try {
 
   await sendAndWait(snapshot()); await rendered(2); await selected(); await workReady();
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#dispatch-map-search-help summary").click();
+  assert.match(await page.locator("#dispatch-map-search-help").innerText(), /Input precision does not establish observation accuracy/);
   narrow = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth,
     selectedVisible: !document.getElementById("dispatch-map-selection").hidden,
     rosterButtons: document.querySelectorAll("#dispatch-map-participants button").length }));
   assert.ok(narrow.document <= narrow.viewport, "the narrow layout must not require horizontal scrolling");
   assert.equal(narrow.selectedVisible, true); assert.equal(narrow.rosterButtons, 2);
   await page.screenshot({ path: path.join(artifacts, "dispatch-map-narrow.png"), fullPage: true });
+  await page.locator("#dispatch-map-search-help summary").click();
   await page.setViewportSize(viewport);
-  checks.push("390 CSS pixel emulation retains the selection, text controls and roster without horizontal overflow (not physical Android acceptance)");
+  checks.push("390 CSS pixel emulation retains expanded coordinate help, selection, text controls and roster without horizontal overflow (not physical Android acceptance)");
 
   mode = "403";
   for (const client of clients.keys()) client.end();
@@ -506,11 +559,22 @@ try {
   checks.push("disconnect clears every private view and resets the camera; revoked reconnect is terminal");
 
   mode = "ok"; await open(); await rendered(2); await connected();
+  await page.locator("#dispatch-map-search").fill("849VCWC8+R9");
+  await page.locator("#dispatch-map-search").press("Enter");
+  assert.match(await page.locator("#dispatch-map-search-status").innerText(), /area center/);
   const wrongScope = snapshot(); wrongScope.scope.key = "d".repeat(64);
   await sendAndWait(wrongScope); await rendered(0);
   await page.waitForFunction(() => document.getElementById("dispatch-map-status").textContent.includes("selected access changed"));
   assert.equal(await page.locator("#dispatch-map-participants li").count(), 0);
-  checks.push("a live scope replacement clears and terminates without mixing organizations");
+  assert.equal(await page.locator("#dispatch-map-search").inputValue(), "");
+  assert.equal(await page.locator("#dispatch-map-search-status").innerText(), "Coordinate search runs locally. Place-name search is not configured.");
+  const clearedDestination = await page.evaluate(() => window.__lastCameraDestination);
+  await page.locator("#dispatch-map-search").fill("18T WL 85650 11369");
+  await page.locator("#dispatch-map-search").press("Enter");
+  assert.match(await page.locator("#dispatch-map-search-status").innerText(), /globe is unavailable/);
+  assert.deepEqual(await page.evaluate(() => window.__lastCameraDestination), clearedDestination);
+  assert.equal(await count(), 0);
+  checks.push("scope loss erases search input, decoded description and camera; later local searches cannot restore cleared private state");
 
   await open(); await rendered(2); await connected();
   send("{invalid"); await rendered(0);

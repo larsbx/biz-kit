@@ -1,7 +1,9 @@
 import { createLocationFeed } from "./dispatch-map-feed.js";
 import { createSelectedWork } from "./dispatch-map-work.js";
 import { observationPresentation, participantLabel, SHA256 } from "./dispatch-map-model.js";
-import { parseCoordinateQuery } from "../../vendor/gods-eye-view/coordinate-parser.js";
+import { resolveCoordinateSearch } from "./dispatch-map-search.js";
+
+const SEARCH_IDLE = "Coordinate search runs locally. Place-name search is not configured.";
 
 const MESSAGES = {
   connecting: "Connecting to authorized observations…",
@@ -114,7 +116,8 @@ export function mountDispatchMap(document = globalThis.document) {
     const stops = document.createElement("ol");
     for (const stop of value.stops) {
       const item = document.createElement("li");
-      item.append(textNode("p", `${stop.sequence}. ${stop.kind} · ${bounded(stop.address_text)}`));
+      item.value = stop.sequence;
+      item.append(textNode("p", `${stop.kind} · ${bounded(stop.address_text)}`));
       item.append(textNode("p", `Window: ${stop.window_start || "unspecified"} — ${stop.window_end || "unspecified"}`));
       if (stop.position) {
         const button = document.createElement("button");
@@ -213,7 +216,7 @@ export function mountDispatchMap(document = globalThis.document) {
       snapshot = value;
       if (!value) {
         clearSelection(); ui.filter.value = ""; ui["location-filter"].value = "all"; ui.search.value = "";
-        ui["search-status"].textContent = "Coordinate search runs locally. Place-name search is not configured.";
+        ui["search-status"].textContent = SEARCH_IDLE;
       } else if (selectedId) {
         const participant = value.participants.find(row => row.participant_id === selectedId);
         if (!participant?.position || !matches(participant, Date.now())) clearSelection();
@@ -233,11 +236,22 @@ export function mountDispatchMap(document = globalThis.document) {
   });
   listen(ui["search-form"], "submit", event => {
     event.preventDefault();
-    const coordinates = parseCoordinateQuery(ui.search.value);
-    if (!coordinates) { ui["search-status"].textContent = "Enter valid decimal latitude and longitude, or a two-dimensional WGS84 geo: URI. No geocoder request was sent."; return; }
+    const result = resolveCoordinateSearch(ui.search.value);
+    if (result.status === "ambiguous_utm_s") {
+      ui["search-status"].textContent = "UTM S can mean a northern latitude band or the southern hemisphere. Use decimal coordinates, DMS, or MGRS with its full grid square. The camera has not moved.";
+      return;
+    }
+    if (result.status !== "ready") {
+      ui["search-status"].textContent = "Enter decimal coordinates, DMS, a two-dimensional WGS84 geo: URI, UTM, MGRS, or a full Plus Code. Open Supported coordinate formats for examples. No geocoder request was sent.";
+      return;
+    }
     if (!globe || !snapshot) { ui["search-status"].textContent = "The globe is unavailable. Coordinates have not been sent anywhere."; return; }
-    clearSelection(); refresh(); globe.showCoordinates(coordinates);
-    ui["search-status"].textContent = `Viewing ${coordinates.label}. This changes only the camera.`;
+    clearSelection(); refresh();
+    if (!globe) { ui["search-status"].textContent = "The globe is unavailable. Coordinates have not been sent anywhere."; return; }
+    globe.showCoordinates(result.point);
+    const description = result.kind === "area_center" ? "Full Plus Code area center. "
+      : result.kind === "grid_reference_point" ? "MGRS grid reference point. " : "";
+    ui["search-status"].textContent = `Viewing ${result.point.label}. ${description}This changes only the camera.`;
   });
   ui.fit.disabled = true;
   feed.start();

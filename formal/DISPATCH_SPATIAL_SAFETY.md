@@ -185,6 +185,7 @@ passed merely because their source exists.
 | Exact sample-to-work join and separate capabilities | `apps/dispatch/lib/dispatch/operations/location_work.ex` | `apps/dispatch/test/dispatch/operations/location_work_test.exs`: missing either read capability, changed observations, consent renewal, revoked/narrowed authority and foreign carrier load |
 | Late work, selection changes, timeout and capability loss | `apps/dispatch/priv/static/js/maps/dispatch-map-work.js` | `tools/dispatch-globe/test/work.test.mjs`: observation header, request generation, replacement/selection races, refusal and timeout |
 | Erasure on all visible surfaces, local controls and no mutation | `dispatch-map.js`, `dispatch-map-renderer.js`, operator load controller | Actual browser selection/follow/filter and disconnect/late-response scenarios; backend unchanged business versions/statuses; independent operator-page authorization tests |
+| Local coordinate interpretation and input refusal | `dispatch-map-search.js` and pinned GEV coordinate/grid/Plus Code modules | Fixed numerical reference vectors and vendor hashes; UTM S refusal preserves selection/follow/work; real browser camera coordinates for every format; grid/area-center labels; search erasure and refusal after scope loss |
 | Independent viewer demand cleanup | `LocationSnapshot` and `DispatchWeb.Streams.Locations` | Existing backend cases for watches added after opening, closing one viewer without ending another's watches, and source-session logout |
 
 ## 6. Reproduce and retain evidence
