@@ -53,13 +53,15 @@ byte values only for the proposed accounting reference and document digest
 fields. Keep the captured rows inside the authorized process because the
 prefix can contain data for other books. The fold trusts the reader and its
 canonical admission boundary. Its fixture entry point also supports isolated
-tests. The three SCF event names below are proposed contracts awaiting type
-registration and signer grants. This operator-run path has no scheduler or
-deployment wiring.
+tests. The SCF event types are registered by `CoopSubstrate.Scf`, which
+admits each one through this same fold with governance-granted
+`scf_accountant` keys. See
+[the SCF host ADR](../../docs/architecture/2026-11-16-scf-host.md).
 
 | Input | Projection rule |
 | --- | --- |
 | `InvoiceIssued` | Retain the exact earlier invoice in the selected chapter/entity. |
+| `ScfJournalEntryPostedV1` | Require `entity_id`, DZD, accounting `date` in the open year, `journal`, `label`, `document` and `lines` (`side`, `account`, `amount_minor`). Post exactly those lines under the `ScfCore.Entry` rules (chart, Σ débit = Σ crédit, pièce). Refusals are `{:invalid_entry, errors}`. Reversible like any posting. |
 | `ScfServiceRevenueRecognizedV1` | Require `entity_id`, `invoice` (global sequence and digest), explicit `currency: DZD`, `tva_treatment: no_tva`, ISO accounting `date`, and `document` (ID and SHA-256). For one supported full-amount service recognition, debit 411 and credit 706 using the admitted invoice amount in centimes. The recognition declaration attests denomination and treatment. The fold performs no currency conversion or TVA determination. |
 | `ScfEntryReversedV1` | Require `entity_id`, exact earlier posting `target`, DZD, accounting date and supporting document. Reverse all lines in the current open year, dated on or after the target. A posting can be reversed once. Reversing that reversal yields a linear, attributable chain. |
 | `ScfFiscalYearClosedV1` | Require `entity_id`, ISO `through` and supporting document. Close only December 31 of the current open year. Start the next year on January 1. |

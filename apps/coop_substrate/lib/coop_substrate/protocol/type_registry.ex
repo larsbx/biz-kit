@@ -1088,6 +1088,21 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
   end
 
   @doc """
+  Register a domain's event types through `:extra_event_types` BEFORE Log
+  audits or replays. Re-registering an identical declaration is a no-op; a
+  different declaration under a known name raises (a boot error, never an
+  override).
+  """
+  def register_extra!(types, domain) when is_map(types) do
+    existing = Application.get_env(:coop_substrate, :extra_event_types, %{})
+
+    for {name, spec} <- types, Map.get(existing, name, spec) != spec,
+        do: raise("conflicting #{domain} event registration: #{name}")
+
+    Application.put_env(:coop_substrate, :extra_event_types, Map.merge(existing, types))
+  end
+
+  @doc """
   Hook for log-dependent validity (09 gated-N): a type's acceptance may
   depend on prior log events. Realized in Phase 1B by
   `CoopSubstrate.Protocol.Validity`, checked against the append gate's fold

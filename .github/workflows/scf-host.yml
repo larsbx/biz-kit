@@ -1,0 +1,72 @@
+name: SCF accounting host
+
+on:
+  pull_request:
+    paths:
+      - "apps/scf_core/**"
+      - "apps/scf_host/**"
+      - "apps/coop_substrate/lib/coop_substrate/scf*.ex"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex"
+      - "apps/coop_substrate/test/scf*_test.exs"
+      - "config/scf_runtime.exs"
+      - "docs/architecture/2026-11-16-scf-host.md"
+      - ".github/workflows/scf-host.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/scf_core/**"
+      - "apps/scf_host/**"
+      - "apps/coop_substrate/lib/coop_substrate/scf*.ex"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex"
+      - "apps/coop_substrate/test/scf*_test.exs"
+      - "config/scf_runtime.exs"
+      - ".github/workflows/scf-host.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ledger-and-console:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      EVENTSTORE_HOST: localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: mix local.hex --force && mix local.rebar --force && mix deps.get
+      - name: Create the test event store
+        working-directory: apps/coop_substrate
+        run: mix event_store.create && mix event_store.init
+      - name: Pure SCF rules, projection and invariants
+        working-directory: apps/scf_core
+        run: mix test
+      - name: SCF admission on the canonical Log, replay and offline capture
+        working-directory: apps/coop_substrate
+        run: mix test test/scf_test.exs test/scf_replay_source_test.exs test/scf_replay_capture_test.exs test/procurement_test.exs
+      - name: Console forms, CSRF, sessions and JSON API over the real Log
+        working-directory: apps/scf_host
+        run: mix test
+      - name: Check formatting
+        run: |
+          mix format apps/scf_core/{mix.exs,lib/**/*.ex,test/**/*.exs} apps/scf_host/{mix.exs,lib/**/*.ex,test/**/*.exs} \
+            apps/coop_substrate/lib/coop_substrate/scf.ex apps/coop_substrate/test/scf_test.exs
+          git diff --exit-code -- apps/scf_core apps/scf_host apps/coop_substrate/lib/coop_substrate/scf.ex apps/coop_substrate/test/scf_test.exs

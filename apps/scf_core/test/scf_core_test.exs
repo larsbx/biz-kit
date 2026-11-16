@@ -203,6 +203,20 @@ defmodule ScfCoreTest do
     end
   end
 
+  test "Money parses typed DZD amounts to centimes, strictly" do
+    for {text, centimes} <- [
+          {"1 234 567,89", 123_456_789},
+          {"1234.5", 123_450},
+          {"0,05", 5},
+          {"  42 ", 4_200},
+          {"1 000,00 DA", 100_000}
+        ],
+        do: assert(Money.parse(text) == {:ok, centimes})
+
+    for bad <- ["", "-5", "1,234", "1.2.3", "abc", "1 2 3", "12,", nil, 5],
+        do: assert(Money.parse(bad) == {:error, :invalid_amount})
+  end
+
   test "Money formats DZD the Algerian way" do
     assert Money.format(123_456_789) == "1 234 567,89 DA"
     assert Money.format(-5) == "-0,05 DA"

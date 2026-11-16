@@ -60,6 +60,7 @@ defmodule CoopSubstrate.Log do
   @impl true
   def init(_opts) do
     :ok = CoopSubstrate.Procurement.register_types!()
+    :ok = CoopSubstrate.Scf.register_types!()
     {head, gate, links} = recover()
     :ok = repair_links(links)
     {:ok, %{head: head, gate: gate}}
@@ -152,6 +153,10 @@ defmodule CoopSubstrate.Log do
   @doc "Current-authority private procurement snapshot, checked in the appender."
   def procurement_snapshot(%Envelope{} = request, server \\ @server),
     do: GenServer.call(server, {:procurement_snapshot, request})
+
+  @doc "An SCF book under the current accountant grant, checked in the appender."
+  def scf_book(%Envelope{} = request, server \\ @server),
+    do: GenServer.call(server, {:scf_book, request})
 
   @doc "Read-only procurement contract review under the current operator grant."
   def procurement_contract_review(%Envelope{} = request, server \\ @server),
@@ -478,6 +483,10 @@ defmodule CoopSubstrate.Log do
     {:reply, CoopSubstrate.Procurement.read_snapshot(request, state.gate), state}
   end
 
+  def handle_call({:scf_book, request}, _from, state) do
+    {:reply, CoopSubstrate.Scf.read_book(request, state.gate), state}
+  end
+
   def handle_call({:procurement_contract_review, request}, _from, state) do
     {:reply, CoopSubstrate.Procurement.read_contract_review(request, state.gate), state}
   end
@@ -518,6 +527,13 @@ defmodule CoopSubstrate.Log do
 
   defp procurement_duplicate(envelopes, gate) do
     case CoopSubstrate.Procurement.duplicate(envelopes, gate) do
+      :new -> scf_duplicate(envelopes, gate)
+      result -> result
+    end
+  end
+
+  defp scf_duplicate(envelopes, gate) do
+    case CoopSubstrate.Scf.duplicate(envelopes, gate) do
       :new -> existing_duplicate(envelopes, gate)
       result -> result
     end
@@ -610,6 +626,7 @@ defmodule CoopSubstrate.Log do
                                                                            {:ok, gate} ->
       result =
         with :ok <- CoopSubstrate.Procurement.live_check(env, gate),
+             :ok <- CoopSubstrate.Scf.live_check(env, gate),
              :ok <- CoopSubstrate.GroupBuys.live_check(env, gate),
              do: TypeRegistry.validity_check(env, gate)
 

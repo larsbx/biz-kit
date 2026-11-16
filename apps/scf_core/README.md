@@ -13,6 +13,11 @@ SCF: Loi 07-11 (25 Nov 2007), Décret exécutif 08-156 and the Arrêté of
 | `ScfCore.Statements` | Compte de résultat par nature (production → VA → EBE → RO → RF → résultat net) and Bilan (actif/passif, courant/non courant, net of 28/29/39/49/59) |
 | `ScfCore.Money` | `1 234 567,89 DA` formatting |
 
+| `ScfCore.SignedProjection` | The fold of signed Log events into a book; `admit/4` is also the Log's admission rule ([SIGNED_PROJECTION.md](SIGNED_PROJECTION.md)) |
+
+Hosted by [`apps/scf_host`](../scf_host) over the canonical Log
+([ADR](../../docs/architecture/2026-11-16-scf-host.md)).
+
 ## Invariants (property-tested, `test/invariants_test.exs`)
 
 For every finite sequence of admitted entries:

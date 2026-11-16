@@ -63,6 +63,18 @@ defmodule BizKit.MixProject do
           runtime_config_path: "config/procurement_runtime.exs",
           include_erts: true,
           strip_beams: false
+        ],
+        # Algerian (SCF) accounting: the ledger that admits every écriture and
+        # the accountant's console and API (apps/scf_host).
+        scf: [
+          applications: [
+            biz_kit_cluster: :permanent,
+            coop_substrate: :permanent,
+            scf_host: :permanent
+          ],
+          runtime_config_path: "config/scf_runtime.exs",
+          include_erts: true,
+          strip_beams: false
         ]
       ]
     ]

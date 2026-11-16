@@ -38,6 +38,7 @@ Shared apps developed in this umbrella:
 | `inventory_core` | `apps/inventory_core` | Pure scoped stock, reservations, transfers and deterministic replay (no live writer) |
 | `order_core` | `apps/order_core` | Money-free order core: merchant-neutral lifecycle and placement (idempotency, one order per cart) |
 | `scf_core` | `apps/scf_core` | Pure Algerian accounting under the Système Comptable Financier: chart, ledger, TVA/G50, bilan and compte de résultat |
+| `scf_host` | `apps/scf_host` | The SCF accountant's French console and JSON API; every écriture is a signed Log event (release `scf`) |
 | `restaurant_host` | `apps/restaurant_host` | The rebuilt eatsbot's host: cash-only LiveView storefront and kitchen board over the signed Log |
 | `restaurant_core` | `apps/restaurant_core` | Money-free restaurant layer: kitchen stages, signed-event admission and the pinned legacy order fixtures |
 | `fulfillment_core` | `apps/fulfillment_core` | Cross-domain transport handoff protocol with Eatsbot/Dispatch adapters |

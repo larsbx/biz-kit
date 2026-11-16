@@ -14,7 +14,7 @@ defmodule CoopSubstrate.Procurement do
   """
   alias CommerceCore.MerchantPilot.Workflow
   alias CoopSubstrate.{Crypto, Log, ProcurementBountyEvidence, ProcurementContract, ProcurementDispatch}
-  alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
 
   @clock Application.compile_env(:coop_substrate, :procurement_clock, System)
   @grant "ProcurementOperatorGrantedV1"
@@ -75,18 +75,7 @@ defmodule CoopSubstrate.Procurement do
 
   # Register through the existing extension registry BEFORE Log audits/replays.
   # A different declaration of these names is a boot error, not an override.
-  def register_types! do
-    existing = Application.get_env(:coop_substrate, :extra_event_types, %{})
-    Enum.each(event_types(), fn {name, spec} ->
-      case Map.fetch(existing, name) do
-        :error -> :ok
-        {:ok, ^spec} -> :ok
-        _ -> raise "conflicting procurement event registration: #{name}"
-      end
-    end)
-    Application.put_env(:coop_substrate, :extra_event_types, Map.merge(existing, event_types()))
-    :ok
-  end
+  def register_types!, do: TypeRegistry.register_extra!(event_types(), "procurement")
 
   defp spec(role, fields), do: %{required_roles: [role], disclosure_class: :own_data,
     stream: {:payload_field, "private-procurement", "cooperative_id"},

@@ -208,4 +208,80 @@ defmodule ScfCore.SignedProjectionTest do
     assert Ledger.entries(result.ledger) == []
     assert result.postings == %{}
   end
+
+  defp manual(sequence, lines, overrides \\ %{}) do
+    row(
+      sequence,
+      "ScfJournalEntryPostedV1",
+      Map.merge(
+        %{
+          "journal" => "OD",
+          "label" => "Apport en capital",
+          "date" => "2026-03-05",
+          "currency" => "DZD",
+          "document" => %{@document | "id" => "statuts"},
+          "lines" =>
+            Enum.map(lines, fn {side, account, amount} ->
+              %{"side" => side, "account" => account, "amount_minor" => amount}
+            end)
+        },
+        overrides
+      )
+    )
+  end
+
+  @capital [{"debit", "512", 1_000_000_00}, {"credit", "101", 1_000_000_00}]
+
+  test "a signed manual écriture posts exactly its lines, cites its source, and can be reversed" do
+    entry = manual(1, @capital)
+    assert {:ok, book} = replay([entry])
+    assert Ledger.balances(book.ledger) == %{"101" => -1_000_000_00, "512" => 1_000_000_00}
+
+    assert [%{id: "signed-scf-v1:1", journal: "OD", piece: "statuts", label: "Apport en capital"}] =
+             Ledger.entries(book.ledger)
+
+    assert %{source: %{sequence: 1}, document: %{"id" => "statuts"}, reverses: nil} =
+             book.postings[1]
+
+    assert {:ok, reversed} = replay([entry, reversal(2, entry, "2026-03-06")])
+    assert Ledger.balances(reversed.ledger) == %{}
+  end
+
+  test "a manual écriture is admitted only if the SCF entry rules hold" do
+    for {lines, overrides, error} <- [
+          {[{"debit", "512", 5}, {"credit", "101", 4}], %{},
+           {:invalid_entry, [{:unbalanced, 5, 4}]}},
+          {[{"debit", "999", 5}, {"credit", "101", 5}], %{},
+           {:invalid_entry, [{:invalid_account, "999"}]}},
+          {@capital, %{"journal" => "od"}, {:invalid_entry, [:invalid_journal]}},
+          {@capital, %{"currency" => "EUR"}, :unsupported_currency},
+          {@capital, %{"date" => "2027-01-01"}, :outside_open_fiscal_year},
+          {@capital, %{"document" => %{"id" => " "}}, :missing_document},
+          {@capital, %{"lines" => [%{"side" => "debit"}]}, :invalid_entry_lines},
+          {@capital, %{"lines" => "512"}, :invalid_entry_lines}
+        ] do
+      assert {:error, {1, ^error}} = replay([manual(1, lines, overrides)])
+    end
+  end
+
+  test "incremental admission from new/1 is the same fold as replay" do
+    rows = [
+      manual(1, @capital),
+      invoice(2),
+      recognize(3, invoice(2)),
+      reversal(4, manual(1, @capital), "2026-04-01")
+    ]
+
+    {:ok, replayed} = replay(rows)
+
+    admitted =
+      Enum.reduce(rows, SignedProjection.new(@book.first_year), fn r, s ->
+        {:ok, s} = SignedProjection.admit(s, @book, r.ref, r.payload)
+        s
+      end)
+
+    assert admitted.ledger == replayed.ledger
+    assert admitted.postings == replayed.postings
+    assert admitted.open_year == replayed.open_year
+  end
 end

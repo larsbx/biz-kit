@@ -72,9 +72,22 @@ defmodule CoopSubstrate.ScfReplaySource do
          rows
        )
        when sequence <= last do
+    with {:ok, %{ref: %{digest: digest}} = row} <- row(event) do
+      fold_page(rest, sequence + 1, last, digest, [row | rows])
+    end
+  end
+
+  defp fold_page(_, _, _, _, _), do: {:error, :invalid_ledger_page}
+
+  @doc """
+  The projection row of one chain-assigned envelope: its full-record
+  reference and normalized payload. Offline capture and live admission
+  (`CoopSubstrate.Scf`) build rows only here, so both feed the fold alike.
+  """
+  def row(%Envelope{} = event) do
     with {:ok, digest} <- SignedConsumerSource.event_digest(event) do
       ref = %{
-        sequence: sequence,
+        sequence: event.global_seq,
         digest: digest,
         event_id: event.event_id,
         chapter: event.chapter_id,
@@ -83,12 +96,9 @@ defmodule CoopSubstrate.ScfReplaySource do
         type: event.type
       }
 
-      row = %{ref: ref, payload: normalize(event.type, event.payload)}
-      fold_page(rest, sequence + 1, last, digest, [row | rows])
+      {:ok, %{ref: ref, payload: normalize(event.type, event.payload)}}
     end
   end
-
-  defp fold_page(_, _, _, _, _), do: {:error, :invalid_ledger_page}
 
   defp normalize("ScfServiceRevenueRecognizedV1", payload) do
     payload
@@ -102,7 +112,9 @@ defmodule CoopSubstrate.ScfReplaySource do
     |> unwrap("document", "sha256")
   end
 
-  defp normalize("ScfFiscalYearClosedV1", payload), do: unwrap(payload, "document", "sha256")
+  defp normalize(type, payload)
+       when type in ["ScfFiscalYearClosedV1", "ScfJournalEntryPostedV1"],
+       do: unwrap(payload, "document", "sha256")
   defp normalize(_, payload), do: payload
 
   defp unwrap(payload, parent, field) do

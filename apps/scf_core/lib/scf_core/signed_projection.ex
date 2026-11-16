@@ -16,6 +16,15 @@ defmodule ScfCore.SignedProjection do
             reversed: MapSet.new(),
             open_year: nil
 
+  @types ~w(ScfJournalEntryPostedV1 ScfServiceRevenueRecognizedV1 ScfEntryReversedV1
+             ScfFiscalYearClosedV1)
+
+  @doc "The SCF event types this fold posts from."
+  def types, do: @types
+
+  @doc "An empty book whose first open exercice is `first_year`."
+  def new(first_year) when first_year in 1..9998, do: %__MODULE__{open_year: first_year}
+
   @doc """
   Rebuild one chapter/entity book. Input rows are an internal replay contract,
   never a public ingest format. An error identifies the failing log position
@@ -24,7 +33,7 @@ defmodule ScfCore.SignedProjection do
   def replay(records, %{chapter: chapter, entity: entity, first_year: year} = book)
       when is_list(records) and is_binary(chapter) and chapter != "" and
              is_binary(entity) and entity != "" and year in 1..9998 do
-    Enum.reduce_while(records, {:ok, %__MODULE__{open_year: year}}, fn row, {:ok, state} ->
+    Enum.reduce_while(records, {:ok, new(year)}, fn row, {:ok, state} ->
       case step(state, book, row) do
         {:ok, next} -> {:cont, {:ok, next}}
         {:error, reason} -> {:halt, {:error, reason}}
@@ -46,7 +55,7 @@ defmodule ScfCore.SignedProjection do
           {:error, {seq, :source_conflict}}
 
         :error when seq == state.sequence + 1 ->
-          case project(state, book, ref, payload) do
+          case admit(state, book, ref, payload) do
             {:ok, next} ->
               {:ok, %{next | sequence: seq, records: Map.put(state.records, seq, row)}}
 
@@ -78,15 +87,24 @@ defmodule ScfCore.SignedProjection do
 
   defp validate_ref(_), do: {:error, :invalid_source}
 
-  defp project(
-         state,
-         %{chapter: chapter, entity: entity},
-         %{chapter: chapter} = ref,
-         %{
-           "entity_id" => entity
-         } = payload
-       ) do
+  @doc """
+  Apply one canonical event to the book, without the redelivery and gap
+  checks of `replay/2`: the caller (the Log's admission gate) supplies events
+  in canonical order exactly once. `replay/2` is this fold plus those checks,
+  so admission and rebuild share one set of rules.
+  """
+  def admit(
+        state,
+        %{chapter: chapter, entity: entity},
+        %{chapter: chapter} = ref,
+        %{
+          "entity_id" => entity
+        } = payload
+      ) do
     case ref.type do
+      "ScfJournalEntryPostedV1" ->
+        post_manual(state, ref, payload)
+
       "InvoiceIssued" ->
         {:ok, put_in(state.invoices[ref.sequence], {ref, payload})}
 
@@ -104,19 +122,57 @@ defmodule ScfCore.SignedProjection do
     end
   end
 
-  defp project(state, %{chapter: chapter}, %{chapter: chapter, type: type}, payload)
-       when type in [
-              "ScfServiceRevenueRecognizedV1",
-              "ScfEntryReversedV1",
-              "ScfFiscalYearClosedV1"
-            ] do
+  def admit(state, %{chapter: chapter}, %{chapter: chapter, type: type}, payload)
+      when type in @types do
     case payload do
       %{"entity_id" => entity} when is_binary(entity) and entity != "" -> {:ok, state}
       _ -> {:error, :missing_entity}
     end
   end
 
-  defp project(state, _, _, _), do: {:ok, state}
+  def admit(state, _, _, _), do: {:ok, state}
+
+  # A general écriture: the signed lines are posted exactly, under the same
+  # Entry rules (chart, Σ débit = Σ crédit, pièce) as every other posting.
+  defp post_manual(state, ref, payload) do
+    with :ok <- dzd(payload["currency"]),
+         {:ok, lines} <- manual_lines(payload["lines"]),
+         {:ok, attrs, document} <- entry_attrs(state, ref, payload),
+         attrs =
+           Map.merge(attrs, %{
+             journal: payload["journal"],
+             label: payload["label"] || "",
+             lines: lines
+           }),
+         {:ok, ledger} <- post(state.ledger, attrs) do
+      posting = %{source: ref, invoice: nil, document: document, reverses: nil}
+      {:ok, put_in(%{state | ledger: ledger}.postings[ref.sequence], posting)}
+    end
+  end
+
+  defp manual_lines(lines) when is_list(lines) and lines != [] do
+    Enum.reduce_while(lines, {:ok, []}, fn
+      %{"side" => side, "account" => account, "amount_minor" => amount}, {:ok, acc}
+      when side in ["debit", "credit"] ->
+        {:cont, {:ok, [{String.to_existing_atom(side), account, amount} | acc]}}
+
+      _, _ ->
+        {:halt, {:error, :invalid_entry_lines}}
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      error -> error
+    end
+  end
+
+  defp manual_lines(_), do: {:error, :invalid_entry_lines}
+
+  defp post(ledger, attrs) do
+    case Ledger.post(ledger, attrs) do
+      {:error, errors} when is_list(errors) -> {:error, {:invalid_entry, errors}}
+      result -> result
+    end
+  end
 
   defp recognize(state, ref, payload) do
     with {:ok, invoice_ref, invoice_id, amount} <- invoice(state, payload["invoice"]),

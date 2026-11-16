@@ -39,6 +39,9 @@ defmodule CoopSubstrate.MixProject do
       # The restaurant order lifecycle the ledger admits (eatsbot rebuild).
       {:restaurant_core, in_umbrella: true},
       {:dispatch_core, in_umbrella: true},
+      # The SCF rulebook the Log applies to SCF events (pure, dependency-free).
+      # A runtime dependency so EVERY release replaying a shared store has it.
+      {:scf_core, in_umbrella: true},
       # Cross-boundary signed replay acceptance; no production dependency.
       {:agent_ops_store, in_umbrella: true, only: :test},
       {:commerce_core, in_umbrella: true, only: :test, runtime: false},
