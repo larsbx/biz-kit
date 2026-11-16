@@ -140,12 +140,14 @@ jobs:
             apps/coop_substrate/test/agent_backend_receiver_test.exs \
             apps/coop_substrate/test/agent_local_worker_test.exs \
             apps/coop_substrate/test/agent_event_acceptance_test.exs \
+            apps/coop_substrate/acceptance/agent_backend_execution_test.exs \
             apps/coop_substrate/test/support/agent_staging_fixture.ex \
             apps/coop_substrate/test/support/agent_staging_sql.ex \
             apps/coop_substrate/test/support/agent_backend_receiver.ex \
             apps/coop_substrate/test/support/agent_local_worker.ex \
+            apps/coop_substrate/test/support/agent_execution_fixture.ex \
             scripts/agent_launch_admission_probe.exs
-      - name: Verify genuine signed authority, SQL fences and session recovery
+      - name: Verify signed authority, SQL fences and local workload recovery
         shell: bash
         run: |
           set -euo pipefail
@@ -158,6 +160,7 @@ jobs:
               test/agent_launch_admission_test.exs \
               test/agent_backend_request_test.exs test/agent_backend_receiver_test.exs \
               test/agent_local_worker_test.exs \
+              acceptance/agent_backend_execution_test.exs \
               --warnings-as-errors --trace --seed "$seed" \
               | tee "$AGENT_LAUNCH_STAGE/signed-launch-$seed.log"
           done

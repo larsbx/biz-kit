@@ -33,6 +33,7 @@ defmodule CoopSubstrate.AgentBackendRequest do
   @hex_digest ~r/\A[0-9a-f]{64}\z/
   @utc_time ~r/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|\+00:00)\z/
   @max_bigint 9_223_372_036_854_775_807
+  @execution_binding ~w(admission_id plan_digest execution_deadline)
   @errors %{
     "effect_fenced" => :agent_backend_effect_fenced,
     "binding_conflict" => :agent_backend_binding_conflict,
@@ -94,6 +95,28 @@ defmodule CoopSubstrate.AgentBackendRequest do
     if valid_request?(request),
       do: response(request, decoded_map),
       else: {:error, :invalid_agent_backend_request}
+  end
+
+  @doc """
+  Bind a lookup to the original create request and any previously observed
+  backend identity. Unknown lookups and fences without a retained identity
+  cannot recover an execution. A match checks binding only.
+  """
+  @spec verify_lookup_binding(map(), term(), String.t() | nil) :: {:ok, map()} | {:error, atom()}
+  def verify_lookup_binding(create, decoded_map, backend_id \\ nil) do
+    with true <-
+           (match?(%{"operation" => "create"}, create) and valid_request?(create) and
+              (is_nil(backend_id) or valid_backend?(backend_id))) or
+             {:error, :invalid_agent_backend_request},
+         {:ok, lookup} <- lookup(create["effect_id"], create["store_id"]),
+         {:ok, receipt} <- verify_response(lookup, decoded_map),
+         true <- complete_binding?(receipt) or {:error, :agent_backend_identity_unobserved},
+         true <-
+           (Map.take(receipt, @execution_binding) == Map.take(create, @execution_binding) and
+              (is_nil(backend_id) or receipt["backend_id"] == backend_id)) or
+             {:error, :agent_backend_binding_conflict} do
+      {:ok, receipt}
+    end
   end
 
   defp target_request(operation, effect_id, store_id) do
