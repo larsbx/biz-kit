@@ -13,7 +13,7 @@ defmodule CoopSubstrate.Procurement do
   Procurement batches are deliberately singleton in this first host.
   """
   alias CommerceCore.MerchantPilot.Workflow
-  alias CoopSubstrate.{Crypto, Log, ProcurementContract, ProcurementDispatch}
+  alias CoopSubstrate.{Crypto, Log, ProcurementBountyEvidence, ProcurementContract, ProcurementDispatch}
   alias CoopSubstrate.Protocol.Envelope
 
   @clock Application.compile_env(:coop_substrate, :procurement_clock, System)
@@ -25,7 +25,9 @@ defmodule CoopSubstrate.Procurement do
   @route "ProcurementDispatchRouteV1"
   @dispatch_request "ProcurementDispatchRequestedV1"
   @dispatch_step "ProcurementDispatchStepV1"
-  @types [@grant, @business, @command, @read, @review, @route, @dispatch_request, @dispatch_step]
+  @bounty_attestation "ProcurementBountyEvidenceAttestedV1"
+  @types [@grant, @business, @command, @read, @review, @route, @dispatch_request,
+    @dispatch_step, @bounty_attestation]
   @quote_fields ~w(quote_id merchant_business_id revision total_minor currency expires_at_ms source_ref)a
   @fields %{
     "request" => ~w(buyer_business_id description quantity currency needed_by_ms consent_ref)a,
@@ -33,8 +35,8 @@ defmodule CoopSubstrate.Procurement do
     "quote" => @quote_fields,
     "sourced_quote" => @quote_fields ++ ~w(sourcing_business_id sourcing_ref)a,
     "post_bounty" => ~w(reward_minor maximum_total_minor terms_ref)a,
-    "confirm_bounty" => ~w(evidence_ref)a,
-    "bounty_payment_evidence" => ~w(evidence_ref)a,
+    "confirm_bounty" => ~w(attestation_id)a,
+    "bounty_payment_evidence" => ~w(attestation_id)a,
     "accept" => ~w(quote_id revision buyer_business_id evidence_ref)a,
     "fulfill" => ~w(evidence_ref)a,
     "cancel" => ~w(evidence_ref)a,
@@ -48,7 +50,7 @@ defmodule CoopSubstrate.Procurement do
   def event?(type), do: type in @types
   def clock_ms, do: @clock.system_time(:millisecond)
   def init, do: %{grants: %{}, businesses: %{}, requests: %{}, commands: %{}, events: %{},
-    bounty_evidence: MapSet.new(), dispatch: ProcurementDispatch.init()}
+    bounty_evidence: MapSet.new(), bounty_attestations: %{}, dispatch: ProcurementDispatch.init()}
   def state(gate), do: Map.get(gate, :procurement, init())
 
   def event_types do
@@ -61,6 +63,9 @@ defmodule CoopSubstrate.Procurement do
         "expires_at_ms" => :int, "expected_version" => :int})),
       @business => spec("governance", Map.merge(common, %{"business_id" => :string,
         "active" => :bool, "evidence_ref" => :string, "expected_version" => :int})),
+      @bounty_attestation => spec("governance", Map.merge(common, %{"request_id" => :string,
+        "purpose" => :string, "evidence_ref" => :string, "expected_version" => :int,
+        "expires_at_ms" => :int})),
       @command => spec("procurement_operator", Map.merge(operator,
         %{"request_id" => :string, "command" => :any})),
       @read => spec("procurement_operator", operator),
@@ -306,6 +311,13 @@ defmodule CoopSubstrate.Procurement do
          do: ProcurementDispatch.configure(state(gate), env)
   end
 
+  defp transition(%Envelope{type: @bounty_attestation} = env, gate, now) do
+    with :ok <- governance(env, gate), :ok <- scope(env),
+         true <- id?(env.payload["request_id"]) or {:error, :invalid_request_id},
+         do: ProcurementBountyEvidence.attest(state(gate), request_key(env), env.payload,
+           env.event_id, now)
+  end
+
   defp transition(%Envelope{type: @dispatch_request} = env, gate, now) do
     with :ok <- operator(env, gate, now), :ok <- scope(env),
          true <- id?(env.payload["request_id"]) or {:error, :invalid_request_id},
@@ -322,21 +334,24 @@ defmodule CoopSubstrate.Procurement do
   defp transition(%Envelope{type: @command} = env, gate, now) do
     s = state(gate)
     p = env.payload
+    key = request_key(env)
+    row = s.requests[key]
     with :ok <- operator(env, gate, now), :ok <- scope(env),
          true <- id?(p["request_id"]),
          {:ok, c} <- decode_command(p["command"]),
-         false <- Map.has_key?(s.commands, {request_key(env), c.id}),
+         false <- Map.has_key?(s.commands, {key, c.id}),
          false <- Map.has_key?(s.events, env.event_id),
          :ok <- businesses(env, c, s),
-         :ok <- ProcurementDispatch.permit_commercial(s, request_key(env), c.action) do
+         :ok <- ProcurementDispatch.permit_commercial(s, key, c.action),
+         {:ok, resolved} <- ProcurementBountyEvidence.resolve(s, row, c, now, env.timestamp_ms) do
       trusted = %{authorized: true, chapter_id: env.chapter_id,
         cooperative_id: p["cooperative_id"], request_id: p["request_id"],
         actor_id: p["operator_id"], now_ms: now, event_at_ms: env.timestamp_ms}
-      case apply_kernel(s.requests[request_key(env)], trusted, c) do
+      case apply_kernel(row, trusted, resolved) do
         {:ok, row, :accepted} ->
-          with {:ok, next} <- reserve_bounty_evidence(s, row, c.action) do
-            {:ok, next |> put_in([:requests, Access.key(request_key(env))], row)
-              |> put_in([:commands, Access.key({request_key(env), c.id})], env)}
+          with {:ok, next} <- ProcurementBountyEvidence.claim(s, row, c.action) do
+            {:ok, next |> put_in([:requests, Access.key(key)], row)
+              |> put_in([:commands, Access.key({key, c.id})], env)}
           end
         {:error, _} = error -> error
         _ -> {:error, :procurement_command_replay}
@@ -361,22 +376,6 @@ defmodule CoopSubstrate.Procurement do
       {:error, _} = error -> error
       _ -> {:error, :procurement_dispatch_fulfillment_refused}
     end
-  end
-
-  defp reserve_bounty_evidence(s, %{bounty: %{award: award}} = row, :confirm_bounty),
-    do: claim_bounty_evidence(s, row.scope, [award.delivery_ref, award.closeout_ref])
-
-  defp reserve_bounty_evidence(s, %{bounty: %{award: award}} = row, :bounty_payment_evidence),
-    do: claim_bounty_evidence(s, row.scope, [award.payment_ref])
-
-  defp reserve_bounty_evidence(s, _, _), do: {:ok, s}
-
-  defp claim_bounty_evidence(s, {chapter, coop, _}, refs) do
-    keys = MapSet.new(refs, &{chapter, coop, &1})
-
-    if MapSet.size(keys) == length(refs) and MapSet.disjoint?(s.bounty_evidence, keys),
-      do: {:ok, %{s | bounty_evidence: MapSet.union(s.bounty_evidence, keys)}},
-      else: {:error, :bounty_evidence_already_used}
   end
 
   # The procurement host includes CommerceCore in its release closure. Keep the

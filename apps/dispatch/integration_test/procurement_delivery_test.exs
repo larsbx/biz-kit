@@ -185,6 +185,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
       courier_role: courier_role,
       service: service,
       service_actor: service_actor,
+      governance: governance,
       signer: signer,
       config: config
     }
@@ -193,10 +194,10 @@ defmodule Dispatch.ProcurementDeliveryTest do
   test "real worker delivery supports one sourcing reward on the exact accepted quote",
        c do
     accepted_quote = order!(c, "order-1", :sourcing_bounty)
-    closeout = %{"evidence_ref" => "buyer-closeout-order-1"}
+    closeout_ref = "buyer-closeout-order-1"
 
     assert {:error, {:reject, 0, :illegal_transition}} =
-             business(c, "order-1", "confirm_bounty", 6, closeout)
+             business(c, "order-1", "confirm_bounty", 6, %{"attestation_id" => closeout_ref})
 
     before = Log.head().global_seq
     assert {:ok, nil} = poll()
@@ -241,13 +242,27 @@ defmodule Dispatch.ProcurementDeliveryTest do
 
     assert Log.head().global_seq == before + 3
 
+    assert {:error, {:reject, 0, :bounty_attestation_scope_or_purpose_mismatch}} =
+             business(c, "order-1", "confirm_bounty", 7, %{"attestation_id" => closeout_ref})
+
+    attestation =
+      append!(c.governance, c.context, "ProcurementBountyEvidenceAttestedV1", %{
+        "cooperative_id" => c.context.cooperative_id,
+        "request_id" => "order-1",
+        "purpose" => "closeout",
+        "evidence_ref" => closeout_ref,
+        "expected_version" => fulfilled.version,
+        "expires_at_ms" => Procurement.clock_ms() + 60_000
+      })
+
+    closeout = %{"attestation_id" => attestation.event_id}
     assert {:ok, confirmed} = business(c, "order-1", "confirm_bounty", 7, closeout)
     assert {:ok, ^confirmed} = business(c, "order-1", "confirm_bounty", 7, closeout)
 
     assert {:error, {:reject, 0, :bounty_result_not_admissible}} =
              business(c, "order-1", "confirm_bounty", 8, closeout)
 
-    assert row(c, "order-1").bounty.award.closeout_ref == closeout["evidence_ref"]
+    assert row(c, "order-1").bounty.award.closeout_ref == closeout_ref
     head = Log.head()
 
     # A retry has a fresh signed envelope, but the same admitted command/proof.
@@ -485,7 +500,8 @@ defmodule Dispatch.ProcurementDeliveryTest do
         timestamp_ms: div(Procurement.clock_ms(), 1_000) * 1_000
       )
 
-    assert {:ok, [_]} = Log.append(event)
+    assert {:ok, [admitted]} = Log.append(event)
+    admitted
   end
 
   defp order!(c, id, kind \\ :ordinary) do

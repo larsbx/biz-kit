@@ -121,14 +121,34 @@ defmodule ProcurementHost.HTTPTest do
       {"accept", %{"quote_id" => "q", "revision" => "1", "buyer_business_id" => "buyer",
         "evidence_ref" => "buyer-selected-quote"}, "Awarded, awaiting fulfillment"},
       {"fulfill", %{"evidence_ref" => "item-delivered"}, "Awaiting closeout evidence"},
-      {"confirm_bounty", %{"evidence_ref" => "buyer-closeout"}, "Earned. Sourcing business: source"},
-      {"bounty_payment_evidence", %{"evidence_ref" => "accounts-payable-evidence"}, "External payment evidence recorded"}
+      {"confirm_bounty", %{"attestation_id" => "buyer-closeout"},
+        "Reward recorded as earned (operator-attested closeout)"},
+      {"bounty_payment_evidence", %{"attestation_id" => "accounts-payable-evidence"},
+        "External payment evidence recorded (operator attestation)"}
     ]
 
     last = Enum.reduce(Enum.with_index(commands), session, fn {{action, attrs, expected}, version}, previous ->
       params = Map.merge(attrs, %{"_csrf_token" => csrf(previous), "command_id" => "bounty-#{version}",
         "expected_version" => to_string(version)})
-      result = request(:post, "/requests/bounty-request/" <> action, params, previous)
+      path = "/requests/bounty-request/" <> action
+
+      params =
+        case Map.fetch(attrs, "attestation_id") do
+          {:ok, reference} ->
+            head = Log.head()
+            assert request(:post, path, params, previous).status == 409
+            assert Log.head() == head
+            purpose = if action == "confirm_bounty", do: "closeout", else: "external_payment"
+            evidence = ProcurementFixture.bounty_attestation(f, "bounty-request", purpose, version,
+              reference, f.now + 60_000)
+            assert {:ok, [attested]} = Log.append(evidence)
+            %{params | "attestation_id" => attested.event_id}
+
+          :error ->
+            params
+        end
+
+      result = request(:post, path, params, previous)
       assert result.status == 303
       detail = request(:get, "/requests/bounty-request", %{}, result)
       assert detail.status == 200

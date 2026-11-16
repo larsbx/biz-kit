@@ -9,8 +9,8 @@ defmodule ProcurementHost.HTML do
     "quote" => @quote_fields,
     "sourced_quote" => @quote_fields ++ ~w(sourcing_business_id sourcing_ref),
     "post_bounty" => ~w(reward_minor maximum_total_minor terms_ref),
-    "confirm_bounty" => ~w(evidence_ref),
-    "bounty_payment_evidence" => ~w(evidence_ref),
+    "confirm_bounty" => ~w(attestation_id),
+    "bounty_payment_evidence" => ~w(attestation_id),
     "accept" => ~w(quote_id revision buyer_business_id evidence_ref),
     "fulfill" => ~w(evidence_ref), "cancel" => ~w(evidence_ref),
     "dispute" => ~w(evidence_ref), "payment_evidence" => ~w(evidence_ref)
@@ -115,8 +115,8 @@ defmodule ProcurementHost.HTML do
     status = cond do
       phase == :disputed -> "Disputed"
       phase == :cancelled -> "Cancelled"
-      award.payment_ref -> "External payment evidence recorded"
-      award.closeout_ref -> "Earned"
+      award.payment_ref -> "External payment evidence recorded (operator attestation)"
+      award.closeout_ref -> "Reward recorded as earned (operator-attested closeout)"
       award.delivered_on_time -> "Awaiting closeout evidence"
       award.delivery_ref -> "Delivery missed the bounty deadline"
       true -> "Awarded, awaiting fulfillment"
@@ -185,7 +185,10 @@ defmodule ProcurementHost.HTML do
     do: "<p>Enter the landed supplier quote with disclosed fees, before adding the sourcing reward.</p>"
 
   defp bounty_instructions("confirm_bounty"),
-    do: "<p>Record buyer closeout evidence after the agreed return and dispute conditions are satisfied.</p>"
+    do: "<p>Enter the signed governance attestation ID for buyer closeout on this request version.</p>"
+
+  defp bounty_instructions("bounty_payment_evidence"),
+    do: "<p>Enter the signed governance attestation ID for the separate external payment evidence.</p>"
 
   defp bounty_instructions(_), do: ""
 
