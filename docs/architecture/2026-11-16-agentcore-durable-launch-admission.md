@@ -178,6 +178,11 @@ error or unavailable database is not a successful negative control.
 
 ## Remaining backend boundary
 
+The [durable reference receiver increment](2026-11-16-agentcore-durable-backend-receiver.md)
+adds an independent operational request store, reply-loss recovery and
+permanent fences. It has no workload execution and does not make signed
+withdrawal atomic with a separate receiver or a physical backend.
+
 Host approval and consent changes after the supplied snapshot are not
 serialized here. Physical start, cancellation delivery, durable backend
 deduplication and authenticated termination remain under issue #92. The
