@@ -432,7 +432,7 @@ def lifecycle(browser: Browser, token: str, checks: dict, dispatch) -> tuple[str
 
 
 def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None, tls_pair=None,
-               delivery_factory=None) -> dict:
+               delivery_factory=None, tls_factory=None) -> dict:
     env = database_environment(dict(os.environ))
     for executable in ("createdb", "dropdb", "pg_dump", "pg_restore", "openssl"):
         require(shutil.which(executable) is not None, f"required tool unavailable: {executable}")
@@ -443,6 +443,8 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
     require((desktop_deb is None) == (tls_pair is None), "native acceptance requires a package and a trusted TLS pair")
     require(delivery_factory is None or desktop_deb is None,
             "separate Dispatch acceptance does not claim graphical courier or Tauri coverage")
+    require(tls_factory is None or (delivery_factory is not None and tls_pair is None),
+            "custom TLS fixtures require separate Dispatch acceptance")
     with ExitStack() as stack:
         directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="bizkit-procurement-"))
         work = Path(directory)
@@ -469,13 +471,17 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
             harness.create_database(database)
             harness.run([harness.executable, "eval", "ProcurementHost.ReleaseTasks.migrate()"], label="migrate")
             checks["migration"] = True
-            if tls_pair is None:
+            if tls_factory is not None:
+                certificate, key, trust_anchor = tls_factory(harness)
+            elif tls_pair is None:
                 certificate, key = work / "tls.crt", work / "tls.key"
                 harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                              "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=127.0.0.1",
                              "-addext", "subjectAltName=IP:127.0.0.1"], label="test-certificate")
+                trust_anchor = certificate
             else:
                 certificate, key = tls_pair
+                trust_anchor = certificate
             observations = Queue() if desktop_deb is not None else None
             tls = proxy(port, certificate, key, observations)
             origin = f"https://127.0.0.1:{tls.server_address[1]}"
@@ -486,7 +492,7 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
             seeded = harness.fixture("seed")
             harness.start()
             if desktop_deb is None:
-                browser = Browser(origin, certificate)
+                browser = Browser(origin, trust_anchor)
             else:
                 from tauri_client import packaged_browser
 

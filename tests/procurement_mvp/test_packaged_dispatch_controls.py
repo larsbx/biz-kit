@@ -30,7 +30,8 @@ def packaged_receipt():
                            (422, 200, 422, 200, 200), strict=True):
         row.update(portal_status=status, unauthenticated_denied=True, missing_csrf_denied=True)
     value["dispatch_evidence"].update(mix_env="test", database_scope="fresh-separate-loopback-databases",
-                                      certificate_sha256={"trusted": "c" * 64, "wrong_hostname": "e" * 64},
+                                      certificate_sha256={"trusted": "c" * 64, "fixture_ca": "b" * 64,
+                                                          "wrong_hostname": "e" * 64},
                                       observations=observed)
     return value
 
@@ -72,6 +73,11 @@ class PackagedControls(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 self.validate(value)
 
+        value = packaged_receipt()
+        del value["dispatch_evidence"]["certificate_sha256"]["fixture_ca"]
+        with self.assertRaisesRegex(RuntimeError, "missing distinct TLS fixture certificate identities"):
+            self.validate(value)
+
     def test_peer_is_launched_from_archive_and_receives_only_fixture_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
@@ -107,6 +113,39 @@ class PackagedControls(unittest.TestCase):
             with patch("sys.argv", argv), patch.dict(os.environ, {}, clear=True), self.assertRaises(RuntimeError):
                 packaged.main()
             self.assertFalse(target.exists())
+
+    def test_hosted_evidence_requires_packaged_receipt_for_exact_revision_and_archives(self):
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = Path(directory)
+            procurement = evidence / "procurement-release.tar.gz"
+            dispatch = evidence / "dispatch-acceptance-release.tar.gz"
+            procurement.write_bytes(b"synthetic Procurement archive")
+            dispatch.write_bytes(b"synthetic Dispatch archive")
+            procurement_hash, dispatch_hash = release.digest(procurement), release.digest(dispatch)
+            manifest = f"{procurement_hash}  {procurement.name}\n{dispatch_hash}  {dispatch.name}\n"
+            (evidence / "artifact.sha256").write_text(manifest)
+            (evidence / "revision.txt").write_text(REVISION + "\n")
+            (evidence / "packaged").mkdir()
+            receipt_path = evidence / "packaged/receipt.json"
+            good = packaged_receipt()
+            good.update(artifact_sha256=procurement_hash, dispatch_artifact_sha256=dispatch_hash)
+            receipt_path.write_text(json.dumps(good))
+            packaged.verify_evidence(evidence, REVISION)
+
+            with self.assertRaisesRegex(RuntimeError, "revision mismatch"):
+                packaged.verify_evidence(evidence, "f" * 40)
+
+            receipt_path.write_text(json.dumps(receipt()))
+            with self.assertRaisesRegex(RuntimeError, "wrong packaged Dispatch acceptance kind"):
+                packaged.verify_evidence(evidence, REVISION)
+            receipt_path.write_text(json.dumps(good))
+
+            dispatch.write_bytes(b"substituted Dispatch archive")
+            with self.assertRaisesRegex(RuntimeError, "checksum manifest mismatch"):
+                packaged.verify_evidence(evidence, REVISION)
+            (evidence / "artifact.sha256").write_text(manifest.replace(dispatch_hash, release.digest(dispatch)))
+            with self.assertRaisesRegex(RuntimeError, "Dispatch archive hash mismatch"):
+                packaged.verify_evidence(evidence, REVISION)
 
 
 if __name__ == "__main__":

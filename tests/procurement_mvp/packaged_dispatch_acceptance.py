@@ -23,6 +23,7 @@ TRANSPORT = {
     "courier": "authenticated-DispatchWeb.Router-in-packaged-test-vm",
 }
 REFUSALS = {"unknown_ca", "hostname_check_failed"}
+TLS_CERTIFICATES = {"trusted", "fixture_ca", "wrong_hostname"}
 
 
 def validate_receipt(value: dict, revision: str, procurement_hash: str, dispatch_hash: str) -> None:
@@ -42,8 +43,8 @@ def validate_receipt(value: dict, revision: str, procurement_hash: str, dispatch
                     and evidence.get("database_scope") == "fresh-separate-loopback-databases",
                     "wrong Dispatch release profile or database scope")
     certificates = evidence.get("certificate_sha256", {})
-    release.require(set(certificates) == {"trusted", "wrong_hostname"}
-                    and len(set(certificates.values())) == 2
+    release.require(set(certificates) == TLS_CERTIFICATES
+                    and len(set(certificates.values())) == len(TLS_CERTIFICATES)
                     and all(re.fullmatch(r"[0-9a-f]{64}", sha) for sha in certificates.values()),
                     "missing distinct TLS fixture certificate identities")
     rows = evidence["observations"]
@@ -69,6 +70,47 @@ def validate_receipt(value: dict, revision: str, procurement_hash: str, dispatch
                     and all(row.get("unauthenticated_denied") is True
                             and row.get("missing_csrf_denied") is True for row in courier),
                     "packaged courier authorization, CSRF or status evidence is incomplete")
+
+
+def verify_evidence(directory: Path, revision: str) -> None:
+    """Verify the exact artifact set the hosted packaged-only gate uploads."""
+    release.require(re.fullmatch(r"[0-9a-f]{40}", revision) is not None,
+                    "expected a full checkout revision")
+    release.require((directory / "revision.txt").read_text() == revision + "\n",
+                    "packaged evidence revision mismatch")
+    procurement = "procurement-release.tar.gz"
+    dispatch_archive = "dispatch-acceptance-release.tar.gz"
+    procurement_hash = release.digest(directory / procurement)
+    dispatch_hash = release.digest(directory / dispatch_archive)
+    expected = f"{procurement_hash}  {procurement}\n{dispatch_hash}  {dispatch_archive}\n"
+    release.require((directory / "artifact.sha256").read_text() == expected,
+                    "packaged archive checksum manifest mismatch")
+    receipt = json.loads((directory / "packaged/receipt.json").read_text())
+    validate_receipt(receipt, revision, procurement_hash, dispatch_hash)
+
+
+def fixture_tls(harness: release.Harness) -> tuple[Path, Path, Path]:
+    work = harness.work
+    ca, ca_key = work / "tls.crt", work / "tls-ca.key"
+    # OTP refuses an untrusted self-signed leaf as selfsigned_peer. Use
+    # issued leaves to vary trust and hostname independently.
+    harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                 "-keyout", str(ca_key), "-out", str(ca), "-subj", "/CN=Packaged acceptance CA",
+                 "-addext", "basicConstraints=critical,CA:TRUE"], label="fixture-ca")
+
+    def issue(name: str, common_name: str, subject_alt_name: str) -> tuple[Path, Path]:
+        cert, key, request = work / f"{name}.crt", work / f"{name}.key", work / f"{name}.csr"
+        harness.run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
+                     "-keyout", str(key), "-out", str(request), "-subj", f"/CN={common_name}",
+                     "-addext", f"subjectAltName={subject_alt_name}"], label=f"{name}-request")
+        harness.run(["openssl", "x509", "-req", "-in", str(request), "-CA", str(ca),
+                     "-CAkey", str(ca_key), "-CAcreateserial", "-copy_extensions", "copy",
+                     "-days", "1", "-out", str(cert)], label=f"{name}-certificate")
+        return cert, key
+
+    certificate, key = issue("trusted-tls", "127.0.0.1", "IP:127.0.0.1")
+    issue("wrong-tls", "wrong.invalid", "DNS:wrong.invalid")
+    return certificate, key, ca
 
 
 class PackagedDelivery(dispatch.DispatchDelivery):
@@ -123,13 +165,12 @@ class PackagedDelivery(dispatch.DispatchDelivery):
 
     def handoff(self, browser: release.Browser, path: str, quote: dict) -> str:
         work = self.harness.work
+        trusted_cert, trusted_key = work / "trusted-tls.crt", work / "trusted-tls.key"
         wrong_cert, wrong_key = work / "wrong-tls.crt", work / "wrong-tls.key"
-        self.harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                          "-keyout", str(wrong_key), "-out", str(wrong_cert), "-subj", "/CN=wrong.invalid",
-                          "-addext", "subjectAltName=DNS:wrong.invalid"], label="wrong-host-certificate")
-        self.certificates = {"trusted": release.digest(work / "tls.crt"),
+        self.certificates = {"trusted": release.digest(trusted_cert),
+                             "fixture_ca": release.digest(work / "tls.crt"),
                              "wrong_hostname": release.digest(wrong_cert)}
-        self.probe(work / "tls.crt", work / "tls.key", "unknown_ca")
+        self.probe(trusted_cert, trusted_key, "unknown_ca")
         self.probe(wrong_cert, wrong_key, "hostname_check_failed")
         return super().handoff(browser, path, quote)
 
@@ -163,7 +204,7 @@ def main():
                     "explicit disposable IPv4 loopback PostgreSQL is required")
     procurement_archive = args.procurement_archive.resolve()
     dispatch_archive = args.dispatch_archive.resolve()
-    result = release.acceptance(procurement_archive, args.revision, destination,
+    result = release.acceptance(procurement_archive, args.revision, destination, tls_factory=fixture_tls,
         delivery_factory=lambda harness, origin: PackagedDelivery(harness, origin, dispatch_archive, args.revision))
     validate_receipt(result, args.revision, release.digest(procurement_archive), release.digest(dispatch_archive))
     result["log_sha256"] = {path.name: release.digest(path) for path in sorted(destination.glob("*.log"))}

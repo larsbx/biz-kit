@@ -268,7 +268,7 @@ defmodule ProcurementAcceptance.DispatchPeer do
     configure_route(%{config | "origin" => origin}, state)
 
     if expected == "hostname_check_failed" do
-      trust!(origin, certificate(config, "wrong-tls.crt"))
+      trust!(origin, certificate(config, "tls.crt"))
     end
 
     {:ok, route} = RestaurantDelivery.configuration(:procurement)

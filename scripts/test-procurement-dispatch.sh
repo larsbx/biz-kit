@@ -68,6 +68,9 @@ PY
 if [ -n "${SOURCE_REVISION:-}" ]; then test "$SOURCE_REVISION" = "$revision"; fi
 paths=(apps config native mix.exs mix.lock tests/procurement_mvp \
   scripts/test-procurement-dispatch.sh .github/workflows/procurement-dispatch.yml)
+if "$packaged_only"; then
+  paths+=(.tool-versions .github/workflows/procurement-dispatch-packaged.yml)
+fi
 git -C "$root" diff --quiet HEAD -- "${paths[@]}"
 test -z "$(git -C "$root" ls-files --others --exclude-standard -- "${paths[@]}")"
 test -s "$root/tests/procurement_mvp/test_dispatch_release_controls.py"

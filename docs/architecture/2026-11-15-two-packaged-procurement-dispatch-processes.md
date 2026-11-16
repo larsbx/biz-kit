@@ -18,8 +18,11 @@ at the application boundary. Production database ACLs require their own gate.
 The real Dispatch Finch client uses an origin-scoped connection pool with
 verified TLS and a test certificate trusted only for that pool. Signed work
 requests through two additional loopback listeners must fail with the exact
-unknown-CA and hostname errors, respectively. Both listeners check that no HTTP
-request reached their proxy. The Procurement backend is reached by the fixture's
+unknown-CA and hostname errors, respectively. The fixture CA signs two leaves.
+The unknown-CA probe presents the same loopback certificate as the working
+endpoint and uses the default trust store. The wrong-hostname probe trusts the
+fixture CA for its origin and presents a different name. Both listeners check
+that their proxies receive no HTTP requests. The Procurement backend is reached by the fixture's
 loopback reverse proxy. The normal Dispatch transport and runtime configuration
 are unchanged by the fixture.
 
@@ -56,17 +59,38 @@ The runner writes under
 `.artifacts/procurement-dispatch-packaged/<full-source-revision>/`.
 Check both release archive hashes with `sha256sum -c artifact.sha256`.
 The `packaged/receipt.json` record is written after cleanup and binds the
-same source revision, both archive hashes, the two TLS fixture fingerprints,
+same source revision, both archive hashes, the TLS fixture fingerprints,
 dispatch process observations, and per-log hashes. It is an unsigned runner
 observation. The canonical custody events are independently signature-checked
 by the packaged ledger inspection.
+
+## Hosted acceptance
+
+The **Procurement and Dispatch packaged-process acceptance** workflow checks out
+the exact pull request head (or the selected commit for a manual run). Its
+dedicated `packaged-only` job builds both archives there and runs the command
+above. The disposable GitHub-hosted Ubuntu 24.04 runner installs OTP and Elixir
+from `.tool-versions`, Rust/Cargo 1.91.1, and PostgreSQL 16 clients. The job pins
+the PostgreSQL 16/PostGIS 3.4 service image by digest, publishes its database
+port on IPv4 loopback, and records the resolved server, extension and client
+versions.
+
+The `procurement-dispatch-packaged-<revision>` artifact is uploaded after the
+runner succeeds and the job verifies the packaged receipt against the checkout
+revision and both actual archive hashes. It contains the two archives, their
+checksum manifest, the revision and toolchain records, and
+`packaged/receipt.json`. The receipt carries SHA-256 hashes of the fixture CA
+and both server certificate PEM files, the exact TLS and courier refusals, and
+the three signed custody steps observed in the original and restored ledger.
+The packaged ledger inspector verifies the persisted signatures and event chains.
+The artifact excludes the fixture keys, database dump and runtime logs.
 
 ## Evidence boundaries
 
 | Boundary | Gate |
 | --- | --- |
 | Packaged Procurement with source Dispatch VMs | Existing PR #417 real-worker suite |
-| Packaged Procurement with packaged Dispatch processes | This gate, using bundled Dispatch `eval`, the test profile, and verified loopback HTTPS |
+| Packaged Procurement with packaged Dispatch processes | Dedicated hosted `packaged-only` job, using bundled Dispatch `eval`, the test profile, and verified loopback HTTPS on one runner |
 | Installed desktop | Native Tauri/WebKit and desktop installer acceptance |
 | Courier browser and external identity | Separate graphical courier and identity-provider acceptance |
 | Target-host deployment | Production-profile Dispatch startup and trust configuration on distinct hosts |
