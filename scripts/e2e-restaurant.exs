@@ -1,5 +1,5 @@
-# The rebuilt eatsbot in the end-to-end stack (scripts/e2e-stack.sh), in place
-# of the legacy apps/eatsbot (docs/architecture/2026-11-16-eatsbot-r0-inventory.md).
+# The rebuilt eatsbot in the end-to-end stack (scripts/e2e-stack.sh), which
+# replaced the legacy apps/eatsbot (docs/architecture/2026-11-16-eatsbot-r0-inventory.md).
 #
 #   mix run --no-start scripts/e2e-restaurant.exs STATE_DIR
 #
@@ -28,8 +28,7 @@ alias CoopSubstrate.Harness.Ops
 alias CoopSubstrate.Protocol.Envelope
 alias RestaurantHost.{Config, DeviceGrants, Restaurant}
 
-# Money needs Localize; use its bundled locale, as scripts/e2e-serve.exs does.
-Application.put_env(:localize, :otp_app, :localize, persistent: true)
+# Money (the restaurant's menu prices) needs Localize running.
 {:ok, _} = Application.ensure_all_started([:coop_substrate, :ex_money])
 
 chapter = "e2e-restaurant"

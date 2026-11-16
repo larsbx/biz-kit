@@ -2,8 +2,8 @@
 # One command for the stack d-patch's end-to-end tests run against
 # (docs/architecture/2026-10-21-end-to-end-stack.md): fresh databases, the
 # e2e fixtures, then dispatch on :4000, the task host's /auth on 127.0.0.1:4001
-# and the rebuilt eatsbot (restaurant_host) on 127.0.0.1:4070. The legacy
-# apps/eatsbot is not started (docs/architecture/2026-11-16-eatsbot-r0-inventory.md).
+# and the rebuilt eatsbot (restaurant_host) on 127.0.0.1:4070 (the legacy
+# apps/eatsbot is retired: docs/architecture/2026-11-16-eatsbot-r0-inventory.md).
 #
 #   scripts/e2e-stack.sh            prepare, then run in the foreground
 #   scripts/e2e-stack.sh --prepare  prepare only
@@ -71,5 +71,5 @@ set -a
 . "$state/restaurant.env"
 set +a
 
-# Every umbrella app but the legacy eatsbot ones (scripts/e2e-serve.exs).
+# Every umbrella app, restaurant_host with its file (scripts/e2e-serve.exs).
 exec mix run --no-start --no-halt scripts/e2e-serve.exs "$state"
