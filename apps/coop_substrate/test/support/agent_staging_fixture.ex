@@ -12,12 +12,14 @@ defmodule CoopSubstrate.AgentStagingFixture do
   @task_key {"chapter-genesis", "tenant-1", "project-1", "task-1"}
   @criteria [%{"id" => "review", "description" => "Independent output review"}]
 
-  def prepare do
+  # A standalone, disposable persistence probe owns its process-level cleanup
+  # instead of an ExUnit test process. Ordinary tests retain on_exit cleanup.
+  def prepare(register_cleanup \\ &on_exit/1) when is_function(register_cleanup, 1) do
     previous = Application.get_env(:coop_substrate, :artifact_dir)
     directory = Path.join(System.tmp_dir!(), "run-intent-" <> CoopSubstrate.ULID.generate())
     Application.put_env(:coop_substrate, :artifact_dir, directory)
 
-    on_exit(fn ->
+    register_cleanup.(fn ->
       if previous,
         do: Application.put_env(:coop_substrate, :artifact_dir, previous),
         else: Application.delete_env(:coop_substrate, :artifact_dir)

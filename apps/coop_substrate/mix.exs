@@ -34,6 +34,8 @@ defmodule CoopSubstrate.MixProject do
       {:biz_kit_cluster, in_umbrella: true},
       # The task lifecycle the ledger admits, shared with any other host.
       {:task_core, in_umbrella: true},
+      # Pure, engine-neutral plan validation for the source-ordered admission gate.
+      {:agent_core, in_umbrella: true},
       # The restaurant order lifecycle the ledger admits (eatsbot rebuild).
       {:restaurant_core, in_umbrella: true},
       {:dispatch_core, in_umbrella: true},

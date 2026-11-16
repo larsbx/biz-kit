@@ -49,10 +49,10 @@ defmodule AgentOpsStore.Postgres do
   @spec register(pid() | atom(), map()) ::
           {:ok, :new | :existing} | {:error, atom()}
   def register(conn, plan) do
-    with {:ok, %{records: records}, :new} <- Attempts.register(Attempts.init(), plan) do
+    with {:ok, %{records: records}, :new} <- Attempts.register(Attempts.init(), plan),
+         {:ok, digest} <- Attempts.descriptor_digest(plan) do
       %{descriptor: d} = Map.fetch!(records, plan.effect_id)
       effect_id = d.effect_id
-      digest = descriptor_digest(d)
 
       params = [
         d.effect_id,
@@ -370,9 +370,6 @@ defmodule AgentOpsStore.Postgres do
   rescue
     _ -> {:error, :query_failed}
   end
-
-  defp descriptor_digest(descriptor),
-    do: :crypto.hash(:sha256, :erlang.term_to_binary(descriptor))
 
   defp hash_token(token) when is_binary(token) and byte_size(token) == 32, do: hash(token)
   defp hash_token(_invalid), do: <<0>>

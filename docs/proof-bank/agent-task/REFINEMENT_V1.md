@@ -22,6 +22,7 @@ The intended obligations remain:
 | AT-3 | Cancelled or superseded leases cannot submit candidate bytes | Existing lease/custody implementation and tests; not proved by `BizKitAgentTask` |
 | AT-4 | Expiry or an ambiguous backend reply does not authorize retry without independently verified reconciliation | Dispatcher and SQL tests; synthetic backend crash/adoption cases; real backend proof remains open |
 | AT-5 | A candidate never implies task completion, accepted evidence or a business effect | Existing candidate boundary; no general business-write tool is introduced |
+| AT-6 | Explicit durable admission orders against the actual canonical source and retains one exact-plan identity | Native signed/SQL ordering and restart acceptance; no backend start or implementation-refinement proof |
 
 `formal/lean/BizKitAgentTask.lean` contains the authorization model and a
 separate `decideValidatedLaunch` guard. Its `blocked` outcome distinguishes
@@ -39,10 +40,11 @@ nor passing test cases establish a universal Elixir/PostgreSQL refinement.
 
 Keep three classes distinct: process-local authority simulation with real
 PostgreSQL, genuine signed append/replay with synthetic backend observations,
-and demonstrated persistence under a specified restart. Only the volume
-workflow recreates the database container; only the signed fixture verifies
-signed history and fresh replay. Neither establishes production power-loss
-recovery or backend finality.
+and demonstrated persistence under a specified restart. The volume workflow
+recreates the database container for simulated-authority cancellation rows.
+The signed admission workflow separately restarts PostgreSQL and replays the
+retained signed source/admission/cancellation in a fresh BEAM process. Neither
+establishes production power-loss recovery or backend finality.
 
 The next production proof boundary is the ordering among committed authority
 changes, launch admission and external execution. A SQL lease check alone
@@ -51,3 +53,6 @@ durable-execution proof badge from this increment.
 
 Implementation paths, exact acceptance commands and remaining limitations
 are documented in the [launch acceptance contract](../../architecture/2026-11-15-agentcore-launch-lease-acceptance.md).
+The separate [durable admission contract](../../architecture/2026-11-16-agentcore-durable-launch-admission.md)
+states its commit ordering, complete plan binding, host-policy limitations and
+the still-unimplemented backend acceptance obligation.
