@@ -40,6 +40,9 @@ jobs:
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install locked dependencies
         run: mix deps.get --check-locked
       - name: Compile the umbrella

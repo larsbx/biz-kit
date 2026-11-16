@@ -8,6 +8,7 @@ on:
       - "apps/task_core/**"
       - "apps/coop_substrate/**"
       - "deploy/agent-core/**"
+      - "experiments/agent_backend_receiver/**"
       - "config/**"
       - "mix.lock"
       - "scripts/agent_launch_admission_probe.exs"
@@ -20,6 +21,7 @@ on:
       - "apps/task_core/**"
       - "apps/coop_substrate/**"
       - "deploy/agent-core/**"
+      - "experiments/agent_backend_receiver/**"
       - "config/**"
       - "mix.lock"
       - "scripts/agent_launch_admission_probe.exs"
@@ -58,7 +60,7 @@ jobs:
           export AGENT_LAUNCH_STAGE="$RUNNER_TEMP/biz-kit-signed-agent-launch"
           printf 'AGENT_LAUNCH_STAGE=%s\n' "$AGENT_LAUNCH_STAGE" >> "$GITHUB_ENV"
           git rev-parse HEAD
-          mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy" "$AGENT_LAUNCH_STAGE/scripts"
+          mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy" "$AGENT_LAUNCH_STAGE/scripts" "$AGENT_LAUNCH_STAGE/experiments"
           git rev-parse HEAD > "$AGENT_LAUNCH_STAGE/source-revision.txt"
           for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core \
             agent_core agent_ops_store group_buy_core inventory_core federation_core federation_service \
@@ -69,6 +71,7 @@ jobs:
           cp mix.lock "$AGENT_LAUNCH_STAGE/mix.lock"
           cp -R deploy/agent-core "$AGENT_LAUNCH_STAGE/deploy/"
           cp scripts/agent_launch_admission_probe.exs "$AGENT_LAUNCH_STAGE/scripts/"
+          cp -R experiments/agent_backend_receiver "$AGENT_LAUNCH_STAGE/experiments/"
           cat > "$AGENT_LAUNCH_STAGE/mix.exs" <<'EOF'
           defmodule SignedAgentLaunchHarness.MixProject do
             use Mix.Project
@@ -76,6 +79,20 @@ jobs:
           end
           EOF
           printf '[inputs: []]\n' > "$AGENT_LAUNCH_STAGE/.formatter.exs"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the independent durable reference receiver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat source-revision.txt)"
+          export AGENT_BACKEND_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/backend-evidence"
+          python3 --version
+          python3 -c 'import sqlite3; print("SQLite", sqlite3.sqlite_version)'
+          python3 -m unittest discover -s experiments/agent_backend_receiver -p 'test_*.py' -v \
+            2>&1 | tee "$AGENT_LAUNCH_STAGE/backend-receiver.log"
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -103,21 +120,28 @@ jobs:
             apps/agent_ops_store/test/postgres_test.exs \
             apps/agent_ops_store/test/dispatch_integration_test.exs \
             apps/coop_substrate/lib/coop_substrate/agent_launch_admission.ex \
+            apps/coop_substrate/lib/coop_substrate/agent_backend_request.ex \
             apps/coop_substrate/lib/coop_substrate/log.ex \
             apps/coop_substrate/mix.exs \
             apps/coop_substrate/test/agent_launch_admission_test.exs \
+            apps/coop_substrate/test/agent_backend_request_test.exs \
+            apps/coop_substrate/test/agent_backend_receiver_test.exs \
             apps/coop_substrate/test/agent_event_acceptance_test.exs \
             apps/coop_substrate/test/support/agent_staging_fixture.ex \
             apps/coop_substrate/test/support/agent_staging_sql.ex \
+            apps/coop_substrate/test/support/agent_backend_receiver.ex \
             scripts/agent_launch_admission_probe.exs
       - name: Verify genuine signed authority, SQL fences and session recovery
         shell: bash
         run: |
           set -euo pipefail
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
+          export AGENT_BACKEND_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/backend-evidence"
           cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
           for seed in 1 9173; do
             mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs \
               test/agent_launch_admission_test.exs \
+              test/agent_backend_request_test.exs test/agent_backend_receiver_test.exs \
               --warnings-as-errors --trace --seed "$seed" \
               | tee "$AGENT_LAUNCH_STAGE/signed-launch-$seed.log"
           done
@@ -164,4 +188,6 @@ jobs:
             ${{ runner.temp }}/biz-kit-signed-agent-launch/signed-launch-*.log
             ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-*.log
             ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-restart.json
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/backend-receiver.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/backend-evidence/**
           if-no-files-found: error

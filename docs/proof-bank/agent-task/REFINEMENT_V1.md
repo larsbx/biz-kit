@@ -23,6 +23,7 @@ The intended obligations remain:
 | AT-4 | Expiry or an ambiguous backend reply does not authorize retry without independently verified reconciliation | Dispatcher and SQL tests; synthetic backend crash/adoption cases; real backend proof remains open |
 | AT-5 | A candidate never implies task completion, accepted evidence or a business effect | Existing candidate boundary; no general business-write tool is introduced |
 | AT-6 | Explicit durable admission orders against the actual canonical source and retains one exact-plan identity | Native signed/SQL ordering and restart acceptance; no backend start or implementation-refinement proof |
+| AT-7 | A reference receiver retains one bound request identity and refuses creates after its durable fence acknowledgement | Independent-process SQLite and signed-host conformance cases; no physical execution or cross-store atomicity proof |
 
 `formal/lean/BizKitAgentTask.lean` contains the authorization model and a
 separate `decideValidatedLaunch` guard. Its `blocked` outcome distinguishes
@@ -55,4 +56,9 @@ Implementation paths, exact acceptance commands and remaining limitations
 are documented in the [launch acceptance contract](../../architecture/2026-11-15-agentcore-launch-lease-acceptance.md).
 The separate [durable admission contract](../../architecture/2026-11-16-agentcore-durable-launch-admission.md)
 states its commit ordering, complete plan binding, host-policy limitations and
-the still-unimplemented backend acceptance obligation.
+the remaining real-backend acceptance obligation. The
+[reference receiver contract](../../architecture/2026-11-16-agentcore-durable-backend-receiver.md)
+separately specifies durable request binding, lost-reply reconciliation,
+permanent tombstones and pinned store identity. Its `unknown` observation is
+not final absence, and its fence acknowledgement is not termination. No
+reference response becomes a verified production recovery observation.
