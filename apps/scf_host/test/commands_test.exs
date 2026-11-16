@@ -54,20 +54,11 @@ defmodule ScfHost.CommandsTest do
     assert {:ok, _, _, %{"lines" => ^lines}} = Commands.build(entry(lines), @book)
   end
 
-  test "an uploaded pièce is hashed; its bytes are not part of the command" do
-    path = Path.join(System.tmp_dir!(), "scf-piece-#{System.unique_integer([:positive])}")
-    File.write!(path, "facture")
-    on_exit(fn -> File.rm(path) end)
-    upload = %Plug.Upload{path: path, filename: "facture.pdf"}
-    params = entry([], %{"document_sha256" => "", "document" => upload}) |> Map.put("lines", [])
+  test "an upload is not a digest: the host stores the bytes first, then cites them" do
+    upload = %Plug.Upload{path: "/nonexistent", filename: "facture.pdf"}
 
-    lines = [
-      %{"side" => "debit", "account" => "512", "amount_minor" => 5},
-      %{"side" => "credit", "account" => "101", "amount_minor" => 5}
-    ]
-
-    assert {:ok, _, _, attrs} = Commands.build(%{params | "lines" => lines}, @book)
-    assert attrs["document"]["sha256"] == {:bytes, :crypto.hash(:sha256, "facture")}
+    assert {:error, :invalid_document} =
+             Commands.build(entry([], %{"document_sha256" => "", "document" => upload}), @book)
   end
 
   test "malformed input is refused before anything is signed" do

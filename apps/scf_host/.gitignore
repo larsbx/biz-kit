@@ -1,0 +1,2 @@
+# Test artifact store (config :coop_substrate, artifact_dir: "tmp/test_artifacts").
+/tmp/

@@ -19,6 +19,9 @@ defmodule CoopSubstrate.Scf do
   * Live admission requires a signature within 30 s of the appender clock
     and a current grant and session; historical replay uses signed time, so
     later expiry or revocation never erases admitted entries.
+  * Local-first: a posting's pièce justificative must be held in this
+    machine's artifact store (`Harness.Artifacts`), verified against the
+    signed digest, when it is admitted. Only the digest enters the Log.
   * Book reads are signed requests authorized inside the Log mailbox; they
     are never appended.
 
@@ -26,6 +29,7 @@ defmodule CoopSubstrate.Scf do
   so every release that replays a store holding SCF events can fold them.
   """
   alias CoopSubstrate.{Crypto, Log, ScfReplaySource}
+  alias CoopSubstrate.Harness.Artifacts
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
   alias ScfCore.SignedProjection
 
@@ -182,10 +186,27 @@ defmodule CoopSubstrate.Scf do
   @doc false
   def live_check(%Envelope{type: type} = env, gate) when type in @types do
     now = clock_ms()
-    with :ok <- fresh(env, now), {:ok, _} <- transition(env, gate, now), do: :ok
+
+    with :ok <- fresh(env, now),
+         {:ok, _} <- transition(env, gate, now),
+         do: document_held(env)
   end
 
   def live_check(_, _), do: :ok
+
+  # Live admission only, after authority and the SCF rules: the pièce's bytes
+  # must be in this machine's artifact store and hash to the signed digest.
+  # Replay never reads files, so later local erasure cannot break history.
+  defp document_held(%Envelope{
+         payload: %{"document" => %{"sha256" => {:bytes, <<_::256>> = digest}}}
+       }) do
+    case Artifacts.verify(digest) do
+      {:ok, _size} -> :ok
+      {:error, reason} -> {:error, {:scf_document_unavailable, reason}}
+    end
+  end
+
+  defp document_held(_), do: :ok
 
   @doc false
   def fold!(env, gate) do

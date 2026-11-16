@@ -6,18 +6,20 @@ defmodule CoopSubstrate.ScfTest do
   offline replay of the audited log (one rulebook for admission and rebuild).
   """
   use CoopSubstrate.LogCase, async: false
-  alias CoopSubstrate.{Log, ProcurementTestClock, Scf, ScfReplaySource}
+  alias CoopSubstrate.{Harness, Log, ProcurementTestClock, Scf, ScfReplaySource}
 
   @now 1_800_000_000_000
   @chapter "scf-test"
   @entity "sarl-atlas"
-  @doc_ref %{"id" => "statuts-2026", "sha256" => {:bytes, <<7::256>>}}
+  @piece "statuts signés"
+  @doc_ref %{"id" => "statuts-2026", "sha256" => {:bytes, :crypto.hash(:sha256, @piece)}}
   @capital [
     %{"side" => "debit", "account" => "512", "amount_minor" => 1_000_000_00},
     %{"side" => "credit", "account" => "101", "amount_minor" => 1_000_000_00}
   ]
 
   setup do
+    {:ok, _} = Harness.Artifacts.put(@piece)
     ProcurementTestClock.set(@now)
     :ok = Scf.register_types!()
     gov = new_member("governance", "gov")
@@ -182,6 +184,35 @@ defmodule CoopSubstrate.ScfTest do
                elem(Scf.envelope(f.context, "ScfJournalEntryPostedV1", "c-2", entry()), 1),
                elem(Scf.envelope(f.context, "ScfJournalEntryPostedV1", "c-3", entry()), 1)
              ])
+  end
+
+  test "the pièce must be held locally when admitted; later local erasure never breaks replay",
+       f do
+    :ok = ready(f)
+    absent = %{"id" => "facture-x", "sha256" => {:bytes, :crypto.hash(:sha256, "jamais stockée")}}
+    head = Log.head()
+
+    assert {:error, {:reject, 0, {:scf_document_unavailable, :not_found}}} =
+             post(f, "c-1", entry(%{"document" => absent}))
+
+    assert Log.head() == head
+
+    {:ok, digest} = Harness.Artifacts.put("facture du jour")
+
+    {:ok, _} =
+      post(f, "c-2", entry(%{"document" => %{"id" => "facture-2", "sha256" => {:bytes, digest}}}))
+
+    before = Scf.state(Log.gate())
+
+    File.rm!(
+      Path.join(
+        Application.fetch_env!(:coop_substrate, :artifact_dir),
+        Base.encode16(digest, case: :lower)
+      )
+    )
+
+    :ok = restart_log()
+    assert Scf.state(Log.gate()) == before
   end
 
   test "signatures outside the admission window are refused", f do

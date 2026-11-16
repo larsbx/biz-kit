@@ -92,7 +92,10 @@ statutory multi-year reporting.
   admission-time policy for issuer identity, currency and TVA evidence,
   recognition eligibility, duplicate invoices and authorized close dates.
 * Validate document bytes against the signed digest and enforce scoped
-  evidence access and retention. A digest in a fixture demonstrates the
+  evidence access and retention. *Done for live admission and access: the
+  Log refuses a posting whose pièce is not held locally, and the host serves
+  only cited pièces ([ADR](../../docs/architecture/2026-11-16-scf-host.md#local-first)).
+  Retention policy remains open.* A digest in a fixture demonstrates the
   link structure. Verification and durable retrieval of documents belong to
   the host. Persist the projected entries, provenance, mapping version and
   checkpoint atomically in a rebuildable read model. Resume only from a

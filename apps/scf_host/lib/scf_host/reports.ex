@@ -21,6 +21,7 @@ defmodule ScfHost.Reports do
         debit: ScfCore.Entry.total(e, :debit),
         credit: ScfCore.Entry.total(e, :credit),
         reverses: get_in(book.postings, [seq, :reverses, :sequence]),
+        document: document_hex(book.postings[seq]),
         reversible: Map.has_key?(book.postings, seq) and not MapSet.member?(book.reversed, seq)
       }
     end
@@ -80,4 +81,9 @@ defmodule ScfHost.Reports do
   def to_json(v), do: v
 
   defp sequence("signed-scf-v1:" <> n), do: String.to_integer(n)
+
+  defp document_hex(%{document: %{"sha256" => <<_::256>> = d}}),
+    do: Base.encode16(d, case: :lower)
+
+  defp document_hex(_), do: nil
 end

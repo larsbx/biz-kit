@@ -2,7 +2,7 @@ defmodule ScfHost.Router do
   @moduledoc false
   use Plug.Router
   alias CoopSubstrate.{Scf, ULID}
-  alias ScfHost.{Auth, Commands, HTML, Reports}
+  alias ScfHost.{Auth, Commands, HTML, Pieces, Reports}
 
   plug(:match)
   plug(:dispatch)
@@ -87,6 +87,15 @@ defmodule ScfHost.Router do
 
   post("/cloture", do: command(conn, Map.put(conn.body_params, "kind", "close"), "/etats"))
 
+  get "/pieces/:hex" do
+    protected(conn, fn conn, _ctx, book ->
+      case Pieces.fetch(book, hex) do
+        {:ok, id, bytes} -> Pieces.respond(conn, id, bytes)
+        :error -> send_resp(conn, 404, "Pièce introuvable")
+      end
+    end)
+  end
+
   get "/tva" do
     protected(conn, fn conn, _ctx, book ->
       params =
@@ -119,7 +128,8 @@ defmodule ScfHost.Router do
   @doc false
   # Shared by the console and the API: parse, sign, append.
   def submit(ctx, book, params) do
-    with {:ok, type, id, attrs} <- Commands.build(params, book),
+    with {:ok, params} <- Pieces.from_upload(params),
+         {:ok, type, id, attrs} <- Commands.build(params, book),
          {:ok, _} <- Scf.post(ctx, type, id, attrs, Auth.server()) do
       :ok
     else
@@ -157,7 +167,7 @@ defmodule ScfHost.API do
   """
   import Plug.Conn
   alias CoopSubstrate.Scf
-  alias ScfHost.{Auth, Reports, Router}
+  alias ScfHost.{Auth, Pieces, Reports, Router}
 
   def call(%{path_info: ["api", "v1" | path]} = conn) do
     with {:ok, ctx} <- Auth.api_context(conn),
@@ -182,6 +192,25 @@ defmodule ScfHost.API do
 
   defp route("GET", ["statements"], conn, _, book),
     do: json(conn, 200, Reports.statements(book, conn.query_params))
+
+  defp route("PUT", ["pieces"], conn, _, _) do
+    with {:ok, bytes, conn} <- read_body(conn, length: Pieces.limit() + 1),
+         [claimed] <- get_req_header(conn, "x-content-sha256"),
+         {:ok, hex} <- Pieces.store(bytes, claimed) do
+      json(conn, 201, %{sha256: hex})
+    else
+      {:more, _, conn} -> json(conn, 413, %{error: "too_large"})
+      {:error, reason} when is_atom(reason) -> json(conn, 422, %{error: Atom.to_string(reason)})
+      _ -> json(conn, 422, %{error: "invalid_digest"})
+    end
+  end
+
+  defp route("GET", ["pieces", hex], conn, _, book) do
+    case Pieces.fetch(book, hex) do
+      {:ok, id, bytes} -> Pieces.respond(conn, id, bytes)
+      :error -> json(conn, 404, %{error: "not_found"})
+    end
+  end
 
   defp route("POST", ["commands"], conn, ctx, book) do
     case Router.submit(ctx, book, conn.body_params) do
@@ -213,8 +242,8 @@ defmodule ScfHost.Web do
   plug(:headers)
 
   plug(Plug.Parsers,
-    parsers: [:urlencoded, {:multipart, length: 10_000_000}, :json],
-    pass: [],
+    parsers: [:urlencoded, {:multipart, length: 9_000_000}, :json],
+    pass: ["application/octet-stream"],
     length: 262_144,
     json_decoder: Jason
   )

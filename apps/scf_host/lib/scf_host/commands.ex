@@ -4,9 +4,8 @@ defmodule ScfHost.Commands do
   attrs}` for `CoopSubstrate.Scf.post/4`. Pure; nothing here signs.
 
   * Amounts are typed DZD (`ScfCore.Money.parse/1`) or exact `amount_minor`.
-  * The pièce justificative is an id plus SHA-256, either given in hex or
-    computed from an upload whose bytes are then discarded (the host keeps
-    no document store; see the ADR).
+  * The pièce justificative is an id plus the hex SHA-256 of bytes already
+    held locally (`ScfHost.Pieces`); the Log refuses it otherwise.
   * A reversal names a log position; its digest comes from the signed book,
     never from the client.
 
@@ -120,14 +119,6 @@ defmodule ScfHost.Commands do
       _ -> {:error, :invalid_document}
     end
   end
-
-  defp digest(%{"document" => %Plug.Upload{path: path}}),
-    do:
-      {:ok,
-       path
-       |> File.stream!(65_536)
-       |> Enum.reduce(:crypto.hash_init(:sha256), &:crypto.hash_update(&2, &1))
-       |> :crypto.hash_final()}
 
   defp digest(%{"document_sha256" => hex}) when is_binary(hex) and byte_size(hex) == 64,
     do: Base.decode16(hex, case: :mixed)

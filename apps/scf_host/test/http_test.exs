@@ -102,6 +102,20 @@ defmodule ScfHost.HTTPTest do
     {r.status, Jason.decode!(r.resp_body)}
   end
 
+  defp put_piece(bytes, claimed \\ nil) do
+    digest = claimed || Base.encode16(:crypto.hash(:sha256, bytes), case: :lower)
+
+    c =
+      conn(:put, "/api/v1/pieces", bytes)
+      |> Map.put(:scheme, :https)
+      |> Plug.Conn.put_req_header("content-type", "application/octet-stream")
+      |> Plug.Conn.put_req_header("x-content-sha256", digest)
+      |> Plug.Conn.put_req_header("authorization", "Bearer " <> @api_token)
+
+    r = Web.call(c, Web.init([]))
+    {r.status, Jason.decode!(r.resp_body)}
+  end
+
   test "unauthenticated pages redirect to sign-in; wrong tokens are refused; headers are strict" do
     assert %{status: 303} = c = request(:get, "/journal")
     assert Plug.Conn.get_resp_header(c, "location") == ["/login"]
@@ -154,6 +168,21 @@ defmodule ScfHost.HTTPTest do
     assert journal.resp_body =~ "&lt;script&gt;"
     refute journal.resp_body =~ "<script>alert"
     assert length(Regex.scan(~r/Contrepasser l'écriture/, journal.resp_body)) == 1
+
+    # The pièce stays on this machine and opens from the journal.
+    hex = Base.encode16(:crypto.hash(:sha256, "statuts signés"), case: :lower)
+    assert journal.resp_body =~ ~s(href="/pieces/#{hex}")
+    piece = request(:get, "/pieces/#{hex}", %{}, session)
+    assert piece.status == 200 and piece.resp_body == "statuts signés"
+    assert ["attachment" <> _] = Plug.Conn.get_resp_header(piece, "content-disposition")
+
+    # Only pièces this book cites are served, and only to the accountant.
+    {:ok, other} = CoopSubstrate.Harness.Artifacts.put("autre chose")
+
+    assert %{status: 404} =
+             request(:get, "/pieces/#{Base.encode16(other, case: :lower)}", %{}, session)
+
+    assert %{status: 303} = request(:get, "/pieces/#{hex}")
 
     balance = request(:get, "/balance", %{}, session)
     assert balance.resp_body =~ "Capital émis"
@@ -213,6 +242,17 @@ defmodule ScfHost.HTTPTest do
       "document_sha256" => String.duplicate("0f", 32),
       "lines" => lines
     }
+
+    # Citing bytes this machine does not hold is refused by the Log itself.
+    assert {422, %{"error" => "{:scf_document_unavailable, :not_found}"}} =
+             api(:post, "/api/v1/commands", entry)
+
+    assert {422, %{"error" => "digest_mismatch"}} =
+             put_piece("facture FA-1", String.duplicate("0", 64))
+
+    assert {201, %{"sha256" => sha}} = put_piece("facture FA-1")
+    assert {201, %{"sha256" => ^sha}} = put_piece("facture FA-1")
+    entry = %{entry | "document_sha256" => sha}
 
     assert {201, %{"status" => "admitted"}} = api(:post, "/api/v1/commands", entry)
     assert {201, _} = api(:post, "/api/v1/commands", entry)

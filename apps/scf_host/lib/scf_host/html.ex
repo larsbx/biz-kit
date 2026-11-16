@@ -28,7 +28,8 @@ defmodule ScfHost.HTML do
     scf_idempotency_conflict: "Ce formulaire a déjà été soumis avec un autre contenu.",
     scf_forbidden: "Habilitation du comptable absente ou révoquée.",
     scf_authority_expired_or_replaced: "Session ou habilitation expirée : reconnectez-vous.",
-    stale_scf_admission_time: "Horloge du serveur décalée : réessayez."
+    stale_scf_admission_time: "Horloge du serveur décalée : réessayez.",
+    document_too_large: "Pièce trop volumineuse (8 Mo au plus)."
   }
 
   def escape(v), do: v |> to_string() |> Plug.HTML.html_escape()
@@ -74,6 +75,9 @@ defmodule ScfHost.HTML do
   def message({:invalid_entry, errors}),
     do: "Écriture refusée : " <> Enum.map_join(errors, " ; ", &entry_error/1)
 
+  def message({:scf_document_unavailable, _}),
+    do: "La pièce justificative n'est pas conservée sur ce poste : joignez le fichier."
+
   def message(reason), do: Map.get(@messages, reason, "Refusé : #{inspect(reason)}")
 
   defp entry_error({:unbalanced, d, c}),
@@ -106,7 +110,7 @@ defmodule ScfHost.HTML do
   defp journal_row(r, command_id) do
     note = if r.reverses, do: " <span class=muted>(contrepasse n° #{r.reverses})</span>", else: ""
 
-    "<tr><td>#{r.sequence}</td><td>#{r.date}</td><td>#{escape(r.journal)}</td><td>#{escape(r.piece)}</td>" <>
+    "<tr><td>#{r.sequence}</td><td>#{r.date}</td><td>#{escape(r.journal)}</td><td>#{piece_link(r)}</td>" <>
       "<td><strong>#{escape(r.label)}</strong>#{note}#{reverse_form(r, command_id)}</td><td></td><td></td></tr>" <>
       Enum.map_join(r.lines, fn {side, a, m} ->
         {d, c} = if side == :debit, do: {Money.format(m), ""}, else: {"", Money.format(m)}
@@ -114,6 +118,11 @@ defmodule ScfHost.HTML do
         "<tr><td></td><td></td><td></td><td></td><td>#{escape(a)} · #{escape(Chart.label(a))}</td><td class=n>#{d}</td><td class=n>#{c}</td></tr>"
       end)
   end
+
+  defp piece_link(%{document: hex, piece: piece}) when is_binary(hex),
+    do: "<a href=\"/pieces/#{hex}\">#{escape(piece)}</a>"
+
+  defp piece_link(r), do: escape(r.piece)
 
   defp reverse_form(%{reversible: false}, _), do: ""
 
