@@ -6,7 +6,7 @@ defmodule Dispatch.Support.DeliveryPortal do
   import Plug.Test
 
   alias Dispatch.Accounts.RoleAssignment
-  alias Dispatch.Support.PortalIdentity
+  alias Dispatch.Support.{Fixtures, PortalIdentity}
 
   @portal_path "/ui/restaurant-receipts"
   @session Plug.Session.init(
