@@ -10,6 +10,7 @@ on:
       - "deploy/agent-core/**"
       - "config/**"
       - "mix.lock"
+      - "scripts/agent_launch_admission_probe.exs"
       - ".github/workflows/agent-core-signed-ledger.yml"
   push:
     branches: [main]
@@ -21,6 +22,7 @@ on:
       - "deploy/agent-core/**"
       - "config/**"
       - "mix.lock"
+      - "scripts/agent_launch_admission_probe.exs"
       - ".github/workflows/agent-core-signed-ledger.yml"
   workflow_dispatch:
 
@@ -56,7 +58,7 @@ jobs:
           export AGENT_LAUNCH_STAGE="$RUNNER_TEMP/biz-kit-signed-agent-launch"
           printf 'AGENT_LAUNCH_STAGE=%s\n' "$AGENT_LAUNCH_STAGE" >> "$GITHUB_ENV"
           git rev-parse HEAD
-          mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy"
+          mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy" "$AGENT_LAUNCH_STAGE/scripts"
           git rev-parse HEAD > "$AGENT_LAUNCH_STAGE/source-revision.txt"
           for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core \
             agent_core agent_ops_store group_buy_core inventory_core federation_core federation_service \
@@ -66,6 +68,7 @@ jobs:
           cp config/config.exs "$AGENT_LAUNCH_STAGE/config/config.exs"
           cp mix.lock "$AGENT_LAUNCH_STAGE/mix.lock"
           cp -R deploy/agent-core "$AGENT_LAUNCH_STAGE/deploy/"
+          cp scripts/agent_launch_admission_probe.exs "$AGENT_LAUNCH_STAGE/scripts/"
           cat > "$AGENT_LAUNCH_STAGE/mix.exs" <<'EOF'
           defmodule SignedAgentLaunchHarness.MixProject do
             use Mix.Project
@@ -92,15 +95,21 @@ jobs:
           set -euo pipefail
           cd "$AGENT_LAUNCH_STAGE"
           mix format --check-formatted \
+            apps/agent_core/lib/agent_core/attempts.ex \
             apps/task_core/lib/task_core/dispatcher.ex \
             apps/task_core/test/dispatcher_test.exs \
             apps/agent_ops_store/lib/agent_ops_store/coordinator.ex \
             apps/agent_ops_store/lib/agent_ops_store/postgres.ex \
             apps/agent_ops_store/test/postgres_test.exs \
             apps/agent_ops_store/test/dispatch_integration_test.exs \
+            apps/coop_substrate/lib/coop_substrate/agent_launch_admission.ex \
+            apps/coop_substrate/lib/coop_substrate/log.ex \
+            apps/coop_substrate/mix.exs \
+            apps/coop_substrate/test/agent_launch_admission_test.exs \
             apps/coop_substrate/test/agent_event_acceptance_test.exs \
             apps/coop_substrate/test/support/agent_staging_fixture.ex \
-            apps/coop_substrate/test/support/agent_staging_sql.ex
+            apps/coop_substrate/test/support/agent_staging_sql.ex \
+            scripts/agent_launch_admission_probe.exs
       - name: Verify genuine signed authority, SQL fences and session recovery
         shell: bash
         run: |
@@ -108,9 +117,43 @@ jobs:
           cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
           for seed in 1 9173; do
             mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs \
+              test/agent_launch_admission_test.exs \
               --warnings-as-errors --trace --seed "$seed" \
               | tee "$AGENT_LAUNCH_STAGE/signed-launch-$seed.log"
           done
+      - name: Commit signed source, admission and cancellation in a separate VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
+          cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
+          mix run --no-start ../../scripts/agent_launch_admission_probe.exs prepare \
+            "$AGENT_LAUNCH_STAGE/admission-restart.json" \
+            | tee "$AGENT_LAUNCH_STAGE/admission-prepare.log"
+      - name: Restart PostgreSQL preserving its data
+        shell: bash
+        env:
+          AGENT_ADMISSION_POSTGRES: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker restart "$AGENT_ADMISSION_POSTGRES"
+          for attempt in $(seq 1 60); do
+            if docker exec "$AGENT_ADMISSION_POSTGRES" pg_isready -U postgres; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "PostgreSQL did not recover after restart" >&2
+          exit 1
+      - name: Recover signed source and the same admission in a fresh VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
+          cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
+          mix run --no-start ../../scripts/agent_launch_admission_probe.exs verify \
+            "$AGENT_LAUNCH_STAGE/admission-restart.json" \
+            | tee "$AGENT_LAUNCH_STAGE/admission-verify.log"
       - name: Retain revision and complete acceptance logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,4 +162,6 @@ jobs:
           path: |
             ${{ runner.temp }}/biz-kit-signed-agent-launch/source-revision.txt
             ${{ runner.temp }}/biz-kit-signed-agent-launch/signed-launch-*.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-*.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-restart.json
           if-no-files-found: error

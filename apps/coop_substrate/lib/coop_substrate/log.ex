@@ -129,6 +129,26 @@ defmodule CoopSubstrate.Log do
         :infinity
       )
 
+  @doc """
+  Commit one staging agent launch admission under current signed authority.
+
+  `context` must be exactly `%{environment: :staging}`. The canonical store's
+  running connection pool and cached schema are used internally; caller connection,
+  transaction and callback overrides are refused. `request` contains the run
+  key, grant locators, trusted registry/requirements snapshot, exact expected
+  plan and committed lease. The host must obtain consent independently.
+
+  The actual ledger row is locked before the operational attempt. The receipt
+  is returned after commit and records which signed head admitted the request.
+  It does not launch a backend, append a business event, prove termination, or
+  make mutable host policy and later external execution atomic with revocation.
+  """
+  def admit_agent_launch(context, request, server \\ @server) do
+    GenServer.call(server, {:admit_agent_launch, context, request}, 10_000)
+  catch
+    :exit, _ -> {:error, :agent_launch_admission_unavailable}
+  end
+
   @doc "Current-authority private procurement snapshot, checked in the appender."
   def procurement_snapshot(%Envelope{} = request, server \\ @server),
     do: GenServer.call(server, {:procurement_snapshot, request})
@@ -464,6 +484,11 @@ defmodule CoopSubstrate.Log do
 
   def handle_call({:federation_effect, context, request, effect}, _from, state) do
     result = CoopSubstrate.FederationFence.run(context, state.head, state.gate, request, effect)
+    {:reply, result, state}
+  end
+
+  def handle_call({:admit_agent_launch, context, request}, _from, state) do
+    result = CoopSubstrate.AgentLaunchAdmission.run(context, state.head, state.gate, request)
     {:reply, result, state}
   end
 
