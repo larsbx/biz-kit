@@ -874,7 +874,7 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
-        "apps/restaurant_core/lib/restaurant_core/admission.ex": "1d156b8b963925da95a6bc23840f5d654cecabfa",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex": "03d9d759e5def6962561d800401f50a713b5ec1c",
         "apps/restaurant_core/lib/restaurant_core/kitchen.ex": "3e6118cdcf95d5486880d21dd5c33b118592482f",
         "apps/restaurant_core/test/admission_test.exs": "24946d7a2e7874130b2d4c1d88d38b7003de1637"
       }
@@ -1305,6 +1305,17 @@
         "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex",
         "apps/task_core/lib/task_core/admission.ex",
         "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "c76dcd8ad2152855db0ac3086e1091b7275137a9",
+      "date": "2026-11-16",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/restaurant_core/lib/restaurant_core/admission.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

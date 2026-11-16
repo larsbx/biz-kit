@@ -61,7 +61,9 @@ defmodule CoopSubstrate.Protocol.Validity do
       a currently declared key (`check_role_keys/2`, runs before every
       per-type check). Genesis (the first governance key) is trust-on-first-
       use, self-certified; later declarations/revocations are governance-
-      signed; revoking the last governance key is unrepresentable.
+      signed; revoking the last governance key is unrepresentable. A key the
+      chapter granted to restaurant Dispatch is never declared a role key
+      (`RestaurantCore.Admission.check/2` fences the converse).
     * `KeyRotated` (1D) — self-rotation: for a REGISTERED member, the
       rotation must be signed by the member's current key and `old_key_id`
       must match it (rotations chain). Rotations for unregistered ids stay
@@ -158,6 +160,9 @@ defmodule CoopSubstrate.Protocol.Validity do
 
       Map.has_key?(declared, p["key_id"]) ->
         {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
+
+      RestaurantCore.Admission.dispatch_pubkey?(gate.restaurant, ch, p["pubkey"]) ->
+        {:error, :key_not_separate}
 
       governance == nil and p["role"] != "governance" ->
         # No governance exists yet: the only representable declaration is the

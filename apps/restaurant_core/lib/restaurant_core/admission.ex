@@ -17,7 +17,9 @@ defmodule RestaurantCore.Admission do
 
   The trusted context is derived from the grant, never from the payload, and
   the outcome is exactly the reducers' outcome (`admit/3` serves both check and
-  fold). Every event is a business fact: none asserts payment or settlement.
+  fold). `check/2` adds one fence on new grants that the fold never applies:
+  a chapter's Dispatch keys share nothing with its device and role keys (see
+  `check/2`). Every event is a business fact: none asserts payment or settlement.
   Money is Hawala's: nothing here computes, accepts or settles an amount.
   """
 
@@ -205,10 +207,63 @@ defmodule RestaurantCore.Admission do
     |> Enum.take(25)
   end
 
-  @doc "`:ok` when the event may be appended to a gate holding `role_keys` and `restaurant`."
+  @doc """
+  `:ok` when the event may be appended to a gate holding `role_keys` and
+  `restaurant`: `admit/3` admits it and, for a grant, the key fence holds.
+
+  The fence keeps a chapter's keys apart. A Dispatch key is never one of the
+  chapter's device keys or declared role keys, and serves one tenant. Within a
+  merchant, a key is granted at most once, so a revoked seed is never granted
+  there again. Revoked grants keep counting. `fold/2` does not apply the fence,
+  so history admitted before it, or by an appender without it, replays
+  unchanged. It fences new admissions only; reads never assume it.
+  """
   def check(env, gate) do
-    with {:ok, _} <- admit(env, gate.role_keys, gate.restaurant), do: :ok
+    with {:ok, _} <- admit(env, gate.role_keys, gate.restaurant),
+         do: fence(env, gate.role_keys, gate.restaurant)
   end
+
+  @doc "Whether `pubkey` was ever granted to Dispatch in `chapter`, revoked or not."
+  def dispatch_pubkey?(state, chapter, {:bytes, pubkey}),
+    do: dispatch_pubkey?(state, chapter, pubkey)
+
+  def dispatch_pubkey?(state, chapter, pubkey),
+    do:
+      Enum.any?(
+        state.grants,
+        &match?({{^chapter, _, _}, %{actor: :dispatch, pubkey: ^pubkey}}, &1)
+      )
+
+  defp fence(
+         %{type: type, chapter_id: ch, payload: %{"pubkey" => {:bytes, key}} = p},
+         keys,
+         state
+       )
+       when type in [@grant, @dispatch_grant] do
+    held =
+      for {{^ch, merchant, _}, %{pubkey: ^key} = grant} <- state.grants, do: {merchant, grant}
+
+    role_key? =
+      Enum.any?(keys, fn {{chapter, _role}, ids} -> chapter == ch and key in Map.values(ids) end)
+
+    cond do
+      not apart?(type, p, held, role_key?) -> {:error, :key_not_separate}
+      List.keymember?(held, p["merchant_id"], 0) -> {:error, :restaurant_key_already_granted}
+      true -> :ok
+    end
+  end
+
+  defp fence(_, _, _), do: :ok
+
+  defp apart?(@dispatch_grant, p, held, role_key?),
+    do:
+      not role_key? and
+        Enum.all?(held, fn {_, grant} ->
+          grant.actor == :dispatch and grant.tenant == p["tenant_id"]
+        end)
+
+  defp apart?(@grant, _, held, _),
+    do: Enum.all?(held, fn {_, grant} -> grant.actor != :dispatch end)
 
   @doc "The restaurant state after an admitted event."
   def fold(env, gate) do
