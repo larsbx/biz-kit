@@ -50,6 +50,8 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/coop_substrate/test/agent_local_worker_test.exs
+          apps/coop_substrate/test/support/agent_local_worker.ex
           apps/coop_substrate/lib/coop_substrate/federation_authority.ex
           apps/coop_substrate/lib/coop_substrate/federation_fence.ex
           apps/coop_substrate/test/federation_authority_test.exs
