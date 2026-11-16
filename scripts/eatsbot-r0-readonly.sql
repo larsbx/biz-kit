@@ -1,8 +1,8 @@
 -- Eatsbot R0: what production holds, as counts only (decommission checklist §3).
 --
--- Run by the owner against the production database, e.g.
---   fly postgres connect -a <eatsbot-db-app>   then   \i eatsbot-r0-readonly.sql
--- or with psql and the production DATABASE_URL.
+-- Run by the owner on the host serving Eatsbot through biz-kit (adder-ws,
+-- scripts/e2e-stack.sh), before its next restart recreates the database:
+--   psql -d eatsbot_dev -f scripts/eatsbot-r0-readonly.sql
 --
 -- Read-only and aggregate-only: one READ ONLY transaction that ends in
 -- ROLLBACK, no row is ever selected, so no customer data leaves the
