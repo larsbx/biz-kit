@@ -73,6 +73,25 @@ defmodule Dispatch.Operations.LocationDemand do
     :ok
   end
 
+  @doc """
+  Releases all location watches owned by the calling request process.
+
+  A fleet stream's roster can change after opening. Its original session is
+  therefore insufficient for cleanup; the existing process-group memberships
+  are the complete record. Other requests' memberships are left untouched.
+  Bandit may reuse this process after the response, so exit cleanup alone is
+  not sufficient.
+  """
+  @spec release_watches() :: :ok
+  def release_watches do
+    for {:location_watch, _participant} = group <- :pg.which_groups(@scope),
+        self() in :pg.get_members(@scope, group) do
+      :pg.leave(@scope, group, self())
+    end
+
+    :ok
+  end
+
   @spec watched?(Ash.UUID.t()) :: boolean()
   def watched?(participant_id), do: :pg.get_members(@scope, group(participant_id)) != []
 

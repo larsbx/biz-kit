@@ -17,6 +17,10 @@ fn main() {
         "dispatch_sign_out",
         "dispatch_request",
         "open_procurement",
+        "operations_status",
+        "operations_place",
+        "operations_hide",
+        "operations_reload",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

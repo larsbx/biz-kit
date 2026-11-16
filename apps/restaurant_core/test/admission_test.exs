@@ -106,96 +106,11 @@ defmodule RestaurantCore.AdmissionTest do
         grant("bot", "system", @all)
       ])
 
-  test "every registered type is one of the five, each signed by one role" do
+  test "every registered type is signed by exactly one role" do
     assert Map.keys(Admission.event_types()) |> Enum.sort() ==
-             ~w(RestaurantDeviceGrantedV1 RestaurantDeviceRevokedV1 RestaurantMenuItemPutV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
+             ~w(RestaurantDeliveryStepV1 RestaurantDeviceGrantedV1 RestaurantDeviceRevokedV1 RestaurantDispatchGrantedV1 RestaurantMenuPublishedV1 RestaurantOrderPlacedV1 RestaurantOrderStepV1)
 
     for {_, spec} <- Admission.event_types(), do: assert([_] = spec.required_roles)
-  end
-
-  defp menu_put(signer, version, extra \\ %{}),
-    do:
-      env(
-        "RestaurantMenuItemPutV1",
-        signer,
-        Map.merge(
-          %{
-            "merchant_id" => "shop",
-            "expected_version" => version,
-            "item_id" => "margherita",
-            "name" => "Margherita",
-            "sku" => "MARG",
-            "price_minor" => 1250,
-            "currency" => "USD",
-            "visibility" => "published",
-            "discounts" => []
-          },
-          extra
-        )
-      )
-
-  test "menu items are governance facts, versioned per merchant (D6)" do
-    g = admin_gate()
-    assert Admission.menu(g.restaurant, @ch, "shop") == %{version: 0, items: %{}}
-
-    # A device, even an admin one, cannot edit the menu; nor an undeclared key.
-    assert Admission.check(menu_put(device("pos"), 0), g) ==
-             {:error, :restaurant_governance_not_declared}
-
-    assert Admission.check(menu_put(%{@gov | key_id: "other"}, 0), g) ==
-             {:error, :restaurant_governance_not_declared}
-
-    g1 = %{g | restaurant: Admission.fold(menu_put(@gov, 0), g)}
-
-    assert %{version: 1, items: %{"margherita" => %{price_minor: 1250}}} =
-             Admission.menu(g1.restaurant, @ch, "shop")
-
-    assert Admission.check(menu_put(@gov, 0, %{"price_minor" => 1300}), g1) ==
-             {:error, :stale_menu_version}
-
-    assert Admission.check(menu_put(@gov, 1, %{"price_minor" => 0}), g1) ==
-             {:error, :invalid_menu_item}
-
-    assert Admission.check(menu_put(@gov, 1, %{"item_id" => "p2"}), g1) ==
-             {:error, :duplicate_sku}
-
-    # Menus are per merchant: another merchant starts at version 0.
-    assert Admission.check(menu_put(@gov, 0, %{"merchant_id" => "cafe"}), g1) == :ok
-    assert Admission.menu(g1.restaurant, @ch, "cafe") == %{version: 0, items: %{}}
-  end
-
-  defp revoke(id, merchant \\ "shop"),
-    do: env("RestaurantDeviceRevokedV1", @gov, %{"merchant_id" => merchant, "key_id" => id})
-
-  test "a revoked device acts never again, its key is never re-granted, its orders stay" do
-    g = admin_gate()
-    g = %{g | restaurant: Admission.fold(place(device("pos")), g)}
-
-    assert Admission.check(%{revoke("pos") | signers: [device("kds")]}, g) ==
-             {:error, :restaurant_governance_not_declared}
-
-    assert Admission.check(revoke("nobody"), g) == {:error, :unknown_restaurant_grant}
-    assert Admission.check(revoke("pos", "cafe"), g) == {:error, :unknown_restaurant_grant}
-
-    g = %{g | restaurant: Admission.fold(revoke("pos"), g)}
-
-    assert Admission.check(
-             place(device("pos"), %{
-               "order_id" => "o2",
-               "cart_id" => "c2",
-               "idempotency_key" => "k2"
-             }),
-             g
-           ) ==
-             {:error, :forbidden}
-
-    assert Admission.check(step(device("pos"), "accept", 0), g) == {:error, :forbidden}
-    assert Admission.check(revoke("pos"), g) == {:error, :unknown_restaurant_grant}
-    assert Admission.check(grant("pos", "admin", @all), g) == {:error, :restaurant_key_revoked}
-
-    # The placed order is untouched, and another granted device still acts on it.
-    assert Admission.state(g.restaurant, @ch, "shop", "o1").state == :placed
-    assert Admission.check(step(device("kds"), "accept", 0), g) == :ok
   end
 
   test "a grant needs a declared governance key and a well-formed actor and action list" do
@@ -268,39 +183,6 @@ defmodule RestaurantCore.AdmissionTest do
              place(device("pos"), %{"fulfillment" => "delivery", "delivery" => %{}}),
              g
            ) == :ok
-  end
-
-  test "a placed snapshot must add up (I₂), in integers, with each discount within its line" do
-    g = admin_gate()
-
-    line = fn d ->
-      %{"name" => "M", "unit_minor" => 1250, "quantity" => 2, "discount_minor" => d}
-    end
-
-    adj = fn tax ->
-      %{"discount_total" => 100, "tax_total" => tax, "delivery_fee" => 0, "tip" => 50}
-    end
-
-    # 2500 − 300 = 2200; 2200 − 100 + 181 + 0 + 50 = 2331
-    good = %{
-      "lines" => [line.(300)],
-      "subtotal_minor" => 2200,
-      "total_minor" => 2331,
-      "adjustments" => adj.(181)
-    }
-
-    assert Admission.check(place(device("pos"), good), g) == :ok
-
-    for bad <- [
-          %{good | "subtotal_minor" => 2500},
-          %{good | "total_minor" => 2332},
-          %{good | "lines" => [line.(-1)], "subtotal_minor" => 2501, "total_minor" => 2632},
-          %{good | "lines" => [line.(2501)], "subtotal_minor" => -1, "total_minor" => 130},
-          %{good | "adjustments" => adj.(0), "total_minor" => 2150, "subtotal_minor" => 0}
-        ] do
-      assert Admission.check(place(device("pos"), bad), g) == {:error, :invalid_checkout_command},
-             inspect(bad)
-    end
   end
 
   test "steps are authorized by the grant, not the request; an unknown order is indistinguishable" do

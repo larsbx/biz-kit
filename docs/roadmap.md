@@ -1,5 +1,25 @@
 # biz-kit roadmap
 
+## Dispatch spatial workspace and minimal stack — 2026-11-11
+
+The accepted [God's Eye View integration roadmap](plans/2026-11-11-dispatch-spatial-workspace.md)
+selects one spatial workspace over authorized Dispatch observations and existing
+business commands. **Owner clarification: the earlier auxiliary stack was
+proposed, not implemented.** The plan avoids building unnecessary components;
+there is no six-to-four-to-two service retirement sequence.
+
+GEV-00 through GEV-08 cover requirements and the minimal profile, the spatial
+contract and proof obligations, fleet layer, complete queries/planning, admitted
+actions, context, history/handoff and deployment acceptance. Use suitable hosted
+tiles/geocoding; add Traccar, local cartography, a routing engine or an optimizer
+only when the selected workflow requires them. Existing Dispatch storage,
+native collection and the separate assignment-ledger migration keep their
+current contracts.
+
+Implementation remains pending. The first target is an authorized fleet view
+with freshness, accuracy, record links, revocation clearing and location-demand
+cleanup, built directly on the selected minimal architecture.
+
 ## Proof Bank application foundry — 2026-11-01
 
 The [Proof Bank B0 rollout](architecture/2026-11-01-proof-bank-rollout.md)

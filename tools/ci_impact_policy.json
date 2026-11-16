@@ -1,0 +1,103 @@
+{
+  "schema": "biz-kit-impact-policy-v1",
+  "authority": "advisory-no-skip-no-required-check",
+  "safe_app_roots": [
+    "biz_kit_composition",
+    "commerce_core",
+    "fulfillment_core",
+    "group_buy_core",
+    "inventory_core",
+    "marketing_core",
+    "order_core",
+    "restaurant_core",
+    "sales_core"
+  ],
+  "always_pr_workflows": [
+    "consolidation.yml",
+    "kafka-producer.yml",
+    "location-cross-repo-acceptance.yml",
+    "portal-auth-acceptance.yml",
+    "task-access-contract.yml"
+  ],
+  "workflow_owners": {
+    "business-composition.yml": [
+      "biz_kit_composition",
+      "commerce_core",
+      "fulfillment_core",
+      "group_buy_core",
+      "inventory_core"
+    ],
+    "commerce-core.yml": [
+      "biz_kit_composition",
+      "commerce_core",
+      "order_core",
+      "restaurant_core"
+    ],
+    "event-consumer-proofs.yml": [
+      "inventory_core"
+    ],
+    "fulfillment-core.yml": [
+      "biz_kit_composition",
+      "fulfillment_core"
+    ],
+    "group-buy-authority.yml": [
+      "group_buy_core"
+    ],
+    "group-buy-core.yml": [
+      "group_buy_core"
+    ],
+    "inventory-core.yml": [
+      "biz_kit_composition",
+      "inventory_core"
+    ],
+    "marketing-consent-bridge.yml": [
+      "biz_kit_composition",
+      "marketing_core",
+      "sales_core"
+    ],
+    "marketing-core-salvage.yml": [
+      "marketing_core"
+    ],
+    "portable-business-cores.yml": [
+      "commerce_core",
+      "fulfillment_core",
+      "inventory_core",
+      "order_core",
+      "restaurant_core",
+      "sales_core"
+    ],
+    "portable-eatsbot-compat.yml": [
+      "commerce_core",
+      "fulfillment_core",
+      "inventory_core",
+      "order_core",
+      "restaurant_core",
+      "sales_core"
+    ],
+    "proof-bank-conformance-probes.yml": [
+      "commerce_core",
+      "fulfillment_core",
+      "group_buy_core",
+      "inventory_core",
+      "marketing_core",
+      "order_core",
+      "restaurant_core",
+      "sales_core"
+    ],
+    "restaurant-core.yml": [
+      "commerce_core",
+      "order_core",
+      "restaurant_core"
+    ],
+    "sales-core.yml": [
+      "sales_core"
+    ]
+  },
+  "notes": [
+    "Candidates are not GitHub check conclusions; no workflow is disabled by this policy.",
+    "Elixir in_umbrella dependency edges are source-derived; runtime, generated, fixture and external edges are not proved complete.",
+    "Only edits to lib/test .ex/.exs files in the narrowly reviewed pure app set may receive a focused advisory proposal.",
+    "All other changes, invalid paths, missing graph data, or unrecognized dependencies force a full advisory proposal.",
+    "Main, merge queue and scheduled requests always propose full coverage; no user-provided policy authorizes skipping required checks."
+  ]
+}

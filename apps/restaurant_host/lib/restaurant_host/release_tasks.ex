@@ -13,11 +13,8 @@ defmodule RestaurantHost.ReleaseTasks do
   @doc "Review and enroll devices from an operator's release copy, without starting the host."
   def grant(args), do: RestaurantHost.Enrollment.main(args)
 
-  @doc "Add or replace a menu item from an operator's release copy, without starting the host."
-  def menu(args), do: RestaurantHost.MenuEditor.main(args)
-
-  @doc "Revoke a device's grant from an operator's release copy, without starting the host."
-  def revoke(args), do: RestaurantHost.DeviceRevoker.main(args)
+  @doc "Publish a menu or revoke a device from an operator's release copy."
+  def manage(args), do: RestaurantHost.Management.main(args)
 
   @spec migrate() :: :ok
   def migrate, do: CoopSubstrate.ReleaseTasks.init_event_stores()

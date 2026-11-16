@@ -8,7 +8,7 @@ defmodule RestaurantHost.Web.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {RestaurantHost.Web.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+    plug :put_secure_browser_headers, %{"cache-control" => "no-store"}
   end
 
   pipeline :api do
@@ -20,26 +20,25 @@ defmodule RestaurantHost.Web.Router do
   scope "/api", RestaurantHost.Web do
     pipe_through :api
 
+    post "/restaurant-delivery", DeliveryController, :submit
+    post "/restaurant-delivery/work", DeliveryController, :work
+    get "/restaurant-menu", DeviceGrantController, :menu
+    post "/restaurant-management/:operation", DeviceGrantController, :prepare_management
+    post "/restaurant-management/:operation/:id", DeviceGrantController, :submit_management
+
     get "/device-grants/:device", DeviceGrantController, :show
     post "/device-grants/:device", DeviceGrantController, :prepare
     post "/device-grants/:device/:id", DeviceGrantController, :submit
-
-    # `mix restaurant.menu`: likewise, only a governance signature on the held
-    # item at the reviewed menu version is admitted. The menu itself is public.
-    # `mix restaurant.revoke`: the device list is a governance-signed read.
-    get "/devices", DeviceRevocationController, :index
-    post "/device-revocations/:key", DeviceRevocationController, :prepare
-    post "/device-revocations/:key/:id", DeviceRevocationController, :submit
-
-    get "/menu", MenuItemController, :index
-    post "/menu-items/:item", MenuItemController, :prepare
-    post "/menu-items/:item/:id", MenuItemController, :submit
   end
 
   scope "/", RestaurantHost.Web do
     pipe_through :browser
 
+    get "/auth/login", AuthController, :login
+    get "/auth/callback", AuthController, :callback
+    post "/auth/logout", AuthController, :logout
     live "/", StorefrontLive
+    live "/account/orders", AccountLive
     get "/board/pair/:board/:secret", PairController, :pair
     live "/board", BoardLive
   end

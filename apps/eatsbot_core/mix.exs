@@ -34,11 +34,11 @@ defmodule EatsbotCore.MixProject do
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
       {:ash_authentication, "~> 5.0-rc"},
       {:ash_authentication_phoenix, "~> 3.0-rc"},
-      {:ash_graphql, "~> 1.12.0"},
+      {:ash_graphql, "~> 1.13.0"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "~> 2.15.2"},
       {:ash, "~> 3.37.2"},
-      {:ash_admin, "~> 1.3.2"},
+      {:ash_admin, "~> 1.4.0"},
       {:ex_cldr, "~> 2.0"},
       {:ex_cldr_numbers, "~> 2.33"},
       {:ex_cldr_currencies, "~> 2.16"},

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Build the production restaurant release, migrate, boot it, check it serves
 # the storefront and pairs a board, enroll both devices, then complete a pickup order on
-# its own ledger (scripts/restaurant_release_smoke.exs). The menu is put on the
-# ledger by the operator-side release command before ordering. Locally and in CI; see
+# its own ledger (scripts/restaurant_release_smoke.exs). Locally and in CI; see
 # docs/deploy.md.
 #
 # Needs PostgreSQL reachable as $PGUSER/$PGPASSWORD (default postgres/postgres)
@@ -29,7 +28,7 @@ cat > "$work/restaurant.json" <<JSON
   "merchant": "shop",
   "currency": "USD",
   "jurisdiction": "US-MI",
-  "timezone": "America/Detroit",
+  "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
   "storefront": {"device_id": "storefront", "key_id": "k-store"},
   "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board",
              "pairing_sha256": "$(printf '%s' "$pairing" | sha256sum | cut -d' ' -f1)"}}
@@ -52,7 +51,7 @@ trap '"$release" stop >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
 url="http://localhost:$RESTAURANT_PORT"
 for _ in $(seq 1 60); do curl -fs -o /dev/null "$url/" && break; sleep 1; done
-curl -fs -o /dev/null "$url/" || { echo "the storefront did not come up" >&2; exit 1; }
+curl -fs "$url/" | grep -q "Margherita" || { echo "the storefront did not come up" >&2; exit 1; }
 
 # A wrong secret is refused; the right one pairs the board and redirects to it.
 test "$(curl -s -o /dev/null -w '%{http_code}' "$url/board/pair/board-1/wrong")" = 403
@@ -65,15 +64,18 @@ for device in storefront board-1; do
     "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.grant([\"$device\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"
 done
 
-# The menu is governance-signed facts on the ledger, put by the operator-side
-# release command (no menu in the restaurant file).
-cat > "$work/margherita.json" <<JSON
-{"item_id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250,
- "currency": "USD", "visibility": "published", "discounts": []}
+cat > "$work/menu.json" <<JSON
+{
+  "merchant_id": "shop",
+  "expected_revision": 0,
+  "currency": "USD",
+  "items": [{"id": "margherita", "name": "Margherita special", "sku": "MARG",
+             "price_minor": 1250, "discount_minor": 250}]
+}
 JSON
 HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
-  "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.menu([\"put\", \"$work/margherita.json\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"
-curl -fs "$url/" | grep -q "Margherita" || { echo "the menu item is not on the storefront" >&2; exit 1; }
+  "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.manage([\"publish-menu\", \"$work/menu.json\", \"--chapter\", \"$chapter\", \"--server\", \"$url\"])"
+curl -fs "$url/" | grep -q "Margherita special"
 
 out=$("$release" rpc "Code.eval_file(\"$PWD/scripts/restaurant_release_smoke.exs\")")
 echo "$out"

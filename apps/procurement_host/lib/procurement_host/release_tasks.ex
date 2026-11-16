@@ -6,10 +6,18 @@ defmodule ProcurementHost.ReleaseTasks do
 
   @doc "Apply an explicitly prepared grant/enrollment file. Never bootstraps governance or starts HTTP."
   def enroll(path) do
+    admit(path, ["ProcurementOperatorGrantedV1", "ProcurementBusinessEnrolledV1",
+      "ProcurementDispatchRouteV1"])
+  end
+
+  @doc "Record a private bounty evidence attestation under an existing governance signing key."
+  def attest_bounty(path), do: admit(path, ["ProcurementBountyEvidenceAttestedV1"])
+
+  defp admit(path, allowed_types) do
     {:ok, _} = Application.ensure_all_started(:commerce_core)
     {:ok, _} = Application.ensure_all_started(:coop_substrate)
     %{"type" => type, "chapter_id" => chapter, "payload" => payload} = path |> File.read!() |> Jason.decode!()
-    unless type in ["ProcurementOperatorGrantedV1", "ProcurementBusinessEnrolledV1"],
+    unless type in allowed_types,
       do: raise("not a procurement authority event")
     seed = Base.decode16!(System.fetch_env!("PROCUREMENT_GOVERNANCE_SEED_HEX"), case: :mixed)
     key = System.fetch_env!("PROCUREMENT_GOVERNANCE_KEY_ID")

@@ -138,6 +138,7 @@ defmodule Eatsbot.ReleaseRuntimeConfigTest do
       read_runtime([
         {"RELEASE_NAME", "orchestration"},
         {"DATABASE_URL", "ecto://orchestration:orchestration@127.0.0.1/orchestration"},
+        {"SECRET_KEY_BASE", String.duplicate("o", 64)},
         {"TOKEN_SIGNING_SECRET", String.duplicate("x", 64)},
         {"SPRUCE_GOOSE_MCP_ENABLED", "false"},
         {"OUTBOX_DISPATCHER_ENABLED", "false"},

@@ -1,7 +1,7 @@
 defmodule ProcurementHost.HTTPTest do
   use CoopSubstrate.LogCase, async: false
   import Plug.Test
-  alias CoopSubstrate.{Log, Procurement, ProcurementFixture, ProcurementTestClock}
+  alias CoopSubstrate.{Log, Procurement, ProcurementFixture, ProcurementTestClock, RestaurantDeliveryWork}
   alias ProcurementHost.{HTML, Web}
   @token String.duplicate("x", 48)
 
@@ -66,6 +66,106 @@ defmodule ProcurementHost.HTTPTest do
     :ok = restart_log()
     assert request(:get, "/requests/http-request", %{}, final).resp_body =~ "fulfilled"
     assert {:ok, %{requests: [%{payment_evidence: []}]}} = Procurement.snapshot(f.context)
+  end
+
+  test "the accepted order exposes signed work through its existing coordinator page", %{f: f} do
+    :ok = ProcurementFixture.quoted(f)
+    assert {:ok, _} = ProcurementFixture.submit(f, "accept", 3, ProcurementFixture.acceptance())
+    signer = new_member("procurement_dispatch", "dispatch")
+    tenant = "11111111-1111-1111-1111-111111111111"
+    route = ProcurementFixture.event(f, "ProcurementDispatchRouteV1", %{
+      "cooperative_id" => "coop", "tenant_id" => tenant, "site" => "North dock",
+      "key_id" => signer.signer.key_id, "pubkey" => {:bytes, signer.signer.pubkey},
+      "active" => true, "expected_version" => 0
+    })
+    assert {:ok, [_]} = Log.append(route)
+
+    detail = request(:get, "/requests/request-1", %{}, login())
+    assert detail.resp_body =~ "Queue Dispatch handoff"
+    assert request(:post, "/requests/request-1/dispatch",
+      %{"_csrf_token" => csrf(detail), "expected_version" => "4"}, detail).status == 303
+
+    scope = %{source: :procurement, chapter: f.context.chapter_id, merchant: "coop",
+      tenant: tenant, key_id: signer.signer.key_id}
+
+    signed = RestaurantDeliveryWork.sign(scope, "", signer.seed)
+    response = work(signed)
+    assert response.status == 200
+    assert %{"jobs" => [%{"order_id" => "request-1", "site" => "North dock", "phase" => "requested"}],
+      "next" => nil} = Jason.decode!(response.resp_body)
+    exhausted = work(RestaurantDeliveryWork.sign(scope, "request-1", signer.seed))
+    assert exhausted.status == 200
+    assert %{"jobs" => [], "next" => nil} = Jason.decode!(exhausted.resp_body)
+    assert work(signed).status == 403
+    assert work(RestaurantDeliveryWork.sign(%{scope | source: :restaurant}, "", signer.seed)).status == 403
+  end
+
+  test "coordinator records a fixed reward, sourcing quote, closeout and external evidence", %{f: f} do
+    source = ProcurementFixture.event(f, "ProcurementBusinessEnrolledV1", %{
+      "cooperative_id" => "coop", "business_id" => "source", "active" => true,
+      "evidence_ref" => "source-enrollment", "expected_version" => 0
+    })
+    assert {:ok, [_]} = Log.append(source)
+    session = request(:get, "/requests", %{}, login())
+    commands = [
+      {"request", %{"buyer_business_id" => "buyer", "description" => "Replacement pump", "quantity" => "1",
+        "currency" => "USD", "needed_by_ms" => "2030-01-01T12:00", "consent_ref" => "buyer-consent"},
+        ~s(action="/requests/bounty-request/post_bounty")},
+      {"post_bounty", %{"reward_minor" => "5000", "maximum_total_minor" => "90000",
+        "terms_ref" => "private-bounty-terms"}, "Fixed reward: 5000 USD minor units"},
+      {"qualify", %{"evidence_ref" => "qualified"}, ~s(action="/requests/bounty-request/sourced_quote")},
+      {"sourced_quote", %{"quote_id" => "q", "merchant_business_id" => "merchant", "revision" => "1",
+        "total_minor" => "85000", "currency" => "USD", "expires_at_ms" => "2030-01-01T11:00",
+        "source_ref" => "supplier-quote", "sourcing_business_id" => "source", "sourcing_ref" => "attribution"},
+        "All-in including reward: 90000 USD minor units"},
+      {"accept", %{"quote_id" => "q", "revision" => "1", "buyer_business_id" => "buyer",
+        "evidence_ref" => "buyer-selected-quote"}, "Awarded, awaiting fulfillment"},
+      {"fulfill", %{"evidence_ref" => "item-delivered"}, "Awaiting closeout evidence"},
+      {"confirm_bounty", %{"attestation_id" => "buyer-closeout"},
+        "Reward recorded as earned (operator-attested closeout)"},
+      {"bounty_payment_evidence", %{"attestation_id" => "accounts-payable-evidence"},
+        "External payment evidence recorded (operator attestation)"}
+    ]
+
+    last = Enum.reduce(Enum.with_index(commands), session, fn {{action, attrs, expected}, version}, previous ->
+      params = Map.merge(attrs, %{"_csrf_token" => csrf(previous), "command_id" => "bounty-#{version}",
+        "expected_version" => to_string(version)})
+      path = "/requests/bounty-request/" <> action
+
+      params =
+        case Map.fetch(attrs, "attestation_id") do
+          {:ok, reference} ->
+            head = Log.head()
+            assert request(:post, path, params, previous).status == 409
+            assert Log.head() == head
+            purpose = if action == "confirm_bounty", do: "closeout", else: "external_payment"
+            evidence = ProcurementFixture.bounty_attestation(f, "bounty-request", purpose, version,
+              reference, f.now + 60_000)
+            assert {:ok, [attested]} = Log.append(evidence)
+            %{params | "attestation_id" => attested.event_id}
+
+          :error ->
+            params
+        end
+
+      result = request(:post, path, params, previous)
+      assert result.status == 303
+      detail = request(:get, "/requests/bounty-request", %{}, result)
+      assert detail.status == 200
+      assert detail.resp_body =~ expected
+      detail
+    end)
+
+    refute last.resp_body =~ ~s(action="/requests/bounty-request/bounty_payment_evidence")
+    assert {:ok, %{requests: [%{payment_evidence: [], bounty: %{award: %{
+      payment_ref: "accounts-payable-evidence"
+    }}}]}} = Procurement.snapshot(f.context)
+  end
+
+  defp work(input) do
+    c = conn(:post, "/api/procurement-dispatch/work", IO.iodata_to_binary(:json.encode(input)))
+    c = Plug.Conn.put_req_header(c, "content-type", "application/json")
+    Web.call(c, Web.init([]))
   end
 
   test "revocation denies an already authenticated browser read and write", %{f: f} do

@@ -13,6 +13,9 @@ defmodule RestaurantHost.ConfigTest do
         "merchant" => "shop",
         "currency" => "USD",
         "jurisdiction" => "US-MI",
+        "menu" => [
+          %{"id" => "margherita", "name" => "Margherita", "sku" => "MARG", "price_minor" => 1250}
+        ],
         "storefront" => %{"device_id" => "storefront", "key_id" => "k-store"},
         "boards" => %{
           "board-1" => %{
@@ -59,9 +62,7 @@ defmodule RestaurantHost.ConfigTest do
   test "malformed files are refused with a reason" do
     assert Config.parse("{", env()) == {:error, :invalid_json}
     assert Config.parse(json(%{"currency" => "usd"}), env()) == {:error, {:invalid, "currency"}}
-    # The menu is on the Log (decommission D6), so the file may not carry one.
-    assert Config.parse(json(%{"menu" => []}), env()) ==
-             {:error, {:unexpected_field, "restaurant", "menu"}}
+    assert Config.parse(json(%{"menu" => []}), env()) == {:error, {:invalid, "menu"}}
 
     assert Config.parse(json(%{"jurisdiction" => "US-XX"}), env()) ==
              {:error, {:invalid, "jurisdiction"}}
@@ -96,15 +97,5 @@ defmodule RestaurantHost.ConfigTest do
              )
 
     assert {:error, _} = Config.parse(json(%{"chapter" => ""}), env())
-  end
-
-  test "the timezone defaults to UTC and must be a known IANA zone" do
-    assert {:ok, %{timezone: "Etc/UTC"}} = Config.parse(json(), env())
-
-    assert {:ok, %{timezone: "America/Detroit"}} =
-             Config.parse(json(%{"timezone" => "America/Detroit"}), env())
-
-    assert Config.parse(json(%{"timezone" => "Mars/Olympus"}), env()) ==
-             {:error, {:invalid, "timezone"}}
   end
 end

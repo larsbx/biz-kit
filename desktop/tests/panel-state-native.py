@@ -123,14 +123,15 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                 request("POST", base + "/window/rect", {"width": 1600, "height": 1000})
                 leaf = lambda p: {"t": "leaf", "p": p}
                 split = lambda a, b, d="h": {"t": "split", "dir": d, "r": 0.4, "a": a, "b": b}
-                layout = split(leaf("services"), split(leaf("configs"), leaf("configs")))
-                js("localStorage.setItem('layout', JSON.stringify(arguments[0]))", layout)
+                # Configs is a tab of the Hosts panel: two Hosts tiles opened on it, beside Dispatch.
+                layout = split(leaf("dispatch"), split(leaf("hosts"), leaf("hosts")))
+                js("localStorage.setItem('layout', JSON.stringify(arguments[0])); localStorage.setItem('hosts.tab', 'configs')", layout)
                 request("POST", base + "/refresh", {})
-                until(lambda: js("return document.querySelectorAll('[data-panel=configs].tile tbody tr').length === 2"), "real config listings")
+                until(lambda: js("return document.querySelectorAll('.tile[data-panel=hosts] .hosts-body[data-panel=configs] tbody tr').length === 2"), "real config listings")
                 js("""window.nativeErrors=[];
                   const error=console.error; console.error=(...args)=>{window.nativeErrors.push(args.map(x=>String(x)+' '+(x?.stack||'')).join(' '));error(...args)};
                   window.addEventListener('error',e=>window.nativeErrors.push(e.message+' '+(e.error?.stack||'')));""")
-                js("window.panels = [...document.querySelectorAll('[data-panel=configs].tile')]; window.panels.forEach(p => p.querySelector('tbody tr').click());")
+                js("window.panels = [...document.querySelectorAll('.tile[data-panel=hosts]')]; window.panels.forEach(p => p.querySelector('tbody tr').click());")
                 until(lambda: js("return document.querySelectorAll('textarea.editor').length === 2"), "real config reads")
                 assert js("return [...document.querySelectorAll('textarea')].every(e => e.value === arguments[0])", original)
                 js("window.editors = window.panels.map(p => p.querySelector('textarea'))")
@@ -142,11 +143,12 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                 until(intact, "independent drafts")
 
                 # Surviving subtree moves up one level; both original DOM editors survive.
-                click('[data-panel=services].tile [aria-label="Close tile"]')
+                click('[data-panel=dispatch].tile [aria-label="Close tile"]')
                 until(intact, "adjacent-pane close")
-                click('[data-panel=configs].tile [aria-label="Split right"]')
+                click('.tile[data-panel=hosts] [aria-label="Split right"]')
                 until(intact, "split")
-                click('.entry[data-panel=settings]')
+                # Settings is a sidebar view now; insert a panel that is not open yet.
+                click('.side-item[data-panel=procurement]')
                 until(intact, "sidebar insertion")
                 until(lambda: js("return document.querySelectorAll('section.tile').length === 4"), "sidebar tile count")
 
@@ -167,12 +169,12 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                     ]}]})
                     assert intact(), "pointer resize destroyed a draft"
                     until(lambda: js("return localStorage.getItem('layout')") != before_resize, "pointer ratio commit")
-                click('[data-panel=configs].tile [aria-label="Zoom"]')
+                click('.tile[data-panel=hosts] [aria-label="Zoom"]')
                 until(lambda: js("return !!document.querySelector('.tile.zoomed')"), "zoom")
                 assert js("""const s=document.querySelector('.tile-surface').getBoundingClientRect();
                   const z=document.querySelector('.tile.zoomed').getBoundingClientRect();
                   return Math.abs(s.width-z.width)<1 && Math.abs(s.height-z.height)<1;"""), "zoom geometry"
-                click('[data-panel=configs].tile [aria-label="Restore"]')
+                click('.tile[data-panel=hosts] [aria-label="Restore"]')
                 assert intact()
 
                 # Every tile has usable, non-overlapping geometry and remains in the surface.
@@ -186,13 +188,13 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                   !v.includes('native-unsaved-secret') && !v.includes('original-native-fixture')));""")
                 saved = js("return localStorage.getItem('layout')")
                 request("POST", base + "/refresh", {})
-                until(lambda: js("return document.querySelectorAll('[data-panel=configs].tile tbody tr').length === 2"), "restored duplicate panels")
+                until(lambda: js("return document.querySelectorAll('.tile[data-panel=hosts] .hosts-body[data-panel=configs] tbody tr').length === 2"), "restored duplicate panels")
                 assert js("return document.querySelectorAll('textarea').length") == 0
                 assert js("return localStorage.getItem('layout')") == saved
                 assert fixture.read_text() == original, "unsaved draft changed the real fixture"
                 print("PASS: native Tauri/WebKit config drafts, duplicate panels, split, adjacent close, sidebar, pointer resize, zoom, geometry, storage, restore")
                 # Exercise actual reviewed writes and version guards through the real IPC backend.
-                js("window.panels=[...document.querySelectorAll('[data-panel=configs].tile')];window.panels.forEach(p=>p.querySelector('tbody tr').click())")
+                js("window.panels=[...document.querySelectorAll('.tile[data-panel=hosts]')];window.panels.forEach(p=>p.querySelector('tbody tr').click())")
                 until(lambda: js("return document.querySelectorAll('textarea.editor').length===2"), "fresh config editors")
                 changed = '{"token":"native-saved"}'
                 js("const e=window.panels[0].querySelector('textarea');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}))", changed)
@@ -201,11 +203,11 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                 js("[...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Review diff').click()")
                 until(lambda: js("return window.panels[0].textContent.includes('Pending change')"), "actual reviewed diff")
                 js("[...window.panels[0].querySelectorAll('button')].find(b=>b.textContent==='Save…').click()")
-                until(lambda: js("return !!document.querySelector('.modal')"), "save confirmation")
-                assert js("return document.querySelector('.modal pre').textContent.includes('native-saved')"), "confirmation omitted reviewed diff"
-                click('.modal .btn.danger')
+                until(lambda: js("return !!document.querySelector('.tile-confirm')"), "save confirmation")
+                assert js("return document.querySelector('.tile-confirm pre').textContent.includes('native-saved')"), "confirmation omitted reviewed diff"
+                click('.tile-confirm .btn.danger')
                 until(lambda: fixture.read_text() == changed, "real guarded config write")
-                until(lambda: js("return !document.querySelector('.modal')"), "save completed")
+                until(lambda: js("return !document.querySelector('.tile-confirm')"), "save completed")
                 backups = list(root.glob("app.json.bak-*"))
                 assert len(backups) == 1 and backups[0].read_text() == original, "backup did not preserve opened bytes"
                 js("const e=window.panels[1].querySelector('textarea');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}))", '{"token":"stale-draft"}')
@@ -214,19 +216,19 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                 assert fixture.read_text() == changed, "stale editor overwrote the saved file"
                 assert js("return window.panels[1].querySelector('textarea').value.includes('stale-draft')"), "stale refusal discarded the draft"
                 print("PASS: native reviewed save, exact backup, stale duplicate refusal and draft retention")
-                click('button[data-panel=scripts]')
-                until(lambda: js("return !!document.querySelector('[data-panel=scripts].tile .card')"), "actual script discovery")
-                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Dry run').click()")
-                until(lambda: js("return document.querySelector('[data-panel=scripts].tile').textContent.includes('dry-run confirmed') && document.querySelector('[data-panel=scripts].tile').textContent.includes('exit 0')"), "explicit dry-run output")
+                click('.tile[data-panel=hosts] .hosts-tab[data-tab=scripts]')
+                until(lambda: js("return !!document.querySelector('[data-panel=scripts].hosts-body .card')"), "actual script discovery")
+                js("[...document.querySelector('[data-panel=scripts].hosts-body').querySelectorAll('button')].find(b=>b.textContent==='Dry run').click()")
+                until(lambda: js("return document.querySelector('[data-panel=scripts].hosts-body').textContent.includes('dry-run confirmed') && document.querySelector('[data-panel=scripts].hosts-body').textContent.includes('exit 0')"), "explicit dry-run output")
                 assert not applied.exists(), "dry run applied a change"
-                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
-                until(lambda: js("return !!document.querySelector('.modal')"), "apply confirmation")
-                assert js("return document.querySelector('.modal pre').textContent.includes('--apply')")
-                click('.modal .btn:not(.danger)')
+                js("[...document.querySelector('[data-panel=scripts].hosts-body').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
+                until(lambda: js("return !!document.querySelector('.tile-confirm')"), "apply confirmation")
+                assert js("return document.querySelector('.tile-confirm pre').textContent.includes('--apply')")
+                click('.tile-confirm .actions .btn:first-child')
                 assert not applied.exists(), "cancelled apply ran the script"
-                js("[...document.querySelector('[data-panel=scripts].tile').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
-                until(lambda: js("return !!document.querySelector('.modal')"), "second apply confirmation")
-                click('.modal .btn.danger')
+                js("[...document.querySelector('[data-panel=scripts].hosts-body').querySelectorAll('button')].find(b=>b.textContent==='Apply').click()")
+                until(lambda: js("return !!document.querySelector('.tile-confirm')"), "second apply confirmation")
+                click('.tile-confirm .btn.danger')
                 until(lambda: applied.exists(), "confirmed real apply")
                 assert applied.read_text().strip() == "applied"
                 print("PASS: native script discovery, explicit dry-run, cancelled apply and confirmed apply")
@@ -251,7 +253,7 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
                 if procurement:
                     origin, unexpected = procurement
                     launcher = '[data-panel=procurement].tile button:not(.icon-btn)'
-                    click('.entry[data-panel=procurement]')
+                    click('.side-item[data-panel=procurement]')
                     click(launcher)
                     until(lambda: js("return document.querySelector('[data-panel=procurement].tile [role=alert]')?.textContent.includes('not configured')"), "missing procurement config")
                     config_path.write_text(json.dumps(dict(config_data, procurementOrigin=origin)))
@@ -304,7 +306,7 @@ def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls
             except Exception:
                 try:
                     print("Native geometry:", request("POST", base + "/execute/sync", {
-                        "script": "return [...document.querySelectorAll('.main,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
+                        "script": "return [...document.querySelectorAll('.tiles,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
                     print("Native page:", request("POST", base + "/execute/sync", {
                         "script": "return {url:location.href,ready:document.readyState,text:document.body.innerText.slice(0,1000)}", "args": []}))
                     print("Native errors:", request("POST", base + "/execute/sync", {

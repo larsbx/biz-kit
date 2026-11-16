@@ -42,6 +42,7 @@ class RewardPhase(str, Enum):
     LEASED = 'leased'
     SUBMITTED = 'submitted'
     ACCEPTED = 'accepted'
+    REJECTED = 'rejected'
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,8 @@ def reward_step(config: RewardConfig, state: RewardState,
                 action: RewardAction) -> RewardState:
     """Apply one well-typed model action; guard failure returns the same state."""
     if isinstance(action, Tick):
+        if state.phase == RewardPhase.REJECTED:
+            return state
         return replace(state, now=state.now + action.delta)
     if isinstance(action, Lease):
         reusable = state.phase == RewardPhase.OPEN or (
@@ -134,6 +137,16 @@ def reward_step(config: RewardConfig, state: RewardState,
                            escrow=state.escrow - config.reward, balanceA=a, balanceB=b)
         return state
     raise TypeError(f'unsupported reward action: {type(action).__name__}')
+
+
+def reject_reward(config: RewardConfig, state: RewardState, evidence: Candidate) -> RewardState:
+    """Apply a definitive decision after the adapter authenticates and fences it."""
+    if (state.phase != RewardPhase.SUBMITTED or state.candidate != evidence
+            or state.payouts != 0 or state.escrow != config.reward or config.reward == 0
+            or evidence.binding != config.expected or not config.worker_allowed(evidence.worker)):
+        return state
+    return replace(state, phase=RewardPhase.REJECTED, escrow=0,
+                   funder=state.funder + state.escrow)
 
 
 class ReservationPhase(str, Enum):

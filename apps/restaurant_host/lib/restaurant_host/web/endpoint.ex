@@ -5,7 +5,8 @@ defmodule RestaurantHost.Web.Endpoint do
     store: :cookie,
     key: "_restaurant_host",
     signing_salt: "restaurant-host",
-    same_site: "Lax"
+    same_site: "Lax",
+    secure: Application.compile_env(:restaurant_host, :secure_cookies, false)
   ]
 
   socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session]]

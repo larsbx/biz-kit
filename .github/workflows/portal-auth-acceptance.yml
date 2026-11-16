@@ -52,7 +52,7 @@ jobs:
           apps/dispatch/lib/dispatch_web/plugs/require_subject.ex
           apps/dispatch/test/dispatch_web/portal_revocation_test.exs
           apps/dispatch/test/support/portal_identity.ex
-          apps/spruce_goose/test/native_session_revocation_test.exs
+          apps/task_host/test/task_host/native_session_revocation_test.exs
       - name: Identity and cross-node regressions
         working-directory: apps/biz_kit_identity
         run: mix test

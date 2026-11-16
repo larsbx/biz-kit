@@ -1,0 +1,193 @@
+name: AgentCore signed launch acceptance
+
+on:
+  pull_request:
+    paths:
+      - "apps/agent_core/**"
+      - "apps/agent_ops_store/**"
+      - "apps/task_core/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - "experiments/agent_backend_receiver/**"
+      - "config/**"
+      - "mix.lock"
+      - "scripts/agent_launch_admission_probe.exs"
+      - ".github/workflows/agent-core-signed-ledger.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/agent_core/**"
+      - "apps/agent_ops_store/**"
+      - "apps/task_core/**"
+      - "apps/coop_substrate/**"
+      - "deploy/agent-core/**"
+      - "experiments/agent_backend_receiver/**"
+      - "config/**"
+      - "mix.lock"
+      - "scripts/agent_launch_admission_probe.exs"
+      - ".github/workflows/agent-core-signed-ledger.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-launch-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record the actual source and prepare its isolated dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENT_LAUNCH_STAGE="$RUNNER_TEMP/biz-kit-signed-agent-launch"
+          printf 'AGENT_LAUNCH_STAGE=%s\n' "$AGENT_LAUNCH_STAGE" >> "$GITHUB_ENV"
+          git rev-parse HEAD
+          mkdir -p "$AGENT_LAUNCH_STAGE/apps" "$AGENT_LAUNCH_STAGE/config" "$AGENT_LAUNCH_STAGE/deploy" "$AGENT_LAUNCH_STAGE/scripts" "$AGENT_LAUNCH_STAGE/experiments"
+          git rev-parse HEAD > "$AGENT_LAUNCH_STAGE/source-revision.txt"
+          for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core \
+            agent_core agent_ops_store group_buy_core inventory_core federation_core federation_service \
+            commerce_core dispatch_core barter_core; do
+            cp -R "apps/$app" "$AGENT_LAUNCH_STAGE/apps/"
+          done
+          cp config/config.exs "$AGENT_LAUNCH_STAGE/config/config.exs"
+          cp mix.lock "$AGENT_LAUNCH_STAGE/mix.lock"
+          cp -R deploy/agent-core "$AGENT_LAUNCH_STAGE/deploy/"
+          cp scripts/agent_launch_admission_probe.exs "$AGENT_LAUNCH_STAGE/scripts/"
+          cp -R experiments/agent_backend_receiver "$AGENT_LAUNCH_STAGE/experiments/"
+          cat > "$AGENT_LAUNCH_STAGE/mix.exs" <<'EOF'
+          defmodule SignedAgentLaunchHarness.MixProject do
+            use Mix.Project
+            def project, do: [apps_path: "apps", deps: []]
+          end
+          EOF
+          printf '[inputs: []]\n' > "$AGENT_LAUNCH_STAGE/.formatter.exs"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the independent durable reference receiver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat source-revision.txt)"
+          export AGENT_BACKEND_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/backend-evidence"
+          python3 --version
+          python3 -c 'import sqlite3; print("SQLite", sqlite3.sqlite_version)'
+          python3 -m unittest discover -s experiments/agent_backend_receiver -p 'test_*.py' -v \
+            2>&1 | tee "$AGENT_LAUNCH_STAGE/backend-receiver.log"
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile locked signed-launch dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          elixir --version
+          rustc --version
+          mix deps.get --check-locked
+          mix compile --warnings-as-errors
+      - name: Check launch-boundary and acceptance formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          mix format --check-formatted \
+            apps/agent_core/lib/agent_core/attempts.ex \
+            apps/task_core/lib/task_core/dispatcher.ex \
+            apps/task_core/test/dispatcher_test.exs \
+            apps/agent_ops_store/lib/agent_ops_store/coordinator.ex \
+            apps/agent_ops_store/lib/agent_ops_store/postgres.ex \
+            apps/agent_ops_store/test/postgres_test.exs \
+            apps/agent_ops_store/test/dispatch_integration_test.exs \
+            apps/coop_substrate/lib/coop_substrate/agent_launch_admission.ex \
+            apps/coop_substrate/lib/coop_substrate/agent_backend_request.ex \
+            apps/coop_substrate/lib/coop_substrate/log.ex \
+            apps/coop_substrate/mix.exs \
+            apps/coop_substrate/test/agent_launch_admission_test.exs \
+            apps/coop_substrate/test/agent_backend_request_test.exs \
+            apps/coop_substrate/test/agent_backend_receiver_test.exs \
+            apps/coop_substrate/test/agent_event_acceptance_test.exs \
+            apps/coop_substrate/test/support/agent_staging_fixture.ex \
+            apps/coop_substrate/test/support/agent_staging_sql.ex \
+            apps/coop_substrate/test/support/agent_backend_receiver.ex \
+            scripts/agent_launch_admission_probe.exs
+      - name: Verify genuine signed authority, SQL fences and session recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
+          export AGENT_BACKEND_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/backend-evidence"
+          cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
+          for seed in 1 9173; do
+            mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs \
+              test/agent_launch_admission_test.exs \
+              test/agent_backend_request_test.exs test/agent_backend_receiver_test.exs \
+              --warnings-as-errors --trace --seed "$seed" \
+              | tee "$AGENT_LAUNCH_STAGE/signed-launch-$seed.log"
+          done
+      - name: Commit signed source, admission and cancellation in a separate VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
+          cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
+          mix run --no-start ../../scripts/agent_launch_admission_probe.exs prepare \
+            "$AGENT_LAUNCH_STAGE/admission-restart.json" \
+            | tee "$AGENT_LAUNCH_STAGE/admission-prepare.log"
+      - name: Restart PostgreSQL preserving its data
+        shell: bash
+        env:
+          AGENT_ADMISSION_POSTGRES: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker restart "$AGENT_ADMISSION_POSTGRES"
+          for attempt in $(seq 1 60); do
+            if docker exec "$AGENT_ADMISSION_POSTGRES" pg_isready -U postgres; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "PostgreSQL did not recover after restart" >&2
+          exit 1
+      - name: Recover signed source and the same admission in a fresh VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
+          cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
+          mix run --no-start ../../scripts/agent_launch_admission_probe.exs verify \
+            "$AGENT_LAUNCH_STAGE/admission-restart.json" \
+            | tee "$AGENT_LAUNCH_STAGE/admission-verify.log"
+      - name: Retain revision and complete acceptance logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentcore-signed-launch-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/source-revision.txt
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/signed-launch-*.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-*.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-restart.json
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/backend-receiver.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/backend-evidence/**
+          if-no-files-found: error

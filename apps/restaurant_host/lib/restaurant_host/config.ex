@@ -1,7 +1,7 @@
 defmodule RestaurantHost.Config do
   @moduledoc """
   A restaurant's production configuration. The restaurant file (JSON) names
-  the Log chapter, merchant, currency, tax jurisdiction, timezone and devices; each
+  the Log chapter, merchant, currency, tax jurisdiction, menu and devices; each
   device's 32-byte signing seed comes only from the environment, as base64 in
   `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` (upper-cased, non-alphanumerics as `_`),
   so the file can be reviewed and versioned without holding a secret. A board's
@@ -10,19 +10,16 @@ defmodule RestaurantHost.Config do
   `RestaurantHost.Application` loads it at boot and refuses to start on any
   error, so a bad configuration fails the deploy, not a guest's order.
 
-  The menu is not here: it is governance-signed facts on the Log
-  (`RestaurantHost.Menu`, `mix restaurant.menu`). `timezone` (IANA, default
-  `Etc/UTC`) is the local time its discount rules read.
-
       {
         "chapter": "chapter-genesis", "merchant": "shop",
-        "currency": "USD", "jurisdiction": "US-MI", "timezone": "America/Detroit",
+        "currency": "USD", "jurisdiction": "US-MI",
+        "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
         "storefront": {"device_id": "storefront", "key_id": "k-store"},
         "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "…"}}
       }
   """
 
-  @top ~w(chapter merchant currency jurisdiction timezone storefront boards)
+  @top ~w(chapter merchant currency jurisdiction menu storefront boards delivery_enabled delivery_site)
   @device ~w(device_id key_id)
 
   @doc "Read the restaurant file at `path` with seeds from `env`."
@@ -41,7 +38,11 @@ defmodule RestaurantHost.Config do
          {:ok, merchant} <- segment(doc, "merchant"),
          {:ok, currency} <- currency(doc["currency"]),
          {:ok, jurisdiction} <- jurisdiction(doc["jurisdiction"]),
-         {:ok, timezone} <- timezone(Map.get(doc, "timezone", "Etc/UTC")),
+         {:ok, menu} <- menu(doc["menu"]),
+         delivery_enabled = Map.get(doc, "delivery_enabled", false),
+         true <- is_boolean(delivery_enabled) or invalid("delivery_enabled"),
+         site = doc["delivery_site"],
+         true <- valid_site?(delivery_enabled, site) or invalid("delivery_site"),
          {:ok, storefront} <- device("storefront", doc["storefront"], env, false),
          {:ok, boards} <- boards(doc["boards"], env),
          :ok <- distinct_devices(storefront, boards) do
@@ -51,12 +52,19 @@ defmodule RestaurantHost.Config do
          merchant: merchant,
          currency: currency,
          jurisdiction: jurisdiction,
-         timezone: timezone,
+         menu: menu,
+         delivery_enabled: delivery_enabled,
+         delivery_site: site,
          storefront: storefront,
          boards: boards
        }}
     end
   end
+
+  defp valid_site?(false, nil), do: true
+
+  defp valid_site?(_, site),
+    do: is_binary(site) and byte_size(site) in 1..120 and String.trim(site) != ""
 
   defp decode(json) do
     case :json.decode(json) do
@@ -106,14 +114,24 @@ defmodule RestaurantHost.Config do
 
   defp jurisdiction(_), do: invalid("jurisdiction")
 
-  defp timezone(tz) when is_binary(tz) do
-    case DateTime.now(tz, Tz.TimeZoneDatabase) do
-      {:ok, _} -> {:ok, tz}
-      _ -> invalid("timezone")
-    end
+  defp menu([_ | _] = items) do
+    if Enum.all?(items, &item?/1),
+      do:
+        {:ok,
+         for(
+           i <- items,
+           do: %{id: i["id"], name: i["name"], sku: i["sku"], price_minor: i["price_minor"]}
+         )},
+      else: invalid("menu")
   end
 
-  defp timezone(_), do: invalid("timezone")
+  defp menu(_), do: invalid("menu")
+
+  defp item?(%{"id" => id, "name" => name, "sku" => sku, "price_minor" => p} = i)
+       when is_binary(id) and is_binary(name) and is_binary(sku) and is_integer(p) and p >= 0,
+       do: map_size(i) == 4 and id != "" and name != "" and sku != ""
+
+  defp item?(_), do: false
 
   defp boards(%{} = boards, env) do
     Enum.reduce_while(boards, {:ok, %{}}, fn {id, spec}, {:ok, acc} ->
