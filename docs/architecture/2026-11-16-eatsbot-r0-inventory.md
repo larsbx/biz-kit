@@ -28,7 +28,12 @@ Two facts follow, and both change R4–R6:
    what was written since the last start, and it is lost at the next one. If
    real customers are being served there, take an archive before any restart
    (below); otherwise there is nothing to keep.
-2. **The legacy writer is fenced by stopping it, not by triggers.**
+2. **The legacy writer is fenced by stopping it, not by triggers.** Done in
+   the stack (2026-11-16, owner-approved): `e2e-stack.sh` no longer creates
+   `eatsbot_dev`, `scripts/e2e-restaurant.exs` bootstraps the rebuilt eatsbot on
+   each fresh ledger (governance declared, storefront and board granted), and
+   `scripts/e2e-serve.exs` starts every umbrella app except the five legacy
+   `eatsbot*` apps, with `restaurant_host` serving on `127.0.0.1:4070`. Before:
    `CoopSubstrate.WriterFence` installs refusing triggers in the legacy
    database, but the next stack start drops and recreates that database, which
    erases them. On this host, the R5 switch is to stop serving `apps/eatsbot`:
@@ -71,19 +76,15 @@ uses its `Noop` driver. There is no job queue.
 | `/deliveries`, `/map` LiveView | Replaced by Dispatch (fixed-route pilot) | Finish open deliveries first |
 | `/auth`, `/admin` (AshAdmin, `ADMIN_API_KEY`) | Not migrated (D1, D4) | Stop serving; unset the secrets |
 
-## What only the owner can answer
+## Owner answers
 
-1. Is `adder-ws`'s Eatsbot serving real customers, or is it the e2e stack its
-   name says? If real: what proxies `127.0.0.1:4100` to them, and is a Telegram
-   webhook registered for it?
-2. If real, before the next restart, run
-   [`scripts/eatsbot-r0-readonly.sql`](../../scripts/eatsbot-r0-readonly.sql)
-   on `adder-ws`: `psql -d eatsbot_dev -f scripts/eatsbot-r0-readonly.sql`.
-   It runs in one `READ ONLY` transaction that ends in `ROLLBACK` and returns
-   counts only: open deliveries and orders by state, unredeemed visits and
-   commissions, consent, Telegram subscriptions, unexpired tokens, rows per
-   table. Then `pg_dump eatsbot_dev` to the restricted archive (§3) if
-   anything must be kept.
+`adder-ws` is a test stack (owner, 2026-11-16): no customer data, so no archive
+or drain, and the switch above was approved. For any other copy of the legacy
+database, [`scripts/eatsbot-r0-readonly.sql`](../../scripts/eatsbot-r0-readonly.sql)
+(`psql -d eatsbot_dev -f scripts/eatsbot-r0-readonly.sql`) runs in one
+`READ ONLY` transaction that ends in `ROLLBACK` and returns counts only: open
+deliveries and orders by state, unredeemed visits and commissions, consent,
+Telegram subscriptions, unexpired tokens, rows per table.
 
 ## Old Fly infrastructure (retired)
 
