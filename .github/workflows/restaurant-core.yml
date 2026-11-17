@@ -13,6 +13,12 @@ on:
       - 'mix.exs'
       - 'mix.lock'
       - 'config/**'
+      - 'scripts/e2e-restaurant.exs'
+      - 'scripts/e2e-serve.exs'
+      - 'scripts/e2e-stack.sh'
+      - 'scripts/eatsbot-r0-readonly.sql'
+      - 'scripts/tests/eatsbot-r0-readonly.sh'
+      - 'scripts/tests/eatsbot-switch-over.cjs'
       - 'scripts/restaurant-release-smoke.sh'
       - 'scripts/restaurant_release_smoke.exs'
       - 'scripts/restaurant_enrollment_smoke_setup.exs'
@@ -58,6 +64,7 @@ jobs:
           apps/restaurant_core/test/kitchen_safety_test.exs
           apps/restaurant_core/test/admission_test.exs
           apps/restaurant_core/test/delivery_test.exs
+          apps/restaurant_core/test/delivery_coupling_test.exs
           apps/restaurant_core/test/menu_admission_test.exs
           apps/coop_substrate/test/restaurant_admission_test.exs
       - name: Lifecycle properties, kitchen conformance and admission refinement
@@ -138,6 +145,62 @@ jobs:
       - name: Storefront, board and orders against the Log
         working-directory: apps/restaurant_host
         run: mix test --no-start --warnings-as-errors
+
+  switch-over:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      EVENTSTORE_HOST: 127.0.0.1
+      SPRUCE_GOOSE_DATABASE_URL: ecto://postgres:postgres@127.0.0.1:5432/spruce_goose_dev
+      TASK_HOST_DATABASE_URL: ecto://postgres:postgres@127.0.0.1:5432/task_host_dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the inventory completes with mixed currencies
+        run: scripts/tests/eatsbot-r0-readonly.sh
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright and Chromium
+        run: npm install -g playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Order and operate the kitchen board through the advertised URLs
+        run: |
+          set -euo pipefail
+          export E2E_STATE_DIR="$(mktemp -d)"
+          export NODE_PATH="$(npm root -g)"
+          scripts/e2e-stack.sh --prepare
+          git diff --exit-code -- mix.lock
+          log="$E2E_STATE_DIR/serve.log"
+          scripts/e2e-stack.sh --serve-only >"$log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true; wait "$server" 2>/dev/null || true; rm -rf "$E2E_STATE_DIR"' EXIT
+          for _ in {1..60}; do
+            if grep -Fxq 'stack serving' "$log" || ! kill -0 "$server" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if ! grep -Fxq 'stack serving' "$log"; then
+            cat "$log" >&2
+            exit 1
+          fi
+          node scripts/tests/eatsbot-switch-over.cjs "$E2E_STATE_DIR/restaurant-stack.json"
 
   release-smoke:
     # The production restaurant release: built, migrated twice, booted, its

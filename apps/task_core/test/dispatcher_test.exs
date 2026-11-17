@@ -39,6 +39,7 @@ defmodule TaskCore.DispatcherTest do
         Process.put(:row, %{phase: "cancel_requested", version: version + 1})
         {:ok, version + 1}
       end,
+      validate_lease: fn _, _ -> :ok end,
       launch: fn ^plan ->
         Process.put(:launches, Process.get(:launches) + 1)
         if Process.get(:launch_error), do: raise("lost response"), else: {:ok, "backend-1"}
@@ -101,5 +102,41 @@ defmodule TaskCore.DispatcherTest do
     Process.put(:attach_error, false)
     assert {:ok, %{disposition: :already_dispatched}} = Dispatcher.deliver(:key, p)
     assert Process.get(:launches) == 1
+  end
+
+  test "a lease invalidated during post-claim authorization cannot launch or retry" do
+    p = Map.put(ports(), :validate_lease, fn _, _ -> {:error, :launch_lease_invalid} end)
+    assert {:error, :launch_lease_invalid} = Dispatcher.deliver(:key, p)
+    assert Process.get(:launches) == 0
+    assert Process.get(:row).phase == "leased"
+    assert Process.get(:prepares) == 2
+    assert {:ok, %{disposition: :already_dispatched}} = Dispatcher.deliver(:key, p)
+    assert Process.get(:launches) == 0
+  end
+
+  test "lease validation is mandatory and only literal success allows launch" do
+    for invalid <- [nil, true, false, {:ok, :stale}, {:error, :db_unavailable}] do
+      p = Map.put(ports(), :validate_lease, fn _, _ -> invalid end)
+      assert {:error, _} = Dispatcher.deliver(:key, p)
+      assert Process.get(:launches) == 0
+      assert Process.get(:row).phase == "leased"
+    end
+
+    p = Map.delete(ports(), :validate_lease)
+    assert {:error, :launch_requires_reconciliation} = Dispatcher.deliver(:key, p)
+    assert Process.get(:launches) == 0
+  end
+
+  test "lease verifier failure cannot launch or reset the claimed effect" do
+    for verify <- [
+          fn _, _ -> raise "database unavailable" end,
+          fn _, _ -> exit(:database_unavailable) end,
+          fn _, _ -> throw(:database_unavailable) end
+        ] do
+      p = Map.put(ports(), :validate_lease, verify)
+      assert {:error, :launch_requires_reconciliation} = Dispatcher.deliver(:key, p)
+      assert Process.get(:launches) == 0
+      assert Process.get(:row).phase == "leased"
+    end
   end
 end

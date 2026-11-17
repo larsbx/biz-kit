@@ -24,7 +24,26 @@ defmodule TaskHost.Web.Router do
     get("/app", AppController, :index)
     get("/app/:file", AppController, :file)
     get("/operations", AppController, :operations)
+    get("/operations/knowledge", AppController, :knowledge)
+
+    get(
+      "/operations/workspaces/:workspace_id/infrastructure-review",
+      InfrastructureReviewController,
+      :show
+    )
+
     get("/api/v1/operations", OperationsController, :index)
+    get("/api/v1/operations/knowledge", KnowledgeController, :index)
+    get("/api/v1/operations/knowledge/workflows/:id", KnowledgeController, :workflow)
+    get("/api/v1/operations/knowledge/workflows/:id/manifest", KnowledgeController, :manifest)
+    get("/api/v1/operations/knowledge/workflows/:id/sop", KnowledgeController, :sop)
+
+    get(
+      "/api/v1/operations/knowledge/documents/:id",
+      KnowledgeController,
+      :show
+    )
+
     post("/api/v1/commands/:id", CommandController, :submit)
     post("/api/v1/devices/challenges/:id", DeviceController, :prove)
     get("/api/v1/enrolments/:code", EnrolmentController, :show)
@@ -102,6 +121,11 @@ defmodule TaskHost.Web.Router do
     post("/blueprints/:held_id", BlueprintController, :apply)
     post("/runs/:run_event_id/readiness", RunReadinessController, :prepare)
     post("/runs/:run_event_id/readiness/:held_id", RunReadinessController, :define)
+    get("/knowledge", ProjectKnowledgeController, :index)
+    get("/knowledge/suggestions", ProjectKnowledgeController, :suggestions)
+    get("/knowledge/:candidate_id", ProjectKnowledgeController, :show)
+    post("/knowledge/:candidate_id/reviews", ProjectKnowledgeController, :prepare)
+    post("/knowledge/:candidate_id/reviews/:held_id", ProjectKnowledgeController, :submit)
     get("/devices/:key_id", DeviceController, :status)
   end
 end

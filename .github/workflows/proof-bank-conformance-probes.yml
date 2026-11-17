@@ -51,6 +51,8 @@ jobs:
           elixir-version: '1.19.0'
       - name: Resolve exact checked-out app dependencies
         working-directory: apps/${{ matrix.app }}
+        env:
+          MIX_ENV: test
         run: mix deps.get
       - name: Execute existing app-local tests (evidence, not mathematical proof)
         working-directory: apps/${{ matrix.app }}
