@@ -6,11 +6,12 @@ defmodule ProofBankCorePortfolioTest do
   test "covers the platform and every reviewed inventory row, with no duplicate IDs" do
     entries = Portfolio.entries()
     ids = Enum.map(entries, & &1.id)
-    assert length(entries) == 31
+    assert length(entries) == 32
     assert length(Enum.uniq(ids)) == length(ids)
     assert "biz-kit" in ids
     assert "proof_bank_core" in ids
     assert "biz_kit_extension" in ids
+    assert "bizops_kb" in ids
     assert "dispatch" in ids
     assert "scf_core" in ids
     assert "school_ops" in ids
@@ -21,7 +22,7 @@ defmodule ProofBankCorePortfolioTest do
 
   test "all portfolio baselines are structurally traced, draft, inert and unverified" do
     assert {:ok, baselines} = Portfolio.compile_all()
-    assert length(baselines) == 31
+    assert length(baselines) == 32
 
     for blueprint <- baselines do
       assert blueprint.schema == "proof-bank.blueprint.v1"
@@ -63,6 +64,7 @@ defmodule ProofBankCorePortfolioTest do
                Portfolio.audit_repo(root)
 
       assert "dispatch" in missing
+      assert "bizops_kb" in missing
       assert "scf_core" in missing
       File.mkdir_p!(Path.join([root, "apps", "unknown_plugin"]))
       File.write!(Path.join([root, "apps", "unknown_plugin", "mix.exs"]), "")
@@ -78,7 +80,7 @@ defmodule ProofBankCorePortfolioTest do
     root = Path.expand("../../..", __DIR__)
 
     if File.dir?(Path.join(root, "apps")) do
-      assert {:ok, %{app_count: 30, owner_review_pending: 31, verified: 0, activated: 0}} =
+      assert {:ok, %{app_count: 31, owner_review_pending: 32, verified: 0, activated: 0}} =
                Portfolio.audit_repo(root)
 
       for entry <- Portfolio.entries() do

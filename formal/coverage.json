@@ -88,6 +88,17 @@
         "note": "Sessions restore tickets: a SessionStore read pending across revoke_principal cannot re-insert the session, so a revoked principal never acts."
       }
     ],
+    "bizops_kb": [
+      {
+        "quint": "formal/quint/obligations/bizops_kb.qnt",
+        "main": "bizops_kb",
+        "control": "bizops_kb_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Two-document abstraction of the compiled manifest pin and document identity checks. Removing the compiled pin admits a matching rewritten manifest and document."
+      }
+    ],
     "commerce_core": [
       {
         "lean": "BizKitCommerce",
