@@ -104,11 +104,18 @@ for {id, _key, _seed} <- devices do
   append!.(d.type, d.payload)
 end
 
+endpoint_url =
+  :restaurant_host
+  |> Application.fetch_env!(RestaurantHost.Web.Endpoint)
+  |> Keyword.fetch!(:url)
+
+base_url = URI.to_string(struct!(URI, endpoint_url))
+
 File.write!(
   Path.join(state, "restaurant-stack.json"),
   JSON.encode!(%{
-    "storefront" => "http://127.0.0.1:4070/",
-    "board_pairing" => "http://127.0.0.1:4070/board/pair/board-1/#{secret}",
+    "storefront" => "#{base_url}/",
+    "board_pairing" => "#{base_url}/board/pair/board-1/#{secret}",
     "chapter" => chapter,
     "merchant" => merchant,
     "harness_keys_dir" => keys

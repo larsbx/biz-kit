@@ -50,8 +50,12 @@ GROUP BY currency ORDER BY currency;
 
 \if :has_visits
 \echo '== 4. Marketing visits: unredeemed redemptions and commissions =='
-SELECT status, count(*) AS visits, sum(commission) AS commission
-FROM marketing_visits GROUP BY status ORDER BY status;
+-- Visits without a commission are counted in the NULL currency group.
+SELECT status, (commission).currency_code AS currency, count(*) AS visits,
+       sum(commission) AS commission
+FROM marketing_visits
+GROUP BY status, (commission).currency_code
+ORDER BY status, currency NULLS LAST;
 \endif
 
 \if :has_promotions
