@@ -30,6 +30,8 @@ defmodule ProofBankCore.Portfolio do
      "A strictly validated extension manifest and inert activation plan may not grant permissions or execute commands."},
     {"biz_kit_identity", :foundation, :conformance,
      "Revoked or expired authentication sessions and grants must not regain protected access."},
+    {"bizops_kb", :capability, :conformance,
+     "Packaged reads must serve the pinned reference bytes. Workflow adoption and run creation must pass their separate authorization checks."},
     {"commerce_core", :capability, :conformance,
      "Pricing must preserve currency consistency and agreed arithmetic under supported input shapes."},
     {"coop_substrate", :foundation, :lean,

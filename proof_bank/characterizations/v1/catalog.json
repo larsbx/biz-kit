@@ -102,6 +102,57 @@
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "bizops_kb",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "registered_at_sha": "c76dcd8ad2152855db0ac3086e1091b7275137a9",
+      "category": "capability",
+      "intended_purpose": "Read-only Operations reference catalog and source-bound workflow previews",
+      "intended_features": [
+        "Packaged manifest pin and all-or-nothing document validation for paths, UTF-8, sizes, SHA-256 and Git blob identities",
+        "Bounded text search, area and category filters, stable-ID lookup and unambiguous internal link resolution",
+        "Read-only schema-2 onboarding preview and downloads bound to the two retained procedure inputs and SOP bundle"
+      ],
+      "observed_code_paths": [
+        "apps/bizops_kb/mix.exs",
+        "apps/bizops_kb/README.md",
+        "apps/bizops_kb/lib/bizops_kb/catalog.ex",
+        "apps/bizops_kb/lib/bizops_kb/workflows.ex",
+        "apps/bizops_kb/priv/catalog.json",
+        "apps/bizops_kb/priv/source-proof.json",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.json",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.sop.md",
+        "apps/bizops_kb/test/workflows_test.exs",
+        "apps/task_host/lib/task_host/web/knowledge_controller.ex",
+        "scripts/bizops-kb/snapshot.py"
+      ],
+      "observed_test_path": "apps/bizops_kb/test/catalog_test.exs",
+      "audit_finding": "Characterized at registered_at_sha. The packaged manifest identifies 216 Markdown documents from larsbx/bizops-kb commit 8749d8db1abd3145b22c6a27da2cc49a41c303fe, tree 79f146858c5d9d850df69b67294cb3fabf131bd1. The offline checker reconstructs the Git commit and tree and checks the imported inventory, source bytes and wiki links. The compiled SHA-256 of catalog.json binds the packaged load. A trusted caller can select an alternate root for internal consistency checks. The catalog tests exercise bounded lookup, missing and changed bytes, and coordinated manifest and document substitutions. The workflow tests cover DAG ordering, source and SOP binding, and refusal of malformed or changed inputs. TaskHost uses the packaged loader and rechecks the current session and access to a configured Operations workspace before returning content. Workflow adoption requires separate signed governance admission tied to the selected Biz-kit commit and exact manifest bytes. Run creation and execution have their own authorization checks. Signing-key trust, installed host behavior, current procedure correctness and engagement-specific owner approval require separate evidence.",
+      "first_formal_obligation": "Every successful packaged load yields the exact document bytes identified by the compiled manifest.",
+      "first_formal_layer": "L1",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/bizops_kb/mix.exs": "f6026cd0de516bfb2861673e481e9206c067e3c7",
+        "apps/bizops_kb/README.md": "813dc376cd50c191cd8dc17c10ab68fb0613958c",
+        "apps/bizops_kb/lib/bizops_kb/catalog.ex": "8bbf5464ab8a828bb6fcbfa6b9c35335f8f8ed1a",
+        "apps/bizops_kb/lib/bizops_kb/workflows.ex": "228949dc59a75fa4c3438a47db38217b0247f1b2",
+        "apps/bizops_kb/priv/catalog.json": "69cb3fdc9c03549fab7799778d89c890b65efef7",
+        "apps/bizops_kb/priv/source-proof.json": "ee3428f4b81380c338669f3cacb2a888cc38eba6",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.json": "3f69ced20236ba5d8e77c13ad5442af59a621cc6",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.sop.md": "3e3ffce8aedcd2e8581e42abbe14a8047ca5c337",
+        "apps/bizops_kb/test/workflows_test.exs": "517e670405a5a4f0d8a79e2c833c891082824ffd",
+        "apps/task_host/lib/task_host/web/knowledge_controller.ex": "df55146d29d2bf655ca99048200f4d81a3b45658",
+        "scripts/bizops-kb/snapshot.py": "eb18408c963aa85dfd2adb582752a29d0503adc9",
+        "apps/bizops_kb/test/catalog_test.exs": "8c951365cc4d161db49fc415f9d612eebc339b46"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz_kit_cluster",
       "source_repo": "larsbx/biz-kit",
       "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
@@ -688,7 +739,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "654ee10dcf2579746feb943791286673fd09faa9",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "5947052443251a14f24f7d0e6323b69b96ef8636",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -1156,6 +1207,17 @@
     },
     {
       "at_sha": "8a187d19814903727f8f80104beb9f25aa84ed3c",
+      "date": "2026-11-16",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "bc53e414f577b0113f8f844285f8cfb9e2cfcee5",
       "date": "2026-11-16",
       "decision": "owner: register and refresh; re-characterize at the next milestone",
       "registered": [],
