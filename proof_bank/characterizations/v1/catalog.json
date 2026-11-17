@@ -102,6 +102,57 @@
     },
     {
       "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "bizops_kb",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "registered_at_sha": "c76dcd8ad2152855db0ac3086e1091b7275137a9",
+      "category": "capability",
+      "intended_purpose": "Read-only Operations reference catalog and source-bound workflow previews",
+      "intended_features": [
+        "Packaged manifest pin and all-or-nothing document validation for paths, UTF-8, sizes, SHA-256 and Git blob identities",
+        "Bounded text search, area and category filters, stable-ID lookup and unambiguous internal link resolution",
+        "Read-only schema-2 onboarding preview and downloads bound to the two retained procedure inputs and SOP bundle"
+      ],
+      "observed_code_paths": [
+        "apps/bizops_kb/mix.exs",
+        "apps/bizops_kb/README.md",
+        "apps/bizops_kb/lib/bizops_kb/catalog.ex",
+        "apps/bizops_kb/lib/bizops_kb/workflows.ex",
+        "apps/bizops_kb/priv/catalog.json",
+        "apps/bizops_kb/priv/source-proof.json",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.json",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.sop.md",
+        "apps/bizops_kb/test/workflows_test.exs",
+        "apps/task_host/lib/task_host/web/knowledge_controller.ex",
+        "scripts/bizops-kb/snapshot.py"
+      ],
+      "observed_test_path": "apps/bizops_kb/test/catalog_test.exs",
+      "audit_finding": "Characterized at registered_at_sha. The packaged manifest identifies 216 Markdown documents from larsbx/bizops-kb commit 8749d8db1abd3145b22c6a27da2cc49a41c303fe, tree 79f146858c5d9d850df69b67294cb3fabf131bd1. The offline checker reconstructs the Git commit and tree and checks the imported inventory, source bytes and wiki links. The compiled SHA-256 of catalog.json binds the packaged load. A trusted caller can select an alternate root for internal consistency checks. The catalog tests exercise bounded lookup, missing and changed bytes, and coordinated manifest and document substitutions. The workflow tests cover DAG ordering, source and SOP binding, and refusal of malformed or changed inputs. TaskHost uses the packaged loader and rechecks the current session and access to a configured Operations workspace before returning content. Workflow adoption requires separate signed governance admission tied to the selected Biz-kit commit and exact manifest bytes. Run creation and execution have their own authorization checks. Signing-key trust, installed host behavior, current procedure correctness and engagement-specific owner approval require separate evidence.",
+      "first_formal_obligation": "Every successful packaged load yields the exact document bytes identified by the compiled manifest.",
+      "first_formal_layer": "L1",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/bizops_kb/mix.exs": "f6026cd0de516bfb2861673e481e9206c067e3c7",
+        "apps/bizops_kb/README.md": "813dc376cd50c191cd8dc17c10ab68fb0613958c",
+        "apps/bizops_kb/lib/bizops_kb/catalog.ex": "8bbf5464ab8a828bb6fcbfa6b9c35335f8f8ed1a",
+        "apps/bizops_kb/lib/bizops_kb/workflows.ex": "228949dc59a75fa4c3438a47db38217b0247f1b2",
+        "apps/bizops_kb/priv/catalog.json": "69cb3fdc9c03549fab7799778d89c890b65efef7",
+        "apps/bizops_kb/priv/source-proof.json": "ee3428f4b81380c338669f3cacb2a888cc38eba6",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.json": "3f69ced20236ba5d8e77c13ad5442af59a621cc6",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.sop.md": "3e3ffce8aedcd2e8581e42abbe14a8047ca5c337",
+        "apps/bizops_kb/test/workflows_test.exs": "517e670405a5a4f0d8a79e2c833c891082824ffd",
+        "apps/task_host/lib/task_host/web/knowledge_controller.ex": "df55146d29d2bf655ca99048200f4d81a3b45658",
+        "scripts/bizops-kb/snapshot.py": "eb18408c963aa85dfd2adb582752a29d0503adc9",
+        "apps/bizops_kb/test/catalog_test.exs": "8c951365cc4d161db49fc415f9d612eebc339b46"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
       "id": "biz_kit_cluster",
       "source_repo": "larsbx/biz-kit",
       "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
@@ -379,161 +430,6 @@
         "apps/dispatch_core/lib/dispatch_core/last_mile.ex": "4c7022ea618044a4166640c41906e6891743a528",
         "apps/dispatch_core/lib/dispatch_core/legacy_delivery.ex": "6ecf565e5de48927e34eb5f522e9659ef7898526",
         "apps/dispatch_core/test/dispatch_core_test.exs": "c39be4063de0461016c1936c8cce90ea6713c535"
-      }
-    },
-    {
-      "schema": "biz-kit.proof-bank.characterization.v1",
-      "id": "eatsbot",
-      "source_repo": "larsbx/biz-kit",
-      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
-      "category": "transitional",
-      "intended_purpose": "Legacy Phoenix restaurant orders, carts, deliveries and marketing",
-      "intended_features": [
-        "Legacy Phoenix restaurant orders",
-        "carts",
-        "deliveries and marketing"
-      ],
-      "observed_code_paths": [
-        "apps/eatsbot/lib/eatsbot.ex",
-        "apps/eatsbot/lib/eatsbot/application.ex"
-      ],
-      "observed_test_path": "apps/eatsbot/test/eatsbot/orders/checkout_concurrency_test.exs",
-      "audit_finding": "Generic application README lacks detailed contract; migration/retirement and dual-writer audit open",
-      "first_formal_obligation": "Retirement preserves accepted order/delivery history without a competing writer",
-      "first_formal_layer": "L4",
-      "priority": "P2",
-      "review_status": "needs_owner_review",
-      "test_result": "not_executed",
-      "implementation_conformance": "not_established",
-      "proof_status": "not_proven",
-      "runtime_conformance": "not_established",
-      "evidence_git_blobs": {
-        "apps/eatsbot/lib/eatsbot.ex": "925b9d891b43db43cf52f0275006fedf7593fc9d",
-        "apps/eatsbot/lib/eatsbot/application.ex": "ccf6194b0632d2689ace29915a3b2d0198ba5ad0",
-        "apps/eatsbot/test/eatsbot/orders/checkout_concurrency_test.exs": "3892437a9274c9272fcc449fd916e4c9e8d2063e"
-      }
-    },
-    {
-      "schema": "biz-kit.proof-bank.characterization.v1",
-      "id": "eatsbot_core",
-      "source_repo": "larsbx/biz-kit",
-      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
-      "category": "transitional",
-      "intended_purpose": "Legacy Ash products/variants/options, carts, orders and deliveries",
-      "intended_features": [
-        "Legacy Ash products/variants/options",
-        "carts",
-        "orders and deliveries"
-      ],
-      "observed_code_paths": [
-        "apps/eatsbot_core/lib/products/product.ex",
-        "apps/eatsbot_core/lib/carts/cart.ex"
-      ],
-      "observed_test_path": "apps/eatsbot_core/test/core_test.exs",
-      "audit_finding": "CONFIRMED GAP: sole app-local test asserts Core.hello() and no Core module file appears in tree; domain coverage is not established",
-      "first_formal_obligation": "Preserve legacy commerce behavior under independent replay characterization",
-      "first_formal_layer": "L4",
-      "priority": "P2",
-      "review_status": "needs_owner_review",
-      "test_result": "not_executed",
-      "implementation_conformance": "not_established",
-      "proof_status": "not_proven",
-      "runtime_conformance": "not_established",
-      "evidence_git_blobs": {
-        "apps/eatsbot_core/lib/products/product.ex": "b85b6bb3a2d8c7e8fe8af5da089a4f5cdc928e66",
-        "apps/eatsbot_core/lib/carts/cart.ex": "904f8373fafbc11a0bce498d3e5ed87d2c4f39b5",
-        "apps/eatsbot_core/test/core_test.exs": "661aff18c2302c01816f3ea06ee0a9546bda53c9"
-      }
-    },
-    {
-      "schema": "biz-kit.proof-bank.characterization.v1",
-      "id": "eatsbot_extension_kafka",
-      "source_repo": "larsbx/biz-kit",
-      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
-      "category": "transitional",
-      "intended_purpose": "Kafka publication, ack mapping and refusal of ambiguous retry outcomes",
-      "intended_features": [
-        "Kafka publication",
-        "ack mapping and refusal of ambiguous retry outcomes"
-      ],
-      "observed_code_paths": [
-        "apps/eatsbot_extension_kafka/lib/driver.ex",
-        "apps/eatsbot_extension_kafka/lib/extension.ex"
-      ],
-      "observed_test_path": "apps/eatsbot_extension_kafka/test/driver_test.exs",
-      "audit_finding": "Driver tests simulate KafkaEx, not a broker; host idempotency needed",
-      "first_formal_obligation": "Ambiguous publish outcomes cannot be recorded as acknowledged success",
-      "first_formal_layer": "L3",
-      "priority": "P2",
-      "review_status": "needs_owner_review",
-      "test_result": "not_executed",
-      "implementation_conformance": "not_established",
-      "proof_status": "not_proven",
-      "runtime_conformance": "not_established",
-      "evidence_git_blobs": {
-        "apps/eatsbot_extension_kafka/lib/driver.ex": "c560467a5bb213d637082cafee448245279d7f3d",
-        "apps/eatsbot_extension_kafka/lib/extension.ex": "467ed7e662d62256438908803704f7281c68be5f",
-        "apps/eatsbot_extension_kafka/test/driver_test.exs": "1c87a2d097c8efb43a280bc7b9a120d2f85fff39"
-      }
-    },
-    {
-      "schema": "biz-kit.proof-bank.characterization.v1",
-      "id": "eatsbot_extension_prometheus",
-      "source_repo": "larsbx/biz-kit",
-      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
-      "category": "transitional",
-      "intended_purpose": "PromEx metrics instrumentation and legacy supervisor endpoint",
-      "intended_features": [
-        "PromEx metrics instrumentation and legacy supervisor endpoint"
-      ],
-      "observed_code_paths": [
-        "apps/eatsbot_extension_prometheus/lib/extension.ex",
-        "apps/eatsbot_extension_prometheus/lib/promex_plugin.ex"
-      ],
-      "observed_test_path": null,
-      "audit_finding": "CONFIRMED GAP: app-local test tree has helper and support handler but no *_test.exs case module",
-      "first_formal_obligation": "Monitoring does not disclose private records or confer commands",
-      "first_formal_layer": "L4",
-      "priority": "P2",
-      "review_status": "needs_owner_review",
-      "test_result": "not_executed",
-      "implementation_conformance": "not_established",
-      "proof_status": "not_proven",
-      "runtime_conformance": "not_established",
-      "evidence_git_blobs": {
-        "apps/eatsbot_extension_prometheus/lib/extension.ex": "aecf4593bf4a25086fc6731cd102f09bf8b06504",
-        "apps/eatsbot_extension_prometheus/lib/promex_plugin.ex": "c780a1603d35cf81c7f8a919e0962048808a3a81"
-      }
-    },
-    {
-      "schema": "biz-kit.proof-bank.characterization.v1",
-      "id": "eatsbot_extension_telegram_bot",
-      "source_repo": "larsbx/biz-kit",
-      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
-      "category": "transitional",
-      "intended_purpose": "Telegram webhook/controller, conversation chains, legacy marketing bridge",
-      "intended_features": [
-        "Telegram webhook/controller",
-        "conversation chains",
-        "legacy marketing bridge"
-      ],
-      "observed_code_paths": [
-        "apps/eatsbot_extension_telegram_bot/lib/controller.ex",
-        "apps/eatsbot_extension_telegram_bot/lib/telegram/chain_handler.ex"
-      ],
-      "observed_test_path": null,
-      "audit_finding": "CONFIRMED GAP: app-local test tree has helper and support handler but no *_test.exs case module",
-      "first_formal_obligation": "Unverified Telegram messages cannot authorize business effects",
-      "first_formal_layer": "L4",
-      "priority": "P2",
-      "review_status": "needs_owner_review",
-      "test_result": "not_executed",
-      "implementation_conformance": "not_established",
-      "proof_status": "not_proven",
-      "runtime_conformance": "not_established",
-      "evidence_git_blobs": {
-        "apps/eatsbot_extension_telegram_bot/lib/controller.ex": "2eebf525195cf0136d3bb11334fc3fda510fe637",
-        "apps/eatsbot_extension_telegram_bot/lib/telegram/chain_handler.ex": "70e0f8ee8c37d3497fbbe27ed21e14f12cfed734"
       }
     },
     {
@@ -843,7 +739,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "2690e4edd13d93e4a7d287d3d8ed4f7fe4966b17",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "5947052443251a14f24f7d0e6323b69b96ef8636",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -1310,8 +1206,30 @@
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
     },
     {
-      "at_sha": "c76dcd8ad2152855db0ac3086e1091b7275137a9",
+      "at_sha": "8a187d19814903727f8f80104beb9f25aa84ed3c",
       "date": "2026-11-16",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "bc53e414f577b0113f8f844285f8cfb9e2cfcee5",
+      "date": "2026-11-16",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "861324237320dd9e588986aa1c50e5e810771a48",
+      "date": "2026-11-17",
       "decision": "owner: register and refresh; re-characterize at the next milestone",
       "registered": [],
       "refreshed_paths": [
