@@ -7,6 +7,24 @@ integration, issuance, capital intake, payment, custody, title writer, or
 deployment entry point. Merge review and independent legal, governance,
 accounting, and Shariah decisions are separate gates.
 
+## Recent runtime contract integration (2026-11-13)
+
+The [new integration ADR](../../docs/architecture/2026-11-13-producer-capital-integration.md)
+maps this proof package, the source-backed [Hanbali commercial contract taxonomy](../../docs/architecture/2026-11-13-hanbali-commercial-contract-taxonomy.md),
+the existing `CapitalAccounts` *patronage/redemption* ledger, and the
+`CoopSubstrate.ProducerCapitalPreview` **pure, non-authoritative** Elixir
+preview. The Elixir slice checks USD 250 annual participation is HELD for
+legal/NAV issuance, cap-table serial partition, revision- and value-bound
+voluntary producer unit purchases, and no hidden principal guarantee.
+
+**No machine-checked Lean/Quint-to-Elixir refinement is established.**
+The Elixir helper does not implement grant authentication, trusted appraisal,
+durable replay/source fences, cash settlement, ownership effect, earnings or
+distributions. The existing proof bank still models these only under its
+explicit trusted evidence/policy assumptions. Real money and title interfaces
+remain disconnected. Do not interpret a passed Elixir preflight as satisfying
+this README's atomic-transition proof acceptance.
+
 ## Model contract
 
 | Area | Implemented rule |

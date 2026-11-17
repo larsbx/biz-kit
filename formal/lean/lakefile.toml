@@ -1,6 +1,6 @@
 name = "BizKitEventProofs"
 version = "0.1.0"
-defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitScf"]
+defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDispatchSpatial", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission", "BizKitProcurementContract", "BizKitAgentTask", "BizKitScf"]
 
 [[lean_lib]]
 name = "BizKitLeases"
@@ -13,6 +13,9 @@ name = "BizKitEventProofs"
 
 [[lean_lib]]
 name = "BizKitDispatch"
+
+[[lean_lib]]
+name = "BizKitDispatchSpatial"
 
 [[lean_lib]]
 name = "BizKitOutcomeAdmission"
@@ -28,6 +31,15 @@ name = "BizKitCommerce"
 
 [[lean_lib]]
 name = "BizKitCommercialSetoff"
+
+[[lean_lib]]
+name = "BizKitCommercialAdmission"
+
+[[lean_lib]]
+name = "BizKitProcurementContract"
+
+[[lean_lib]]
+name = "BizKitAgentTask"
 
 [[lean_lib]]
 name = "BizKitScf"

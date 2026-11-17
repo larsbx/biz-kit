@@ -51,6 +51,10 @@ defmodule CoopSubstrate.SigningDomainTest do
   # evidence that its signed bytes start outside the `hawala` prefix. A new
   # call site fails this test until it is reviewed and listed here.
   @direct_ed25519_sites %{
+    # Consent reconstructs these domain-prefixed bytes from the exact proposal
+    # before checking either signature; callers cannot supply arbitrary bytes.
+    "barter_core/lib/barter_core/cross_currency_consent.ex" =>
+      ~r/@domain "biz-kit\/cross-currency-source-consent\/v1\\0".*bytes = @domain <> BarterCore\.digest\(fields\)/s,
     "coop_substrate/lib/coop_substrate/crypto.ex" => ~r/@hawala_domain "hawala"/,
     "federation_service/lib/federation_service/gossip.ex" => ~r/@schema "bizkit\./,
     "federation_service/lib/federation_service/gossip_sync.ex" =>

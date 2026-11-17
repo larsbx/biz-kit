@@ -62,6 +62,10 @@ export function validateSnapshot(value) {
       !["tasks", "suggestions", "workflows"].every((kind) =>
         record(w.view[kind]),
       ) ||
+      (w.knowledge !== undefined && (!record(w.knowledge) ||
+        !["pending_count", "approved_count", "rejected_count", "withdrawn_count", "stale_count"].every(
+          key => Number.isSafeInteger(w.knowledge[key]) && w.knowledge[key] >= 0,
+        ))) ||
       ids.has(w.id) ||
       scopes.has(scopeKey(w))
     ) {
