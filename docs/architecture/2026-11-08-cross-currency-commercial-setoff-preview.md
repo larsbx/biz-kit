@@ -3,6 +3,8 @@
 Date: 2026-11-08. Status: **implemented pure preview; no signed discharge, regulated FX execution or favorable legal classification**.
 Related: [scoped non-prohibition profile](2026-11-04-commercial-clearing-nonprohibition-profile.md), [ledger-first ADR](2026-11-03-ledger-first-commercial-clearing.md), source-bound security issue #299.
 
+Remaining work: [living obligations register](cross-currency-setoff-obligations.md).
+
 ## Decision
 
 Different denominations are **not prohibited in the product design**. They need distinct valuation and consent evidence. The legal question is determined from the actual operator, activity and jurisdiction, not from whether two obligations use the same ISO currency code.
@@ -90,7 +92,12 @@ cross-currency business event must introduce a distinct reviewed version,
 bind the rate + its legal terms directly to the signed source lineage, and
 inherit/retest the existing source-fence and protected legacy-rail controls.
 
-## Next bounded acceptance: actual contractual discharge
+## Prerequisites for any future contractual discharge
+
+The [living obligations register](cross-currency-setoff-obligations.md) tracks
+completed proof acceptance and the pending read-only source/authority drafts.
+Those inert increments precede any effectful design; the requirements below
+do not authorize activation.
 
 Separately develop a versioned cross-currency commercial business event on the existing serial business log, using the protections in #299. It must bind:
 
@@ -125,11 +132,13 @@ Another 992 deterministic boundary cases compare Lean and Elixir. Source and
 agreement controls are finite fixtures; no exhaustive temporal protocol check
 or whole-Elixir refinement theorem is claimed. The runner checks clean Git-head
 source bytes, fresh compilation/kernel replay, proof-placeholder rejection,
-behavioral source mutations, all 55 Barter tests and the scoped formatter repair.
+behavioral source mutations, the complete current structured Barter test
+inventory and the scoped formatter repair. Each receipt records the observed
+suite size rather than requiring a historical constant.
 
 The dedicated workflow checks out the actual PR head and retains its receipt,
 input/output corpora, runtime fingerprints and logs. The proof bank documents
 the remaining public-ID/parser, serialization/hash, external source authority,
 contractual discharge, accounting and regulatory boundaries. This is arithmetic
-and asserted-record assurance for the draft; it is not production activation or
+and asserted-record assurance for the merged pure preview; it is not production activation or
 closure of issue #299.
