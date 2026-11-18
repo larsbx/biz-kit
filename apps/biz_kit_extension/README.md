@@ -65,3 +65,18 @@ governance approval, extension execution or signed business admission. The
 trusted host must independently attest its checkout/build and obtain current
 governance approval before enabling real behavior. See the
 [release-lock design](../../docs/architecture/2026-11-02-extension-source-lock.md).
+
+A trusted host can pass `reviewed_release: %{source_commits: pins, lock: reviewed}`
+to `Registry.start_link/1`. Startup refuses stale or incomplete review inputs.
+The registry uses the exact manifest snapshot it verified and starts with
+every descriptor hidden. Local reconciliation only changes metadata visibility.
+
+## Upgrade compatibility review (portable)
+
+`BizKit.Extension.Upgrade.assess/2` compares canonical V1 manifests
+without executing domain code. It refuses same-version changes, downgrades,
+major version changes and removed/changed existing command, event, projection,
+capability, requested grant and dependency contracts. It reports additions as
+**review-required**, never as granted business authority. It is not an
+installation, migration or executable activation boundary.
+See the [upgrade assessment note](../../docs/architecture/2026-11-02-extension-upgrade-compatibility.md).

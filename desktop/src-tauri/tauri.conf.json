@@ -4,27 +4,17 @@
   "version": "0.1.0",
   "identifier": "io.github.larsbx.bizkit",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../build"
+    "frontendDist": "../ui"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "biz-kit",
-        "width": 1280,
-        "height": 840,
-        "minWidth": 900,
-        "minHeight": 560,
-        "resizable": true
-      }
-    ],
+    "windows": [],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'",
-      "dangerousDisableAssetCspModification": ["style-src"]
-    }
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
@@ -40,8 +30,16 @@
       "icons/icon.ico"
     ],
     "linux": {
-      "deb": { "depends": ["openssh-client"] },
-      "rpm": { "depends": ["openssh-clients"] }
+      "deb": {
+        "depends": [
+          "openssh-client"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "openssh-clients"
+        ]
+      }
     }
   }
 }

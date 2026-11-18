@@ -8,7 +8,8 @@ defmodule CommerceCore.CheckoutTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias CommerceCore.{Checkout, OrderLifecycle}
+  alias CommerceCore.Checkout
+  alias OrderCore.Lifecycle, as: OrderLifecycle
 
   @pool [:delivery, :pickup, :dine_in, :ship, :curbside]
 

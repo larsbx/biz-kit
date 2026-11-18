@@ -72,22 +72,32 @@ actor = %{
   "lifecycle_version" => 1
 }
 
-for id <- ~w(t1 t2),
-    do:
-      ok!.(
-        append.(
-          op,
-          "TaskCreatedV1",
-          Map.merge(
-            where,
-            Map.merge(actor, %{
-              "task_id" => id,
-              "title" => "Smoke #{id}",
-              "timing" => %{"schedule" => nil, "due_ms" => nil}
-            })
-          )
-        )
-      )
+create = fn id ->
+  append.(
+    op,
+    "TaskCreatedV1",
+    Map.merge(
+      where,
+      Map.merge(actor, %{
+        "task_id" => id,
+        "title" => "Smoke #{id}",
+        "timing" => %{"schedule" => nil, "due_ms" => nil}
+      })
+    )
+  )
+end
+
+# No work before the project has an eligible owner (TaskCore.Projects): then
+# governance declares alice human and assigns her the project, in one batch.
+{:error, {:reject, 0, :project_has_no_owner}} = create.("t1")
+
+{:ok, [_, _]} =
+  Log.append([
+    sign.(gov, "TaskPrincipalKindDeclaredV1", %{"principal_id" => "alice", "kind" => "human"}),
+    sign.(gov, "TaskProjectOwnerAssignedV1", Map.put(where, "principal_id", "alice"))
+  ])
+
+for id <- ~w(t1 t2), do: ok!.(create.(id))
 
 step = fn action ->
   {:ok, type, payload} = TaskCore.Steps.command(Log.gate().orchestration, scope, action, actor)

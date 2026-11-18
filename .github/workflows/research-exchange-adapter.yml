@@ -1,0 +1,102 @@
+name: Research exchange bounded MCP adapter
+on:
+  pull_request:
+    paths:
+      - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
+      - 'docs/proof-bank/research-exchange/**'
+      - 'proof_bank/research_exchange/**'
+      - '.github/workflows/research-exchange-adapter.yml'
+      - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
+      - 'docs/proof-bank/research-exchange/**'
+      - 'proof_bank/research_exchange/**'
+      - '.github/workflows/research-exchange-adapter.yml'
+      - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  executable-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify the shared reviewed core identity
+        run: |
+          set -euo pipefail
+          snapshot_tool=proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py
+          git fetch --no-tags --depth=1 origin "$(python3 -B "$snapshot_tool" --print-revision)"
+          python3 -B "$snapshot_tool" --require-clean \
+            --output "$RUNNER_TEMP/research-exchange-mcp/core-snapshot-before.json"
+      - name: Core identity refusal controls
+        run: python3 -B -m unittest discover -s proof_bank/research_exchange_mcp/tools -p 'test_*.py' -v
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          version-type: 'strict'
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+          install-hex: false
+          install-rebar: false
+      - name: Formatting and warning-free compilation
+        run: |
+          elixir proof_bank/research_exchange_mcp/test/format.exs --check
+          mkdir -p "$RUNNER_TEMP/research-exchange-beams"
+          elixirc --warnings-as-errors -o "$RUNNER_TEMP/research-exchange-beams" proof_bank/research_exchange_mcp/lib/research_exchange/*.ex
+      - name: Executable admission and stdio adversarial tests
+        run: |
+          set -euo pipefail
+          elixir proof_bank/research_exchange_mcp/test/run.exs \
+            | tee "$RUNNER_TEMP/research-exchange-mcp/adapter-tests.log"
+          python3 -B proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py --require-clean \
+            --output "$RUNNER_TEMP/research-exchange-mcp/core-snapshot-after.json"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - name: Durable MCP admission and dual-checker replay
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          core=proof_bank/research_exchange
+          mcp=proof_bank/research_exchange_mcp
+          tools="$RUNNER_TEMP/durable-tools"
+          mkdir -p "$tools/quint"
+          python3 - "$core/toolchains.lock.json" "$tools" <<'PY'
+          import json, pathlib, subprocess, sys
+          lock = json.loads(pathlib.Path(sys.argv[1]).read_text())["downloads"]["lean"]
+          directory = pathlib.Path(sys.argv[2])
+          archive = directory / lock["archive"]
+          subprocess.run(["curl", "--fail", "--location", "--retry", "3",
+                          lock["url"], "-o", str(archive)], check=True)
+          subprocess.run(["sha256sum", "--check"], check=True,
+                         input=f"{lock['sha256']}  {archive}\n", text=True)
+          subprocess.run(["tar", "--zstd", "-xf", str(archive), "-C", str(directory)], check=True)
+          PY
+          cp "$core"/tooling/quint/package*.json "$tools/quint/"
+          npm ci --prefix "$tools/quint" --ignore-scripts --no-audit --no-fund
+          bash "$mcp/durable/verify.sh" "$tools/lean-4.35.0-linux" \
+            "$tools/quint/node_modules/@informalsystems/quint/dist/src/cli.js" \
+            "$RUNNER_TEMP/research-exchange-mcp/durable"
+      - name: Preserve exact-revision MCP observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-exchange-mcp-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/research-exchange-mcp/
+          if-no-files-found: error
+          retention-days: 30
+      # Complete core and durable bridge acceptance have dedicated workflows.
+      # This job checks memory/transport controls and the disposable offline
+      # replay pilot. Both durable profiles retain their own acceptance suites.

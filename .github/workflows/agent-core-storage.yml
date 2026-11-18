@@ -81,6 +81,9 @@ jobs:
             < deploy/agent-core/sql/004_event_cursor.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+            < deploy/agent-core/sql/005_launch_admission.sql
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
             < deploy/agent-core/sql/ci_event_cursor.sql
           docker compose -f deploy/agent-core/compose.yaml exec -T db \
             psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
@@ -105,7 +108,31 @@ jobs:
         run: |
           set -euo pipefail
           mix deps.get --check-locked
-          (cd apps/agent_ops_store && mix test --include integration)
+          mix format --check-formatted \
+            apps/task_core/lib/task_core/dispatcher.ex \
+            apps/task_core/test/dispatcher_test.exs \
+            apps/agent_ops_store/lib/agent_ops_store/coordinator.ex \
+            apps/agent_ops_store/lib/agent_ops_store/postgres.ex \
+            apps/agent_ops_store/test/dispatch_integration_test.exs \
+            apps/agent_ops_store/test/postgres_test.exs
+          (cd apps/agent_ops_store && mix test --include integration --seed 1)
+
+      - name: Record the six actual authority-drift cancellation rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 -Aqt \
+            -c "SELECT count(*) FROM agent_ops.execution_attempts
+                WHERE run_id LIKE 'run%-drift-%' AND phase='cancel_requested'
+                  AND attempts=1 AND backend_ref IS NULL;")"
+          test "$count" = "6"
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 -Aqt \
+            -c "SELECT effect_id, phase, row_version, attempt_epoch, attempts,
+                       backend_ref, encode(descriptor_digest, 'hex')
+                FROM agent_ops.execution_attempts WHERE run_id LIKE 'run%-drift-%'
+                ORDER BY effect_id;" > "$RUNNER_TEMP/agent-drift-before.txt"
 
       - name: Recreate database container without deleting its volume
         shell: bash
@@ -134,6 +161,14 @@ jobs:
                 FROM agent_ops.execution_attempts
                 WHERE effect_id='agent-run:signed-ci';")"
           test "$attempt" = "leased:2"
+
+          docker compose -f deploy/agent-core/compose.yaml exec -T db \
+            psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 -Aqt \
+            -c "SELECT effect_id, phase, row_version, attempt_epoch, attempts,
+                       backend_ref, encode(descriptor_digest, 'hex')
+                FROM agent_ops.execution_attempts WHERE run_id LIKE 'run%-drift-%'
+                ORDER BY effect_id;" > "$RUNNER_TEMP/agent-drift-after.txt"
+          cmp "$RUNNER_TEMP/agent-drift-before.txt" "$RUNNER_TEMP/agent-drift-after.txt"
 
       - name: Stop service but retain volume
         if: always()

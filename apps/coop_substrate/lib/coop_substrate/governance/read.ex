@@ -44,25 +44,50 @@ defmodule CoopSubstrate.Governance.Read do
 
   @doc false
   def chapters(role_keys, request, signature, now_ms) do
-    bytes = signing_bytes(request)
+    with :ok <- validate_request(request, signature, now_ms) do
+      bytes = signing_bytes(request)
 
-    chapters =
-      for {{chapter, "governance"}, keys} <- role_keys,
-          Crypto.verify(bytes, signature, keys[request.key_id] || ""),
-          do: chapter
+      chapters =
+        for {{chapter, "governance"}, keys} <- role_keys,
+            Crypto.verify(bytes, signature, keys[request.key_id] || ""),
+            do: chapter
 
-    cond do
-      not (is_binary(request.nonce) and byte_size(request.nonce) in 16..128) ->
-        {:error, :invalid_nonce}
-
-      abs(now_ms - request.timestamp_ms) > Access.window_ms() ->
-        {:error, :stale_request}
-
-      chapters == [] ->
-        {:error, :not_governance}
-
-      true ->
-        {:ok, Enum.sort(chapters)}
+      if chapters == [],
+        do: {:error, :not_governance},
+        else: {:ok, Enum.sort(chapters)}
     end
   end
+
+  # Validate before canonical encoding or signature verification. This also
+  # protects direct callers that did not pass through the HTTP header codec.
+  defp validate_request(
+         %{
+           method: method,
+           path: path,
+           timestamp_ms: timestamp,
+           nonce: nonce,
+           key_id: key_id
+         },
+         <<_::512>>,
+         now_ms
+       )
+       when is_binary(method) and is_binary(path) and is_integer(timestamp) and
+              timestamp >= 0 and timestamp <= 9_223_372_036_854_775_807 and
+              is_binary(nonce) and is_binary(key_id) and is_integer(now_ms) do
+    cond do
+      not Enum.all?([method, path, nonce, key_id], &String.valid?/1) ->
+        {:error, :invalid_request}
+
+      byte_size(nonce) not in 16..128 ->
+        {:error, :invalid_nonce}
+
+      abs(now_ms - timestamp) > Access.window_ms() ->
+        {:error, :stale_request}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_request(_, _, _), do: {:error, :invalid_request}
 end

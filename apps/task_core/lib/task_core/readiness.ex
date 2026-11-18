@@ -6,6 +6,11 @@ defmodule TaskCore.Readiness do
   acknowledge the SOP and request transitions. Replay folds accepted facts
   without filesystem reads or execution effects.
 
+  A blueprint's optional readiness contract fixes the SOP, version and all
+  input digests, including the adopted manifest. Ordinary readiness admission
+  enforces those bindings; a client or a new governance-signed readiness
+  command cannot replace them while retaining the existing workflow run.
+
   Execution (docs/architecture/2026-10-19-execution.md):
 
     * `TaskStartedV1` (ready -> in_progress) rechecks what readiness
@@ -167,6 +172,7 @@ defmodule TaskCore.Readiness do
              p["predecessor_ids"],
              p["artifact_requirements"]
            ),
+         :ok <- TaskCore.Hierarchy.keeps_readiness_contract(task, p),
          do: :ok
   end
 
@@ -244,6 +250,8 @@ defmodule TaskCore.Readiness do
   # A DoD can only be defined while a task is proposed (`TaskCore.DoD`), so queuing
   # without one would leave the task unable ever to get one.
   defp dod_defined(%{dod: nil}), do: {:error, :dod_not_defined}
+  # A typed definition is queued only once its requester agrees (`TaskCore.DoD`).
+  defp dod_defined(%{dod: %{request_type: _, agreement: nil}}), do: {:error, :dod_not_agreed}
   defp dod_defined(_task), do: :ok
 
   defp definition(task) do

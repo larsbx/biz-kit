@@ -61,6 +61,18 @@ defmodule AgentCore.Attempts do
   def register(_state, _plan), do: {:error, :invalid_operational_projection}
 
   @doc """
+  Stable checksum of the validated operational descriptor used by host stores.
+
+  This preserves the existing BEAM descriptor encoding; it is not the
+  canonical signed-ledger hash, a profile approval or a launch permission.
+  """
+  @spec descriptor_digest(map()) :: {:ok, binary()} | {:error, atom()}
+  def descriptor_digest(plan) do
+    with {:ok, descriptor} <- descriptor(plan),
+         do: {:ok, :crypto.hash(:sha256, :erlang.term_to_binary(descriptor))}
+  end
+
+  @doc """
   Claim a pending attempt with a host-generated owner and unpredictable token.
 
   The host must atomically persist the new epoch BEFORE launching a backend.

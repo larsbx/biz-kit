@@ -20,7 +20,7 @@ defmodule CoopSubstrate.CommandsTest do
     agent = new_member("suggester")
     op_grant = operator_grant(gov, op, "alice")
     agent_grant = suggester_grant(gov, agent, "bot")
-    {:ok, _} = Log.append([declare_governance(gov), op_grant, agent_grant])
+    {:ok, _} = Log.append([declare_governance(gov), op_grant, agent_grant | project_owner(gov)])
     {:ok, _} = Log.append(create(op, op_grant, "task-1", unscheduled()))
 
     {:ok, [suggestion]} =

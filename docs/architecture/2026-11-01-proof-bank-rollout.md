@@ -86,6 +86,21 @@ not write any of those systems. Private learner, customer, location, driver
 or financial records are excluded from LLM/accelerator contexts unless
 independently authorized through typed, purpose-bound read ports.
 
+## Sequencing amendment: use Biz-kit itself first
+
+External community-submitted apps and marketplace release work **must follow**
+internal acceptance of the platform's own authority boundaries and its existing
+apps. [First-party adoption](2026-11-01-proof-bank-first-party.md) inventories
+the platform plus 28 umbrella Mix apps as review-required candidates, including
+legacy and transitional code. The current 29 baselines are not accepted
+requirements, not verified proofs, and not permission to install anything.
+
+Before B3/B5 release work, require at least one end-to-end first-party pilot
+with reviewed requirements, independently checked supported claims, and
+exact-revision implementation conformance. Then repeat on a nonidentical
+second domain and preserve every remaining unreviewed app as a visible gap.
+This does not override existing security, financial or legacy-retirement gates.
+
 ## Rollout gates
 
 | Gate | Deliverable | Evidence needed |

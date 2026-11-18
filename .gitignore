@@ -10,3 +10,11 @@ erl_crash.dump
 /apps/federation_service/test/support/__pycache__/
 /tools/__pycache__/
 /tools/halaqa_federation_draft/__pycache__/
+
+# Formal toolchain outputs
+_apalache-out/
+formal/lean/.lake/
+
+# Reproducible spatial acceptance evidence is uploaded by CI.
+/.artifacts/dispatch-spatial/
+/.artifacts/dispatch-spatial-runtime/

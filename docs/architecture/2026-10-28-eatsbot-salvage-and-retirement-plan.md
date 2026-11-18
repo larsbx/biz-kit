@@ -1,6 +1,8 @@
 # Eatsbot salvage and verified retirement plan
 
 Date: 2026-10-28. Status: **Proposed target architecture; inventory and retirement plan, not a production shutdown**.
+
+Since 2026-11-07 the [Eatsbot decommission checklist](2026-11-07-eatsbot-decommission.md) defines when this plan is done, for the rebuilt eatsbot (`restaurant_host`) that now replaces the legacy runtime. The R0–R6 packages and refusal rules below still apply.
 Paired with [the cross-repository extension ADR](2026-10-28-cross-repository-extension-and-hawala-capability.md) (biz-kit PR #175) and the [Eatsbot retirement ADR](https://github.com/larsbx/eatsbot/blob/dev/docs/modules/decisions/pages/biz-kit-interoperability-and-source-ownership.adoc) (eatsbot PR #35).
 
 ## Decision and end state
@@ -73,7 +75,7 @@ Both are staged R3 **contract composition only**. They have no live host signatu
 
 **R4 — State migration and parallel proof.** Reconcile every relevant legacy order, marketing consent and suppression, redemption, delivery, payment/refund/commission liability, and audit record at an explicit cutoff and version. Use read-only shadow projections and signed comparison reports, **not** dual writes. Cover incomplete operations and unknown effects; retain `HOLD` where a result cannot be proved. Validate new host against actual external consumers and failure/restart/partition cases. Document data migration, de-duplication, retained history, encryption, retention and rollback checkpoints.
 
-**R5 — Authorized switch and drain.** Only after green revision-pinned release, integration, load, authorization and migration acceptance: approve the writer/traffic cutover, stop legacy writes, drain callbacks/jobs/queues, reconcile late receipts, and repoint every external endpoint/client. Keep a controlled rollback window and record the one authoritative owner at each instant. No data or financial obligation may be silently orphaned.
+**R5 — Authorized switch and drain.** Only after green revision-pinned release, integration, load, authorization and migration acceptance: approve the writer/traffic cutover, stop legacy writes, drain callbacks/jobs/queues, reconcile late receipts, and repoint every external endpoint/client. Keep a controlled rollback window and record the one authoritative owner at each instant. No data or financial obligation may be silently orphaned. The stop is a signed fence: governance appends `LegacyWriterFenced` for `eatsbot`, and `mix coop.fence_writer` installs it on the legacy database in one transaction (`CoopSubstrate.WriterFence`); a configuration flag is not a fence.
 
 **R6 — Retire the product.** Remove `eatsbot`, `eatsbot_core` and legacy `eatsbot_extension_*` packages from active biz-kit releases/dependency graphs **after** all surviving capabilities have consumers, history and tests elsewhere. Disable standalone deployment and automated production deploys; revoke only obsolete service credentials, migrate/close channel integrations and decommission infrastructure after retention and contractual obligations are satisfied. Archive `larsbx/eatsbot` read-only with commit history, migration mappings and provenance (not delete or publicly expose sensitive data). Mark documentation explicitly retired.
 

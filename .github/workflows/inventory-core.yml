@@ -25,6 +25,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify and record checked-out source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git show --no-patch --format='source_commit=%H%nsource_tree=%T'
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -45,6 +53,8 @@ jobs:
           apps/inventory_core/test/wire_test.exs
           apps/inventory_core/test/menu_test.exs
           apps/inventory_core/test/basket_test.exs
+          apps/inventory_core/test/proof_bank_inventory_contract_test.exs
+          apps/inventory_core/test/proof_bank_locations_test.exs
       - name: Test replay and reservation rules
         working-directory: apps/inventory_core
         run: mix test --no-start

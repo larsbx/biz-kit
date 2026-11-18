@@ -178,11 +178,12 @@ end
 # Which apps this boot carries. A release runs this whole file, so each app's
 # production section is gated on the release that ships it (mix.exs); an unset
 # RELEASE_NAME (a Mix run) carries every app. The `orchestration` release has no
-# dispatch, and the `eatsbot` release has only eatsbot.
+# dispatch, and the `restaurant` release has only the ledger and the rebuilt
+# eatsbot's host.
 release_name = System.get_env("RELEASE_NAME")
-dispatch_released? = release_name not in ["orchestration", "eatsbot"]
-spruce_goose_released? = release_name != "eatsbot"
-eatsbot_released? = release_name in [nil, "eatsbot"]
+dispatch_released? = release_name not in ["orchestration", "restaurant"]
+spruce_goose_released? = release_name not in ["restaurant"]
+restaurant_released? = release_name in [nil, "restaurant"]
 
 if config_env() == :prod and dispatch_released? do
   config :dispatch, Dispatch.Repo,
@@ -295,12 +296,13 @@ config :spruce_goose,
   ledger_recovery_mode: System.get_env("LEDGER_RECOVERY_MODE", "false") in ["1", "true"],
   ledger_recovery_database: System.get_env("LEDGER_RECOVERY_DATABASE")
 
-config :spruce_goose,
+# Blueprint sources (TaskHost.Blueprints.ForgejoVerifier, mix coop.blueprint).
+config :task_host,
   forgejo_read_token_file:
     System.get_env(
       "SPRUCE_GOOSE_FORGEJO_READ_TOKEN_FILE",
       Application.get_env(
-        :spruce_goose,
+        :task_host,
         :forgejo_read_token_file,
         "/home/admin-papa/.config/sprucegoose/forgejo-read-token"
       )
@@ -309,7 +311,7 @@ config :spruce_goose,
     System.get_env(
       "SPRUCE_GOOSE_FORGEJO_API_URL",
       Application.get_env(
-        :spruce_goose,
+        :task_host,
         :forgejo_api_url,
         "https://ubuntu-8gb-hil-1.tail2188e6.ts.net:8448/api/v1"
       )
@@ -372,74 +374,35 @@ config :spruce_goose,
   cli_request_timeout:
     String.to_integer(System.get_env("SPRUCE_GOOSE_CLI_REQUEST_TIMEOUT_MS", "30000"))
 
-# MCP/OAuth endpoint. Opt-in and loopback-only.
+# Postgres TLS for the release databases (SpruceGoose's and the task host's).
 #
-# SpruceGoose is CLI-first; nothing binds a port unless this is switched on.
-# The bind address is deliberately not configurable from the environment:
-# exposing the MCP tool surface beyond loopback is a separate, governed
-# security decision, not an ops toggle.
-mcp_enabled? = System.get_env("SPRUCE_GOOSE_MCP_ENABLED", "false") in ["1", "true"]
+# `ssl: true` alone leaves peer verification to library and OTP defaults, so
+# whether the connection was actually verified depended on nothing stated
+# here. For a system whose entire authority lives in this database, that is
+# pinned explicitly. DATABASE_SSL=false turns TLS off; DATABASE_CA_CERT_FILE
+# names a bundle, otherwise the system store is used, which OTP exposes as
+# :public_key.cacerts_get/0.
+postgres_ssl = fn database_url ->
+  ssl_flag = System.get_env("DATABASE_SSL", "true")
 
-config :spruce_goose, :start_web_endpoint, mcp_enabled?
+  if ssl_flag != "false" and ssl_flag != "0" do
+    cacert =
+      case System.get_env("DATABASE_CA_CERT_FILE") do
+        value when is_binary(value) and value != "" -> [cacertfile: value]
+        _ -> [cacerts: :public_key.cacerts_get()]
+      end
 
-if mcp_enabled? do
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise "SECRET_KEY_BASE is required when SPRUCE_GOOSE_MCP_ENABLED is true"
-
-  if byte_size(secret_key_base) < 64 do
-    raise "SECRET_KEY_BASE must be at least 64 bytes; generate one with `mix phx.gen.secret`"
+    [
+      verify: :verify_peer,
+      depth: 3,
+      server_name_indication: String.to_charlist(URI.parse(database_url).host || ""),
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ] ++ cacert
+  else
+    false
   end
-
-  for {var, setting} <- [
-        {"TOKEN_SIGNING_SECRET", :token_signing_secret},
-        {"OAUTH2_SIGNING_SECRET", :oauth2_signing_secret}
-      ] do
-    case System.get_env(var) do
-      nil ->
-        if config_env() == :prod,
-          do: raise("#{var} is required when SPRUCE_GOOSE_MCP_ENABLED is true")
-
-      value ->
-        config :spruce_goose, [{setting, value}]
-    end
-  end
-
-  oauth_actor_bindings =
-    case System.get_env("SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS") do
-      value when is_binary(value) and value != "" ->
-        uuid = ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
-
-        value
-        |> String.split(",", trim: true)
-        |> Enum.reduce(%{}, fn entry, bindings ->
-          case String.split(entry, "=", parts: 2) do
-            [client_id, actor_id] ->
-              if not Regex.match?(uuid, client_id) or not Regex.match?(uuid, actor_id) do
-                raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS entries must be canonical lowercase UUID=UUID pairs"
-              end
-
-              if Map.has_key?(bindings, client_id) do
-                raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS contains duplicate OAuth client ID #{client_id}"
-              end
-
-              Map.put(bindings, client_id, actor_id)
-
-            _ ->
-              raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS entries must be canonical lowercase UUID=UUID pairs"
-          end
-        end)
-
-      _ ->
-        raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS is required when MCP is enabled"
-    end
-
-  config :spruce_goose, :oauth_client_actor_bindings, oauth_actor_bindings
-
-  config :spruce_goose, SpruceGoose.Web.Endpoint,
-    http: [ip: {127, 0, 0, 1}, port: String.to_integer(System.get_env("MCP_PORT", "4000"))],
-    secret_key_base: secret_key_base,
-    server: true
 end
 
 if config_env() == :prod and spruce_goose_released? do
@@ -455,41 +418,106 @@ if config_env() == :prod and spruce_goose_released? do
     System.get_env("DATABASE_URL") ||
       raise "DATABASE_URL is required in production"
 
-  ssl_flag = System.get_env("DATABASE_SSL", "true")
-  ssl = ssl_flag != "false" and ssl_flag != "0"
-
-  # `ssl: true` alone leaves peer verification to library and OTP defaults, so
-  # whether the connection was actually verified depended on nothing stated
-  # here. For a system whose entire authority lives in this database, that is
-  # pinned explicitly. DATABASE_CA_CERT_FILE names a bundle; otherwise the
-  # system store is used, which OTP exposes as :public_key.cacerts_get/0.
-  ssl_opts =
-    if ssl do
-      cacert =
-        case System.get_env("DATABASE_CA_CERT_FILE") do
-          value when is_binary(value) and value != "" -> [cacertfile: value]
-          _ -> [cacerts: :public_key.cacerts_get()]
-        end
-
-      [
-        verify: :verify_peer,
-        depth: 3,
-        server_name_indication: String.to_charlist(URI.parse(database_url).host || ""),
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-        ]
-      ] ++ cacert
-    end
-
   config :spruce_goose, SpruceGoose.Repo,
     url: database_url,
-    ssl: if(ssl, do: ssl_opts, else: false),
+    ssl: postgres_ssl.(database_url),
     pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
 
   config :spruce_goose,
     token_signing_secret:
       System.get_env("TOKEN_SIGNING_SECRET") ||
         raise("Missing environment variable `TOKEN_SIGNING_SECRET`!")
+end
+
+# ── task_host ───────────────────────────────────────────────────────────────
+# Sign-in, the web view, its signed commands and the change feed, moved from
+# SpruceGoose (docs/architecture/2026-11-09-task-host.md). Loopback-only, as
+# SpruceGoose's endpoint was: a reverse proxy on the host publishes it. Its
+# database holds native apps' sessions; pointed at the one SpruceGoose used,
+# signed-in devices stay signed in. Environment names keep their SPRUCE_GOOSE_
+# prefix until SpruceGoose's decommission.
+task_host_released? = release_name not in ["restaurant"]
+
+# Optional presentation catalogue for /operations. Read at boot, never from a
+# request-supplied path. Invalid or oversized input disables the operations
+# endpoint (503) rather than exposing file contents or widening any grant.
+# OTP 27's JSON decoder is available before application dependencies start.
+if task_host_released? do
+  operations =
+    case System.get_env("TASK_HOST_OPERATIONS_CONFIG") do
+      nil ->
+        Application.get_env(:task_host, :operations, %{
+          "schema_version" => 1,
+          "title" => "Operations",
+          "time_zone" => "Etc/UTC",
+          "workspaces" => []
+        })
+
+      path ->
+        case File.open(path, [:read, :binary], &IO.binread(&1, 65_537)) do
+          {:ok, bytes} when is_binary(bytes) and byte_size(bytes) <= 65_536 ->
+            try do
+              :json.decode(bytes)
+            rescue
+              _error -> :invalid
+            end
+
+          _error ->
+            :invalid
+        end
+    end
+
+  # No bridge routes respond until all OAuth resource settings are present.
+  config :task_host, :plugin_bridge, %{
+    resource: System.get_env("BIZKIT_PLUGIN_MCP_RESOURCE"),
+    issuer: System.get_env("BIZKIT_PLUGIN_OAUTH_ISSUER"),
+    introspection_url: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_URL"),
+    client_id: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_CLIENT_ID"),
+    client_secret: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_CLIENT_SECRET"),
+    workspace_ids:
+      "BIZKIT_PLUGIN_WORKSPACE_IDS"
+      |> System.get_env("")
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+  }
+
+  config :task_host,
+    operations: operations,
+    keel_review_manifest: System.get_env("TASK_HOST_KEEL_REVIEW_MANIFEST")
+end
+
+if config_env() == :prod and task_host_released? do
+  secret_key_base =
+    System.get_env("SECRET_KEY_BASE") || raise "SECRET_KEY_BASE is required for the task host"
+
+  if byte_size(secret_key_base) < 64 do
+    raise "SECRET_KEY_BASE must be at least 64 bytes; generate one with `mix phx.gen.secret`"
+  end
+
+  # 4001 beside dispatch's 4000 in the biz_kit release. MCP_PORT, SpruceGoose's
+  # endpoint's setting, still applies where a deployment set it.
+  task_host_port = System.get_env("TASK_HOST_PORT") || System.get_env("MCP_PORT") || "4001"
+
+  config :task_host, TaskHost.Web.Endpoint,
+    http: [ip: {127, 0, 0, 1}, port: String.to_integer(task_host_port)],
+    secret_key_base: secret_key_base,
+    server: true
+
+  task_host_database_url =
+    System.get_env("TASK_HOST_DATABASE_URL") || System.get_env("DATABASE_URL") ||
+      raise "TASK_HOST_DATABASE_URL (or DATABASE_URL) is required in production"
+
+  config :task_host, TaskHost.Repo,
+    url: task_host_database_url,
+    ssl: postgres_ssl.(task_host_database_url),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
+
+  # Where the ledger keeps the bytes custody receipts name. Unset, it stays
+  # `priv/artifacts` relative to the release's working directory, as before;
+  # set it before moving a deployment, and keep the bytes with it.
+  if dir = System.get_env("COOP_ARTIFACT_DIR") do
+    config :coop_substrate, :artifact_dir, dir
+  end
 end
 
 # ── coop_substrate ──────────────────────────────────────────────────────────
@@ -509,13 +537,112 @@ if config_env() == :prod do
   end
 end
 
+# Development builds hardcode their databases (apps/*/config) at compile time:
+# role postgres on localhost:5432 and the *_dev names. A development
+# deployment that shares a PostgreSQL cluster with something else names its own
+# databases here. Each applies only when set, so a plain `mix phx.server` is
+# unchanged. TLS stays off, as in development. Not DATABASE_URL or
+# SECRET_KEY_BASE: scripts/e2e-stack.sh sets those in development for
+# dispatch, and must not move SpruceGoose or the task host with them.
+if config_env() == :dev do
+  eventstore =
+    for {key, var} <- [
+          database: "EVENTSTORE_DATABASE",
+          username: "EVENTSTORE_USERNAME",
+          password: "EVENTSTORE_PASSWORD",
+          hostname: "EVENTSTORE_HOST",
+          port: "EVENTSTORE_PORT"
+        ],
+        value = System.get_env(var),
+        value not in [nil, ""],
+        do: {key, if(key == :port, do: String.to_integer(value), else: value)}
+
+  if eventstore != [] do
+    for store <- [CoopSubstrate.EventStore, CoopSubstrate.Records],
+        do: config(:coop_substrate, store, eventstore)
+  end
+
+  if url = System.get_env("SPRUCE_GOOSE_DATABASE_URL") do
+    config :spruce_goose, SpruceGoose.Repo, url: url
+  end
+
+  if url = System.get_env("TASK_HOST_DATABASE_URL") do
+    config :task_host, TaskHost.Repo, url: url
+  end
+
+  if secret_key_base = System.get_env("TASK_HOST_SECRET_KEY_BASE") do
+    config :task_host, TaskHost.Web.Endpoint, secret_key_base: secret_key_base
+  end
+
+  if level = System.get_env("LOG_LEVEL") do
+    config :logger, level: String.to_existing_atom(level)
+  end
+end
+
+# apps/dispatch/config sets the console formatter for the whole umbrella, but
+# releases without dispatch do not carry Dispatch.LogFormatter: every log line
+# would crash the formatter. Fall back to the default format there.
+unless Code.ensure_loaded?(Dispatch.LogFormatter) do
+  config :logger, :default_formatter,
+    format: "$time $metadata[$level] $message\n",
+    metadata: [:request_id, :correlation_id, :tenant_id]
+end
+
+# ── restaurant_host (the rebuilt eatsbot) ───────────────────────────────────
+# Its own variables, so the restaurant never shares Dispatch's URL or secret.
+# RESTAURANT_CONFIG_FILE names the restaurant file (RestaurantHost.Config);
+# each device's seed is read from RESTAURANT_DEVICE_SEED_<DEVICE_ID> when the
+# host boots, which refuses to start on any invalid setting.
+if config_env() == :prod and restaurant_released? do
+  %URI{host: host, scheme: scheme, port: port} =
+    URI.parse(require_env.("RESTAURANT_PUBLIC_BASE_URL"))
+
+  # IPv4 any by default; "::" where the host has IPv6, "127.0.0.1" behind a
+  # local proxy.
+  bind =
+    case :inet.parse_address(String.to_charlist(System.get_env("RESTAURANT_BIND_IP", "0.0.0.0"))) do
+      {:ok, ip} -> ip
+      {:error, _} -> raise "RESTAURANT_BIND_IP must be an IP address"
+    end
+
+  # The websocket origin check compares against this URL's host.
+  config :restaurant_host, RestaurantHost.Web.Endpoint,
+    url: [host: host, scheme: scheme, port: port || 443],
+    http: [ip: bind, port: integer_env.("RESTAURANT_PORT", 4070)],
+    secret_key_base: require_env.("RESTAURANT_SECRET_KEY_BASE"),
+    server: true
+
+  config :restaurant_host, :restaurant_file, require_env.("RESTAURANT_CONFIG_FILE")
+
+  if System.get_env("WORKOS_CLIENT_ID") do
+    config :restaurant_host, :identity_provider, "workos"
+  end
+
+  if staff = System.get_env("RESTAURANT_STAFF_PRINCIPALS") do
+    principals = staff |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+    unless Enum.all?(principals, &Regex.match?(~r/\Aprn_[a-z2-7]{26}\z/, &1)) do
+      raise "RESTAURANT_STAFF_PRINCIPALS must contain only Biz-kit principal IDs"
+    end
+
+    config :restaurant_host, :staff_principals, principals
+  end
+end
+
+# Localize uses its bundled locale everywhere. (It used to read the legacy
+# eatsbot's locale cache, retired with apps/eatsbot: decommission R6.)
+config :localize, otp_app: :localize
+
 # ── biz_kit_identity ────────────────────────────────────────────────────────
-# Native apps' sessions last until the person signs out, kept by hash in
-# SpruceGoose's Postgres so a restart does not end them
-# (docs/architecture/2026-10-21-native-sign-in.md). Both releases carry
-# SpruceGoose; tests of the apps that do not configure their own.
-if config_env() in [:dev, :prod] do
-  config :biz_kit_identity, :session_store, SpruceGoose.Web.NativeSessionStore
+# Native apps' sessions last until the person signs out, kept by hash in the
+# task host's Postgres so a restart does not end them
+# (docs/architecture/2026-10-21-native-sign-in.md). The biz_kit and orchestration
+# releases carry TaskHost; the narrow restaurant release uses its own store.
+# Tests of apps that do not carry TaskHost configure their own store as well.
+if config_env() in [:dev, :prod] and release_name != "restaurant" do
+  config :biz_kit_identity,
+    session_store: BizKit.Identity.PostgresSessionStore,
+    session_repo: TaskHost.Repo
 end
 
 # Human sign-in. WorkOS is the first provider; any BizKit.Identity.Provider can
@@ -546,13 +673,13 @@ if config_env() == :dev do
   # scripts/e2e-stack.sh signs a whole cast in, from one address, within a
   # minute. It is not the limiter's test, so it raises that bucket alone.
   if limit = System.get_env("SPRUCE_GOOSE_SIGN_IN_LIMIT") do
-    config :spruce_goose, SpruceGoose.Web.RateLimit,
+    config :task_host, TaskHost.Web.RateLimit,
       overrides: %{sign_in: {String.to_integer(limit), 60_000}}
   end
 
   # Development serves /auth over plain HTTP; a secure cookie would never come
   # back, and sign-in could not complete. Every other environment keeps it.
-  config :spruce_goose, :secure_cookies, false
+  config :task_host, :secure_cookies, false
 
   if people = System.get_env("BIZKIT_DEVELOPMENT_SIGN_IN") do
     config :biz_kit_identity,
@@ -586,7 +713,7 @@ if config_env() in [:dev, :prod] do
   end
 
   if public_url = System.get_env("SPRUCE_GOOSE_PUBLIC_URL") do
-    config :spruce_goose, :public_url, public_url
+    config :task_host, :public_url, public_url
   end
 end
 
@@ -603,8 +730,8 @@ if config_env() == :prod do
 
   # Reverse proxies whose x-forwarded-for is believed, e.g. "10.0.0.0/8,::1".
   if proxies = System.get_env("SPRUCE_GOOSE_TRUSTED_PROXIES") do
-    config :spruce_goose,
-           SpruceGoose.Web.RateLimit,
+    config :task_host,
+           TaskHost.Web.RateLimit,
            trusted_proxies: proxies |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
   end
 end
@@ -622,171 +749,4 @@ if config_env() == :prod do
         _ -> raise "DOCUMENT_REFERENCE_KEY must be base64 for 32 bytes"
       end
   end
-end
-
-# ── eatsbot (from larsbx/eatsbot) ───────────────────────────────────────────
-# config/runtime.exs is executed for all environments, including
-# during releases. It is executed after compilation and before the
-# system starts, so it is typically used to load production configuration
-# and secrets from environment variables or elsewhere. Do not define
-# any compile-time configuration in here, as it won't be applied.
-# The block below contains prod specific runtime configuration.
-
-# ## Using releases
-#
-# If you use `mix release`, you need to explicitly enable the server
-# by passing the PHX_SERVER=true when you start it:
-#
-#     PHX_SERVER=true bin/eatsbot start
-#
-# Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
-# script that automatically sets the env var above.
-if System.get_env("PHX_SERVER") do
-  config :eatsbot, EatsbotWeb.Endpoint, server: true
-end
-
-# Marketing agent: public base URL encoded on counter NFC/QR stickers and the
-# bot they deep-link into (see EatsbotCore.Marketing for all options).
-config :eatsbot,
-       EatsbotCore.Marketing,
-       Enum.reject(
-         [
-           public_url: System.get_env("PUBLIC_URL"),
-           telegram_bot_username: System.get_env("TELEGRAM_BOT_USERNAME")
-         ],
-         &is_nil(elem(&1, 1))
-       )
-
-# Telegram bot: read at boot, so one built release serves any bot. The webhook
-# rejects updates without the secret it registers with Telegram, so a webhook
-# without one could never take an update.
-if eatsbot_released? do
-  telegram_webhook = System.get_env("TELEGRAM_WEBHOOK")
-  telegram_webhook_secret = System.get_env("TELEGRAM_WEBHOOK_SECRET")
-
-  if (telegram_webhook != nil or telegram_webhook_secret != nil) and
-       not (is_binary(telegram_webhook_secret) and
-              Regex.match?(~r/\A[A-Za-z0-9_-]{1,256}\z/, telegram_webhook_secret)) do
-    raise """
-    environment variable TELEGRAM_WEBHOOK_SECRET is missing or invalid.
-    TELEGRAM_WEBHOOK is set, and the webhook accepts only updates carrying the
-    secret: 1-256 characters from A-Z, a-z, 0-9, _ and -.
-    """
-  end
-
-  if token = System.get_env("TELEGRAM_BOT_TOKEN"), do: config(:telegex, token: token)
-
-  config :eatsbot,
-         Eatsbot.Extensions.TelegramBot.Handler,
-         Enum.reject(
-           [webhook_url: telegram_webhook, webhook_secret: telegram_webhook_secret],
-           &is_nil(elem(&1, 1))
-         )
-end
-
-if config_env() == :prod and eatsbot_released? do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
-
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-
-  # config :opentelemetry_exporter,
-  #   otlp_protocol: :http_protobuf,
-  #   otlp_endpoint: System.fetch_env!("OTLP_ENDPOINT")
-
-  config :eatsbot, Eatsbot.Repo,
-    # ssl: true,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: maybe_ipv6
-
-  # The secret key base is used to sign/encrypt cookies and other secrets.
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
-
-  host = System.get_env("PHX_HOST") || "example.com"
-  port = String.to_integer(System.get_env("PORT") || "4000")
-
-  config :eatsbot, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-
-  config :eatsbot, EatsbotWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
-    http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: port
-    ],
-    secret_key_base: secret_key_base
-
-  config :eatsbot,
-    geocoding_token: System.fetch_env!("GEOCODING_TOKEN"),
-    token_signing_secret:
-      System.get_env("TOKEN_SIGNING_SECRET") ||
-        raise("Missing environment variable `TOKEN_SIGNING_SECRET`!"),
-    req_impl: Req
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :eatsbot, EatsbotWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :eatsbot, EatsbotWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Also, you may need to configure the Swoosh API client of your choice if you
-  # are not using SMTP. Here is an example of the configuration:
-  #
-  #     config :eatsbot, Eatsbot.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # For this example you need include a HTTP client required by Swoosh API client.
-  # Swoosh supports Hackney and Finch out of the box:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end
