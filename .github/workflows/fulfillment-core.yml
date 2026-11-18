@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'apps/fulfillment_core/**'
-      - 'apps/eatsbot_core/**'
       - 'apps/dispatch/**'
       - 'apps/biz_kit_composition/**'
       - 'mix.exs'
@@ -41,9 +40,10 @@ jobs:
           apps/fulfillment_core/mix.exs
           apps/fulfillment_core/lib/fulfillment_core.ex
           apps/fulfillment_core/lib/fulfillment_core/wire.ex
+          apps/fulfillment_core/lib/fulfillment_core/order_coupling.ex
+          apps/fulfillment_core/test/order_coupling_safety_test.exs
           apps/fulfillment_core/test/fulfillment_core_test.exs
           apps/fulfillment_core/test/wire_test.exs
-          apps/eatsbot_core/lib/orders/fulfillment_bridge.ex
           apps/dispatch/lib/dispatch/fulfillment_bridge.ex
       - name: Validate shared contract
         working-directory: apps/fulfillment_core

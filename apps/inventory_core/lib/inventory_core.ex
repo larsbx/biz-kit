@@ -90,7 +90,17 @@ defmodule InventoryCore do
         Enum.all?(state.locations, fn {location, amount} ->
           is_integer(amount) and amount >= 0 and
             amount >= holds(state.reservations, location)
-        end)
+        end) and
+          Enum.all?(state.reservations, fn
+            {_id, %{status: :active, location: location, remaining: remaining}} ->
+              is_integer(remaining) and remaining > 0 and Map.has_key?(state.locations, location)
+
+            {_id, %{status: status}} when status in [:committed, :released, :expired] ->
+              true
+
+            _ ->
+              false
+          end)
 
       if valid, do: :ok, else: {:error, :stock_invariant_violated}
     end

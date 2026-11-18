@@ -1,6 +1,6 @@
 name = "BizKitEventProofs"
 version = "0.1.0"
-defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitEventProofs"]
+defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDispatchSpatial", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission", "BizKitProcurementContract", "BizKitAgentTask"]
 
 [[lean_lib]]
 name = "BizKitLeases"
@@ -10,3 +10,33 @@ name = "BizKitBundles"
 
 [[lean_lib]]
 name = "BizKitEventProofs"
+
+[[lean_lib]]
+name = "BizKitDispatch"
+
+[[lean_lib]]
+name = "BizKitDispatchSpatial"
+
+[[lean_lib]]
+name = "BizKitOutcomeAdmission"
+
+[[lean_lib]]
+name = "BizKitInventory"
+
+[[lean_lib]]
+name = "BizKitInventoryLocations"
+
+[[lean_lib]]
+name = "BizKitCommerce"
+
+[[lean_lib]]
+name = "BizKitCommercialSetoff"
+
+[[lean_lib]]
+name = "BizKitCommercialAdmission"
+
+[[lean_lib]]
+name = "BizKitProcurementContract"
+
+[[lean_lib]]
+name = "BizKitAgentTask"

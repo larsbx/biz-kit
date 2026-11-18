@@ -10,7 +10,10 @@ defmodule SchoolOps.MixProject do
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
-      deps: [{:task_core, in_umbrella: true}]
+      deps: [
+        {:task_core, in_umbrella: true},
+        {:biz_kit_extension, in_umbrella: true}
+      ]
     ]
   end
 

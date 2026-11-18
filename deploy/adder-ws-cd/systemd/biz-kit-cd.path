@@ -1,0 +1,9 @@
+[Unit]
+Description=Start biz-kit CD when a deploy is pending (written by biz-kit-cd-trigger)
+
+[Path]
+PathExists=%h/.local/state/biz-kit-cd/pending
+Unit=biz-kit-cd.service
+
+[Install]
+WantedBy=default.target

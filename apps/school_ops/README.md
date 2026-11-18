@@ -69,3 +69,7 @@ new content revision here, preserving all stable identifiers and source rights.
 See [domain architecture](../../docs/architecture/2026-10-23-school-ops.md)
 and [the source curriculum](priv/content/README.md). Run `mix test` from
 this app to exercise catalog and shared-workflow contracts.
+
+SchoolOps.Extension is now a read-only ExtensionV1 reference descriptor.
+It declares no business writer or new authorization. See the
+[extension contract](../../docs/architecture/2026-10-31-extension-v1-first-slice.md).

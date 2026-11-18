@@ -26,3 +26,7 @@ delivery bearer tokens are imported.
 Run \`cd apps/dispatch_core && mix test --no-start\`. CI also verifies
 standalone compilation/test outside the umbrella. See biz-kit salvage
 issue #176 and the R0–R6 decommission plan in PR #175.
+
+**Characterization.** `test/eatsbot_characterization_test.exs` checks this core
+against the old eatsbot's recorded behaviour, pinned by sha256 to
+`larsbx/eatsbot@15a201e` (rebuild slice 1): every pair of legacy delivery states is valid exactly when it was, and the next states offered match.

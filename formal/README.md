@@ -12,6 +12,14 @@ notifications do not license writes at the receiving home.
 
 ## Formal models and what they actually establish
 
+The [TigerBeetle outcome-admission proof target](../docs/architecture/2026-10-29-tb-outcome-admission-proof-target.md)
+adds `BizKitOutcomeAdmission.lean` and `tb_outcome_admission.qnt`: exact
+source-slot/body binding, one durable business append per original operation,
+independent destination cursors and lost-reply recovery. This separate model
+uses **one-based complete-group ordinals** throughout; `Source.anchor` maps
+them to original native IDs. It assumes an immutable verified source snapshot
+and does not implement Log admission or cryptographic verification.
+
 | Obligation | Lean kernel statement | Quint bounded check | Not yet established |
 | --- | --- | --- | --- |
 | Prefix safety | `Safe`: every checkpointed ledger position has its durably registered effect bundle | `noPrematureCheckpoint`, `cursorWithinHead` | Real SQL effects/cursor transaction and EventStore integration |
@@ -86,7 +94,8 @@ transition relation, not properties of arbitrary Elixir/PostgreSQL code.**
 No `sorry`, `admit`, untrusted axioms or `native_decide` are permitted.
 CI installs the SHA-256-pinned Lean 4.35.0 release archive, rebuilds from
 source, replays the entire imported environment with `leanchecker --fresh`,
-and audits declarations defined in **each** of the three library modules.
+and audits declarations defined in **each** library module, including the
+separate outcome-admission module.
 `leanchecker` uses Lean's kernel; it is not a different kernel implementation.
 
 ### Quint — finite adversarial histories

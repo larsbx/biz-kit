@@ -167,6 +167,9 @@ defmodule DispatchWeb.Router do
     # the same fragments to the same viewer.
     get "/ui/operations/stream", StreamController, :operations
     get "/ui/participants/:participant_id/stream", StreamController, :participant
+    get "/ui/operations/locations", FleetLocationsController, :index
+    get "/ui/operations/locations/stream", FleetLocationsController, :stream
+    get "/ui/operations/locations/:participant_id/work", FleetLocationsController, :work
   end
 
   scope "/", DispatchWeb do
@@ -174,6 +177,10 @@ defmodule DispatchWeb.Router do
 
     # Section 4.3's primary routes. Section 26.2 fixes the paths.
     get "/operations", PortalController, :operations
+    get "/operations/map", FleetMapController, :index
+    get "/operations/loads/:load_id", OperationsLoadController, :show
+    get "/ui/restaurant-receipts", RestaurantReceiptController, :form
+    post "/ui/restaurant-receipts", RestaurantReceiptController, :submit
     get "/partner/stops/:stop_id", PortalController, :partner_stop
     post "/partner/stops/:stop_id/readiness-events", PartnerActionController, :readiness
     post "/partner/stops/:stop_id/document-references", PartnerActionController, :document
@@ -226,6 +233,16 @@ defmodule DispatchWeb.Router do
     post "/me/location-consents/:consent_id/revoke", LocationController, :revoke_consent
     post "/me/location-samples:batch", LocationController, :ingest
     post "/driver/location-samples:batch", LocationController, :ingest_driver
+
+    # The carrier's dispatch board (`Dispatch.Operations.Board`).
+    get "/operations/loads", OperationsController, :index
+    post "/operations/loads", OperationsController, :create
+    get "/operations/loads/:load_id", OperationsController, :show
+    patch "/operations/loads/:load_id", OperationsController, :update
+    post "/operations/loads/:load_id/stops", OperationsController, :add_stop
+    post "/operations/loads/:load_id/trips", OperationsController, :plan
+    post "/operations/trips/:assignment_id/transitions", OperationsController, :transition
+    get "/operations/fleet", OperationsController, :fleet
   end
 
   scope "/v1", DispatchWeb do

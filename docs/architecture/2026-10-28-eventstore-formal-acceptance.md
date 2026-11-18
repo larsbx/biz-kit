@@ -79,12 +79,13 @@ is still a staging limitation. See [#161](https://github.com/larsbx/biz-kit/issu
 ## Financial profile boundary
 
 The [node-books host profile](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
-integrates Hawala's proposed one-PostgreSQL-commit and mandatory TigerBeetle
-verification gate. The present candidate-bundle/cursor proofs establish
-neither atomic financial admission nor verified accounting. A consumed
-EventStore position cannot authorize financial execution. Actual financial
-append participation, deterministic postings, exact-prefix verification,
-epoch fencing and generated-trace refinement require their own acceptance.
+now selects TigerBeetle financial commit followed by independent downstream
+persistence. It supersedes the prior PostgreSQL-first financial proposal.
+The present candidate-bundle/cursor proofs establish neither native TB financial
+admission nor complete native-source replay. A consumed EventStore position
+cannot authorize financial execution. Actual native guard/posting semantics,
+signed outcome admission, exact-prefix verification, effective epoch fencing
+and generated-trace refinement require their own acceptance.
 
 ## Infrastructure prerequisites
 

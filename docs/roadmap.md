@@ -1,5 +1,106 @@
 # biz-kit roadmap
 
+## Dispatch spatial workspace and minimal stack — 2026-11-11
+
+The accepted [God's Eye View integration roadmap](plans/2026-11-11-dispatch-spatial-workspace.md)
+selects one spatial workspace over authorized Dispatch observations and existing
+business commands. **Owner clarification: the earlier auxiliary stack was
+proposed, not implemented.** The plan avoids building unnecessary components;
+there is no six-to-four-to-two service retirement sequence.
+
+GEV-00 through GEV-08 cover requirements and the minimal profile, the spatial
+contract and proof obligations, fleet layer, complete queries/planning, admitted
+actions, context, history/handoff and deployment acceptance. Use suitable hosted
+tiles/geocoding; add Traccar, local cartography, a routing engine or an optimizer
+only when the selected workflow requires them. Existing Dispatch storage,
+native collection and the separate assignment-ledger migration keep their
+current contracts.
+
+Implementation remains pending. The first target is an authorized fleet view
+with freshness, accuracy, record links, revocation clearing and location-demand
+cleanup, built directly on the selected minimal architecture.
+
+## Proof Bank application foundry — 2026-11-01
+
+The [Proof Bank B0 rollout](architecture/2026-11-01-proof-bank-rollout.md)
+introduces a standalone-portable, **inert** `ProofBankCore` that compiles
+structured interview answers, requirements, and pending proof obligations with
+strict references. It does **not** certify mathematical claims, authorize
+extensions, install applications, or create business writers.
+
+The [B0 scaffold PR #236](https://github.com/larsbx/biz-kit/pull/236)
+remains review/CI-gated. The phased implementation issues are:
+[B1 member interviews and approvals #237](https://github.com/larsbx/biz-kit/issues/237),
+[B2 checker and evidence #238](https://github.com/larsbx/biz-kit/issues/238),
+[B3–B4 agent implementations and two-domain conformance #239](https://github.com/larsbx/biz-kit/issues/239),
+and [B5–B6 marketplace and optional GPU #240](https://github.com/larsbx/biz-kit/issues/240).
+Reuse the versioned ExtensionV1 manifest under review in PR #224; do not
+introduce a second extension loader or bypass existing signed admission.
+
+**Internal-first adoption precedes third-party app generation.**
+[PR #241](https://github.com/larsbx/biz-kit/pull/241) (stacked on #236)
+seeds draft Proof Bank baselines for the platform and all 29 umbrella apps,
+with app-inventory drift checks. All 30 records require owner review and remain
+unverified/inert. First reconcile platform identity and admission, Dispatch,
+Inventory and Hawala boundaries before opening the marketplace.
+See [first-party adoption](architecture/2026-11-01-proof-bank-first-party.md).
+The [source-grounded characterization audit](proof-bank/characterizations/v1/README.md)
+tracks actual application surfaces, test leads and known gaps before formalization.
+
+## Halaqa federation over Iroh — updated 2026-11-01
+
+The [native federation boundary](architecture/2026-10-31-halaqa-iroh-federation-boundary.md)
+records F0–F5: offline conformance, Halaqa owner decisions, independent
+verification, native delivery with application HTTP disabled, domain admission
+and optional ActivityPub HTTP compatibility. The experimental implementation is
+in [PR #229](https://github.com/larsbx/biz-kit/pull/229); Halaqa owns its proposed
+semantic contract in [PR #9](https://github.com/larsbx/halaqa/pull/9).
+
+**Implemented and tested, with production authority disabled:** pinned signed
+draft-2 has 74 synthetic cases (8 signature-valid, 66 refused), independently
+checked by Python/OpenSSL, Elixir/OTP and Rust/dalek. PostgreSQL retains original
+sender intent, receiver receipts and immutable same-ID conflicts. Pinned direct
+and TLS-verified relay-only Iroh exchanges recover retained receipts after a
+lost reply and native restart without redelivery. The operator runner requires
+clean exact-revision sources, checks the reviewing checkout's Git HEAD and
+records binary/relay-CA hashes; rehearsal reports cannot claim a verified
+checkout. Neither source hashes nor endpoint keys attest binary build or
+independent-host provenance.
+
+At implementation head
+[`82a57e5e26f68fcfed71685493bca49a5a447909`](https://github.com/larsbx/biz-kit/commit/82a57e5e26f68fcfed71685493bca49a5a447909),
+62 Python checks and 6 Rust transport tests passed locally; the preserved
+independent Rust verifier has 19 tests. All six associated hosted PR workflows
+completed successfully, including
+[Halaqa conformance](https://github.com/larsbx/biz-kit/actions/runs/41308159312)
+and [Consolidation](https://github.com/larsbx/biz-kit/actions/runs/41308159292).
+These results cover synthetic fixtures and a one-host rehearsal, not a
+production cutover or independently administered installations.
+
+**Next: actual two-host acceptance (F3 remains open).** Follow the
+[executable handoff](architecture/2026-11-01-halaqa-two-host-acceptance.md):
+
+1. Identify two independently administered test hosts and a controlled,
+   endpoint-allowlisted relay. Record host/administration provenance, the relay
+   URL and its trusted CA certificate. No Halaqa host targets or relay have
+   been selected; unrelated existing deployment hosts are not implied targets.
+2. Run sender and receiver roles from clean checkouts of the same reviewed
+   revision. Retain both public reports and operator observations showing
+   actual relay traffic, zero direct-IP sockets, lost-reply/native-restart
+   recovery and exactly one delivery of the original intent.
+3. Compare the reports in a clean reviewing checkout and review the separate
+   host evidence. The runner deliberately returns
+   `PAIR_CONSISTENT_HOST_PROVENANCE_UNVERIFIED`; different labels, keys,
+   processes or databases alone cannot close the host-provenance obligation.
+
+Actual identity succession, current revocation/disclosure sources, envelope
+refresh, supervised production Elixir adapters and canonical domain admission
+remain F1/F2/F4 obligations. A signed fixture or operational retention receipt
+confers no governing, business or financial authority. No production migration,
+business writer or HTTP ActivityPub gateway is activated.
+
+## Existing consolidation roadmap
+
 Updated 2026-10-22 (security audit priorities and Slice 1 status). The direction is
 [one source of truth](architecture/2026-10-11-single-source-of-truth.md):
 one signed business-event ledger, one command admission path, one principal
@@ -129,6 +230,64 @@ module tests successfully; it did not run local Elixir/PostgreSQL reproductions
 of the findings. CI success is evidence for the checks actually run, not for
 absence of these races.
 
+## Next: enforcement gaps (formal coverage findings, 2026-11-06)
+
+Writing a model for every app's obligation
+([formal coverage](../formal/quint/obligations/README.md)) showed where the
+code is weaker than the obligation it should enforce. The gaps are closed one
+at a time in this order: authority and data integrity first, by app priority
+and blast radius. Each fix is test-first in code; when it lands, its model's
+header cites the enforcing code and the gap leaves the README table.
+
+1. **dispatch: vehicle and trailer exclusivity.** Two ACTIVE trips could share
+   a vehicle or trailer. *Closed:* partial unique indexes
+   `one_active_per_vehicle` / `one_active_per_trailer`, with a
+   concurrent-sessions test.
+2. **keel: `Org.can?/4` on an invalid graph.** Permissions were derived
+   without checking validity, so a delegation cycle could launder authority.
+   *Closed:* `can?/4` requires `Invariants.valid_at?/2` (SPEC §4, amendment
+   A6), fail-closed per instant.
+3. **biz_kit_cluster: fencing after a partition.** *Closed as a modelling
+   error:* ledger appends are fenced by the event store's expected-version
+   check (a stale appender is refused); the model now says so. Other
+   singletons' in-memory state still diverges during a partition, as the
+   cluster ADR accepts.
+4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
+   allowed execution when the marker file was missing. *Closed:* only a
+   marker reading `local` allows direct execution; a missing, empty or
+   remote marker refuses. Fixed ahead of the
+   [decommission](architecture/2026-11-06-sprucegoose-decommission.md) by
+   owner decision.
+5. **eatsbot_core: history atomic with state.** `UpdateHistory` wrote the
+   history row in `after_transaction`, so a failure left state with no
+   history. *Closed:* the row is written in `after_action`, inside the state
+   change's transaction.
+6. **marketing_core: verify delivery evidence.** *Closed as a host contract
+   that is already enforced:* `Attribution.eligible?/3` is pure and trusts
+   `delivery_status: :confirmed`, and its only host, `BizKit.MarketingBridge`,
+   binds that to a host-verified receipt (id, digest, fields) and refuses a
+   forged one. The model now cites the bridge.
+7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
+   bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
+   (below). *Started with Dispatch* (owner decision):
+   [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md)
+   gives the assignment lifecycle a signed, admitted path and a fold rebuilt
+   from the ledger. Dispatch's board still writes rows; parity, the command
+   switch and the writer fence follow. eatsbot's fence is item 8.
+8. **eatsbot: retirement cutover fence.** The legacy writer could not be stopped. *Closed:*
+   governance orders the fence on the ledger (`LegacyWriterFenced`, for a
+   closed set of writers, only under declared governance), and
+   `mix coop.fence_writer` installs it in eatsbot's database in one
+   transaction: statement triggers refuse every write, after waiting for
+   writers in flight. It fences every deployment of the legacy writer.
+   Migrating the accepted history remains the R5 runbook's step.
+9. **barter_core, federation_core: host contracts.** *Closed by host
+   review:* nothing in the repo transfers barter assets (preview only, no
+   host); `FederationService` is read-only and turns a subscription into
+   authority only through a signed local grant
+   (`CoopSubstrate.FederationAuthority`). Residual: the pilot
+   `approval_verifier` path has no atomic revocation fence.
+
 ## Next
 
 1. **Close the security and validation gate above.** Land focused corrections
@@ -202,7 +361,8 @@ What remains, in order:
   shadows, boards and inbox captures are not migrated; they go with its
   writer.
 - **Dispatch and ownership.** Move dispatch, Keel ownership and shared
-  principal facts onto the same admission path.
+  principal facts onto the same admission path. First slice:
+  [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md).
 - **Cutover.** Fence the old writers behind a signed baseline and prove
   replay. Then retire the old row authority, the local certified writer,
   the business outboxes and the duplicate issuers.

@@ -1,0 +1,13 @@
+[package]
+name = "halaqa-signed-draft-conformance"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+base64 = "=0.22.1"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std"] }
+serde = "1"
+serde_json = { version = "1", features = ["raw_value"] }
+sha2 = "=0.10.9"
