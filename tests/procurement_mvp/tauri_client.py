@@ -27,8 +27,16 @@ class NativeBrowser(Browser):
         panel = '.side-item[data-panel=procurement]'
         until(lambda: self.js("return !!document.querySelector(arguments[0])", panel), "desktop Procurement entry")
         self.js("document.querySelector(arguments[0]).click()", panel)
-        launcher = '[data-panel=procurement].tile button:not(.icon-btn)'
-        until(lambda: self.js("return !!document.querySelector(arguments[0])", launcher), "Procurement launcher")
+        launcher = '[data-panel=procurement].tile [data-procurement-open]'
+        save = '[data-panel=procurement].tile [data-procurement-save]'
+        until(lambda: self.js("const b=document.querySelector(arguments[0]);return b && !b.disabled", save), "Procurement connection setup")
+        require(self.js("return document.querySelector(arguments[0]).disabled", launcher), "unconfigured launcher should require setup")
+        self.js("document.querySelector('[aria-label=\"Procurement server address\"]').value=arguments[0]", self.url)
+        self.js("document.querySelector(arguments[0]).click()", save)
+        until(lambda: self.js("return !!document.querySelector('.tile-confirm .btn.go')"), "reviewed connection confirmation")
+        require(self.js("return document.querySelector('.tile-confirm pre').textContent.includes(arguments[0])", self.url), "connection review omitted server")
+        self.js("document.querySelector('.tile-confirm .btn.go').click()")
+        until(lambda: self.js("const b=document.querySelector(arguments[0]);return b && !b.disabled && !document.querySelector('.tile-confirm')", launcher), "saved Procurement launcher")
         self.js("document.querySelector(arguments[0]).click()", launcher)
         handles = until(lambda: set(self.webdriver("GET", self.base + "/window/handles")) - {main},
                         "Procurement webview")
@@ -131,10 +139,17 @@ def packaged_browser(package, origin, observations, work, receipts):
     home = work / "desktop-home"
     config = home / "config/biz-kit"
     config.mkdir(parents=True)
-    (config / "config.json").write_text(json.dumps({"procurementOrigin": origin}) + "\n")
+    # No preseeded origin: the installed app must expose a working setup path.
+    initial_config = {"hosts": [], "procurementSetupSentinel": {"keep": True}}
+    (config / "config.json").write_text(json.dumps(initial_config) + "\n")
     env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / "config"),
                XDG_DATA_HOME=str(home / "data"), XDG_CACHE_HOME=str(home / "cache"))
     with (receipts / "tauri-driver.log").open("w") as log, native_session(binary, env, log) as (request, base):
         browser = NativeBrowser(origin, observations, request, base, identity)
         browser.open_procurement()
+        saved = json.loads((config / "config.json").read_text())
+        require(saved.pop("procurementOrigin", None) == origin.rstrip("/") + "/", "native setup did not persist the exact server")
+        require(saved == initial_config, "native setup changed unrelated desktop settings")
+        log.write("PASS: visible native connection setup, reviewed save, exact-origin launch, unrelated settings preserved\n")
+        log.flush()
         yield browser
