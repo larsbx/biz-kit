@@ -30,6 +30,8 @@ defmodule CoopSubstrate.Projections.Membership do
     %{
       orchestration: CoopSubstrate.Projections.Tasks.init(),
       group_buys: CoopSubstrate.GroupBuys.init(),
+      restaurant: RestaurantCore.Admission.init(),
+      dispatch: DispatchCore.Admission.init(),
       entities: %{},
       members: %{},
       memberships: %{},
@@ -42,6 +44,10 @@ defmodule CoopSubstrate.Projections.Membership do
       throughput_rules: %{},
       floor_rules: %{},
       obligations: %{},
+      # Source signed-core lineage remains a read projection, not a writer.
+      commercial_source_lineage: %{},
+      # Pure, signed proposals only; never reserve/close source obligations.
+      commercial_setoff_intents: %{},
       role_keys: %{},
       federation_grants: %{},
       # Who each role key was declared for (its optional `member_id`), by
@@ -90,6 +96,8 @@ defmodule CoopSubstrate.Projections.Membership do
   # Derived from the registration, as in Validity: a task type that is admitted
   # but not folded here would leave every later check reading stale state.
   @task_types Map.keys(TaskCore.Admission.event_types())
+  @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
+  @dispatch_types Map.keys(DispatchCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
@@ -101,6 +109,16 @@ defmodule CoopSubstrate.Projections.Membership do
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @group_buy_types do
     update_in(state, [:group_buys], fn _ -> CoopSubstrate.GroupBuys.fold!(env, state) end)
+  end
+
+  @impl true
+  def handle_event(%Envelope{type: type} = env, state) when type in @restaurant_types do
+    %{state | restaurant: RestaurantCore.Admission.fold(env, state)}
+  end
+
+  @impl true
+  def handle_event(%Envelope{type: type} = env, state) when type in @dispatch_types do
+    %{state | dispatch: DispatchCore.Admission.fold(env, state)}
   end
 
   @impl true
@@ -205,32 +223,54 @@ defmodule CoopSubstrate.Projections.Membership do
     })
   end
 
-  def handle_event(%Envelope{type: "ObligationRecorded", chapter_id: ch, payload: p}, state) do
-    put_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], %{
-      debtor_id: p["debtor_id"],
-      creditor_id: p["creditor_id"],
-      amount_minor: p["amount_minor"],
-      denomination: p["denomination"],
-      open: true
-    })
+  def handle_event(%Envelope{type: "ObligationRecorded", chapter_id: ch, payload: p} = env, state) do
+    next =
+      put_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], %{
+        debtor_id: p["debtor_id"],
+        creditor_id: p["creditor_id"],
+        amount_minor: p["amount_minor"],
+        denomination: p["denomination"],
+        open: true
+      })
+
+    CoopSubstrate.CommercialSourceLineage.recorded(env, next)
   end
 
-  def handle_event(%Envelope{type: "ObligationAssigned", chapter_id: ch, payload: p}, state) do
+  def handle_event(%Envelope{type: "ObligationAssigned", chapter_id: ch, payload: p} = env, state) do
     # The gate guarantees the obligation exists and is open.
-    update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
-      %{ob | debtor_id: p["new_debtor_id"]}
-    end)
+    next =
+      update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
+        %{ob | debtor_id: p["new_debtor_id"]}
+      end)
+
+    CoopSubstrate.CommercialSourceLineage.assigned(env, next)
   end
 
-  def handle_event(%Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p}, state) do
-    update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
-      %{ob | open: false}
-    end)
+  def handle_event(
+        %Envelope{type: "ObligationDischarged", chapter_id: ch, payload: p} = env,
+        state
+      ) do
+    next =
+      update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
+        %{ob | open: false}
+      end)
+
+    CoopSubstrate.CommercialSourceLineage.discharged(env, next)
+  end
+
+  # The source-bound commercial intent is only a signed proposal: no debt
+  # discharge, journal mutation, reservation or financial settlement here.
+  def handle_event(
+        %Envelope{type: "CommercialSetoffIntentRecordedV1"} = env,
+        state
+      ) do
+    CoopSubstrate.CommercialSetoffIntent.fold(env, state)
   end
 
   # Phase 9A: an executed netting round closes every open like-denominated
   # pair obligation atomically and opens the residual (docs/phase9a_plan.md).
-  def handle_event(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p}, state) do
+  def handle_event(%Envelope{type: "NettingExecuted", chapter_id: ch, payload: p} = env, state) do
+    before = state
     {a, b, denom} = {p["party_a"], p["party_b"], p["denomination"]}
 
     state =
@@ -248,19 +288,22 @@ defmodule CoopSubstrate.Projections.Membership do
         end)
       end)
 
-    case p["residual_obligation_id"] do
-      nil ->
-        state
+    next =
+      case p["residual_obligation_id"] do
+        nil ->
+          state
 
-      residual_id ->
-        put_in(state, [:obligations, Access.key({ch, residual_id})], %{
-          debtor_id: p["net_debtor"],
-          creditor_id: p["net_creditor"],
-          amount_minor: p["net_minor"],
-          denomination: denom,
-          open: true
-        })
-    end
+        residual_id ->
+          put_in(state, [:obligations, Access.key({ch, residual_id})], %{
+            debtor_id: p["net_debtor"],
+            creditor_id: p["net_creditor"],
+            amount_minor: p["net_minor"],
+            denomination: denom,
+            open: true
+          })
+      end
+
+    CoopSubstrate.CommercialSourceLineage.netted(env, before, next)
   end
 
   def handle_event(%Envelope{type: "PatronageRecorded", chapter_id: ch, payload: p}, state) do

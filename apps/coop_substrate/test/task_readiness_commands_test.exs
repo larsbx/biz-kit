@@ -57,7 +57,9 @@ defmodule CoopSubstrate.TaskReadinessCommandsTest do
         })
       )
 
-    {:ok, _} = Log.append([grant, baseline])
+    {:ok, _} =
+      Log.append(CoopSubstrate.TaskTimingFixtures.project_owner(gov) ++ [grant, baseline])
+
     ctx = %{gov: gov, worker: worker, grant: grant}
     {:ok, _} = Tasks.propose(command(ctx, "TaskProposedV1", 1))
     # Queuing requires a Definition of Done, which can only be defined while proposed.

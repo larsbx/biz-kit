@@ -39,3 +39,44 @@ Manifest/Catalog still enforce ownership, grants and dependency semantics.
 
 See docs/architecture/2026-10-31-extension-v1-first-slice.md for incomplete
 runtime, authorization, external compatibility and migration obligations.
+
+## Staged read-only descriptor registry
+
+`BizKit.Extension.Registry` can hold an ephemeral, initially hidden view of
+statically allowlisted and validated descriptors. `reconcile/2` atomically
+changes *visibility* while enforcing dependencies; invalid requests preserve
+prior state and process restarts hide everything. This is **not** extension
+process activation, durable governance authorization, or a command/ledger gate.
+The OTP app does not automatically start the Registry, and nothing here runs
+SchoolOps or Dispatch in the background. See the
+[registry-stage ADR](../../docs/architecture/2026-11-01-extension-registry-stage.md).
+
+## Reviewed source-locked release descriptors
+
+`BizKit.Extension.ReleaseLock.build/2` computes a domain-separated SHA-256
+fingerprint of validated ExtensionV1 manifests and binds it to an explicitly
+supplied full Git source commit for each compiled module. `verify/3`
+refuses source drift, unchanged-version manifest changes, incomplete pin sets,
+unknown modules and dependency incompatibilities. The exact-head CI helper
+uses the verified checkout SHA for both host reference descriptors.
+
+This is a reproducibility *preflight*, not source artifact attestation, durable
+governance approval, extension execution or signed business admission. The
+trusted host must independently attest its checkout/build and obtain current
+governance approval before enabling real behavior. See the
+[release-lock design](../../docs/architecture/2026-11-02-extension-source-lock.md).
+
+A trusted host can pass `reviewed_release: %{source_commits: pins, lock: reviewed}`
+to `Registry.start_link/1`. Startup refuses stale or incomplete review inputs.
+The registry uses the exact manifest snapshot it verified and starts with
+every descriptor hidden. Local reconciliation only changes metadata visibility.
+
+## Upgrade compatibility review (portable)
+
+`BizKit.Extension.Upgrade.assess/2` compares canonical V1 manifests
+without executing domain code. It refuses same-version changes, downgrades,
+major version changes and removed/changed existing command, event, projection,
+capability, requested grant and dependency contracts. It reports additions as
+**review-required**, never as granted business authority. It is not an
+installation, migration or executable activation boundary.
+See the [upgrade assessment note](../../docs/architecture/2026-11-02-extension-upgrade-compatibility.md).

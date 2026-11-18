@@ -19,7 +19,7 @@ defmodule CoopSubstrate.DeviceRevocationTest do
     laptop = new_member("operator")
     phone = new_member("operator")
     bob_key = new_member("operator")
-    {:ok, _} = Log.append(declare_governance(gov))
+    {:ok, _} = Log.append([declare_governance(gov) | project_owner(gov)])
 
     {:ok, [laptop_grant, phone_grant, bob_grant]} =
       Log.append([

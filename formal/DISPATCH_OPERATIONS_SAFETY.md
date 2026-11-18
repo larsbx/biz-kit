@@ -70,7 +70,7 @@ and yield concrete invariant violations, not merely tool errors.
 | Audit-event atomicity | Lean `commit_appends_exactly_one_audit`; Quint `auditCount == version` | `Board.transaction`, `audited` | One exact event per accepted move, zero for refused moves, rollback on persistence failure |
 | Resource-bound replay | Lean `target_change_cannot_replay` and `method_change_cannot_replay`; Quint `dispatch_idempotency` | `OperationsController.write/3` + `Idempotency.execute/4` | Same-key retry same target and body; cross-target/method/body = 409; zero second mutation within one unexpired claim epoch |
 | Claim retention boundary | One-epoch assumption, not a global exactly-once theorem | `Idempotency.resolve/7` and `purge_expired/1` | Expired claim permits a new mutation; a live retry then replays the new epoch response |
-| Hostless Dispatch | UI composition requirement, not Lean theorem | `PanelContent.svelte` and `panels.ts` | Render Dispatch sign-in without SSH hosts on Windows/macOS/Linux |
+| Hostless Dispatch | UI composition requirement, not Lean theorem | `desktop/ui/app.js` (`mountPanel`) and `desktop/ui/lib/panels.js` | Render Dispatch sign-in without SSH hosts on Windows/macOS/Linux |
 | Authentication isolation | Existing auth contract (not modeled here) | `desktop/src-tauri/src/dispatch.rs` | Preserve PKCE, `/v1/` restriction, session isolation, no redirect following |
 
 ### Trust boundary
@@ -82,7 +82,7 @@ those guards. It also does not establish the persistence order, completeness,
 cryptographic collision resistance or authorization of external HTTP paths.
 
 Actual proof-to-code correspondence therefore requires the hosted Dispatch
-PostgreSQL/PostGIS integration lane, desktop SvelteKit tests and Rust tests,
+PostgreSQL/PostGIS integration lane, desktop UI tests and Rust tests,
 and existing portal/integration checks to pass **on the same current head**.
 Queued, cancelled or skipped jobs are not passing evidence.
 

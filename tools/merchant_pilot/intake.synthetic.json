@@ -1,0 +1,721 @@
+{
+  "intake_version": 1,
+  "dataset": "synthetic",
+  "pilot": {
+    "id": "00000000000000000000000000000001",
+    "geography": "00000000000000000000000000000002",
+    "category": "00000000000000000000000000000003",
+    "approval_ref": null
+  },
+  "cohort_started_at": "2026-01-01T00:00:00Z",
+  "as_of": "2026-04-10T00:00:00Z",
+  "coverage": [
+    {
+      "source_id": "00000000000000000000000000002775",
+      "owner_id": "00000000000000000000000000000065",
+      "collection": "merchants",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f40"
+    },
+    {
+      "source_id": "00000000000000000000000000002776",
+      "owner_id": "00000000000000000000000000000066",
+      "collection": "merchants",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f40"
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "collection": "requests",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f41"
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "collection": "invitations",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f42"
+    },
+    {
+      "source_id": "00000000000000000000000000002775",
+      "owner_id": "00000000000000000000000000000065",
+      "collection": "quotes",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f43"
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "collection": "fee_arrangements",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f44"
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "collection": "orders",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f45"
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "collection": "costs",
+      "from": "2026-01-01T00:00:00Z",
+      "through": "2026-04-10T00:00:00Z",
+      "evidence_ref": "00000000000000000000000000001f46"
+    }
+  ],
+  "merchants": [
+    {
+      "source_id": "00000000000000000000000000002775",
+      "owner_id": "00000000000000000000000000000065",
+      "record_id": "000000000000000000000000000003e8",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b58"
+      ],
+      "data": {
+        "id": "00000000000000000000000000000065",
+        "business_id": "000000000000000000000000000000c9",
+        "opted_in_at": "2026-01-01T00:00:00Z",
+        "withdrawn_at": null,
+        "participation_ref": "0000000000000000000000000000012d"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002776",
+      "owner_id": "00000000000000000000000000000066",
+      "record_id": "000000000000000000000000000003e9",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b58"
+      ],
+      "data": {
+        "id": "00000000000000000000000000000066",
+        "business_id": "000000000000000000000000000000ca",
+        "opted_in_at": "2026-01-01T00:00:00Z",
+        "withdrawn_at": null,
+        "participation_ref": "0000000000000000000000000000012e"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "0000000000000000000000000000012d",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b59"
+      ],
+      "data": {
+        "id": "0000000000000000000000000000012d",
+        "buyer_key": "00000000000000000000000000000191",
+        "geography": "00000000000000000000000000000002",
+        "category": "00000000000000000000000000000003",
+        "specification_ref": "000000000000000000000000000001f5",
+        "condition_ref": "00000000000000000000000000000259",
+        "quantity": 1,
+        "needed_by": "2026-05-01T00:00:00Z",
+        "budget_minor": 12000,
+        "currency": "USD",
+        "submitted_at": "2026-01-01T00:00:00Z",
+        "qualified_at": "2026-01-01T00:00:00Z",
+        "status": "qualified",
+        "duplicate_of": null,
+        "withdrawn_at": null,
+        "consent": {
+          "revision_ref": "000000000000000000000000000002bd",
+          "granted_at": "2026-01-01T00:00:00Z",
+          "sharing_revoked_at": null,
+          "measurement_authorized": true
+        },
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "0000000000000000000000000000012e",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b59"
+      ],
+      "data": {
+        "id": "0000000000000000000000000000012e",
+        "buyer_key": "00000000000000000000000000000192",
+        "geography": "00000000000000000000000000000002",
+        "category": "00000000000000000000000000000003",
+        "specification_ref": "000000000000000000000000000001f6",
+        "condition_ref": "0000000000000000000000000000025a",
+        "quantity": 1,
+        "needed_by": "2026-05-01T00:00:00Z",
+        "budget_minor": 12000,
+        "currency": "USD",
+        "submitted_at": "2026-01-01T00:00:00Z",
+        "qualified_at": "2026-01-01T00:00:00Z",
+        "status": "qualified",
+        "duplicate_of": null,
+        "withdrawn_at": null,
+        "consent": {
+          "revision_ref": "000000000000000000000000000002be",
+          "granted_at": "2026-01-01T00:00:00Z",
+          "sharing_revoked_at": null,
+          "measurement_authorized": true
+        },
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "0000000000000000000000000000012f",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b59"
+      ],
+      "data": {
+        "id": "0000000000000000000000000000012f",
+        "buyer_key": "00000000000000000000000000000193",
+        "geography": "00000000000000000000000000000002",
+        "category": "00000000000000000000000000000003",
+        "specification_ref": "000000000000000000000000000001f7",
+        "condition_ref": "0000000000000000000000000000025b",
+        "quantity": 1,
+        "needed_by": "2026-05-01T00:00:00Z",
+        "budget_minor": 12000,
+        "currency": "USD",
+        "submitted_at": "2026-01-01T00:00:00Z",
+        "qualified_at": "2026-01-01T00:00:00Z",
+        "status": "qualified",
+        "duplicate_of": null,
+        "withdrawn_at": "2026-01-03T00:00:00Z",
+        "consent": {
+          "revision_ref": "000000000000000000000000000002bf",
+          "granted_at": "2026-01-01T00:00:00Z",
+          "sharing_revoked_at": null,
+          "measurement_authorized": true
+        },
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000130",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b59"
+      ],
+      "data": {
+        "id": "00000000000000000000000000000130",
+        "buyer_key": "00000000000000000000000000000194",
+        "geography": "00000000000000000000000000000002",
+        "category": "00000000000000000000000000000003",
+        "specification_ref": "000000000000000000000000000001f8",
+        "condition_ref": "0000000000000000000000000000025c",
+        "quantity": 1,
+        "needed_by": "2026-05-01T00:00:00Z",
+        "budget_minor": 12000,
+        "currency": "USD",
+        "submitted_at": "2026-04-08T00:00:00Z",
+        "qualified_at": "2026-04-08T00:00:00Z",
+        "status": "qualified",
+        "duplicate_of": null,
+        "withdrawn_at": null,
+        "consent": {
+          "revision_ref": "000000000000000000000000000002c0",
+          "granted_at": "2026-04-08T00:00:00Z",
+          "sharing_revoked_at": null,
+          "measurement_authorized": true
+        },
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000131",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b59"
+      ],
+      "data": {
+        "id": "00000000000000000000000000000131",
+        "buyer_key": "00000000000000000000000000000191",
+        "geography": "00000000000000000000000000000002",
+        "category": "00000000000000000000000000000003",
+        "specification_ref": "000000000000000000000000000001f9",
+        "condition_ref": "0000000000000000000000000000025d",
+        "quantity": 1,
+        "needed_by": "2026-05-01T00:00:00Z",
+        "budget_minor": 12000,
+        "currency": "USD",
+        "submitted_at": "2026-01-01T00:00:00Z",
+        "qualified_at": null,
+        "status": "duplicate",
+        "duplicate_of": "0000000000000000000000000000012d",
+        "withdrawn_at": null,
+        "consent": {
+          "revision_ref": "000000000000000000000000000002c1",
+          "granted_at": "2026-01-01T00:00:00Z",
+          "sharing_revoked_at": null,
+          "measurement_authorized": true
+        },
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    }
+  ],
+  "invitations": [
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000321",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5a"
+      ],
+      "data": {
+        "request_id": "0000000000000000000000000000012d",
+        "merchant_id": "00000000000000000000000000000065",
+        "invited_at": "2026-01-01T00:00:00Z",
+        "responded_at": "2026-01-02T00:00:00Z"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000322",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5a"
+      ],
+      "data": {
+        "request_id": "0000000000000000000000000000012e",
+        "merchant_id": "00000000000000000000000000000065",
+        "invited_at": "2026-01-01T00:00:00Z",
+        "responded_at": null
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000323",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5a"
+      ],
+      "data": {
+        "request_id": "0000000000000000000000000000012f",
+        "merchant_id": "00000000000000000000000000000065",
+        "invited_at": "2026-01-01T00:00:00Z",
+        "responded_at": null
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000324",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5a"
+      ],
+      "data": {
+        "request_id": "00000000000000000000000000000130",
+        "merchant_id": "00000000000000000000000000000065",
+        "invited_at": "2026-04-08T00:00:00Z",
+        "responded_at": "2026-04-08T00:00:00Z"
+      }
+    }
+  ],
+  "quotes": [
+    {
+      "source_id": "00000000000000000000000000002775",
+      "owner_id": "00000000000000000000000000000065",
+      "record_id": "00000000000000000000000000000385",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5b"
+      ],
+      "data": {
+        "request_id": "0000000000000000000000000000012d",
+        "merchant_id": "00000000000000000000000000000065",
+        "issued_at": "2026-01-02T00:00:00Z",
+        "expires_at": "2026-01-12T00:00:00Z",
+        "withdrawn_at": null,
+        "qualified": true,
+        "currency": "USD",
+        "price_minor": 10000,
+        "tax_minor": 1000,
+        "shipping_minor": 1000,
+        "buyer_fee_minor": 0,
+        "supersedes_revision": null,
+        "item_evidence_ref": "000000000000000000000000000007d1",
+        "stock_evidence_ref": "000000000000000000000000000007d2"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002775",
+      "owner_id": "00000000000000000000000000000065",
+      "record_id": "00000000000000000000000000000385",
+      "revision": 2,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5b"
+      ],
+      "data": {
+        "request_id": "0000000000000000000000000000012d",
+        "merchant_id": "00000000000000000000000000000065",
+        "issued_at": "2026-01-03T00:00:00Z",
+        "expires_at": "2026-01-12T00:00:00Z",
+        "withdrawn_at": null,
+        "qualified": true,
+        "currency": "USD",
+        "price_minor": 10000,
+        "tax_minor": 1000,
+        "shipping_minor": 1000,
+        "buyer_fee_minor": 0,
+        "supersedes_revision": 1,
+        "item_evidence_ref": "000000000000000000000000000007d1",
+        "stock_evidence_ref": "000000000000000000000000000007d2"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002775",
+      "owner_id": "00000000000000000000000000000065",
+      "record_id": "00000000000000000000000000000386",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5b"
+      ],
+      "data": {
+        "request_id": "00000000000000000000000000000130",
+        "merchant_id": "00000000000000000000000000000065",
+        "issued_at": "2026-04-08T00:00:00Z",
+        "expires_at": "2026-04-15T00:00:00Z",
+        "withdrawn_at": null,
+        "qualified": true,
+        "currency": "USD",
+        "price_minor": 10000,
+        "tax_minor": 1000,
+        "shipping_minor": 1000,
+        "buyer_fee_minor": 0,
+        "supersedes_revision": null,
+        "item_evidence_ref": "000000000000000000000000000007d3",
+        "stock_evidence_ref": "000000000000000000000000000007d4"
+      }
+    }
+  ],
+  "fee_arrangements": [
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "0000000000000000000000000000044d",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5c"
+      ],
+      "data": {
+        "id": "0000000000000000000000000000044d",
+        "merchant_id": "00000000000000000000000000000065",
+        "servicing_store_id": "00000000000000000000000000000066",
+        "currency": "USD",
+        "payer": "merchant",
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_until": "2026-05-01T00:00:00Z",
+        "terms_ref": "00000000000000000000000000000899"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "0000000000000000000000000000044e",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5c"
+      ],
+      "data": {
+        "id": "0000000000000000000000000000044e",
+        "merchant_id": "00000000000000000000000000000065",
+        "servicing_store_id": null,
+        "currency": "USD",
+        "payer": "merchant",
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_until": "2026-05-01T00:00:00Z",
+        "terms_ref": "0000000000000000000000000000089a"
+      }
+    }
+  ],
+  "orders": [
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "000000000000000000000000000004b1",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5d"
+      ],
+      "data": {
+        "id": "000000000000000000000000000004b1",
+        "quote_ref": {
+          "source_id": "00000000000000000000000000002775",
+          "record_id": "00000000000000000000000000000385",
+          "revision": 2
+        },
+        "servicing_store_id": "00000000000000000000000000000066",
+        "currency": "USD",
+        "accepted_at": "2026-01-04T00:00:00Z",
+        "promised_by": "2026-01-07T00:00:00Z",
+        "outcome": "fulfilled",
+        "outcome_at": "2026-01-06T00:00:00Z",
+        "paid_at": "2026-01-04T00:00:00Z",
+        "returned_at": "2026-01-20T00:00:00Z",
+        "disputed_at": "2026-01-21T00:00:00Z",
+        "reconciled_at": "2026-02-20T00:00:00Z",
+        "gross_minor": 10000,
+        "refunds": [
+          {
+            "id": "00000000000000000000000000000515",
+            "at": "2026-01-22T00:00:00Z",
+            "minor": 1000,
+            "evidence_ref": "000000000000000000000000000008fd",
+            "provider_verified": true
+          }
+        ],
+        "fees": {
+          "servicing_store": {
+            "gross_minor": 250,
+            "reversed_minor": 50
+          },
+          "platform": {
+            "gross_minor": 600,
+            "reversed_minor": 100
+          }
+        },
+        "fee_arrangement_id": "0000000000000000000000000000044d",
+        "stock_terms_revalidated": true,
+        "provider_verified": true,
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "000000000000000000000000000004b2",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5d"
+      ],
+      "data": {
+        "id": "000000000000000000000000000004b2",
+        "quote_ref": {
+          "source_id": "00000000000000000000000000002775",
+          "record_id": "00000000000000000000000000000386",
+          "revision": 1
+        },
+        "servicing_store_id": null,
+        "currency": "USD",
+        "accepted_at": "2026-04-08T00:00:00Z",
+        "promised_by": "2026-04-09T00:00:00Z",
+        "outcome": "pending",
+        "outcome_at": null,
+        "paid_at": null,
+        "returned_at": null,
+        "disputed_at": null,
+        "reconciled_at": null,
+        "gross_minor": null,
+        "refunds": [],
+        "fees": {
+          "servicing_store": {
+            "gross_minor": 0,
+            "reversed_minor": 0
+          },
+          "platform": null
+        },
+        "fee_arrangement_id": "0000000000000000000000000000044e",
+        "stock_terms_revalidated": true,
+        "provider_verified": false,
+        "observed_through": "2026-04-10T00:00:00Z"
+      }
+    }
+  ],
+  "costs": [
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000bb9",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5e"
+      ],
+      "data": {
+        "order_id": "000000000000000000000000000004b1",
+        "role": "merchant",
+        "currency": "USD",
+        "complete": true,
+        "items": [
+          {
+            "id": "00000000000000000000000000000bb9",
+            "kind": "acquisition",
+            "minor": 7000,
+            "incurred_at": "2026-01-23T00:00:00Z",
+            "evidence_ref": "00000000000000000000000000000c1d"
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000bba",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5e"
+      ],
+      "data": {
+        "order_id": "000000000000000000000000000004b1",
+        "role": "servicing_store",
+        "currency": "USD",
+        "complete": true,
+        "items": [
+          {
+            "id": "00000000000000000000000000000bba",
+            "kind": "handling",
+            "minor": 180,
+            "incurred_at": "2026-01-23T00:00:00Z",
+            "evidence_ref": "00000000000000000000000000000c1e"
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000bbb",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5e"
+      ],
+      "data": {
+        "order_id": "000000000000000000000000000004b1",
+        "role": "platform",
+        "currency": "USD",
+        "complete": true,
+        "items": [
+          {
+            "id": "00000000000000000000000000000bbb",
+            "kind": "support",
+            "minor": 200,
+            "incurred_at": "2026-01-23T00:00:00Z",
+            "evidence_ref": "00000000000000000000000000000c1f"
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000bbc",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5e"
+      ],
+      "data": {
+        "order_id": null,
+        "role": "merchant",
+        "currency": "USD",
+        "complete": true,
+        "items": [
+          {
+            "id": "00000000000000000000000000000bbc",
+            "kind": "acquisition",
+            "minor": 25,
+            "incurred_at": "2026-01-23T00:00:00Z",
+            "evidence_ref": "00000000000000000000000000000c20"
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000bbd",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5e"
+      ],
+      "data": {
+        "order_id": null,
+        "role": "servicing_store",
+        "currency": "USD",
+        "complete": true,
+        "items": [
+          {
+            "id": "00000000000000000000000000000bbd",
+            "kind": "operations",
+            "minor": 10,
+            "incurred_at": "2026-01-23T00:00:00Z",
+            "evidence_ref": "00000000000000000000000000000c21"
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "00000000000000000000000000002a94",
+      "owner_id": "00000000000000000000000000000384",
+      "record_id": "00000000000000000000000000000bbe",
+      "revision": 1,
+      "captured_at": "2026-04-10T00:00:00Z",
+      "evidence_refs": [
+        "00000000000000000000000000001b5e"
+      ],
+      "data": {
+        "order_id": null,
+        "role": "platform",
+        "currency": "USD",
+        "complete": true,
+        "items": [
+          {
+            "id": "00000000000000000000000000000bbe",
+            "kind": "support",
+            "minor": 100,
+            "incurred_at": "2026-01-23T00:00:00Z",
+            "evidence_ref": "00000000000000000000000000000c22"
+          }
+        ]
+      }
+    }
+  ]
+}

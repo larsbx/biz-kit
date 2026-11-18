@@ -92,6 +92,16 @@ defmodule TaskCore.LessonWorkflowTest do
       school
       |> admit!(@head, "TaskOperatorGrantedV1", grant("teacher", @teacher), "teacher-grant")
       |> admit!(@head, "TaskReviewerGrantedV1", grant("marker", @marker), "marker-grant")
+      # The school's head declares the teacher human and makes them the
+      # project's accountable owner, before any work (TaskCore.Projects).
+      |> fold!(%Event{
+        event_id: "teacher-human",
+        chapter_id: @chapter,
+        type: "TaskPrincipalKindDeclaredV1",
+        payload: %{"principal_id" => "teacher", "kind" => "human"},
+        signers: [@head]
+      })
+      |> admit!(@head, "TaskProjectOwnerAssignedV1", %{"principal_id" => "teacher"})
 
     school =
       for lesson <- ~w(intro fractions), reduce: school do
@@ -255,6 +265,22 @@ defmodule TaskCore.LessonWorkflowTest do
                {:error, :unsupported_task_lifecycle}
 
       refute Map.has_key?(s.state.tasks, key("i"))
+    end
+
+    test "a run is new work: refused while the project has no owner", %{school: s} do
+      {s, revision} = apply_blueprint!(s, Host.curriculum(), "a1")
+      ids = %{"intro" => "i", "adding" => "a"}
+
+      # Governance can apply a blueprint without an owner; a run cannot start.
+      ownerless = %{s | state: %{s.state | projects: %{}}}
+
+      assert admit(
+               prepare(ownerless, {:instantiate, revision, "autumn", "fractions", ids}),
+               ownerless
+             ) ==
+               {:error, :project_has_no_owner}
+
+      assert admit(prepare(s, {:instantiate, revision, "autumn", "fractions", ids}), s) == :ok
     end
 
     test "a run names every definition with new, distinct tasks", %{school: s} do

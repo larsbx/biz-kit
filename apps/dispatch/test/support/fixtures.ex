@@ -25,7 +25,7 @@ defmodule Dispatch.Support.Fixtures do
     User
   }
 
-  alias Dispatch.Fleet.{Assignment, Load, Stop, StopParty}
+  alias Dispatch.Fleet.{Assignment, Load, Stop, StopParty, Trailer, Vehicle}
 
   require Ash.Query
 
@@ -256,8 +256,23 @@ defmodule Dispatch.Support.Fixtures do
       tenant_id: tenant,
       load_id: load.id,
       operator_participant_id: operator.id,
+      vehicle_id: Keyword.get(opts, :vehicle_id),
+      trailer_id: Keyword.get(opts, :trailer_id),
       starts_at: Keyword.get(opts, :starts_at, DateTime.utc_now()),
       ends_at: Keyword.get(opts, :ends_at)
+    })
+    |> Ash.create!(authorize?: false, tenant: tenant)
+  end
+
+  @doc "An active vehicle or trailer of `org`."
+  @spec equipment(Ash.UUID.t(), Organization.t(), Vehicle | Trailer) :: struct()
+  def equipment(tenant, org, resource) when resource in [Vehicle, Trailer] do
+    resource
+    |> Ash.Changeset.for_create(:register, %{
+      tenant_id: tenant,
+      organization_id: org.id,
+      unit_number: unique("UNIT"),
+      status: :ACTIVE
     })
     |> Ash.create!(authorize?: false, tenant: tenant)
   end

@@ -40,10 +40,16 @@ defmodule BizKit.Extension.Manifest do
       {:ok,
        %{
          manifest
-         | dependencies: Enum.sort_by(manifest.dependencies, & &1.id),
+         | contract_version: 1,
+           dependencies: Enum.sort_by(manifest.dependencies, & &1.id),
            capabilities: Enum.sort(manifest.capabilities),
            requested_grants: Enum.sort(manifest.requested_grants),
-           commands: Enum.sort_by(manifest.commands, & &1.name),
+           commands:
+             manifest.commands
+             |> Enum.map(fn command ->
+               %{command | required_grants: Enum.sort(command.required_grants)}
+             end)
+             |> Enum.sort_by(& &1.name),
            events: Enum.sort_by(manifest.events, & &1.name),
            projections: Enum.sort_by(manifest.projections, & &1.name),
            migrations: Enum.sort(manifest.migrations)

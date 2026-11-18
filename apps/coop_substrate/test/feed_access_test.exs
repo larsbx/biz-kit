@@ -24,7 +24,7 @@ defmodule CoopSubstrate.FeedAccessTest do
     deleg = as_role(new_member("operator"), "operator")
     op_grant = operator_grant(gov, op, "alice")
     agent_grant = suggester_grant(gov, agent, "bot")
-    {:ok, _} = Log.append([declare_governance(gov), op_grant, agent_grant])
+    {:ok, _} = Log.append([declare_governance(gov), op_grant, agent_grant | project_owner(gov)])
     {:ok, [delegation]} = Log.append(delegation(op, op_grant, deleg, "deleg-bot"))
 
     %{
