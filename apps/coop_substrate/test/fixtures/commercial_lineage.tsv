@@ -1,0 +1,6 @@
+recorded	true	true	1
+assigned	false	true	2
+assigned_back	false	true	3
+direct_discharge	false	false	2
+assigned_back_discharged	false	false	4
+legacy_netting	false	false	2
