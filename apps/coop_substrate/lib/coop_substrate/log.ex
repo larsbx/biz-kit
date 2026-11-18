@@ -129,6 +129,26 @@ defmodule CoopSubstrate.Log do
         :infinity
       )
 
+  @doc """
+  Commit one staging agent launch admission under current signed authority.
+
+  `context` must be exactly `%{environment: :staging}`. The canonical store's
+  running connection pool and cached schema are used internally; caller connection,
+  transaction and callback overrides are refused. `request` contains the run
+  key, grant locators, trusted registry/requirements snapshot, exact expected
+  plan and committed lease. The host must obtain consent independently.
+
+  The actual ledger row is locked before the operational attempt. The receipt
+  is returned after commit and records which signed head admitted the request.
+  It does not launch a backend, append a business event, prove termination, or
+  make mutable host policy and later external execution atomic with revocation.
+  """
+  def admit_agent_launch(context, request, server \\ @server) do
+    GenServer.call(server, {:admit_agent_launch, context, request}, 10_000)
+  catch
+    :exit, _ -> {:error, :agent_launch_admission_unavailable}
+  end
+
   @doc "Current-authority private procurement snapshot, checked in the appender."
   def procurement_snapshot(%Envelope{} = request, server \\ @server),
     do: GenServer.call(server, {:procurement_snapshot, request})
@@ -195,7 +215,7 @@ defmodule CoopSubstrate.Log do
     result =
       fold_ledger_raw(initial, limit, fn position, bytes, {head, breaks} ->
         case audit_record(position, bytes, head) do
-          {:ok, head} -> {head, breaks}
+          {:ok, head, _env} -> {head, breaks}
           {:error, break, head} -> {head, [break | breaks]}
         end
       end)
@@ -405,6 +425,41 @@ defmodule CoopSubstrate.Log do
   end
 
   @doc """
+  Replay a pure projection from genesis to the supplied head. Verify the
+  signatures and both chains on the same raw records being replayed. A short
+  read, a different head, or an invalid record yields no projection result.
+  """
+  @spec replay_verified(module(), %{global_seq: non_neg_integer(), global_hash: binary() | nil}) ::
+          {:ok, term()} | {:error, term()}
+  def replay_verified(projection, %{global_seq: sequence, global_hash: hash})
+      when is_atom(projection) and
+             ((sequence == 0 and is_nil(hash)) or
+                (is_integer(sequence) and sequence > 0 and is_binary(hash) and
+                   byte_size(hash) == 32)) do
+    initial = {:ok, %Head{}, projection.init()}
+
+    with {:ok, result} <-
+           fold_ledger_raw(initial, sequence, fn
+             position, bytes, {:ok, head, state} ->
+               case audit_record(position, bytes, head) do
+                 {:ok, head, env} -> {:ok, head, projection.handle_event(env, state)}
+                 {:error, break, _head} -> {:error, {:unverified_ledger_prefix, break}}
+               end
+
+             _, _, error ->
+               error
+           end) do
+      case result do
+        {:ok, %Head{global_seq: ^sequence, global_hash: ^hash}, state} -> {:ok, state}
+        {:ok, _head, _state} -> {:error, :ledger_head_mismatch}
+        {:error, _} = error -> error
+      end
+    end
+  end
+
+  def replay_verified(_, _), do: {:error, :invalid_ledger_head}
+
+  @doc """
   Signed per-stream export (08 §1, minimal for 1A): the stream's raw
   canonical records, independently verifiable via `verify_export/1` with no
   access to this store.
@@ -464,6 +519,11 @@ defmodule CoopSubstrate.Log do
 
   def handle_call({:federation_effect, context, request, effect}, _from, state) do
     result = CoopSubstrate.FederationFence.run(context, state.head, state.gate, request, effect)
+    {:reply, result, state}
+  end
+
+  def handle_call({:admit_agent_launch, context, request}, _from, state) do
+    result = CoopSubstrate.AgentLaunchAdmission.run(context, state.head, state.gate, request)
     {:reply, result, state}
   end
 
@@ -833,7 +893,7 @@ defmodule CoopSubstrate.Log do
         }
 
         case breaks do
-          [] -> {:ok, new_head}
+          [] -> {:ok, new_head, env}
           breaks -> {:error, {:break, position, breaks}, new_head}
         end
 

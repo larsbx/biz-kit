@@ -22,7 +22,8 @@ the signed Log (`CoopSubstrate.Log`, rule `RestaurantCore.Admission`).
   `/board/pair/:board/:secret` compares the secret's SHA-256 in constant time
   and puts the board in the browser's signed session. If the operator
   configures staff principals, staff must also sign in. A governance-signed
-  device revocation fences that key in the Log.
+  device revocation fences that key in the Log, and the merchant never
+  grants it again.
 * **No state of its own.** Orders are read back from the Log's gate. No
   financial operation exists: money is Hawala's, and payment is cash.
 

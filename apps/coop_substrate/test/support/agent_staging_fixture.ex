@@ -1,23 +1,29 @@
 defmodule CoopSubstrate.AgentStagingFixture do
   @moduledoc "Signed ledger fixture shared by staging-only agent acceptance."
   import ExUnit.Assertions
-  import ExUnit.Callbacks, only: [on_exit: 1]
+  import ExUnit.Callbacks, only: [on_exit: 1, start_supervised!: 1]
   import CoopSubstrate.LogCase
-  alias CoopSubstrate.{Log, Tasks}
+  alias AgentCore.Preflight
+  alias AgentOpsStore.Postgres
+  alias CoopSubstrate.{AgentStagingSQL, Canonical, Log, Tasks}
+  alias TaskCore.AgentRuns
   alias CoopSubstrate.Harness.Artifacts
   alias CoopSubstrate.Projections.Tasks, as: Projection
 
   @scope %{"tenant_id" => "tenant-1", "project_id" => "project-1"}
   @subject Map.put(@scope, "task_id", "task-1")
   @task_key {"chapter-genesis", "tenant-1", "project-1", "task-1"}
+  @run_key {"chapter-genesis", "tenant-1", "project-1", "run-1"}
   @criteria [%{"id" => "review", "description" => "Independent output review"}]
 
-  def prepare do
+  # A standalone, disposable persistence probe owns its process-level cleanup
+  # instead of an ExUnit test process. Ordinary tests retain on_exit cleanup.
+  def prepare(register_cleanup \\ &on_exit/1) when is_function(register_cleanup, 1) do
     previous = Application.get_env(:coop_substrate, :artifact_dir)
     directory = Path.join(System.tmp_dir!(), "run-intent-" <> CoopSubstrate.ULID.generate())
     Application.put_env(:coop_substrate, :artifact_dir, directory)
 
-    on_exit(fn ->
+    register_cleanup.(fn ->
       if previous,
         do: Application.put_env(:coop_substrate, :artifact_dir, previous),
         else: Application.delete_env(:coop_substrate, :artifact_dir)
@@ -165,6 +171,85 @@ defmodule CoopSubstrate.AgentStagingFixture do
       grant: grant,
       suggester: suggester,
       ready: ready
+    }
+  end
+
+  def admit!(adapter, parameters \\ %{}) do
+    AgentStagingSQL.setup!()
+    fixture = prepare()
+    features = ~w(text idempotent_launch_v1 effect_lookup_v1 cancellation_v1 bounded_results_v1)
+
+    manifest = %{
+      "id" => "approved-profile",
+      "version" => 1,
+      "adapter_module" => Atom.to_string(adapter),
+      "parameters" =>
+        Map.put(parameters, "capabilities", %{
+          "features" => features,
+          "data_classes" => ["internal"],
+          "regions" => ["local"],
+          "max_duration_ms" => 300_000,
+          "max_output_bytes" => 4096
+        })
+    }
+
+    profile = %{id: "approved-profile", approved: true, adapter: adapter, manifest: manifest}
+    read = access_grant(fixture, "read")
+    execute = access_grant(fixture, "execute")
+
+    intent =
+      request(fixture, %{
+        "execution_profile_digest" => {:bytes, Canonical.hash!(manifest)},
+        "max_duration_ms" => 300_000
+      })
+
+    assert {:ok, _} = Log.append([read, execute, intent])
+    grants = %{read: read.event_id, execute: execute.event_id}
+    registry = %{"approved-profile" => profile}
+
+    requirements = %{
+      "features" => features,
+      "data_classes" => ["internal"],
+      "region" => "local",
+      "max_duration_ms" => 300_000,
+      "max_output_bytes" => 4096
+    }
+
+    assert {:ok, state} = Log.replay(Projection)
+    assert {:ok, run} = AgentRuns.authorized?(state, @run_key, grants)
+    assert {:ok, plan} = Preflight.prepare(run, registry, &Canonical.hash!/1, requirements)
+    config = Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)
+
+    conn =
+      start_supervised!(
+        {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])}
+      )
+
+    assert {:ok, :new} = Postgres.register(conn, plan)
+    assert {:ok, row} = Postgres.snapshot(conn, plan.effect_id)
+
+    assert {:ok, lease} =
+             Postgres.claim(conn, plan.effect_id, row.version, "receiver-test", 300_000, 2)
+
+    request = %{
+      run_key: @run_key,
+      grants: grants,
+      registry: registry,
+      requirements: requirements,
+      plan: plan,
+      lease: lease
+    }
+
+    assert {:ok, admission} = Log.admit_agent_launch(%{environment: :staging}, request)
+
+    %{
+      conn: conn,
+      fixture: fixture,
+      request: request,
+      effect: plan.effect_id,
+      admission: admission,
+      head: Log.head(),
+      intent_id: intent.event_id
     }
   end
 

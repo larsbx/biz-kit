@@ -1,5 +1,10 @@
 # AgentCore launch-lease acceptance
 
+The [durable admission increment](2026-11-16-agentcore-durable-launch-admission.md)
+adds a separate opt-in decision ordered with canonical append and a signed
+database-restart probe. It preserves the direct-dispatch boundary described
+here; an admission receipt does not prove physical backend execution.
+
 ## Problem and integration scope
 
 The review of PR #398 at `fefe7394ffacd6c49e9d22cf3224af731f039b3c`

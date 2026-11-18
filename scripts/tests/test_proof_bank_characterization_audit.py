@@ -37,7 +37,7 @@ class AuditTest(unittest.TestCase):
             })))
             self.assertIn("missing/unsafe", str(module.audit(root, {**data, "records": [dict(base,id="foo", observed_code_paths=["../secret"]), data["records"][1]]})))
 
-class ScfInventoryTest(unittest.TestCase):
+class InventoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = source.parents[1]
@@ -68,6 +68,30 @@ class ScfInventoryTest(unittest.TestCase):
                 ]
                 self.assertEqual(
                     [f"scf_core: invalid status {field}"],
+                    module.audit(self.root, {**self.data, "records": records}),
+                )
+
+    def test_missing_bizops_kb_record_fails_real_inventory_audit(self):
+        self.assertEqual([], module.audit(self.root, self.data))
+        records = [record for record in self.data["records"] if record["id"] != "bizops_kb"]
+        self.assertEqual(
+            ["app drift: missing=['bizops_kb'], extra=[]"],
+            module.audit(self.root, {**self.data, "records": records}),
+        )
+
+    def test_bizops_kb_requires_the_packaged_manifest_and_source_proof_pins(self):
+        [record] = [entry for entry in self.data["records"] if entry["id"] == "bizops_kb"]
+        for path in ("apps/bizops_kb/priv/catalog.json", "apps/bizops_kb/priv/source-proof.json"):
+            with self.subTest(path=path):
+                self.assertIn(path, record["evidence_git_blobs"])
+                pins = {**record["evidence_git_blobs"], path: "0" * 40}
+                tampered = {**record, "evidence_git_blobs": pins}
+                records = [
+                    tampered if entry["id"] == "bizops_kb" else entry
+                    for entry in self.data["records"]
+                ]
+                self.assertEqual(
+                    [f"bizops_kb: changed source/test bytes require re-characterization: {path}"],
                     module.audit(self.root, {**self.data, "records": records}),
                 )
 
