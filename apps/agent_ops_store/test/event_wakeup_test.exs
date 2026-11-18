@@ -72,8 +72,17 @@ defmodule AgentOpsStore.EventWakeupTest do
   test "an unavailable group or a dead worker is not silently authorized" do
     # Failed linked GenServer startup may also deliver an EXIT signal.
     Process.flag(:trap_exit, true)
-    target = spawn(fn -> :ok end)
+    # Keep the worker alive until the monitor is installed. Monitoring an
+    # already-exited PID reports :noproc, not :normal, even if it exited cleanly.
+    target =
+      spawn(fn ->
+        receive do
+          :stop -> :ok
+        end
+      end)
+
     ref = Process.monitor(target)
+    send(target, :stop)
     assert_receive {:DOWN, ^ref, :process, ^target, :normal}, 1000
 
     assert {:error, :invalid_wakeup_target} =

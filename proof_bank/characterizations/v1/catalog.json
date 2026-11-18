@@ -1,0 +1,1254 @@
+{
+  "schema": "biz-kit.proof-bank.characterizations.v1",
+  "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+  "source_repo": "larsbx/biz-kit",
+  "method": "source and test assertions inspected; not an executed conformance run",
+  "records": [
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "agent_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Agent-neutral profiles, launch/poll/cancel ports, preflight",
+      "intended_features": [
+        "Agent-neutral profiles",
+        "launch/poll/cancel ports",
+        "preflight"
+      ],
+      "observed_code_paths": [
+        "apps/agent_core/lib/agent_core/profiles.ex",
+        "apps/agent_core/lib/agent_core/execution_port.ex"
+      ],
+      "observed_test_path": "apps/agent_core/test/profiles_test.exs",
+      "audit_finding": "Host approval and private-data policy are external; unit-test hash is not the canonical signed hash",
+      "first_formal_obligation": "Only current approved profile revisions may launch runs",
+      "first_formal_layer": "L2",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/agent_core/lib/agent_core/profiles.ex": "5805f22b45c7c3089ded5b187ac769361c1d7660",
+        "apps/agent_core/lib/agent_core/execution_port.ex": "18190393bf0aa25198af04a23df579524d8259a9",
+        "apps/agent_core/test/profiles_test.exs": "3b6b74c8c793448644ec8bd77dd77bfb61e6c59f"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "agent_ops_store",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Agent coordinator, tool proxy, workers, event replay and durable cursor",
+      "intended_features": [
+        "Agent coordinator",
+        "tool proxy",
+        "workers",
+        "event replay and durable cursor"
+      ],
+      "observed_code_paths": [
+        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex",
+        "apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex"
+      ],
+      "observed_test_path": "apps/agent_ops_store/test/coordinator_test.exs",
+      "audit_finding": "Source coordinator tests explicitly cover staging-only behavior, not production worker authority",
+      "first_formal_obligation": "Stale agent leases cannot admit competing business effects",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex": "d7f4c578847b0b99cd9bfd3909046fe76b010bfa",
+        "apps/agent_ops_store/lib/agent_ops_store/tool_proxy.ex": "709c146ed4c824cd4d3ce027654d544843f780ad",
+        "apps/agent_ops_store/test/coordinator_test.exs": "c7a03d7467ddc740c35631147851d3e33fd61630"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "barter_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Exact multi-party intent matching, consortium brokerage and exchange previews",
+      "intended_features": [
+        "Exact multi-party intent matching",
+        "consortium brokerage and exchange previews"
+      ],
+      "observed_code_paths": [
+        "apps/barter_core/lib/barter_core/optimizer.ex",
+        "apps/barter_core/lib/barter_core/brokerage.ex"
+      ],
+      "observed_test_path": "apps/barter_core/test/barter_core_test.exs",
+      "audit_finding": "Consent refs are not authenticated signatures; no transfer, legal agency or financial settlement",
+      "first_formal_obligation": "An optimizer preview cannot transfer assets without separately signed admission",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/barter_core/lib/barter_core/optimizer.ex": "6e4b47fd7dbe68e6166df42afb35907cdb502406",
+        "apps/barter_core/lib/barter_core/brokerage.ex": "8df4e06174e32ce1e0477a1f1588021773860bbe",
+        "apps/barter_core/test/barter_core_test.exs": "bce7796bad685a8b9d5f5f352555a4af18db033c"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "bizops_kb",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "registered_at_sha": "c76dcd8ad2152855db0ac3086e1091b7275137a9",
+      "category": "capability",
+      "intended_purpose": "Read-only Operations reference catalog and source-bound workflow previews",
+      "intended_features": [
+        "Packaged manifest pin and all-or-nothing document validation for paths, UTF-8, sizes, SHA-256 and Git blob identities",
+        "Bounded text search, area and category filters, stable-ID lookup and unambiguous internal link resolution",
+        "Read-only schema-2 onboarding preview and downloads bound to the two retained procedure inputs and SOP bundle"
+      ],
+      "observed_code_paths": [
+        "apps/bizops_kb/mix.exs",
+        "apps/bizops_kb/README.md",
+        "apps/bizops_kb/lib/bizops_kb/catalog.ex",
+        "apps/bizops_kb/lib/bizops_kb/workflows.ex",
+        "apps/bizops_kb/priv/catalog.json",
+        "apps/bizops_kb/priv/source-proof.json",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.json",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.sop.md",
+        "apps/bizops_kb/test/workflows_test.exs",
+        "apps/task_host/lib/task_host/web/knowledge_controller.ex",
+        "scripts/bizops-kb/snapshot.py"
+      ],
+      "observed_test_path": "apps/bizops_kb/test/catalog_test.exs",
+      "audit_finding": "Characterized at registered_at_sha. The packaged manifest identifies 216 Markdown documents from larsbx/bizops-kb commit 8749d8db1abd3145b22c6a27da2cc49a41c303fe, tree 79f146858c5d9d850df69b67294cb3fabf131bd1. The offline checker reconstructs the Git commit and tree and checks the imported inventory, source bytes and wiki links. The compiled SHA-256 of catalog.json binds the packaged load. A trusted caller can select an alternate root for internal consistency checks. The catalog tests exercise bounded lookup, missing and changed bytes, and coordinated manifest and document substitutions. The workflow tests cover DAG ordering, source and SOP binding, and refusal of malformed or changed inputs. TaskHost uses the packaged loader and rechecks the current session and access to a configured Operations workspace before returning content. Workflow adoption requires separate signed governance admission tied to the selected Biz-kit commit and exact manifest bytes. Run creation and execution have their own authorization checks. Signing-key trust, installed host behavior, current procedure correctness and engagement-specific owner approval require separate evidence.",
+      "first_formal_obligation": "Every successful packaged load yields the exact document bytes identified by the compiled manifest.",
+      "first_formal_layer": "L1",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/bizops_kb/mix.exs": "f6026cd0de516bfb2861673e481e9206c067e3c7",
+        "apps/bizops_kb/README.md": "813dc376cd50c191cd8dc17c10ab68fb0613958c",
+        "apps/bizops_kb/lib/bizops_kb/catalog.ex": "8bbf5464ab8a828bb6fcbfa6b9c35335f8f8ed1a",
+        "apps/bizops_kb/lib/bizops_kb/workflows.ex": "228949dc59a75fa4c3438a47db38217b0247f1b2",
+        "apps/bizops_kb/priv/catalog.json": "69cb3fdc9c03549fab7799778d89c890b65efef7",
+        "apps/bizops_kb/priv/source-proof.json": "ee3428f4b81380c338669f3cacb2a888cc38eba6",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.json": "3f69ced20236ba5d8e77c13ad5442af59a621cc6",
+        "apps/bizops_kb/priv/workflows/office-assistant-onboarding-v1.sop.md": "3e3ffce8aedcd2e8581e42abbe14a8047ca5c337",
+        "apps/bizops_kb/test/workflows_test.exs": "517e670405a5a4f0d8a79e2c833c891082824ffd",
+        "apps/task_host/lib/task_host/web/knowledge_controller.ex": "df55146d29d2bf655ca99048200f4d81a3b45658",
+        "scripts/bizops-kb/snapshot.py": "eb18408c963aa85dfd2adb582752a29d0503adc9",
+        "apps/bizops_kb/test/catalog_test.exs": "8c951365cc4d161db49fc415f9d612eebc339b46"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "biz_kit_cluster",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Distributed singleton ownership, failover and recovery after partitions",
+      "intended_features": [
+        "Distributed singleton ownership",
+        "failover and recovery after partitions"
+      ],
+      "observed_code_paths": [
+        "apps/biz_kit_cluster/lib/biz_kit/cluster/singleton.ex"
+      ],
+      "observed_test_path": "apps/biz_kit_cluster/test/singleton_test.exs",
+      "audit_finding": "Peer-node test declarations inspected but not executed; leader is not business authorization",
+      "first_formal_obligation": "After partition recovery at most one fenced authority may perform effects",
+      "first_formal_layer": "L3",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_cluster/lib/biz_kit/cluster/singleton.ex": "7a57359ee8aab4f958051601864d834bd1c3dda8",
+        "apps/biz_kit_cluster/test/singleton_test.exs": "17fe014d821eef12b0ff7da37970afd3e66b0a23"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "biz_kit_composition",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure catalog/stock/price/fulfillment and marketing candidate previews",
+      "intended_features": [
+        "Pure catalog/stock/price/fulfillment and marketing candidate previews"
+      ],
+      "observed_code_paths": [
+        "apps/biz_kit_composition/lib/biz_kit/composition.ex",
+        "apps/biz_kit_composition/lib/biz_kit/marketing_bridge.ex"
+      ],
+      "observed_test_path": "apps/biz_kit_composition/test/composition_test.exs",
+      "audit_finding": "Neither inventory reservation nor order acceptance is atomic in preview; host must revalidate",
+      "first_formal_obligation": "A preview never implies a committed reservation, sale or delivery",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_composition/lib/biz_kit/composition.ex": "c8e107d5c55134b2cbd55bb51503c1e9cb347b91",
+        "apps/biz_kit_composition/lib/biz_kit/marketing_bridge.ex": "cd9e7778e009e263a48d23959ecf6530855acfce",
+        "apps/biz_kit_composition/test/composition_test.exs": "580ffcadcd0371adfd54b0c164dee97c7354cbf0"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "biz_kit_extension",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Portable ExtensionV1 manifest validation, dependency ordering, inert activation planning",
+      "intended_features": [
+        "Manifest V1 strict validation",
+        "Deterministic dependency resolution",
+        "Explicit-module catalog and inert activation plan"
+      ],
+      "observed_code_paths": [
+        "apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex",
+        "apps/biz_kit_extension/lib/biz_kit/extension/catalog.ex"
+      ],
+      "observed_test_path": "apps/biz_kit_extension/test/manifest_test.exs",
+      "audit_finding": "The current ExtensionV1 core is nonmutating; a plan is neither an installed runtime extension nor an actual authority grant. Manifest validation is not proof of an implementation's safety.",
+      "first_formal_obligation": "Extension discovery and inert planning cannot grant permission, invoke an extension or mutate authoritative state.",
+      "first_formal_layer": "L2",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex": "76a55939eaf032b57a003439eb987a6b58899360",
+        "apps/biz_kit_extension/lib/biz_kit/extension/catalog.ex": "614e026e01c8f2885aad3a035823bf7d7ac89d92",
+        "apps/biz_kit_extension/test/manifest_test.exs": "80273ad8947999e1d68dd8dce8262dcca9c8b8a2"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "biz_kit_identity",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Principals, provider binding, persistent native sessions and revocation",
+      "intended_features": [
+        "Principals",
+        "provider binding",
+        "persistent native sessions and revocation"
+      ],
+      "observed_code_paths": [
+        "apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex",
+        "apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex"
+      ],
+      "observed_test_path": "apps/biz_kit_identity/test/durable_sessions_test.exs",
+      "audit_finding": "Test session store is memory backed; cross-host and live revocation unproven",
+      "first_formal_obligation": "Revoked principal cannot act through persisted sessions",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/biz_kit_identity/lib/biz_kit/identity/sessions.ex": "9a954820349991a601539da121f2d129616f5df9",
+        "apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex": "c1d1adb6164414da8452583287ef94aaf7fc2476",
+        "apps/biz_kit_identity/test/durable_sessions_test.exs": "8a46203b2a345c306d454d0c66d14b630a47e13a"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "biz-kit",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "platform",
+      "intended_purpose": "Umbrella of composable business domains, with signed admission and extension governance",
+      "intended_features": [
+        "Umbrella of composable business domains",
+        "with signed admission and extension governance"
+      ],
+      "observed_code_paths": [
+        "mix.exs",
+        "docs/architecture/2026-10-24-modular-business-platform.md"
+      ],
+      "observed_test_path": null,
+      "audit_finding": "Architecture is not implementation conformance; ExtensionV1 is separately under review",
+      "first_formal_obligation": "Every business effect passes exactly its owner’s authenticated admission path",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "mix.exs": "61ae2370d901306cc1ef7e07dd158bee67112556",
+        "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "commerce_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Exact Money-valued pricing, rounded tax, catalog and checkout proposals",
+      "intended_features": [
+        "Exact Money-valued pricing",
+        "rounded tax",
+        "catalog and checkout proposals"
+      ],
+      "observed_code_paths": [
+        "apps/commerce_core/lib/commerce_core/pricing.ex",
+        "apps/commerce_core/lib/commerce_core/tax.ex"
+      ],
+      "observed_test_path": "apps/commerce_core/test/kitchen_checkout_safety_test.exs",
+      "audit_finding": "No payment, refund or authoritative tax jurisdiction determination in pure kernel",
+      "first_formal_obligation": "Currency totals and tax component shares conserve exact minor units",
+      "first_formal_layer": "L1",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/commerce_core/lib/commerce_core/pricing.ex": "7dfb9a672008075e16a46104ca306fb5e68a08f9",
+        "apps/commerce_core/lib/commerce_core/tax.ex": "9d1a2b861fb416c97f3e8944b7f85a5eccb625d8",
+        "apps/commerce_core/test/kitchen_checkout_safety_test.exs": "b974b920f1b5d07efe3b9acf943643858a0c713c"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "coop_substrate",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Canonical signed append-only business-event ledger, replay and custody",
+      "intended_features": [
+        "Canonical signed append-only business-event ledger",
+        "replay and custody"
+      ],
+      "observed_code_paths": [
+        "apps/coop_substrate/lib/coop_substrate/canonical.ex",
+        "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex"
+      ],
+      "observed_test_path": "apps/coop_substrate/test/canonical_test.exs",
+      "audit_finding": "Known-answer vectors do not establish live Postgres append linearization or key custody",
+      "first_formal_obligation": "Accepted append always binds canonical bytes, authorization, scope and replay identity",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/coop_substrate/lib/coop_substrate/canonical.ex": "a61cbebaa3154f2615c6e5d5c63d8c2fc298c2b3",
+        "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex": "d792dba38347b34c897ee502be9ea5625620043a",
+        "apps/coop_substrate/test/canonical_test.exs": "d5534845cc1e99d6df22135821fee24076169e44"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "dispatch",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Ash/Phoenix transport authority: scoped roles, fleet, operations board, devices and status events",
+      "intended_features": [
+        "Ash/Phoenix transport authority: scoped roles",
+        "fleet",
+        "operations board",
+        "devices and status events"
+      ],
+      "observed_code_paths": [
+        "apps/dispatch/lib/dispatch/access.ex",
+        "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "observed_test_path": "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs",
+      "audit_finding": "Pure access tests and board tests require separate Postgres/PostGIS, mobile and provider acceptance",
+      "first_formal_obligation": "Concurrent authenticated assignments cannot create active driver/vehicle conflicts",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "62fb826ed46e3c65ccaf7b01d8c982f9b4748960",
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "dispatch_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure last-mile states, producer evidence, cancellation and legacy edge characterization",
+      "intended_features": [
+        "Pure last-mile states",
+        "producer evidence",
+        "cancellation and legacy edge characterization"
+      ],
+      "observed_code_paths": [
+        "apps/dispatch_core/lib/dispatch_core/last_mile.ex",
+        "apps/dispatch_core/lib/dispatch_core/legacy_delivery.ex"
+      ],
+      "observed_test_path": "apps/dispatch_core/test/dispatch_core_test.exs",
+      "audit_finding": "Proof references do not prove physical delivery and policy is not the operational writer",
+      "first_formal_obligation": "Cancellation cannot fabricate or erase confirmed physical transport facts",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/dispatch_core/lib/dispatch_core/last_mile.ex": "4c7022ea618044a4166640c41906e6891743a528",
+        "apps/dispatch_core/lib/dispatch_core/legacy_delivery.ex": "6ecf565e5de48927e34eb5f522e9659ef7898526",
+        "apps/dispatch_core/test/dispatch_core_test.exs": "c39be4063de0461016c1936c8cce90ea6713c535"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "federation_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure ActivityStreams marketplace and pending subscription wire contracts",
+      "intended_features": [
+        "Pure ActivityStreams marketplace and pending subscription wire contracts"
+      ],
+      "observed_code_paths": [
+        "apps/federation_core/lib/federation_core/marketplace.ex",
+        "apps/federation_core/lib/federation_core/subscriptions.ex"
+      ],
+      "observed_test_path": "apps/federation_core/test/marketplace_test.exs",
+      "audit_finding": "decode_verified assumes caller authenticated actor; no transport or persistent moderation",
+      "first_formal_obligation": "Untrusted remote listings can never become local business authority",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/federation_core/lib/federation_core/marketplace.ex": "7d5b2f34baed5454163e69ad907879a46b860182",
+        "apps/federation_core/lib/federation_core/subscriptions.ex": "1ed48a3241db386a6dc109a01862801d06587874",
+        "apps/federation_core/test/marketplace_test.exs": "0946ff7c944b6e37d63fd8f44be34728648085bc"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "federation_service",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Read-only HTTPS explicit-peer discovery, inbox signature checking and durable projection",
+      "intended_features": [
+        "Read-only HTTPS explicit-peer discovery",
+        "inbox signature checking and durable projection"
+      ],
+      "observed_code_paths": [
+        "apps/federation_service/lib/federation_service/inbox.ex",
+        "apps/federation_service/lib/federation_service/network.ex"
+      ],
+      "observed_test_path": "apps/federation_service/test/network_test.exs",
+      "audit_finding": "Explicit-peer pilot, not open federation; real TLS and restart acceptance require separate checks",
+      "first_formal_obligation": "Stale/withdrawn listings cannot be resurrected through reorder/retry",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/federation_service/lib/federation_service/inbox.ex": "f49f5423dd9e0a11e7b03a5bdeaa7622e1d99387",
+        "apps/federation_service/lib/federation_service/network.ex": "0c04b547837ee20a07a66599baa7f20fbae50699",
+        "apps/federation_service/test/network_test.exs": "61e3b0ea8d7f39ba526aadf2aad7fd84fa58bb5a"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "fulfillment_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure commerce-to-transport request, accept/reject, cancellation and proof protocol",
+      "intended_features": [
+        "Pure commerce-to-transport request",
+        "accept/reject",
+        "cancellation and proof protocol"
+      ],
+      "observed_code_paths": [
+        "apps/fulfillment_core/lib/fulfillment_core.ex",
+        "apps/fulfillment_core/lib/fulfillment_core/order_coupling.ex"
+      ],
+      "observed_test_path": "apps/fulfillment_core/test/fulfillment_core_test.exs",
+      "audit_finding": "Proof refs not authenticated custody; no transport writer or financial refund",
+      "first_formal_obligation": "Cancellation race cannot invent completed cancellation or erase delivery fact",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/fulfillment_core/lib/fulfillment_core.ex": "ee139fb7f0693b1d27d4e51aaff3587eb150bc40",
+        "apps/fulfillment_core/lib/fulfillment_core/order_coupling.ex": "cbbb46ea1333dde1a3eb354483ab0b7e595f72fe",
+        "apps/fulfillment_core/test/fulfillment_core_test.exs": "645f63061e8328cfbfcf12a12db919fec6bdfd3f"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "group_buy_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Member pledges, volume-tier group purchases, binding threshold and escrow-shape previews",
+      "intended_features": [
+        "Member pledges",
+        "volume-tier group purchases",
+        "binding threshold and escrow-shape previews"
+      ],
+      "observed_code_paths": [
+        "apps/group_buy_core/lib/group_buy_core/binding_round.ex",
+        "apps/group_buy_core/lib/group_buy_core/escrow.ex"
+      ],
+      "observed_test_path": "apps/group_buy_core/test/binding_round_test.exs",
+      "audit_finding": "IMPORTANT: threshold automatically binds accepted pledges; no second purchase click. Binding is not payment/reservation",
+      "first_formal_obligation": "Pledges bind exactly once on threshold, distinct from stock and money movement",
+      "first_formal_layer": "L2",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/group_buy_core/lib/group_buy_core/binding_round.ex": "406cde7d475235a47be7a203e99a7d21dfb86125",
+        "apps/group_buy_core/lib/group_buy_core/escrow.ex": "fc43369ad3d3ab15b580dfe79fb8c1f43aff37f3",
+        "apps/group_buy_core/test/binding_round_test.exs": "5020302471e33b457a0d38558e8767d264610cf8"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "hawala_capability",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "test_fixture",
+      "intended_purpose": "Test-only external Hawala cross-authority replay, journal failure and signed test-port contracts",
+      "intended_features": [
+        "Test-only external Hawala cross-authority replay",
+        "journal failure and signed test-port contracts"
+      ],
+      "observed_code_paths": [
+        "apps/hawala_capability/test/support/cross_authority_host.ex",
+        "apps/hawala_capability/test/support/signed_test_port.ex"
+      ],
+      "observed_test_path": "apps/hawala_capability/test/conformance_test.exs",
+      "audit_finding": "CRITICAL: app contains no production lib, signing or financial writer; test-VM fences not cross-process production",
+      "first_formal_obligation": "Test receipts must never be treated as live financial settlement",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/hawala_capability/test/support/cross_authority_host.ex": "a1d259c3ef82d6bf64ec1c7488eab4a5dc580a95",
+        "apps/hawala_capability/test/support/signed_test_port.ex": "81c3578eeb22605e1bc0ed5d835347a6671ed0e6",
+        "apps/hawala_capability/test/conformance_test.exs": "b450e00b938f65f7d8b63a07361bdd83a9fe8538"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "inventory_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure receipt/reservation/release/transfer policy, menu availability and basket preflight",
+      "intended_features": [
+        "Pure receipt/reservation/release/transfer policy",
+        "menu availability and basket preflight"
+      ],
+      "observed_code_paths": [
+        "apps/inventory_core/lib/inventory_core.ex",
+        "apps/inventory_core/lib/inventory_core/basket.ex"
+      ],
+      "observed_test_path": "apps/inventory_core/test/inventory_core_test.exs",
+      "audit_finding": "Caller approved flag is not authorization; host must serialize/atomically admit reservations",
+      "first_formal_obligation": "All accepted holds respect nonnegative available stock under concurrency",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/inventory_core/lib/inventory_core.ex": "87272d4af62f798f9e11684d8e892dff863e85a9",
+        "apps/inventory_core/lib/inventory_core/basket.ex": "aebf383bc08699958a231884a5fc44bf55ab478b",
+        "apps/inventory_core/test/inventory_core_test.exs": "d14b4cffd4e1a797a06018224f4674c5abe989a2"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "keel",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Temporal organization/ownership/roles, exact decision quorums and invariant checks",
+      "intended_features": [
+        "Temporal organization/ownership/roles",
+        "exact decision quorums and invariant checks"
+      ],
+      "observed_code_paths": [
+        "apps/keel/lib/keel/invariants.ex",
+        "apps/keel/lib/keel/decision.ex"
+      ],
+      "observed_test_path": "apps/keel/test/conformance_test.exs",
+      "audit_finding": "Invalid objects can be constructed for diagnosis; not an authenticated live Biz-kit grant directory",
+      "first_formal_obligation": "Invalid/cyclic temporal ownership cannot grant active permissions",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/keel/lib/keel/invariants.ex": "34a2989c87ccf67284d39df0097d1c1dd6f43480",
+        "apps/keel/lib/keel/decision.ex": "5064abc54b309a7b84faed531a9a330f32c96a73",
+        "apps/keel/test/conformance_test.exs": "2de5b753d5fc09fcb9bf855bb008e96ec3a2186b"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "marketing_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure confirmed-delivery attribution, touchpoint QR and one-use redemption",
+      "intended_features": [
+        "Pure confirmed-delivery attribution",
+        "touchpoint QR and one-use redemption"
+      ],
+      "observed_code_paths": [
+        "apps/marketing_core/lib/marketing_core/attribution.ex",
+        "apps/marketing_core/lib/marketing_core/redemption.ex"
+      ],
+      "observed_test_path": "apps/marketing_core/test/marketing_core_test.exs",
+      "audit_finding": "Legacy Money/Decimal parity not proved; redemption is not financial settlement",
+      "first_formal_obligation": "Only authenticated timely delivery can qualify for attribution",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/marketing_core/lib/marketing_core/attribution.ex": "972f63d9b8a72f07825c1385ab1627f84b08a656",
+        "apps/marketing_core/lib/marketing_core/redemption.ex": "b3763829a6fe7b26fcfaab4b397dd5e5107162de",
+        "apps/marketing_core/test/marketing_core_test.exs": "8facd330a92170fca4561a6050942dbebb57f2cf"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "order_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Merchant-neutral order lifecycle and authorized candidate reducer",
+      "intended_features": [
+        "Order lifecycle",
+        "Authorized placement"
+      ],
+      "observed_code_paths": [
+        "apps/order_core/lib/order_core/lifecycle.ex",
+        "apps/order_core/lib/order_core/placement.ex"
+      ],
+      "observed_test_path": "apps/order_core/test/lifecycle_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "Authorization precedes state inspection, and no lifecycle state asserts payment or settlement",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "evidence_git_blobs": {
+        "apps/order_core/lib/order_core/lifecycle.ex": "fba844e751d28af954931278891c9a0c53af9521",
+        "apps/order_core/lib/order_core/placement.ex": "10e7f2711447ea1d1703e582822521aa6b902807",
+        "apps/order_core/test/lifecycle_test.exs": "dce86fddaa3ff649f2f081057c9e96678f400f27"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "proof_bank_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Strict interview→requirement→obligation traceability and independent engine ports",
+      "intended_features": [
+        "Strict interview→requirement→obligation traceability and independent engine ports"
+      ],
+      "observed_code_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core.ex",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "observed_test_path": "apps/proof_bank_core/test/proof_bank_core_test.exs",
+      "audit_finding": "Unmerged scaffold; CI queued; this compiler has no proof checking or approval",
+      "first_formal_obligation": "Generated candidate cannot promote its own proof, approval or extension activation",
+      "first_formal_layer": "L2",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "5947052443251a14f24f7d0e6323b69b96ef8636",
+        "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "restaurant_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Kitchen workflow and pure admission of signed restaurant events",
+      "intended_features": [
+        "Kitchen workflow",
+        "Signed restaurant event admission"
+      ],
+      "observed_code_paths": [
+        "apps/restaurant_core/lib/restaurant_core/admission.ex",
+        "apps/restaurant_core/lib/restaurant_core/kitchen.ex"
+      ],
+      "observed_test_path": "apps/restaurant_core/test/admission_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "A restaurant event is admitted only when signed by a device a governance grant authorized for that action",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "evidence_git_blobs": {
+        "apps/restaurant_core/lib/restaurant_core/admission.ex": "03d9d759e5def6962561d800401f50a713b5ec1c",
+        "apps/restaurant_core/lib/restaurant_core/kitchen.ex": "3e6118cdcf95d5486880d21dd5c33b118592482f",
+        "apps/restaurant_core/test/admission_test.exs": "24946d7a2e7874130b2d4c1d88d38b7003de1637"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "restaurant_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Restaurant storefront, kitchen board and device grants over the signed Log",
+      "intended_features": [
+        "Storefront",
+        "Kitchen board",
+        "Governance-signed device grants"
+      ],
+      "observed_code_paths": [
+        "apps/restaurant_host/lib/restaurant_host/device_grants.ex",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex"
+      ],
+      "observed_test_path": "apps/restaurant_host/test/device_grants_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-03); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "The host obtains a governance signature only on the grant it showed, and the governance seed never leaves the administrator",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "evidence_git_blobs": {
+        "apps/restaurant_host/lib/restaurant_host/device_grants.ex": "9645ebbb7617643dee3f99f0209ba837f0d86753",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex": "ffcaa7679b80d0c5b0fd57839285f1ffa635bfbd",
+        "apps/restaurant_host/test/device_grants_test.exs": "2c17ccdafdc0eba7328603dd3ac8473a7e1e6976"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "sales_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure CRM pipeline, scoped marketing consent, revocation and candidate audience planning",
+      "intended_features": [
+        "Pure CRM pipeline",
+        "scoped marketing consent",
+        "revocation and candidate audience planning"
+      ],
+      "observed_code_paths": [
+        "apps/sales_core/lib/sales_core/consent.ex",
+        "apps/sales_core/lib/sales_core/pipeline.ex"
+      ],
+      "observed_test_path": "apps/sales_core/test/sales_core_test.exs",
+      "audit_finding": "Consent evidence refs require host verification; no sender or financial writer",
+      "first_formal_obligation": "Withdrawal prevents subsequent marketing including stale regrant/replay",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/sales_core/lib/sales_core/consent.ex": "7efd5bc6e3b437efe053f6f4452cf4dec88850e3",
+        "apps/sales_core/lib/sales_core/pipeline.ex": "c6b149d85cf0cbdee1e88f184da6cd5ea5261d0b",
+        "apps/sales_core/test/sales_core_test.exs": "f6a00f42dc0bfbc36fbcc971c4c8e4437a453a43"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "scf_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "registered_at_sha": "52b296c5ac3b4ac65e0e3ef167d2751a231165e3",
+      "category": "capability",
+      "intended_purpose": "In-memory Algerian SCF double-entry accounting in integer DZD centimes",
+      "intended_features": [
+        "Chart classes 1–7 with recognized account prefixes and DZD formatting",
+        "Entry validation with a nonblank supporting-document reference and equal debit and credit totals",
+        "Append-only posting by entry ID, monotonic period closure, reversal posting and date-windowed balances and trial balance",
+        "Dated TVA rate table, integer HT/TTC rounding and G50 TVA position from 4457 and 4456 account prefixes",
+        "Single-exercice compte de résultat par nature and bilan"
+      ],
+      "observed_code_paths": [
+        "apps/scf_core/lib/scf_core/chart.ex",
+        "apps/scf_core/lib/scf_core/entry.ex",
+        "apps/scf_core/lib/scf_core/ledger.ex",
+        "apps/scf_core/lib/scf_core/money.ex",
+        "apps/scf_core/lib/scf_core/statements.ex",
+        "apps/scf_core/lib/scf_core/tva.ex"
+      ],
+      "observed_test_path": "apps/scf_core/test/invariants_test.exs",
+      "audit_finding": "Characterized at registered_at_sha. The README and source exclude persistence and replay, multi-exercice carry-forward and result allocation, IBS/IRG/payroll, cash-flow statements, annexes, tax filings beyond the G50 TVA position, and multicurrency. Entry validation checks the presence of a document reference only. The TVA table has two dated rows; their legal applicability needs independent review. scf_core_test.exs contains example assertions for validation, posting, closure, reversal, TVA and statements. The property suite samples bounded ledgers over a fixed account subset and asserts trial-balance equality, bilan equality, TCR net income, posting-order independence and reversal cancellation with standard attributes. Ledger.reverse/3 merges caller attributes over the generated lines and admits distinct reversal IDs, so inverse and single-correction guarantees need explicit preconditions or an admission contract.",
+      "first_formal_obligation": "Establish that every reachable ledger preserves debit-credit equality and closed-period entries under posting, closure and reversal, with exact-retry idempotence and an explicit contract for when a reversal cancels the original. Establish separately that statement projections preserve their equations over the admitted account domain.",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/scf_core/lib/scf_core/chart.ex": "3d2090183387cd83db88fb2b53062c7b80b7aac9",
+        "apps/scf_core/lib/scf_core/entry.ex": "765f244e718cf72240e72047af9ae29bbc2c8a34",
+        "apps/scf_core/lib/scf_core/ledger.ex": "1ef284eb8f4774daf5b0182c295d5fdab5381382",
+        "apps/scf_core/lib/scf_core/money.ex": "ace3c184bdcf813c57e3d2eede650bfb7e9c466d",
+        "apps/scf_core/lib/scf_core/statements.ex": "86b024910166bbc1e5dc3e6da61e3bbcde0d5916",
+        "apps/scf_core/lib/scf_core/tva.ex": "a1b48a967748df3a7c911de21ea369c02bab170e",
+        "apps/scf_core/test/invariants_test.exs": "17b2aa6bea93949f7f1a4e9bbe8a8fd7ea68df04"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "school_ops",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Grade 2 curriculum catalog and place-value staff readiness TaskCore proposals",
+      "intended_features": [
+        "Grade 2 curriculum catalog and place-value staff readiness TaskCore proposals"
+      ],
+      "observed_code_paths": [
+        "apps/school_ops/lib/school_ops/catalog.ex",
+        "apps/school_ops/lib/school_ops/workflows.ex"
+      ],
+      "observed_test_path": "apps/school_ops/test/domain_test.exs",
+      "audit_finding": "Current shipped domain is first Grade 2 course; no K–12, learner mastery or signed learner results established",
+      "first_formal_obligation": "Staff readiness tasks never assert learner mastery or authoritative assessment results",
+      "first_formal_layer": "L2",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/school_ops/lib/school_ops/catalog.ex": "1473414ddd516dd07f445cccda0947d1db38e5ba",
+        "apps/school_ops/lib/school_ops/workflows.ex": "e5fe65a198375382de72292827dac90e982c08ab",
+        "apps/school_ops/test/domain_test.exs": "2e53948aff1115733abb18054826e8b6bb0951ac"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "spruce_goose",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "transitional_authority",
+      "intended_purpose": "Postgres/Ash operational orchestration with actor grants, CLI authority and recovery markers",
+      "intended_features": [
+        "Postgres/Ash operational orchestration with actor grants",
+        "CLI authority and recovery markers"
+      ],
+      "observed_code_paths": [
+        "apps/spruce_goose/lib/spruce_goose/actors.ex",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex"
+      ],
+      "observed_test_path": "apps/spruce_goose/test/authority_runtime_test.exs",
+      "audit_finding": "ACTIVE transitional authority; must not be described as inert legacy or moved without cutover evidence",
+      "first_formal_obligation": "After delegated cutover no secondary privileged direct writer can operate",
+      "first_formal_layer": "L4",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/spruce_goose/lib/spruce_goose/actors.ex": "a33b0bf900ab778b50a65701f4722397ca800958",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex": "7798e2e33b670c2bccfa0483d0200ce0d9d79850",
+        "apps/spruce_goose/test/authority_runtime_test.exs": "85879d3948f48304bad734d7c1a575d8dd8a2784"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "task_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "foundation",
+      "intended_purpose": "Pure task DAG, lifecycle/DoD/evidence, and signed agent-intent logic",
+      "intended_features": [
+        "Pure task DAG",
+        "lifecycle/DoD/evidence",
+        "and signed agent-intent logic"
+      ],
+      "observed_code_paths": [
+        "apps/task_core/lib/task_core/admission.ex",
+        "apps/task_core/lib/task_core/agent_runs.ex"
+      ],
+      "observed_test_path": "apps/task_core/test/agent_runs_test.exs",
+      "audit_finding": "Test-local hash differs from production signature scheme; host storage/admission not proved",
+      "first_formal_obligation": "Revoked grants or changed task versions invalidate runnable agent intents",
+      "first_formal_layer": "L2",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "evidence_git_blobs": {
+        "apps/task_core/lib/task_core/admission.ex": "77646f692247e70eebdfff341275c7e33c3b6c78",
+        "apps/task_core/lib/task_core/agent_runs.ex": "e2cea02be4c1e7f2d28e829d1eb09c85e7b45844",
+        "apps/task_core/test/agent_runs_test.exs": "74e16f5dc07bac66e82a9a72a6452560c09a7f19"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "procurement_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Procurement coordinator console over CoopSubstrate.Procurement and the signed Log",
+      "intended_features": [
+        "Coordinator sign-in",
+        "Request, quote and order commands",
+        "Bounded clock-boundary re-signing"
+      ],
+      "observed_code_paths": [
+        "apps/procurement_host/lib/procurement_host/admission.ex",
+        "apps/procurement_host/lib/procurement_host/auth.ex",
+        "apps/procurement_host/lib/procurement_host/web.ex"
+      ],
+      "observed_test_path": "apps/procurement_host/test/admission_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-08); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "A command is re-signed only after an explicit pre-append clock-boundary refusal, at most three attempts, and never after an outcome that may have committed",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "29aad2442197fb934043ff49d89c905758b5ba3c",
+      "evidence_git_blobs": {
+        "apps/procurement_host/lib/procurement_host/admission.ex": "2fd2528409078795551cb8974ddc594a967afc09",
+        "apps/procurement_host/lib/procurement_host/auth.ex": "d4b867705b5eb607ea32c867fca03d3d2947a454",
+        "apps/procurement_host/lib/procurement_host/web.ex": "557a285616ac843c95819bd7594c443cea8c3577",
+        "apps/procurement_host/test/admission_test.exs": "44bd8ceccaaa9cac2b5d62a373275c1d5195efb3"
+      }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "task_host",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "hosted",
+      "intended_purpose": "Sign-in, the task web view, its signed commands and the change feed over the signed Log, rehosted from SpruceGoose",
+      "intended_features": [
+        "Human and native sign-in",
+        "Device-signed task commands",
+        "Change feed"
+      ],
+      "observed_code_paths": [
+        "apps/task_host/lib/task_host/web/command_controller.ex",
+        "apps/task_host/lib/task_host/web/requests.ex",
+        "apps/task_host/lib/task_host/web/auth_controller.ex"
+      ],
+      "observed_test_path": "apps/task_host/test/task_host/web/command_test.exs",
+      "audit_finding": "Registered without characterization by owner decision (2026-11-09); characterize at the next Proof Bank milestone",
+      "first_formal_obligation": "The host appends a held command only with its owner's signature over exactly the bytes held, once, before the hold expires",
+      "first_formal_layer": "L4",
+      "priority": "P1",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "d2f293fe6abb9aa8ea512160af02e1cd07645d14",
+      "evidence_git_blobs": {
+        "apps/task_host/lib/task_host/web/command_controller.ex": "40f24af1b2898c8811b1fd4b5e6dca219a3bc7c6",
+        "apps/task_host/lib/task_host/web/requests.ex": "67111e3e64dcb8ef3f8d8b8233d8bce0d3b1a8f2",
+        "apps/task_host/lib/task_host/web/auth_controller.ex": "22173f86d570815c3a164383bb9ab4e5565b86f3",
+        "apps/task_host/test/task_host/web/command_test.exs": "a7fbe14b7ed5ce6aa45cb942a310dba66c4c41f9"
+      }
+    }
+  ],
+  "evidence_refreshes": [
+    {
+      "at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
+      "date": "2026-11-03",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "order_core",
+        "restaurant_core",
+        "restaurant_host"
+      ],
+      "refreshed_paths": [
+        "apps/biz_kit_extension/lib/biz_kit/extension/manifest.ex",
+        "apps/biz_kit_extension/test/manifest_test.exs",
+        "apps/commerce_core/test/kitchen_checkout_safety_test.exs",
+        "apps/dispatch/lib/dispatch/operations/board.ex",
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs",
+        "apps/inventory_core/lib/inventory_core.ex",
+        "apps/inventory_core/test/inventory_core_test.exs",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex",
+        "apps/task_core/lib/task_core/admission.ex",
+        "mix.exs"
+      ],
+      "renamed": {
+        "apps/commerce_core/test/checkout_safety_test.exs": "apps/commerce_core/test/kitchen_checkout_safety_test.exs"
+      },
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "f1b5cd8d4bed8719edd7899f3478dbaf854520e8",
+      "date": "2026-11-03",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "4c030846756c4b6a2944048d7608ec0615892ae0",
+      "date": "2026-11-06",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "e43337353bd8adbb015881740135e1e30dda43c4",
+      "date": "2026-11-07",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/keel/lib/keel/invariants.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "0d903ae26db7f10bceba43890289ead9cf2595c4",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/spruce_goose/lib/spruce_goose/authority_runtime.ex",
+        "apps/spruce_goose/test/authority_runtime_test.exs",
+        "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "29aad2442197fb934043ff49d89c905758b5ba3c",
+      "date": "2026-11-08",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "procurement_host"
+      ],
+      "refreshed_paths": [],
+      "renamed": {},
+      "meaning": "Registered without characterization; pinned bytes are the registration evidence"
+    },
+    {
+      "at_sha": "9708b2828277dcc34a19061bae387bf260700948",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "d2f293fe6abb9aa8ea512160af02e1cd07645d14",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "task_host"
+      ],
+      "refreshed_paths": [],
+      "renamed": {},
+      "meaning": "Registered without characterization; pinned bytes are the registration evidence"
+    },
+    {
+      "at_sha": "50be07baf860110fbcf347e90c80a18df09ec000",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex",
+        "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "58140f4934bc27ddc6684bbf4c27e0a99fee7b8d",
+      "date": "2026-11-09",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/task_host/lib/task_host/web/auth_controller.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "dc85d1e1cf2dfc21aa1478855f2639804c5a28c0",
+      "date": "2026-11-12",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/procurement_host/lib/procurement_host/web.ex",
+        "apps/restaurant_core/lib/restaurant_core/admission.ex",
+        "apps/restaurant_core/test/admission_test.exs",
+        "apps/restaurant_host/lib/restaurant_host/orders.ex",
+        "apps/restaurant_host/test/device_grants_test.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "401d7aa03dc72db32c933b26ce556a260552807d",
+      "date": "2026-11-15",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/agent_ops_store/lib/agent_ops_store/coordinator.ex",
+        "apps/task_core/lib/task_core/admission.ex",
+        "mix.exs"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "8a187d19814903727f8f80104beb9f25aa84ed3c",
+      "date": "2026-11-16",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "bc53e414f577b0113f8f844285f8cfb9e2cfcee5",
+      "date": "2026-11-16",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "861324237320dd9e588986aa1c50e5e810771a48",
+      "date": "2026-11-17",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/restaurant_core/lib/restaurant_core/admission.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "0d07ed900ba4dfb01c46ba44d2e84163b734a21a",
+      "date": "2026-11-18",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/order_core/lib/order_core/lifecycle.ex",
+        "apps/order_core/lib/order_core/placement.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    }
+  ]
+}

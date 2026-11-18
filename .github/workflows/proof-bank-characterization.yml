@@ -1,0 +1,43 @@
+name: Proof Bank — characterization integrity
+on:
+  pull_request:
+    paths:
+      - 'proof_bank/characterizations/**'
+      - 'scripts/proof_bank_characterization_audit.py'
+      - 'scripts/proof_bank_coverage_report.py'
+      - 'scripts/tests/test_proof_bank_coverage_report.py'
+      - 'scripts/tests/test_proof_bank_characterization_audit.py'
+      - 'scripts/bizops-kb/snapshot.py'
+      - 'apps/**/mix.exs'
+      - 'apps/**/lib/**'
+      - 'apps/**/test/**'
+      - 'apps/bizops_kb/README.md'
+      - 'apps/bizops_kb/priv/*.json'
+      - 'apps/bizops_kb/priv/workflows/**'
+      - '.github/workflows/proof-bank-characterization.yml'
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  static-source-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify and record checked-out source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git show --no-patch --format='source_commit=%H%nsource_tree=%T'
+      - name: Validate candidate source dossiers (NOT implementation conformance)
+        run: python3 scripts/proof_bank_characterization_audit.py
+      - name: Test audit refuses missing apps and falsely promoted results
+        run: python3 -m unittest discover -s scripts/tests -p 'test_proof_bank_characterization_audit.py' -v
+      - name: Produce conservative per-app coverage report
+        run: |
+          python3 scripts/proof_bank_coverage_report.py --format json > "$RUNNER_TEMP/proof-bank-coverage.json"
+          python3 scripts/proof_bank_coverage_report.py --format markdown >> "$GITHUB_STEP_SUMMARY"
+          python3 -m unittest discover -s scripts/tests -p 'test_proof_bank_coverage_report.py' -v

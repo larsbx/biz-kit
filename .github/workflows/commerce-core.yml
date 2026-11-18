@@ -4,8 +4,8 @@ on:
   pull_request:
     paths:
       - 'apps/commerce_core/**'
-      - 'apps/eatsbot_core/**'
-      - 'apps/eatsbot/**'
+      - 'apps/order_core/**'
+      - 'apps/restaurant_core/**'
       - 'apps/biz_kit_composition/**'
       - 'mix.exs'
       - 'mix.lock'
@@ -46,29 +46,22 @@ jobs:
           apps/commerce_core/test/pricing_test.exs
           apps/commerce_core/lib/commerce_core/tax.ex
           apps/commerce_core/test/tax_test.exs
+          apps/commerce_core/lib/commerce_core/tax/jurisdictions.ex
+          apps/commerce_core/test/jurisdictions_test.exs
           apps/commerce_core/test/eatsbot_characterization_test.exs
           apps/commerce_core/test/catalog_modifiers_test.exs
           apps/commerce_core/test/order_pipeline_test.exs
-          apps/commerce_core/lib/commerce_core/order_lifecycle.ex
           apps/commerce_core/lib/commerce_core/checkout.ex
-          apps/commerce_core/test/order_safety_test.exs
-          apps/commerce_core/test/checkout_safety_test.exs
-          apps/commerce_core/lib/commerce_core/ownership.ex
+          apps/commerce_core/test/kitchen_checkout_safety_test.exs
+          apps/commerce_core/test/checkout_test.exs
           apps/commerce_core/test/home_isolation_test.exs
+          apps/order_core/lib/order_core/ownership.ex
+          apps/order_core/lib/order_core/placement.ex
+          apps/order_core/lib/order_core/lifecycle.ex
           apps/commerce_core/lib/commerce_core/catalog.ex
           apps/commerce_core/lib/commerce_core/catalog_wire.ex
           apps/commerce_core/test/catalog_test.exs
           apps/commerce_core/test/catalog_wire_test.exs
-          apps/eatsbot_core/lib/orders/pricing.ex
-          apps/eatsbot_core/lib/products/catalog_bridge.ex
-          apps/eatsbot/test/eatsbot/products/catalog_bridge_test.exs
       - name: Test CommerceCore independently of a database
         working-directory: apps/commerce_core
         run: mix test --no-start
-      - name: Test isolated Eatsbot source bridge without starting the legacy runtime
-        working-directory: apps/commerce_core
-        run: >-
-          MIX_ENV=test mix run --no-start --no-compile
-          -r test/test_helper.exs
-          -r ../eatsbot_core/lib/products/catalog_bridge.ex
-          -e 'Code.require_file("../eatsbot/test/eatsbot/products/catalog_bridge_test.exs")'

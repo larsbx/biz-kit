@@ -20,10 +20,11 @@ defmodule Dispatch.Operations.Board do
 
   require Ash.Query
 
-  alias Dispatch.Access.Actor
+  alias Dispatch.Access.{Actor, Driving}
   alias Dispatch.Accounts.{Participant, RoleAssignment}
   alias Dispatch.Audit.AuditEvent
   alias Dispatch.Fleet.{Assignment, Load, Stop, Trailer, Vehicle}
+  alias Dispatch.Identity.PrincipalResolution
 
   @type refusal ::
           :forbidden | :not_found | :stale | {:invalid, String.t()}
@@ -85,8 +86,8 @@ defmodule Dispatch.Operations.Board do
   @doc "Creates a DRAFT load with this organization as the carrier."
   @spec create_load(Actor.t(), map()) :: {:ok, Load.t()} | {:error, refusal()}
   def create_load(%Actor{} = actor, params) do
-    with :ok <- can(actor, "load.create") do
-      transaction(fn ->
+    with {:ok, actor} <- authorized(actor, "load.create") do
+      transaction(actor, "load.create", fn actor ->
         Load
         |> Ash.Changeset.for_create(:create_load, %{
           tenant_id: actor.tenant_id,
@@ -106,10 +107,10 @@ defmodule Dispatch.Operations.Board do
   @doc "Changes a load's commodity text and reference, if it is still at `expected_version`."
   @spec update_load(Actor.t(), String.t(), map()) :: {:ok, Load.t()} | {:error, refusal()}
   def update_load(%Actor{} = actor, load_id, params) do
-    with :ok <- can(actor, "load.update.nonbinding"),
+    with {:ok, actor} <- authorized(actor, "load.update.nonbinding"),
          {:ok, load} <- own_load(actor, load_id),
          :ok <- current(load, params["expected_version"]) do
-      transaction(fn ->
+      transaction(actor, "load.update.nonbinding", fn actor ->
         load
         |> Ash.Changeset.for_update(:update_nonbinding, %{
           commodity_text: params["commodity_text"],
@@ -127,14 +128,14 @@ defmodule Dispatch.Operations.Board do
   @doc "Appends a stop to one of the organization's loads, after its last."
   @spec add_stop(Actor.t(), String.t(), map()) :: {:ok, Load.t()} | {:error, refusal()}
   def add_stop(%Actor{} = actor, load_id, params) do
-    with :ok <- can(actor, "stop.add"),
+    with {:ok, actor} <- authorized(actor, "stop.add"),
          {:ok, load} <- own_load(actor, load_id),
          {:ok, kind} <- one_of(params["kind"], ~w(PICKUP DELIVERY OTHER), "kind") do
-      transaction(fn ->
-        # Serialized per load, so two stops added at once cannot take one
-        # sequence number.
-        lock!("load-stops:" <> load.id)
+      # Serialized per load, so two stops added at once cannot take one
+      # sequence number.
+      lock = fn -> lock!("load-stops:" <> load.id) end
 
+      transaction(actor, "stop.add", lock, fn actor ->
         Stop
         |> Ash.Changeset.for_create(:add, %{
           tenant_id: actor.tenant_id,
@@ -164,12 +165,12 @@ defmodule Dispatch.Operations.Board do
   """
   @spec plan(Actor.t(), String.t(), map()) :: {:ok, Load.t()} | {:error, refusal()}
   def plan(%Actor{} = actor, load_id, params) do
-    with :ok <- can(actor, "assignment.plan"),
+    with {:ok, actor} <- authorized(actor, "assignment.plan"),
          {:ok, load} <- own_load(actor, load_id),
          {:ok, driver} <- own_driver(actor, params["operator_participant_id"]),
          {:ok, vehicle_id} <- own_equipment(actor, Vehicle, params["vehicle_id"]),
          {:ok, trailer_id} <- own_equipment(actor, Trailer, params["trailer_id"]) do
-      transaction(fn ->
+      transaction(actor, "assignment.plan", fn actor ->
         Assignment
         |> Ash.Changeset.for_create(:plan, %{
           tenant_id: actor.tenant_id,
@@ -201,17 +202,19 @@ defmodule Dispatch.Operations.Board do
   @spec transition(Actor.t(), String.t(), String.t(), integer() | nil) ::
           {:ok, Load.t()} | {:error, refusal()}
   def transition(%Actor{} = actor, assignment_id, action, expected_version) do
-    with :ok <- can(actor, "assignment.update.status"),
+    with {:ok, actor} <- authorized(actor, "assignment.update.status"),
          {:ok, action} <- transition_action(action),
          {:ok, trip} <- own_trip(actor, assignment_id) do
-      transaction(fn ->
-        # Ordinary UPDATEs take this lock too. Re-read ownership, version and
-        # source state after acquiring it, in the mutation/audit transaction.
-        lock_trip!(actor, trip.id)
+      # Ordinary UPDATEs take this lock too. After acquiring it, re-read the
+      # grant, then ownership, version and source state, in the mutation/audit
+      # transaction.
+      lock = fn -> lock_trip!(actor, trip.id) end
 
+      transaction(actor, "assignment.update.status", lock, fn actor ->
         with {:ok, trip} <- own_trip(actor, trip.id),
              :ok <- current(trip, expected_version),
-             :ok <- permitted(trip.status, action) do
+             :ok <- permitted(trip.status, action),
+             :ok <- driver_in_force(actor, trip, action) do
           trip
           |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
           # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
@@ -228,6 +231,12 @@ defmodule Dispatch.Operations.Board do
 
   defp can(actor, capability),
     do: if(Actor.can?(actor, capability), do: :ok, else: {:error, :forbidden})
+
+  # A write is authorized by the grant as committed, never by the snapshot it
+  # was called with (issue #254): checked fresh on entry, then again under
+  # `FOR SHARE` in the mutation's transaction, after any other lock it waits on.
+  defp authorized(actor, capability, opts \\ []),
+    do: PrincipalResolution.authorize(actor, capability, opts)
 
   defp organization(%Actor{role_assignment: %RoleAssignment{organization_id: id}}), do: id
 
@@ -293,7 +302,7 @@ defmodule Dispatch.Operations.Board do
       |> Ash.Query.load(:role_definition)
       # REVIEWED-UNAUTHORIZED: the organization's own roster, for its dispatcher.
       |> Ash.read!(authorize?: false, tenant: actor.tenant_id)
-      |> Enum.filter(&Dispatch.Access.can?(&1, "assignment.read.self", actor.at))
+      |> Enum.filter(&Driving.drives?(&1, actor.at))
       |> Map.new(&{&1.principal_id, &1})
 
     Participant
@@ -345,6 +354,19 @@ defmodule Dispatch.Operations.Board do
   defp permitted(status, action),
     do: {:error, {:invalid, "cannot #{action} a #{status} trip"}}
 
+  # Equipment goes out only with a driver who holds a driving role, so a role
+  # revoked once the equipment is checked in stays revoked (`Driving`).
+  defp driver_in_force(actor, trip, :activate) do
+    case Driving.roles(actor.tenant_id, organization(actor), trip.operator_participant_id,
+           lock: true
+         ) do
+      [] -> {:error, {:invalid, "the driver no longer holds a driving role"}}
+      _held -> :ok
+    end
+  end
+
+  defp driver_in_force(_actor, _trip, _action), do: :ok
+
   defp lock_trip!(actor, id) do
     from(a in "assignments",
       where: a.id == type(^id, :binary_id) and a.tenant_id == type(^actor.tenant_id, :binary_id),
@@ -381,10 +403,16 @@ defmodule Dispatch.Operations.Board do
     Dispatch.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))", [key])
   end
 
-  defp transaction(fun) do
+  # Runs `fun` as the actor it is authorized as once `lock` is held, so the
+  # mutation and its audit event commit under the grant as it then stands.
+  defp transaction(actor, capability, lock \\ fn -> :ok end, fun) do
     Dispatch.Repo.transaction(fn ->
-      case fun.() do
-        {:ok, result} -> result
+      lock.()
+
+      with {:ok, actor} <- authorized(actor, capability, lock: true),
+           {:ok, result} <- fun.(actor) do
+        result
+      else
         {:error, reason} -> Dispatch.Repo.rollback(reason)
       end
     end)
@@ -436,8 +464,16 @@ defmodule Dispatch.Operations.Board do
 
   defp refusal(other), do: {:invalid, first_line(inspect(other))}
 
-  defp conflict(_message),
-    do: "the driver already has an active trip; complete or cancel it first"
+  defp conflict(message) do
+    holder =
+      cond do
+        message =~ "one_active_per_vehicle" -> "the vehicle is already on an active trip"
+        message =~ "one_active_per_trailer" -> "the trailer is already on an active trip"
+        true -> "the driver already has an active trip"
+      end
+
+    holder <> "; complete or cancel it first"
+  end
 
   defp first_line(message) do
     message

@@ -40,6 +40,11 @@ In tests, the helper starts Localize's currency loader using the bundled
 English locale cache owned by Localize itself, without starting Eatsbot's web,
 database, or queue services. Production CommerceCore code never calls Eatsbot.
 
+The portable Eatsbot compatibility workflow uses Elixir 1.18 and OTP 26.
+The offline [Merchant Pilot](../../tools/merchant_pilot/README.md) requires
+OTP 27+ for its strict JSON codec. Its tests are skipped on OTP 26 and run
+in the OTP 27 standalone package workflow.
+
 The only declared runtime dependency is `ex_money`. This kernel does not
 depend on Eatsbot, Dispatch, SchoolOps, Ash resources, storage, network,
 tenant-specific policies or the umbrella runtime. Its source lives inside
@@ -63,13 +68,19 @@ bound and merchant scoping.
 against the old eatsbot's recorded behaviour, pinned by sha256 to
 `larsbx/eatsbot@15a201e` (rebuild slice 1): all 314 recorded baskets price to the same totals or are refused with the same error term.
 
-**Order and checkout safety.** `CommerceCore.OrderLifecycle` adds a pure,
-order-scoped candidate reducer and mathematical history replay.
-Host-verified operation grants precede all protected state/revision/history
-inspection. `CommerceCore.Checkout` produces immutable priced order candidates,
-one per cart, with channel-scoped idempotency and a delivery-request marker.
-Both require serialized authenticated host admission; neither is a database or
-production writer. Checkout creates no tracking secrets or transport record.
+**Order and checkout safety.** The money-free order core lives in
+[`order_core`](../order_core/README.md): `OrderCore.Lifecycle` (the
+merchant-neutral lifecycle over a merchant's production stages) and
+`OrderCore.Placement` (one order per cart, channel-scoped idempotency, cart
+ownership and the workflow's fulfillments, with the priced snapshot opaque).
+`CommerceCore.Checkout` is Placement priced by `Pricing`: immutable priced
+order candidates with a delivery-request marker. Host-verified grants precede
+all protected inspection; neither is a database or production writer, and
+checkout creates no tracking secrets or transport record.
+`test/kitchen_checkout_safety_test.exs` replays the 11 pinned legacy checkout
+scenarios through the kitchen workflow (`RestaurantCore.Kitchen.workflow/0`);
+`test/checkout_test.exs` proves checkout offers exactly the workflow's
+fulfillments, for every fulfillment set.
 
 Checkout and lifecycle completion do not accept money. Every checkout candidate
 is `financial_status: :unconfirmed`, including duplicate requests containing a
@@ -83,8 +94,8 @@ See [the fixture provenance, intentional differences and remaining migration gat
 ## Home ownership boundary
 
 For home-bound candidates use `%{home_id: "home", merchant: "organization"}`
-as the owner passed to `Catalog.new/1`, `Checkout.new/2` or
-`OrderLifecycle.new/3`. Catalog operations require that same owner; checkout and
+as the owner passed to `Catalog.new/1`, `Checkout.new/3` or
+`OrderCore.Lifecycle.new/4`. Catalog operations require that same owner; checkout and
 order grants additionally carry `home_id`. Cart snapshots carry owner and
 principal; `Checkout.fetch_cart/3` requires a per-cart `:cart_read` host grant.
 The host must authenticate and revalidate all context and serialize the one

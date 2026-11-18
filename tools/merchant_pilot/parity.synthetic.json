@@ -1,0 +1,530 @@
+{
+  "dataset": "synthetic",
+  "intake": {
+    "manifest_sha256": "2e2558c31ce7142ca2de32130204964309dc18ab6441e989202ab9372a6ac1ec",
+    "report": {
+      "as_of": "2026-04-10T00:00:00Z",
+      "cohort_started_at": "2026-01-01T00:00:00Z",
+      "dataset": "synthetic",
+      "demand": {
+        "first_quote_within_seven_days": {
+          "median_seconds": 86400.0,
+          "observed": 1,
+          "unmatched_mature": 1
+        },
+        "qualified_requests": 4,
+        "requests_with_accepted_order": 2,
+        "seven_day_invitation_response": {
+          "denominator": 2,
+          "numerator": 1
+        },
+        "seven_day_match": {
+          "denominator": 2,
+          "incomplete": 1,
+          "numerator": 1,
+          "withdrawn_early": 1
+        }
+      },
+      "economics": {
+        "by_currency": {
+          "USD": {
+            "merchant": {
+              "accepted": 2,
+              "complete": 1,
+              "known_orders_cost_minor": 7000,
+              "known_orders_revenue_minor": 8300,
+              "missing_inputs": 0,
+              "scenarios": [
+                {
+                  "added_cost_basis_points": 0,
+                  "cohort_margin_minor": null,
+                  "known_orders_margin_minor": 1300,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                },
+                {
+                  "added_cost_basis_points": 1000,
+                  "cohort_margin_minor": null,
+                  "known_orders_margin_minor": 600,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                },
+                {
+                  "added_cost_basis_points": 2500,
+                  "cohort_margin_minor": null,
+                  "known_orders_margin_minor": -450,
+                  "negative_known_orders": 1,
+                  "nonpositive_known_orders": 1
+                }
+              ],
+              "unallocated_cost_minor": 25,
+              "unreconciled": 1
+            },
+            "platform": {
+              "accepted": 2,
+              "complete": 1,
+              "known_orders_cost_minor": 200,
+              "known_orders_revenue_minor": 500,
+              "missing_inputs": 0,
+              "scenarios": [
+                {
+                  "added_cost_basis_points": 0,
+                  "cohort_margin_minor": null,
+                  "known_orders_margin_minor": 300,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                },
+                {
+                  "added_cost_basis_points": 1000,
+                  "cohort_margin_minor": null,
+                  "known_orders_margin_minor": 280,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                },
+                {
+                  "added_cost_basis_points": 2500,
+                  "cohort_margin_minor": null,
+                  "known_orders_margin_minor": 250,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                }
+              ],
+              "unallocated_cost_minor": 100,
+              "unreconciled": 1
+            },
+            "servicing_store": {
+              "accepted": 1,
+              "complete": 1,
+              "known_orders_cost_minor": 180,
+              "known_orders_revenue_minor": 200,
+              "missing_inputs": 0,
+              "scenarios": [
+                {
+                  "added_cost_basis_points": 0,
+                  "cohort_margin_minor": 10,
+                  "known_orders_margin_minor": 20,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                },
+                {
+                  "added_cost_basis_points": 1000,
+                  "cohort_margin_minor": -9,
+                  "known_orders_margin_minor": 2,
+                  "negative_known_orders": 0,
+                  "nonpositive_known_orders": 0
+                },
+                {
+                  "added_cost_basis_points": 2500,
+                  "cohort_margin_minor": -38,
+                  "known_orders_margin_minor": -25,
+                  "negative_known_orders": 1,
+                  "nonpositive_known_orders": 1
+                }
+              ],
+              "unallocated_cost_minor": 10,
+              "unreconciled": 0
+            }
+          }
+        },
+        "orders": [
+          {
+            "currency": "USD",
+            "id": "000000000000000000000000000004b1",
+            "roles": {
+              "merchant": {
+                "cost_headroom_minor": 1300,
+                "incremental_cost_minor": 7000,
+                "margin_minor": 1300,
+                "revenue_minor": 8300,
+                "status": "complete"
+              },
+              "platform": {
+                "cost_headroom_minor": 300,
+                "incremental_cost_minor": 200,
+                "margin_minor": 300,
+                "revenue_minor": 500,
+                "status": "complete"
+              },
+              "servicing_store": {
+                "cost_headroom_minor": 20,
+                "incremental_cost_minor": 180,
+                "margin_minor": 20,
+                "revenue_minor": 200,
+                "status": "complete"
+              }
+            }
+          },
+          {
+            "currency": "USD",
+            "id": "000000000000000000000000000004b2",
+            "roles": {
+              "merchant": {
+                "status": "unreconciled"
+              },
+              "platform": {
+                "status": "unreconciled"
+              }
+            }
+          }
+        ]
+      },
+      "orders": {
+        "accepted_orders": 2,
+        "cancelled": {
+          "denominator": 1,
+          "numerator": 0
+        },
+        "intervention_disputes_30_day": {
+          "denominator": 1,
+          "incomplete": 1,
+          "numerator": 1
+        },
+        "merchant_repeat_90_day": {
+          "denominator": 1,
+          "incomplete": 0,
+          "numerator": 0
+        },
+        "on_time_fulfillment": {
+          "denominator": 1,
+          "incomplete": 1,
+          "numerator": 1,
+          "pending_past_promise": 1
+        },
+        "realized_orders": 1,
+        "refunded_orders_to_date": {
+          "denominator": 2,
+          "numerator": 1
+        },
+        "returns_to_date": {
+          "denominator": 1,
+          "numerator": 1
+        }
+      },
+      "schema_version": 1
+    },
+    "snapshot_sha256": "f59d6de55acdabdcbce89cbbbbbfa83c8a542d3dddc0e6c311249579196a3c23"
+  },
+  "reference_revision": "7de755e31e5b9bed8fec04ca7b32fa77964961cb",
+  "scorecard": {
+    "as_of": "2026-04-10T00:00:00Z",
+    "cohort_started_at": "2026-01-01T00:00:00Z",
+    "dataset": "synthetic",
+    "demand": {
+      "first_quote_within_seven_days": {
+        "median_seconds": 129600.0,
+        "observed": 4,
+        "unmatched_mature": 1
+      },
+      "qualified_requests": 7,
+      "requests_with_accepted_order": 5,
+      "seven_day_invitation_response": {
+        "denominator": 6,
+        "numerator": 5
+      },
+      "seven_day_match": {
+        "denominator": 5,
+        "incomplete": 1,
+        "numerator": 4,
+        "withdrawn_early": 1
+      }
+    },
+    "economics": {
+      "by_currency": {
+        "JPY": {
+          "merchant": {
+            "accepted": 1,
+            "complete": 0,
+            "known_orders_cost_minor": null,
+            "known_orders_revenue_minor": null,
+            "missing_inputs": 1,
+            "scenarios": [
+              {
+                "added_cost_basis_points": 0,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": null,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              },
+              {
+                "added_cost_basis_points": 1000,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": null,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              },
+              {
+                "added_cost_basis_points": 2500,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": null,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              }
+            ],
+            "unallocated_cost_minor": 0,
+            "unreconciled": 0
+          },
+          "platform": {
+            "accepted": 1,
+            "complete": 1,
+            "known_orders_cost_minor": 300,
+            "known_orders_revenue_minor": 1100,
+            "missing_inputs": 0,
+            "scenarios": [
+              {
+                "added_cost_basis_points": 0,
+                "cohort_margin_minor": 700,
+                "known_orders_margin_minor": 800,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              },
+              {
+                "added_cost_basis_points": 1000,
+                "cohort_margin_minor": 660,
+                "known_orders_margin_minor": 770,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              },
+              {
+                "added_cost_basis_points": 2500,
+                "cohort_margin_minor": 600,
+                "known_orders_margin_minor": 725,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              }
+            ],
+            "unallocated_cost_minor": 100,
+            "unreconciled": 0
+          }
+        },
+        "USD": {
+          "merchant": {
+            "accepted": 4,
+            "complete": 3,
+            "known_orders_cost_minor": 15100,
+            "known_orders_revenue_minor": 17800,
+            "missing_inputs": 0,
+            "scenarios": [
+              {
+                "added_cost_basis_points": 0,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": 2700,
+                "negative_known_orders": 1,
+                "nonpositive_known_orders": 1
+              },
+              {
+                "added_cost_basis_points": 1000,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": 1190,
+                "negative_known_orders": 1,
+                "nonpositive_known_orders": 1
+              },
+              {
+                "added_cost_basis_points": 2500,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": -1075,
+                "negative_known_orders": 3,
+                "nonpositive_known_orders": 3
+              }
+            ],
+            "unallocated_cost_minor": 500,
+            "unreconciled": 1
+          },
+          "platform": {
+            "accepted": 4,
+            "complete": 3,
+            "known_orders_cost_minor": 825,
+            "known_orders_revenue_minor": 1000,
+            "missing_inputs": 0,
+            "scenarios": [
+              {
+                "added_cost_basis_points": 0,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": 175,
+                "negative_known_orders": 2,
+                "nonpositive_known_orders": 2
+              },
+              {
+                "added_cost_basis_points": 1000,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": 92,
+                "negative_known_orders": 2,
+                "nonpositive_known_orders": 2
+              },
+              {
+                "added_cost_basis_points": 2500,
+                "cohort_margin_minor": null,
+                "known_orders_margin_minor": -32,
+                "negative_known_orders": 2,
+                "nonpositive_known_orders": 2
+              }
+            ],
+            "unallocated_cost_minor": 0,
+            "unreconciled": 1
+          },
+          "servicing_store": {
+            "accepted": 1,
+            "complete": 1,
+            "known_orders_cost_minor": 180,
+            "known_orders_revenue_minor": 200,
+            "missing_inputs": 0,
+            "scenarios": [
+              {
+                "added_cost_basis_points": 0,
+                "cohort_margin_minor": 20,
+                "known_orders_margin_minor": 20,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              },
+              {
+                "added_cost_basis_points": 1000,
+                "cohort_margin_minor": 2,
+                "known_orders_margin_minor": 2,
+                "negative_known_orders": 0,
+                "nonpositive_known_orders": 0
+              },
+              {
+                "added_cost_basis_points": 2500,
+                "cohort_margin_minor": -25,
+                "known_orders_margin_minor": -25,
+                "negative_known_orders": 1,
+                "nonpositive_known_orders": 1
+              }
+            ],
+            "unallocated_cost_minor": 0,
+            "unreconciled": 0
+          }
+        }
+      },
+      "orders": [
+        {
+          "currency": "USD",
+          "id": "0000000000000000000000000000012d",
+          "roles": {
+            "merchant": {
+              "cost_headroom_minor": 1300,
+              "incremental_cost_minor": 7000,
+              "margin_minor": 1300,
+              "revenue_minor": 8300,
+              "status": "complete"
+            },
+            "platform": {
+              "cost_headroom_minor": 300,
+              "incremental_cost_minor": 200,
+              "margin_minor": 300,
+              "revenue_minor": 500,
+              "status": "complete"
+            },
+            "servicing_store": {
+              "cost_headroom_minor": 20,
+              "incremental_cost_minor": 180,
+              "margin_minor": 20,
+              "revenue_minor": 200,
+              "status": "complete"
+            }
+          }
+        },
+        {
+          "currency": "USD",
+          "id": "0000000000000000000000000000012e",
+          "roles": {
+            "merchant": {
+              "cost_headroom_minor": 1500,
+              "incremental_cost_minor": 8000,
+              "margin_minor": 1500,
+              "revenue_minor": 9500,
+              "status": "complete"
+            },
+            "platform": {
+              "cost_headroom_minor": -50,
+              "incremental_cost_minor": 550,
+              "margin_minor": -50,
+              "revenue_minor": 500,
+              "status": "complete"
+            }
+          }
+        },
+        {
+          "currency": "USD",
+          "id": "0000000000000000000000000000012f",
+          "roles": {
+            "merchant": {
+              "status": "unreconciled"
+            },
+            "platform": {
+              "status": "unreconciled"
+            }
+          }
+        },
+        {
+          "currency": "USD",
+          "id": "00000000000000000000000000000130",
+          "roles": {
+            "merchant": {
+              "cost_headroom_minor": -100,
+              "incremental_cost_minor": 100,
+              "margin_minor": -100,
+              "revenue_minor": 0,
+              "status": "complete"
+            },
+            "platform": {
+              "cost_headroom_minor": -75,
+              "incremental_cost_minor": 75,
+              "margin_minor": -75,
+              "revenue_minor": 0,
+              "status": "complete"
+            }
+          }
+        },
+        {
+          "currency": "JPY",
+          "id": "00000000000000000000000000000131",
+          "roles": {
+            "merchant": {
+              "status": "missing_inputs"
+            },
+            "platform": {
+              "cost_headroom_minor": 800,
+              "incremental_cost_minor": 300,
+              "margin_minor": 800,
+              "revenue_minor": 1100,
+              "status": "complete"
+            }
+          }
+        }
+      ]
+    },
+    "orders": {
+      "accepted_orders": 5,
+      "cancelled": {
+        "denominator": 4,
+        "numerator": 1
+      },
+      "intervention_disputes_30_day": {
+        "denominator": 3,
+        "incomplete": 2,
+        "numerator": 1
+      },
+      "merchant_repeat_90_day": {
+        "denominator": 1,
+        "incomplete": 1,
+        "numerator": 1
+      },
+      "on_time_fulfillment": {
+        "denominator": 4,
+        "incomplete": 1,
+        "numerator": 2,
+        "pending_past_promise": 1
+      },
+      "realized_orders": 3,
+      "refunded_orders_to_date": {
+        "denominator": 5,
+        "numerator": 1
+      },
+      "returns_to_date": {
+        "denominator": 3,
+        "numerator": 1
+      }
+    },
+    "schema_version": 1
+  }
+}

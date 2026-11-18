@@ -87,6 +87,9 @@ defmodule DispatchWeb.SettingsController do
   defp message(:last_administrator),
     do: "The organization's last administrator cannot be removed."
 
+  defp message(:equipment_not_checked_in),
+    do: "This driver's equipment is still out on an active trip. Check it in first."
+
   defp message(:already_granted), do: "That person already holds that role."
 
   defp message(:stale),

@@ -1,7 +1,8 @@
 defmodule CommerceCore.HomeIsolationTest do
   use ExUnit.Case, async: true
 
-  alias CommerceCore.{Catalog, Checkout, OrderLifecycle}
+  alias CommerceCore.{Catalog, Checkout}
+  alias RestaurantCore.Kitchen, as: OrderLifecycle
 
   @a %{home_id: "home-a", merchant: "shop"}
   @b %{home_id: "home-b", merchant: "shop"}
@@ -69,7 +70,11 @@ defmodule CommerceCore.HomeIsolationTest do
   end
 
   test "cart access and checkout refuse foreign scope, identifiers and principal without history" do
-    {:ok, a} = Checkout.new(@a, %{"cart" => cart(@a), "private" => cart(@a, "grace")})
+    {:ok, a} =
+      Checkout.new(OrderLifecycle.workflow(), @a, %{
+        "cart" => cart(@a),
+        "private" => cart(@a, "grace")
+      })
 
     for owner <- [@b, @other] do
       for id <- ["cart", "private", "missing"] do
@@ -94,7 +99,12 @@ defmodule CommerceCore.HomeIsolationTest do
 
   test "identical idempotency keys are independent across homes and merchants; repeats reauthorize" do
     for owner <- [@a, @b, @other] do
-      {:ok, state} = Checkout.new(owner, %{"cart" => cart(owner), "second" => cart(owner)})
+      {:ok, state} =
+        Checkout.new(OrderLifecycle.workflow(), owner, %{
+          "cart" => cart(owner),
+          "second" => cart(owner)
+        })
+
       assert {:ok, placed, order, :accepted} = Checkout.apply(state, grant(owner), command())
       assert order.home_id == owner.home_id
       assert order.merchant == owner.merchant
@@ -119,14 +129,16 @@ defmodule CommerceCore.HomeIsolationTest do
   end
 
   test "foreign persisted cart or order snapshots cannot be relabeled or returned on retry" do
-    assert Checkout.new(@a, %{"cart" => cart(@b)}) == {:error, :invalid_checkout_projection}
-
-    assert Checkout.new(@a, %{"cart" => Map.delete(cart(@a), :home_id)}) ==
+    assert Checkout.new(OrderLifecycle.workflow(), @a, %{"cart" => cart(@b)}) ==
              {:error, :invalid_checkout_projection}
 
-    assert Checkout.new(@a, %{"cart" => nil}) == {:error, :invalid_checkout_projection}
+    assert Checkout.new(OrderLifecycle.workflow(), @a, %{"cart" => Map.delete(cart(@a), :home_id)}) ==
+             {:error, :invalid_checkout_projection}
 
-    {:ok, state} = Checkout.new(@a, %{"cart" => cart(@a)})
+    assert Checkout.new(OrderLifecycle.workflow(), @a, %{"cart" => nil}) ==
+             {:error, :invalid_checkout_projection}
+
+    {:ok, state} = Checkout.new(OrderLifecycle.workflow(), @a, %{"cart" => cart(@a)})
     {:ok, placed, order, :accepted} = Checkout.apply(state, grant(@a), command())
     contaminated = put_in(placed.orders[{:web, "same-key"}], %{order | home_id: "home-b"})
     assert Checkout.apply(contaminated, grant(@a), command()) == {:error, :forbidden}
@@ -165,7 +177,7 @@ defmodule CommerceCore.HomeIsolationTest do
   end
 
   test "merchant-only compatibility state cannot silently accept a home grant" do
-    {:ok, old} = Checkout.new("shop", %{"cart" => cart(@a)})
+    {:ok, old} = Checkout.new(OrderLifecycle.workflow(), "shop", %{"cart" => cart(@a)})
     assert Checkout.apply(old, grant(@a), command()) == {:error, :forbidden}
   end
 end

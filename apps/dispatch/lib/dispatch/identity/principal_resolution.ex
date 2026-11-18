@@ -130,9 +130,85 @@ defmodule Dispatch.Identity.PrincipalResolution do
       participant_id: actor.principal_id
     }
 
-    with {:ok, assignment} <- fetch_assignment(context, at) do
+    with {:ok, assignment} <- fetch_assignment(context, at),
+         :ok <- in_standing(assignment) do
       Actor.from_assignment(assignment, at: at)
     end
+  end
+
+  @doc """
+  The fresh actor `actor` acts as now, if it still carries `capability`.
+
+  `revalidate/2` at the current instant, plus the capability, plus the checks
+  that the fresh actor is the same authority the caller selected: the same
+  assignment, principal, tenant and organization. Neither the cached
+  assignment nor the actor's `at` decides anything here.
+
+  With `lock: true`, run inside the mutation's transaction, the assignment,
+  its definition and, for a participant, the participant and user rows are
+  first locked `FOR SHARE` (issue #254). A change committed before the lock is
+  seen by the re-read; a change attempted after it waits until the mutation
+  commits, and so is ordered after it. Either way the write and its audit event
+  are authorized by the grant as it stands when they commit.
+  """
+  @spec authorize(Actor.t(), String.t(), keyword()) :: {:ok, Actor.t()} | {:error, :forbidden}
+  def authorize(%Actor{} = actor, capability, opts \\ []) do
+    if Keyword.get(opts, :lock, false), do: lock_authority!(actor)
+
+    with {:ok, fresh} <- revalidate(actor),
+         true <- same_authority?(actor, fresh) and Actor.can?(fresh, capability) do
+      {:ok, fresh}
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  defp same_authority?(actor, fresh) do
+    {actor.role_assignment.id, actor.principal_type, actor.principal_id, actor.tenant_id,
+     actor.role_assignment.organization_id} ==
+      {fresh.role_assignment.id, fresh.principal_type, fresh.principal_id, fresh.tenant_id,
+       fresh.role_assignment.organization_id}
+  end
+
+  defp lock_authority!(actor) do
+    tenant = actor.tenant_id
+
+    from(ra in "role_assignments",
+      join: rd in "role_definitions",
+      on: rd.id == ra.role_definition_id and rd.tenant_id == ra.tenant_id,
+      where: ra.id == type(^actor.role_assignment.id, :binary_id),
+      where: ra.tenant_id == type(^tenant, :binary_id),
+      select: ra.id,
+      lock: "FOR SHARE"
+    )
+    |> Dispatch.Repo.all()
+
+    if actor.principal_type == :PARTICIPANT do
+      from([p] in participant(actor.principal_id, tenant), select: p.id, lock: "FOR SHARE")
+      |> Dispatch.Repo.all()
+    end
+
+    :ok
+  end
+
+  # `actor/3` reaches an assignment only through an active participant of an
+  # active user (`contexts/2`); a re-read must not outlive either.
+  defp in_standing(%RoleAssignment{principal_type: :PARTICIPANT} = assignment) do
+    from([p, u] in participant(assignment.principal_id, assignment.tenant_id),
+      where: p.status == "ACTIVE" and u.status == "ACTIVE"
+    )
+    |> Dispatch.Repo.exists?()
+    |> if(do: :ok, else: {:error, :role_assignment_not_active})
+  end
+
+  defp in_standing(%RoleAssignment{}), do: :ok
+
+  defp participant(id, tenant) do
+    from(p in "participants",
+      join: u in "users",
+      on: u.id == p.user_id,
+      where: p.id == type(^id, :binary_id) and p.tenant_id == type(^tenant, :binary_id)
+    )
   end
 
   @doc """

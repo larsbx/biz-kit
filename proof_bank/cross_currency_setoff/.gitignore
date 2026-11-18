@@ -1,0 +1,8 @@
+/evidence/
+/tooling/quint/node_modules/
+/lean/*.olean
+/lean/*.ilean
+/lean/*.ir
+/lean/*.c
+/lean/.lake/
+**/__pycache__/

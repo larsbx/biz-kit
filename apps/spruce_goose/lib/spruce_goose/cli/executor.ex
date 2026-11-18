@@ -6,7 +6,8 @@ defmodule SpruceGoose.CLI.Executor do
 
   alias SpruceGoose.Actors.{Refusal, Registry, Resolver}
   alias SpruceGoose.CLI.Command
-  alias SpruceGoose.Blueprints.{Applier, SourceVerifier}
+  alias SpruceGoose.Blueprints.Applier
+  alias TaskHost.Blueprints.SourceVerifier
   alias SpruceGoose.Outbox.Operator, as: OutboxOperator
   alias SpruceGoose.Kernel.{ShadowEvents, TaskProjector}
   alias SpruceGoose.Kernel.GrandfatheredBaseline

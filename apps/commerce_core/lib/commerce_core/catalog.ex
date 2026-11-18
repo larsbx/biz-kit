@@ -8,7 +8,7 @@ defmodule CommerceCore.Catalog do
   proof of a grant.
   """
 
-  alias CommerceCore.Ownership
+  alias OrderCore.Ownership
 
   @visibility [:published, :hidden, :disabled]
 

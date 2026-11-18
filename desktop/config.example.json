@@ -5,6 +5,7 @@
     { "name": "db", "ssh": "deploy@db.example.com", "label": "database" }
   ],
   "scriptsDir": null,
+  "procurementOrigin": null,
   "configs": [
     { "path": "$HOME/.config/systemd/user/*.service" },
     { "path": "$HOME/.config/systemd/user/*.d/*.conf" },

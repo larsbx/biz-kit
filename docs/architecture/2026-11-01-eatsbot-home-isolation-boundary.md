@@ -1,5 +1,19 @@
 # Eatsbot home/merchant boundary and persistence admission
 
+## Integration status (2026-11-18)
+
+The legacy Eatsbot applications and their catalog bridge were retired on main.
+This resolution preserves those removals and the current money-free OrderCore
+split. The home/merchant candidate guards now live in `OrderCore.Ownership`,
+`OrderCore.Placement` and `OrderCore.Lifecycle`, with CommerceCore catalog and
+priced checkout using them. The regression suite uses the current kitchen
+workflow and explicit `Checkout.new(workflow, owner, carts)` constructor.
+
+The legacy bridge implementation and its standalone test job are not restored.
+The audit below records the November 1 legacy boundary and remaining migration
+requirements; its old module paths and proposed adapter API are historical.
+No shared tenancy or production cutover is admitted by this branch.
+
 Date: 2026-11-01. Tracks #233 and the Eatsbot salvage/retirement plan (#176).
 Status: focused candidate guards and regression tests; **shared database admission
 remains closed**. No production configuration, schema, writer, WorkOS or NetBird
