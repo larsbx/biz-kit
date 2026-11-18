@@ -66,6 +66,7 @@ jobs:
           apps/restaurant_core/test/delivery_test.exs
           apps/restaurant_core/test/delivery_coupling_test.exs
           apps/restaurant_core/test/menu_admission_test.exs
+          apps/restaurant_core/test/key_separation_test.exs
           apps/coop_substrate/test/restaurant_admission_test.exs
       - name: Lifecycle properties, kitchen conformance and admission refinement
         run: |

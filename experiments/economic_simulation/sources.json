@@ -1,0 +1,168 @@
+{
+  "schema_version": "economic-sources-v1",
+  "reviewed_on": "2026-11-15",
+  "purpose": "Trace research questions and optional runtimes without claiming that original demonstration models reproduce published results.",
+  "paper_replications": [],
+  "calibration": {
+    "status": "synthetic_uncalibrated",
+    "pilot_observations_used": false,
+    "note": "No experimental result is evidence of real seven-day matching, merchant participation, or physical fulfillment until calibrated and prospectively checked against pilot data."
+  },
+  "reproducibility": {
+    "python": "3.12",
+    "lockfile": "uv.lock",
+    "lock_resolved_on": "2026-11-15",
+    "install": "uv sync --frozen --extra research --python 3.12",
+    "base_dependencies": [],
+    "development_dependencies": ["jsonschema==4.23.0"],
+    "version_policy": "Exact reviewed runtime pins; update the lock, source record, and behavioral validation together.",
+    "adapter_integration": "Independent JSON demonstrations; neither adapter currently drives the core marketplace engine."
+  },
+  "papers": [
+    {
+      "id": "liu_zhang_zhang_cost_balancing_2026",
+      "title": "When to Match: A Cost-Balancing Principle for Dynamic Markets",
+      "authors": ["Jie Liu", "Hailun Zhang", "Jiheng Zhang"],
+      "url": "https://arxiv.org/abs/2601.21858v2",
+      "version": "v2",
+      "version_date": "2026-07-09",
+      "implementation_status": "reference_only",
+      "code_status": "not_verified",
+      "use": "Motivates comparing immediate clearing and batching when waiting trades off against market thickness.",
+      "evidence": "The paper proves a factor-two cost guarantee for its balanced finite arrival model and reports application experiments.",
+      "assumptions_and_limits": [
+        "The stated guarantee requires equal totals of each type and a specific relationship between queue size and matching cost.",
+        "Arbitrary B2B compatibility graphs, impatient merchants, capacities, and fulfillment failures do not inherit the guarantee.",
+        "The core batching experiments do not implement or replicate the paper's Cost-Balancing algorithm."
+      ]
+    },
+    {
+      "id": "marla_xu_zhou_censored_reserves_2026",
+      "title": "Offline Learning of Reserve Prices from Censored Bids",
+      "authors": ["Lavanya Marla", "Yunzong Xu", "Boxuan Zhou"],
+      "url": "https://arxiv.org/abs/2611.06067v1",
+      "version": "v1",
+      "version_date": "2026-11-04",
+      "implementation_status": "reference_only",
+      "code_status": "not_verified",
+      "use": "Motivates recording exposure and nonresponse instead of treating observed bids as an uncensored demand sample.",
+      "evidence": "The paper studies identification and regret for reserve learning from censored historical bids, with theoretical and numerical results.",
+      "assumptions_and_limits": [
+        "Central results use monotone hazard rate assumptions and information about censored bidders.",
+        "Seller revenue in a second-price auction differs from an at-cost cooperative procurement objective.",
+        "No reserve-learning estimator or paper experiment is implemented here."
+      ]
+    },
+    {
+      "id": "asymmetric_barter_www_2026",
+      "title": "Barter Exchange with Asymmetric Valuations",
+      "url": "https://dl.acm.org/doi/10.1145/3774904.3792349",
+      "publication_year": 2026,
+      "implementation_status": "reference_only",
+      "code_status": "not_verified",
+      "use": "Motivates checking whose value is counted and whether each participant benefits in a proposed barter cycle.",
+      "evidence": "The research distinguishes expected guarantees from the outcomes of randomized allocation.",
+      "assumptions_and_limits": [
+        "An ex ante guarantee is not a guarantee of realized individual benefit.",
+        "A static allocation result does not establish delivery reliability or robust execution of a multi-party exchange.",
+        "The core cycle model is an independent synthetic stress test, not the paper's algorithm."
+      ]
+    },
+    {
+      "id": "barkel_et_al_kidney_survey_2025",
+      "title": "Operational research approaches and mathematical models for kidney exchange: A literature survey and empirical evaluation",
+      "authors": ["Mathijs Barkel", "Rachael Colley", "Maxence Delorme", "David Manlove", "William Pettersson"],
+      "url": "https://arxiv.org/abs/2504.04091v2",
+      "version": "v2",
+      "version_date": "2025-08-31",
+      "implementation_status": "reference_only",
+      "code_status": "public_code_not_integrated",
+      "code_url": "https://github.com/MathijsBarkel/KEPSurvey",
+      "use": "Reference formulations and benchmark instances for cycle and chain matching.",
+      "evidence": "A computational comparison of cycle/chain integer-programming formulations on kidney-exchange instances.",
+      "assumptions_and_limits": [
+        "Compatibility weights and objective values concern kidney exchange, not monetary B2B transactions.",
+        "Static optimum and solver runtime do not measure exchange fragility or physical fulfillment.",
+        "The source implementation requires commercial Gurobi; it is not installed or copied."
+      ]
+    }
+  ],
+  "software": [
+    {
+      "id": "mesa",
+      "name": "Mesa",
+      "repository_url": "https://github.com/mesa/mesa",
+      "package_url": "https://pypi.org/project/mesa/3.5.2/",
+      "metadata_url": "https://pypi.org/pypi/mesa/3.5.2/json",
+      "documentation_url": "https://mesa.readthedocs.io/stable/apis/model.html",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/mesa/mesa/blob/v3.5.2/LICENSE",
+      "version": "3.5.2",
+      "release_date": "2026-10-28",
+      "implementation_status": "integrated_optional_adapter",
+      "extra": "mesa",
+      "entrypoint": "adapters.run_mesa_demo",
+      "vendored": false,
+      "scope": "Original synthetic participation/response demonstration using actual Mesa Model and Agent classes.",
+      "limits": ["No empirical calibration.", "A response is not a qualified quote.", "No fulfillment model.", "Does not drive the core engine."]
+    },
+    {
+      "id": "negmas",
+      "name": "NegMAS",
+      "repository_url": "https://github.com/yasserfarouk/negmas",
+      "package_url": "https://pypi.org/project/negmas/0.17.0/",
+      "metadata_url": "https://pypi.org/pypi/negmas/0.17.0/json",
+      "documentation_url": "https://negmas.readthedocs.io/en/latest/",
+      "license": "AGPL-3.0-or-later",
+      "license_url": "https://github.com/yasserfarouk/negmas/blob/main/LICENSE",
+      "license_note": "Use current package metadata and the license file; older README prose describing BSD is stale. Optional research dependency only; not part of the stdlib core installation.",
+      "version": "0.17.0",
+      "release_date": "2026-11-07",
+      "implementation_status": "integrated_optional_adapter",
+      "extra": "negmas",
+      "entrypoint": "adapters.run_negotiation",
+      "vendored": false,
+      "scope": "Original round-based bilateral integer-price strategy using the real SAO mechanism.",
+      "limits": ["An agreement is not physical fulfillment.", "No calibrated strategic behavior, quantity, quality, or delivery issue.", "Does not drive the core engine.", "Upstream consumes unused global RNG draws; use process workers for concurrent jobs. Economic outputs use local seeded streams."]
+    },
+    {
+      "id": "scml",
+      "name": "Supply Chain Management League",
+      "repository_url": "https://github.com/yasserfarouk/scml",
+      "package_url": "https://pypi.org/project/scml/0.8.4/",
+      "license": "GPL-2.0-or-later",
+      "license_url": "https://github.com/yasserfarouk/scml/blob/master/LICENSE",
+      "license_note": "PyPI 0.8.4 metadata specifies GPL-2.0-or-later, while the repository license header mentions version 2 only. Resolve that discrepancy before any future integration.",
+      "reviewed_version": "0.8.4",
+      "implementation_status": "reference_only",
+      "vendored": false,
+      "scope": "Future reference for supply-chain negotiation competition environments.",
+      "limits": ["Competition execution and shortage penalties must not be equated with independently observed physical delivery.", "Not installed, imported, adapted, or reproduced in this package."]
+    },
+    {
+      "id": "kep_survey",
+      "name": "KEPSurvey",
+      "repository_url": "https://github.com/MathijsBarkel/KEPSurvey",
+      "readme_url": "https://github.com/MathijsBarkel/KEPSurvey/blob/main/README.md",
+      "license": "GPL-3.0",
+      "license_url": "https://github.com/MathijsBarkel/KEPSurvey/blob/main/LICENSE",
+      "implementation_status": "reference_only",
+      "vendored": false,
+      "scope": "C++ cycle/chain optimization benchmark, separate from this package's small synthetic exchange model.",
+      "runtime_requirement": "Commercial Gurobi solver; authors used version 10.0.3.",
+      "limits": ["Open source code does not make the proprietary solver freely deployable.", "No model of merchant withdrawal, logistics, or B2B physical fulfillment is integrated."]
+    },
+    {
+      "id": "pymarket",
+      "name": "PyMarket",
+      "repository_url": "https://github.com/kiedanski/pymarket",
+      "package_url": "https://pypi.org/project/pymarket/0.7.6/",
+      "license": "MIT",
+      "license_url": "https://github.com/kiedanski/pymarket/blob/master/LICENSE",
+      "implementation_status": "reference_only",
+      "vendored": false,
+      "scope": "Possible future auction-clearing baseline; old package/repository version mismatch needs a separate compatibility check.",
+      "limits": ["No PyMarket code is installed, imported, or copied.", "Clearing a bid book does not establish merchant participation or fulfillment."]
+    }
+  ]
+}

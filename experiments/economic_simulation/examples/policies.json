@@ -1,0 +1,19 @@
+{
+  "immediate": {
+    "cadence_hours": 0,
+    "selection": "first_quote"
+  },
+  "daily": {
+    "cadence_hours": 24,
+    "selection": "lowest_cost"
+  },
+  "two_day": {
+    "cadence_hours": 48,
+    "selection": "lowest_cost"
+  },
+  "reliability": {
+    "cadence_hours": 24,
+    "selection": "reliability_adjusted",
+    "failure_penalty_minor": 10000
+  }
+}

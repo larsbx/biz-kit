@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 
 const LABEL: &str = "procurement";
 
-fn host_url(raw: &str) -> Result<Url, String> {
+pub(super) fn host_url(raw: &str) -> Result<Url, String> {
     let invalid =
         "Set procurementOrigin to an HTTPS origin, such as https://procurement.example.org.";
     let url = Url::parse(raw).map_err(|_| invalid.to_string())?;
@@ -44,6 +44,8 @@ pub async fn open_procurement(app: AppHandle) -> Result<(), String> {
                 "Close the existing Procurement window before opening a different server.".into(),
             );
         }
+        window.show().map_err(|error| error.to_string())?;
+        window.unminimize().map_err(|error| error.to_string())?;
         return window.set_focus().map_err(|error| error.to_string());
     }
 

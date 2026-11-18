@@ -263,6 +263,15 @@
         "witness": "obligationWitness",
         "max_steps": 6,
         "note": "Device-signed restaurant events are admitted only for a key a governance-signed grant bound, with the action among the granted actions."
+      },
+      {
+        "quint": "formal/quint/obligations/restaurant_core.qnt",
+        "main": "restaurant_key_fence",
+        "control": "restaurant_key_fence_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "A new grant keeps a chapter's keys apart: a Dispatch key is none of the chapter's device or role keys and serves one tenant, and a merchant grants each key once, revoked or not (RestaurantCore.Admission.check/2, Validity's RoleKeyDeclared clause)."
       }
     ],
     "restaurant_host": [
