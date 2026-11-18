@@ -1,101 +1,74 @@
-# Proof Bank AgentCore × TaskCore execution-admission correspondence
+# AgentCore and TaskCore execution-admission correspondence
 
-Date: 2026-11-13. Status: **candidate runtime conformance, not a formal
-implementation-refinement proof**.
+Status: executable conformance cases and an abstract checked guard model.
+This is not a universal implementation-refinement proof.
 
-## Intended behavior, grounded in actual code
+## Guarded behavior
 
-- `TaskCore.AgentRuns` admits operator-signed agent-run *intent* against the
-  current task, its version, source and DoD digest, current operator and
-  suggester grants. `authorized?/3` additionally requires *independent*
-  current task-read and execute grants.
-- `AgentCore.Profiles.resolve/3` checks an approved trusted registry,
-  current immutable manifest digest and reviewed adapter module. A profile
-  reference does not create an executable permission.
-- `AgentCore.Preflight.prepare/4` constructs a **candidate**, not a
-  launch lease, from an authorized run, fixed task ticket and host-supplied
-  data classifications and budgets.
-- `TaskCore.Dispatcher.deliver/2` calls `prepare` before durable register
-  and claim and again **after the CAS claim**; changed authority fences the
-  lease instead of launching an adapter.
-- `AgentOpsStore.Coordinator` implements this bridge with a persistent
-  PostgreSQL attempt projection in explicit **staging only**. The launch
-  adapter and attempt store never become the signed business-event authority.
+An execution plan derives from signed run intent and current TaskCore
+authority. Task source/version, operator and suggester grants, independent
+read and execute grants, approved profile digest, capabilities and consent
+must match. The Dispatcher performs this preparation before claim and again
+after the durable CAS claim. Discovered authority changes request a durable
+cancellation fence. A separate committed-lease check must succeed immediately
+before invoking the adapter.
 
-These boundaries are implemented across
-`apps/task_core/lib/task_core/agent_runs.ex`,
-`apps/agent_core/lib/agent_core/{profiles,preflight}.ex`,
-`apps/task_core/lib/task_core/dispatcher.ex`, and
-`apps/agent_ops_store/lib/agent_ops_store/{coordinator,postgres}.ex`.
+The intended obligations remain:
 
-## New adversarial acceptance at the actual boundary
+| Obligation | Meaning | Current evidence and boundary |
+| --- | --- | --- |
+| AT-1 | Launch requires the authorized run, task identity/version, independent grants and matching approved profile at the prelaunch observation, plus a valid claim | Abstract guard theorems; actual preflight/dispatch/SQL tests; signed fixture |
+| AT-2 | A mutation observed after claim prevents launch and preserves a cancellation fence | Six two-adapter simulated-authority cases; three genuine-signed-history cases with fresh Log/SQL-session redelivery |
+| AT-3 | Cancelled or superseded leases cannot submit candidate bytes | Existing lease/custody implementation and tests; not proved by `BizKitAgentTask` |
+| AT-4 | Expiry or an ambiguous backend reply does not authorize retry without independently verified reconciliation | Dispatcher and SQL tests; synthetic backend crash/adoption cases; real backend proof remains open |
+| AT-5 | A candidate never implies task completion, accepted evidence or a business effect | Existing candidate boundary; no general business-write tool is introduced |
+| AT-6 | Explicit durable admission orders against the actual canonical source and retains one exact-plan identity | Native signed/SQL ordering and restart acceptance; no backend start or implementation-refinement proof |
+| AT-7 | A reference receiver retains one bound request identity and refuses creates after its durable fence acknowledgement | Independent-process SQLite and signed-host conformance cases; no physical execution or cross-store atomicity proof |
+| AT-8 | A fixed local worker is not respawned after an ambiguous start, and termination requires an bound pidfd exit observation | Linux fixed-worker and signed-host acceptance cases; no general adapter, sandbox, cross-store atomicity or model-refinement proof |
 
-`apps/agent_ops_store/test/dispatch_integration_test.exs` already contains
-real PostgreSQL competing-claim, revocation-after-claim, ambiguous-launch,
-backend termination, and two-adapter tests. This increment adds three
-controlled *between-claim-and-launch* changes:
+`formal/lean/BizKitAgentTask.lean` contains the authorization model and a
+separate `decideValidatedLaunch` guard. Its `blocked` outcome distinguishes
+lease refusal from a persisted cancellation request. It proves no launch
+without the observed guards, together with controls showing why omitting
+either recheck permits an unsafe abstract decision. It is registered for
+the pinned build, fresh kernel replay and all-module axiom audit.
 
-| Change after CAS claim | Required observable behavior |
-| --- | --- |
-| Task version changes | `:stale_agent_run_task` on recheck; no launch; durable `cancel_requested` |
-| Operator grant revoked | `:agent_run_operator_revoked`; no launch; durable fence |
-| Approved profile manifest changes without matching signed digest | `:execution_profile_digest_mismatch`; no launch; durable fence |
+The theorems do not model real signatures, SQL clocks, transaction commits,
+network calls or crashes. They do not prove that an observed authority or
+lease remains valid after the observation. Neither successful model checking
+nor passing test cases establish a universal Elixir/PostgreSQL refinement.
 
-Each test injects the change at the **second** host context read, after the
-durable claim. No production code is bypassed in the test: the actual
-`Coordinator.deliver`, `TaskCore.AgentRuns.authorized?`,
-`AgentCore.Preflight.prepare`, `Dispatcher.deliver`, and PostgreSQL
-transition path run. The fixture uses process-local simulated TaskCore replay,
-not an independently authenticated, durable, source-bound ledger event; do
-not treat it as proof of live governance identity or production authority.
+## Evidence and next boundary
 
-## Formal obligations derived from the implementation
+Keep three classes distinct: process-local authority simulation with real
+PostgreSQL, genuine signed append/replay with synthetic backend observations,
+and demonstrated persistence under a specified restart. The volume workflow
+recreates the database container for simulated-authority cancellation rows.
+The signed admission workflow separately restarts PostgreSQL and replays the
+retained signed source/admission/cancellation in a fresh BEAM process. Neither
+establishes production power-loss recovery or backend finality.
 
-Define a guarded relationship among:
-`SignedRunIntent`, `CurrentTask`, `CurrentOperatorGrant`,
-`CurrentReadGrant`, `CurrentExecuteGrant`, `ApprovedProfileDigest`,
-`CASLease`, `AdapterLaunch`, and `CandidateResult`.
+The next production proof boundary is the ordering among committed authority
+changes, launch admission and external execution. A SQL lease check alone
+cannot make these indivisible. Do not promote a general revocation-safe or
+durable-execution proof badge from this increment.
 
-- **AT-1:** a launched effect must have a current authorized run, matched
-  task source/version, both independent grants and a matching approved profile
-  at the prelaunch check.
-- **AT-2:** an intervening mutation to any of those requirements must prevent
-  a launch and persist a fenced attempt when discovered post-claim.
-- **AT-3:** a late worker cannot submit candidate bytes after its lease is
-  cancelled or its epoch superseded.
-- **AT-4:** lease expiry / lost backend reply does not license a retry without
-  independently verified external reconciliation.
-- **AT-5:** a produced candidate never implies approval, completed task,
-  accepted proof or business side effect.
+Implementation paths, exact acceptance commands and remaining limitations
+are documented in the [launch acceptance contract](../../architecture/2026-11-15-agentcore-launch-lease-acceptance.md).
+The separate [durable admission contract](../../architecture/2026-11-16-agentcore-durable-launch-admission.md)
+states its commit ordering, complete plan binding, host-policy limitations and
+the remaining real-backend acceptance obligation. The
+[reference receiver contract](../../architecture/2026-11-16-agentcore-durable-backend-receiver.md)
+separately specifies durable request binding, lost-reply reconciliation,
+permanent tombstones and pinned store identity. Its `unknown` observation is
+not final absence, and its fence acknowledgement is not termination. No
+reference response becomes a verified production recovery observation.
 
-`formal/lean/BizKitAgentTask.lean` models the exact two-phase
-preflight/claim/recheck guard and contains an unguarded counterexample.
-`formal/lean/BizKitLeases.lean`, task lifecycle Quint models, and host
-PostgreSQL tests are complementary evidence, **not** a universal
-implementation-refinement theorem. A checked proof of the guarded model
-does not establish the actual PostgreSQL host correspondence. Prove the
-formal model's safety under explicit fairness/crash assumptions, then
-establish its correspondence to all supported runtime paths and actual
-authorization snapshots. A SQL lease alone cannot close the gap between
-a time-dependent grant change and external launch; the threat model must
-define which current-state and revocation serialization properties are
-guaranteed.
-
-## Reproducibility
-
-The existing `.github/workflows/agent-core-storage.yml` runs the
-PostgreSQL/Elixir `AgentOpsStore` integration suite in a named-volume Docker
-fixture on PRs changing `apps/agent_ops_store/**`. This PR relies on that
-existing workflow; it adds no redundant pipeline or deployable service.
-
-All status claims remain **not established** until exact-head CI completes.
-No credentials, financial writes, plugin activation or production coordinator
-are introduced.
-
-## Formal checking integration
-
-The repo-pinned Lean 4.35 pipeline builds `BizKitAgentTask`, freshly replays
-its declarations in the Lean kernel, and includes it in the axiom audit.
-A proof about the abstract post-claim guard is a separate evidence class
-from the real integration tests; both must succeed at the **same exact head**.
-No new trusted axiom, proof bypass, or production authority is introduced.
+The [fixed local worker contract](../../architecture/2026-11-16-agentcore-fixed-local-worker.md)
+adds actual bounded child work, lost-creation-reply reconciliation and kernel
+termination observation for one non-forking process. Existing `starting` records
+never authorize a replacement spawn. The host still must deliver withdrawal to
+the provider and obtain its own fence acknowledgement. These implementation
+tests do not extend the Lean or Quint models and do not establish automatic
+revocation delivery, sandbox policy enforcement, host power-loss recovery or
+general `RecoveryPort` finality.

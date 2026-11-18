@@ -1116,3 +1116,6 @@ defmodule CoopSubstrate.Protocol.TypeRegistry do
     |> Map.merge(CoopSubstrate.FederationAuthority.event_types())
     |> Map.merge(CoopSubstrate.CommercialAdmission.event_types())
     |> Map.merge(CoopSubstrate.WriterFence.event_types())
+    |> Map.merge(Application.get_env(:coop_substrate, :extra_event_types, %{}))
+  end
+end

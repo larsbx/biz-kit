@@ -13,7 +13,7 @@ defmodule CoopSubstrate.Procurement do
   Procurement batches are deliberately singleton in this first host.
   """
   alias CommerceCore.MerchantPilot.Workflow
-  alias CoopSubstrate.{Crypto, Log, ProcurementDispatch}
+  alias CoopSubstrate.{Crypto, Log, ProcurementBountyEvidence, ProcurementContract, ProcurementDispatch}
   alias CoopSubstrate.Protocol.Envelope
 
   @clock Application.compile_env(:coop_substrate, :procurement_clock, System)
@@ -21,26 +21,36 @@ defmodule CoopSubstrate.Procurement do
   @business "ProcurementBusinessEnrolledV1"
   @command "ProcurementCommandAdmittedV1"
   @read "ProcurementSnapshotRequestV1"
+  @review "ProcurementContractReviewRequestV1"
   @route "ProcurementDispatchRouteV1"
   @dispatch_request "ProcurementDispatchRequestedV1"
   @dispatch_step "ProcurementDispatchStepV1"
-  @types [@grant, @business, @command, @read, @route, @dispatch_request, @dispatch_step]
+  @bounty_attestation "ProcurementBountyEvidenceAttestedV1"
+  @types [@grant, @business, @command, @read, @review, @route, @dispatch_request,
+    @dispatch_step, @bounty_attestation]
+  @quote_fields ~w(quote_id merchant_business_id revision total_minor currency expires_at_ms source_ref)a
   @fields %{
     "request" => ~w(buyer_business_id description quantity currency needed_by_ms consent_ref)a,
     "qualify" => ~w(evidence_ref)a,
-    "quote" => ~w(quote_id merchant_business_id revision total_minor currency expires_at_ms source_ref)a,
+    "quote" => @quote_fields,
+    "sourced_quote" => @quote_fields ++ ~w(sourcing_business_id sourcing_ref)a,
+    "post_bounty" => ~w(reward_minor maximum_total_minor terms_ref)a,
+    "confirm_bounty" => ~w(attestation_id)a,
+    "bounty_payment_evidence" => ~w(attestation_id)a,
     "accept" => ~w(quote_id revision buyer_business_id evidence_ref)a,
     "fulfill" => ~w(evidence_ref)a,
     "cancel" => ~w(evidence_ref)a,
     "dispute" => ~w(evidence_ref)a,
     "payment_evidence" => ~w(evidence_ref)a
   }
-  @actions Map.new(~w(request qualify quote accept fulfill cancel dispute payment_evidence)a,
+  @actions Map.new(~w(request qualify quote accept fulfill cancel dispute payment_evidence
+    post_bounty sourced_quote confirm_bounty bounty_payment_evidence)a,
     &{Atom.to_string(&1), &1})
 
   def event?(type), do: type in @types
   def clock_ms, do: @clock.system_time(:millisecond)
-  def init, do: %{grants: %{}, businesses: %{}, requests: %{}, commands: %{}, events: %{}, dispatch: ProcurementDispatch.init()}
+  def init, do: %{grants: %{}, businesses: %{}, requests: %{}, commands: %{}, events: %{},
+    bounty_evidence: MapSet.new(), bounty_attestations: %{}, dispatch: ProcurementDispatch.init()}
   def state(gate), do: Map.get(gate, :procurement, init())
 
   def event_types do
@@ -53,9 +63,13 @@ defmodule CoopSubstrate.Procurement do
         "expires_at_ms" => :int, "expected_version" => :int})),
       @business => spec("governance", Map.merge(common, %{"business_id" => :string,
         "active" => :bool, "evidence_ref" => :string, "expected_version" => :int})),
+      @bounty_attestation => spec("governance", Map.merge(common, %{"request_id" => :string,
+        "purpose" => :string, "evidence_ref" => :string, "expected_version" => :int,
+        "expires_at_ms" => :int})),
       @command => spec("procurement_operator", Map.merge(operator,
         %{"request_id" => :string, "command" => :any})),
-      @read => spec("procurement_operator", operator)
+      @read => spec("procurement_operator", operator),
+      @review => spec("procurement_operator", Map.put(operator, "record", :any))
     } |> Map.merge(ProcurementDispatch.event_types(operator))
   end
 
@@ -113,6 +127,56 @@ defmodule CoopSubstrate.Procurement do
   def snapshot(context, server \\ Log.server()) do
     with {:ok, request} <- snapshot_request(context),
       do: Log.procurement_snapshot(request, server)
+  end
+
+  @doc "Classify an exact accepted procurement revision using current private evidence."
+  def review_contract(context, record, server \\ Log.server()) do
+    with {:ok, request} <- contract_review_request(context, record),
+      do: Log.procurement_contract_review(request, server)
+  end
+
+  def contract_review_request(context, record),
+    do: signed(@review, context, Map.put(operator_payload(context), "record", record))
+
+  @doc false
+  def read_contract_review(%Envelope{type: @review} = env, gate) do
+    now = clock_ms()
+
+    with :ok <- Envelope.verify(env),
+         false <- Envelope.appended?(env),
+         :ok <- fresh(env, now),
+         :ok <- operator(env, gate, now),
+         :ok <- scope(env),
+         %{"request_id" => id} = record <- env.payload["record"],
+         true <- id?(id),
+         key = {env.chapter_id, env.payload["cooperative_id"], id},
+         row when not is_nil(row) <- state(gate).requests[key],
+         :ok <- contract_businesses(record, gate, key) do
+      ProcurementContract.validate(record, row, now, &contract_evidence(key, &1, now))
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_procurement_contract_review}
+    end
+  end
+
+  def read_contract_review(_, _), do: {:error, :invalid_procurement_contract_review}
+
+  defp contract_businesses(record, gate, {chapter, coop, _}) do
+    enrolled = state(gate).businesses
+
+    if Enum.all?(~w(member_id supplier_id cooperative_business_id), fn field ->
+         id = record[field]
+         id?(id) and match?(%{active: true}, enrolled[{chapter, coop, id}])
+       end),
+       do: :ok,
+       else: {:error, :business_not_enrolled}
+  end
+
+  defp contract_evidence(key, ref, now) do
+    case Application.get_env(:coop_substrate, :procurement_contract_evidence) do
+      nil -> {:error, :procurement_contract_evidence_unavailable}
+      owner -> owner.resolve(key, ref, now)
+    end
   end
 
   # Executed in the Log mailbox: current grant + selected snapshot are one read.
@@ -173,7 +237,8 @@ defmodule CoopSubstrate.Procurement do
     if Enum.any?(envelopes, &event?(&1.type)) do
       case envelopes do
         [%Envelope{type: @command} = env] -> command_duplicate(env, gate)
-        [%Envelope{type: @read}] -> {:error, :snapshot_requests_are_not_log_events}
+        [%Envelope{type: type}] when type in [@read, @review] ->
+          {:error, :snapshot_requests_are_not_log_events}
         [env] -> if Map.has_key?(state(gate).events, env.event_id),
           do: {:error, :procurement_event_replay}, else: :new
         _ -> {:error, :procurement_requires_singleton_batch}
@@ -246,6 +311,13 @@ defmodule CoopSubstrate.Procurement do
          do: ProcurementDispatch.configure(state(gate), env)
   end
 
+  defp transition(%Envelope{type: @bounty_attestation} = env, gate, now) do
+    with :ok <- governance(env, gate), :ok <- scope(env),
+         true <- id?(env.payload["request_id"]) or {:error, :invalid_request_id},
+         do: ProcurementBountyEvidence.attest(state(gate), request_key(env), env.payload,
+           env.event_id, now)
+  end
+
   defp transition(%Envelope{type: @dispatch_request} = env, gate, now) do
     with :ok <- operator(env, gate, now), :ok <- scope(env),
          true <- id?(env.payload["request_id"]) or {:error, :invalid_request_id},
@@ -262,20 +334,25 @@ defmodule CoopSubstrate.Procurement do
   defp transition(%Envelope{type: @command} = env, gate, now) do
     s = state(gate)
     p = env.payload
+    key = request_key(env)
+    row = s.requests[key]
     with :ok <- operator(env, gate, now), :ok <- scope(env),
          true <- id?(p["request_id"]),
          {:ok, c} <- decode_command(p["command"]),
-         false <- Map.has_key?(s.commands, {request_key(env), c.id}),
+         false <- Map.has_key?(s.commands, {key, c.id}),
          false <- Map.has_key?(s.events, env.event_id),
          :ok <- businesses(env, c, s),
-         :ok <- ProcurementDispatch.permit_commercial(s, request_key(env), c.action) do
+         :ok <- ProcurementDispatch.permit_commercial(s, key, c.action),
+         {:ok, resolved} <- ProcurementBountyEvidence.resolve(s, row, c, now, env.timestamp_ms) do
       trusted = %{authorized: true, chapter_id: env.chapter_id,
         cooperative_id: p["cooperative_id"], request_id: p["request_id"],
-        actor_id: p["operator_id"], now_ms: now}
-      case apply_kernel(s.requests[request_key(env)], trusted, c) do
+        actor_id: p["operator_id"], now_ms: now, event_at_ms: env.timestamp_ms}
+      case apply_kernel(row, trusted, resolved) do
         {:ok, row, :accepted} ->
-          {:ok, s |> put_in([:requests, Access.key(request_key(env))], row)
-            |> put_in([:commands, Access.key({request_key(env), c.id})], env)}
+          with {:ok, next} <- ProcurementBountyEvidence.claim(s, row, c.action) do
+            {:ok, next |> put_in([:requests, Access.key(key)], row)
+              |> put_in([:commands, Access.key({key, c.id})], env)}
+          end
         {:error, _} = error -> error
         _ -> {:error, :procurement_command_replay}
       end
@@ -290,7 +367,7 @@ defmodule CoopSubstrate.Procurement do
   defp apply_dispatch_fulfillment(row, env, now) do
     {chapter, cooperative, request} = row.scope
     trusted = %{authorized: true, chapter_id: chapter, cooperative_id: cooperative,
-      request_id: request, actor_id: hd(env.signers).key_id, now_ms: now}
+      request_id: request, actor_id: hd(env.signers).key_id, now_ms: now, event_at_ms: env.timestamp_ms}
     command = %{id: env.event_id, expected_version: row.version, action: :fulfill,
       attrs: %{evidence_ref: "dispatch:" <> env.payload["proof_id"]}}
 
@@ -346,10 +423,18 @@ defmodule CoopSubstrate.Procurement do
     ids = case c.action do
       :request -> [c.attrs[:buyer_business_id]]
       :quote -> [c.attrs[:merchant_business_id]]
+      :sourced_quote -> [c.attrs[:merchant_business_id], c.attrs[:sourcing_business_id]]
       :accept ->
         row = s.requests[request_key(env)]
         quote = if row, do: row.quotes[c.attrs[:quote_id]]
-        [c.attrs[:buyer_business_id], if(quote, do: quote.merchant_business_id)]
+        ids = [c.attrs[:buyer_business_id], if(quote, do: quote.merchant_business_id)]
+        if quote && Map.has_key?(quote, :sourcing_business_id),
+          do: [quote.sourcing_business_id | ids], else: ids
+      :post_bounty ->
+        case s.requests[request_key(env)] do
+          nil -> []
+          row -> [row.request.buyer_business_id]
+        end
       _ -> []
     end
     if Enum.all?(ids, fn id ->

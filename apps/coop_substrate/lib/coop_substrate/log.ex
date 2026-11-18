@@ -110,6 +110,10 @@ defmodule CoopSubstrate.Log do
   @spec gate(GenServer.server()) :: map()
   def gate(server \\ @server), do: GenServer.call(server, :gate)
 
+  @doc "The current gate and its exact revision, obtained in a single appender call."
+  @spec read_snapshot(GenServer.server()) :: {map(), {non_neg_integer(), binary() | nil}}
+  def read_snapshot(server \\ @server), do: GenServer.call(server, :read_snapshot)
+
   @doc """
   Trusted host subscription effect under current signed authority. The SQL
   connection must target this ledger's database/schema. The effect must be a
@@ -125,9 +129,33 @@ defmodule CoopSubstrate.Log do
         :infinity
       )
 
+  @doc """
+  Commit one staging agent launch admission under current signed authority.
+
+  `context` must be exactly `%{environment: :staging}`. The canonical store's
+  running connection pool and cached schema are used internally; caller connection,
+  transaction and callback overrides are refused. `request` contains the run
+  key, grant locators, trusted registry/requirements snapshot, exact expected
+  plan and committed lease. The host must obtain consent independently.
+
+  The actual ledger row is locked before the operational attempt. The receipt
+  is returned after commit and records which signed head admitted the request.
+  It does not launch a backend, append a business event, prove termination, or
+  make mutable host policy and later external execution atomic with revocation.
+  """
+  def admit_agent_launch(context, request, server \\ @server) do
+    GenServer.call(server, {:admit_agent_launch, context, request}, 10_000)
+  catch
+    :exit, _ -> {:error, :agent_launch_admission_unavailable}
+  end
+
   @doc "Current-authority private procurement snapshot, checked in the appender."
   def procurement_snapshot(%Envelope{} = request, server \\ @server),
     do: GenServer.call(server, {:procurement_snapshot, request})
+
+  @doc "Read-only procurement contract review under the current operator grant."
+  def procurement_contract_review(%Envelope{} = request, server \\ @server),
+    do: GenServer.call(server, {:procurement_contract_review, request})
 
   # -- read API (straight from the store; no serialization needed) -------------
 
@@ -443,12 +471,24 @@ defmodule CoopSubstrate.Log do
 
   def handle_call(:gate, _from, %{gate: gate} = state), do: {:reply, gate, state}
 
+  def handle_call(:read_snapshot, _from, %{head: head, gate: gate} = state),
+    do: {:reply, {gate, {head.global_seq, head.global_hash}}, state}
+
   def handle_call({:procurement_snapshot, request}, _from, state) do
     {:reply, CoopSubstrate.Procurement.read_snapshot(request, state.gate), state}
   end
 
+  def handle_call({:procurement_contract_review, request}, _from, state) do
+    {:reply, CoopSubstrate.Procurement.read_contract_review(request, state.gate), state}
+  end
+
   def handle_call({:federation_effect, context, request, effect}, _from, state) do
     result = CoopSubstrate.FederationFence.run(context, state.head, state.gate, request, effect)
+    {:reply, result, state}
+  end
+
+  def handle_call({:admit_agent_launch, context, request}, _from, state) do
+    result = CoopSubstrate.AgentLaunchAdmission.run(context, state.head, state.gate, request)
     {:reply, result, state}
   end
 

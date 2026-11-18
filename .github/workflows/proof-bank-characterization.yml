@@ -5,9 +5,13 @@ on:
       - 'proof_bank/characterizations/**'
       - 'scripts/proof_bank_characterization_audit.py'
       - 'scripts/tests/test_proof_bank_characterization_audit.py'
+      - 'scripts/bizops-kb/snapshot.py'
       - 'apps/**/mix.exs'
       - 'apps/**/lib/**'
       - 'apps/**/test/**'
+      - 'apps/bizops_kb/README.md'
+      - 'apps/bizops_kb/priv/*.json'
+      - 'apps/bizops_kb/priv/workflows/**'
       - '.github/workflows/proof-bank-characterization.yml'
   push:
     branches: [main]

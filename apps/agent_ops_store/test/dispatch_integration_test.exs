@@ -107,11 +107,13 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
             )
 
           {^ticks, :profile_digest_changed} ->
+            profile_id = Map.fetch!(current.agent_runs, key).execution_profile_id
+
             Process.put(
               :registry,
               put_in(
                 Process.get(:registry),
-                ["local", :manifest, "parameters", "backend"],
+                [profile_id, :manifest, "parameters", "backend"],
                 "changed-after-claim"
               )
             )
@@ -307,8 +309,16 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     )
   end
 
-  setup do
-    Process.put(:run_suffix, Base.encode16(:crypto.strong_rand_bytes(5), case: :lower))
+  setup context do
+    random_suffix = Base.encode16(:crypto.strong_rand_bytes(5), case: :lower)
+
+    suffix =
+      case context[:launch_drift] do
+        nil -> random_suffix
+        marker -> "drift-" <> marker <> "-" <> random_suffix
+      end
+
+    Process.put(:run_suffix, suffix)
     Process.put(:launches, [])
     Process.put(:terminations, [])
     Process.put(:context_reads, 0)
@@ -435,47 +445,41 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert row.phase == "cancel_requested"
   end
 
-  test "a task revision after the durable claim fences both adapters before launch", %{
-    conn: conn
-  } do
-    Process.put(:proof_bank_mutation, {2, :task_version})
+  for {profile_id, run_name} <- [{"local", "run1"}, {"remote", "run2"}] do
+    for {mutation, refusal} <- [
+          task_version: :stale_agent_run_task,
+          operator_revoked: :agent_run_operator_revoked,
+          profile_digest_changed: :execution_profile_digest_mismatch
+        ] do
+      @tag launch_drift: "#{profile_id}-#{mutation}"
+      test "#{mutation} after the durable claim prevents #{profile_id} adapter launch", %{
+        conn: conn
+      } do
+        key = run_key(unquote(run_name))
+        effect_id = effect(unquote(run_name))
+        refusal = unquote(refusal)
+        Process.put(:proof_bank_mutation, {2, unquote(mutation)})
 
-    assert {:error, :authority_changed_after_claim} =
-             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
+        assert {:error, :authority_changed_after_claim} =
+                 Coordinator.deliver(conn, key, Host, "worker1")
 
-    assert Process.get(:launches) == []
-    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
-    assert row.phase == "cancel_requested"
-    assert row.attempts == 1
-    assert {:error, :stale_agent_run_task} = Coordinator.prepare(run_key("run1"), Host)
-  end
+        assert Process.get(:launches) == []
+        assert {:ok, row} = Postgres.snapshot(conn, effect_id)
+        assert row.phase == "cancel_requested"
+        assert row.attempts == 1
+        assert row.backend_ref == nil
+        assert {:error, ^refusal} = Coordinator.prepare(key, Host)
 
-  test "operator grant revocation after the durable claim prevents a launch", %{conn: conn} do
-    Process.put(:proof_bank_mutation, {2, :operator_revoked})
-
-    assert {:error, :authority_changed_after_claim} =
-             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
-
-    assert Process.get(:launches) == []
-    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
-    assert row.phase == "cancel_requested"
-    assert {:error, :agent_run_operator_revoked} = Coordinator.prepare(run_key("run1"), Host)
-  end
-
-  test "profile manifest mutation after a claim cannot launch under the old digest", %{
-    conn: conn
-  } do
-    Process.put(:proof_bank_mutation, {2, :profile_digest_changed})
-
-    assert {:error, :authority_changed_after_claim} =
-             Coordinator.deliver(conn, run_key("run1"), Host, "worker1")
-
-    assert Process.get(:launches) == []
-    assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
-    assert row.phase == "cancel_requested"
-
-    assert {:error, :execution_profile_digest_mismatch} =
-             Coordinator.prepare(run_key("run1"), Host)
+        # Redelivery retains the same durable fence and never retries launch.
+        assert {:error, ^refusal} = Coordinator.deliver(conn, key, Host, "worker2")
+        assert {:ok, retained} = Postgres.snapshot(conn, effect_id)
+        assert retained.phase == "cancel_requested"
+        assert retained.version == row.version
+        assert retained.attempts == 1
+        assert retained.backend_ref == nil
+        assert Process.get(:launches) == []
+      end
+    end
   end
 
   test "ambiguous launch acknowledgment remains leased, never automatically retried", %{
