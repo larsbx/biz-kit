@@ -50,7 +50,7 @@ mkdir -p "$stage/apps" "$stage/config"
 # ProcurementHost, RestaurantHost or a second business ledger.
 for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core \
   fulfillment_core agent_core agent_ops_store group_buy_core inventory_core \
-  federation_core federation_service commerce_core dispatch_core procurement_host dispatch \
+  federation_core federation_service commerce_core barter_core dispatch_core procurement_host dispatch \
   biz_kit_identity biz_kit_extension; do
   cp -R "$root/apps/$app" "$stage/apps/"
 done

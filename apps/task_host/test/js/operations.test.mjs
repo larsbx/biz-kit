@@ -79,6 +79,16 @@ test("configuration remains generic and exact scopes cannot be counted twice", (
   );
 });
 
+test("workspace knowledge counts are bounded integers and project links reveal the scoped queue", () => {
+  const knowledge = { pending_count: 2, approved_count: 3, rejected_count: 1, withdrawn_count: 0, stale_count: 0 };
+  assert.equal(validateSnapshot(snapshot(workspace("one", {}, { knowledge }))).workspaces[0].knowledge.pending_count, 2);
+  assert.throws(() => validateSnapshot(snapshot(workspace("one", {}, { knowledge: { ...knowledge, pending_count: -1 } }))));
+  assert.throws(() => validateSnapshot(snapshot(workspace("one", {}, { knowledge: { ...knowledge, approved_count: "3" } }))));
+  const url = new URL(projectLink(workspace("one"), { section: "knowledge-heading", provider: "second" }), "https://host.test");
+  assert.equal(url.searchParams.get("chapter"), "chapter-one");
+  assert.equal(url.hash, "#knowledge-heading");
+});
+
 test("timezone dates follow real timezone data, including DST", () => {
   assert.equal(validTimeZone("America/New_York"), true);
   assert.equal(validTimeZone("../New_York"), false);

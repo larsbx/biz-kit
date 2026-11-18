@@ -207,6 +207,19 @@ Research code, fixed inputs, tests, charts and full replications are in a
 file artifact delivered separately in the ChatGPT conversation. This PR
 does not include or execute the research software in CI.
 
+## Integration with current source-backed specifications (2026-11-13)
+
+The [2026-11-13 integration ADR](2026-11-13-producer-capital-integration.md)
+connects this ownership design to the [Hanbali contract taxonomy](2026-11-13-hanbali-commercial-contract-taxonomy.md),
+the existing [Lean/Quint producer capital kernel](../../proof_bank/producer_capital/README.md),
+the legacy `CapitalAccounts` patronage/redemption projection, and draft SCF
+proof work. A first **inert** `ProducerCapitalPreview` tests annual $250
+share-intent classification and staged producer-only unit-sale shape without
+issuing legal units, transferring assets or paying investors. This changes
+**no** capital rights or Shariah/civil review status. Direct project profits
+must be attributable to independently reviewed actual productive activity,
+not fabricated surplus on at-cost co-op services.
+
 ## Suggested next technically verifiable increment
 
 Design a pure, **inert** membership-NAV and project-unit-cap-table kernel

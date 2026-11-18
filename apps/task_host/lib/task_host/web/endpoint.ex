@@ -17,6 +17,9 @@ defmodule TaskHost.Web.Endpoint do
   # Before any body is read.
   plug(TaskHost.Web.RateLimit)
 
+  # Keep the MCP transport's body bound and inputs out of controller logs.
+  plug(TaskHost.Web.PluginBridge)
+
   plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
