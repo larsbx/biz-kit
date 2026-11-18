@@ -2,6 +2,12 @@
 
 Status: **staging regression tests, not a production coordinator or deployment.**
 
+The [2026-11-15 launch acceptance increment](2026-11-15-agentcore-launch-lease-acceptance.md)
+adds the prelaunch lease validator, both-adapter authority drift matrix,
+focused genuine signed replay tests and actual cancellation-row volume checks.
+Its remaining ordering and backend-durability limits supersede the historical
+next-step list below; production authority remains disabled.
+
 The agent coordinator is already implemented as an opt-in **staging-only**
 bridge in `AgentOpsStore.Coordinator` with `TaskCore.Dispatcher`,
 `TaskCore.AgentRuns.authorized?/3`, `AgentCore.Preflight`, and

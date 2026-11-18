@@ -108,7 +108,7 @@ defmodule Dispatch.ProcurementDeliveryTest do
       "expected_version" => 0
     })
 
-    for business <- ["buyer", "supplier"] do
+    for business <- ["buyer", "supplier", "source"] do
       append!(governance, context, "ProcurementBusinessEnrolledV1", %{
         "cooperative_id" => context.cooperative_id,
         "business_id" => business,
@@ -185,14 +185,20 @@ defmodule Dispatch.ProcurementDeliveryTest do
       courier_role: courier_role,
       service: service,
       service_actor: service_actor,
+      governance: governance,
       signer: signer,
       config: config
     }
   end
 
-  test "real worker assignment and authenticated pickup/drop-off fulfill the exact quote once",
+  test "real worker delivery supports one sourcing reward on the exact accepted quote",
        c do
-    accepted_quote = order!(c, "order-1")
+    accepted_quote = order!(c, "order-1", :sourcing_bounty)
+    closeout_ref = "buyer-closeout-order-1"
+
+    assert {:error, {:reject, 0, :illegal_transition}} =
+             business(c, "order-1", "confirm_bounty", 6, %{"attestation_id" => closeout_ref})
+
     before = Log.head().global_seq
     assert {:ok, nil} = poll()
     trip = trip!(c, "order-1")
@@ -220,8 +226,43 @@ defmodule Dispatch.ProcurementDeliveryTest do
     assert {:ok, nil} = poll()
     assert trip!(c, "order-1").status == :COMPLETED
 
-    assert_exact_fulfillment(c, "order-1", accepted_quote)
+    assert_exact_fulfillment(c, "order-1", accepted_quote, 7)
+    fulfilled = row(c, "order-1")
+    delivery_ref = fulfilled.outcome_ref
+
+    assert %{
+             sourcing_business_id: "source",
+             quote_id: "quote-order-1",
+             quote_revision: 1,
+             delivered_on_time: true,
+             delivery_ref: ^delivery_ref,
+             closeout_ref: nil,
+             payment_ref: nil
+           } = fulfilled.bounty.award
+
     assert Log.head().global_seq == before + 3
+
+    assert {:error, {:reject, 0, :bounty_attestation_scope_or_purpose_mismatch}} =
+             business(c, "order-1", "confirm_bounty", 7, %{"attestation_id" => closeout_ref})
+
+    attestation =
+      append!(c.governance, c.context, "ProcurementBountyEvidenceAttestedV1", %{
+        "cooperative_id" => c.context.cooperative_id,
+        "request_id" => "order-1",
+        "purpose" => "closeout",
+        "evidence_ref" => closeout_ref,
+        "expected_version" => fulfilled.version,
+        "expires_at_ms" => Procurement.clock_ms() + 60_000
+      })
+
+    closeout = %{"attestation_id" => attestation.event_id}
+    assert {:ok, confirmed} = business(c, "order-1", "confirm_bounty", 7, closeout)
+    assert {:ok, ^confirmed} = business(c, "order-1", "confirm_bounty", 7, closeout)
+
+    assert {:error, {:reject, 0, :bounty_result_not_admissible}} =
+             business(c, "order-1", "confirm_bounty", 8, closeout)
+
+    assert row(c, "order-1").bounty.award.closeout_ref == closeout_ref
     head = Log.head()
 
     # A retry has a fresh signed envelope, but the same admitted command/proof.
@@ -459,10 +500,11 @@ defmodule Dispatch.ProcurementDeliveryTest do
         timestamp_ms: div(Procurement.clock_ms(), 1_000) * 1_000
       )
 
-    assert {:ok, [_]} = Log.append(event)
+    assert {:ok, [admitted]} = Log.append(event)
+    admitted
   end
 
-  defp order!(c, id) do
+  defp order!(c, id, kind \\ :ordinary) do
     now = tick()
 
     commands = [
@@ -495,14 +537,32 @@ defmodule Dispatch.ProcurementDeliveryTest do
        }}
     ]
 
+    commands = if kind == :sourcing_bounty, do: add_sourcing_bounty(commands, id), else: commands
+
     for {{action, attrs}, version} <- Enum.with_index(commands) do
       assert {:ok, _} = business(c, id, action, version, attrs)
     end
 
     quote = row(c, id).accepted_quote
     tick()
-    assert :ok = Handoff.request(c.context, id, 4)
+    assert :ok = Handoff.request(c.context, id, length(commands))
     quote
+  end
+
+  defp add_sourcing_bounty([request, qualify, {"quote", attrs}, accept], id) do
+    terms = %{
+      "reward_minor" => 500,
+      "maximum_total_minor" => 12500,
+      "terms_ref" => "bounty-terms-" <> id
+    }
+
+    sourced =
+      Map.merge(attrs, %{
+        "sourcing_business_id" => "source",
+        "sourcing_ref" => "source-attribution-" <> id
+      })
+
+    [request, {"post_bounty", terms}, qualify, {"sourced_quote", sourced}, accept]
   end
 
   defp business(c, id, action, version, attrs) do
@@ -593,11 +653,11 @@ defmodule Dispatch.ProcurementDeliveryTest do
     end
   end
 
-  defp assert_exact_fulfillment(c, id, quote) do
+  defp assert_exact_fulfillment(c, id, quote, version \\ 6) do
     row = row(c, id)
     assert row.scope == scope(c, id)
     assert row.phase == :fulfilled
-    assert row.version == 6
+    assert row.version == version
     assert row.accepted_quote == quote
     assert row.payment_evidence == []
     assert map_size(Procurement.state(Log.gate()).requests) == 1

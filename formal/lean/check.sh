@@ -12,6 +12,8 @@ lake build
 # Replay the complete imported environment in the Lean kernel, including the
 # separate bundle and lease modules. This is not a different kernel implementation.
 lake env leanchecker --fresh --verbose BizKitEventProofs
+lake env leanchecker --fresh --verbose BizKitDispatchSpatial
+lake env lean CheckDispatchSpatial.lean
 lake env leanchecker --fresh --verbose BizKitOutcomeAdmission
 lake env leanchecker --fresh --verbose BizKitInventory
 lake env leanchecker --fresh --verbose BizKitInventoryLocations
@@ -19,6 +21,7 @@ lake env leanchecker --fresh --verbose BizKitCommerce
 lake env leanchecker --fresh --verbose BizKitCommercialSetoff
 lake env leanchecker --fresh --verbose BizKitCommercialAdmission
 lake env leanchecker --fresh --verbose BizKitProcurementContract
+lake env leanchecker --fresh --verbose BizKitAgentTask
 lake env leanchecker --fresh --verbose BizKitCommercialLineage
 bash check_lineage_fixtures.sh
 bash check_inventory_fixtures.sh
@@ -34,7 +37,7 @@ cp lean-toolchain "$scratch/audit/lean-toolchain"
 
 # The audit selects declarations by defining MODULE, not their namespace.
 # Auditing only BizKitEventProofs would omit BizKitBundles and BizKitLeases.
-for root in BizKitLeases BizKitBundles BizKitDispatch BizKitEventProofs BizKitOutcomeAdmission BizKitInventory BizKitInventoryLocations BizKitCommerce BizKitCommercialSetoff BizKitCommercialAdmission BizKitProcurementContract BizKitCommercialLineage; do
+for root in BizKitLeases BizKitBundles BizKitDispatch BizKitDispatchSpatial BizKitEventProofs BizKitOutcomeAdmission BizKitInventory BizKitInventoryLocations BizKitCommerce BizKitCommercialSetoff BizKitCommercialAdmission BizKitProcurementContract BizKitAgentTask BizKitCommercialLineage; do
   lake env "$scratch/audit/.lake/build/bin/axiom-audit" \
     --root "$root" --allow propext,Classical.choice,Quot.sound
 done

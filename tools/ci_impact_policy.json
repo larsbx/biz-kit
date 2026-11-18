@@ -14,7 +14,6 @@
   ],
   "always_pr_workflows": [
     "consolidation.yml",
-    "kafka-producer.yml",
     "location-cross-repo-acceptance.yml",
     "portal-auth-acceptance.yml",
     "task-access-contract.yml"

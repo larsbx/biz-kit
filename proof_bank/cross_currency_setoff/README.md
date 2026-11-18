@@ -4,6 +4,14 @@ This package verifies the pure, unsigned preview introduced in PR #341.
 It does not activate settlement or make a legal determination. Both source
 obligations and all authority references remain unverified host assertions.
 
+## Remaining obligations
+
+The [living obligations register](../../docs/architecture/cross-currency-setoff-obligations.md)
+records completed hosted acceptance for PR #410, the separately tested read-only
+drafts #413/#422, ongoing verification duties, additional formal assurance and
+requirements before any business effect. Historical queued checks should not
+be carried forward as open after their exact-head receipts have passed.
+
 ## Arithmetic contract
 
 Let `Q` be available quote-currency minor units, `B` available base-currency
