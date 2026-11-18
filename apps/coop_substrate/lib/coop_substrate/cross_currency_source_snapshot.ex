@@ -58,6 +58,8 @@ defmodule CoopSubstrate.CrossCurrencySourceSnapshot do
          source_hashes: Map.new(sources, fn {id, source} -> {id, source.source_event_hash} end),
          sources: sources,
          members: members,
+         member_key_epochs:
+           Map.new(members, fn {id, _} -> {id, gate.member_key_epochs[{chapter, id}]} end),
          observed_head: head_before,
          source_status: :authenticated_local_original_business_history,
          agency_status: :unverified,
