@@ -44,5 +44,5 @@ defmodule CommerceCore.MixProject do
     end
   end
 
-  def application, do: [extra_applications: [:logger]]
+  def application, do: [extra_applications: [:logger, :crypto]]
 end

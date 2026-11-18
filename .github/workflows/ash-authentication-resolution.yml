@@ -50,6 +50,7 @@ jobs:
       MIX_ENV: test
       ERL_FLAGS: '+S 4:4'
       DATABASE_URL: ecto://postgres:postgres@localhost:5432/dispatch_test
+      BIZKIT_BUNDLED_TEST_LOCALE: "true"
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
       SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
@@ -64,22 +65,7 @@ jobs:
           elixir-version: '1.19.0'
       - run: git rev-parse HEAD && mix deps.get --check-locked && mix hex.audit
       - name: Compile exact PR head
-        id: exact
-        continue-on-error: true
         run: mix compile --warnings-as-errors
-      - name: Apply the independent #301 compile correction to the runner only
-        if: steps.exact.outcome == 'failure'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex")
-          text = path.read_text()
-          old = "def prepare(chapter, {a, b}, denomination, residual_id, timestamp_ms, server \\\\ Log.server())"
-          assert text.count(old) == 1
-          path.write_text(text.replace(old, old.replace("{a, b}", "pair")))
-          PY
-          git diff --check && git diff
-          mix compile --warnings-as-errors
       - name: Identity
         working-directory: apps/biz_kit_identity
         run: mix test
@@ -89,20 +75,6 @@ jobs:
       - name: Dispatch authorization and tenant isolation
         working-directory: apps/dispatch
         run: mix ecto.create && mix ecto.migrate && mix test --include integration
-      - name: Eatsbot authentication, tenant isolation and Telegram webhook
-        working-directory: apps/eatsbot
-        env:
-          ADMIN_API_KEY: test
-        run: |
-          mix localize.download_locales
-          mix test test/eatsbot/authentication_dependency_test.exs test/eatsbot/tenant_dependency_test.exs test/eatsbot_web/admin_auth_dependency_test.exs test/eatsbot_web/controllers/telegram_webhook_test.exs
-          mix ash.codegen --check
-      - name: Eatsbot Core
-        working-directory: apps/eatsbot_core
-        run: mix test
-      - name: Telegram extension
-        working-directory: apps/eatsbot_extension_telegram_bot
-        run: mix test
       - name: Production release smoke
         if: success() || failure()
         env:

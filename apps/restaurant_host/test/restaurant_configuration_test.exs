@@ -21,7 +21,7 @@ defmodule RestaurantHost.RestaurantConfigurationTest do
       chapter: "chapter-a",
       merchant: "shop",
       currency: :USD,
-      tax_rate: "0",
+      jurisdiction: "US-MI",
       menu: [%{id: "meal", name: "Meal", sku: "MEAL", price_minor: 100}],
       storefront: %{device_id: "storefront", key_id: "k-store", seed: seed},
       boards: %{}

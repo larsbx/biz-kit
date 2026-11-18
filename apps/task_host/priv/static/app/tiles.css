@@ -1,0 +1,42 @@
+/* The desktop's flat tiling surface: pane DOM never moves during layout edits. */
+.tiled-workspace { --tile-bg: var(--paper, var(--card, #fff)); color: var(--ink, var(--fg)); display: flex; flex-direction: column; height: 100dvh; min-width: 0; padding: 10px; gap: 8px; overflow: auto; }
+.tiles-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 0 0 auto; }
+.tiles-help { color: var(--muted); font-size: 12px; }
+.section-tiles { position: relative; flex: 1 0 760px; min-width: 960px; }
+.section-tiles.has-zoom { min-width: 0; flex-basis: 0; min-height: 220px; }
+.section-tile { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--tile-bg); }
+.section-tile[hidden] { display: none; }
+.section-tile.tile-zoomed { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; z-index: 3; }
+.section-tile-head { display: flex; align-items: center; gap: 3px; padding: 5px; border-bottom: 1px solid var(--line); flex: 0 0 auto; overflow-x: auto; }
+.tile-picker { font: inherit; font-size: 12px; min-width: 70px; max-width: 100%; padding: 5px; border: 1px solid var(--line); background: var(--tile-bg); color: inherit; border-radius: 4px; }
+.section-tile-head .tile-picker { flex: 1; width: 0; }
+.tile-button { font: inherit; font-size: 13px; padding: 4px 8px; min-width: 30px; min-height: 30px; border: 1px solid var(--line); background: var(--tile-bg); color: inherit; border-radius: 4px; cursor: pointer; }
+.tile-button:hover { background: var(--soft, var(--bg)); }
+.tile-button:disabled { opacity: .4; cursor: default; }
+.section-tile-body { flex: 1; min-height: 0; min-width: 0; overflow: auto; padding: 12px; overflow-wrap: anywhere; }
+.section-tile-body > [data-tile-content] { max-width: none; min-width: 0; width: 100%; margin: 0; }
+.section-tile-body > .sidebar { border: 0; padding: 0; background: transparent; }
+.section-tile-body > .topbar { border: 0; padding: 0; flex-wrap: wrap; min-height: 0; }
+.section-tile-body > .metric, .section-tile-body > .card, .section-tile-body > .work-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.section-tile-body > .page-heading { display: block; }
+.section-tile-body > .status-box { align-items: flex-start; text-align: left; }
+.section-tile-body > .toolbar { padding: 0; flex-wrap: wrap; }
+.section-tile-body .workspace-actions { display: block; margin: 0; }
+.section-tile-body .workspace-card + .workspace-card { margin-top: 10px; }
+.section-tile-body .actions { flex-wrap: wrap; }
+.section-tile-body h2:first-child { margin-top: 0; }
+.section-tile-body input, .section-tile-body textarea, .section-tile-body select { max-width: 100%; }
+.tiles-empty { color: var(--muted); font-size: 13px; }
+.section-tiles > .split { position: absolute; display: flex; pointer-events: none; min-width: 0; min-height: 0; }
+.section-tiles > .split.v { flex-direction: column; }
+.section-tiles .pane { min-width: 0; min-height: 0; }
+.section-tiles .divider { flex: 0 0 12px; pointer-events: auto; touch-action: none; cursor: col-resize; position: relative; border-radius: 4px; }
+.section-tiles .v > .divider { cursor: row-resize; }
+.section-tiles .divider::after { content: ""; position: absolute; inset: 0 4px; background: var(--line); border-radius: 3px; }
+.section-tiles .v > .divider::after { inset: 4px 0; }
+.section-tiles .divider:hover::after, .section-tiles .divider.drag::after, .section-tiles .divider:focus-visible::after { background: var(--accent); }
+.section-tiles .divider:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+body.project-tiles > header { max-width: none; padding: 8px 12px; }
+body.project-tiles { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+body.project-tiles > .tiled-workspace { flex: 1; min-height: 0; height: auto; }
+@media (max-width: 740px) { .tiles-help { display: none; } }

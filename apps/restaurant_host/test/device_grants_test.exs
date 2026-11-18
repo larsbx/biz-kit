@@ -8,7 +8,7 @@ defmodule RestaurantHost.DeviceGrantsTest do
 
   alias CoopSubstrate.{Canonical, Crypto, Log}
   alias CoopSubstrate.Harness.Ops
-  alias RestaurantHost.{DeviceGrants, Enrollment, Orders, Restaurant, World}
+  alias RestaurantHost.{DeviceGrants, Enrollment, Management, Orders, Restaurant, World}
 
   @port 4073
   @url "http://127.0.0.1:#{@port}"
@@ -285,6 +285,67 @@ defmodule RestaurantHost.DeviceGrantsTest do
 
     assert {403, _} = post(path, body, [{~c"authorization", String.to_charlist(malformed)}])
     assert Log.head() == head
+  end
+
+  test "a governance publication supersedes the bootstrap menu and revocation fences a paired board",
+       %{restaurant: r, gov: gov} do
+    grant!("storefront")
+    grant!("board-1")
+
+    menu = %{
+      "merchant_id" => r.merchant,
+      "currency" => "USD",
+      "expected_revision" => 0,
+      "items" => [
+        %{
+          "id" => "margherita",
+          "name" => "Margherita",
+          "sku" => "MARG",
+          "price_minor" => 1250,
+          "discount_minor" => 250
+        }
+      ]
+    }
+
+    assert {403, _} =
+             post("/api/restaurant-management/publish-menu", %{
+               "chapter_id" => r.chapter,
+               "governance_key_id" => gov.key_id,
+               "payload" => menu
+             })
+
+    assert {:ok, %{"event_id" => _}} =
+             Management.approve(@url, r.chapter, "publish-menu", menu, gov)
+
+    assert {:error, {422, _}} = Management.approve(@url, r.chapter, "publish-menu", menu, gov)
+
+    assert Orders.place(r, %{"margherita" => 2}, "Ada", "stale") == {:error, :stale_menu}
+
+    latest = Restaurant.published_menu(r)
+    assert latest.menu_revision == 1
+    assert Orders.price(latest, %{"pepperoni" => 1}) == {:error, :unknown_item}
+    assert {:ok, order} = Orders.place(latest, %{"margherita" => 2}, "Ada", "fresh")
+
+    assert %{subtotal: 2000, total: 2120, menu_revision: 1, lines: [%{"discount_minor" => 500}]} =
+             Orders.get(r, order)
+
+    assert {:ok, _} =
+             Management.approve(
+               @url,
+               r.chapter,
+               "publish-menu",
+               %{menu | "expected_revision" => 1, "items" => []},
+               gov
+             )
+
+    assert {:ok, ^order} = Orders.place(latest, %{"margherita" => 2}, "Ada", "fresh")
+    assert Orders.menu(Restaurant.published_menu(r)) == []
+
+    revoke = %{"merchant_id" => r.merchant, "key_id" => r.boards["board-1"].signer.key_id}
+    assert {:ok, _} = Management.approve(@url, r.chapter, "revoke-device", revoke, gov)
+    refute Restaurant.active_board?(r, "board-1")
+    assert Orders.step(r, "board-1", order, :accept, 0) == {:error, :forbidden}
+    assert %{state: :placed} = Orders.get(r, order)
   end
 
   defp post(path, body, headers \\ []) do

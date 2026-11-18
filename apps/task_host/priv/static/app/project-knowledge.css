@@ -1,0 +1,31 @@
+.knowledge-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.knowledge-toolbar select { max-width: 100%; }
+.knowledge-reason-field { display: block; margin: 12px 0 0; font-size: 13px; }
+.knowledge-reason-field textarea { display: block; width: 100%; margin-top: 5px; resize: vertical; }
+.knowledge-previous-approval { margin: 10px 0; border-left: 3px solid var(--line); padding-left: 10px; }
+.knowledge-note { color: var(--muted); font-size: 13px; }
+.knowledge-item { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 12px 0; min-width: 0; }
+.knowledge-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; }
+.knowledge-title h3 { margin: 0; }
+.knowledge-title a, .knowledge-item h3 { overflow-wrap: anywhere; }
+.knowledge-badge { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; font-size: 11px; white-space: nowrap; color: var(--muted); }
+.knowledge-approved { color: var(--accent); }
+.knowledge-pending, .knowledge-stale { color: var(--warn); }
+.knowledge-body { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; max-height: 65vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 6px; }
+.knowledge-provenance { margin: 10px 0; font-size: 12px; }
+.knowledge-provenance pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; font-size: 12px; }
+.knowledge-provenance dt { font-weight: 600; }
+.knowledge-provenance dd { margin: 2px 0 10px; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+.knowledge-draft > summary, .knowledge-provenance > summary, .knowledge-suggestions > summary { cursor: pointer; padding: 6px 0; }
+.knowledge-suggestions { grid-column: 1 / -1; min-width: 0; margin-top: 8px; font-size: 13px; }
+.knowledge-suggestion { padding: 12px 0; border-top: 1px solid var(--line); min-width: 0; }
+.knowledge-suggestion:first-child { border-top: 0; }
+.knowledge-reason { color: var(--accent); font-size: 12px; }
+.knowledge-suggestion p, .knowledge-item p { overflow-wrap: anywhere; }
+.knowledge-suggestion-list { min-width: 0; }
+.workspace-knowledge { margin: 10px 0 0; }
+@media (max-width: 600px) {
+  .knowledge-toolbar button, .knowledge-toolbar select { min-height: 42px; }
+  .knowledge-item { padding: 10px; }
+  .knowledge-body { padding: 8px; }
+}

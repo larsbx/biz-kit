@@ -301,4 +301,71 @@ defmodule Dispatch.Operations.BoardTest do
 
     assert {:error, {:invalid, _}} = Board.transition(ctx.dispatcher, b.id, "activate", b.version)
   end
+
+  describe "equipment on active trips" do
+    setup ctx do
+      %{participant: other} = Fixtures.person(ctx.tenant, ctx.carrier, display_name: "Ola")
+      Fixtures.assignment(ctx.tenant, ctx.carrier, other, "DRIVER")
+      %{other: other}
+    end
+
+    defp two_trips(ctx, equipment) do
+      {:ok, first} = Board.create_load(ctx.dispatcher, %{})
+      {:ok, second} = Board.create_load(ctx.dispatcher, %{})
+
+      plan = fn load, driver ->
+        Map.put(equipment, "operator_participant_id", driver.id)
+        |> then(&Board.plan(ctx.dispatcher, load.id, &1))
+      end
+
+      {:ok, %{assignments: [a]}} = plan.(first, ctx.driver)
+      {:ok, %{assignments: [b]}} = plan.(second, ctx.other)
+      {a, b}
+    end
+
+    test "a vehicle already on an active trip cannot start a second one", ctx do
+      truck = vehicle(ctx)
+      {a, b} = two_trips(ctx, %{"vehicle_id" => truck.id})
+      {:ok, _} = Board.transition(ctx.dispatcher, a.id, "activate", a.version)
+
+      assert {:error, {:invalid, message}} =
+               Board.transition(ctx.dispatcher, b.id, "activate", b.version)
+
+      assert message =~ "vehicle"
+    end
+
+    test "a trailer already on an active trip cannot start a second one", ctx do
+      trailer = Fixtures.equipment(ctx.tenant, ctx.carrier, Dispatch.Fleet.Trailer)
+      {a, b} = two_trips(ctx, %{"trailer_id" => trailer.id})
+      {:ok, _} = Board.transition(ctx.dispatcher, a.id, "activate", a.version)
+
+      assert {:error, {:invalid, message}} =
+               Board.transition(ctx.dispatcher, b.id, "activate", b.version)
+
+      assert message =~ "trailer"
+    end
+
+    test "completing a trip frees its vehicle", ctx do
+      truck = vehicle(ctx)
+      {a, b} = two_trips(ctx, %{"vehicle_id" => truck.id})
+      {:ok, _} = Board.transition(ctx.dispatcher, a.id, "activate", a.version)
+      {:ok, _} = Board.transition(ctx.dispatcher, a.id, "complete", a.version + 1)
+
+      assert {:ok, _} = Board.transition(ctx.dispatcher, b.id, "activate", b.version)
+    end
+
+    test "control: different vehicles start side by side", ctx do
+      {a, _} = two_trips(ctx, %{"vehicle_id" => vehicle(ctx).id})
+      {:ok, third} = Board.create_load(ctx.dispatcher, %{})
+
+      {:ok, %{assignments: [c]}} =
+        Board.plan(ctx.dispatcher, third.id, %{
+          "operator_participant_id" => ctx.other.id,
+          "vehicle_id" => vehicle(ctx).id
+        })
+
+      {:ok, _} = Board.transition(ctx.dispatcher, a.id, "activate", a.version)
+      assert {:ok, _} = Board.transition(ctx.dispatcher, c.id, "activate", c.version)
+    end
+  end
 end

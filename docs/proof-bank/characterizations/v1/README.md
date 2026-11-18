@@ -10,6 +10,14 @@ Source revision: `a98489111a74b395e97f797f0b21e7f53cd95997` (draft stacked PR #2
 4. **Behavior conformance:** run tests, adversarial counterexamples, concurrency/race cases, external dependencies and independent oracles.
 5. **Formal verification:** formalize only a reviewed behavioral contract; bind precise assumptions, proof checker version, implementation refinement, and deployed authority.
 
+## Refreshing pins (until the next characterization milestone)
+
+Every evidence file's git blob is pinned, so a change to one fails `static-source-audit`. By owner decision (2026-11-03), until the next characterization milestone the author of the change refreshes the pins instead of re-characterizing:
+
+    python3 scripts/proof_bank_characterization_audit.py --refresh
+
+This re-pins only existing files whose bytes changed, and appends an `evidence_refreshes` entry to the catalog: the commit it ran on, the date and the paths. `source_sha` and every status stay as they were. App drift, missing or unsafe paths and promoted statuses still fail afterwards. A refreshed pin records that the bytes changed, **not** that anyone re-inspected them.
+
 **Do not infer conformance from a model file, an app folder, a coverage percentage, a test filename, or a CI job in queued status.**
 
 ## All application characterizations
@@ -28,11 +36,6 @@ Source revision: `a98489111a74b395e97f797f0b21e7f53cd95997` (draft stacked PR #2
 | `coop_substrate` | Canonical signed append-only business-event ledger, replay and custody | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/coop_substrate/lib/coop_substrate/canonical.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/coop_substrate/test/canonical_test.exs) | Accepted append always binds canonical bytes, authorization, scope and replay identity | **Unverified** |
 | `dispatch` | Ash/Phoenix transport authority: scoped roles, fleet, operations board, devices and status events | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/dispatch/lib/dispatch/access.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/dispatch/test/dispatch/operations/board_concurrency_test.exs) | Concurrent authenticated assignments cannot create active driver/vehicle conflicts | **Unverified** |
 | `dispatch_core` | Pure last-mile states, producer evidence, cancellation and legacy edge characterization | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/dispatch_core/lib/dispatch_core/last_mile.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/dispatch_core/test/dispatch_core_test.exs) | Cancellation cannot fabricate or erase confirmed physical transport facts | **Unverified** |
-| `eatsbot` | Legacy Phoenix restaurant orders, carts, deliveries and marketing | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot/lib/eatsbot.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot/test/eatsbot/orders/checkout_concurrency_test.exs) | Retirement preserves accepted order/delivery history without a competing writer | **Unverified** |
-| `eatsbot_core` | Legacy Ash products/variants/options, carts, orders and deliveries | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot_core/lib/products/product.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot_core/test/core_test.exs) | Preserve legacy commerce behavior under independent replay characterization | **Unverified** |
-| `eatsbot_extension_kafka` | Kafka publication, ack mapping and refusal of ambiguous retry outcomes | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot_extension_kafka/lib/driver.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot_extension_kafka/test/driver_test.exs) | Ambiguous publish outcomes cannot be recorded as acknowledged success | **Unverified** |
-| `eatsbot_extension_prometheus` | PromEx metrics instrumentation and legacy supervisor endpoint | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot_extension_prometheus/lib/extension.ex) | **no app-local case** | Monitoring does not disclose private records or confer commands | **Unverified** |
-| `eatsbot_extension_telegram_bot` | Telegram webhook/controller, conversation chains, legacy marketing bridge | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/eatsbot_extension_telegram_bot/lib/controller.ex) | **no app-local case** | Unverified Telegram messages cannot authorize business effects | **Unverified** |
 | `federation_core` | Pure ActivityStreams marketplace and pending subscription wire contracts | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/federation_core/lib/federation_core/marketplace.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/federation_core/test/marketplace_test.exs) | Untrusted remote listings can never become local business authority | **Unverified** |
 | `federation_service` | Read-only HTTPS explicit-peer discovery, inbox signature checking and durable projection | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/federation_service/lib/federation_service/inbox.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/federation_service/test/network_test.exs) | Stale/withdrawn listings cannot be resurrected through reorder/retry | **Unverified** |
 | `fulfillment_core` | Pure commerce-to-transport request, accept/reject, cancellation and proof protocol | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/fulfillment_core/lib/fulfillment_core.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/fulfillment_core/test/fulfillment_core_test.exs) | Cancellation race cannot invent completed cancellation or erase delivery fact | **Unverified** |
@@ -48,10 +51,6 @@ Source revision: `a98489111a74b395e97f797f0b21e7f53cd95997` (draft stacked PR #2
 | `task_core` | Pure task DAG, lifecycle/DoD/evidence, and signed agent-intent logic | [source](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/task_core/lib/task_core/admission.ex) | [test](https://github.com/larsbx/biz-kit/blob/a98489111a74b395e97f797f0b21e7f53cd95997/apps/task_core/test/agent_runs_test.exs) | Revoked grants or changed task versions invalidate runnable agent intents | **Unverified** |
 
 ## Early audit findings
-
-**EatsbotCore:** The only app-local ExUnit case calls `Core.hello()` but the application tree has no corresponding `Core` module source. This is a concrete *test-suite relevance gap* (and a plausible failing test), **not** a demonstrated runtime regression. Characterize the real Ash resources using `eatsbot` and extracted portable-core consumers before changing ownership.
-
-**Eatsbot Prometheus and Telegram:** No `*_test.exs` cases in their own app test trees (only helpers and support handlers). Implement negative security/ingress cases before claiming conformance.
 
 **HawalaCapability:** Source README explicitly specifies a **test-only** adapter and immutable external Hawala fixtures. No live financial gateway exists here. Cross-VM fencing and financial finality are outside the scope of the test harness.
 
@@ -92,8 +91,7 @@ side effects. CI must show passing jobs and captured log links before a
 reviewer changes any `not_executed` catalog state. The current catalog
 remains deliberately pessimistic even after tests are scheduled.
 
-Hosts (`dispatch`, `spruce_goose`, `eatsbot`, `federation_service`),
-remaining app/test fixtures, external `hawala-core` and the two legacy
-Eatsbot extensions with no app-local ExUnit cases require separate
+Hosts (`dispatch`, `spruce_goose`, `federation_service`),
+remaining app/test fixtures and external `hawala-core` require separate
 infrastructure-specific acceptance gates. The pure-core lane cannot
 substitute for those tests.

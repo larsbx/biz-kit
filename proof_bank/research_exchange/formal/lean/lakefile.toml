@@ -1,0 +1,10 @@
+name = "researchExchange"
+version = "0.2.0"
+defaultTargets = ["ResearchExchange", "exchange_trace"]
+
+[[lean_lib]]
+name = "ResearchExchange"
+
+[[lean_exe]]
+name = "exchange_trace"
+root = "Main"

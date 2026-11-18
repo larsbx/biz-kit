@@ -20,7 +20,9 @@ defmodule CoopSubstrate.CommercialSetoffTest do
 
     for {member_id, actor} <- [{"M-alice", alice}, {"M-bob", bob}] do
       {:ok, _} =
-        Log.append(signed_event(actor, "MemberRegistered", registration_payload(member_id, actor)))
+        Log.append(
+          signed_event(actor, "MemberRegistered", registration_payload(member_id, actor))
+        )
     end
 
     %{alice: alice, bob: bob}
@@ -79,6 +81,7 @@ defmodule CoopSubstrate.CommercialSetoffTest do
     assert proposal.action == :independent_dual_signature_and_admission_required
     assert proposal.envelope.type == "NettingExecuted"
     assert proposal.envelope.sigs == %{}
+
     assert proposal.envelope.payload == %{
              "party_a" => "M-alice",
              "party_b" => "M-bob",
@@ -91,6 +94,7 @@ defmodule CoopSubstrate.CommercialSetoffTest do
              "net_creditor" => "M-bob",
              "net_minor" => 40
            }
+
     assert Log.head() == before_head
   end
 
@@ -114,17 +118,21 @@ defmodule CoopSubstrate.CommercialSetoffTest do
 
     assert %{open: false} = Log.gate().obligations[{@chapter, "OB-1"}]
     assert %{open: false} = Log.gate().obligations[{@chapter, "OB-2"}]
+
     assert %{open: true, amount_minor: 40} =
              Log.gate().obligations[{@chapter, "OB-NET-1"}]
 
     assert {:error, :nothing_to_net} = prepare("OB-NET-2")
+
     assert {:ok, [%{a_to_b: 40, b_to_a: 0, setoff: 0}]} =
              Finance.netting(@chapter, {"M-alice", "M-bob"})
 
     assert :ok = Log.verify_chains()
     restart_log()
+
     assert %{open: true, amount_minor: 40} =
              Log.gate().obligations[{@chapter, "OB-NET-1"}]
+
     assert {:ok, state} = Log.replay(Membership)
     assert state.obligations == Log.gate().obligations
   end
@@ -165,9 +173,11 @@ defmodule CoopSubstrate.CommercialSetoffTest do
     assert Enum.at(new_envelope.signers, 1).key_id == replacement.signer.key_id
   end
 
-  test "refuses empty, unregistered, unsorted, one-way, cross-currency or reused residual IDs", ctx do
+  test "refuses empty, unregistered, unsorted, one-way, cross-currency or reused residual IDs",
+       ctx do
     record!(ctx.alice, ctx.bob, "OB-1", "M-alice", "M-bob", 100)
     assert {:error, :nothing_to_net} = prepare()
+
     assert {:error, :invalid_pair_or_denomination} =
              CommercialSetoff.prepare(@chapter, {"M-bob", "M-alice"}, "USD", "x", 5)
 
@@ -185,7 +195,8 @@ defmodule CoopSubstrate.CommercialSetoffTest do
     refute Map.has_key?(valid.payload, "source_obligation_ids")
   end
 
-  test "equal bilateral position needs no residual and duplicate signed event cannot discharge twice", ctx do
+  test "equal bilateral position needs no residual and duplicate signed event cannot discharge twice",
+       ctx do
     record!(ctx.alice, ctx.bob, "OB-1", "M-alice", "M-bob", 30)
     record!(ctx.bob, ctx.alice, "OB-2", "M-bob", "M-alice", 30)
 

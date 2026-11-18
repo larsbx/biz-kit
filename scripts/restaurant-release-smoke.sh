@@ -27,7 +27,7 @@ cat > "$work/restaurant.json" <<JSON
   "chapter": "$chapter",
   "merchant": "shop",
   "currency": "USD",
-  "tax_rate": "0.0825",
+  "jurisdiction": "US-MI",
   "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
   "storefront": {"device_id": "storefront", "key_id": "k-store"},
   "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board",
@@ -63,6 +63,19 @@ for device in storefront board-1; do
   HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
     "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.grant([\"$device\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"
 done
+
+cat > "$work/menu.json" <<JSON
+{
+  "merchant_id": "shop",
+  "expected_revision": 0,
+  "currency": "USD",
+  "items": [{"id": "margherita", "name": "Margherita special", "sku": "MARG",
+             "price_minor": 1250, "discount_minor": 250}]
+}
+JSON
+HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
+  "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.manage([\"publish-menu\", \"$work/menu.json\", \"--chapter\", \"$chapter\", \"--server\", \"$url\"])"
+curl -fs "$url/" | grep -q "Margherita special"
 
 out=$("$release" rpc "Code.eval_file(\"$PWD/scripts/restaurant_release_smoke.exs\")")
 echo "$out"

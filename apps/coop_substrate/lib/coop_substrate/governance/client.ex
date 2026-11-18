@@ -16,6 +16,14 @@ defmodule CoopSubstrate.Governance.Client do
 
   @type signer :: %{key_id: String.t(), pubkey: binary(), seed: binary()}
 
+  @doc """
+  The server the governance tasks talk to without `--server`: `$BIZKIT_URL`,
+  else the task host on its default loopback port
+  (docs/architecture/2026-11-09-task-host.md).
+  """
+  @spec default_server() :: String.t()
+  def default_server, do: System.get_env("BIZKIT_URL", "http://127.0.0.1:4001")
+
   @spec get(String.t()) :: {:ok, map()} | {:error, term()}
   def get(url), do: request(:get, url, nil)
 
