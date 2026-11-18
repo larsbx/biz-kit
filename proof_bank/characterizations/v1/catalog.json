@@ -396,7 +396,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
-        "apps/dispatch/lib/dispatch/operations/board.ex": "62fb826ed46e3c65ccaf7b01d8c982f9b4748960",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "b3a62f1c3e1e5f612694846129cf6dc2a285928c",
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
       }
     },
@@ -1234,6 +1234,28 @@
       "registered": [],
       "refreshed_paths": [
         "apps/restaurant_core/lib/restaurant_core/admission.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "e074ef4a8bccb5330318000e8efdd34cdd38b4f7",
+      "date": "2026-11-07",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "9e4970c697c7aba8a44d6953c690d536e7f5ac91",
+      "date": "2026-11-18",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/dispatch/lib/dispatch/operations/board.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"

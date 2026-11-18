@@ -12,12 +12,14 @@ defmodule Dispatch.Access.Driving do
 
   - Revoking a driving role locks the participant's open trips `FOR UPDATE`
     (`equipment_out?/3`) before deciding.
-  - Activating a trip locks that trip, then locks the operator's driving roles
-    `FOR SHARE` (`roles/4` with `lock: true`).
+  - Activating a trip locks that trip, then validates its immutable source
+    through `Dispatch.Fleet.OperatorPolicy`, including role/definition share locks.
 
-  Whichever commits first, the other sees it: a revocation finds the active
-  trip, or an activation finds no driving role. Both take the trip lock before
-  any role row, so the two cannot deadlock.
+  A revocation ordered first is seen at admission; an activation ordered first
+  keeps its selected role locked through the mutation. E3 occupancy itself is
+  enforced by the assignment's global User constraints. The trip-before-role
+  ordering is shared with equipment revocation; broader transactions and their
+  actor/identity/definition locks have no general deadlock-freedom guarantee.
   """
 
   import Ecto.Query, only: [from: 2]

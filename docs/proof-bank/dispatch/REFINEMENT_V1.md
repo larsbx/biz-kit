@@ -123,9 +123,10 @@ as evidence of rollback.
   suite is at request entry.
 - Establish the durable audit history projection and atomicity across all
   supported write paths. The rollback control exercises one concrete path.
-- Global driver exclusivity across trips, writers and tenants remains
-  **unverified**. Give it its own invariant, authority scope, and adversarial
-  two-trip PostgreSQL cases.
+- Global driver exclusivity across all trips, writers and tenants is **not
+  established**. PR #312 defines E1/E2/E3 and supplies adversarial PostgreSQL
+  cases; at `21923592`, they pass while the stronger global-user and profile
+  binding assertions are refuted. See the review packet and pinned receipts.
 - Record exact-head hosted outcomes before acceptance. The Proof Bank packet
   remains unverified, and marketplace release remains gated by #242.
 
@@ -150,3 +151,29 @@ MIX_ENV=test mix test --include integration \
 The forced outer rollback and the expired credential paired with a live
 credential are runtime negative controls. The existing Quint counterexample
 controls exercise model sensitivity separately.
+
+## Driver-exclusivity review packet (#296)
+
+[DRIVER_EXCLUSIVITY_V1.md](DRIVER_EXCLUSIVITY_V1.md) defines the present
+per-tenant partial-index invariant separately from proposed mixed-profile and
+global-user invariants. Its independently committed two-trip acceptance suite
+covers both contender orders, commit/rollback, terminal slot release and
+non-Board writers. At `f04dee64`, hosted formal/linkage jobs passed but runtime
+tests were skipped after a prerequisite CommercialSetoff compilation failure.
+After that repair, run 42110873119 at `21923592` passed all three jobs,
+including 61 runtime tests with zero failures and both assertion-specific
+limitation controls. The hosted receipt is pinned to that source revision.
+The accompanying profile-binding patch is unapplied. No verification status is promoted.
+
+The [global exclusivity Lean/Quint layer](FORMAL_EXCLUSIVITY_V1.md) proves
+preservation under an abstract commit-time guard and refutes weaker guard
+models. Identity binding, authority and atomic database correspondence remain
+assumptions; these results do not close the runtime or refinement obligations.
+
+
+Hosted run 42113640384 at `e1d81bfa` also passed the extended formal layer
+(114 declarations, 11 Quint tests), portable linkage and 61 baseline runtime
+tests. Both stronger-policy assertions were refuted as expected. A later,
+separately labelled review-only runner tests the unapplied profile-binding
+patch against a derived source tree and restores/recompiles the baseline;
+its candidate result is not evidence for unchanged-source behavior.

@@ -228,7 +228,8 @@ defmodule Dispatch.Operations.BoardTest do
 
   test "a foreign organization's trip cannot be transitioned", ctx do
     other = Fixtures.organization(ctx.tenant, :CARRIER)
-    trip = Fixtures.assignment_record(ctx.tenant, other, ctx.driver)
+    %{participant: other_driver} = Fixtures.person(ctx.tenant, other)
+    trip = Fixtures.assignment_record(ctx.tenant, other, other_driver)
 
     assert {:error, :not_found} =
              Board.transition(ctx.dispatcher, trip.id, "activate", trip.version)

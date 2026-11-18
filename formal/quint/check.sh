@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 bash check_tb_outcome_admission.sh
+bash check_dispatch_exclusivity.sh
 
 # Version-pinned Quint 0.32.0 is installed by GitHub Actions. The safe
 # models must typecheck, pass sampled safety, and pass bounded Apalache.

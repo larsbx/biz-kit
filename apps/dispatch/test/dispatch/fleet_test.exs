@@ -343,7 +343,10 @@ defmodule Dispatch.FleetTest do
       operator = participant(tenant, carrier)
 
       driver_role =
-        role_definition(tenant, "DRIVER", Dispatch.Access.Roles.Driver, ["status.declare.self"])
+        role_definition(tenant, "DRIVER", Dispatch.Access.Roles.Driver, [
+          "assignment.read.self",
+          "status.declare.self"
+        ])
 
       driver_grant = grant(tenant, carrier, operator, driver_role, :SELF, nil)
 
@@ -369,7 +372,7 @@ defmodule Dispatch.FleetTest do
       assert {:ok, _now_allowed} = activate(third, tenant)
     end
 
-    test "a profile declaring concurrency is not bound by the index" do
+    test "two valid concurrent profiles may both be active" do
       # Section 22.2 scopes the rule to DRIVER and lets other profiles declare a
       # different cardinality. A universal index would block work the
       # specification permits, which is the failure this test exists to catch.
@@ -378,7 +381,10 @@ defmodule Dispatch.FleetTest do
       operator = participant(tenant, carrier)
 
       courier_role =
-        role_definition(tenant, "COURIER", Dispatch.Support.Roles.Courier, ["status.declare.self"])
+        role_definition(tenant, "COURIER", Dispatch.Support.Roles.Courier, [
+          "assignment.read.self",
+          "status.declare.self"
+        ])
 
       courier_grant = grant(tenant, carrier, operator, courier_role, :SELF, nil)
 
@@ -392,9 +398,8 @@ defmodule Dispatch.FleetTest do
     end
 
     test "an omitted role assignment keeps the restrictive default" do
-      # The flag is derived, never asserted. A caller that says nothing — or
-      # names a role assignment that cannot be resolved — gets the restriction,
-      # because relaxing it on a lookup failure would be a fail-open.
+      # Omission keeps the restrictive default. Explicitly naming an invalid
+      # source is an error, rather than silently discarding caller intent.
       carrier = organization()
       tenant = carrier.id
       operator = participant(tenant, carrier)
@@ -411,9 +416,9 @@ defmodule Dispatch.FleetTest do
           starts_at: DateTime.utc_now(),
           operator_role_assignment_id: Ash.UUID.generate()
         })
-        |> Ash.create!(authorize?: false, tenant: tenant)
+        |> Ash.create(authorize?: false, tenant: tenant)
 
-      assert unresolvable.operator_exclusive
+      assert {:error, _invalid_source} = unresolvable
     end
 
     test "the flag cannot be set by the caller" do
