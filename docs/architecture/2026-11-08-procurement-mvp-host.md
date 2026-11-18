@@ -18,6 +18,10 @@ merchant quotes, delivery and payment references are **operator attestations**,
 not independently verified business registration, buyer signatures or bank facts.
 Cost capture, scorecard export and membership economics remain unconnected.
 
+The coordinator can optionally record a fixed sourcing reward on a wanted
+request. See [procurement sourcing bounties](procurement-sourcing-bounty.md)
+for the quote, fulfillment and closeout rules.
+
 ## Admission and recovery
 
 The canonical Log remains the writer and PostgreSQL EventStore the durable source.

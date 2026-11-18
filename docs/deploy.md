@@ -12,26 +12,13 @@ Date: 2026-10-20. The shortest path to a running deployment.
 | --- | --- | --- |
 | `orchestration` | the ledger (`coop_substrate`), identity, cluster, the task host (`task_host`: sign-in, web view, API, change feed), SpruceGoose (CLI service, until it retires) | the settings below are set |
 | `biz_kit` | all of the above, plus `dispatch` and `keel` | dispatch's integrations are configured too |
-| `eatsbot` | `eatsbot` and its `eatsbot_*` siblings | `DATABASE_URL`, `SECRET_KEY_BASE`, `GEOCODING_TOKEN`, `TOKEN_SIGNING_SECRET` are set |
 | `restaurant` | the ledger and the rebuilt eatsbot's host (`restaurant_host`) | the [restaurant settings](#the-restaurant-release) are set |
 
-`eatsbot` is built from its own directory, so it compiles only eatsbot and its
-siblings: `docker build -f apps/eatsbot/Dockerfile .` from the repository root.
-It has a database of its own. Its production section of `runtime.exs` runs
-only for this release (or an unset `RELEASE_NAME`), and the dispatch and
-SpruceGoose sections skip it.
-
-Production eatsbot is not deployed from here: Fly deploys it from
-`larsbx/eatsbot`, which remains the source of truth (see the
-[modular platform decision](architecture/2026-10-24-modular-business-platform.md)).
-Moving production to this release is a separate, tested cutover; until then
-this release exists for building and testing, and must not run as a second
-writer against eatsbot's production database.
-
-The Telegram bot reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK` (the full
-`https://…/telegram` URL) at boot. Setting `TELEGRAM_WEBHOOK` also requires
-`TELEGRAM_WEBHOOK_SECRET` (1–256 of `A-Z a-z 0-9 _ -`): the bot registers it
-with Telegram, and `POST /telegram` answers 401 to any update without it.
+Eatsbot is the `restaurant` release described below: the rebuilt eatsbot,
+started with an empty restaurant ledger. The legacy `apps/eatsbot*` apps and
+their `eatsbot` release are retired (decommission R6,
+[R0 inventory](architecture/2026-11-16-eatsbot-r0-inventory.md)); their history
+stays in git. Its GraphQL API and Telegram bot were dropped (decisions D2, D3).
 
 Nothing depends on dispatch, so `orchestration` leaves it out. In
 production, dispatch refuses to start until it has these:
@@ -168,9 +155,11 @@ The host holds a grant for five minutes, bound to chapter, merchant and the
 configured device key. The client checks the canonical bytes match the
 reviewed grant and governance signer, then sends only a signature. Submission
 is single-use; expired, replayed, unauthorized or malformed grants cannot
-append. A repeat enrollment is refused as already granted. For refusal,
-check chapter governance, device configuration, key identifiers and clock
-before preparing a new grant. This command does not rotate or revoke keys.
+append. The ledger refuses a repeat enrollment, a device key the merchant
+was already granted under another key ID (revoked or not), and a key the
+chapter granted to Dispatch. The command reports each only as a refusal
+(`not_granted`), so check chapter governance, device configuration, key
+identifiers and seeds, and clock before preparing a new grant. This command does not rotate or revoke keys.
 Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 `_`, `.` or `-`, starting with a letter or digit. Device IDs, key IDs, derived
 seed-variable names and device keys must be distinct in one restaurant.
@@ -210,7 +199,8 @@ mix restaurant.manage publish-menu menu.json --chapter chapter-genesis --server 
 To revoke a board or storefront key, use the JSON
 `{"merchant_id":"shop","key_id":"k-board"}` with the same command, replacing
 `publish-menu` with `revoke-device`. Replace a revoked key by enrolling a new
-key ID. Both operations are available from an operator's release copy:
+key ID with a new seed: the merchant never grants a revoked key again, so set a
+fresh `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` before enrolling. Both operations are available from an operator's release copy:
 
 ```sh
 bin/restaurant eval 'RestaurantHost.ReleaseTasks.manage(["publish-menu", "menu.json", "--chapter", "chapter-genesis", "--server", "https://order.example"])'
@@ -232,7 +222,12 @@ Enroll a dedicated Dispatch key with
 The JSON contains `merchant_id`, `tenant_id` (Dispatch UUID), `key_id` and
 `pubkey` (base64url without padding). The key can be revoked with
 `revoke-device`. The seed is a base64-encoded 32-byte seed in a protected
-file on the Dispatch machine.
+file on the Dispatch machine. The chapter keeps that key apart: the ledger
+refuses it if it is any of the chapter's device or role keys, or was granted
+for another tenant, and no role key may reuse it later. The command reports
+such a refusal only as `not_admitted`. One Dispatch key may serve several
+merchants of its tenant. Re-enabling Dispatch after a revoke, or switching
+tenant, takes a new key ID and a new seed file.
 
 | Dispatch release variable | Value |
 | --- | --- |

@@ -86,3 +86,37 @@ See [the native identity and device integration contract](../../docs/architectur
 Dispatch.Extension is a nonmutating ExtensionV1 reference descriptor. Existing
 server authorization and transport ownership remain unchanged. See the
 [extension contract](../../docs/architecture/2026-10-31-extension-v1-first-slice.md).
+
+## Fleet spatial workspace
+
+`/operations/map` adds a small God's Eye View-derived globe and an observation
+list to this portal. It uses the existing signed location ingestion and a
+reauthorized JSON/SSE snapshot. The selected organization role must already
+hold both `operations.participant.read` and
+`operations.location.precise.read`; current trip consent is also required for
+each displayed position. Eligible readers see a **Fleet map** link on
+`/operations`. No default role gains access through this feature.
+
+Before packaging a Dispatch release, stage the pinned, same-origin Cesium
+assets from the repository root:
+
+```sh
+npm ci --prefix tools/dispatch-globe --ignore-scripts
+npm run build --prefix tools/dispatch-globe
+```
+
+Node is only a build dependency. The running Phoenix service serves the globe,
+its coarse local Natural Earth basemap, and the authorized observation feed.
+No external map key, public-data service or standalone GEV server is needed.
+The workspace includes accuracy, freshness, mock-observation labels, keyboard
+and marker selection, follow, roster filters and local coordinate search.
+Selected work additionally requires `load.read` and `assignment.read` and is
+bound to the exact current observation. It links to a read-only operator load
+page and ordered planned stops; unknown stop coordinates and progress remain
+explicit. Address search, routes and direct operational write controls remain
+later work. The separate proposed MapLibre application is omitted.
+
+See [the integration decision](../../docs/architecture/2026-11-11-dispatch-map.md),
+[V2 wire contract](../../docs/architecture/2026-11-11-dispatch-spatial-contract.md),
+[formal obligations](../../formal/DISPATCH_SPATIAL_SAFETY.md) and
+[build/profile acceptance](../../tools/dispatch-globe/README.md).

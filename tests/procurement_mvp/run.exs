@@ -144,6 +144,81 @@ defmodule ProcurementMVPTest do
     assert replay.() == replay.()
   end
 
+  defp bounty_terms, do: %{reward_minor: 500, maximum_total_minor: 9500, terms_ref: "private:terms"}
+
+  defp sourced_quote(revision \\ 1) do
+    Map.merge(quote_attrs(revision), %{sourcing_business_id: "source", sourcing_ref: "private:attribution"})
+  end
+
+  defp open_bounty do
+    nil |> take(:request, request()) |> take(:post_bounty, bounty_terms()) |> take(:qualify, evidence())
+  end
+
+  test "bounty terms fix the reward before bids and enforce the all-in cap" do
+    requested = take(nil, :request, request())
+    for reward <- [0, -1, 1.5, 9501] do
+      malformed = %{bounty_terms() | reward_minor: reward}
+      assert {:error, :invalid_bounty_terms} =
+               W.apply_command(requested, trusted(), command(requested, :post_bounty, malformed))
+    end
+
+    ordinary = prepared()
+    assert {:error, :bounty_terms_already_fixed} =
+             W.apply_command(ordinary, trusted(), command(ordinary, :post_bounty, bounty_terms()))
+    assert {:error, :bounty_missing} =
+             W.apply_command(ordinary, trusted(), command(ordinary, :sourced_quote, %{sourced_quote() | quote_id: "new"}))
+
+    s = open_bounty()
+    assert {:error, :bounty_budget_exceeded} =
+             W.apply_command(s, trusted(), command(s, :sourced_quote, %{sourced_quote() | total_minor: 9001}))
+    assert {:error, :independent_sourcing_business_required} =
+             W.apply_command(s, trusted(), command(s, :sourced_quote, %{sourced_quote() | sourcing_business_id: "merchant"}))
+    assert {:error, :bounty_terms_already_fixed} =
+             W.apply_command(s, trusted(), command(s, :post_bounty, bounty_terms()))
+
+    ordinary_winner = s |> take(:quote, quote_attrs()) |> take(:accept, accept())
+    assert ordinary_winner.bounty.award == nil
+  end
+
+  test "bounty binds the selected quote revision and is earned only after closeout" do
+    s = open_bounty() |> take(:sourced_quote, sourced_quote()) |> take(:sourced_quote, sourced_quote(2))
+    assert {:error, :sourcing_business_mismatch} =
+             W.apply_command(s, trusted(), command(s, :quote, quote_attrs(3)))
+    assert {:error, :quote_revision_conflict} =
+             W.apply_command(s, trusted(), command(s, :accept, accept()))
+    a = take(s, :accept, accept(2))
+    assert %{sourcing_business_id: "source", quote_id: "q", quote_revision: 2,
+             delivery_ref: nil, closeout_ref: nil, payment_ref: nil} = a.bounty.award
+    assert {:error, :illegal_transition} =
+             W.apply_command(a, trusted(), command(a, :confirm_bounty, evidence()))
+
+    f = take(a, :fulfill, %{evidence_ref: "delivery"})
+    assert {:error, :bounty_result_not_admissible} =
+             W.apply_command(f, trusted(), command(f, :bounty_payment_evidence, evidence()))
+    closeout = command(f, :confirm_bounty, %{evidence_ref: "closeout"})
+    assert {:ok, earned, :accepted} = W.apply_command(f, trusted(), closeout)
+    assert {:ok, ^earned, :duplicate} = W.apply_command(earned, trusted(), closeout)
+    assert {:error, :bounty_result_not_admissible} =
+             W.apply_command(earned, trusted(), command(earned, :confirm_bounty, evidence()))
+    paid = take(earned, :bounty_payment_evidence, %{evidence_ref: "external-payment"})
+    assert %{delivery_ref: "delivery", closeout_ref: "closeout", payment_ref: "external-payment"} =
+             paid.bounty.award
+    assert paid.payment_evidence == []
+  end
+
+  test "late delivery and disputed orders cannot earn sourcing rewards" do
+    a = open_bounty() |> take(:sourced_quote, sourced_quote()) |> take(:accept, accept())
+    late = trusted(%{now_ms: 10_001, event_at_ms: 10_000})
+    assert {:ok, f, :accepted} = W.apply_command(a, late, command(a, :fulfill, evidence()))
+    assert f.phase == :fulfilled
+    assert {:error, :bounty_result_not_admissible} =
+             W.apply_command(f, late, command(f, :confirm_bounty, evidence()))
+
+    disputed = a |> take(:fulfill, evidence()) |> take(:dispute, evidence())
+    assert {:error, :illegal_transition} =
+             W.apply_command(disputed, trusted(), command(disputed, :confirm_bounty, evidence()))
+  end
+
   defp action_attrs("quote" <> r), do: {:quote, quote_attrs(String.to_integer(r))}
   defp action_attrs("accept" <> r), do: {:accept, accept(String.to_integer(r))}
   defp action_attrs("payment"), do: {:payment_evidence, evidence()}

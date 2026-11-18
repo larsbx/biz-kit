@@ -5,11 +5,13 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
   place exactly one order, and the order's history replays to its state (I₆).
   """
   use CoopSubstrate.LogCase, async: false
-  alias CoopSubstrate.Log
+  alias CoopSubstrate.{Canonical, Constants, Log}
   alias CoopSubstrate.Projections.Membership
+  alias CoopSubstrate.Protocol.Envelope
   alias RestaurantCore.Admission
 
   @ch "chapter-genesis"
+  @tenant "11111111-1111-1111-1111-111111111111"
   @all ~w(checkout accept start_preparing mark_ready complete cancel dispatch fail)
 
   setup do
@@ -41,7 +43,7 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
         )
     end
 
-    {:ok, pos: pos, kds: kds, ghost: ghost}
+    {:ok, gov: gov, pos: pos, kds: kds, ghost: ghost}
   end
 
   defp checkout(device, order_id),
@@ -117,5 +119,107 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
 
     {:ok, replayed} = Log.replay(Membership)
     assert Admission.state(replayed.restaurant, @ch, "shop", "o1") == live
+  end
+
+  defp dispatch_grant(gov, merchant, key_id, pubkey),
+    do:
+      signed_event(gov, "RestaurantDispatchGrantedV1", %{
+        "merchant_id" => merchant,
+        "tenant_id" => @tenant,
+        "key_id" => key_id,
+        "pubkey" => {:bytes, pubkey}
+      })
+
+  defp declare(gov, role, key_id, pubkey),
+    do:
+      signed_event(gov, "RoleKeyDeclared", %{
+        "role" => role,
+        "key_id" => key_id,
+        "pubkey" => {:bytes, pubkey}
+      })
+
+  # Test-only: what an appender without the key fence committed. The record
+  # goes straight to the EventStore, past validity, chained like any other.
+  defp persist_unchecked!(event) do
+    head = Log.head()
+    {:ok, stream} = Envelope.stream_id(event)
+    {:ok, prior} = Log.read_stream(stream)
+    last = List.last(prior)
+    {:ok, previous_hash} = Envelope.event_hash(last)
+
+    assigned =
+      Envelope.with_log_assignment(event, %{
+        stream_id: stream,
+        stream_seq: last.stream_seq + 1,
+        global_seq: head.global_seq + 1,
+        prev_global_hash: head.global_hash,
+        prev_stream_hash: previous_hash
+      })
+
+    {:ok, uuid} = CoopSubstrate.ULID.to_uuid(event.event_id)
+
+    data = %EventStore.EventData{
+      event_id: uuid,
+      event_type: event.type,
+      data: Canonical.encode!(Envelope.full_record_term(assigned)),
+      metadata: nil
+    }
+
+    :ok = CoopSubstrate.EventStore.append_to_stream("ledger", head.global_seq, [data])
+  end
+
+  test "a Dispatch key that reuses a device key appends nothing", ctx do
+    head = Log.head()
+
+    assert {:error, refusal} =
+             Log.append(dispatch_grant(ctx.gov, "deli", "courier", ctx.pos.signer.pubkey))
+
+    assert inspect(refusal) =~ "key_not_separate"
+    assert Log.head() == head
+  end
+
+  test "a Dispatch key is never declared a role key afterwards, in any declarable role", ctx do
+    courier = new_member("restaurant_dispatch")
+
+    {:ok, _} =
+      Log.append(dispatch_grant(ctx.gov, "shop", courier.signer.key_id, courier.signer.pubkey))
+
+    head = Log.head()
+
+    for role <- Constants.declarable_roles() do
+      assert {:error, refusal} =
+               Log.append(declare(ctx.gov, role, "k-" <> role, courier.signer.pubkey))
+
+      assert inspect(refusal) =~ "key_not_separate", role
+    end
+
+    assert Log.head() == head
+    # A fresh key is declared as before.
+    assert {:ok, _} =
+             Log.append(declare(ctx.gov, "steward", "k-fresh", new_member().signer.pubkey))
+  end
+
+  test "a ledger that already holds a collision boots, replays it, and refuses the next one",
+       ctx do
+    head = Log.head()
+    # Admitted before the fence existed: a Dispatch grant on pos's device key.
+    persist_unchecked!(dispatch_grant(ctx.gov, "shop", "courier", ctx.pos.signer.pubkey))
+    restart_log()
+
+    assert Log.head().global_seq == head.global_seq + 1
+    grants = Log.gate().restaurant.grants
+    assert %{actor: :dispatch} = grants[{@ch, "shop", "courier"}]
+    assert %{actor: :admin} = grants[{@ch, "shop", ctx.pos.signer.key_id}]
+    {:ok, replayed} = Log.replay(Membership)
+    assert replayed.restaurant.grants == grants
+    assert :ok = Log.verify_chains()
+
+    head = Log.head()
+
+    assert {:error, refusal} =
+             Log.append(dispatch_grant(ctx.gov, "deli", "courier", ctx.pos.signer.pubkey))
+
+    assert inspect(refusal) =~ "key_not_separate"
+    assert Log.head() == head
   end
 end

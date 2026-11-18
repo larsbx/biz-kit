@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 
 ROOT = Path(__file__).resolve().parents[3]
 PROJECT = ROOT / "proof_bank/cross_currency_setoff"
@@ -37,6 +38,25 @@ def canonical(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def verification_identity(dirty: str, allow_dirty: bool) -> dict[str, object]:
+    """Development mode never claims clean-head acceptance, even with clean status."""
+    return {"verification_mode": "development" if allow_dirty else "clean-head",
+            "git_status_clean": not bool(dirty),
+            "head_sources_verified": not allow_dirty,
+            "clean_checkout": not bool(dirty) and not allow_dirty}
+
+
+def tool_module(name: str):
+    """Load only a source-manifested sibling, including under Python isolated mode."""
+    path = PROJECT / "tools" / (name + ".py")
+    module = types.ModuleType("setoff_" + name)
+    module.__file__ = str(path)
+    # A timestamp-valid .pyc can contain different code from its .py file.
+    # Compile the hashed source bytes directly; ignored caches are not evidence.
+    exec(compile(path.read_bytes(), str(path), "exec"), module.__dict__)
+    return module
+
+
 def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
 
@@ -51,7 +71,14 @@ def source_manifest() -> dict[str, str]:
              ROOT / "mix.exs", ROOT / "mix.lock"]
     paths += list((ROOT / "apps/barter_core").rglob("*.ex"))
     paths += list((ROOT / "apps/barter_core").rglob("*.exs"))
-    paths += list((ROOT / "config").glob("*.exs"))
+    # The umbrella config imports app config/config.exs conditionally and those
+    # files import environment-specific/nested configuration. Include optional
+    # app config trees too: an ignored injected file must not evade the HEAD
+    # source check merely because ordinary Git status remains clean.
+    paths += list((ROOT / "config").rglob("*.exs"))
+    paths += list(ROOT.glob("apps/*/config/**/*.exs"))
+    paths += list(ROOT.glob(".formatter.exs"))
+    paths += list(ROOT.glob("apps/*/.formatter.exs"))
     paths += list((ROOT / "apps/coop_substrate/lib/coop_substrate").glob("commercial_setoff*.ex"))
     paths += list((ROOT / "apps/coop_substrate/test").glob("commercial_setoff*_test.exs"))
     paths += [p for p in PROJECT.rglob("*") if p.is_file() and
@@ -134,6 +161,43 @@ def check_observations(inputs: list[tuple[int, ...]], outputs: list[tuple[int, .
             raise ValueError("unexpected status")
 
 
+def check_suite_receipt(report: object, expected_files: list[str]) -> dict[str, object]:
+    """Require one complete, unfiltered ExUnit inventory with no missing tests.
+
+    The total follows the current suite; adding tests must not break a constant
+    count, and a zero-test/filtered/aborted run must not count as acceptance.
+    The ordinary unfiltered `mix test` remains responsible for discovery.
+    """
+    keys = {"schema", "suite_started", "suite_finished", "interrupted",
+            "declared", "started", "finished"}
+    if (not isinstance(report, dict) or set(report) != keys or
+            report["schema"] != "bizkit.cross-currency.barter-suite.v1" or
+            type(report["suite_started"]) is not int or report["suite_started"] != 1 or
+            type(report["suite_finished"]) is not int or report["suite_finished"] != 1 or
+            report["interrupted"] is not False or
+            not all(isinstance(report[key], list) for key in ["declared", "started", "finished"])):
+        raise ValueError("incomplete or malformed Barter suite receipt")
+    declared, started, finished = report["declared"], report["started"], report["finished"]
+    if not declared or not expected_files or len(set(expected_files)) != len(expected_files):
+        raise ValueError("empty or duplicate Barter suite inventory")
+    if any(not isinstance(row, dict) or set(row) != {"id", "file"} or
+           not all(isinstance(row[key], str) and row[key] for key in ["id", "file"])
+           for row in declared):
+        raise ValueError("malformed declared Barter tests")
+    ids = [row["id"] for row in declared]
+    if len(set(ids)) != len(ids) or {row["file"] for row in declared} != set(expected_files):
+        raise ValueError("duplicate tests or incomplete Barter test file coverage")
+    if (not all(isinstance(item, str) for item in started) or
+            len(started) != len(ids) or set(started) != set(ids)):
+        raise ValueError("not every declared Barter test started exactly once")
+    if (any(not isinstance(row, dict) or set(row) != {"id", "status"} or
+            not isinstance(row["id"], str) or row["status"] != "passed" for row in finished) or
+            len(finished) != len(ids) or {row["id"] for row in finished} != set(ids)):
+        raise ValueError("not every declared Barter test passed exactly once")
+    return {"tests": len(ids), "failures": 0, "skipped": 0, "excluded": 0,
+            "files": sorted(expected_files), "status": "passed"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-head", required=True)
@@ -182,7 +246,7 @@ def main() -> int:
         "schema": "bizkit-cross-currency-preview-verification/v1",
         "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "git_head": actual_head, "expected_head": args.expected_head,
-        "clean_checkout": not bool(dirty), "dirty_paths": dirty.splitlines(),
+        **verification_identity(dirty, args.allow_dirty), "dirty_paths": dirty.splitlines(),
         "source_sha256": hashlib.sha256(canonical(initial_sources).encode()).hexdigest(),
         "source_files": initial_sources, "signature": None,
         "runtime_identity": {name: {"path": str(path), "sha256": sha(path)} for name, path in binaries.items()},
@@ -197,11 +261,12 @@ def main() -> int:
         receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
 
     def run(label: str, command: list[str], *, cwd: Path = ROOT, stdin: str | None = None,
-            allowed: tuple[int, ...] = (0,), timeout: int = 180) -> subprocess.CompletedProcess[str]:
+            allowed: tuple[int, ...] = (0,), timeout: int = 180,
+            env_overrides: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         print("RUN " + label, flush=True)
         started = time.monotonic()
         try:
-            result = subprocess.run(command, cwd=cwd, env=env, input=stdin, text=True,
+            result = subprocess.run(command, cwd=cwd, env=env | (env_overrides or {}), input=stdin, text=True,
                                     capture_output=True, timeout=timeout, check=False)
         except subprocess.TimeoutExpired as exc:
             receipt["stages"].append({"name": label, "command": command, "status": "timeout"})
@@ -220,6 +285,7 @@ def main() -> int:
 
     try:
         run("receipt-negative-controls", [sys.executable, "-I", str(PROJECT / "tools/test_receipt_guards.py")])
+        run("assertion-receipt-negative-controls", [sys.executable, "-I", str(PROJECT / "tools/test_assertion_mutations.py")])
         versions = {}
         for name in ["lean", "quint", "elixir"]:
             versions[name] = run(name + "-version", [str(binaries[name]), "--version"]).stdout.strip()
@@ -234,16 +300,22 @@ def main() -> int:
                 run("lean-" + module, [str(binaries["lean"]), "-DwarningAsError=true", "-o", str(build / (module + ".olean")), module + ".lean"], cwd=lean_dir)
             registry = json.loads((lean_dir / "proof_targets.json").read_text())
             targets = registry["theorems"]
+            contracts = registry["contracts"]
             if (registry.get("schema") != "bizkit.cross-currency-setoff.lean-targets.v1" or
                     registry.get("expected_count") != 40 or len(targets) != 40 or
+                    registry.get("expected_contract_count") != 40 or len(contracts) != 40 or
+                    contracts != ["CrossCurrencySetoff.Contracts.check_" + name.rsplit(".", 1)[1]
+                                  for name in targets] or
                     set(registry.get("allowed_axioms", [])) != ALLOWED_AXIOMS):
                 raise RuntimeError("changed theorem inventory contract")
             audit = run("lean-axioms", [str(binaries["lean"]), "-DwarningAsError=true", "AxiomAudit.lean"], cwd=lean_dir)
-            receipt["axioms"] = audit_axioms(audit.stdout, targets)
+            receipt["axioms"] = audit_axioms(audit.stdout, targets + contracts)
             receipt["theorem_count"] = len(targets)
+            receipt["contract_count"] = len(contracts)
             # Fresh replay is a second execution of Lean's own kernel, not an
             # independently implemented verifier or proof of the Elixir runtime.
             run("lean-fresh-kernel", [str(binaries["leanchecker"]), "--fresh", "--verbose", "CrossCurrencySetoff"], cwd=lean_dir, timeout=300)
+            run("lean-contracts-fresh-kernel", [str(binaries["leanchecker"]), "--fresh", "--verbose", "Contracts"], cwd=lean_dir, timeout=300)
             negative = build / "FalseRounding.lean"
             negative.write_text("import CrossCurrencySetoff\nopen CrossCurrencySetoff\n"
                                 "example : quoteReduction 10 1 3 2 = 1 := by decide\n")
@@ -268,6 +340,8 @@ def main() -> int:
             if not re.search(r"error: declaration uses [`']?sorry", placeholder_result.stdout):
                 raise RuntimeError("unregistered contract placeholder was not rejected for the intended reason")
             receipt["lean_negative_controls"] = ["false rounding proof rejected", "custom axiom rejected by audit", "unregistered contract placeholder rejected"]
+            receipt["lean_contract_controls"] = tool_module("lean_contract_controls").run_contract_controls(
+                lean_dir, build, binaries, run, audit_axioms, targets, contracts)
             small = list(itertools.product(range(9), range(9), range(6), range(6)))
             large = boundaries()
             for corpus, inputs, with_quint in [("bounded", small, True), ("boundary", large, False)]:
@@ -309,40 +383,27 @@ def main() -> int:
                 if not different:
                     raise RuntimeError("undetected Elixir mutant: " + name)
                 receipt["elixir_mutations"].append({"name": name, "mismatched_rows": different, "status": "detected"})
-            assertion_mutants = {
-                "omit-source-revision-preimage": ("Integer.to_string(source.revision),", '"revision-omitted",'),
-                "omit-source-id-preimage": ("      source.id,\n      source.debtor,", '      "source-id-omitted",\n      source.debtor,'),
-                "accept-expired-rate": ("is_integer(rate.valid_until) and rate.valid_until > now", "is_integer(rate.valid_until) and rate.valid_until >= now"),
-                "omit-full-candidate-equality": ("{:ok, ^candidate} -> {:ok, candidate}", "{:ok, _recomputed} -> {:ok, candidate}"),
-                "discard-second-currency": ("totals_by_currency: totals,", "totals_by_currency: [hd(totals)],"),
-            }
-            receipt["elixir_assertion_mutations"] = []
-            for name, (needle, replacement) in assertion_mutants.items():
-                if original.count(needle) != 1:
-                    raise RuntimeError("changed assertion mutation anchor: " + name)
-                mutant = build / (name + ".ex")
-                mutant.write_text(original.replace(needle, replacement))
-                command = [str(binaries["elixir"]),
-                           "-r", str(ROOT / "apps/barter_core/lib/barter_core.ex"),
-                           "-r", str(mutant),
-                           "-r", str(ROOT / "apps/barter_core/test/test_helper.exs"),
-                           "-r", str(ROOT / "apps/barter_core/test/cross_currency_setoff_test.exs"),
-                           "-r", str(ROOT / "apps/barter_core/test/cross_currency_setoff_formal_test.exs"),
-                           "-e", "ExUnit.configure(seed: 341)"]
-                result = run("elixir-assertion-mutant-" + name, command, allowed=(2,))
-                failed_tests = re.search(r"(?m)^19 tests, ([1-9][0-9]*) failures\s*$", result.stdout)
-                if not failed_tests or not re.search(r"Assertion|Refute|match \(=\) failed", result.stdout):
-                    raise RuntimeError("assertion mutant was not rejected by the full intended test inventory: " + name)
-                receipt["elixir_assertion_mutations"].append({"name": name, "failed_tests": int(failed_tests.group(1)), "status": "detected"})
+            assertion_check = run("elixir-assertion-mutations", [sys.executable, "-I",
+                str(PROJECT / "tools/assertion_mutations.py"), "--elixir-bin", str(binaries["elixir"]),
+                "--out-dir", str(output / "assertion-mutations")], timeout=600)
+            assertion_receipt = json.loads(assertion_check.stdout)
+            receipt["elixir_assertion_baseline"] = assertion_receipt["baseline"]
+            receipt["elixir_assertion_mutations"] = assertion_receipt["mutations"]
         quint_check = run("quint-tests-and-mutations", [sys.executable, str(PROJECT / "quint/check.py"), "--quint-cli", str(binaries["quint"]), "--out-dir", str(output / "quint-logs")], timeout=600)
         receipt["quint"] = json.loads(quint_check.stdout)
         with tempfile.TemporaryDirectory(prefix="setoff-mix-build-") as mix_build:
             env["MIX_BUILD_PATH"] = mix_build
-            suite = run("barter-suite", [str(binaries["mix"]), "test"], cwd=ROOT / "apps/barter_core")
+            suite_receipt = output / "barter-suite.json"
+            env["BARTER_SUITE_RECEIPT"] = str(suite_receipt)
+            run("barter-suite", [str(binaries["elixir"]),
+                "-r", str(PROJECT / "elixir/suite_receipt.exs"),
+                str(binaries["mix"]), "test", "--formatter", "ExUnit.CLIFormatter",
+                "--formatter", "CrossCurrencySetoff.SuiteReceipt"], cwd=ROOT / "apps/barter_core")
         env.pop("MIX_BUILD_PATH", None)
-        summary = re.search(r"(?m)^55 tests, 0 failures\s*$", suite.stdout)
-        if not summary or re.search(r"\b(?:skipped|excluded)\b", suite.stdout):
-            raise RuntimeError("expected all 55 Barter tests to execute without failures or exclusions")
+        env.pop("BARTER_SUITE_RECEIPT", None)
+        expected_files = [p.relative_to(ROOT / "apps/barter_core").as_posix()
+                          for p in sorted((ROOT / "apps/barter_core/test").rglob("*_test.exs"))]
+        receipt["barter_suite"] = check_suite_receipt(json.loads(suite_receipt.read_text()), expected_files)
         run("barter-format", [str(binaries["elixir"].with_name("mix")), "format", "--check-formatted", "mix.exs", "lib/**/*.ex", "test/**/*.exs", "../../proof_bank/cross_currency_setoff/elixir/*.exs"], cwd=ROOT / "apps/barter_core")
         commercial = [f"../coop_substrate/{folder}/commercial_setoff{suffix}.{ext}" for folder, ext in [("lib/coop_substrate", "ex"), ("test", "exs")] for suffix in (["", "_proof", "_sources"] if ext == "ex" else ["_test", "_proof_test", "_sources_test"])]
         run("commercial-scoped-format", [str(binaries["elixir"].with_name("mix")), "format", "--check-formatted", *commercial], cwd=ROOT / "apps/barter_core")
@@ -362,7 +423,8 @@ def main() -> int:
     receipt["artifacts"] = {p.relative_to(output).as_posix(): sha(p) for p in sorted(output.rglob("*")) if p.is_file() and p != receipt_path}
     save()
     print(json.dumps({"status": receipt["status"], "receipt": str(receipt_path),
-                      "git_head": actual_head, "clean_checkout": receipt["clean_checkout"]}), flush=True)
+                      "git_head": actual_head, "clean_checkout": receipt["clean_checkout"],
+                      "verification_mode": receipt["verification_mode"]}), flush=True)
     return 0 if receipt["status"] == "passed" else 1
 
 

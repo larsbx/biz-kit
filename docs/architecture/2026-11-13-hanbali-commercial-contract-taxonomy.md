@@ -356,6 +356,19 @@ the current runtime executes or verifies these contracts**.
 | An old `validated_inert` receipt is supplied to post accounting or settle funds. | Refuse the transition; each effect stage needs its own implemented authority. |
 | A manufacturing order uses milestone payments. | Assess the selected contemporary istisna' profile; do not claim the entire structure is the classical Hanbali baseline. |
 
+### Implementation status cross-reference (2026-11-13)
+
+The [producer-capital integration ADR](2026-11-13-producer-capital-integration.md)
+links this sourced taxonomy to the existing Lean/Quint proof bank and a
+separately scoped `CoopSubstrate.ProducerCapitalPreview` implementation.
+Its pure annual contribution and voluntary unit-transfer previews **do not**
+approve or enforce any doctrinal profile, legal effect, issuer or financial
+action. In particular, legacy `CapitalAccounts` patronage balances must
+not be treated as legally issued $250 membership equity, and procurement
+agency/cost claims remain distinct from investment revenues. The contract
+families and conditions in this specification, including the proposed
+versioned record and effectful admission gates above, remain unchanged.
+
 ## 8. Development order and completion gates
 
 | Priority | Candidate work | Completion evidence before effectful use |

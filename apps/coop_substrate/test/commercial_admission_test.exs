@@ -4,7 +4,7 @@ defmodule CoopSubstrate.CommercialAdmissionTest do
 
   alias CoopSubstrate.{Canonical, CommercialAdmission, Log}
   alias CoopSubstrate.Projections.{AdmissionGate, Membership}
-  alias CoopSubstrate.Protocol.Envelope
+  alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
   alias BizKit.Cluster.Peers
 
   @chapter "chapter-genesis"
@@ -223,6 +223,26 @@ defmodule CoopSubstrate.CommercialAdmissionTest do
     assert {:error, {:reject, ^index, ^reason}} = Log.append(envs)
     assert Log.head() == head
     assert Log.gate() == gate
+  end
+
+  test "commercial admission preserves all existing registry extensions" do
+    extension_modules = [
+      TaskCore.Admission,
+      RestaurantCore.Admission,
+      DispatchCore.Admission,
+      CoopSubstrate.GroupBuys,
+      CoopSubstrate.FederationAuthority,
+      CoopSubstrate.WriterFence,
+      CommercialAdmission
+    ]
+
+    extension_specs = Enum.flat_map(extension_modules, & &1.event_types())
+    runtime_specs = Application.fetch_env!(:coop_substrate, :extra_event_types)
+    assert Map.has_key?(runtime_specs, "TestBilateralEvent")
+
+    for {type, spec} <- Enum.concat(extension_specs, runtime_specs) do
+      assert TypeRegistry.spec(type) == {:ok, spec}, "registry entry for #{type}"
+    end
   end
 
   test "profile requires declared current governance and cannot downgrade", ctx do
