@@ -2,7 +2,7 @@
 
 Pinned compiler: **Lean 4.35.0**, importing only `Init`; no Mathlib or external Lean packages.
 
-`CrossCurrencySetoff.lean` supplies 40 universally quantified theorems. `Contracts.lean` separately states 40 expected proposition types, including expanded arithmetic formulas and the original cross-multiplication definition of exactness. `proof_targets.json` fixes the theorem inventory. `AxiomAudit.lean` audits the compiled declarations; the permitted foundational axioms are `propext`, `Quot.sound`, and `Classical.choice`. There are no added axioms, admitted proofs, `sorry`, or `native_decide` proofs.
+`CrossCurrencySetoff.lean` supplies 40 universally quantified theorems. `Contracts.lean` separately states 40 expected proposition types as named `CrossCurrencySetoff.Contracts.check_*` theorems, including expanded arithmetic formulas and the original cross-multiplication definition of exactness. `proof_targets.json` fixes both inventories: 40 model theorems and 40 independent contract checks. `AxiomAudit.lean` audits the transitive dependencies of all 80 compiled declarations; the permitted foundational axioms are `propext`, `Quot.sound`, and `Classical.choice`. There are no added axioms, admitted proofs, `sorry`, or `native_decide` proofs.
 
 ## Mathematical claim
 
@@ -42,12 +42,15 @@ From this directory, with the pinned Lean binaries on `PATH`:
 
 ```sh
 lean -o CrossCurrencySetoff.olean CrossCurrencySetoff.lean
-LEAN_PATH=. lean Contracts.lean
+LEAN_PATH=. lean -o Contracts.olean Contracts.lean
 LEAN_PATH=. lean AxiomAudit.lean
+LEAN_PATH=. leanchecker --fresh --verbose Contracts
 LEAN_PATH=. lean --run Eval.lean < arithmetic-input.tsv
 ```
 
-The repository-level verification runner uses fresh temporary build directories, audits the complete declaration inventory, runs adversarial proof controls, and compares outputs against the independent Quint model and actual Elixir module.
+The repository-level verification runner uses fresh temporary build directories, audits both complete declaration inventories, and replays `Contracts` together with its imported model using Lean's own fresh kernel. This is a second kernel execution, not a distinct kernel implementation. It runs adversarial proof controls and compares outputs against the independent Quint model and actual Elixir module.
+
+The contract audit closes a demonstrated evidence gap: a core theorem could be weakened to `True`, and its anonymous expected-type check could then be discharged using a custom axiom that was absent from the core theorem's dependency graph. Ordinary axiom declarations do not trigger the compiler's `sorry` warning. Naming and auditing the contract proofs makes that dependency visible and rejected. A separate inventory prevents a deleted or substituted contract from being counted as a completed check. The 40 mathematical targets are unchanged; the 40 contract checks are reported separately.
 
 The evaluator reads `Q<TAB>B<TAB>n<TAB>d` and emits `status<TAB>quoteReduction<TAB>baseReduction<TAB>quoteResidual<TAB>baseResidual`. Status `0` means invalid source amount/rate, `1` means no positive exact offset, and `2` means accepted. Invalid/no-offset rows emit zero reductions with both original residuals. All four numeric inputs must be at most the implementation bound; source amounts must be positive and the rate must be canonical. Core arithmetic theorems also cover zero available amounts.
 

@@ -1,9 +1,10 @@
-name: BizOps knowledge catalog acceptance
+name: BizOps knowledge and workflow acceptance
 
 on:
   pull_request:
     paths:
       - 'apps/bizops_kb/**'
+      - 'apps/task_core/**'
       - 'scripts/bizops-kb/**'
       - 'apps/task_host/priv/static/app/knowledge*'
       - 'apps/task_host/test/js/knowledge.test.mjs'
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - 'apps/bizops_kb/**'
+      - 'apps/task_core/**'
       - 'scripts/bizops-kb/**'
       - 'apps/task_host/priv/static/app/knowledge*'
       - 'apps/task_host/test/js/knowledge.test.mjs'
@@ -45,11 +47,17 @@ jobs:
         run: python3 scripts/bizops-kb/snapshot.py check
       - name: Source integrity and reproducible import negative controls
         run: python3 -m unittest discover -s scripts/bizops-kb -p 'test_*.py' -v
-      - name: Standalone catalog and malformed-input acceptance
-        run: >-
-          elixir -r apps/bizops_kb/lib/bizops_kb/catalog.ex
-          -r apps/bizops_kb/test/test_helper.exs
-          apps/bizops_kb/test/catalog_test.exs
+      - name: Compile the portable task rules without umbrella dependencies
+        run: |
+          cp -R apps/task_core "$RUNNER_TEMP/bizops-task-core"
+          cd "$RUNNER_TEMP/bizops-task-core"
+          MIX_ENV=test mix compile --warnings-as-errors
+      - name: Catalog, workflow and source-binding acceptance
+        run: |
+          elixir -pa "$RUNNER_TEMP/bizops-task-core/_build/test/lib/task_core/ebin" \
+            -r 'apps/bizops_kb/lib/bizops_kb/*.ex' \
+            -r apps/bizops_kb/test/test_helper.exs \
+            -r 'apps/bizops_kb/test/*_test.exs' -e ''
       - name: Check standalone app formatting
         working-directory: apps/bizops_kb
         run: mix format --check-formatted

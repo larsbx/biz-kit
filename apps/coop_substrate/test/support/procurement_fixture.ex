@@ -36,6 +36,16 @@ defmodule CoopSubstrate.ProcurementFixture do
     %{"cooperative_id" => "coop", "operator_id" => "coordinator", "active" => active,
       "key_id" => f.operator.signer.key_id, "pubkey" => {:bytes, f.operator.signer.pubkey},
       "expires_at_ms" => f.now + 7_200_000, "expected_version" => expected})
+  def bounty_attestation(f, request_id, purpose, version, reference, expires) do
+    event(f, "ProcurementBountyEvidenceAttestedV1", %{
+      "cooperative_id" => f.context.cooperative_id,
+      "request_id" => request_id,
+      "purpose" => purpose,
+      "expected_version" => version,
+      "evidence_ref" => reference,
+      "expires_at_ms" => expires
+    })
+  end
   def request(f), do: %{"buyer_business_id" => "buyer", "description" => "Bulk packaging",
     "quantity" => 4, "currency" => "USD", "needed_by_ms" => f.now + 86_400_000,
     "consent_ref" => "buyer-consent-private"}

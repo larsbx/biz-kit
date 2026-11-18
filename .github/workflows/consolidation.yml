@@ -40,6 +40,9 @@ jobs:
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install locked dependencies
         run: mix deps.get --check-locked
       - name: Compile the umbrella
@@ -47,6 +50,8 @@ jobs:
       - name: Verify changed Elixir formatting
         run: >-
           mix format --check-formatted
+          apps/coop_substrate/test/agent_local_worker_test.exs
+          apps/coop_substrate/test/support/agent_local_worker.ex
           apps/coop_substrate/lib/coop_substrate/federation_authority.ex
           apps/coop_substrate/lib/coop_substrate/federation_fence.ex
           apps/coop_substrate/test/federation_authority_test.exs
@@ -163,6 +168,14 @@ jobs:
           apps/biz_kit_identity/lib/biz_kit/identity/providers/work_os.ex
           apps/biz_kit_identity/test/identity_test.exs
           apps/coop_substrate/lib/coop_substrate/commands.ex
+          apps/coop_substrate/lib/coop_substrate/knowledge.ex
+          apps/task_core/lib/task_core/knowledge.ex
+          apps/task_core/test/knowledge_test.exs
+          apps/task_host/lib/task_host/project_knowledge_suggestions.ex
+          apps/task_host/lib/task_host/web/project_knowledge_controller.ex
+          apps/task_host/test/task_host/project_knowledge_suggestions_test.exs
+          apps/task_host/test/task_host/web/project_knowledge_test.exs
+          apps/task_host/test/task_host/web/project_knowledge_browser_test.exs
           apps/task_core/lib/task_core/decisions.ex
           apps/coop_substrate/test/commands_test.exs
           apps/task_host/lib/task_host/web/command_controller.ex
@@ -260,6 +273,8 @@ jobs:
           apps/task_core/test/lesson_workflow_test.exs
           apps/task_core/lib/task_core/workflow.ex
           apps/task_core/lib/task_core/blueprint/source.ex
+          apps/task_core/lib/task_core/blueprint/readiness_contract.ex
+          apps/task_core/test/readiness_contract_test.exs
           apps/spruce_goose/test/workflow_plan_test.exs
           apps/task_core/test/workflow_test.exs
           apps/task_core/test/fixtures/curriculum.exs
@@ -404,19 +419,6 @@ jobs:
       - name: Test orchestration after notes retirement
         working-directory: apps/spruce_goose
         run: mix test
-      - name: Prepare eatsbot's locale data and database
-        working-directory: apps/eatsbot
-        run: mix localize.download_locales && mix ash.setup --quiet
-      - name: Test eatsbot (orders, deliveries, storefront API)
-        working-directory: apps/eatsbot
-        env:
-          ADMIN_API_KEY: test
-        run: mix test && mix ash.codegen --check
-      - name: Verify eatsbot formatting
-        run: >-
-          for app in eatsbot eatsbot_core eatsbot_extension_kafka
-          eatsbot_extension_prometheus eatsbot_extension_telegram_bot;
-          do (cd apps/$app && mix format --check-formatted) || exit 1; done
       - name: Test registry revocation across separate database sessions
         working-directory: apps/spruce_goose
         run: SPRUCE_GOOSE_TEST_DOGFOOD=true mix test test/actors_separate_sessions_test.exs --include separate_sessions

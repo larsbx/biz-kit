@@ -7,6 +7,11 @@ defmodule BizOpsKB.Catalog do
   loaded catalog retains those exact bytes; it never follows a moving branch,
   performs network access, executes content or grants publication authority.
 
+  The default packaged load also requires the manifest digest embedded at
+  compilation. Runtime edits cannot repin its source or rebind document
+  hashes. An explicit `root:` selects a separate, trusted snapshot and checks
+  internal consistency only; hosts must not take that option from requests.
+
   This module is not an authorization boundary. Hosts must authorize the user
   before calling it or returning metadata, search results or bodies. Returned
   text, including snippets and wiki labels, must be rendered as text, not HTML.
@@ -26,13 +31,32 @@ defmodule BizOpsKB.Catalog do
   @max_documents 1000
   @max_query_bytes 160
 
-  @doc "Load the bundled snapshot, or a snapshot under an explicitly supplied priv root."
+  @packaged_manifest Path.expand("../../priv/catalog.json", __DIR__)
+  @external_resource @packaged_manifest
+  @packaged_manifest_sha256 :crypto.hash(:sha256, File.read!(@packaged_manifest))
+
+  @doc """
+  Load the compiled, pinned snapshot by default. An explicit `root:` is a
+  trusted selection of another internally consistent snapshot; it does not
+  establish that snapshot's relationship to this release's source commit.
+  """
   @spec load(keyword()) :: {:ok, t()} | {:error, load_error()}
   def load(opts \\ []) do
-    root = Keyword.get_lazy(opts, :root, fn -> Application.app_dir(:bizops_kb, "priv") end)
+    case Keyword.fetch(opts, :root) do
+      {:ok, root} -> load_catalog(root, nil)
+      :error -> load_packaged()
+    end
+  end
 
+  @doc "Verify the packaged snapshot, including a relocated copy, against the compiled pin."
+  @spec load_packaged(String.t()) :: {:ok, t()} | {:error, load_error()}
+  def load_packaged(root \\ Application.app_dir(:bizops_kb, "priv")),
+    do: load_catalog(root, @packaged_manifest_sha256)
+
+  defp load_catalog(root, expected_manifest) do
     with true <- is_binary(root) and String.valid?(root) and not String.contains?(root, <<0>>),
          {:ok, manifest_bytes} <- read_manifest(root),
+         :ok <- verify_manifest_pin(manifest_bytes, expected_manifest),
          {:ok, manifest} <- decode_manifest(manifest_bytes),
          :ok <- validate_manifest(manifest),
          :ok <- directory(Path.join(root, "content")),
@@ -54,6 +78,14 @@ defmodule BizOpsKB.Catalog do
       when reason in [:invalid_catalog, :content_unavailable, :content_mismatch] ->
         {:error, reason}
     end
+  end
+
+  defp verify_manifest_pin(_bytes, nil), do: :ok
+
+  defp verify_manifest_pin(bytes, expected) do
+    if :crypto.hash(:sha256, bytes) == expected,
+      do: :ok,
+      else: {:error, :content_mismatch}
   end
 
   @doc "Source provenance and area/category counts. This contains no document bodies."

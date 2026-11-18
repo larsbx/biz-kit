@@ -15,6 +15,7 @@ defmodule TaskHost.Operations do
   """
 
   alias CoopSubstrate.Feed.{Access, View}
+  alias TaskCore.Knowledge
   alias TaskHost.InfrastructureReview
 
   @config_fields ~w(schema_version title time_zone workspaces)
@@ -79,12 +80,21 @@ defmodule TaskHost.Operations do
           # whitelist also excludes delegations and custody receipts.
           view = gate |> View.select(scope) |> Map.take(@view_kinds)
 
+          knowledge =
+            Map.new(Knowledge.counts(gate.orchestration, scope), fn {status, count} ->
+              {status <> "_count", count}
+            end)
+
           case Map.pop(workspace, "infrastructure_review") do
             {nil, workspace} ->
-              Map.put(workspace, "view", view)
+              Map.merge(workspace, %{"view" => view, "knowledge" => knowledge})
 
             {_review, workspace} ->
-              Map.merge(workspace, %{"view" => view, "has_infrastructure_review" => true})
+              Map.merge(workspace, %{
+                "view" => view,
+                "knowledge" => knowledge,
+                "has_infrastructure_review" => true
+              })
           end
         end
 
@@ -93,6 +103,18 @@ defmodule TaskHost.Operations do
   end
 
   def snapshot(_gate, _principal, _config), do: {:error, :unauthorized}
+
+  @doc "Resolve a configured workspace under the same ACL as the Operations view."
+  def workspace(gate, principal, config, workspace_id) do
+    with {:ok, config} <- normalize(config),
+         %{} = workspace <- Enum.find(config["workspaces"], &(&1["id"] == workspace_id)),
+         {:ok, reader} <- reader(gate, principal, scope(workspace)) do
+      {:ok, workspace, reader}
+    else
+      nil -> {:error, :no_grant}
+      {:error, _} = error -> error
+    end
+  end
 
   @doc "Resolve the configured review through the workspace's current read grant."
   def infrastructure_review(gate, principal, config, workspace_id) do
@@ -106,13 +128,12 @@ defmodule TaskHost.Operations do
     end
   end
 
-  defp authorized?(gate, principal, scope) do
-    case Access.for_principal(gate.orchestration, principal, scope) do
-      {:ok, _reader} ->
-        true
+  defp authorized?(gate, principal, scope), do: match?({:ok, _}, reader(gate, principal, scope))
 
-      {:error, :no_grant} ->
-        match?({:ok, _reader}, Access.for_administrator(gate, principal, scope))
+  defp reader(gate, principal, scope) do
+    case Access.for_principal(gate.orchestration, principal, scope) do
+      {:ok, _reader} = result -> result
+      {:error, :no_grant} -> Access.for_administrator(gate, principal, scope)
     end
   end
 

@@ -2356,29 +2356,29 @@
     },
     {
       "area": "Source and decisions",
-      "blob_sha": "ef9370d715a050bcd20f5875bbb48e6ec12d2125",
+      "blob_sha": "c15b91c73d689388505c654aafe6e604844023d6",
       "category": "Source and decisions",
       "id": "ref-b335630551682c19",
       "jd_id": null,
       "path": "README.md",
-      "sha256": "b049851c2055ba607e067045b3fd7114f8fcc390f8ed9ca9210559b62db37bdc",
-      "size": 1346,
+      "sha256": "92ed21c73bf2b1f268f8ae7f7b96b516be9704684472055de1b9e5085d7fcd0c",
+      "size": 2722,
       "title": "README"
     },
     {
       "area": "Source and decisions",
-      "blob_sha": "e310de9344f195e21f04a936505265e83c038e78",
+      "blob_sha": "bd37f4287d31d778991d52335cd3908207c7ac7b",
       "category": "Source and decisions",
       "id": "ref-3abe18dba932753f",
       "jd_id": null,
       "path": "docs/decisions/2026-10-30-source-custody-and-platform-storage.md",
-      "sha256": "cfed04c0fa477dd33e148322d6465e081065df21170d59f35044eaca8761c1f3",
-      "size": 2776,
+      "sha256": "8677c397d48d1ca74dab04e410457a56dcc5f8f0a94e5feea575aa303ff7277f",
+      "size": 14023,
       "title": "2026-10-30-source-custody-and-platform-storage"
     }
   ],
   "repository": "larsbx/bizops-kb",
-  "revision": "ca356e34e6b1c4a2fb9f576c34196ca3bf13beee",
+  "revision": "8749d8db1abd3145b22c6a27da2cc49a41c303fe",
   "schema": 1,
-  "tree": "7a29785f90feca8871da0b14b6fcd76401fc8278"
+  "tree": "79f146858c5d9d850df69b67294cb3fabf131bd1"
 }

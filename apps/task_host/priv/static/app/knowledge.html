@@ -52,6 +52,10 @@
             </label>
             <button class="button" type="submit">Search</button>
           </form>
+          <section id="workflow-previews" class="workflow-previews" hidden aria-labelledby="workflow-previews-title">
+            <div class="list-heading"><h2 id="workflow-previews-title">Workflow previews</h2><span class="subtle">Review before adoption</span></div>
+            <div id="workflow-list"></div>
+          </section>
           <section id="library-browser" class="library-browser" aria-label="Reference documents">
             <div class="library-results">
               <div class="list-heading"><h2 id="list-title">Documents</h2><span id="result-count" class="subtle"></span></div>
@@ -68,7 +72,14 @@
               <h2 id="document-title" tabindex="-1"></h2>
               <p id="document-path" class="document-path"></p>
               <a id="document-source" target="_blank" rel="noopener noreferrer">View original source</a>
+              <div id="document-workflows" class="related-workflows"></div>
               <div id="document-body" class="markdown-body"></div>
+            </article>
+            <article id="workflow-panel" class="document-panel" hidden aria-labelledby="workflow-title">
+              <button id="close-workflow" type="button" class="quiet">← Documents</button>
+              <p class="eyebrow">READ-ONLY WORKFLOW PREVIEW</p>
+              <h2 id="workflow-title" tabindex="-1"></h2>
+              <div id="workflow-body"></div>
             </article>
           </section>
           <footer class="page-footer"><span>Biz-kit Operations</span><span>Reference content · reading creates no tasks or approvals</span></footer>

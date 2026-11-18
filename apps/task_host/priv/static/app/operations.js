@@ -9,6 +9,7 @@ import {
   timingLabel,
   workflowRows,
 } from "./operations-view.js";
+import { KnowledgeSuggestions, projectKnowledgeLink } from "./project-knowledge.js";
 
 const $ = (id) => document.getElementById(id);
 const state = new SnapshotState();
@@ -28,6 +29,7 @@ let logoutPending = false;
 let previousPrincipal = null;
 let lastUpdated = null;
 let unavailable = "Connecting to your workspaces…";
+const knowledgeSuggestions = new KnowledgeSuggestions({ principal: () => state.value?.principal, provider });
 
 const tabs = {
   today: [
@@ -98,6 +100,7 @@ function resetFilters() {
 }
 
 function clear(message) {
+  knowledgeSuggestions.clear(message);
   state.clear();
   lastUpdated = null;
   unavailable = message;
@@ -187,6 +190,7 @@ function card(row, timeZone) {
       href: projectLink(workspace, { taskId: row.id, provider }),
       textContent: "Open task",
     }),
+    knowledgeSuggestions.disclosure(workspace, { task_id: row.id }),
   );
   node.dataset.taskKey = row.key;
   return node;
@@ -225,6 +229,7 @@ function workflowCard(row) {
       }),
       textContent: "Open workflow",
     }),
+    knowledgeSuggestions.disclosure(row.workspace, { roadmap_key: row.workflow.roadmap_key, workflow_id: row.workflow.workflow_id }),
   );
 }
 
@@ -266,6 +271,7 @@ function renderWorkViews(snapshot) {
 }
 
 function render() {
+  knowledgeSuggestions.beginRender();
   const navigation = new URLSearchParams({ provider });
   for (const [key, value] of [["workspace", options.workspace], ["category", options.category], ["q", options.query], ["tab", options.tab]]) {
     if (value) navigation.set(key, value);
@@ -299,6 +305,7 @@ function render() {
     $("time-zone").textContent = "";
     for (const id of ["today", "overdue", "review"])
       $(`metric-${id}`).textContent = "—";
+    knowledgeSuggestions.endRender();
     return;
   }
 
@@ -387,6 +394,11 @@ function render() {
             href: projectLink(w, { provider }),
             textContent: "Open workspace →",
           }),
+          w.knowledge ? el("p", { className: "workspace-knowledge" },
+            el("a", {
+              href: projectKnowledgeLink(w, { provider }),
+              textContent: `Project knowledge: ${w.knowledge.pending_count} pending approval · ${w.knowledge.approved_count} approved`,
+            })) : null,
           w.has_infrastructure_review === true
             ? el(
                 "p",
@@ -400,6 +412,7 @@ function render() {
         ),
       ),
   );
+  knowledgeSuggestions.endRender();
 }
 
 async function refresh() {
@@ -434,7 +447,9 @@ async function refresh() {
       );
     const value = await response.json();
     if (!state.accept(generation, value)) return;
-    if (previousPrincipal !== null && previousPrincipal !== value.principal) resetFilters();
+    if (previousPrincipal !== null && previousPrincipal !== value.principal) {
+      resetFilters(); knowledgeSuggestions.clear();
+    }
     previousPrincipal = value.principal;
     lastUpdated = Date.now();
     $("sign-in").hidden = true;
@@ -444,6 +459,7 @@ async function refresh() {
       `Updated ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(lastUpdated)}`,
     );
     render();
+    knowledgeSuggestions.refreshOpen();
     if ($("settings-dialog").open) renderSettings();
   } catch (error) {
     if (!state.current(generation)) return;

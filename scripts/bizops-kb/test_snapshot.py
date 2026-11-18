@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 import snapshot
 
@@ -31,7 +32,9 @@ class SnapshotTest(unittest.TestCase):
         result = snapshot.check(self.root)
         self.assertEqual(result["documents"], 216)
         self.assertEqual(result["wikilinks"], 45)
-        self.assertEqual(result["revision"], "ca356e34e6b1c4a2fb9f576c34196ca3bf13beee")
+        self.assertEqual(result["revision"], "8749d8db1abd3145b22c6a27da2cc49a41c303fe")
+        self.assertEqual(result["tree"], "79f146858c5d9d850df69b67294cb3fabf131bd1")
+        self.assertEqual(result["bytes"], 106105)
 
     def test_changed_content_cannot_rewrite_its_catalog_hash_to_pass(self):
         catalog = self.read("catalog.json")
@@ -91,6 +94,57 @@ class SnapshotTest(unittest.TestCase):
         (self.root / "catalog.json").write_text('{"schema":1,"schema":2}')
         with self.assertRaisesRegex(snapshot.InvalidSnapshot, "duplicate JSON key"):
             snapshot.check(self.root)
+
+    def test_deep_or_malformed_metadata_is_a_clean_refusal(self):
+        for body in (b"[" * 33 + b"0" + b"]" * 33, b'{"bad":', b"\xff"):
+            with self.subTest(body=body):
+                (self.root / "catalog.json").write_bytes(body)
+                with self.assertRaises(snapshot.InvalidSnapshot):
+                    snapshot.check(self.root)
+
+    def test_git_timeout_and_launch_failure_are_clean_refusals(self):
+        for error in (subprocess.TimeoutExpired("git", 30), FileNotFoundError("git")):
+            with self.subTest(error=type(error).__name__):
+                with mock.patch.object(snapshot.subprocess, "run", side_effect=error):
+                    with self.assertRaises(snapshot.InvalidSnapshot):
+                        snapshot.git(self.root, "cat-file", "commit", "0" * 40)
+
+    def test_non_ascii_digits_do_not_emit_runtime_invalid_johnny_decimal_ids(self):
+        path = "20-29 Products/24 Processes/٢٤.١٢ Procedure.md"
+        body = b"An inert source note.\n"
+        metadata = snapshot.document_metadata(path, body, {"sha": snapshot.object_hash("blob", body)})
+        self.assertIsNone(metadata["jd_id"])
+        self.assertRegex(metadata["id"], r"^ref-[0-9a-f]{16}$")
+        self.assertEqual(metadata["path"], path)
+
+    def test_bare_object_import_ignores_replacement_refs_and_needs_no_parent_history(self):
+        source = Path(self.temporary.name) / "objects.git"
+        subprocess.run(["git", "init", "--bare", "-q", str(source)], check=True)
+
+        def write_object(kind, body):
+            return subprocess.run(
+                ["git", "-C", str(source), "hash-object", "-w", "-t", kind, "--stdin"],
+                input=body, stdout=subprocess.PIPE, check=True,
+            ).stdout.decode().strip()
+
+        def write_revision(body):
+            blob = write_object("blob", body)
+            tree = write_object("tree", b"100644 README.md\0" + bytes.fromhex(blob))
+            commit = (f"tree {tree}\nparent {'f' * 40}\n"
+                      "author Fixture <fixture@example.invalid> 0 +0000\n"
+                      "committer Fixture <fixture@example.invalid> 0 +0000\n\nFixture\n").encode()
+            return write_object("commit", commit)
+
+        original = b"# Original immutable source\n"
+        revision = write_revision(original)
+        replacement = write_revision(b"# Replacement must not be imported\n")
+        snapshot.git(source, "update-ref", "refs/replace/" + revision, replacement)
+        target = Path(self.temporary.name) / "bare-import"
+        with mock.patch.dict(os.environ, {"GIT_DIR": str(self.root / "nonexistent.git")}):
+            result = snapshot.import_snapshot(source, revision, target)
+        self.assertEqual(result["revision"], revision)
+        self.assertEqual((target / "content/README.md").read_bytes(), original)
+        self.assertEqual(result["documents"], 1)
 
     def test_oversized_document_is_rejected_before_reading(self):
         path = self.root / "content" / self.read("catalog.json")["documents"][0]["path"]

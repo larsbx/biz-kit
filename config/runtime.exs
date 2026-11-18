@@ -178,12 +178,11 @@ end
 # Which apps this boot carries. A release runs this whole file, so each app's
 # production section is gated on the release that ships it (mix.exs); an unset
 # RELEASE_NAME (a Mix run) carries every app. The `orchestration` release has no
-# dispatch, the `eatsbot` release has only eatsbot, and the `restaurant` release
-# has only the ledger and the rebuilt eatsbot's host.
+# dispatch, and the `restaurant` release has only the ledger and the rebuilt
+# eatsbot's host.
 release_name = System.get_env("RELEASE_NAME")
-dispatch_released? = release_name not in ["orchestration", "eatsbot", "restaurant"]
-spruce_goose_released? = release_name not in ["eatsbot", "restaurant"]
-eatsbot_released? = release_name in [nil, "eatsbot"]
+dispatch_released? = release_name not in ["orchestration", "restaurant"]
+spruce_goose_released? = release_name not in ["restaurant"]
 restaurant_released? = release_name in [nil, "restaurant"]
 
 if config_env() == :prod and dispatch_released? do
@@ -437,7 +436,7 @@ end
 # database holds native apps' sessions; pointed at the one SpruceGoose used,
 # signed-in devices stay signed in. Environment names keep their SPRUCE_GOOSE_
 # prefix until SpruceGoose's decommission.
-task_host_released? = release_name not in ["eatsbot", "restaurant"]
+task_host_released? = release_name not in ["restaurant"]
 
 # Optional presentation catalogue for /operations. Read at boot, never from a
 # request-supplied path. Invalid or oversized input disables the operations
@@ -467,6 +466,20 @@ if task_host_released? do
             :invalid
         end
     end
+
+  # No bridge routes respond until all OAuth resource settings are present.
+  config :task_host, :plugin_bridge, %{
+    resource: System.get_env("BIZKIT_PLUGIN_MCP_RESOURCE"),
+    issuer: System.get_env("BIZKIT_PLUGIN_OAUTH_ISSUER"),
+    introspection_url: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_URL"),
+    client_id: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_CLIENT_ID"),
+    client_secret: System.get_env("BIZKIT_PLUGIN_INTROSPECTION_CLIENT_SECRET"),
+    workspace_ids:
+      "BIZKIT_PLUGIN_WORKSPACE_IDS"
+      |> System.get_env("")
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+  }
 
   config :task_host,
     operations: operations,
@@ -616,16 +629,9 @@ if config_env() == :prod and restaurant_released? do
   end
 end
 
-# The shared config points Localize at the legacy eatsbot's locale cache
-# (apps/eatsbot/config/config.exs). A boot that does not carry eatsbot uses
-# Localize's bundled locale instead: the restaurant release, and a Mix run of an
-# app that only reaches Money through a core (`cd apps/coop_substrate && mix
-# test`, whose code path holds that app's dependencies only). Without this,
-# Localize refuses to start there ("unknown application: :eatsbot").
-if release_name == "restaurant" or
-     (is_nil(release_name) and :code.lib_dir(:eatsbot) == {:error, :bad_name}) do
-  config :localize, otp_app: :localize
-end
+# Localize uses its bundled locale everywhere. (It used to read the legacy
+# eatsbot's locale cache, retired with apps/eatsbot: decommission R6.)
+config :localize, otp_app: :localize
 
 # ── biz_kit_identity ────────────────────────────────────────────────────────
 # Native apps' sessions last until the person signs out, kept by hash in the
@@ -743,171 +749,4 @@ if config_env() == :prod do
         _ -> raise "DOCUMENT_REFERENCE_KEY must be base64 for 32 bytes"
       end
   end
-end
-
-# ── eatsbot (from larsbx/eatsbot) ───────────────────────────────────────────
-# config/runtime.exs is executed for all environments, including
-# during releases. It is executed after compilation and before the
-# system starts, so it is typically used to load production configuration
-# and secrets from environment variables or elsewhere. Do not define
-# any compile-time configuration in here, as it won't be applied.
-# The block below contains prod specific runtime configuration.
-
-# ## Using releases
-#
-# If you use `mix release`, you need to explicitly enable the server
-# by passing the PHX_SERVER=true when you start it:
-#
-#     PHX_SERVER=true bin/eatsbot start
-#
-# Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
-# script that automatically sets the env var above.
-if System.get_env("PHX_SERVER") do
-  config :eatsbot, EatsbotWeb.Endpoint, server: true
-end
-
-# Marketing agent: public base URL encoded on counter NFC/QR stickers and the
-# bot they deep-link into (see EatsbotCore.Marketing for all options).
-config :eatsbot,
-       EatsbotCore.Marketing,
-       Enum.reject(
-         [
-           public_url: System.get_env("PUBLIC_URL"),
-           telegram_bot_username: System.get_env("TELEGRAM_BOT_USERNAME")
-         ],
-         &is_nil(elem(&1, 1))
-       )
-
-# Telegram bot: read at boot, so one built release serves any bot. The webhook
-# rejects updates without the secret it registers with Telegram, so a webhook
-# without one could never take an update.
-if eatsbot_released? do
-  telegram_webhook = System.get_env("TELEGRAM_WEBHOOK")
-  telegram_webhook_secret = System.get_env("TELEGRAM_WEBHOOK_SECRET")
-
-  if (telegram_webhook != nil or telegram_webhook_secret != nil) and
-       not (is_binary(telegram_webhook_secret) and
-              Regex.match?(~r/\A[A-Za-z0-9_-]{1,256}\z/, telegram_webhook_secret)) do
-    raise """
-    environment variable TELEGRAM_WEBHOOK_SECRET is missing or invalid.
-    TELEGRAM_WEBHOOK is set, and the webhook accepts only updates carrying the
-    secret: 1-256 characters from A-Z, a-z, 0-9, _ and -.
-    """
-  end
-
-  if token = System.get_env("TELEGRAM_BOT_TOKEN"), do: config(:telegex, token: token)
-
-  config :eatsbot,
-         Eatsbot.Extensions.TelegramBot.Handler,
-         Enum.reject(
-           [webhook_url: telegram_webhook, webhook_secret: telegram_webhook_secret],
-           &is_nil(elem(&1, 1))
-         )
-end
-
-if config_env() == :prod and eatsbot_released? do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
-
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-
-  # config :opentelemetry_exporter,
-  #   otlp_protocol: :http_protobuf,
-  #   otlp_endpoint: System.fetch_env!("OTLP_ENDPOINT")
-
-  config :eatsbot, Eatsbot.Repo,
-    # ssl: true,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: maybe_ipv6
-
-  # The secret key base is used to sign/encrypt cookies and other secrets.
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
-
-  host = System.get_env("PHX_HOST") || "example.com"
-  port = String.to_integer(System.get_env("PORT") || "4000")
-
-  config :eatsbot, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-
-  config :eatsbot, EatsbotWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
-    http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: port
-    ],
-    secret_key_base: secret_key_base
-
-  config :eatsbot,
-    geocoding_token: System.fetch_env!("GEOCODING_TOKEN"),
-    token_signing_secret:
-      System.get_env("TOKEN_SIGNING_SECRET") ||
-        raise("Missing environment variable `TOKEN_SIGNING_SECRET`!"),
-    req_impl: Req
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :eatsbot, EatsbotWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :eatsbot, EatsbotWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Also, you may need to configure the Swoosh API client of your choice if you
-  # are not using SMTP. Here is an example of the configuration:
-  #
-  #     config :eatsbot, Eatsbot.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # For this example you need include a HTTP client required by Swoosh API client.
-  # Swoosh supports Hackney and Finch out of the box:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end

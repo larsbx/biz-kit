@@ -1,4 +1,6 @@
-import CrossCurrencySetoff
+import Contracts
+
+/- Audit both model proofs and the independently restated contract proofs. -/
 
 #print axioms CrossCurrencySetoff.exact_iff_common_multiplier
 #print axioms CrossCurrencySetoff.canonical_unique
@@ -40,3 +42,43 @@ import CrossCurrencySetoff
 #print axioms CrossCurrencySetoff.expired_source_refused
 #print axioms CrossCurrencySetoff.same_currency_refused
 #print axioms CrossCurrencySetoff.no_exact_offset_refused
+#print axioms CrossCurrencySetoff.Contracts.check_exact_iff_common_multiplier
+#print axioms CrossCurrencySetoff.Contracts.check_canonical_unique
+#print axioms CrossCurrencySetoff.Contracts.check_quote_reduction_bounded
+#print axioms CrossCurrencySetoff.Contracts.check_base_reduction_bounded
+#print axioms CrossCurrencySetoff.Contracts.check_quote_conservation
+#print axioms CrossCurrencySetoff.Contracts.check_base_conservation
+#print axioms CrossCurrencySetoff.Contracts.check_residuals_nonnegative
+#print axioms CrossCurrencySetoff.Contracts.check_integer_residuals
+#print axioms CrossCurrencySetoff.Contracts.check_proposed_exact
+#print axioms CrossCurrencySetoff.Contracts.check_proposed_feasible
+#print axioms CrossCurrencySetoff.Contracts.check_multiplier_feasible_iff
+#print axioms CrossCurrencySetoff.Contracts.check_maximum_exact_offset
+#print axioms CrossCurrencySetoff.Contracts.check_no_larger_exact_offset
+#print axioms CrossCurrencySetoff.Contracts.check_refusal_iff_no_positive_exact
+#print axioms CrossCurrencySetoff.Contracts.check_residual_exhaustion
+#print axioms CrossCurrencySetoff.Contracts.check_exact_quote_divisible
+#print axioms CrossCurrencySetoff.Contracts.check_exact_base_divisible
+#print axioms CrossCurrencySetoff.Contracts.check_reduction_machine_bound
+#print axioms CrossCurrencySetoff.Contracts.check_scalar_aggregation_breaks_quote_conservation
+#print axioms CrossCurrencySetoff.Contracts.check_accepted_is_assembled
+#print axioms CrossCurrencySetoff.Contracts.check_accepted_assertions_valid
+#print axioms CrossCurrencySetoff.Contracts.check_preserves_both_sources
+#print axioms CrossCurrencySetoff.Contracts.check_preserves_independent_source_identities
+#print axioms CrossCurrencySetoff.Contracts.check_distinct_sources_stay_distinct
+#print axioms CrossCurrencySetoff.Contracts.check_distinct_currencies_stay_distinct
+#print axioms CrossCurrencySetoff.Contracts.check_accepted_conservation
+#print axioms CrossCurrencySetoff.Contracts.check_mismatched_quote_revision_refused
+#print axioms CrossCurrencySetoff.Contracts.check_substituted_source_refused
+#print axioms CrossCurrencySetoff.Contracts.check_expired_agreement_refused
+#print axioms CrossCurrencySetoff.Contracts.check_future_agreement_refused
+#print axioms CrossCurrencySetoff.Contracts.check_noncanonical_rate_refused
+#print axioms CrossCurrencySetoff.Contracts.check_accepted_no_effects
+#print axioms CrossCurrencySetoff.Contracts.check_changed_observation_refused
+#print axioms CrossCurrencySetoff.Contracts.check_accepted_exact
+#print axioms CrossCurrencySetoff.Contracts.check_accepted_maximum_exact_offset
+#print axioms CrossCurrencySetoff.Contracts.check_mismatched_base_revision_refused
+#print axioms CrossCurrencySetoff.Contracts.check_changed_source_snapshot_changes_preview
+#print axioms CrossCurrencySetoff.Contracts.check_expired_source_refused
+#print axioms CrossCurrencySetoff.Contracts.check_same_currency_refused
+#print axioms CrossCurrencySetoff.Contracts.check_no_exact_offset_refused

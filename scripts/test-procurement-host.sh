@@ -29,9 +29,10 @@ printf '%s\n' "$revision" | tee "$receipts/revision.txt"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/apps" "$stage/config"
+# Include the ledger's test-only dependencies without changing the release roots.
 for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core fulfillment_core agent_core \
   agent_ops_store group_buy_core inventory_core federation_core federation_service \
-  commerce_core dispatch_core procurement_host; do
+  commerce_core barter_core dispatch_core procurement_host; do
   cp -R "$root/apps/$app" "$stage/apps/"
 done
 cp "$root/config/config.exs" "$root/config/procurement_runtime.exs" "$stage/config/"

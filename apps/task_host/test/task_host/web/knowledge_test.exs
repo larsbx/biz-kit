@@ -5,6 +5,7 @@ defmodule TaskHost.Web.KnowledgeTest do
 
   alias BizKit.Identity.Principal
   alias BizOpsKB.Catalog
+  alias BizOpsKB.Workflows
   alias CoopSubstrate.Log
 
   setup do
@@ -61,6 +62,11 @@ defmodule TaskHost.Web.KnowledgeTest do
   defp index, do: "/api/v1/operations/knowledge"
   defp detail(id), do: index() <> "/documents/" <> URI.encode(id, &URI.char_unreserved?/1)
 
+  defp workflow(id \\ "office-assistant-onboarding-v1"),
+    do: index() <> "/workflows/" <> URI.encode(id, &URI.char_unreserved?/1)
+
+  defp workflow_paths, do: [workflow(), workflow() <> "/manifest", workflow() <> "/sop"]
+
   test "the static page contains no source corpus and anonymous API reads are refused", w do
     for path <- ["/operations/knowledge", "/app/knowledge.html"] do
       conn = call(:get, path, [])
@@ -69,7 +75,7 @@ defmodule TaskHost.Web.KnowledgeTest do
       refute conn.resp_body =~ w.document["path"]
     end
 
-    for path <- [index(), detail(w.document["id"])],
+    for path <- [index(), detail(w.document["id"])] ++ workflow_paths(),
         headers <- [[], [{"cookie", "bizkit_session=forged"}]] do
       conn = call(:get, path, headers)
       assert conn.status == 401
@@ -82,8 +88,127 @@ defmodule TaskHost.Web.KnowledgeTest do
        w do
     assert get(index(), w.outsider_session).status == 403
     assert get(detail(w.document["id"]), w.outsider_session).status == 403
+    for path <- workflow_paths(), do: assert(get(path, w.outsider_session).status == 403)
     Application.put_env(:task_host, :operations, TaskHost.Operations.default_config())
     assert body(get(index(), w.session)) == %{"error" => "workspace_access_required"}
+  end
+
+  test "workflow discovery is linked to its exact source documents", w do
+    before = Log.head()
+    {:ok, expected} = Workflows.list(w.catalog)
+    response = body(get(index(), w.session))
+    assert response["workflows_available"]
+    assert response["workflows"] == expected
+    assert [%{"id" => "office-assistant-onboarding-v1"} = summary] = expected
+    assert summary["task_count"] == 8
+
+    for id <- summary["source_document_ids"] do
+      conn = get(detail(id), w.session)
+      assert conn.status == 200
+      assert body(conn)["workflows"] == expected
+    end
+
+    assert Log.head() == before
+  end
+
+  test "workflow preview exposes validated definitions and provenance without adopting work", w do
+    before = Log.head()
+    {:ok, expected} = Workflows.preview(w.catalog, "office-assistant-onboarding-v1")
+    conn = get(workflow(), w.session)
+    assert conn.status == 200
+    assert body(conn)["workflow"] == expected
+    assert body(conn)["read_only"]
+    assert body(conn)["principal"] == w.reader
+    assert body(conn)["source"] == Catalog.summary(w.catalog)["source"]
+    assert expected["adoption"]["commit_required"]
+    assert Plug.Conn.get_resp_header(conn, "cache-control") == ["no-store"]
+    assert Log.head() == before
+  end
+
+  test "workflow downloads retain exact digest-bound bytes and cannot accept writes", w do
+    before = Log.head()
+    {:ok, preview} = Workflows.preview(w.catalog, "office-assistant-onboarding-v1")
+
+    for kind <- [:manifest, :sop] do
+      {:ok, artifact} = Workflows.artifact(w.catalog, "office-assistant-onboarding-v1", kind)
+      path = workflow() <> "/" <> Atom.to_string(kind)
+      conn = get(path <> "?root=/tmp/private&path=../../mix.lock&principal=forged", w.session)
+      assert conn.status == 200
+      assert conn.resp_body == artifact.bytes
+
+      expected_digest =
+        if kind == :manifest,
+          do: preview["adoption"]["manifest_sha256"],
+          else: preview["sop"]["sha256"]
+
+      assert Base.encode16(:crypto.hash(:sha256, conn.resp_body), case: :lower) == expected_digest
+
+      assert Plug.Conn.get_resp_header(conn, "content-disposition") == [
+               ~s(attachment; filename="#{artifact.filename}")
+             ]
+
+      assert Plug.Conn.get_resp_header(conn, "cache-control") == ["no-store"]
+      assert Plug.Conn.get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+
+      assert Plug.Conn.get_resp_header(conn, "content-security-policy") == [
+               "default-src 'none'; sandbox"
+             ]
+    end
+
+    for path <- workflow_paths() do
+      assert_raise Phoenix.Router.NoRouteError, fn ->
+        call(:post, path, [{"cookie", w.session}])
+      end
+    end
+
+    assert Log.head() == before
+  end
+
+  test "unknown workflow identities cannot select an arbitrary artifact", w do
+    for id <- ["missing", "..", "mix.lock"], suffix <- ["", "/manifest", "/sop"] do
+      conn = get(workflow(id) <> suffix, w.session)
+      assert conn.status == 404
+      assert body(conn) == %{"error" => "not_found"}
+    end
+  end
+
+  test "download pins reject a stale preview or malformed digest without releasing bytes", w do
+    before = Log.head()
+    {:ok, preview} = Workflows.preview(w.catalog, "office-assistant-onboarding-v1")
+
+    for {kind, digest} <- [
+          {:manifest, preview["adoption"]["manifest_sha256"]},
+          {:sop, preview["sop"]["sha256"]}
+        ] do
+      path = workflow() <> "/" <> Atom.to_string(kind)
+      {:ok, artifact} = Workflows.artifact(w.catalog, "office-assistant-onboarding-v1", kind)
+      matching = get(path <> "?expected_sha256=" <> digest, w.session)
+      assert matching.status == 200
+      assert matching.resp_body == artifact.bytes
+
+      stale_digest =
+        String.duplicate(if(String.starts_with?(digest, "0"), do: "1", else: "0"), 64)
+
+      stale = get(path <> "?expected_sha256=" <> stale_digest, w.session)
+      assert stale.status == 409
+      assert body(stale) == %{"error" => "stale_workflow_preview"}
+      assert Plug.Conn.get_resp_header(stale, "content-disposition") == []
+      assert Plug.Conn.get_resp_header(stale, "cache-control") == ["no-store"]
+
+      for query <- [
+            "expected_sha256=",
+            "expected_sha256[]=bad",
+            "expected_sha256=" <> String.upcase(digest),
+            "expected_sha256=" <> String.duplicate("a", 63),
+            "expected_sha256=" <> String.duplicate("g", 64)
+          ] do
+        invalid = get(path <> "?" <> query, w.session)
+        assert invalid.status == 400
+        assert body(invalid) == %{"error" => "invalid_query"}
+      end
+    end
+
+    assert Log.head() == before
   end
 
   test "current Operations readers browse a pinned nonauthoritative catalog without ledger writes",
@@ -170,7 +295,7 @@ defmodule TaskHost.Web.KnowledgeTest do
     assert get(index(), w.session).status == 200
     revoke!(w.world, "TaskOperatorRevokedV1", w.grant)
 
-    for path <- [index(), detail(w.document["id"])] do
+    for path <- [index(), detail(w.document["id"])] ++ workflow_paths() do
       conn = get(path, w.session)
       assert conn.status == 403
       assert body(conn) == %{"error" => "workspace_access_required"}
@@ -182,6 +307,7 @@ defmodule TaskHost.Web.KnowledgeTest do
     assert call(:post, "/auth/logout", [{"cookie", w.session}]).status == 204
     assert get(index(), w.session).status == 401
     assert get(detail(w.document["id"]), w.session).status == 401
+    for path <- workflow_paths(), do: assert(get(path, w.session).status == 401)
     fresh = session!("second", "kb-reader")
     bind([])
     assert get(index(), fresh).status == 401
