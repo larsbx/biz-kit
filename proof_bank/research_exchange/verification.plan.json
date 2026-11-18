@@ -3,9 +3,11 @@
   "scope": {
     "reward": "one prefunded reward slot and two participant destinations",
     "reservation": "one compute reservation",
-    "lean": "the actual pure transition functions, arbitrary natural parameters and finite traces",
+    "lean": "the actual pure transition functions and guarded adapter commit wrapper, arbitrary natural parameters and finite traces",
     "quint": "explicit finite domains in each model, safety only",
     "python": "finite implementation tests and differential execution, not formal refinement",
+    "adapter": "loopback HTTP and SQLite pilot with live credential checks, exact approved proof-export profiles and atomic fixture-credit payout or refund; no production deployment or external financial settlement",
+    "adapter_model": "two prepared operations, bounded grant/row-version interference, process crashes and lost-response retry; atomic durable commits are modeled, not a SQL implementation-refinement theorem",
     "receipt": "unsigned trusted-local execution record, not public verifier authority"
   },
   "assumptions": [
@@ -15,7 +17,9 @@
     "A transition is applied atomically; database linearizability is an integration obligation.",
     "The initial reward slot is already funded, and the configuration is fixed throughout a trace.",
     "Approved proof axioms are propext, Classical.choice and Quot.sound; no other axiom dependencies are permitted.",
-    "The correctness of the checkers, host runtimes, OS and compiler used for native execution is outside these service-state proofs."
+    "The correctness of the checkers, host runtimes, OS and compiler used for native execution is outside these service-state proofs.",
+    "The adapter trusts its provisioning operator, SQLite, OS and filesystem. Process-crash tests provide local fixture evidence, not a formal storage or external settlement proof.",
+    "Controlled checking admits only exact reviewed proof-export profiles. Arbitrary contributor Lean code, public deployment and general proof-worker sandboxing remain outside this pilot."
   ],
   "stages": [
     {
@@ -192,6 +196,40 @@
       "required_patterns": [
         "QUINT_CHECKS_PASSED"
       ],
+      "timeout_seconds": 600
+    },
+    {
+      "id": "adapter_model_checks",
+      "evidence_class": "independent finite adapter safety, concurrency and crash scenarios, and targeted invariant counterexamples",
+      "command": [
+        "{python}",
+        "{root}/formal/quint/run_adapter_checks.py",
+        "--output-dir",
+        "{output}/adapter_quint",
+        "--quint-cli",
+        "{quint}",
+        "--java-bin",
+        "{java}"
+      ],
+      "required_patterns": [
+        "^QUINT_ADAPTER_CHECKS_PASSED 1 exhaustive model; 17 scenarios; 12 targeted mutants$"
+      ],
+      "expected_exit_codes": [0],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "adapter_acceptance",
+      "evidence_class": "real loopback HTTP, controlled proof replay and SQLite process-crash acceptance with disposable fixture credits",
+      "command": [
+        "{python}",
+        "{root}/tools/run_adapter_acceptance.py",
+        "--output-dir",
+        "{output}/adapter_acceptance"
+      ],
+      "required_patterns": [
+        "^ADAPTER_ACCEPTANCE_PASSED 27 tests; 0 skipped$"
+      ],
+      "expected_exit_codes": [0],
       "timeout_seconds": 600
     }
   ]

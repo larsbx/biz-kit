@@ -29,13 +29,17 @@ Only then are `apps/spruce_goose`, its release wiring and its settings removed.
 
 ## 1. Surfaces to rehost
 
+Rehosted on the task host on 2026-11-09, with the owner's decisions on
+sessions and `/mcp` ([task host](2026-11-09-task-host.md), which tracks each
+row's gate).
+
 | Surface | Depends on it | Requirement | Gate |
 | --- | --- | --- | --- |
 | `/auth`: WorkOS sign-in, native sign-in exchange, `BIZKIT_IDENTITY_BINDINGS` | d-patch; Dispatch's `BizKitSession` verifier | One authentication entry point outside SpruceGoose | d-patch native sign-in and Dispatch portal acceptance pass against the new host |
-| `identity_native_sessions` and `SpruceGoose.Web.NativeSessionStore` | Every signed-in native device | Move the store and its rows, or end every session and require sign-in again (**owner decision**). Revocation stays atomic | Atomic native-session revocation tests pass on the new store |
-| OAuth2 issuer for MCP clients (`SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS`, `OAUTH2_SIGNING_SECRET`) | MCP clients | Preserve client authorization and actor bindings; never merge principals on name or email | Each bound client authenticates with its existing binding |
+| `identity_native_sessions` and `SpruceGoose.Web.NativeSessionStore` | Every signed-in native device | Move the store and its rows, or end every session and require sign-in again. *Decided: kept* (store in `biz_kit_identity`, same table). Revocation stays atomic | Atomic native-session revocation tests pass on the new store |
+| OAuth2 issuer for MCP clients (`SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS`, `OAUTH2_SIGNING_SECRET`) | MCP clients | *Dropped with `/mcp`* (task host decision 3). Nothing else used it | Recorded |
 | Task web view and API: commands, SSE feed, tasks, run readiness, project ownership, devices, enrolment, grants, offboarding, administrators, artifacts, blueprints | Operators | Already thin over `CoopSubstrate`; rehost on a ledger-only host | The browser workflow and HTTP suites pass against the new host |
-| `/mcp` (AshAi over Ash resources) | Agents | Rebuild on task commands, or drop (**owner decision**) | Decided and recorded |
+| `/mcp` (AshAi over Ash resources) | Agents | Rebuild on task commands, or drop. *Decided: dropped*, with the OAuth2 issuer | Decided and recorded |
 | `orchestration` release and `SpruceGoose.ReleaseTasks.migrate/0` | Deployment | The new host also creates and initializes the **ledger's** event store | `scripts/release-smoke.sh` equivalent passes without SpruceGoose |
 | `ARTIFACT_STORE_ROOT` (`/var/lib/sprucegoose/artifacts`) | Ledger `ArtifactCustody` receipts | Receipts reference bytes outside the log; they stay readable | Every custody receipt's bytes re-hash to their recorded digest at the new location |
 | CLI commands that sign ledger events | Operators | Keep them as `mix` tasks; legacy-writer commands go with the writer | Each retained command has a `mix` task and test |

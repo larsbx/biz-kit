@@ -9,6 +9,7 @@ approval. No receipt is written unless every required check completes.
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import hashlib
 import http.client
 import http.cookiejar
@@ -18,6 +19,7 @@ import json
 import os
 from pathlib import Path
 import re
+from queue import Queue
 import secrets
 import shutil
 import signal
@@ -31,12 +33,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 REQUIRED = frozenset({
     "packaged_identity", "migration", "unauthenticated_denied", "csrf_denied",
     "http_lifecycle", "obsolete_quote_denied", "exact_retry_inert",
     "restart_replay", "revoked_session_denied", "revoked_write_inert",
-    "backup_restore_equal", "restored_revocation_denied",
+    "backup_restore_equal", "restored_revocation_denied", "dispatch_handoff",
 })
 MODE = "disposable-local-postgres"
 
@@ -161,8 +164,11 @@ class Browser:
         status, _, headers = self.request(path, fields)
         require(status == 303 and headers.get("Location") == "/login", "revoked/unauthenticated request admitted")
 
+    def has_secure_session(self) -> bool:
+        return any(cookie.name == "_procurement_pilot" and cookie.secure for cookie in self.cookies)
 
-def proxy(backend_port: int, certificate: Path, key: Path):
+
+def proxy(backend_port: int, certificate: Path, key: Path, observations: Queue | None = None):
     class Forward(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass  # No cookies, credentials or request bodies in receipts.
@@ -192,6 +198,9 @@ def proxy(backend_port: int, certificate: Path, key: Path):
                         self.send_header(name, value)
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
+                if observations is not None:
+                    headers = {name: result.getheader(name) for name in ("Location", "Cache-Control")}
+                    observations.put((self.command, self.path, result.status, headers))
                 self.wfile.write(payload)
             except (OSError, http.client.HTTPException):
                 self.send_error(502)
@@ -228,9 +237,14 @@ class Harness:
         self.run(["createdb", "--maintenance-db=postgres", "--template=template0", name], label="createdb")
         self.databases.append(name)  # Never drop a database this process did not create.
 
-    def fixture(self, mode: str) -> dict:
-        require(self.child is None, "offline fixture cannot run beside a live appender")
+    def fixture(self, mode: str, payload=None) -> dict:
+        require(mode == "sign" or self.child is None, "offline fixture cannot run beside a live appender")
         env = dict(self.env, PROCUREMENT_ENABLED="false", PROCUREMENT_FIXTURE_MODE=mode)
+        if mode == "sign":
+            for name in ("PROCUREMENT_GOVERNANCE_SEED_HEX", "PROCUREMENT_SIGNING_SEED_HEX",
+                         "PROCUREMENT_SECRET_KEY_BASE", "PROCUREMENT_LOGIN_SHA256"):
+                env.pop(name)
+            env["PROCUREMENT_FIXTURE_INPUT"] = json.dumps(payload)
         script = Path(__file__).with_name("release_fixture.exs").resolve()
         env["PROCUREMENT_FIXTURE_FILE"] = str(script)
         text = self.run([self.executable, "eval", 'Code.eval_file(System.fetch_env!("PROCUREMENT_FIXTURE_FILE"))'],
@@ -244,8 +258,9 @@ class Harness:
         require(self.child is None, "release already running")
         self.counter += 1
         self.output = (self.receipts / f"{self.counter:02d}-release.log").open("w")
-        # Offline authority never enters the long-running host environment.
-        env = {k: v for k, v in self.env.items() if not k.startswith("PROCUREMENT_GOVERNANCE_")}
+        # Offline governance and the synthetic Dispatch key stay outside the host.
+        env = {k: v for k, v in self.env.items()
+               if not k.startswith(("PROCUREMENT_GOVERNANCE_", "PROCUREMENT_FIXTURE_"))}
         env["PROCUREMENT_ENABLED"] = "true"
         self.child = subprocess.Popen([self.executable, "start"], cwd=self.root, env=env,
                                       stdout=self.output, stderr=subprocess.STDOUT, start_new_session=True)
@@ -295,21 +310,82 @@ class Harness:
         require(not errors, "temporary database cleanup failed: " + "; ".join(errors))
 
 
-def lifecycle(browser: Browser, token: str, checks: dict) -> tuple[str, dict]:
+def dispatch_handoff(browser: Browser, path: str, harness: Harness, origin: str, certificate: Path) -> str:
+    client = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), NoRedirect(),
+        urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=str(certificate))))
+    order = path.rsplit("/", 1)[1]
+    endpoint = origin + "/api/procurement-dispatch"
+
+    def post(signed: dict, expected: int, *, work: bool = False) -> dict:
+        request = urllib.request.Request(endpoint + ("/work" if work else ""),
+                                         data=json.dumps(signed).encode(),
+                                         headers={"Content-Type": "application/json"})
+        try:
+            response = client.open(request, timeout=15)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            require(response.status == expected,
+                    f"Dispatch HTTPS expected {expected}; got {response.status}")
+            return json.load(response)
+
+    browser.submit(Forms(browser.page(path)).one("/dispatch", suffix=True), {})
+    work_request = harness.fixture("sign", "work")
+    jobs = post(work_request, 200, work=True)["jobs"]
+    require(jobs == [{"order_id": order, "site": "Synthetic north dock", "phase": "requested"}],
+            "Dispatch work did not match the accepted order")
+    post(work_request, 403, work=True)
+
+    trip = {"order_id": order, "load_id": str(uuid.uuid4()),
+            "assignment_id": str(uuid.uuid4()), "automated": True}
+
+    def step(operation: str, version: int, **proof) -> dict:
+        return dict(trip, op=operation, expected_version=version,
+                    command_id="quickstart-" + operation, **proof)
+
+    def code(page: str, label: str) -> str:
+        found = re.search(rf"{label} <code>([A-Za-z0-9_-]+)</code>", page)
+        require(found is not None, f"missing {label} on the coordinator page")
+        return found[1]
+
+    def code_digest(value: str) -> str:
+        return hashlib.sha256(value.encode()).hexdigest()
+
+    post(harness.fixture("sign", step("accept", 0)), 201)
+    page = browser.page(path)
+    pickup = code(page, "Pickup code")
+    dropoff = code(page, "Drop-off code")
+    pickup_step = step("picked_up", 1, proof_id=str(uuid.uuid4()), proof_digest=code_digest(pickup))
+    wrong_pickup = dict(pickup_step, proof_digest=code_digest(dropoff))
+    refusal = post(harness.fixture("sign", wrong_pickup), 422)
+    require(refusal.get("error") == "delivery_code_required_or_invalid", "wrong pickup code was not rejected")
+    post(harness.fixture("sign", pickup_step), 201)
+    delivery_proof = str(uuid.uuid4())
+    delivery = step("delivered", 2, proof_id=delivery_proof, proof_digest=code_digest(dropoff))
+    post(harness.fixture("sign", delivery), 201)
+    require(post(harness.fixture("sign", delivery), 200) == {"status": "already_admitted"},
+            "duplicate delivery receipt did not return the inert result")
+    return "dispatch:" + delivery_proof
+
+
+def lifecycle(browser: Browser, token: str, checks: dict, dispatch) -> tuple[str, dict, str]:
     browser.denied("/requests")
     checks["unauthenticated_denied"] = True
     login = Forms(browser.page("/login")).one("/login")
     _, body, _ = browser.submit(login, {"token": token})
     require(token not in body, "credential reflected by login")
     page = browser.page("/requests")
-    require(any(cookie.secure for cookie in browser.cookies), "no Secure session cookie")
+    require(browser.has_secure_session(), "no Secure session cookie")
     create = Forms(page).one("/request", suffix=True)
-    request_path = create["action"].rsplit("/", 1)[0]
     invalid = dict(create["fields"])
     invalid.pop("_csrf_token", None)
     status, _, _ = browser.request(create["action"], invalid)
     require(status == 403, "missing CSRF did not produce a refusal")
     checks["csrf_denied"] = True
+    # The WebView navigated to the refusal. Reopen the rendered form before submitting.
+    create = Forms(browser.page("/requests")).one("/request", suffix=True)
+    request_path = create["action"].rsplit("/", 1)[0]
     future = time.strftime("%Y-%m-%dT%H:%M", time.gmtime(time.time() + 86_400))
     original, _, _ = browser.submit(create, {
         "buyer_business_id": "acceptance-buyer", "description": "<script>synthetic packaging</script>",
@@ -330,21 +406,23 @@ def lifecycle(browser: Browser, token: str, checks: dict) -> tuple[str, dict]:
     browser.submit(old_accept, {"expected_version": current["fields"]["expected_version"],
                    "_csrf_token": current["fields"]["_csrf_token"], "evidence_ref": "obsolete"}, expected=409)
     checks["obsolete_quote_denied"] = True
+    current = Forms(browser.page(request_path)).one("/accept", suffix=True)
     browser.submit(current, {"evidence_ref": "synthetic-buyer-acceptance"})
-    page = browser.page(request_path)
-    browser.submit(Forms(page).one("/fulfill", suffix=True), {"evidence_ref": "synthetic-delivery"})
+    outcome_ref = dispatch(request_path)
     page = browser.page(request_path)
     require("fulfilled" in page and "Frozen accepted quote" in page and "12500" in page,
             "fulfilled frozen quote absent")
+    require("Delivery recorded against this order." in page and outcome_ref in page,
+            "Dispatch proof absent from the original order")
     checks["http_lifecycle"] = True
     current_csrf = Forms(page).one("/logout")["fields"]["_csrf_token"]
     original["_csrf_token"] = current_csrf
     browser.submit({"action": create["action"], "fields": {}}, original)
-    # Offline inspection below establishes exact retry was inert at version 6.
-    return request_path, original
+    # Offline inspection below establishes the original command retry was inert.
+    return request_path, original, outcome_ref
 
 
-def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
+def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None, tls_pair=None) -> dict:
     env = database_environment(dict(os.environ))
     for executable in ("createdb", "dropdb", "pg_dump", "pg_restore", "openssl"):
         require(shutil.which(executable) is not None, f"required tool unavailable: {executable}")
@@ -352,7 +430,9 @@ def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
     checks: dict[str, bool] = {}
     receipts.mkdir(parents=True, exist_ok=True)
     os.umask(0o077)
-    with tempfile.TemporaryDirectory(prefix="bizkit-procurement-") as directory:
+    require((desktop_deb is None) == (tls_pair is None), "native acceptance requires a package and a trusted TLS pair")
+    with ExitStack() as stack:
+        directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="bizkit-procurement-"))
         work = Path(directory)
         root = unpack(archive, work, revision)
         checks["packaged_identity"] = True
@@ -368,27 +448,44 @@ def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
                    PROCUREMENT_CHAPTER="acceptance-chapter", PROCUREMENT_COOPERATIVE="acceptance-coop",
                    PROCUREMENT_OPERATOR="acceptance-operator", PROCUREMENT_KEY_ID="acceptance-key",
                    PROCUREMENT_GRANT_VERSION="1", PROCUREMENT_PORT=str(port),
-                   PROCUREMENT_GOVERNANCE_SEED_HEX=secrets.token_hex(32))
+                   PROCUREMENT_GOVERNANCE_SEED_HEX=secrets.token_hex(32),
+                   PROCUREMENT_FIXTURE_DISPATCH_SEED=secrets.token_hex(32))
         harness = Harness(root, work, receipts, env)
         tls = None
         try:
             harness.create_database(database)
             harness.run([harness.executable, "eval", "ProcurementHost.ReleaseTasks.migrate()"], label="migrate")
             checks["migration"] = True
-            harness.fixture("seed")
-            certificate, key = work / "tls.crt", work / "tls.key"
-            harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                         "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=127.0.0.1",
-                         "-addext", "subjectAltName=IP:127.0.0.1"], label="test-certificate")
+            seeded = harness.fixture("seed")
+            if tls_pair is None:
+                certificate, key = work / "tls.crt", work / "tls.key"
+                harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                             "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=127.0.0.1",
+                             "-addext", "subjectAltName=IP:127.0.0.1"], label="test-certificate")
+            else:
+                certificate, key = tls_pair
             harness.start()
-            tls = proxy(port, certificate, key)
-            browser = Browser(f"https://127.0.0.1:{tls.server_address[1]}", certificate)
-            path, retry = lifecycle(browser, token, checks)
+            observations = Queue() if desktop_deb is not None else None
+            tls = proxy(port, certificate, key, observations)
+            origin = f"https://127.0.0.1:{tls.server_address[1]}"
+            if desktop_deb is None:
+                browser = Browser(origin, certificate)
+            else:
+                from tauri_client import packaged_browser
+
+                browser = stack.enter_context(packaged_browser(desktop_deb, origin, observations, work, receipts))
+            path, retry, outcome_ref = lifecycle(
+                browser, token, checks, lambda path: dispatch_handoff(browser, path, harness, origin, certificate))
             harness.stop()
             before = harness.fixture("inspect")
-            expected = {"phase": "fulfilled", "version": 6, "command_count": 6,
+            expected = {"id": path.rsplit("/", 1)[1], "dispatch_phase": "delivered", "outcome_ref": outcome_ref,
+                        "phase": "fulfilled", "version": 7, "command_count": 6,
                         "quote_revision": 2, "quote_total_minor": 12500, "payment_evidence_count": 0}
             require(before["requests"] == [expected], "lifecycle/retry produced unexpected persistent state")
+            # Five coordinator commands, one queue request and three Dispatch steps.
+            require(before["global_seq"] == seeded["global_seq"] + 9,
+                    "refusals or retries produced unexpected ledger writes")
+            checks["dispatch_handoff"] = True
             checks["exact_retry_inert"] = True
             harness.start()
             require("fulfilled" in browser.page(path), "HTTP record missing after cold restart")
@@ -427,6 +524,9 @@ def acceptance(archive: Path, revision: str, receipts: Path) -> dict:
                        "trust": "unsigned-runner-observation", "restored_ledger": revoked,
                        "scope": "synthetic loopback HTTPS/SQL; not target-host or graphical-browser acceptance"}
             validate_receipt(receipt, revision, artifact_sha256)
+            if desktop_deb is not None:
+                receipt.update(kind="procurement-packaged-tauri-acceptance-v1", desktop=browser.identity,
+                               scope="packaged Linux Tauri/WebKit and ERTS over synthetic loopback HTTPS/SQL")
         finally:
             if tls is not None:
                 tls.shutdown()
@@ -440,12 +540,15 @@ def main():
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--receipts", type=Path, required=True)
+    parser.add_argument("--desktop-deb", type=Path)
+    parser.add_argument("--tls-pair", type=Path, nargs=2, metavar=("CERTIFICATE", "KEY"))
     args = parser.parse_args()
     destination = args.receipts.resolve()
     destination.mkdir(parents=True, exist_ok=True)
     receipt_path = destination / "receipt.json"
     receipt_path.unlink(missing_ok=True)  # A previous success never survives a failed rerun.
-    receipt = acceptance(args.archive.resolve(), args.revision, destination)
+    receipt = acceptance(args.archive.resolve(), args.revision, destination,
+                         desktop_deb=args.desktop_deb, tls_pair=args.tls_pair)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
     print(json.dumps(receipt, sort_keys=True))
 

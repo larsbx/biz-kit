@@ -16,7 +16,7 @@ defmodule SpruceGoose.CLI.SocketPath do
   elsewhere — bound a world-reachable admin API with no error and no warning.
 
   So the directory is checked here, before binding, with the same test
-  `SpruceGoose.Blueprints.ForgejoVerifier` already applies to the read token:
+  `TaskHost.Blueprints.ForgejoVerifier` already applies to the read token:
   owned by this user, and no group or other bits. A boundary the application
   will not assert is not a boundary it can claim.
   """

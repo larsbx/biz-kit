@@ -3,11 +3,11 @@
 // (Org.roles/3 over Org.edges/3, which keeps an edge only when
 // Interval.contains?(during, t), so expired and empty intervals grant nothing)
 // and their effective grants (Org.effective/3, direct delegation lines at t).
-// FINDING: can?/4 does NOT check Keel.Invariants.valid?/1 (cycles in reports,
-// delegation or ownership, interval well-formedness); no in-repo caller gates
-// can?/4 on it. This model states the intended rule, where an invalid
-// (cyclic) organization grants nothing; only the active-at-t half is
-// enforced by the code today.
+// and Keel.Invariants.valid_at?/2: can?/4 grants nothing at t when the org
+// is not well formed at t (every static invariant and every temporal one at
+// t: cycles in reports, delegation or ownership, bad intervals, seat limits).
+// Keel SPEC §4 `can` and amendment A6; tested by OrgTest "an invalid org
+// grants nothing".
 // Abstracted away: one party, one seat edge, one delegation line; time is
 // the seat interval being active or not; capability coverage and alienation
 // reservations are omitted. GUARDED switches off both halves of the gate.

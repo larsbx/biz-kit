@@ -1,13 +1,16 @@
 // Obligation (dispatch): concurrent authenticated assignments cannot create
 // active driver/vehicle conflicts.
 //
-// Rule in code: Dispatch.Fleet.Assignment identity :one_active_per_operator, a
-// partial unique index (status = 'ACTIVE' AND operator_exclusive) that
-// PostgreSQL enforces under concurrent commits; Dispatch.Operations.Board
-// refusal/1 maps it to "the driver already has an active trip".
-// FINDING: the vehicle half is NOT enforced in code. No index or check stops
-// two ACTIVE assignments sharing a vehicle_id (Board only checks ownership via
-// own_equipment/3). The vehicle guard below is the intended rule, not code.
+// Rule in code: Dispatch.Fleet.Assignment identities :one_active_per_operator
+// (status = 'ACTIVE' AND operator_exclusive) and :one_active_per_vehicle /
+// :one_active_per_trailer (status = 'ACTIVE' AND <id> IS NOT NULL), partial
+// unique indexes PostgreSQL enforces under concurrent commits;
+// Dispatch.Operations.Board refusal/1 names the conflicting driver or
+// equipment. Tested by BoardTest "equipment on active trips" and
+// EquipmentExclusivityConcurrencyTest. On the ledger path the same rule is
+// DispatchCore.Admission's check at `activate`, run by the single appender
+// (every operator exclusive there; CoopSubstrate.DispatchAssignmentsTest).
+// Trailers follow the vehicle rule and are not modelled separately.
 // Abstracted: two assignments, two drivers, two vehicles; commits serialize
 // (the database's unique check), so interleaving is a sequence of steps.
 module dispatch_spec {

@@ -123,15 +123,20 @@ defmodule CoopSubstrate.CommercialSetoffSources do
       |> Enum.sort_by(fn {{_chapter, id}, _row} -> id end)
 
     cond do
-      length(rows) < 2 -> {:error, :no_bilateral_sources}
-      length(rows) > @max_sources -> {:error, :source_limit_exceeded}
+      length(rows) < 2 ->
+        {:error, :no_bilateral_sources}
+
+      length(rows) > @max_sources ->
+        {:error, :source_limit_exceeded}
+
       not Enum.any?(rows, fn {_id, row} -> row.debtor_id == a end) ->
         {:error, :no_bilateral_sources}
 
       not Enum.any?(rows, fn {_id, row} -> row.debtor_id == b end) ->
         {:error, :no_bilateral_sources}
 
-      true -> {:ok, rows}
+      true ->
+        {:ok, rows}
     end
   end
 

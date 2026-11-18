@@ -464,8 +464,16 @@ defmodule Dispatch.Operations.Board do
 
   defp refusal(other), do: {:invalid, first_line(inspect(other))}
 
-  defp conflict(_message),
-    do: "the driver already has an active trip; complete or cancel it first"
+  defp conflict(message) do
+    holder =
+      cond do
+        message =~ "one_active_per_vehicle" -> "the vehicle is already on an active trip"
+        message =~ "one_active_per_trailer" -> "the trailer is already on an active trip"
+        true -> "the driver already has an active trip"
+      end
+
+    holder <> "; complete or cancel it first"
+  end
 
   defp first_line(message) do
     message

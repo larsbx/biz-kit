@@ -1,0 +1,243 @@
+{
+  "schema_version": 2,
+  "project": {
+    "key": "office-assistant",
+    "name": "Office assistant onboarding"
+  },
+  "roadmaps": [
+    {
+      "key": "office-setup",
+      "name": "Office setup and handoff",
+      "workflows": [
+        {
+          "id": "office-onboarding",
+          "name": "Office assistant onboarding",
+          "readiness_contract": {
+            "schema_version": 1,
+            "sop_digest": "899468a13b3c0b073102a981d2ee29d98d49e6a3164243b5e933ca2ae9258ed6",
+            "sop_version": "1.0.0",
+            "input_digests": {
+              "source_24_12": "0803f0b19737eae54b6df585fac4e5136d7fbadb151873b90aa6227e7df20c34",
+              "source_24_12d": "7fa0018dee855d5a3dd6f542914ac0bb98fc1df83d1e189bc925826e66732d53"
+            },
+            "manifest_input": "workflow_manifest"
+          },
+          "tasks": [
+            {
+              "id": "owner-scope",
+              "title": "Approve the engagement and owner Part A",
+              "description": "Source: 24.12 Before you arrive; 24.12d Part A and Risks acknowledged. Confirm current product, channel and hosting choices for this engagement; the copied procedures preserve historical names and do not authorize setup.",
+              "depends_on": [],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "signed-scope",
+                  "description": "Retain owner-signed Part A identifying the company, owner, installer, dates, included and excluded work, employee count, channels, support window and named internal admin."
+                },
+                {
+                  "id": "data-and-keys",
+                  "description": "Record the restricted-document types and access list, at least two owner-appointed vault key holders, hosting location, data-processing agreement, retention and exit terms; the installer retains no vault key."
+                },
+                {
+                  "id": "policy-and-risk",
+                  "description": "Retain owner decisions on chat access, employee changes and current channel/stack choices, with initialed risks and mitigations. Review the companion hosting, file-plane and channel-topology procedures and record the versions selected for the engagement."
+                }
+              ]
+            },
+            {
+              "id": "preflight",
+              "title": "Prepare the approved deployment",
+              "description": "Source: 24.12 Before you arrive. Begin after owner Part A has accepted the scope. Preserve the isolated company boundary and the reviewed hosting decisions.",
+              "depends_on": [
+                "owner-scope"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "roster-and-package",
+                  "description": "Record the staff/device roster, departments, account needs, machine roles and device identifiers. Retain evidence that the Windows installer is signed and passes on a clean machine."
+                },
+                {
+                  "id": "cloud-and-network",
+                  "description": "Demonstrate the approved isolated company cloud stack and its own gateway/bot/profile setup, and retain the reviewed cloud-to-office network ACLs."
+                },
+                {
+                  "id": "reference-preparation",
+                  "description": "Prepare the company Johnny.Decimal draft, wiki host and quiet/headless file-drop configuration, with the approved owner scope and restricted list available to the installer."
+                }
+              ]
+            },
+            {
+              "id": "discovery",
+              "title": "Confirm roles, document tiers and the office plan",
+              "description": "Source: 24.12 Day 1 AM: discovery. Validate the office and staff needs against the approved scope before building the office zone.",
+              "depends_on": [
+                "owner-scope"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "use-cases",
+                  "description": "Record two or three agreed assistant use cases for each job role and the network/machine audit, including OS versions, admin rights and anchor disk capacity."
+                },
+                {
+                  "id": "classified-index",
+                  "description": "Inventory documents into open, internal and restricted tiers; retain owner-reviewed version 1 of the company Johnny.Decimal index."
+                },
+                {
+                  "id": "folder-plan",
+                  "description": "Record departments, anchors, the librarian anchor and vault locations; review the department/anchor folder matrix and device modes with the owner."
+                }
+              ]
+            },
+            {
+              "id": "office-zone",
+              "title": "Build and test the office zone",
+              "description": "Source: 24.12 Day 1 PM: office zone. Use only the approved cloud, network and folder plan; restricted content stays in the vault.",
+              "depends_on": [
+                "preflight",
+                "discovery"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "vault-and-sync",
+                  "description": "Demonstrate the file drop, librarian and encrypted vault, including write-only upload tests; record every sync device and verify the installed configurations against the owner-reviewed folder matrix."
+                },
+                {
+                  "id": "restore",
+                  "description": "Retain evidence of running cross-zone backups and one successful restore, identifying the restored file and test date."
+                },
+                {
+                  "id": "pilot",
+                  "description": "For two pilot employees, retain a message and document round-trip showing approved channels and uploads reach the hub, route to the correct assistant and file into the correct tier."
+                }
+              ]
+            },
+            {
+              "id": "staff-enrollment",
+              "title": "Enroll every employee and verify access boundaries",
+              "description": "Source: 24.12 Day 2 AM: enrollment; 24.12d Part B employee, upload and folder checks. Keep a per-employee and per-device test log.",
+              "depends_on": [
+                "office-zone"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "employee-round-trips",
+                  "description": "For every employee, record installer/profile setup, hub account and primary-channel enrollment, successful message round-trip and document upload through the hub to the correct tier; verify each optional extra channel in use."
+                },
+                {
+                  "id": "restricted-refusal",
+                  "description": "Demonstrate that a restricted document sent through chat is refused and redirected to the approved restricted upload link; verify per-profile allowlists and catch-all routing."
+                },
+                {
+                  "id": "device-isolation",
+                  "description": "Verify each non-anchor receives only company-wide and assigned department open/internal folders, with desktop send/receive and laptop receive-only modes. Verify anchors retain every department replica, restricted folders stay inside the vault, and intake is limited to the librarian anchor and edge."
+                }
+              ]
+            },
+            {
+              "id": "staff-training",
+              "title": "Train staff and deliver their reference cards",
+              "description": "Source: 24.12 Day 2 PM: training + handoff; 24.12d Part B. Use the reviewed companion training procedure and quick cards.",
+              "depends_on": [
+                "staff-enrollment"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "training-held",
+                  "description": "Record the 30-45 minute staff training session, attendance and delivery of the appropriate channel quick cards."
+                },
+                {
+                  "id": "safe-use",
+                  "description": "Demonstrate the upload/refusal path and fallback/escalation instructions, including checking assistant output before customer-facing or money-related use."
+                }
+              ]
+            },
+            {
+              "id": "admin-handoff",
+              "title": "Witness admin add, revoke and support procedures",
+              "description": "Source: 24.12 Day 2 PM: training + handoff; 24.12d Part B. Retain witnessed evidence of the actual client-side steps and standard support round trip.",
+              "depends_on": [
+                "staff-enrollment"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "admin-add",
+                  "description": "Deliver the reviewed runbook to the named internal admin. Witness one employee add, including client-side steps and support-generated configurations/cloud changes."
+                },
+                {
+                  "id": "admin-revoke",
+                  "description": "Witness one profile/device revoke: verify peer-side sync cutoff before tailnet removal, then demonstrate sync fails over both LAN and tailnet."
+                },
+                {
+                  "id": "support-and-keys",
+                  "description": "Confirm the agreed support contact/window, owner-appointed vault key holders and their recorded key storage; schedule the two-week check-in."
+                }
+              ]
+            },
+            {
+              "id": "owner-acceptance",
+              "title": "Obtain witnessed owner Part B acceptance",
+              "description": "Source: 24.12 Risks and Done when; 24.12d Part B: handoff acceptance. Handoff is complete only after the owner and installer review the evidence and sign.",
+              "depends_on": [
+                "staff-training",
+                "admin-handoff"
+              ],
+              "artifact_requirements": [
+                "source_24_12",
+                "source_24_12d",
+                "workflow_manifest"
+              ],
+              "definition_of_done": [
+                {
+                  "id": "acceptance-evidence",
+                  "description": "Present every Part B check with witnessed results or evidence: all employee and extra-channel round-trips, uploads, restricted refusal, successful restore, admin add/revoke, training, runbook, keys and folder matrix."
+                },
+                {
+                  "id": "signed-part-b",
+                  "description": "Retain owner and installer signatures and dates on completed Part B, with the scope and risk acknowledgements reconciled against Part A."
+                },
+                {
+                  "id": "open-items",
+                  "description": "Record each carried open item with its owner and due date, the support-window end and the scheduled two-week check-in; have the owner accept this handoff record."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

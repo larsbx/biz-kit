@@ -1,0 +1,122 @@
+name: Research exchange durable MCP bridge
+
+on:
+  pull_request:
+    paths:
+      - 'proof_bank/research_exchange/**'
+      - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
+      - 'docs/proof-bank/research-exchange/**'
+      - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-adapter.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'proof_bank/research_exchange/**'
+      - 'proof_bank/research_exchange_mcp/**'
+      - 'proof_bank/research_exchange_bridge/**'
+      - 'docs/proof-bank/research-exchange/**'
+      - '.github/workflows/proof-bank-research-exchange.yml'
+      - '.github/workflows/research-exchange-adapter.yml'
+      - '.github/workflows/research-exchange-durable-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-exchange-bridge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  durable-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          version-type: 'strict'
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+          install-hex: false
+          install-rebar: false
+      - name: Bind the selected core and clean integration source
+        run: |
+          set -euo pipefail
+          snapshot_tool=proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py
+          git fetch --no-tags --depth=1 origin "$(python3 -B "$snapshot_tool" --print-revision)"
+          python3 -B "$snapshot_tool" --require-clean \
+            --output "$RUNNER_TEMP/research-exchange-bridge/core-snapshot-before.json"
+      - name: Verification gate refusal controls
+        run: python3 -B -m unittest discover -s proof_bank/research_exchange_bridge/tools -p 'test_*.py' -v
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            ${{ runner.temp }}/research-exchange-tools/*.tar.zst
+            ${{ runner.temp }}/research-exchange-tools/*.tar.gz
+            ${{ runner.temp }}/research-exchange-tools/*.tgz
+          key: research-exchange-archives-linux-x64-${{ hashFiles('proof_bank/research_exchange/toolchains.lock.json') }}
+      - name: Install the unchanged locked proof toolchains
+        run: |
+          set -euo pipefail
+          command -v zstd
+          test "$(node --version)" = 'v24.22.1'
+          npm install --global --ignore-scripts --no-audit --no-fund npm@11.9.0
+          test "$(npm --version)" = '11.9.0'
+          python3 -B proof_bank/research_exchange/tools/bootstrap.py --destination "$RUNNER_TEMP/research-exchange-tools"
+      - name: Complete representation, model and real MCP execution acceptance
+        env:
+          BRIDGE_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          FRE_TOOLS="$RUNNER_TEMP/research-exchange-tools"
+          python3 -B proof_bank/research_exchange_bridge/tools/verify.py \
+            --expected-revision "$BRIDGE_EXPECTED_REVISION" \
+            --lean-root "$FRE_TOOLS/lean-4.35.0-linux" \
+            --quint-cli "$FRE_TOOLS/quint/node_modules/@informalsystems/quint/dist/src/cli.js" \
+            --java-bin "$FRE_TOOLS/jdk-21.0.13+9-jre/bin/java" \
+            --quint-home "$FRE_TOOLS/quint-home" \
+            --elixir "$(command -v elixir)" \
+            --output-dir "$RUNNER_TEMP/research-exchange-bridge/profile"
+          python3 -B proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py --require-clean \
+            --output "$RUNNER_TEMP/research-exchange-bridge/core-snapshot-after.json"
+      - name: Compile and replay the pinned submitted-source profile
+        run: |
+          set -euo pipefail
+          export EXCHANGE_LEAN_ROOT="$RUNNER_TEMP/research-exchange-tools/lean-4.35.0-linux"
+          export PATH="$EXCHANGE_LEAN_ROOT/bin:$PATH"
+          export EXCHANGE_SOURCE_IMPORTS="$RUNNER_TEMP/exchange-source-imports"
+          mathlib="$RUNNER_TEMP/exchange-mathlib"
+          git clone --branch v4.35.0 --depth 1 https://github.com/leanprover-community/mathlib4.git "$mathlib"
+          git -C "$mathlib" checkout --detach 56a005855ea17e0b0958f73ec801ae140b0a1679
+          (cd "$mathlib" && lake build +Mathlib.Data.Nat.Prime.Defs)
+          evidence="$RUNNER_TEMP/research-exchange-bridge"
+          python3 -B proof_bank/research_exchange_bridge/tools/prepare_source_imports.py \
+            "$mathlib" "$EXCHANGE_SOURCE_IMPORTS" | tee "$evidence/source-imports.json"
+          export EXCHANGE_SOURCE_EVIDENCE="$evidence/source-replay.json"
+          PYTHONPATH=proof_bank python3 -B -m unittest research_exchange_bridge.tests.test_source -v \
+            2>&1 | tee "$evidence/source-acceptance.log"
+          test -s "$EXCHANGE_SOURCE_EVIDENCE"
+      - name: Preserve exact-revision bridge evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-exchange-bridge-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/research-exchange-bridge/
+            !${{ runner.temp }}/research-exchange-bridge/profile/proofs/work/**
+          if-no-files-found: error
+          retention-days: 30
