@@ -1,0 +1,200 @@
+{
+  "description": "Independent supply/need slots; staggered physical legs can leave an exchange partially performed.",
+  "annual_membership_fee_minor": 25000,
+  "policy": {
+    "mechanism": "barter",
+    "cadence_hours": 0,
+    "selection": "first_quote",
+    "max_cycle_length": null,
+    "rematch_rounds": 0,
+    "failure_penalty_minor": 0,
+    "coordination_cost_minor_per_order": 0
+  },
+  "shocks": [],
+  "limits": {
+    "max_events": 100000,
+    "max_candidate_pairs": 50000,
+    "solver_work_budget": 1000000
+  },
+  "schema_version": "1.0",
+  "scenario_id": "barter-ring-5",
+  "start_at": "2026-01-01T00:00:00Z",
+  "observed_until_hour": 168,
+  "currency": "USD",
+  "businesses": [
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 0,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "producer-0"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 0,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "producer-1"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 0,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "producer-2"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 0,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.0,
+      "receipt_delay_hours": 0,
+      "id": "producer-3"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 0,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "producer-4"
+    }
+  ],
+  "offers": [
+    {
+      "id": "supply-0",
+      "seller_id": "producer-0",
+      "category": "product-0",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "available_at_hour": 0,
+      "expires_at_hour": 336,
+      "unit_price_minor": 1000,
+      "delivery_hours": 6
+    },
+    {
+      "id": "supply-1",
+      "seller_id": "producer-1",
+      "category": "product-1",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "available_at_hour": 0,
+      "expires_at_hour": 336,
+      "unit_price_minor": 1000,
+      "delivery_hours": 12
+    },
+    {
+      "id": "supply-2",
+      "seller_id": "producer-2",
+      "category": "product-2",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "available_at_hour": 0,
+      "expires_at_hour": 336,
+      "unit_price_minor": 1000,
+      "delivery_hours": 18
+    },
+    {
+      "id": "supply-3",
+      "seller_id": "producer-3",
+      "category": "product-3",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "available_at_hour": 0,
+      "expires_at_hour": 336,
+      "unit_price_minor": 1000,
+      "delivery_hours": 24
+    },
+    {
+      "id": "supply-4",
+      "seller_id": "producer-4",
+      "category": "product-4",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "available_at_hour": 0,
+      "expires_at_hour": 336,
+      "unit_price_minor": 1000,
+      "delivery_hours": 30
+    }
+  ],
+  "requests": [
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": "supply-0",
+      "acceptable_offer_ids": null,
+      "id": "need-0",
+      "buyer_id": "producer-0",
+      "category": "product-4",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 0,
+      "due_at_hour": 168,
+      "max_unit_price_minor": 2000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": "supply-1",
+      "acceptable_offer_ids": null,
+      "id": "need-1",
+      "buyer_id": "producer-1",
+      "category": "product-0",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 0,
+      "due_at_hour": 168,
+      "max_unit_price_minor": 2000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": "supply-2",
+      "acceptable_offer_ids": null,
+      "id": "need-2",
+      "buyer_id": "producer-2",
+      "category": "product-1",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 0,
+      "due_at_hour": 168,
+      "max_unit_price_minor": 2000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": "supply-3",
+      "acceptable_offer_ids": null,
+      "id": "need-3",
+      "buyer_id": "producer-3",
+      "category": "product-2",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 0,
+      "due_at_hour": 168,
+      "max_unit_price_minor": 2000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": "supply-4",
+      "acceptable_offer_ids": null,
+      "id": "need-4",
+      "buyer_id": "producer-4",
+      "category": "product-3",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 0,
+      "due_at_hour": 168,
+      "max_unit_price_minor": 2000
+    }
+  ]
+}

@@ -1,0 +1,1150 @@
+{
+  "description": "Uncalibrated synthetic demand-first market. Every scope has distinct physical stock lots.",
+  "annual_membership_fee_minor": 25000,
+  "policy": {
+    "mechanism": "purchase",
+    "cadence_hours": 0,
+    "selection": "first_quote",
+    "max_cycle_length": null,
+    "rematch_rounds": 0,
+    "failure_penalty_minor": 0,
+    "coordination_cost_minor_per_order": 100
+  },
+  "shocks": [],
+  "limits": {
+    "max_events": 100000,
+    "max_candidate_pairs": 50000,
+    "solver_work_budget": 1000000
+  },
+  "schema_version": "1.0",
+  "scenario_id": "demand-12-40-5-2",
+  "start_at": "2026-01-01T00:00:00Z",
+  "observed_until_hour": 336,
+  "currency": "USD",
+  "businesses": [
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-0"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-1"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-10"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-11"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-12"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-13"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-14"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-15"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-16"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-17"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-18"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-19"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-2"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-3"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-4"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-5"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-6"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-7"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-8"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-9"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-0"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 24,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-1"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 48,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-2"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-3"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 24,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-4"
+    }
+  ],
+  "requests": [
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a1-c1",
+        "lot-4-a1-c1"
+      ],
+      "id": "request-0000",
+      "buyer_id": "buyer-0",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 168,
+      "due_at_hour": 336,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c1",
+        "lot-3-a0-c1"
+      ],
+      "id": "request-0001",
+      "buyer_id": "buyer-1",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 2,
+      "due_at_hour": 170,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-1-a1-c1"
+      ],
+      "id": "request-0002",
+      "buyer_id": "buyer-2",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 153,
+      "due_at_hour": 321,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-2-a0-c1"
+      ],
+      "id": "request-0003",
+      "buyer_id": "buyer-3",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 94,
+      "due_at_hour": 262,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0004",
+      "buyer_id": "buyer-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 147,
+      "due_at_hour": 315,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-4-a1-c1"
+      ],
+      "id": "request-0005",
+      "buyer_id": "buyer-5",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 22,
+      "due_at_hour": 190,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0006",
+      "buyer_id": "buyer-6",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 108,
+      "due_at_hour": 276,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a1-c0",
+        "lot-2-a1-c0"
+      ],
+      "id": "request-0007",
+      "buyer_id": "buyer-7",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 138,
+      "due_at_hour": 306,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0008",
+      "buyer_id": "buyer-8",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 129,
+      "due_at_hour": 297,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a1-c1",
+        "lot-4-a1-c1"
+      ],
+      "id": "request-0009",
+      "buyer_id": "buyer-9",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 122,
+      "due_at_hour": 290,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0010",
+      "buyer_id": "buyer-10",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 49,
+      "due_at_hour": 217,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-2-a1-c1"
+      ],
+      "id": "request-0011",
+      "buyer_id": "buyer-11",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 79,
+      "due_at_hour": 247,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-2-a0-c1"
+      ],
+      "id": "request-0012",
+      "buyer_id": "buyer-12",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 93,
+      "due_at_hour": 261,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c1",
+        "lot-4-a0-c1"
+      ],
+      "id": "request-0013",
+      "buyer_id": "buyer-13",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 110,
+      "due_at_hour": 278,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-3-a0-c1"
+      ],
+      "id": "request-0014",
+      "buyer_id": "buyer-14",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 11,
+      "due_at_hour": 179,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0015",
+      "buyer_id": "buyer-15",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 45,
+      "due_at_hour": 213,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c1",
+        "lot-3-a0-c1"
+      ],
+      "id": "request-0016",
+      "buyer_id": "buyer-16",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 70,
+      "due_at_hour": 238,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-2-a0-c1"
+      ],
+      "id": "request-0017",
+      "buyer_id": "buyer-17",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 94,
+      "due_at_hour": 262,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a1-c1",
+        "lot-3-a1-c1"
+      ],
+      "id": "request-0018",
+      "buyer_id": "buyer-18",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 121,
+      "due_at_hour": 289,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-2-a0-c1"
+      ],
+      "id": "request-0019",
+      "buyer_id": "buyer-19",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 140,
+      "due_at_hour": 308,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0020",
+      "buyer_id": "buyer-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 155,
+      "due_at_hour": 323,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c0",
+        "lot-4-a1-c0"
+      ],
+      "id": "request-0021",
+      "buyer_id": "buyer-1",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 61,
+      "due_at_hour": 229,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0022",
+      "buyer_id": "buyer-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 92,
+      "due_at_hour": 260,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c1",
+        "lot-1-a0-c1"
+      ],
+      "id": "request-0023",
+      "buyer_id": "buyer-3",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 71,
+      "due_at_hour": 239,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a1-c1",
+        "lot-4-a1-c1"
+      ],
+      "id": "request-0024",
+      "buyer_id": "buyer-4",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 160,
+      "due_at_hour": 328,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c0",
+        "lot-2-a1-c0"
+      ],
+      "id": "request-0025",
+      "buyer_id": "buyer-5",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 114,
+      "due_at_hour": 282,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a1-c1",
+        "lot-3-a1-c1"
+      ],
+      "id": "request-0026",
+      "buyer_id": "buyer-6",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 131,
+      "due_at_hour": 299,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-4-a1-c1"
+      ],
+      "id": "request-0027",
+      "buyer_id": "buyer-7",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 7,
+      "due_at_hour": 175,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-4-a0-c1"
+      ],
+      "id": "request-0028",
+      "buyer_id": "buyer-8",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 107,
+      "due_at_hour": 275,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c1",
+        "lot-2-a0-c1"
+      ],
+      "id": "request-0029",
+      "buyer_id": "buyer-9",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 120,
+      "due_at_hour": 288,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c1",
+        "lot-4-a0-c1"
+      ],
+      "id": "request-0030",
+      "buyer_id": "buyer-10",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 110,
+      "due_at_hour": 278,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a1-c0",
+        "lot-4-a1-c0"
+      ],
+      "id": "request-0031",
+      "buyer_id": "buyer-11",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 148,
+      "due_at_hour": 316,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-1-a1-c1"
+      ],
+      "id": "request-0032",
+      "buyer_id": "buyer-12",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 144,
+      "due_at_hour": 312,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0033",
+      "buyer_id": "buyer-13",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 9,
+      "due_at_hour": 177,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c1",
+        "lot-2-a0-c1"
+      ],
+      "id": "request-0034",
+      "buyer_id": "buyer-14",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 25,
+      "due_at_hour": 193,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-3-a1-c1"
+      ],
+      "id": "request-0035",
+      "buyer_id": "buyer-15",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 138,
+      "due_at_hour": 306,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c1",
+        "lot-1-a0-c1"
+      ],
+      "id": "request-0036",
+      "buyer_id": "buyer-16",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 148,
+      "due_at_hour": 316,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-2-a1-c1"
+      ],
+      "id": "request-0037",
+      "buyer_id": "buyer-17",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 82,
+      "due_at_hour": 250,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0038",
+      "buyer_id": "buyer-18",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 79,
+      "due_at_hour": 247,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a1-c1",
+        "lot-1-a1-c1"
+      ],
+      "id": "request-0039",
+      "buyer_id": "buyer-19",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 45,
+      "due_at_hour": 213,
+      "max_unit_price_minor": 20000
+    }
+  ],
+  "offers": [
+    {
+      "id": "lot-0-a0-c0",
+      "seller_id": "supplier-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1000,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-0-a0-c1",
+      "seller_id": "supplier-0",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1000,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-0-a1-c0",
+      "seller_id": "supplier-0",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1000,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-0-a1-c1",
+      "seller_id": "supplier-0",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1000,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-1-a0-c0",
+      "seller_id": "supplier-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1050,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-1-a0-c1",
+      "seller_id": "supplier-1",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1050,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-1-a1-c0",
+      "seller_id": "supplier-1",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1050,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-1-a1-c1",
+      "seller_id": "supplier-1",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1050,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-2-a0-c0",
+      "seller_id": "supplier-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1100,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-2-a0-c1",
+      "seller_id": "supplier-2",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1100,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-2-a1-c0",
+      "seller_id": "supplier-2",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1100,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-2-a1-c1",
+      "seller_id": "supplier-2",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1100,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-3-a0-c0",
+      "seller_id": "supplier-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1150,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-3-a0-c1",
+      "seller_id": "supplier-3",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1150,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-3-a1-c0",
+      "seller_id": "supplier-3",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1150,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-3-a1-c1",
+      "seller_id": "supplier-3",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1150,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-4-a0-c0",
+      "seller_id": "supplier-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1200,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-4-a0-c1",
+      "seller_id": "supplier-4",
+      "category": "maintenance",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1200,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-4-a1-c0",
+      "seller_id": "supplier-4",
+      "category": "materials",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1200,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-4-a1-c1",
+      "seller_id": "supplier-4",
+      "category": "maintenance",
+      "area": "metro-b",
+      "unit": "lot",
+      "quantity": 8,
+      "available_at_hour": 0,
+      "expires_at_hour": 504,
+      "unit_price_minor": 1200,
+      "delivery_hours": 48
+    }
+  ]
+}
