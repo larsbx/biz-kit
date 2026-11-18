@@ -119,6 +119,19 @@ def run_stage(argv, directory, env, *, limit=None, timeout=None):
     return (directory / "stdout").read_bytes()
 
 
+class SourceStageError(BridgeError):
+    def __init__(self, code, stage):
+        super().__init__(code)
+        self.stage = stage
+
+
+def run_source_stage(stage, argv, directory, env, **limits):
+    try:
+        return run_stage(argv, directory, env, **limits)
+    except BridgeError as error:
+        raise SourceStageError(error.code, stage) from error
+
+
 def audit_axioms(output):
     match = re.fullmatch(rb"'submitted' (?:does not depend on any axioms|depends on axioms: \[([^\]]*)\])\n",
                          output)
@@ -153,10 +166,10 @@ def check_source(checker: ControlledChecker, root, profile, source, binding, pro
         source_path.write_bytes(program)
         source_path.chmod(0o400)
         paths = checker.paths
-        run_stage([paths["lean"], "-s", "32768", "-j", "1", "-o", "Submission.olean", "Submission.lean"], directory, env)
+        run_source_stage("compile", [paths["lean"], "-s", "32768", "-j", "1", "-o", "Submission.olean", "Submission.lean"], directory, env)
         (directory / "Audit.lean").write_text(f"module\nimport Submission\n#print axioms {TARGET}\n", encoding="ascii")
-        axioms = audit_axioms(run_stage([paths["lean"], "-s", "32768", "-j", "1", "Audit.lean"], directory, env))
-        closure = run_stage([paths["leanexport"], "Submission", "--", TARGET], directory, env,
+        axioms = audit_axioms(run_source_stage("axiom_audit", [paths["lean"], "-s", "32768", "-j", "1", "Audit.lean"], directory, env))
+        closure = run_source_stage("export", [paths["leanexport"], "Submission", "--", TARGET], directory, env,
                             timeout=profile["policy"].get("export_wall_seconds", POLICY["wall_seconds"]))
         require(0 < len(closure) < POLICY["artifact_bytes"], "source_resource_limit")
         closure_path = directory / "submission.export"
@@ -168,7 +181,7 @@ def check_source(checker: ControlledChecker, root, profile, source, binding, pro
             ("leanchecker", "--from-export", rb"Lean default kernel accepts the solution"),
             ("lean4lean", "--import", rb"checked [1-9][0-9]* declarations"),
         ):
-            output = run_stage([paths[name], flag, closure_path], directory, checker.environment())
+            output = run_source_stage(name, [paths[name], flag, closure_path], directory, checker.environment())
             require(re.search(success, output) is not None and file_digest(closure_path) == closure_sha,
                     "source_replay_failed")
             checks.append({"checker": name, "closure_sha256": closure_sha, "status": "passed"})

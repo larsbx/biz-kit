@@ -482,13 +482,15 @@ class Store:
             os._exit(87)
         return receipt
 
-    def pause(self, job_id, code):
+    def pause(self, job_id, code, *, stage=None):
         """Record an unsuccessful attempt without changing represented kernel state."""
         with self.transaction() as connection:
             row = connection.execute("SELECT * FROM bridge_jobs WHERE id=?", (job_id,)).fetchone()
             if row is None or row["terminal"]:
                 return
             details = {"status": "inconclusive", "reason": code, "credits_issued": 0}
+            if stage is not None:
+                details["stage"] = stage
             scope = loads(row["receipt_json"])["payload"]["acceptance_scope"]
             receipt = self._receipt("verification_inconclusive", job_id, loads(row["binding_json"]),
                                     row["version"], details, scope=scope)
@@ -521,6 +523,9 @@ class Store:
                     require(time.monotonic() < deadline, "checker_unavailable")
                     time.sleep(0.05)
             return self.commit(prepared, checked, failpoint=failpoint)
+        except source.SourceStageError as error:
+            self.pause(job_id, error.code, stage=error.stage)
+            return None
         except (BridgeError, PilotError) as error:
             self.pause(job_id, error.code)
             return None
