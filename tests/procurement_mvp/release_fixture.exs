@@ -1,4 +1,5 @@
-# Offline synthetic fixture, deliberately OUTSIDE the application/release source.
+# Offline synthetic bootstrap and ledger inspection, deliberately OUTSIDE the
+# application/release source. Inspection also binds actual Dispatch peer work.
 # Run through bin/procurement eval. Never exposes an HTTP bootstrap or keeps a
 # governance key in the long-running host. Must not run beside a live appender.
 defmodule ProcurementReleaseFixture do
@@ -15,7 +16,7 @@ defmodule ProcurementReleaseFixture do
     seed = dispatch_seed()
     scope = %{source: :procurement, chapter: System.fetch_env!("PROCUREMENT_CHAPTER"),
       merchant: System.fetch_env!("PROCUREMENT_COOPERATIVE"),
-      tenant: @tenant, key_id: @dispatch_key}
+      tenant: dispatch_tenant(), key_id: @dispatch_key}
 
     body =
       case Jason.decode!(System.fetch_env!("PROCUREMENT_FIXTURE_INPUT")) do
@@ -23,7 +24,7 @@ defmodule ProcurementReleaseFixture do
         payload ->
           signer = %{role: "procurement_dispatch", key_id: @dispatch_key,
             pubkey: Crypto.pubkey_from_seed(seed)}
-          payload = Map.merge(payload, %{"cooperative_id" => scope.merchant, "tenant_id" => @tenant})
+          payload = Map.merge(payload, %{"cooperative_id" => scope.merchant, "tenant_id" => scope.tenant})
           {:ok, event} = Envelope.new(type: "ProcurementDispatchStepV1", chapter_id: scope.chapter,
             timestamp_ms: System.system_time(:millisecond), payload: payload, signers: [signer])
           {:ok, signed} = Envelope.sign(event, @dispatch_key, seed)
@@ -44,22 +45,31 @@ defmodule ProcurementReleaseFixture do
     unless System.get_env("PROCUREMENT_ENABLED") == "false",
       do: raise("offline fixture must not start the HTTP listener")
 
+    dispatch_tenant()
     {:ok, _} = Application.ensure_all_started(:commerce_core)
     {:ok, _} = Application.ensure_all_started(:coop_substrate)
     context = ProcurementHost.Auth.from_env!()
 
-    case System.fetch_env!("PROCUREMENT_FIXTURE_MODE") do
+    mode = System.fetch_env!("PROCUREMENT_FIXTURE_MODE")
+    case mode do
       "seed" -> seed(context)
       "revoke" -> authority(context, false, 1)
       "inspect" -> :ok
+      "inspect_dispatch" -> :ok
       _ -> raise "unknown fixture mode"
     end
 
-    report(inspect_ledger(context))
+    report(inspect_ledger(context, mode == "inspect_dispatch"))
   end
 
   defp report(value), do: IO.puts("PROCUREMENT_FIXTURE_JSON:" <> Jason.encode!(value))
   defp dispatch_seed, do: Base.decode16!(System.fetch_env!("PROCUREMENT_FIXTURE_DISPATCH_SEED"), case: :mixed)
+
+  defp dispatch_tenant do
+    tenant = System.get_env("PROCUREMENT_FIXTURE_DISPATCH_TENANT", @tenant)
+    unless RestaurantCore.Delivery.uuid?(tenant), do: raise("invalid fixture Dispatch tenant")
+    tenant
+  end
 
   defp seed(context) do
     unless Log.head().global_seq == 0, do: raise("refusing to seed an existing ledger")
@@ -78,7 +88,7 @@ defmodule ProcurementReleaseFixture do
     end
 
     admit(context, "ProcurementDispatchRouteV1", %{
-      "cooperative_id" => context.cooperative_id, "tenant_id" => @tenant, "site" => @site,
+      "cooperative_id" => context.cooperative_id, "tenant_id" => dispatch_tenant(), "site" => @site,
       "key_id" => @dispatch_key, "pubkey" => {:bytes, Crypto.pubkey_from_seed(dispatch_seed())},
       "active" => true, "expected_version" => 0
     })
@@ -117,7 +127,7 @@ defmodule ProcurementReleaseFixture do
     end
   end
 
-  defp inspect_ledger(context) do
+  defp inspect_ledger(context, dispatch?) do
     # read_all decodes and verifies the persisted signed records independently
     # of the live projection. Compare its length with the reconstructed head.
     {:ok, events} = Log.read_all()
@@ -126,6 +136,7 @@ defmodule ProcurementReleaseFixture do
     Enum.each(events, fn event ->
       unless Envelope.verify(event) == :ok, do: raise("invalid persisted signature")
     end)
+    if dispatch?, do: :ok = Log.verify_chains()
     state = Procurement.state(Log.gate())
     grant = Map.fetch!(state.grants,
       {context.chapter_id, context.cooperative_id, context.operator_id})
@@ -141,11 +152,41 @@ defmodule ProcurementReleaseFixture do
         payment_evidence_count: length(row.payment_evidence)
       }
     end)
-    %{
+    ledger = %{
       global_seq: head.global_seq, global_hash: Base.encode16(head.global_hash, case: :lower),
       verified_event_count: length(events), grant_active: grant.active,
       grant_version: grant.version, requests: requests
     }
+
+    if dispatch? do
+      detailed_requests = state.requests |> Enum.sort() |> Enum.map(fn {scope, row} ->
+        %{
+          chapter_id: elem(scope, 0), cooperative_id: elem(scope, 1), order_id: elem(scope, 2),
+          accepted_quote: row.accepted_quote,
+          dispatch_phase: ProcurementDispatch.handoff_phase(state, scope),
+          dispatch_request: Map.get(row, :dispatch)
+        }
+      end)
+      steps = for event <- events, event.type == "ProcurementDispatchStepV1" do
+        signer = case event.signers do
+          [single] -> single
+          _ -> nil
+        end
+        %{
+          event_id: event.event_id, global_seq: event.global_seq,
+          chapter_id: event.chapter_id, payload: event.payload,
+          signer_count: length(event.signers), signature_count: map_size(event.sigs),
+          signer_key_id: if(signer, do: signer.key_id),
+          signer_role: if(signer, do: signer.role)
+        }
+      end
+      %{
+        ledger: ledger, requests: detailed_requests, steps: steps,
+        event_types: Enum.map(events, & &1.type)
+      }
+    else
+      ledger
+    end
   end
 end
 
