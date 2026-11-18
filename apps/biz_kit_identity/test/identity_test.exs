@@ -173,14 +173,10 @@ defmodule BizKit.IdentityTest do
 
       {:ok, b} = Identity.login("workos", "code", "https://x")
 
-      assert {:ok, _} =
-               Identity.session(
-                 b,
-                 System.system_time(:millisecond) + Identity.session_ttl_ms() - 1
-               )
-
-      assert Identity.session(b, System.system_time(:millisecond) + Identity.session_ttl_ms() + 1) ==
-               {:error, :expired}
+      # Anchor the boundary to the issued session, not a later wall-clock read.
+      assert {:ok, %{expires_at: expires_at}} = Identity.session(b)
+      assert {:ok, _} = Identity.session(b, expires_at - 1)
+      assert Identity.session(b, expires_at) == {:error, :expired}
 
       {:ok, c} = Identity.login("workos", "code", "https://x")
       bind([{"https://idp.test", "sub-B", p}])

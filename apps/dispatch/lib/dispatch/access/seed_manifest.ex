@@ -17,6 +17,11 @@ defmodule Dispatch.Access.SeedManifest do
   - `DISPATCHER` does not carry `operations.location.precise.read`. Section 23.2
     makes precise location a separate capability that additionally requires
     active consent.
+  - `DISPATCHER` additionally carries the dispatching capabilities
+    (`Dispatch.Access.Capabilities`), which go beyond the specification's
+    table by owner decision on 2026-10-27: a carrier's dispatcher creates its
+    own loads and stops and plans, starts, completes and cancels its own trips.
+    They are organization-scoped and bind no other organization.
   - No profile carries `action.execute.approved`. Section 23.2: no seeded role
     may accept a load, alter a rate, change a confirmed appointment, bind
     another organization, or execute a consequential action because of its
@@ -77,6 +82,12 @@ defmodule Dispatch.Access.SeedManifest do
         appointment.propose
         instruction.propose
         communications.read.scoped
+        load.create
+        stop.add
+        assignment.read
+        assignment.plan
+        assignment.update.status
+        fleet.read
       ),
       constraints: %{
         "operations.participant.read" => ["active_assignment_only"],

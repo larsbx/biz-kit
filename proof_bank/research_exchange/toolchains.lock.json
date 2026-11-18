@@ -1,0 +1,63 @@
+{
+  "schema": "formal-research-exchange/toolchains/v1",
+  "platform": "linux-x86_64",
+  "versions": {
+    "lean": "4.35.0",
+    "lean_commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc",
+    "quint": "0.33.1",
+    "apalache": "0.62.4",
+    "jre": "21.0.13+9",
+    "node_observed": "24.22.1",
+    "npm_observed": "11.9.0",
+    "python_observed": "3.12.14"
+  },
+  "downloads": {
+    "lean": {
+      "url": "https://github.com/leanprover/lean4/releases/download/v4.35.0/lean-4.35.0-linux.tar.zst",
+      "archive": "lean-4.35.0-linux.tar.zst",
+      "sha256": "7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d",
+      "installed_relative": "lean-4.35.0-linux",
+      "extract_relative": "."
+    },
+    "jre": {
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jre_x64_linux_hotspot_21.0.13_9.tar.gz",
+      "archive": "OpenJDK21U-jre_x64_linux_hotspot_21.0.13_9.tar.gz",
+      "sha256": "a535a1df9c6284d9618872984e026ae0352d1f7e9e0605425c0e6114f47351dd",
+      "installed_relative": "jdk-21.0.13+9-jre",
+      "extract_relative": "."
+    },
+    "apalache": {
+      "url": "https://github.com/apalache-mc/apalache/releases/download/v0.62.4/apalache.tgz",
+      "archive": "apalache-0.62.4.tgz",
+      "sha256": "8ac8488422c30d552735bae11b92a2d014d8e02e8608702acc08f9a2d8a9abb2",
+      "installed_relative": "quint-home/apalache-dist-0.62.4/apalache",
+      "extract_relative": "quint-home/apalache-dist-0.62.4"
+    }
+  },
+  "file_sha256": {
+    "lean": "bf8d54e4714cc4b03d3f6bb34c83b7202b87e49c8bfcbff6895c085bb90ceb38",
+    "lake": "8ba83c98f76562d03b8dbc33f1057151ba6cbb121679dde76b2260ccc90495e1",
+    "leanchecker": "12c38901cdbfab178f1bf6145dd30012e9a3b2c11ca695292a5884fa3cbaddb6",
+    "leanexport": "f6a6483d518a11b323c28b9bac176d2220df0e9fc3230833815db9586669c074",
+    "lean4lean": "baaec030a70c78562ced2c75866ab0d2410e81ce680b835179ed16570ad5ef97",
+    "leanshared": "efef27df56f2197139afe12f1a2b63913a05f1aba81ce88824c44100431ed8c4",
+    "quint_cli": "952a50a28932282528b5c9b86ac5542405d85da4f80876aabe8cb8c7d5a6d0e8",
+    "java": "7afc28801f744050aeba646b20e7314265279f76f9d0273b21a2b66411e1bf6d",
+    "apalache_jar": "e5223915507b65cc5f1638bd037ede60f8a4fc1644aff46355779f9b05df9262"
+  },
+  "tree_sha256": {
+    "lean": "de15da94c4dec7fed6dea9a2fa3373327a79caa558bb9cf8a51b19b2e7ecd014",
+    "quint_node_modules": "753b0b5ad9db77c137800c19d4ca03966c6ad848a51095020b8e800d07f3c93b",
+    "jre": "712d671b8a9d93cf7ee8690620ce6b014a77cfbc62e288e6f9dcc8ca2b7d4328"
+  },
+  "notes": [
+    "Python, Node, libc, the OS and the local runner are part of the trusted execution environment; Python/Node executable hashes are recorded in every receipt, not pinned by this platform lock.",
+    "Lean, Quint dependency files and JRE distributions are hashed recursively. Apalache and TLC use the pinned combined jar.",
+    "The v0.1.1 Lean and JRE tree pins identify the exact contents of the SHA-verified release archives. The v0.1.0 tree pins included non-archive staging files; archive and individual executable/library pins are unchanged. Extra installed files are still rejected.",
+    "No mathlib dependency is needed for these service-state kernels. Library-specific proof environments must receive their own locks.",
+    "The optional application-path adapter is hash-pinned for this Linux build. A different build must be separately reviewed and locked before use."
+  ],
+  "optional_file_sha256": {
+    "application_path_adapter": "7d5f1634765da17c774a13af2ae4c5e0040dc66ae7d4cae39bb42cb9d390f98d"
+  }
+}

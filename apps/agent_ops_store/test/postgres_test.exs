@@ -41,11 +41,16 @@ defmodule AgentOpsStore.PostgresTest do
     }
   end
 
-  test "launch validation rejects stale, expired and cancelled leases", %{conn: conn} do
+  test "launch validation binds the exact effect, lease generation and unattached backend", %{
+    conn: conn
+  } do
     p = plan()
     assert {:ok, :new} = Postgres.register(conn, p)
     assert {:ok, lease} = Postgres.claim(conn, p.effect_id, 1, "worker", 60_000, 2)
     assert :ok = Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+    assert {:error, :launch_lease_invalid} =
+             Postgres.validate_launch_lease(conn, "agent-run:another-intent", lease)
 
     for stale <- [
           %{lease | version: lease.version + 1},
@@ -56,19 +61,102 @@ defmodule AgentOpsStore.PostgresTest do
                Postgres.validate_launch_lease(conn, p.effect_id, stale)
     end
 
-    Postgrex.query!(
-      conn,
-      "UPDATE agent_ops.execution_attempts SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE effect_id=$1",
-      [p.effect_id]
-    )
+    assert {:ok, version} =
+             Postgres.renew(conn, p.effect_id, lease.version, lease.epoch, lease.token, 60_000)
 
     assert {:error, :launch_lease_invalid} =
              Postgres.validate_launch_lease(conn, p.effect_id, lease)
 
-    assert {:ok, _} = Postgres.request_cancel(conn, p.effect_id, lease.version)
+    renewed = %{lease | version: version}
+    assert :ok = Postgres.validate_launch_lease(conn, p.effect_id, renewed)
+
+    assert {:ok, attached_version} =
+             Postgres.attach_backend(
+               conn,
+               p.effect_id,
+               version,
+               lease.epoch,
+               lease.token,
+               "bound"
+             )
+
+    assert {:error, :launch_lease_invalid} =
+             Postgres.validate_launch_lease(conn, p.effect_id, %{
+               lease
+               | version: attached_version
+             })
+  end
+
+  test "launch validation independently refuses lease expiry and execution deadline expiry", %{
+    conn: conn
+  } do
+    for column <- ["lease_expires_at", "execution_deadline"] do
+      p = plan()
+      assert {:ok, :new} = Postgres.register(conn, p)
+      assert {:ok, lease} = Postgres.claim(conn, p.effect_id, 1, "worker", 60_000, 2)
+      assert :ok = Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+      Postgrex.query!(
+        conn,
+        "UPDATE agent_ops.execution_attempts SET #{column}=clock_timestamp()-interval '1 second' WHERE effect_id=$1",
+        [p.effect_id]
+      )
+
+      assert {:error, :launch_lease_invalid} =
+               Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+      assert {:ok, %{phase: "leased", version: version}} = Postgres.snapshot(conn, p.effect_id)
+      assert version == lease.version
+
+      assert {:error, :claim_refused} =
+               Postgres.claim(conn, p.effect_id, version, "retry", 60_000, 2)
+    end
+  end
+
+  test "a separately committed cancellation invalidates a live launch lease", %{conn: conn} do
+    p = plan()
+    assert {:ok, :new} = Postgres.register(conn, p)
+    assert {:ok, lease} = Postgres.claim(conn, p.effect_id, 1, "worker", 60_000, 2)
+    assert :ok = Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+    other =
+      start_supervised!(
+        Supervisor.child_spec({Postgrex, AgentOpsStore.TestConnection.options()},
+          id: :cancel_conn
+        )
+      )
+
+    assert {:ok, _} = Postgres.request_cancel(other, p.effect_id, lease.version)
 
     assert {:error, :launch_lease_invalid} =
              Postgres.validate_launch_lease(conn, p.effect_id, lease)
+
+    assert {:ok, %{phase: "cancel_requested"}} = Postgres.snapshot(conn, p.effect_id)
+  end
+
+  test "malformed leases, transaction handles and unavailable SQL fail closed", %{conn: conn} do
+    p = plan()
+    assert {:ok, :new} = Postgres.register(conn, p)
+    assert {:ok, lease} = Postgres.claim(conn, p.effect_id, 1, "worker", 60_000, 2)
+
+    for invalid <- [nil, %{}, %{lease | token: "short"}, %{lease | version: 0}] do
+      assert {:error, :launch_lease_invalid} =
+               Postgres.validate_launch_lease(conn, p.effect_id, invalid)
+    end
+
+    assert {:ok, {:error, :launch_lease_invalid}} =
+             Postgrex.transaction(conn, fn transaction ->
+               Postgres.validate_launch_lease(transaction, p.effect_id, lease)
+             end)
+
+    assert {:error, :launch_lease_invalid} =
+             Postgres.validate_launch_lease(
+               :missing_launch_validation_connection,
+               p.effect_id,
+               lease
+             )
+
+    assert :ok = Postgres.validate_launch_lease(conn, p.effect_id, lease)
   end
 
   test "durable registration, CAS claim, backend binding, and candidate", %{conn: conn} do

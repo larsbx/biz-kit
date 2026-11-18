@@ -1,0 +1,11 @@
+[Unit]
+Description=biz-kit CD trigger on the tailnet (CI posts /deploy after a push to main)
+
+[Socket]
+ListenStream=100.67.165.25:8791
+FreeBind=yes
+Accept=yes
+MaxConnections=8
+
+[Install]
+WantedBy=sockets.target

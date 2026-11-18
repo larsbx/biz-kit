@@ -28,5 +28,13 @@ defmodule TaskCore.Host do
   """
   @callback read_blueprint(digest :: <<_::256>>) :: {:ok, term()} | {:error, term()}
 
-  @optional_callbacks read_blueprint: 1
+  @doc """
+  The intake catalogue stored under this SHA-256 digest, decoded into
+  string-keyed maps, lists and strings, for `TaskCore.Intake`. Only a host
+  that admits typed Definitions of Done (`TaskDoDDefinedV2`) needs it; without
+  it they are refused.
+  """
+  @callback read_catalogue(digest :: <<_::256>>) :: {:ok, term()} | {:error, term()}
+
+  @optional_callbacks read_blueprint: 1, read_catalogue: 1
 end

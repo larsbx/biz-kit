@@ -6,7 +6,7 @@ defmodule FulfillmentCore.MixProject do
       app: :fulfillment_core,
       version: "0.1.0",
       elixir: "~> 1.18",
-      deps: []
+      deps: [{:jason, "~> 1.4", only: :test}]
     ] ++ umbrella_paths()
   end
 

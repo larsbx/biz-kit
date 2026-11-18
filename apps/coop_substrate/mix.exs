@@ -34,9 +34,16 @@ defmodule CoopSubstrate.MixProject do
       {:biz_kit_cluster, in_umbrella: true},
       # The task lifecycle the ledger admits, shared with any other host.
       {:task_core, in_umbrella: true},
+      # Pure, engine-neutral plan validation for the source-ordered admission gate.
+      {:agent_core, in_umbrella: true},
+      # The restaurant order lifecycle the ledger admits (eatsbot rebuild).
+      {:restaurant_core, in_umbrella: true},
+      {:dispatch_core, in_umbrella: true},
       # The opt-in staging subscriber calls operational registrations at runtime.
       {:agent_ops_store, in_umbrella: true},
-      # Federation acceptance remains a test-only dependency.
+      {:commerce_core, in_umbrella: true, only: :test, runtime: false},
+      # Inert cross-currency provenance acceptance; no production dependency.
+      {:barter_core, in_umbrella: true, only: :test, runtime: false},
       {:federation_service, in_umbrella: true, only: :test},
       {:group_buy_core, in_umbrella: true},
       {:inventory_core, in_umbrella: true},

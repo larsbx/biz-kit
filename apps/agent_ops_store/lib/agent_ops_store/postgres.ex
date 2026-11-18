@@ -49,10 +49,10 @@ defmodule AgentOpsStore.Postgres do
   @spec register(pid() | atom(), map()) ::
           {:ok, :new | :existing} | {:error, atom()}
   def register(conn, plan) do
-    with {:ok, %{records: records}, :new} <- Attempts.register(Attempts.init(), plan) do
+    with {:ok, %{records: records}, :new} <- Attempts.register(Attempts.init(), plan),
+         {:ok, digest} <- Attempts.descriptor_digest(plan) do
       %{descriptor: d} = Map.fetch!(records, plan.effect_id)
       effect_id = d.effect_id
-      digest = descriptor_digest(d)
 
       params = [
         d.effect_id,
@@ -111,8 +111,19 @@ defmodule AgentOpsStore.Postgres do
     end
   end
 
-  @doc "Refuse an expired or fenced claim immediately before calling a backend."
-  def validate_launch_lease(conn, effect, lease) do
+  @doc """
+  Recheck a committed, unexpired and unfenced claim immediately before launch.
+
+  A connection process or named pool is required; a caller-owned transaction
+  handle cannot establish that its claim has committed. This is a local
+  prelaunch check, not atomic fencing of a subsequent external API call.
+  """
+  @spec validate_launch_lease(pid() | atom(), String.t(), map()) ::
+          :ok | {:error, :launch_lease_invalid}
+  def validate_launch_lease(conn, effect, %{version: version, epoch: epoch, token: token})
+      when (is_pid(conn) or is_atom(conn)) and is_binary(effect) and
+             is_integer(version) and version > 0 and is_integer(epoch) and epoch > 0 and
+             is_binary(token) and byte_size(token) == 32 do
     sql = """
     SELECT 1 FROM agent_ops.execution_attempts
      WHERE effect_id=$1 AND row_version=$2 AND attempt_epoch=$3
@@ -120,11 +131,15 @@ defmodule AgentOpsStore.Postgres do
        AND lease_expires_at>clock_timestamp() AND execution_deadline>clock_timestamp()
     """
 
-    case query(conn, sql, [effect, lease.version, lease.epoch, hash_token(lease.token)]) do
+    case query(conn, sql, [effect, version, epoch, hash_token(token)]) do
       {:ok, [[1]]} -> :ok
       _ -> {:error, :launch_lease_invalid}
     end
+  catch
+    :exit, _ -> {:error, :launch_lease_invalid}
   end
+
+  def validate_launch_lease(_conn, _effect, _lease), do: {:error, :launch_lease_invalid}
 
   @doc "Lease renewal is refused for wrong token, epoch, version or expiry."
   def renew(conn, effect_id, version, epoch, token, lease_ms) do
@@ -355,9 +370,6 @@ defmodule AgentOpsStore.Postgres do
   rescue
     _ -> {:error, :query_failed}
   end
-
-  defp descriptor_digest(descriptor),
-    do: :crypto.hash(:sha256, :erlang.term_to_binary(descriptor))
 
   defp hash_token(token) when is_binary(token) and byte_size(token) == 32, do: hash(token)
   defp hash_token(_invalid), do: <<0>>

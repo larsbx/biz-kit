@@ -5,7 +5,8 @@ defmodule TaskCore.Dispatcher do
   All ports are trusted server functions, never caller-supplied tools. prepare
   must authorize against fresh committed business replay. register and claim
   must commit before launch; claim is transactional CAS in the durable host
-  store. The store is a projection, never business authority. This algorithm
+  store. validate_lease must recheck the committed claim after authorization
+  and immediately before launch. The store is a projection, never business authority. This algorithm
   works for any executor and contains no agent, profile or runtime policy.
 
   Ambiguous launch or attachment failure retains the lease. Redelivery NEVER
@@ -54,16 +55,19 @@ defmodule TaskCore.Dispatcher do
   defp launch(plan, lease, ports) do
     # A backend error, exception or lost response cannot establish absence.
     # In all such cases the durable leased row blocks another launch.
-    # Current-state replay may itself wait long enough to expire or fence the
-    # lease. Check the durable version/epoch/token again immediately before
-    # invoking the external adapter; failed validation must not launch it.
-    with :ok <- ports.validate_lease.(plan.effect_id, lease) do
-      launch_validated(plan, lease, ports)
+    # Replaying current authority may itself outlast or invalidate the claim.
+    # Only an explicit successful check can authorize this local launch step.
+    # This does not make an external launch atomic with a later revocation.
+    case ports.validate_lease.(plan.effect_id, lease) do
+      :ok -> launch_validated(plan, lease, ports)
+      {:error, _} = error -> error
+      _ -> {:error, :launch_lease_invalid}
     end
   rescue
     _ -> {:error, :launch_requires_reconciliation}
   catch
     :exit, _ -> {:error, :launch_requires_reconciliation}
+    :throw, _ -> {:error, :launch_requires_reconciliation}
   end
 
   defp launch_validated(plan, lease, ports) do

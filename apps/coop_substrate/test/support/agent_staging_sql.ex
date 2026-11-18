@@ -18,10 +18,9 @@ defmodule CoopSubstrate.AgentStagingSQL do
 
     try do
       for file <- Path.wildcard(Path.expand("../../../../deploy/agent-core/sql/00*.sql", __DIR__)) do
-        case Postgrex.SimpleConnection.call(conn, {:sql, File.read!(file)}, 30_000) do
-          results when is_list(results) -> :ok
-          error -> raise "agent staging migration failed: #{inspect(error)}"
-        end
+        conn
+        |> Postgrex.SimpleConnection.call({:sql, File.read!(file)}, 30_000)
+        |> successful!()
       end
 
       results =
@@ -30,9 +29,18 @@ defmodule CoopSubstrate.AgentStagingSQL do
           {:sql, "TRUNCATE agent_ops.execution_attempts CASCADE"}
         )
 
-      true = is_list(results)
+      successful!(results)
     after
       GenServer.stop(conn)
     end
   end
+
+  defp successful!(results) when is_list(results) do
+    unless results != [] and Enum.all?(results, &match?(%Postgrex.Result{}, &1)),
+      do: raise("agent staging SQL failed: #{inspect(results)}")
+
+    :ok
+  end
+
+  defp successful!(error), do: raise("agent staging SQL failed: #{inspect(error)}")
 end

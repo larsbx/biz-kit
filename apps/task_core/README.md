@@ -4,7 +4,11 @@ Task and workflow rules for any application:
 - lifecycles;
 - dependency graphs;
 - readiness and execution;
-- Definitions of Done, evidence and review;
+- project ownership: one eligible, accountable human owner per project,
+  before any work, never orphaned (ownership confers no authority);
+- Definitions of Done, evidence and review, and typed intake: request types
+  a project's owner adopts, which fix a definition's shape, agreed to by the
+  requester;
 - timing, suggestions and delegation;
 - roadmaps and workflows from reviewed blueprints, and workflow runs.
 

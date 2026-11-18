@@ -61,7 +61,10 @@ defmodule CoopSubstrate.SignedEventReplayTest do
 
     conn =
       start_supervised!(
-        {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])}
+        Supervisor.child_spec(
+          {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])},
+          id: :setup_conn
+        )
       )
 
     on_exit(fn ->
@@ -109,7 +112,7 @@ defmodule CoopSubstrate.SignedEventReplayTest do
     Process.exit(worker, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 15_000
 
-    stop_supervised!(Postgrex)
+    stop_supervised!(:setup_conn)
     restart_log()
     {:ok, fresh} = raw_conn()
 

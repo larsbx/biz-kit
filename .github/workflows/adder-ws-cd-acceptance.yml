@@ -1,0 +1,19 @@
+name: Adder-ws CD contract
+on:
+  pull_request:
+    paths: ['.github/workflows/deploy-adder-ws.yml', '.github/workflows/adder-ws-cd-acceptance.yml', 'tools/test_adder_ws_cd.py', 'docs/adder-ws-cd.md']
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-adder-ws.yml', '.github/workflows/adder-ws-cd-acceptance.yml', 'tools/test_adder_ws_cd.py', 'docs/adder-ws-cd.md']
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 -m pip install PyYAML==6.0.3
+      - run: python3 tools/test_adder_ws_cd.py

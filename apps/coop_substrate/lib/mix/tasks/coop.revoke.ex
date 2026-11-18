@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Coop.Revoke do
   confirmed, signs its revocation with the governance key in
   `HARNESS_KEYS_DIR` and submits it to the server. Does not start the
   application. `--server` defaults to `$BIZKIT_URL`, then
-  `http://127.0.0.1:4000`.
+  `http://127.0.0.1:4001`, the task host.
   """
 
   use Mix.Task
@@ -31,7 +31,7 @@ defmodule Mix.Tasks.Coop.Revoke do
       List.first(positional) ||
         Mix.raise("usage: mix coop.revoke <GRANT_ID> [--server URL] [--yes]")
 
-    base = opts[:server] || System.get_env("BIZKIT_URL", "http://127.0.0.1:4000")
+    base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
 
     with {:ok, signer} <- Ops.load_signer("governance"),
          {:ok, details} <- Revoker.fetch(base, id) do

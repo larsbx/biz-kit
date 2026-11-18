@@ -12,9 +12,17 @@ defmodule CoopSubstrate.Governance.Client do
   """
 
   alias CoopSubstrate.{Canonical, Crypto}
-  alias CoopSubstrate.Governance.Read
+  alias CoopSubstrate.Governance.{Authorization, Read}
 
   @type signer :: %{key_id: String.t(), pubkey: binary(), seed: binary()}
+
+  @doc """
+  The server the governance tasks talk to without `--server`: `$BIZKIT_URL`,
+  else the task host on its default loopback port
+  (docs/architecture/2026-11-09-task-host.md).
+  """
+  @spec default_server() :: String.t()
+  def default_server, do: System.get_env("BIZKIT_URL", "http://127.0.0.1:4001")
 
   @spec get(String.t()) :: {:ok, map()} | {:error, term()}
   def get(url), do: request(:get, url, nil)
@@ -100,13 +108,8 @@ defmodule CoopSubstrate.Governance.Client do
       key_id: signer.key_id
     }
 
-    sig = Base.url_encode64(Crypto.sign(Read.signing_bytes(read), signer.seed), padding: false)
-
-    {~c"authorization",
-     String.to_charlist(
-       ~s(CoopGovernance key="#{read.key_id}", ts="#{read.timestamp_ms}", ) <>
-         ~s(nonce="#{read.nonce}", sig="#{sig}")
-     )}
+    signature = Crypto.sign(Read.signing_bytes(read), signer.seed)
+    {~c"authorization", String.to_charlist(Authorization.encode(read, signature))}
   end
 
   defp request(method, url, body, headers \\ []) do

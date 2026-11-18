@@ -1,5 +1,46 @@
 # Remaining dependency security correction (issue #157)
 
+## November 1 federation CI audit repair
+
+On 2026-11-01, PR #226 head `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`
+failed the federation workflow's full-lock audit. Its published SARIF
+([run 41265211322](https://github.com/larsbx/biz-kit/actions/runs/41265211322))
+identifies the four entries below. The two-node job independently stopped at
+the reachable Bandit audit before running its Elixir acceptance suite; its
+native Rust checks passed. These are dependency failures, not evidence of a
+signed-profile verification failure.
+
+| Package | Affected lock | First fixed lock | Advisory |
+| --- | --- | --- | --- |
+| bandit | 1.14.0 | 1.14.1 | [CVE-2026-116078](https://github.com/mtrudel/bandit/security/advisories/GHSA-pxjf-g536-7r93) |
+| phoenix_html | 4.3.0 | 4.4.0 | [CVE-2026-117645](https://cna.erlef.org/cves/CVE-2026-117645.html) |
+| assent | 0.3.1 | 0.3.2 | [CVE-2026-117656](https://github.com/pow-auth/assent/security/advisories/GHSA-9fr5-g44g-9526) |
+| ssl_verify_fun | 1.1.7 | 1.1.8 | [CVE-2026-117666](https://github.com/deadtrickster/ssl_verify_fun.erl/security/advisories/GHSA-7gw2-hphm-c5px) |
+
+Only these four lock records change. Release dependency requirements are
+unchanged; package tarball SHA-256 values match the official Hex release API,
+and inner checksums come from each verified tarball's `CHECKSUM` record.
+No advisory is ignored and no audit failure is made informational. The
+federation service also requires Bandit `~> 1.14.1`, and its production-listener
+acceptance asserts that exact corrected lock version. The
+historical October correction below remains evidence for its original revision;
+its statement that Bandit remains 1.14.0 is superseded by this repair.
+Locked resolution, full audit and actual federation tests must pass before
+acceptance. This does not by itself establish production deployment.
+
+Local verification on Elixir 1.19 / OTP 27 with Hex 2.6.0 reports zero
+findings from the complete shared-lock SARIF audit after these four changes.
+The locked federation dependency resolution and compilation pass. Hosted
+umbrella and native two-peer acceptance remain separate checks at the PR head.
+
+The local federation harness also passes: 17 core tests and a 107-case service
+suite (2 test-mode skips: native gossip without an executable and the separately
+run production-only listener). The production-compiled HTTPS listener passes
+in its own run; native gossip remains unexecuted locally. The source retains its
+loopback-override refusal and the corrected exact Bandit version assertion.
+
+## October correction history
+
 The baseline is Bandit correction `6d4d67b42858a7c88bdd2569ae0cbb588f8d9461`.
 Its full shared-lock audit reported 13 advisories. This correction upgrades the
 three affected **active** packages, upgrades AshSQL as required by AshPostgres,

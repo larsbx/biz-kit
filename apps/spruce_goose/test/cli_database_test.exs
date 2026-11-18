@@ -16,13 +16,13 @@ defmodule SpruceGoose.CLIDatabaseTest do
   }
 
   test "blueprint apply creates a repository-defined project atomically" do
-    previous = Application.get_env(:spruce_goose, :blueprint_source_verifier)
-    Application.put_env(:spruce_goose, :blueprint_source_verifier, __MODULE__.NewProjectVerifier)
+    previous = Application.get_env(:task_host, :blueprint_source_verifier)
+    Application.put_env(:task_host, :blueprint_source_verifier, __MODULE__.NewProjectVerifier)
 
     on_exit(fn ->
       if previous,
-        do: Application.put_env(:spruce_goose, :blueprint_source_verifier, previous),
-        else: Application.delete_env(:spruce_goose, :blueprint_source_verifier)
+        do: Application.put_env(:task_host, :blueprint_source_verifier, previous),
+        else: Application.delete_env(:task_host, :blueprint_source_verifier)
     end)
 
     actor =
@@ -69,18 +69,18 @@ defmodule SpruceGoose.CLIDatabaseTest do
   end
 
   test "a rejected new-project blueprint leaves no constitutive rows" do
-    previous = Application.get_env(:spruce_goose, :blueprint_source_verifier)
+    previous = Application.get_env(:task_host, :blueprint_source_verifier)
 
     Application.put_env(
-      :spruce_goose,
+      :task_host,
       :blueprint_source_verifier,
       __MODULE__.InvalidNewProjectVerifier
     )
 
     on_exit(fn ->
       if previous,
-        do: Application.put_env(:spruce_goose, :blueprint_source_verifier, previous),
-        else: Application.delete_env(:spruce_goose, :blueprint_source_verifier)
+        do: Application.put_env(:task_host, :blueprint_source_verifier, previous),
+        else: Application.delete_env(:task_host, :blueprint_source_verifier)
     end)
 
     actor =
@@ -107,7 +107,7 @@ defmodule SpruceGoose.CLIDatabaseTest do
   end
 
   defmodule NewProjectVerifier do
-    @behaviour SpruceGoose.Blueprints.SourceVerifier
+    @behaviour TaskHost.Blueprints.SourceVerifier
 
     @impl true
     def verify(_repository, _commit, _path) do
@@ -143,7 +143,7 @@ defmodule SpruceGoose.CLIDatabaseTest do
   end
 
   defmodule InvalidNewProjectVerifier do
-    @behaviour SpruceGoose.Blueprints.SourceVerifier
+    @behaviour TaskHost.Blueprints.SourceVerifier
 
     @impl true
     def verify(_repository, _commit, _path) do

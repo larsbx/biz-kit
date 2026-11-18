@@ -15,5 +15,7 @@ defmodule Dispatch.Communications do
   use Ash.Domain
 
   resources do
+    resource Dispatch.Communications.Conversation
+    resource Dispatch.Communications.ActionProposal
   end
 end

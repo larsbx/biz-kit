@@ -5,6 +5,40 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Cross-currency setoff — remaining obligations](cross-currency-setoff-obligations.md):
+  completed exact-head evidence, pending inert drafts, additional formal assurance,
+  and separate authority, admission, discharge and accounting requirements.
+- [Producer cooperative capital integration — 2026-11-13](2026-11-13-producer-capital-integration.md):
+  versioned inert membership ($250 annual) and producer-asset unit-buyout
+  previews, source-bound proposal digests, legacy patronage/SCF boundaries,
+  Hanbali taxonomy and Lean/Quint proof-bank conformance gaps. No issuance,
+  buyout, payment, distribution or legal authority is activated.
+- [Hanbali commercial contract taxonomy — 2026-11-13](2026-11-13-hanbali-commercial-contract-taxonomy.md):
+  sourced contract families, intra-school choices and contemporary composites
+  mapped to the at-cost producer cooperative; proposed evidence, admission and
+  implementation requirements. Includes a [primary source register](2026-11-13-hanbali-contract-sources.md).
+  Recording the specification does not activate financial or contractual effects.
+- [Dispatch spatial workspace and minimal stack — 2026-11-11](../plans/2026-11-11-dispatch-spatial-workspace.md):
+  accepted GEV-00–08 roadmap for God's Eye View reuse, authorized spatial data,
+  planning, history and minimal deployment. The earlier auxiliary stack was
+  proposed only; omit unneeded components from the first build. Implementation
+  and field acceptance remain pending.
+- [Task host — 2026-11-09](2026-11-09-task-host.md): SpruceGoose's web
+  surface (`/auth`, the task view, its commands and the feed) rehosted on
+  `apps/task_host`; native sessions kept; `/mcp` and the OAuth2 issuer dropped.
+- [Dispatch assignments on the ledger — 2026-11-09](2026-11-09-dispatch-assignments-on-the-ledger.md):
+  first Dispatch slice of consolidation step 4; the assignment lifecycle as
+  signed, admitted events, with equipment exclusivity at the append gate. The
+  board does not use it yet.
+- [SpruceGoose decommission checklist — 2026-11-06](2026-11-06-sprucegoose-decommission.md):
+  proposed; surfaces to rehost, the authority cutover, history kept as inert
+  audit data, and what is not migrated.
+- [Eatsbot decommission checklist — 2026-11-07](2026-11-07-eatsbot-decommission.md):
+  proposed; the 10-28 plan restated for the rebuilt eatsbot: surfaces to
+  rehost or drop, single-writer cutover, open obligations, and R0–R6 status.
+- [PostgreSQL event log, Redis operations and TigerBeetle — 2026-10-30](2026-10-30-postgres-event-log-redis-consolidation.md):
+  selected staged EventStore-library replacement, Redis/Oban/Kafka consolidation,
+  SQL priorities, legacy retirement and compatibility/recovery gates; implementation pending.
 - [One source of truth — 2026-10-11](2026-10-11-single-source-of-truth.md): current
   direction, common command/write path, removal targets, and cutover proof.
 - [Integration comparison — 2026-10-09](2026-10-09-integration-decisions.md):
@@ -16,6 +50,18 @@ domain views. The imported histories and existing identifiers remain intact.
 - [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
   proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
   with R0–R6 source inventory, migration, authorization, cutover and archive gates.
+  Its exit conditions are restated by the 2026-11-07 checklist.
+- [ExtensionV1 semantic upgrade assessment — 2026-11-02](2026-11-02-extension-upgrade-compatibility.md):
+  fail-closed V1 compatibility and review-required changes; no deployment approval.
+- [ExtensionV1 source-pinned release lock — 2026-11-02](2026-11-02-extension-source-lock.md):
+  deterministic exact-source and manifest fingerprints for trusted build
+  preflight; not executable activation or signed deployment authority.
+- [ExtensionV1 staged read-only registry — 2026-11-01](2026-11-01-extension-registry-stage.md):
+  ephemeral validated descriptor visibility, atomic dependency-safe view
+  reconciliation and fail-closed restart; no runtime execution or grants.
+- [ExtensionV1 first nonmutating contract slice — 2026-10-31](2026-10-31-extension-v1-first-slice.md):
+  strict manifests, deterministic allowlisted catalog, dry-run activation,
+  SchoolOps/Dispatch reference descriptors and portability CI; live admission pending.
 - [Cross-repository extension and Hawala capability — 2026-10-28](2026-10-28-cross-repository-extension-and-hawala-capability.md):
   proposed common application-extension and source-ownership contract across biz-kit,
   hawala-core, Eatsbot, d-patch and school-ops; authority and live-money gates remain separate.
@@ -26,9 +72,9 @@ domain views. The imported histories and existing identifiers remain intact.
   proposed, paired with hawala-core ADR 0005; every participating installation
   can host a Hawala peer/capability plane, while financial authority remains
   strictly scoped and cross-authority settlement stays Hawala-owned.
-- [Hawala node-owned books: PostgreSQL and TigerBeetle — 2026-10-28](2026-10-28-hawala-node-books-postgres-tigerbeetle.md):
-  pinned canonical profile and proposed host integration: one PostgreSQL financial
-  commit, mandatory accounting verification before execution, scoped HOLD and recovery gates.
+- [Hawala node-owned books: TigerBeetle first — 2026-10-28](2026-10-28-hawala-node-books-postgres-tigerbeetle.md):
+  native financial commit, then recoverable independent persistence to signed
+  EventStore history, PostgreSQL projections and other destinations; adapters remain pending.
 
 - [First common-ledger task command](2026-10-11-first-ledger-task-command.md): notes
   retirement, signed baseline and scoped grant, append-time proposal admission,

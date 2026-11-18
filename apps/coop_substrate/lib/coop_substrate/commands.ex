@@ -177,17 +177,21 @@ defmodule CoopSubstrate.Commands do
     end)
   end
 
-  # Each against the gate the ones before it leave, as `Log.append/1` checks a batch.
+  # Each against the gate the ones before it leave, and owner eligibility after
+  # all of them, as `Log.append/1` checks a batch.
   defp admissible(envs, gate) do
-    Enum.reduce_while(envs, gate, fn env, gate ->
+    Enum.reduce_while(envs, Map.put(gate, :defer_transition, true), fn env, gate ->
       case invalid(TypeRegistry.validity_check(env, gate)) do
         :ok -> {:cont, Membership.handle_event(env, gate)}
         error -> {:halt, error}
       end
     end)
     |> case do
-      {:error, _} = error -> error
-      _gate -> :ok
+      {:error, _} = error ->
+        error
+
+      final ->
+        invalid(TaskCore.Admission.check_transition(gate.orchestration, final.orchestration))
     end
   end
 

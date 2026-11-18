@@ -1,5 +1,12 @@
 defmodule CoopSubstrate.AgentEventAcceptanceTest do
-  @moduledoc "Real signed ledger + PostgreSQL staging acceptance; synthetic backend only."
+  @moduledoc """
+  Real signed ledger + PostgreSQL staging acceptance; synthetic backend only.
+
+  Signed authority is reconstructed from Log, never from a process dictionary.
+  The adapter, registry and observation issuer remain trusted test fixtures.
+  Worker/Log and SQL-session recovery does not establish backend durability,
+  database power-loss recovery, or atomic external launch/revocation fencing.
+  """
   use CoopSubstrate.LogCase, async: false
   alias CoopSubstrate.{AgentStagingFixture, AgentStagingSQL, Canonical, Log}
   alias AgentOpsStore.{Coordinator, EventWakeup, Postgres}
@@ -42,6 +49,21 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
     def committed_state, do: Log.replay(CoopSubstrate.Projections.Tasks)
 
     def context(_) do
+      before =
+        Agent.get_and_update(CoopSubstrate.AgentEventAcceptanceTest.Fixture, fn s ->
+          {s, %{s | context_reads: s.context_reads + 1}}
+        end)
+
+      if before.block_recheck and before.context_reads == 1 do
+        send(before.parent, {:before_recheck, self()})
+
+        receive do
+          :release -> :ok
+        after
+          5_000 -> raise "signed authority recheck barrier timed out"
+        end
+      end
+
       cfg = Agent.get(CoopSubstrate.AgentEventAcceptanceTest.Fixture, & &1)
       with {:ok, state} <- committed_state(), do: {:ok, Map.put(cfg.context, :state, state)}
     end
@@ -63,8 +85,8 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
       if cfg.expire_claim and cfg.prepares == 1 do
         Postgrex.query!(
           cfg.conn,
-          "UPDATE agent_ops.execution_attempts SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE phase='leased'",
-          []
+          "UPDATE agent_ops.execution_attempts SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE effect_id=$1 AND phase='leased'",
+          [cfg.effect]
         )
       end
 
@@ -156,9 +178,12 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
                backend: nil,
                block_launch: false,
                block_claim: false,
+               block_recheck: false,
+               context_reads: 0,
                prepares: 0,
                expire_claim: false,
-               conn: nil
+               conn: nil,
+               effect: nil
              }
            end,
            [name: @fixture]
@@ -169,15 +194,18 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
 
     conn =
       start_supervised!(
-        {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])}
+        Supervisor.child_spec(
+          {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])},
+          id: :signed_launch_connection
+        )
       )
-
-    Agent.update(@fixture, &%{&1 | conn: conn})
 
     request =
       AgentStagingFixture.request(ctx, %{
         "execution_profile_digest" => {:bytes, Canonical.hash!(manifest)}
       })
+
+    Agent.update(@fixture, &%{&1 | conn: conn, effect: "agent-run:" <> request.event_id})
 
     %{
       conn: conn,
@@ -350,5 +378,124 @@ defmodule CoopSubstrate.AgentEventAcceptanceTest do
 
     assert {:ok, %{phase: "leased", expired: true, epoch: 1}} =
              Postgres.snapshot(ctx.conn, ctx.effect)
+  end
+
+  test "a second SQL connection cancels a claim during authority recheck before launch", ctx do
+    assert {:ok, _} = Log.append(ctx.request)
+    Agent.update(@fixture, &%{&1 | block_claim: true})
+    delivery = Task.async(fn -> Coordinator.deliver(ctx.conn, @key, Host, "one") end)
+    assert_receive {:after_claim, paused}, 5_000
+    second = connection(:lease_fence_connection)
+    assert {:ok, row} = Postgres.snapshot(second, ctx.effect)
+    assert row.phase == "leased"
+    assert {:ok, _} = Postgres.request_cancel(second, ctx.effect, row.version)
+    send(paused, :release)
+    assert {:error, :launch_lease_invalid} = Task.await(delivery, 5_000)
+    assert Agent.get(@fixture, & &1.launches) == []
+
+    fresh = restart_sessions()
+
+    assert {:ok, %{disposition: :already_dispatched, phase: "cancel_requested"}} =
+             Coordinator.deliver(fresh, @key, Host, "fresh-worker")
+
+    assert {:ok, %{phase: "cancel_requested", backend_ref: nil, attempts: 1}} =
+             Postgres.snapshot(fresh, ctx.effect)
+
+    assert Agent.get(@fixture, & &1.launches) == []
+  end
+
+  test "signed operator revocation after claim remains fenced after fresh replay", ctx do
+    drift_after_claim(ctx, :agent_run_operator_revoked, fn ->
+      revoke =
+        signed_event(ctx.ctx.gov, "TaskOperatorRevokedV1", %{
+          "tenant_id" => "tenant-1",
+          "project_id" => "project-1",
+          "authorization_event_id" => ctx.ctx.grant.event_id
+        })
+
+      assert {:ok, _} = Log.append(revoke)
+    end)
+  end
+
+  test "signed task revision after claim remains stale after fresh replay", ctx do
+    drift_after_claim(ctx, :stale_agent_run_task, fn ->
+      start =
+        signed_event(ctx.ctx.op, "TaskStartedV1", %{
+          "tenant_id" => "tenant-1",
+          "project_id" => "project-1",
+          "task_id" => "task-1",
+          "principal_id" => "operator-1",
+          "authorization_event_id" => ctx.ctx.grant.event_id,
+          "lifecycle_version" => 1,
+          "expected_version" => 7
+        })
+
+      assert {:ok, _} = Log.append(start)
+      assert {:ok, state} = Host.committed_state()
+      assert state.tasks[{"chapter-genesis", "tenant-1", "project-1", "task-1"}].version == 8
+    end)
+  end
+
+  test "a changed trusted profile cannot reuse the signed intent digest after fresh replay",
+       ctx do
+    drift_after_claim(ctx, :execution_profile_digest_mismatch, fn ->
+      # Profile approval is trusted host configuration. The run's old digest
+      # remains an authentic signed ledger fact; no replacement is admitted.
+      Agent.update(@fixture, fn s ->
+        update_in(s, [:context, :registry, "approved-profile", :manifest, "parameters"], fn p ->
+          Map.put(p, "fixture_revision", 2)
+        end)
+      end)
+    end)
+  end
+
+  defp drift_after_claim(ctx, reason, mutate) do
+    assert {:ok, _} = Log.append(ctx.request)
+    Agent.update(@fixture, &%{&1 | block_recheck: true})
+    delivery = Task.async(fn -> Coordinator.deliver(ctx.conn, @key, Host, "one") end)
+    assert_receive {:before_recheck, paused}, 5_000
+    assert {:ok, %{phase: "leased", attempts: 1}} = Postgres.snapshot(ctx.conn, ctx.effect)
+    mutate.()
+    assert :ok = Log.verify_chains()
+    send(paused, :release)
+    assert {:error, :authority_changed_after_claim} = Task.await(delivery, 5_000)
+    assert {:error, ^reason} = Coordinator.prepare(@key, Host)
+    assert Agent.get(@fixture, & &1.launches) == []
+
+    assert {:ok, %{phase: "cancel_requested", backend_ref: nil, attempts: 1}} =
+             Postgres.snapshot(ctx.conn, ctx.effect)
+
+    fresh = restart_sessions()
+    head = Log.head()
+
+    for _ <- 1..3 do
+      assert {:error, ^reason} = Coordinator.deliver(fresh, @key, Host, "fresh-worker")
+    end
+
+    assert Log.head() == head
+    assert :ok = Log.verify_chains()
+    assert Agent.get(@fixture, & &1.launches) == []
+
+    assert {:ok, %{phase: "cancel_requested", backend_ref: nil, attempts: 1}} =
+             Postgres.snapshot(fresh, ctx.effect)
+  end
+
+  defp restart_sessions do
+    stop_supervised!(:signed_launch_connection)
+    restart_log()
+    fresh = connection(:fresh_signed_launch_connection)
+    Agent.update(@fixture, &%{&1 | conn: fresh})
+    fresh
+  end
+
+  defp connection(id) do
+    config = Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)
+
+    start_supervised!(
+      Supervisor.child_spec(
+        {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])},
+        id: id
+      )
+    )
   end
 end

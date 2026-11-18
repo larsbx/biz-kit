@@ -141,6 +141,10 @@ fn parse(host: &str, raw: &str) -> Vec<Unit> {
         }
     }
     flush(&mut cur, &scope, &mut out);
+    // An alias (dbus-org.bluez.service) resolves to the unit it names, so the
+    // same Id can arrive twice in one scope. Keep the first.
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|u| seen.insert((u.scope.clone(), u.id.clone())));
     out
 }
 
@@ -193,6 +197,16 @@ mod tests {
                    StartLimitIntervalUSec=10s\nStartLimitBurst=5\n";
         let u = &parse("h", raw)[0];
         assert!(u.limit_unreachable);
+    }
+
+    #[test]
+    fn an_alias_does_not_list_a_unit_twice() {
+        let raw = "@@@SCOPE system\nId=bluetooth.service\nActiveState=active\n\n\
+                   Id=bluetooth.service\nActiveState=active\n\n\
+                   @@@SCOPE user\nId=bluetooth.service\nActiveState=inactive\n";
+        let units = parse("h", raw);
+        assert_eq!(units.len(), 2);
+        assert_eq!((units[0].scope.as_str(), units[1].scope.as_str()), ("system", "user"));
     }
 
     #[test]

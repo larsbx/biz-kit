@@ -1,0 +1,65 @@
+name: BizOps knowledge and workflow acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/bizops_kb/**'
+      - 'apps/task_core/**'
+      - 'scripts/bizops-kb/**'
+      - 'apps/task_host/priv/static/app/knowledge*'
+      - 'apps/task_host/test/js/knowledge.test.mjs'
+      - '.github/workflows/bizops-kb-acceptance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/bizops_kb/**'
+      - 'apps/task_core/**'
+      - 'scripts/bizops-kb/**'
+      - 'apps/task_host/priv/static/app/knowledge*'
+      - 'apps/task_host/test/js/knowledge.test.mjs'
+      - '.github/workflows/bizops-kb-acceptance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bizops-kb-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source-and-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record evaluated source revision
+        run: git rev-parse HEAD
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify pinned source commit, trees, documents and links offline
+        run: python3 scripts/bizops-kb/snapshot.py check
+      - name: Source integrity and reproducible import negative controls
+        run: python3 -m unittest discover -s scripts/bizops-kb -p 'test_*.py' -v
+      - name: Compile the portable task rules without umbrella dependencies
+        run: |
+          cp -R apps/task_core "$RUNNER_TEMP/bizops-task-core"
+          cd "$RUNNER_TEMP/bizops-task-core"
+          MIX_ENV=test mix compile --warnings-as-errors
+      - name: Catalog, workflow and source-binding acceptance
+        run: |
+          elixir -pa "$RUNNER_TEMP/bizops-task-core/_build/test/lib/task_core/ebin" \
+            -r 'apps/bizops_kb/lib/bizops_kb/*.ex' \
+            -r apps/bizops_kb/test/test_helper.exs \
+            -r 'apps/bizops_kb/test/*_test.exs' -e ''
+      - name: Check standalone app formatting
+        working-directory: apps/bizops_kb
+        run: mix format --check-formatted
+      - name: Safe document rendering and browser-state contract
+        run: node --test apps/task_host/test/js/knowledge.test.mjs

@@ -77,6 +77,10 @@ docker compose -f deploy/agent-core/compose.yaml exec -T db \
   psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
   < deploy/agent-core/sql/005_event_registrations.sql
 
+docker compose -f deploy/agent-core/compose.yaml exec -T db \
+  psql -U bizkit -d bizkit_agent_dev -v ON_ERROR_STOP=1 \
+  < deploy/agent-core/sql/005_launch_admission.sql
+
 # Or replace 'docker' with 'podman'.
 ```
 
@@ -113,6 +117,18 @@ the stored token and lease. Expired leased rows are *not* claimable until a
 privileged reconciler proves the backend absent and supplies a verified
 receipt ID. An ID is provenance only: the SQL function itself cannot verify
 its cryptographic validity, so the host must verify and bind it first.
+
+`sql/005_launch_admission.sql` adds immutable operational admission receipts.
+Use it through the staging-only `CoopSubstrate.Log.admit_agent_launch/3` entry
+point on the canonical ledger's database. That entry point locks and verifies
+the actual signed source, checks current TaskCore authority and the exact plan,
+then commits a receipt with the live attempt check in the same transaction.
+Calling the SQL function directly does not perform signed authorization.
+Admission allocates no backend and grants no execution or business-write
+authority. Existing `Coordinator.deliver/4` retains its earlier contract;
+it does not automatically switch to this admission path. See the
+[admission and restart contract](../../docs/architecture/2026-11-16-agentcore-durable-launch-admission.md)
+for ordering, receipt recovery and the remaining backend obligations.
 
 `sql/ci_cas_contract.sql` exercises duplicate claim refusal, stale
 version/token/epoch fencing, candidate state, cancellation and a

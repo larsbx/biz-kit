@@ -61,7 +61,9 @@ defmodule CoopSubstrate.Protocol.Validity do
       a currently declared key (`check_role_keys/2`, runs before every
       per-type check). Genesis (the first governance key) is trust-on-first-
       use, self-certified; later declarations/revocations are governance-
-      signed; revoking the last governance key is unrepresentable.
+      signed; revoking the last governance key is unrepresentable. A key the
+      chapter granted to restaurant Dispatch is never declared a role key
+      (`RestaurantCore.Admission.check/2` fences the converse).
     * `KeyRotated` (1D) — self-rotation: for a REGISTERED member, the
       rotation must be signed by the member's current key and `old_key_id`
       must match it (rotations chain). Rotations for unregistered ids stay
@@ -82,7 +84,8 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
   def check(%Envelope{} = env, gate) do
-    with :ok <- check_role_keys(env, gate) do
+    with :ok <- CoopSubstrate.CommercialAdmission.fence(env, gate),
+         :ok <- check_role_keys(env, gate) do
       type_check(env, gate)
     end
   end
@@ -111,9 +114,22 @@ defmodule CoopSubstrate.Protocol.Validity do
   # Every registered task type routes to the task gate; deriving the list from
   # the registration keeps a new type from being registered but left unchecked.
   @task_types Map.keys(TaskCore.Admission.event_types())
+  @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
+  @dispatch_types Map.keys(DispatchCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @commercial_types Map.keys(CoopSubstrate.CommercialAdmission.event_types())
+  @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_types do
+    CoopSubstrate.CommercialAdmission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
+    CoopSubstrate.WriterFence.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
     CoopSubstrate.FederationAuthority.check(env, gate)
   end
@@ -126,6 +142,14 @@ defmodule CoopSubstrate.Protocol.Validity do
     TaskCore.Admission.check(env, gate)
   end
 
+  defp type_check(%Envelope{type: type} = env, gate) when type in @restaurant_types do
+    RestaurantCore.Admission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @dispatch_types do
+    DispatchCore.Admission.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do
     governance = gate.role_keys[{ch, "governance"}]
     declared = gate.role_keys[{ch, p["role"]}] || %{}
@@ -136,6 +160,9 @@ defmodule CoopSubstrate.Protocol.Validity do
 
       Map.has_key?(declared, p["key_id"]) ->
         {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
+
+      RestaurantCore.Admission.dispatch_pubkey?(gate.restaurant, ch, p["pubkey"]) ->
+        {:error, :key_not_separate}
 
       governance == nil and p["role"] != "governance" ->
         # No governance exists yet: the only representable declaration is the
@@ -913,6 +940,13 @@ defmodule CoopSubstrate.Protocol.Validity do
           check_party_key(env, "assignee", assignee)
         end
     end
+  end
+
+  # The source-bound V1 event records an inert, dual-signed proposal.
+  # Unlike legacy NettingExecuted, it does NOT close obligations or issue
+  # a net receivable. The gate checks the signed, exact current source list.
+  defp type_check(%Envelope{type: "CommercialSetoffIntentRecordedV1"} = env, gate) do
+    CoopSubstrate.CommercialSetoffIntent.check(env, gate)
   end
 
   # -- Phase 9A: netting execution + exposure caps (docs/phase9a_plan.md) ------

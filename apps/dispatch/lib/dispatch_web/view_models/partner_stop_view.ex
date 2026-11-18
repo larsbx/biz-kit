@@ -37,7 +37,10 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
 
   alias Dispatch.Access.{Actor, Party}
   alias Dispatch.Identity.PrincipalResolution
-  alias Dispatch.Fleet.Stop
+  alias Dispatch.Fleet.{Stop, DocumentReference, ReferenceCipher}
+  alias Dispatch.Operations.StopReadinessEvent
+  alias Dispatch.Communications.ActionProposal
+  alias Dispatch.Access.Checks.PartnerScope
   alias DispatchWeb.ViewModels.FactSummary
 
   require Ash.Query
@@ -52,7 +55,15 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
     :window_end,
     :contact_name,
     :readiness,
-    :arrival_summary
+    :arrival_summary,
+    :version,
+    :latest_readiness_id,
+    :readiness_summary,
+    documents: [],
+    proposals: [],
+    can_report: false,
+    can_reference: false,
+    can_propose: false
   ]
 
   @type t :: %__MODULE__{
@@ -78,7 +89,7 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
     with {:ok, actor} <- PrincipalResolution.revalidate(actor),
          {:ok, stop} <- fetch(actor, stop_id),
          true <- permitted?(actor, stop) do
-      {:ok, from(stop)}
+      {:ok, from(stop, actor)}
     else
       _nothing_to_report -> {:error, :not_found}
     end
@@ -91,6 +102,7 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
   # indistinguishable without a branch that has to remember to be.
   defp fetch(actor, stop_id) do
     Stop
+    |> Ash.Query.for_read(:partner)
     |> Ash.Query.filter(id == ^stop_id)
     |> Ash.read_one(actor: actor, tenant: actor.tenant_id)
     |> case do
@@ -116,10 +128,29 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
   # not the delivery stop on the same load, which is exactly the case a
   # hand-rolled conjunction loses.
   defp permitted?(actor, stop) do
-    Party.permits?(actor.role_assignment, "stop.read", {:STOP, stop.id}, at: actor.at)
+    # The resource's Ash policy has already constrained the read. This page
+    # remains a stop-scoped surface; a broker uses its load view instead.
+    actor.role_assignment.scope_type == :STOP and
+      Party.permits?(actor.role_assignment, "stop.read", {:STOP, stop.id}, at: actor.at)
   end
 
-  defp from(%Stop{} = stop) do
+  defp from(%Stop{} = stop, actor) do
+    readiness =
+      StopReadinessEvent
+      |> Ash.Query.filter(stop_id == ^stop.id)
+      |> Ash.Query.sort(occurred_at: :desc, recorded_at: :desc, id: :desc)
+      |> Ash.Query.limit(1)
+      |> Ash.read_one!(actor: actor, tenant: actor.tenant_id)
+
+    latest =
+      StopReadinessEvent
+      |> Ash.Query.filter(stop_id == ^stop.id)
+      |> Ash.Query.sort(recorded_at: :desc, id: :desc)
+      |> Ash.Query.limit(1)
+      |> Ash.read_one!(actor: actor, tenant: actor.tenant_id)
+
+    writable = PartnerScope.stop_kind?(actor, stop)
+
     %__MODULE__{
       stop_id: stop.id,
       # The identifier only. Everything else about the load stays on the other
@@ -130,8 +161,88 @@ defmodule DispatchWeb.ViewModels.PartnerStopView do
       window_start: stop.window_start,
       window_end: stop.window_end,
       contact_name: stop.contact_name,
-      readiness: nil,
+      version: stop.version,
+      readiness: if(readiness, do: readiness.state),
+      latest_readiness_id: if(latest, do: latest.id),
+      readiness_summary:
+        if(readiness,
+          do:
+            FactSummary.new(readiness.state, readiness.source, readiness.occurred_at,
+              received_at: readiness.recorded_at
+            )
+        ),
+      documents: documents(actor, stop.id),
+      proposals: proposals(actor, stop),
+      can_report: writable and Actor.can?(actor, "stop.update.readiness"),
+      can_reference: writable and Actor.can?(actor, "document_reference.add"),
+      can_propose:
+        writable and Actor.can?(actor, "proposal.create") and
+          (Actor.can?(actor, "appointment.propose") or Actor.can?(actor, "instruction.propose")),
       arrival_summary: nil
     }
+  end
+
+  def documents(actor, stop_id) do
+    if Actor.can?(actor, "document_reference.read") do
+      DocumentReference
+      |> Ash.Query.filter(stop_id == ^stop_id)
+      |> Ash.Query.sort(created_at: :desc)
+      |> Ash.Query.limit(100)
+      |> Ash.read!(actor: actor, tenant: actor.tenant_id)
+      |> Enum.map(fn doc ->
+        reference =
+          case ReferenceCipher.decrypt(doc.object_reference_ciphertext) do
+            {:ok, value} -> value
+            _ -> "Reference unavailable"
+          end
+
+        %{
+          id: doc.id,
+          category: doc.category,
+          label: doc.label,
+          reference: reference,
+          source: doc.source,
+          occurred_at: doc.occurred_at,
+          recorded_at: doc.recorded_at,
+          scan_state: doc.scan_state
+        }
+      end)
+    else
+      []
+    end
+  end
+
+  def proposals(actor, stop) do
+    if Actor.can?(actor, "proposal.create") do
+      ActionProposal
+      |> Ash.Query.filter(stop_id == ^stop.id)
+      |> Ash.Query.sort(recorded_at: :desc)
+      |> Ash.Query.limit(100)
+      |> Ash.read!(actor: actor, tenant: actor.tenant_id)
+      |> Enum.map(fn proposal ->
+        state =
+          cond do
+            DateTime.compare(proposal.expires_at, actor.at) != :gt -> :EXPIRED
+            proposal.basis_version != stop.version -> :STALE
+            true -> :PROPOSED
+          end
+
+        %{
+          id: proposal.id,
+          kind: proposal.kind,
+          state: state,
+          window_start: proposal.window_start,
+          window_end: proposal.window_end,
+          instructions: proposal.instructions,
+          source: proposal.source,
+          occurred_at: proposal.occurred_at,
+          recorded_at: proposal.recorded_at,
+          expires_at: proposal.expires_at,
+          payload_sha256: proposal.payload_sha256
+        }
+      end)
+    else
+      []
+    end
   end
 end

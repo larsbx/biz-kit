@@ -157,13 +157,13 @@ to locate Hawala in biz-kit's Elixir umbrella: network integration is a
 
 ## Node-owned books storage profile
 
-The supplemental [PostgreSQL/TigerBeetle host contract](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
-integrates hawala-core #45's pinned node-books specification: one canonical
-PostgreSQL financial commit, followed by mandatory verification of the same
-source prefix in the fenced TigerBeetle accounting copy before execution.
-This is proposed implementation work, not a second financial writer or
-accepted storage refinement. The paired decisions, gaps and proof source pin
-below retain their existing meanings and review requirements.
+The supplemental [TigerBeetle-first host contract](2026-10-28-hawala-node-books-postgres-tigerbeetle.md)
+selects one native financial commit, then independent recoverable persistence
+to signed EventStore history, PostgreSQL projections and other destinations.
+It supersedes the PostgreSQL-first node-books proposal and independently pins
+the Hawala-owned specification and tested port core. Native adapters are not
+yet accepted or activated. The paired decisions, gaps and cross-authority proof
+source pin below retain their existing meanings and review requirements.
 
 ## Acceptance sequence
 
@@ -285,6 +285,14 @@ unilateral reversal of a completed spend.
 obligations, never as rewrites of committed ones. Dispute entry, evidence
 retention and the adjudicating authority are named for each workflow in G1.
 
+*Status:* specified and implemented in hawala-core #52 (`hawala-remedy`,
+`docs/REMEDIES.md`): remedies are new linked dual-signed obligations; consent
+comes from the party whose money moves, or an award from the pinned
+adjudicator, with one award per case; cumulative caps prevent double
+recovery; disputes hold and move nothing; and each G1 workflow has a dispute
+profile. The adjudication service, the finality-policy encoding of the
+adjudicator, and remedy execution remain open.
+
 ### Authority, trust and privacy
 
 **G5. Authority discovery and trust pinning (N4, N5). Blocks step 2.**
@@ -298,9 +306,11 @@ policy, no global revocation. Discovery may advertise a descriptor, but
 only the pinned policy confers trust.
 
 *Status:* specified and implemented for scope authorities in hawala-core #47
-(`hawala-authority-descriptor`, `docs/AUTHORITY_DESCRIPTOR.md`). Pinning of
-execution observers, settlement attestors and coordinators, the discovery
-transport, durable pin storage and the biz-kit relying-party side remain open.
+(`hawala-authority-descriptor`, `docs/AUTHORITY_DESCRIPTOR.md`), and for
+execution observers and settlement attestors under role-specific scopes in
+hawala-core #53. Coordinator succession stays governed by the recovery
+mandate. The discovery transport, durable pin storage and the biz-kit
+relying-party side remain open.
 
 **G6. Capability port authentication (N1). Blocks step 1.** N1 says
 calling the host confers no authority, but leaves two questions open: how

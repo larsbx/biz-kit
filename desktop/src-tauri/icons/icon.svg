@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1E3A5F"/>
+      <stop offset="1" stop-color="#0B1724"/>
+    </linearGradient>
+    <linearGradient id="case" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#CBD5E1"/>
+    </linearGradient>
+  </defs>
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="url(#bg)"/>
+  <!-- kit handle -->
+  <path d="M392 352 V292 a44 44 0 0 1 44 -44 h152 a44 44 0 0 1 44 44 V352"
+        fill="none" stroke="#CBD5E1" stroke-width="48" stroke-linecap="round"/>
+  <!-- kit body -->
+  <rect x="184" y="340" width="656" height="456" rx="72" fill="url(#case)"/>
+  <!-- lid seam -->
+  <rect x="184" y="452" width="656" height="20" fill="#94A3B8" opacity="0.55"/>
+  <!-- health pulse -->
+  <polyline points="232,610 382,610 432,520 502,720 566,560 606,610 792,610"
+            fill="none" stroke="#F59E0B" stroke-width="44"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- status leds -->
+  <circle cx="704" cy="398" r="20" fill="#22C55E"/>
+  <circle cx="764" cy="398" r="20" fill="#22C55E"/>
+</svg>

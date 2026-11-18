@@ -52,13 +52,16 @@ jobs:
           apps/dispatch/lib/dispatch_web/plugs/require_subject.ex
           apps/dispatch/test/dispatch_web/portal_revocation_test.exs
           apps/dispatch/test/support/portal_identity.ex
-          apps/spruce_goose/test/native_session_revocation_test.exs
+          apps/task_host/test/task_host/native_session_revocation_test.exs
       - name: Identity and cross-node regressions
         working-directory: apps/biz_kit_identity
         run: mix test
       - name: Migrate Dispatch PostgreSQL/PostGIS
         working-directory: apps/dispatch
         run: mix ecto.create && mix ecto.migrate
+      - name: Initialize signed ledger storage for device-enrolment acceptance
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
       - name: Dispatch including portal, stream and role integration
         working-directory: apps/dispatch
         run: mix test --include integration
