@@ -1,7 +1,6 @@
 # Eatsbot decommission checklist
 
-Date: 2026-11-07. Status: **proposed checklist; nothing here is implemented
-by this document.** It restates the
+Originally written November 7, 2026. This checklist restates the
 [salvage and retirement plan](2026-10-28-eatsbot-salvage-and-retirement-plan.md)
 for the path the code has since taken: the rebuilt eatsbot
 (`order_core`, `restaurant_core`, `restaurant_host`, the `restaurant`
@@ -14,6 +13,39 @@ Sources: the plan, the [source audit](2026-10-28-eatsbot-source-revision-audit.m
 [deploy](../deploy.md), `apps/restaurant_host/README.md`,
 `apps/restaurant_core/README.md` and [issue #176](https://github.com/larsbx/biz-kit/issues/176),
 read at main `89d5e8a2`.
+
+## Migration status as of November 14, 2026
+
+**The replacement source is on Biz-kit `main`. Production cutover is still open.**
+The production source documented for Fly remains `larsbx/eatsbot` on `dev`.
+Continue to treat it as the sole production order writer until the switch is
+verified. The owner chose to start the replacement with an empty restaurant ledger.
+Finish outstanding legacy obligations on the legacy system or give each a named
+owner and resolution path. Retain legacy history as restricted audit material.
+
+| Area | Current status |
+| --- | --- |
+| Cash pickup | [#348](https://github.com/larsbx/biz-kit/pull/348) merged accounts and scoped order history using prebound Biz-kit identities, signed menu publishing, merchant-funded fixed discounts, staff sign-in for paired boards, and ledger-backed device revocation. |
+| Fixed-route delivery | [#349](https://github.com/larsbx/biz-kit/pull/349) merged through the pickup branch and [#378](https://github.com/larsbx/biz-kit/pull/378) integrated the stack on `main`. The pilot uses one configured route and an authorized courier. Dispatch owns transport and uses distinct pickup and drop-off codes tied to the order and assignment. Delivery evidence carries no payment or settlement authority. |
+| Source-level evidence | The landed integration SHA `b3ddad4422f6d9d5456fb261fa3ebfd464d427c7` passed all four [restaurant jobs](https://github.com/larsbx/biz-kit/actions/runs/43249065306) and [Dispatch partner acceptance](https://github.com/larsbx/biz-kit/actions/runs/43249064861). Restaurant tests use a signed test client, and Dispatch tests cover assignment preparation separately. The passing [real-worker procurement run](https://github.com/larsbx/biz-kit/actions/runs/43247527978) used procurement orders. |
+| Restaurant end-to-end | Draft [#402](https://github.com/larsbx/biz-kit/pull/402) adds the real worker and authenticated courier route to a RestaurantHost checkout fixture, including worker restart and receipt replay. Its [hosted run](https://github.com/larsbx/biz-kit/actions/runs/43578830161) was queued when checked. Packaged staging, outage behavior, and delayed pickup after cancellation still need evidence. |
+| Build and compatibility | The LiveView cancel form now uses `order_id`. The standalone Localize boot fallback is on `main` via [#357](https://github.com/larsbx/biz-kit/pull/357). [#395](https://github.com/larsbx/biz-kit/pull/395) restored the truncated substrate modules and fixed the legacy runtime-config fixture. At `0f2745b5727ed34f9c1f657b05322a431be2efb0`, [Restaurant](https://github.com/larsbx/biz-kit/actions/runs/43580446923), [Dispatch](https://github.com/larsbx/biz-kit/actions/runs/43580446794), and [Consolidation](https://github.com/larsbx/biz-kit/actions/runs/43580446893) had no result yet. Draft [#401](https://github.com/larsbx/biz-kit/pull/401) passed the [OTP 26 CommerceCore job](https://github.com/larsbx/biz-kit/actions/runs/43578380785/job/132397600826) at synthetic merge `fc9be6a246afaf124a4644efba9ba32d96d4f7ef` with 24 skips for the OTP 27-only Merchant Pilot suite. Its [OTP 27 standalone checks](https://github.com/larsbx/biz-kit/actions/runs/43578380964) were queued. |
+| Separate delivery proposal | [#365](https://github.com/larsbx/biz-kit/pull/365) remains open and unmerged. [#376](https://github.com/larsbx/biz-kit/pull/376) merged its verification runner and launch probes. The runner defaults to the #365 revision. Its address, cancellation, evidence, and activation questions concern that proposal and need separate evaluation against the merged pilot path. |
+
+**Next reproducible gate.** Run the #402 acceptance on its exact source
+revision. Then stage both packaged services against disposable databases using
+the [fixed-route runbook](../deploy.md#automated-restaurant-delivery-with-dispatch).
+Capture one checkout, load and assignment, signed acceptance, pickup and drop-off,
+the storefront showing **Delivered**, and the Dispatch assignment reaching
+**COMPLETED**. Verify receipt replay, worker outage and recovery, and a pickup
+report arriving after cancellation. Record the disposition of each exception.
+
+Keep [issue #176](https://github.com/larsbx/biz-kit/issues/176) open through R0 inventory, R4 parallel proof
+without overlapping writer authority, R5 writer fence and reconciled drain
+with rollback, and R6 retention and retirement. Confirm GraphQL, Kafka,
+Telegram and other consumers in R0. The owner's decision drops GraphQL and
+Telegram from the replacement, with consumer notification and queue disposition
+still part of cutover.
 
 ## Definition
 
@@ -40,6 +72,9 @@ standalone `dev` head and the live deployment.
 
 ## 1. Surfaces to rehost or drop
 
+The table records the original slice-4 baseline. Use the dated migration
+status above for subsequent implementation and decisions.
+
 | Surface (umbrella copy) | Rebuilt at `89d5e8a2` | Requirement | Gate |
 | --- | --- | --- | --- |
 | Guest ordering and checkout | Storefront `/`: catalog menu, `Tax`/`Pricing`, cash at pickup, idempotent checkout key | Card payment only through Hawala; checkout stays financially unconfirmed until then | Slice 4 gate test passes against the deployed host; a card payment is settled by Hawala, never by an order step |
@@ -60,7 +95,7 @@ standalone `dev` head and the live deployment.
 | --- | --- | --- |
 | Rebuilt admission | `RestaurantCore.Admission` refines the kitchen reducer; the Log admits orders and steps from granted devices only | Holds on the deployed host |
 | Legacy order and checkout semantics | 48 recorded successes kept, 459 unauthorized requests refused, 207 typed refusals (`order_actions`, pinned to `eatsbot@15a201e`) | Holds |
-| Legacy state carried over | Not decided | Start empty with legacy data archived (§3), or migrate open orders and deliveries as signed baseline events (**owner decision**). Either way no legacy row becomes a ledger authority |
+| Legacy state carried over | Pending at this historical baseline. Owner later chose to start empty. | Retain the legacy audit archive (§3) and finish or assign every outstanding obligation. No legacy row grants ledger authority. |
 | Single writer | Legacy is the only production writer | At the switch instant, legacy order writes are refused and the rebuilt host is the one writer; recorded with time and both release versions |
 | Drain | Not started | Telegram webhook, Kafka and job queues empty; late callbacks reconciled; unknown outcomes held, not guessed |
 | Rollback | Not defined | A rollback window with its exit condition; configuration rollback is not a writer fence |
@@ -107,8 +142,6 @@ code; their UX may be adapted). Restaurant kitchen stages stay in
 
 ## Open
 
-- **Owner decisions** in §1 and §2. Each one recorded closes a row's
-  requirement; each "drop" also needs the R0 consumer list to be empty or
-  told.
-- **Issue #176** tracks R0–R6 against the 10-28 plan; its checkboxes do not
-  yet reflect the rebuild.
+Use the dated status above for the current gates. Map the R0 inventory, R4
+parallel proof, R5 authority switch and R6 retirement evidence back to
+[issue #176](https://github.com/larsbx/biz-kit/issues/176).

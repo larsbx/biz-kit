@@ -61,7 +61,9 @@ defmodule CoopSubstrate.Protocol.Validity do
       a currently declared key (`check_role_keys/2`, runs before every
       per-type check). Genesis (the first governance key) is trust-on-first-
       use, self-certified; later declarations/revocations are governance-
-      signed; revoking the last governance key is unrepresentable.
+      signed; revoking the last governance key is unrepresentable. A key the
+      chapter granted to restaurant Dispatch is never declared a role key
+      (`RestaurantCore.Admission.check/2` fences the converse).
     * `KeyRotated` (1D) — self-rotation: for a REGISTERED member, the
       rotation must be signed by the member's current key and `old_key_id`
       must match it (rotations chain). Rotations for unregistered ids stay
@@ -83,7 +85,8 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   @spec check(Envelope.t(), map()) :: :ok | {:error, term()}
   def check(%Envelope{} = env, gate) do
-    with :ok <- check_role_keys(env, gate),
+    with :ok <- CoopSubstrate.CommercialAdmission.fence(env, gate),
+         :ok <- check_role_keys(env, gate),
          :ok <- CommercialSetoffAdmission.check_existing_rail(env, gate) do
       type_check(env, gate)
     end
@@ -119,9 +122,15 @@ defmodule CoopSubstrate.Protocol.Validity do
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
   @commercial_admission_types Map.keys(CommercialSetoffAdmission.event_types())
+  @commercial_types Map.keys(CoopSubstrate.CommercialAdmission.event_types())
   @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_admission_types do
     CommercialSetoffAdmission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_types do
+    CoopSubstrate.CommercialAdmission.check(env, gate)
   end
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
@@ -158,6 +167,9 @@ defmodule CoopSubstrate.Protocol.Validity do
 
       Map.has_key?(declared, p["key_id"]) ->
         {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
+
+      RestaurantCore.Admission.dispatch_pubkey?(gate.restaurant, ch, p["pubkey"]) ->
+        {:error, :key_not_separate}
 
       governance == nil and p["role"] != "governance" ->
         # No governance exists yet: the only representable declaration is the

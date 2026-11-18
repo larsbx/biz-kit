@@ -238,6 +238,85 @@ defmodule CoopSubstrate.CommercialSetoffAdmissionTest do
     assert :ok = Log.verify_chains()
   end
 
+  test "protected proposal reservations exclude later review claims across restart", ctx do
+    enable(ctx)
+    sources(ctx)
+    review = reviewed_event(ctx, "review-after-reservation")
+    enable_proposal(ctx)
+    proposal = proposal_event(ctx, "proposal-first")
+    receipt = append!(proposal)
+    restart_log()
+    head = Log.head()
+
+    assert {:error, {:commercial_source_reserved, id}} =
+             Admission.terms(Log.gate(), @chapter, {"A", "B"}, "USD", "new-review")
+
+    assert id in ["ob-a", "ob-b"]
+    assert reject(review) == {:commercial_source_reserved, id}
+    assert Log.head() == head
+    assert Log.gate().commercial_setoff_admission.claims == %{}
+    assert {:ok, [^receipt]} = Log.append(proposal)
+    assert :ok = Log.verify_chains()
+  end
+
+  test "review claims exclude prepared protected proposals across restart", ctx do
+    enable(ctx)
+    sources(ctx)
+    review = reviewed_event(ctx, "review-first")
+    enable_proposal(ctx)
+    proposal = proposal_event(ctx, "proposal-after-review")
+    receipt = append!(review)
+    restart_log()
+    head = Log.head()
+
+    assert CoopSubstrate.CommercialAdmission.prepare(
+             Log.gate(),
+             @chapter,
+             "new-proposal",
+             {"A", "B"},
+             "USD",
+             ctx.governance.signer.key_id
+           ) == {:error, :commercial_source_already_reserved}
+
+    assert reject(proposal) == :commercial_source_already_reserved
+    assert Log.head() == head
+    assert Log.gate().commercial_admission.reservations == %{}
+    assert {:ok, [^receipt]} = Log.append(review)
+    assert :ok = Log.verify_chains()
+  end
+
+  defp enable_proposal(ctx) do
+    authority =
+      Log.gate().commercial_admission.governance[{@chapter, ctx.governance.signer.key_id}]
+
+    append!(
+      signed_event(ctx.governance, "CommercialAdmissionProfileActivatedV1", %{
+        "profile" => CoopSubstrate.CommercialAdmission.profile(),
+        "version" => 2,
+        "governance_event_id" => authority.event_id,
+        "governance_event_hash" => {:bytes, authority.event_hash}
+      })
+    )
+  end
+
+  defp proposal_event(ctx, id) do
+    {:ok, terms} =
+      CoopSubstrate.CommercialAdmission.prepare(
+        Log.gate(),
+        @chapter,
+        id,
+        {"A", "B"},
+        "USD",
+        ctx.governance.signer.key_id
+      )
+
+    multi_signed_event(
+      [role(ctx.parties["A"], "party_a"), role(ctx.parties["B"], "party_b"), ctx.governance],
+      "CommercialSetoffIntentReservedV2",
+      terms
+    )
+  end
+
   defp reviewed_event(ctx, id) do
     {terms, refs} = reviewed(ctx, id)
     admission(ctx, terms, refs)

@@ -95,6 +95,17 @@ def observed_cases(directory):
     return result
 
 
+def collect_observations(directories):
+    observations, counts = [], []
+    for index, directory in enumerate(directories):
+        cases = observed_cases(directory)
+        if not cases:
+            raise ValueError("No actual committed SQLite wire observations found in " + str(directory))
+        observations.extend((f"profile-{index}:" + name, wire, state) for name, wire, state in cases)
+        counts.append({"directory": str(directory), "committed_observations": len(cases)})
+    return observations, counts
+
+
 def validate_observation(observed, wire, result):
     """Compare the actual durable output, not merely two replays of its input."""
     effects = observed["effects"]
@@ -120,14 +131,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lean-command", type=Path, default=ROOT / "formal/lean/.lake/build/bin/bridge_trace")
     parser.add_argument("--expected-lean-sha256")
-    parser.add_argument("--acceptance-evidence", type=Path)
+    parser.add_argument("--acceptance-evidence", type=Path, action="append", default=[],
+                        help="Repeat for each required profile; every directory must contain committed observations")
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     cases = [(name, wire, None) for name, wire in generated_cases()]
-    observed = observed_cases(args.acceptance_evidence)
-    if args.acceptance_evidence is not None and not observed:
-        raise SystemExit("No actual committed SQLite wire observations found")
+    observed, observation_sources = collect_observations(args.acceptance_evidence)
     cases.extend(observed)
     source = b"".join(canonical(wire) + b"\n" for _, wire, _ in cases)
     executable = args.lean_command.resolve(strict=True)
@@ -155,6 +165,7 @@ def main():
                "generated_cases": len(cases) - len(observed), "observed_commit_cases": len(observed),
                "comparisons": len(cases), "lean_executable_sha256": before,
                "persisted_post_states_compared": len(observed),
+               "observation_sources": observation_sources,
                "input_sha256": sha(source), "output_sha256": sha(run.stdout),
                "scope": "finite runtime/compiled-Lean correspondence; SQL and checker truth remain explicit premises"}
     (args.output_dir / "comparisons.json").write_bytes(canonical(comparisons) + b"\n")

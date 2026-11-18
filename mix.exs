@@ -17,7 +17,8 @@ defmodule BizKit.MixProject do
             dispatch: :permanent,
             spruce_goose: :permanent,
             task_host: :permanent,
-            school_ops: :permanent
+            school_ops: :permanent,
+            bizops_kb: :permanent
           ],
           # Inherited from spruce_goose's release: self-contained runtime and
           # unstripped beams (its provenance chunks must survive the build).
@@ -36,7 +37,8 @@ defmodule BizKit.MixProject do
             biz_kit_identity: :permanent,
             spruce_goose: :permanent,
             task_host: :permanent,
-            school_ops: :permanent
+            school_ops: :permanent,
+            bizops_kb: :permanent
           ],
           include_erts: true,
           strip_beams: false
@@ -62,7 +64,21 @@ defmodule BizKit.MixProject do
           include_erts: true,
           strip_beams: false
         ]
+      ] ++ acceptance_releases(Mix.env())
+    ]
+  end
+
+  # The isolated runner embeds synthetic test helpers and its own runtime guard.
+  defp acceptance_releases(:test) do
+    [
+      dispatch_acceptance: [
+        applications: [dispatch: :permanent, coop_substrate: :load],
+        runtime_config_path: "config/dispatch_acceptance_runtime.exs",
+        include_erts: true,
+        strip_beams: false
       ]
     ]
   end
+
+  defp acceptance_releases(_), do: []
 end

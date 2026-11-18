@@ -6,6 +6,11 @@ defmodule TaskCore.Readiness do
   acknowledge the SOP and request transitions. Replay folds accepted facts
   without filesystem reads or execution effects.
 
+  A blueprint's optional readiness contract fixes the SOP, version and all
+  input digests, including the adopted manifest. Ordinary readiness admission
+  enforces those bindings; a client or a new governance-signed readiness
+  command cannot replace them while retaining the existing workflow run.
+
   Execution (docs/architecture/2026-10-19-execution.md):
 
     * `TaskStartedV1` (ready -> in_progress) rechecks what readiness
@@ -167,6 +172,7 @@ defmodule TaskCore.Readiness do
              p["predecessor_ids"],
              p["artifact_requirements"]
            ),
+         :ok <- TaskCore.Hierarchy.keeps_readiness_contract(task, p),
          do: :ok
   end
 

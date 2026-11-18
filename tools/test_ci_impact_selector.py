@@ -199,7 +199,7 @@ class ImpactTests(unittest.TestCase):
     def test_current_umbrella_reverse_edges_and_sensitive_fallback(self):
         # Exercise the real repository rather than relying only on toy fixtures.
         graph = module.umbrella_graph(ROOT)
-        self.assertGreaterEqual(len(graph), 32)
+        self.assertGreaterEqual(len(graph), 31)
         self.assertIn("biz_kit_composition", module.dependents(graph, {"sales_core"}))
         policy = module.read_policy(ROOT)
         sales = module.plan(ROOT, policy, HEAD, "pull_request",

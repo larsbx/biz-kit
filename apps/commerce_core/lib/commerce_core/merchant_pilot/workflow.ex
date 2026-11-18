@@ -11,8 +11,22 @@ defmodule CommerceCore.MerchantPilot.Workflow do
   Trusted scope and actor identity never come from those attributes. Evidence
   references are opaque private-record handles, not public URLs or raw documents.
   """
+  alias CommerceCore.MerchantPilot.SourcingBounty
 
-  @actions [:request, :qualify, :quote, :accept, :fulfill, :cancel, :dispute, :payment_evidence]
+  @actions [
+    :request,
+    :qualify,
+    :quote,
+    :accept,
+    :fulfill,
+    :cancel,
+    :dispute,
+    :payment_evidence,
+    :post_bounty,
+    :sourced_quote,
+    :confirm_bounty,
+    :bounty_payment_evidence
+  ]
   @terminal [:fulfilled, :cancelled, :disputed]
 
   def actions, do: @actions
@@ -48,8 +62,8 @@ defmodule CommerceCore.MerchantPilot.Workflow do
   defp command_shape(%{id: id, expected_version: v, action: a, attrs: p} = c) do
     if map_size(c) == 4 and text?(id, 128) and is_integer(v) and v >= 0 and
          a in @actions and is_map(p),
-      do: :ok,
-      else: {:error, :invalid_command}
+       do: :ok,
+       else: {:error, :invalid_command}
   end
 
   defp command_shape(_), do: {:error, :invalid_command}
@@ -64,7 +78,13 @@ defmodule CommerceCore.MerchantPilot.Workflow do
     else
       with {:ok, next} <- transition(state, t, c.action, c.attrs) do
         record = %{command: c, actor_id: t.actor_id, at_ms: t.now_ms}
-        next = %{next | version: version(state) + 1, receipts: Map.put(next.receipts, c.id, record)}
+
+        next = %{
+          next
+          | version: version(state) + 1,
+            receipts: Map.put(next.receipts, c.id, record)
+        }
+
         {:ok, next, :accepted}
       end
     end
@@ -76,9 +96,19 @@ defmodule CommerceCore.MerchantPilot.Workflow do
     if keys?(p, fields) and text?(p.buyer_business_id, 128) and text?(p.description, 2000) and
          is_integer(p.quantity) and p.quantity > 0 and currency?(p.currency) and
          is_integer(p.needed_by_ms) and p.needed_by_ms > t.now_ms and text?(p.consent_ref, 256) do
-      {:ok, %{scope: {t.chapter_id, t.cooperative_id, t.request_id}, request: p,
-        phase: :requested, version: 0, quotes: %{}, accepted_quote: nil,
-        acceptance_ref: nil, outcome_ref: nil, payment_evidence: [], receipts: %{}}}
+      {:ok,
+       %{
+         scope: {t.chapter_id, t.cooperative_id, t.request_id},
+         request: p,
+         phase: :requested,
+         version: 0,
+         quotes: %{},
+         accepted_quote: nil,
+         acceptance_ref: nil,
+         outcome_ref: nil,
+         payment_evidence: [],
+         receipts: %{}
+       }}
     else
       {:error, :invalid_request}
     end
@@ -93,21 +123,57 @@ defmodule CommerceCore.MerchantPilot.Workflow do
       else: {:error, :invalid_evidence}
   end
 
-  defp transition(%{phase: :qualified} = s, t, :quote, p) do
-    fields = [:quote_id, :merchant_business_id, :revision, :total_minor, :currency,
-      :expires_at_ms, :source_ref]
+  defp transition(%{phase: phase} = s, t, :post_bounty, p)
+       when phase in [:requested, :qualified] do
+    if keys?(p, [:reward_minor, :maximum_total_minor, :terms_ref]) and text?(p.terms_ref, 256),
+      do: SourcingBounty.post(s, t.now_ms, p),
+      else: {:error, :invalid_bounty_terms}
+  end
+
+  defp transition(%{phase: :qualified} = s, t, action, p)
+       when action in [:quote, :sourced_quote] do
+    fields = [
+      :quote_id,
+      :merchant_business_id,
+      :revision,
+      :total_minor,
+      :currency,
+      :expires_at_ms,
+      :source_ref
+    ]
+
+    fields =
+      if action == :sourced_quote,
+        do: fields ++ [:sourcing_business_id, :sourcing_ref],
+        else: fields
+
     old = Map.get(s.quotes, p[:quote_id])
 
     cond do
       not (keys?(p, fields) and text?(p.quote_id, 128) and
-        text?(p.merchant_business_id, 128) and is_integer(p.revision) and p.revision > 0 and
-        is_integer(p.total_minor) and p.total_minor >= 0 and p.total_minor <= 9_007_199_254_740_991 and
-        p.currency == s.request.currency and is_integer(p.expires_at_ms) and
-        p.expires_at_ms > t.now_ms and text?(p.source_ref, 256)) -> {:error, :invalid_quote}
-      p.merchant_business_id == s.request.buyer_business_id -> {:error, :same_business}
-      old != nil and old.merchant_business_id != p.merchant_business_id -> {:error, :quote_owner_mismatch}
-      p.revision != if(old == nil, do: 1, else: old.revision + 1) -> {:error, :quote_revision_conflict}
-      true -> {:ok, %{s | quotes: Map.put(s.quotes, p.quote_id, p)}}
+             text?(p.merchant_business_id, 128) and is_integer(p.revision) and p.revision > 0 and
+             is_integer(p.total_minor) and p.total_minor >= 0 and
+             p.total_minor <= 9_007_199_254_740_991 and
+             p.currency == s.request.currency and is_integer(p.expires_at_ms) and
+             p.expires_at_ms > t.now_ms and text?(p.source_ref, 256)) ->
+        {:error, :invalid_quote}
+
+      action == :sourced_quote and
+          not (text?(p.sourcing_business_id, 128) and text?(p.sourcing_ref, 256)) ->
+        {:error, :invalid_sourcing_evidence}
+
+      p.merchant_business_id == s.request.buyer_business_id ->
+        {:error, :same_business}
+
+      old != nil and old.merchant_business_id != p.merchant_business_id ->
+        {:error, :quote_owner_mismatch}
+
+      p.revision != if(old == nil, do: 1, else: old.revision + 1) ->
+        {:error, :quote_revision_conflict}
+
+      true ->
+        with :ok <- SourcingBounty.validate_quote(s, t.now_ms, old, p),
+             do: {:ok, %{s | quotes: Map.put(s.quotes, p.quote_id, p)}}
     end
   end
 
@@ -116,17 +182,39 @@ defmodule CommerceCore.MerchantPilot.Workflow do
     quote = Map.get(s.quotes, p[:quote_id])
 
     cond do
-      not (keys?(p, fields) and text?(p.evidence_ref, 256)) -> {:error, :invalid_acceptance}
-      p.buyer_business_id != s.request.buyer_business_id -> {:error, :buyer_mismatch}
-      quote == nil -> {:error, :quote_missing}
-      p.revision != quote.revision -> {:error, :quote_revision_conflict}
-      quote.expires_at_ms <= t.now_ms -> {:error, :quote_expired}
-      true -> {:ok, %{s | phase: :accepted, accepted_quote: quote, acceptance_ref: p.evidence_ref}}
+      not (keys?(p, fields) and text?(p.evidence_ref, 256)) ->
+        {:error, :invalid_acceptance}
+
+      p.buyer_business_id != s.request.buyer_business_id ->
+        {:error, :buyer_mismatch}
+
+      quote == nil ->
+        {:error, :quote_missing}
+
+      p.revision != quote.revision ->
+        {:error, :quote_revision_conflict}
+
+      quote.expires_at_ms <= t.now_ms ->
+        {:error, :quote_expired}
+
+      true ->
+        next = %{s | phase: :accepted, accepted_quote: quote, acceptance_ref: p.evidence_ref}
+        SourcingBounty.award(next, t.now_ms)
     end
   end
 
-  defp transition(%{phase: :accepted} = s, _, :fulfill, p),
-    do: outcome(s, :fulfilled, p)
+  defp transition(%{phase: :accepted} = s, t, :fulfill, p) do
+    with {:ok, next} <- outcome(s, :fulfilled, p) do
+      {:ok, SourcingBounty.record_delivery(next, Map.get(t, :event_at_ms, t.now_ms))}
+    end
+  end
+
+  defp transition(%{phase: :fulfilled} = s, _, action, p)
+       when action in [:confirm_bounty, :bounty_payment_evidence] do
+    if keys?(p, [:evidence_ref]) and text?(p.evidence_ref, 256),
+      do: SourcingBounty.record_result(s, action, p.evidence_ref),
+      else: {:error, :invalid_evidence}
+  end
 
   defp transition(%{phase: phase} = s, _, :cancel, p) when phase not in @terminal,
     do: outcome(s, :cancelled, p)
@@ -137,8 +225,14 @@ defmodule CommerceCore.MerchantPilot.Workflow do
   defp transition(%{phase: phase, accepted_quote: quote} = s, t, :payment_evidence, p)
        when phase in [:accepted, :fulfilled, :disputed] and not is_nil(quote) do
     if keys?(p, [:evidence_ref]) and text?(p.evidence_ref, 256) do
-      evidence = %{reference: p.evidence_ref, recorded_by: t.actor_id, recorded_at_ms: t.now_ms,
-        status: :operator_attestation, bank_verified: false}
+      evidence = %{
+        reference: p.evidence_ref,
+        recorded_by: t.actor_id,
+        recorded_at_ms: t.now_ms,
+        status: :operator_attestation,
+        bank_verified: false
+      }
+
       {:ok, %{s | payment_evidence: s.payment_evidence ++ [evidence]}}
     else
       {:error, :invalid_evidence}
@@ -154,6 +248,9 @@ defmodule CommerceCore.MerchantPilot.Workflow do
   end
 
   defp keys?(p, fields), do: Enum.sort(Map.keys(p)) == Enum.sort(fields)
-  defp text?(v, max), do: is_binary(v) and String.valid?(v) and byte_size(v) in 1..max and String.trim(v) != ""
+
+  defp text?(v, max),
+    do: is_binary(v) and String.valid?(v) and byte_size(v) in 1..max and String.trim(v) != ""
+
   defp currency?(v), do: is_binary(v) and Regex.match?(~r/\A[A-Z]{3}\z/, v)
 end

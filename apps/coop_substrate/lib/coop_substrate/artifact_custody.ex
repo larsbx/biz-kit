@@ -104,9 +104,13 @@ defmodule CoopSubstrate.ArtifactCustody do
   """
   @spec evidence(String.t(), CoopSubstrate.Feed.View.scope(), String.t()) ::
           {:ok, map()} | {:error, :no_grant | :unknown_task | :no_submission}
-  def evidence(principal, {chapter, tenant, project} = scope, task_id) do
-    o = Log.gate().orchestration
+  def evidence(principal, scope, task_id),
+    do: evidence(Log.gate().orchestration, principal, scope, task_id)
 
+  @doc "Apply the evidence ACL and read from one trusted orchestration snapshot."
+  @spec evidence(map(), String.t(), CoopSubstrate.Feed.View.scope(), String.t()) ::
+          {:ok, map()} | {:error, :no_grant | :unknown_task | :no_submission}
+  def evidence(o, principal, {chapter, tenant, project} = scope, task_id) do
     with :ok <- participant(o, principal, scope) do
       case o.tasks[{chapter, tenant, project, task_id}] do
         nil ->

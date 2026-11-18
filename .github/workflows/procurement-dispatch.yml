@@ -10,6 +10,7 @@ on:
       - 'apps/biz_kit_cluster/**'
       - 'apps/biz_kit_extension/**'
       - 'apps/commerce_core/**'
+      - 'apps/barter_core/**'
       - 'apps/task_core/**'
       - 'apps/order_core/**'
       - 'apps/restaurant_core/**'
@@ -23,6 +24,7 @@ on:
       - 'config/**'
       - 'native/**'
       - 'mix.*'
+      - 'tests/procurement_mvp/**'
       - 'scripts/test-procurement-dispatch.sh'
       - '.github/workflows/procurement-dispatch.yml'
   workflow_dispatch:
@@ -36,7 +38,7 @@ env:
 jobs:
   real-worker:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgis/postgis:16-3.4
@@ -60,10 +62,15 @@ jobs:
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
       - uses: dtolnay/rust-toolchain@1.91.1
+      - name: Match backup and restore clients to PostgreSQL 16
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16 openssl
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
       - run: mix local.hex --force && mix local.rebar --force
       - name: Create the disposable Dispatch database role
         run: psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
-      - name: Real worker, authorized assignments and courier receipts
+      - name: Source worker and packaged procurement with authorized courier receipts
         run: bash scripts/test-procurement-dispatch.sh
       - uses: actions/upload-artifact@v4
         if: always()

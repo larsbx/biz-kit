@@ -45,7 +45,7 @@ before changing the deployment and copies it into place on each install or upgra
 | `~/ops/bizops-dev/operations.json` | `TASK_HOST_OPERATIONS_CONFIG` |
 | `~/ops/bizops-dev/state/` | working directory, artifacts, `genesis_checkpoint.bin` |
 
-## Bootstrap (done 2026-11-10)
+## Genesis (recorded 2026-11-10)
 
 Genesis ran once with the service stopped: governance `k-3141779e` for
 `chapter-genesis`. Run commands that need the env file through
@@ -71,10 +71,50 @@ ssh -L 4001:127.0.0.1:4001 papa      # then open http://127.0.0.1:4001/app
 
 ## Bootstrap verification
 
+The hosted Operations acceptance workflow ran both browser tests successfully
+at commit `7c013ae2f248b085e7a9e720829a1de66be31c57`. Chromium used the
+development provider on an isolated loopback TaskHost with synthetic keys
+and records. The test verified that inspection left the request pending,
+the governance signature granted administrator access, and the original
+browser could see the configured workspace and record.
+[Hosted acceptance run](https://github.com/larsbx/biz-kit/actions/runs/42818293394)
+
+Packaged release acceptance still requires a run through the installed
+helper and systemd user unit on an isolated host. The checks below cover
+that deployment path.
+
+
 Run `bash deploy/papa-operations-dev/test-bootstrap.sh` on a Linux development
 machine. It uses a temporary home and stand-ins for PostgreSQL, systemd, curl
 and the release. It checks installer paths and permissions, repeat installs,
 missing-helper failure, and approval command sequencing and exit propagation.
+
+### Packaged release acceptance
+
+On a disposable Linux host with a systemd user manager, install the packaged
+development release with the installer above. Use a local PostgreSQL cluster
+and fresh synthetic keys, workspace and task records. Configure the workspace
+in `operations.json` before running the check. In the deployment env file set
+`BIZKIT_DEVELOPMENT_SIGN_IN=bootstrap=synthetic-bootstrap` and bind
+`biz-kit-development` / `synthetic-bootstrap` to a fresh synthetic principal.
+Restart the service to load those settings.
+
+With Node, Playwright and Chromium installed, run on that host from a directory
+where Node can resolve `playwright`:
+
+```sh
+bash deploy/papa-operations-dev/accept-packaged-bootstrap.sh --isolated-synthetic \
+  chapter-genesis synthetic-tenant synthetic-project synthetic-desk 'Synthetic task'
+```
+
+Use the IDs and task title from the fixture. The script checks the running
+unit, loopback socket and deployment database configuration, then uses the
+installed helper to inspect and sign the browser's synthetic request. It
+restarts the user service and checks that the browser still sees the workspace
+and task. Start with a fresh principal or restore the fixture before repeating
+a run that reached signed approval.
+
+### Manual browser check
 
 For browser acceptance, use an isolated development instance with fresh
 synthetic governance keys, identity and records. Verify the listener is on

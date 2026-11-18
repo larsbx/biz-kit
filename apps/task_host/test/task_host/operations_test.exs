@@ -3,6 +3,10 @@ defmodule TaskHost.OperationsTest do
 
   alias TaskHost.Operations
 
+  defmodule KnowledgeHost do
+    def hash(term), do: :crypto.hash(:sha256, :erlang.term_to_binary(term, [:deterministic]))
+  end
+
   defp workspace(id, chapter \\ "chapter-a", project \\ "project-1") do
     %{
       "id" => id,
@@ -153,6 +157,81 @@ defmodule TaskHost.OperationsTest do
       assert {:ok, %{"workspaces" => []}} =
                Operations.snapshot(after_revoke, "principal-a", input)
     end
+  end
+
+  test "automatic knowledge counts are scoped before any workspace data is returned" do
+    scope = {"chapter-a", "tenant-1", "project-1"}
+    private_scope = {"chapter-b", "tenant-1", "project-1"}
+
+    gate =
+      gate()
+      |> put_in([:orchestration, :host], KnowledgeHost)
+      |> grant("g-a", "principal-a", "chapter-a", "project-1")
+      |> knowledge_workflow(scope, "visible-revision")
+      |> knowledge_workflow(private_scope, "private-revision")
+
+    input = config([workspace("a"), workspace("private", "chapter-b")])
+    assert {:ok, %{"workspaces" => [visible]}} = Operations.snapshot(gate, "principal-a", input)
+
+    assert visible["knowledge"] == %{
+             "pending_count" => 1,
+             "approved_count" => 0,
+             "rejected_count" => 0,
+             "withdrawn_count" => 0,
+             "stale_count" => 0
+           }
+
+    # Counts are presentation metadata, not candidate bodies or source pins.
+    refute Map.has_key?(visible["knowledge"], "items")
+    refute inspect(visible, limit: :infinity) =~ "private-revision"
+    assert {:ok, %{"workspaces" => []}} = Operations.snapshot(gate, "no-reader", input)
+  end
+
+  defp knowledge_workflow(gate, {chapter, tenant, project}, revision) do
+    {:ok, blueprint} =
+      TaskCore.Blueprint.normalize(%{
+        "schema_version" => 2,
+        "project" => %{"key" => project, "name" => "Operations"},
+        "roadmaps" => [
+          %{
+            "key" => "ops",
+            "name" => "Operations",
+            "workflows" => [
+              %{
+                "id" => "setup",
+                "name" => "Workspace setup",
+                "tasks" => [
+                  %{
+                    "id" => "ready",
+                    "title" => "Prepare workspace",
+                    "definition_of_done" => [
+                      %{"id" => "ready", "description" => "Workspace ready"}
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      })
+
+    event = %{
+      type: "TaskBlueprintAppliedV1",
+      event_id: revision,
+      chapter_id: chapter,
+      payload: %{
+        "tenant_id" => tenant,
+        "project_id" => project,
+        "repository" => "synthetic/operations",
+        "commit" => String.duplicate("a", 40),
+        "tree" => String.duplicate("b", 40),
+        "path" => "workflow.json",
+        "manifest_digest" => {:bytes, KnowledgeHost.hash(blueprint)},
+        "blueprint" => blueprint
+      }
+    }
+
+    %{gate | orchestration: TaskCore.Hierarchy.handle_event(event, gate.orchestration)}
   end
 
   test "chapter governance remains chapter-wide but never crosses into another chapter" do

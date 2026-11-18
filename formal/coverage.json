@@ -88,6 +88,17 @@
         "note": "Sessions restore tickets: a SessionStore read pending across revoke_principal cannot re-insert the session, so a revoked principal never acts."
       }
     ],
+    "bizops_kb": [
+      {
+        "quint": "formal/quint/obligations/bizops_kb.qnt",
+        "main": "bizops_kb",
+        "control": "bizops_kb_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "Two-document abstraction of the compiled manifest pin and document identity checks. Removing the compiled pin admits a matching rewritten manifest and document."
+      }
+    ],
     "commerce_core": [
       {
         "lean": "BizKitCommerce",
@@ -126,61 +137,6 @@
         "witness": "obligationWitness",
         "max_steps": 6,
         "note": "LastMile cancel_confirmed only before pickup; pickup and delivery refs are never fabricated or erased by cancellation."
-      }
-    ],
-    "eatsbot": [
-      {
-        "quint": "formal/quint/obligations/eatsbot.qnt",
-        "main": "eatsbot",
-        "control": "eatsbot_control",
-        "invariant": "obligation",
-        "witness": "obligationWitness",
-        "max_steps": 6,
-        "note": "Planned R5 cutover: no legacy write after cutover and migrated history equals accepted legacy history; not implemented in code (finding)."
-      }
-    ],
-    "eatsbot_core": [
-      {
-        "quint": "formal/quint/obligations/eatsbot_core.qnt",
-        "main": "eatsbot_core",
-        "control": "eatsbot_core_control",
-        "invariant": "obligation",
-        "witness": "obligationWitness",
-        "max_steps": 6,
-        "note": "Delivery history replays to the live state when the history row is written atomically; code writes it after_transaction (finding)."
-      }
-    ],
-    "eatsbot_extension_kafka": [
-      {
-        "quint": "formal/quint/obligations/eatsbot_extension_kafka.qnt",
-        "main": "eatsbot_extension_kafka",
-        "control": "eatsbot_extension_kafka_control",
-        "invariant": "obligation",
-        "witness": "obligationWitness",
-        "max_steps": 6,
-        "note": "Kafka.Driver records :ok only on a matching leader ACK; errors, exits and malformed replies are never recorded as success."
-      }
-    ],
-    "eatsbot_extension_prometheus": [
-      {
-        "quint": "formal/quint/obligations/eatsbot_extension_prometheus.qnt",
-        "main": "eatsbot_extension_prometheus",
-        "control": "eatsbot_extension_prometheus_control",
-        "invariant": "obligation",
-        "witness": "obligationWitness",
-        "max_steps": 6,
-        "note": "PromEx tag_values project telemetry onto public tags only, and the scrape is read-only."
-      }
-    ],
-    "eatsbot_extension_telegram_bot": [
-      {
-        "quint": "formal/quint/obligations/eatsbot_extension_telegram_bot.qnt",
-        "main": "eatsbot_extension_telegram_bot",
-        "control": "eatsbot_extension_telegram_bot_control",
-        "invariant": "obligation",
-        "witness": "obligationWitness",
-        "max_steps": 6,
-        "note": "verify_secret_token admits only requests whose header equals a valid configured secret, so unverified messages cause no effect."
       }
     ],
     "federation_core": [
@@ -307,6 +263,15 @@
         "witness": "obligationWitness",
         "max_steps": 6,
         "note": "Device-signed restaurant events are admitted only for a key a governance-signed grant bound, with the action among the granted actions."
+      },
+      {
+        "quint": "formal/quint/obligations/restaurant_core.qnt",
+        "main": "restaurant_key_fence",
+        "control": "restaurant_key_fence_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "A new grant keeps a chapter's keys apart: a Dispatch key is none of the chapter's device or role keys and serves one tenant, and a merchant grants each key once, revoked or not (RestaurantCore.Admission.check/2, Validity's RoleKeyDeclared clause)."
       }
     ],
     "restaurant_host": [

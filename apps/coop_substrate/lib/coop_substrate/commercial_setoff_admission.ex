@@ -128,7 +128,11 @@ defmodule CoopSubstrate.CommercialSetoffAdmission do
         not CommercialSourceLineage.original_only?(gate, chapter, id) ->
           {:halt, {:error, {:ineligible_commercial_source, id}}}
 
-        Map.has_key?(gate.commercial_setoff_admission.claims, {chapter, id}) ->
+        reserved?(gate, chapter, id) or
+            Map.has_key?(
+              get_in(gate, [:commercial_admission, :reservations]) || %{},
+              {chapter, id}
+            ) ->
           {:halt, {:error, {:commercial_source_reserved, id}}}
 
         true ->

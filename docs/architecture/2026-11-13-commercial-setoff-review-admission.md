@@ -29,3 +29,18 @@ quint typecheck formal/quint/commercial_setoff_review.qnt
 quint run formal/quint/commercial_setoff_review.qnt --invariant=safety \
   --max-samples=10000 --max-steps=20 --seed=1
 ```
+
+## Integration with protected proposal admission
+
+The review receipt and the protected `CommercialSetoffIntentReservedV2` proposal
+remain distinct event families. Both admission fences and exact-retry paths run
+in the canonical serialized Log. Preparation and append refuse an original
+source already claimed by either family, so introducing review evidence does not
+create a second reservation path for the same obligation. Historical replay
+still folds the recorded event; an exact signed retry recovers its original
+receipt without allocating another claim.
+
+The signed-ledger integration controls exercise both reservation orderings,
+restart, refused fresh preparation and refused previously prepared append, and
+unchanged head on refusal. The separate Lean and Quint review models do not
+formalize this combined two-family implementation.

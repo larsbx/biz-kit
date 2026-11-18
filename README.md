@@ -1,13 +1,18 @@
 # biz-kit
 
 One Mix umbrella and one dependency lock for the Elixir core of the business
-platform, with three release profiles: `biz_kit`, `orchestration` and `eatsbot`.
+platform, with its release profiles in [docs/deploy.md](docs/deploy.md).
 The domain apps below were imported with their full history, so `git log` and
-`git blame` work under each directory: the first four with `git subtree`,
-eatsbot with `git filter-repo` (see below).
-The read-only `school_ops` curriculum app is a version-pinned content
-snapshot: it records its upstream commit rather than claiming a subtree history
-import.
+`git blame` work under each directory, with `git subtree`.
+The read-only `school_ops` curriculum and `bizops_kb` business reference apps
+use version-pinned content snapshots: each records its upstream commit rather
+than claiming a subtree history import.
+
+[Economic simulation experiments](experiments/economic_simulation/README.md)
+provide a separate Python laboratory for demand-first procurement, thin markets,
+barter cycles and physical fulfillment risk. Versioned JSON scenarios/results,
+paired policy runs and optional Mesa/NegMAS adapters form the interface boundary;
+synthetic purchase exports use the existing Elixir pilot scorecard.
 
 | App | Path | Imported from | Role |
 | --- | --- | --- | --- |
@@ -16,17 +21,14 @@ import.
 | `dispatch` | `apps/dispatch` | `larsbx/d-patch` (`central/` only) | Dispatch domain: participants, trips, loads, communications. Its server work continues here; d-patch keeps the clients |
 | `task_host` | `apps/task_host` | `apps/spruce_goose`'s web layer | Sign-in (`/auth`), the task web view, its signed commands and the change feed, over the ledger ([decision](docs/architecture/2026-11-09-task-host.md)) |
 | `spruce_goose` | `apps/spruce_goose` | `larsbx/sprucegoose` | The legacy orchestration writer and its CLI service, until decommission |
-| `eatsbot` | `apps/eatsbot` | `larsbx/eatsbot` (`tololo/`, then `eatsbot/`) | Restaurant ordering: storefront GraphQL API, back office, orders, deliveries. Its own release and database. An imported copy: `larsbx/eatsbot` stays the authoritative, independently evolving product, and production deploys from there |
-| `eatsbot_core`, `eatsbot_extension_*` | `apps/eatsbot_core`, `apps/eatsbot_extension_{kafka,prometheus,telegram_bot}` | `larsbx/eatsbot` (eatsbot's former path dependencies) | eatsbot's domain resources, and its Kafka, Prometheus and Telegram extensions |
-
-> **Proposed future disposition (not yet implemented):** Eatsbot is being
-> retired as an independent product and the imported Eatsbot runtime is to be
-> dismantled after verified cutover. Salvage its marketing/attribution policies
-> into MarketingCore, last-mile delivery policies into DispatchCore, and
-> reusable checkout/consent/handoff behavior into existing platform cores.
-> See [the Eatsbot salvage and retirement plan](docs/architecture/2026-10-28-eatsbot-salvage-and-retirement-plan.md).
-> The source/deployment ownership stated above remains current until the
-> documented migration and single-writer cutover gates have passed.
+> **Eatsbot is retired as a separate product.** Its imported copy
+> (`apps/eatsbot`, `apps/eatsbot_core`, `apps/eatsbot_extension_*`, imported
+> from `larsbx/eatsbot` with `git filter-repo`) was removed in decommission R6;
+> its history stays in git. Eatsbot is now `restaurant_host` (below), and its
+> reusable rules live in MarketingCore, DispatchCore, CommerceCore,
+> FulfillmentCore and SalesCore. See the
+> [salvage and retirement plan](docs/architecture/2026-10-28-eatsbot-salvage-and-retirement-plan.md)
+> and the [decommission checklist](docs/architecture/2026-11-07-eatsbot-decommission.md).
 
 Shared apps developed in this umbrella:
 
@@ -45,17 +47,16 @@ Shared apps developed in this umbrella:
 | `biz_kit_identity` | `apps/biz_kit_identity` | Stable platform principals, authentication-provider adapters and revocable sessions |
 | `biz_kit_cluster` | `apps/biz_kit_cluster` | Cluster membership and singleton coordination |
 | `school_ops` | `apps/school_ops` | School domain: K–12 curriculum catalog, lesson/assessment review, and TaskCore-based staff workflows |
+| `bizops_kb` | `apps/bizops_kb` | Read-only Johnny.Decimal business reference catalog, source verification, search and linked documents in Operations |
 
 Mix requires umbrella directory names to equal OTP application names, hence
-`coop_substrate`, `spruce_goose` and the `eatsbot_*` siblings. eatsbot's
-directory was renamed during its life, so it was imported with `git filter-repo`
-mapping both paths onto `apps/eatsbot` rather than with `git subtree`; all 133
-commits that touched it keep their authors, dates and messages.
+`coop_substrate` and `spruce_goose`.
 
 Not included, by design: the Android, web and e2e clients of `d-patch`
 (separate clients of this backend); `agent-runtime-platform` (Python and
-Podman sandbox, reached through dispatch's Hermes adapter); `bizops-kb`
-(content, not code); `truck-shop` and `spruce` (optional, see below).
+Podman sandbox, reached through dispatch's Hermes adapter); `truck-shop` and
+`spruce` (optional, see below). `bizops-kb` remains the source authoring
+repository; its reviewed Markdown snapshot is included as reference content.
 
 ## Toolchain
 
@@ -80,7 +81,6 @@ mix compile
 (cd apps/dispatch       && mix test --include integration) # needs PostGIS
 (cd apps/task_host      && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
 (cd apps/spruce_goose   && MIX_ENV=test mix ecto.create && MIX_ENV=test mix ecto.migrate && mix test)
-(cd apps/eatsbot        && MIX_ENV=test mix ash.setup && ADMIN_API_KEY=test mix test)
 (cd apps/school_ops     && mix test)                        # no database required
 ```
 
@@ -160,13 +160,8 @@ production writers have been consolidated.
   they differed) so that resolution moved as little as possible.
 - `dispatch`: `ash_authentication ~> 4.0` became `~> 5.0-rc` to match
   `spruce_goose`. dispatch declared the dependency but used none of it.
-- `eatsbot`: `ash_authentication` 4 → `~> 5.0-rc` (its token resource now
-  declares the actions v5 no longer generates) and `phoenix` 1.7 → `~> 1.8`, to
-  match the umbrella. Its Ash tracer is installed when eatsbot starts, not in
-  shared config: the other apps do not carry `opentelemetry_ash`.
-- `telegex` is vendored under `vendor/telegex` with a one-line guard fix; a
-  clean umbrella build otherwise fails depending on compile order
-  (`vendor/telegex/VENDOR.md`).
+- The imported eatsbot apps, their dependency alignments and the vendored
+  `telegex` they needed were removed with them (decommission R6).
 - `config/runtime.exs` gates each app's production section on the release that
   ships it (`RELEASE_NAME`), so no release needs another's secrets.
 - `dispatch` signs with the ledger's scheme (`coop_substrate`, code only), and
@@ -185,6 +180,41 @@ project mappings with `TASK_HOST_OPERATIONS_CONFIG`; see
 and [example configuration](config/operations.example.json).
 This first increment reuses existing signed task actions. Assignment, recurring
 execution and purchasing additions remain later stages of the documented MVP.
+
+### Business knowledge inside Operations
+
+Open **Knowledge** from `/operations`, or visit `/operations/knowledge`, to
+browse the 216 imported business reference documents by Johnny.Decimal area
+and category. Search the text, follow internal links, and inspect each
+document's source revision. Access uses the existing Operations session and
+workspace gate.
+
+The catalog is a shared reference library. Importing a procedure does not
+approve it as an SOP, create a task, send a message, or run an agent. The
+**Office assistant onboarding** workflow preview adapts procedures `24.12` and
+`24.12d` into eight tasks with dependencies, completion criteria and exact
+source pins. Governance may explicitly adopt its reviewed manifest through the
+existing signed workflow controls; operator run creation remains a separate step.
+
+Source: `larsbx/bizops-kb` at
+`8749d8db1abd3145b22c6a27da2cc49a41c303fe`, including the revised October 30
+source-custody decision for the SpruceGoose migration. The import retains
+source bytes, stable IDs, and an offline Git commit/tree proof. For update and
+verification commands, see [the catalog README](apps/bizops_kb/README.md) and
+[the integration contract](docs/architecture/2026-11-14-bizops-kb-catalog.md).
+For source-bound workflow adoption, see
+[the workflow increment](docs/architecture/2026-11-14-bizops-kb-workflows.md).
+
+**Project knowledge** also populates automatically from completed tasks with
+accepted evidence and currently adopted workflows. Drafts enter a project
+review queue; an administrator's signed approval makes the exact reviewed
+revision eligible for suggestions beside Operations tasks and workflows.
+Rejections persist, changed sources require another review, and withdrawals
+remove suggestions. Workspace cards link to the queue and show its counts.
+Company-derived knowledge retains the project's access controls and is not
+published into the shared reference catalog. See
+[automatic population and approval](docs/architecture/2026-11-14-project-knowledge.md)
+for source eligibility, review semantics and API boundaries.
 
 [docs/roadmap.md](docs/roadmap.md): what is delivered, what comes next and
 in what order, the remaining consolidation steps, and open questions.
