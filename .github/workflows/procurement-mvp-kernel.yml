@@ -1,0 +1,116 @@
+name: Procurement MVP kernel
+on:
+  pull_request:
+    paths:
+      - 'apps/commerce_core/lib/commerce_core/merchant_pilot/workflow.ex'
+      - 'tests/procurement_mvp/**'
+      - 'proofs/procurement_mvp/**'
+      - 'docs/architecture/2026-11-08-procurement-mvp-kernel.md'
+      - '.github/workflows/procurement-mvp-kernel.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: procurement-kernel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile actual reducer and replay reference matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/procurement-runtime
+          git rev-parse HEAD | tee .artifacts/procurement-runtime/revision.txt
+          elixir --version | tee .artifacts/procurement-runtime/toolchain.txt
+          bash tests/procurement_mvp/check.sh 2>&1 | tee .artifacts/procurement-runtime/check.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-runtime-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-runtime
+          if-no-files-found: error
+  lean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - name: Replay five abstract lifecycle theorems
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/procurement-lean
+          git rev-parse HEAD | tee .artifacts/procurement-lean/revision.txt
+          curl --fail --location --retry 3 https://github.com/leanprover/lean4/releases/download/v4.19.0/lean-4.19.0-linux.tar.zst -o "$RUNNER_TEMP/lean.tar.zst"
+          tar --zstd -xf "$RUNNER_TEMP/lean.tar.zst" -C "$RUNNER_TEMP"
+          lean="$RUNNER_TEMP/lean-4.19.0-linux/bin/lean"
+          "$lean" --version | tee .artifacts/procurement-lean/toolchain.txt
+          "$lean" proofs/procurement_mvp/Workflow.lean 2>&1 | tee .artifacts/procurement-lean/axioms.log
+          if grep -q sorryAx .artifacts/procurement-lean/axioms.log; then exit 1; fi
+          sha256sum proofs/procurement_mvp/Workflow.lean > .artifacts/procurement-lean/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-lean-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-lean
+          if-no-files-found: error
+  quint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Typecheck, scenario tests, and seeded bounded simulation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/procurement-quint
+          git rev-parse HEAD | tee .artifacts/procurement-quint/revision.txt
+          npm install --prefix "$RUNNER_TEMP/quint" --no-save @informalsystems/quint@0.33.1
+          quint="$RUNNER_TEMP/quint/node_modules/.bin/quint"
+          "$quint" --version | tee .artifacts/procurement-quint/toolchain.txt
+          "$quint" typecheck proofs/procurement_mvp/workflow.qnt 2>&1 | tee .artifacts/procurement-quint/typecheck.log
+          "$quint" test proofs/procurement_mvp/workflow.qnt --seed=20261108 2>&1 | tee .artifacts/procurement-quint/tests.log
+          "$quint" run proofs/procurement_mvp/workflow.qnt --invariant=invariant --max-steps=16 --max-samples=1000 --seed=20261108 2>&1 | tee .artifacts/procurement-quint/simulation.log
+          sha256sum proofs/procurement_mvp/workflow.qnt > .artifacts/procurement-quint/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-quint-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-quint
+          if-no-files-found: error
+  kernel-acceptance:
+    if: always()
+    needs: [runtime, lean, quint]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every scoped check; skipped is not success
+        env:
+          RUNTIME: ${{ needs.runtime.result }}
+          LEAN: ${{ needs.lean.result }}
+          QUINT: ${{ needs.quint.result }}
+        run: |
+          test "$RUNTIME" = success
+          test "$LEAN" = success
+          test "$QUINT" = success
+          echo "Kernel checks passed for $SOURCE_REVISION; NOT deployment or browser acceptance."

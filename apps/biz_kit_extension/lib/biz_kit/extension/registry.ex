@@ -14,7 +14,7 @@ defmodule BizKit.Extension.Registry do
 
   use GenServer
 
-  alias BizKit.Extension.Catalog
+  alias BizKit.Extension.{Catalog, ReleaseLock}
 
   @type server :: GenServer.server()
 
@@ -23,13 +23,19 @@ defmodule BizKit.Extension.Registry do
 
   Modules supplied from a request, user-controlled string, or remote manifest
   are outside this API's trust boundary.
+
+  Pass `:reviewed_release` with `%{source_commits: pins, lock: reviewed_lock}`
+  to require an exact release match before the registry starts. Source pins
+  and the reviewed lock must come from the trusted host. The verified catalog
+  still starts hidden and uses the same read-only visibility controls.
   """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) when is_list(opts) do
     if Keyword.keyword?(opts) do
       case Keyword.fetch(opts, :modules) do
         {:ok, modules} ->
-          with {:ok, catalog} <- Catalog.build(modules) do
+          with {:ok, catalog} <-
+                 load_catalog(modules, Keyword.get_values(opts, :reviewed_release)) do
             GenServer.start_link(__MODULE__, catalog, Keyword.take(opts, [:name]))
           end
 
@@ -42,6 +48,15 @@ defmodule BizKit.Extension.Registry do
   end
 
   def start_link(_), do: {:error, :invalid_options}
+
+  defp load_catalog(modules, []), do: Catalog.build(modules)
+
+  defp load_catalog(modules, [%{source_commits: pins, lock: lock} = release])
+       when map_size(release) == 2 do
+    ReleaseLock.reviewed_catalog(modules, pins, lock)
+  end
+
+  defp load_catalog(_, _), do: {:error, :invalid_reviewed_release}
 
   @doc "A deterministic list of installed descriptor IDs; no module execution."
   @spec installed(server()) :: [String.t()]

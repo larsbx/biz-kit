@@ -15,7 +15,7 @@ defmodule CoopSubstrate.Administrators do
   """
 
   alias CoopSubstrate.{Commands, Log}
-  alias TaskCore.State
+  alias TaskCore.{Projects, State}
 
   @doc "The chapter's governance keys, each with the principal it names, if any."
   @spec list(String.t()) :: [%{key_id: String.t(), principal_id: String.t() | nil}]
@@ -63,12 +63,49 @@ defmodule CoopSubstrate.Administrators do
     |> Enum.uniq()
     |> Enum.sort()
     |> Enum.map(fn {tenant, project} = scope ->
+      project_scope = {chapter, tenant, project}
+      owner = Projects.owner(o, project_scope)
+
+      # Derived from TaskCore's eligibility rule; never a parallel owner registry.
+      candidates =
+        (Enum.map(authorities, & &1[:principal_id]) ++ [owner])
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+        |> Enum.sort()
+        |> Enum.filter(fn principal ->
+          principal == owner or
+            Enum.any?(authorities, fn a ->
+              {a.tenant_id, a.project_id} == scope and a[:principal_id] == principal
+            end)
+        end)
+        |> Enum.map(fn principal ->
+          kind = Projects.kind(o, chapter, principal)
+          eligible = Projects.eligible?(o, project_scope, principal)
+
+          %{
+            principal_id: principal,
+            kind: kind,
+            eligible: eligible,
+            reason:
+              cond do
+                kind == "agent" -> "principal_not_human"
+                kind != "human" -> "human_declaration_required"
+                not eligible -> "active_operator_grant_required"
+                true -> nil
+              end
+          }
+        end)
+
       %{
         tenant_id: tenant,
         project_id: project,
         tasks: Enum.frequencies(for {^scope, state} <- states, do: state),
         grants: Enum.count(authorities, &(&1.active and {&1.tenant_id, &1.project_id} == scope)),
-        people: Enum.sort(for {^scope, principal} <- people, do: principal)
+        people: Enum.sort(for {^scope, principal} <- people, do: principal),
+        accountable_owner: owner,
+        owner_kind: Projects.kind(o, chapter, owner),
+        owner_eligible: Projects.eligible_owner?(o, project_scope),
+        owner_candidates: candidates
       }
     end)
   end

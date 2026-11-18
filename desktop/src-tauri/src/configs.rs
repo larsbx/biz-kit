@@ -4,7 +4,9 @@
 //! timestamped backup next to the original: a careless overwrite of a settings
 //! file can silently disable everything in it.
 
-use crate::exec;
+use crate::{config_edit, exec};
+#[cfg(test)]
+use crate::config_edit::base64_encode;
 use crate::settings::{self, ConfigPattern};
 use serde::Serialize;
 
@@ -98,17 +100,14 @@ pub async fn read_config(host: String, path: String) -> Result<String, String> {
 }
 
 /// Unified diff of the pending change, produced on the host so what is compared
-/// is the file as it exists right now -- not a copy fetched earlier.
+/// matches the bytes the editor opened; a stale editor must reload first.
 #[tauri::command]
-pub async fn diff_config(host: String, path: String, content: String) -> Result<String, String> {
-    let b64 = base64_encode(content.as_bytes());
-    let script = format!(
-        "tmp=$(mktemp) && printf '%s' {} | base64 -d > \"$tmp\" && \
-         diff -u -- {} \"$tmp\"; rc=$?; rm -f \"$tmp\"; exit 0",
-        exec::shq(&b64),
-        exec::shq(&path)
-    );
-    let out = exec::run(&host, &script).await?;
+pub async fn diff_config(host: String, path: String, content: String, expected: String) -> Result<String, String> {
+    let script = config_edit::diff_script(&path);
+    let out = exec::run_with_input(&host, &script, config_edit::snapshots(&expected, &content)).await?;
+    if out.code != 0 {
+        return Err(out.stderr.trim().to_string());
+    }
     Ok(if out.stdout.trim().is_empty() {
         "(no changes)".into()
     } else {
@@ -119,42 +118,20 @@ pub async fn diff_config(host: String, path: String, content: String) -> Result<
 /// Write, keeping a timestamped backup. Validates JSON before replacing a
 /// .json file: a malformed settings.json silently disables every setting in it.
 #[tauri::command]
-pub async fn write_config(host: String, path: String, content: String) -> Result<String, String> {
+pub async fn write_config(host: String, path: String, content: String, expected: String) -> Result<String, String> {
     if settings::load()?.is_protected(&path) {
         return Err(format!("refusing to write {path}: it matches protectedPaths in settings"));
     }
-    if path.ends_with(".json") {
+    if path.to_lowercase().ends_with(".json") {
         serde_json::from_str::<serde_json::Value>(&content)
             .map_err(|e| format!("refusing to write invalid JSON: {e}"))?;
     }
-    let b64 = base64_encode(content.as_bytes());
-    let script = format!(
-        "set -e; p={}; \
-         cp -a -- \"$p\" \"$p.bak-$(date +%Y%m%d%H%M%S)\"; \
-         printf '%s' {} | base64 -d > \"$p\"; \
-         echo \"wrote $p\"",
-        exec::shq(&path),
-        exec::shq(&b64)
-    );
-    let out = exec::run(&host, &script).await?;
+    let script = config_edit::write_script(&path);
+    let out = exec::run_with_input(&host, &script, config_edit::snapshots(&expected, &content)).await?;
     if out.code != 0 {
         return Err(out.stderr.trim().to_string());
     }
     Ok(out.stdout.trim().to_string())
-}
-
-fn base64_encode(data: &[u8]) -> String {
-    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::new();
-    for c in data.chunks(3) {
-        let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
-        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
-        s.push(T[(n >> 18 & 63) as usize] as char);
-        s.push(T[(n >> 12 & 63) as usize] as char);
-        s.push(if c.len() > 1 { T[(n >> 6 & 63) as usize] as char } else { '=' });
-        s.push(if c.len() > 2 { T[(n & 63) as usize] as char } else { '=' });
-    }
-    s
 }
 
 #[cfg(test)]

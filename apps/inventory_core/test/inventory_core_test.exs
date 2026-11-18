@@ -182,6 +182,7 @@ defmodule InventoryCoreTest do
     }
 
     assert {:error, :stock_invariant_violated} = InventoryCore.check(orphan, "workshop")
+
     assert {:error, :stock_invariant_violated} =
              InventoryCore.check(%{orphan | locations: %{"missing" => 1}}, "workshop")
 

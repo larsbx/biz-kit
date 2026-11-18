@@ -75,6 +75,65 @@ defmodule Dispatch.Operations.BoardConcurrencyTest do
     end
   end
 
+  test "competing cancellations with the same expected version commit only once", ctx do
+    parent = self()
+    cancel = fn -> Board.transition(ctx.actor, ctx.trip.id, "cancel", ctx.trip.version) end
+
+    winner =
+      session(fn ->
+        Repo.transaction(fn ->
+          assert {:ok, _} = cancel.()
+          send(parent, {:pending, backend()})
+          receive do: (:commit -> :ok)
+        end)
+      end)
+
+    assert_receive {:pending, winner_backend}, 5_000
+    contender = session(cancel)
+
+    try do
+      assert waiting_on?(winner_backend), "the contender must wait on the winning transaction"
+    after
+      send(winner.pid, :commit)
+    end
+
+    assert {:ok, :ok} = Task.await(winner, 10_000)
+    assert {:error, :stale} = Task.await(contender, 10_000)
+
+    trip = Ash.get!(Assignment, ctx.trip.id, authorize?: false, tenant: ctx.actor.tenant_id)
+    assert {trip.status, trip.version} == {:CANCELLED, ctx.trip.version + 1}
+
+    assert %{rows: [["assignment.cancelled"]]} =
+             Repo.query!(
+               "SELECT event_type FROM audit_events WHERE tenant_id = $1 AND subject_id = $2",
+               [Ecto.UUID.dump!(ctx.actor.tenant_id), Ecto.UUID.dump!(ctx.trip.id)]
+             )
+  end
+
+  test "rolling back an accepted transition discards both the trip update and audit", ctx do
+    assert {:error, :negative_control} =
+             Task.await(
+               session(fn ->
+                 Repo.transaction(fn ->
+                   assert {:ok, _} =
+                            Board.transition(ctx.actor, ctx.trip.id, "cancel", ctx.trip.version)
+
+                   Repo.rollback(:negative_control)
+                 end)
+               end)
+             )
+
+    trip = Ash.get!(Assignment, ctx.trip.id, authorize?: false, tenant: ctx.actor.tenant_id)
+    assert {trip.status, trip.version, trip.ends_at} ==
+             {ctx.trip.status, ctx.trip.version, ctx.trip.ends_at}
+
+    assert %{rows: []} =
+             Repo.query!(
+               "SELECT id FROM audit_events WHERE tenant_id = $1 AND subject_id = $2",
+               [Ecto.UUID.dump!(ctx.actor.tenant_id), Ecto.UUID.dump!(ctx.trip.id)]
+             )
+  end
+
   test "an action holding an old snapshot cannot overwrite a newer version", ctx do
     {:ok, _} = Board.transition(ctx.actor, ctx.trip.id, "cancel", ctx.trip.version)
 

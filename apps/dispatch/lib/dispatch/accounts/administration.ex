@@ -34,10 +34,10 @@ defmodule Dispatch.Accounts.Administration do
   import Ecto.Query, only: [from: 2]
 
   alias Dispatch.Access
-  alias Dispatch.Identity.PrincipalResolution
-  alias Dispatch.Access.{Actor, RoleProfile}
+  alias Dispatch.Access.{Actor, Driving, RoleProfile}
   alias Dispatch.Accounts.{Participant, RoleAssignment, RoleDefinition}
   alias Dispatch.Audit.AuditEvent
+  alias Dispatch.Identity.PrincipalResolution
 
   @manage "role_assignment.manage"
   @step_up_seconds 300
@@ -48,6 +48,7 @@ defmodule Dispatch.Accounts.Administration do
           | :step_up_required
           | :own_assignment
           | :last_administrator
+          | :equipment_not_checked_in
           | :already_granted
           | :stale
 
@@ -92,15 +93,14 @@ defmodule Dispatch.Accounts.Administration do
   @spec grant(Actor.t(), map(), DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def grant(%Actor{} = actor, params, authenticated_at) do
-    serialized(actor, fn current ->
-      with :ok <- manages(current),
-           :ok <- recent(authenticated_at, current.at),
-           {:ok, participant} <- participant(current, params["participant_id"]),
-           :ok <- not_own(current, participant.id),
-           {:ok, definition, scope} <- definition(current, params["role_definition_id"]),
-           :ok <- not_held(current, participant, definition) do
-        assignment = create!(current, participant, definition, scope)
-        audit!(current, "role_assignment.granted", assignment, definition)
+    serialized(actor, fn actor ->
+      with :ok <- recent(authenticated_at, actor.at),
+           {:ok, participant} <- participant(actor, params["participant_id"]),
+           :ok <- not_own(actor, participant.id),
+           {:ok, definition, scope} <- definition(actor, params["role_definition_id"]),
+           :ok <- not_held(actor, participant, definition) do
+        assignment = create!(actor, participant, definition, scope)
+        audit!(actor, "role_assignment.granted", assignment, definition)
         {:ok, assignment}
       end
     end)
@@ -113,19 +113,19 @@ defmodule Dispatch.Accounts.Administration do
   @spec revoke(Actor.t(), String.t(), integer() | nil, DateTime.t() | nil) ::
           {:ok, RoleAssignment.t()} | {:error, refusal()}
   def revoke(%Actor{} = actor, assignment_id, expected_version, authenticated_at) do
-    serialized(actor, fn current_actor ->
-      with :ok <- manages(current_actor),
-           :ok <- recent(authenticated_at, current_actor.at),
-           {:ok, assignment} <- held(current_actor, assignment_id),
+    serialized(actor, fn actor ->
+      with :ok <- recent(authenticated_at, actor.at),
+           {:ok, assignment} <- held(actor, assignment_id),
            :ok <- current(assignment, expected_version),
-           :ok <- not_last_administrator(current_actor, assignment) do
+           :ok <- not_last_administrator(actor, assignment),
+           :ok <- equipment_checked_in(actor, assignment) do
         revoked =
           assignment
           |> Ash.Changeset.for_update(:revoke, %{})
           # REVIEWED-UNAUTHORIZED: authorized above against Section 23.3's rules.
-          |> Ash.update!(authorize?: false, tenant: current_actor.tenant_id)
+          |> Ash.update!(authorize?: false, tenant: actor.tenant_id)
 
-        audit!(current_actor, "role_assignment.revoked", revoked, assignment.role_definition)
+        audit!(actor, "role_assignment.revoked", revoked, assignment.role_definition)
         {:ok, revoked}
       end
     end)
@@ -172,6 +172,20 @@ defmodule Dispatch.Accounts.Administration do
     if administers?.(assignment) and others == [],
       do: {:error, :last_administrator},
       else: :ok
+  end
+
+  # Owner rule (2026-11-02): a driving role ends only once the driver's
+  # equipment is checked in, unless another driving role of theirs stays in
+  # force. `Driving` documents how this serializes with trip activation.
+  defp equipment_checked_in(actor, assignment) do
+    holder = assignment.principal_id
+    org = organization(actor)
+
+    if Driving.drives?(assignment, actor.at) and
+         Driving.equipment_out?(actor.tenant_id, org, holder) and
+         Enum.all?(Driving.roles(actor.tenant_id, org, holder), &(&1.id == assignment.id)),
+       do: {:error, :equipment_not_checked_in},
+       else: :ok
   end
 
   defp participants(actor) do
@@ -287,9 +301,10 @@ defmodule Dispatch.Accounts.Administration do
     |> Ash.create!(authorize?: false, tenant: actor.tenant_id)
   end
 
-  # A caller may have been authorized before it waited on this lock. The
-  # assignment, organization and participant must still be active *after*
-  # acquiring it; a cached actor must never authorize a new grant or revocation.
+  # One organization's role changes at a time, released with the transaction.
+  # Once the lock is held, `fun` runs as the administrator as committed then,
+  # never as the snapshot that queued (issue #254): an administrator revoked
+  # while waiting is refused like any other non-administrator.
   defp serialized(actor, fun) do
     Dispatch.Repo.transaction(fn ->
       Dispatch.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))", [
@@ -297,13 +312,11 @@ defmodule Dispatch.Accounts.Administration do
       ])
 
       with :ok <- lock_current_authority(actor),
-           {:ok, current_actor} <- PrincipalResolution.revalidate(actor) do
-        case fun.(current_actor) do
-          {:ok, result} -> result
-          {:error, reason} -> Dispatch.Repo.rollback(reason)
-        end
+           {:ok, actor} <- administering(actor),
+           {:ok, result} <- fun.(actor) do
+        result
       else
-        _stale_or_unavailable -> Dispatch.Repo.rollback(:not_found)
+        {:error, reason} -> Dispatch.Repo.rollback(reason)
       end
     end)
   end
@@ -353,6 +366,13 @@ defmodule Dispatch.Accounts.Administration do
   end
 
   defp lock_current_authority(_non_participant), do: {:error, :not_found}
+
+  defp administering(actor) do
+    case PrincipalResolution.authorize(actor, @manage, lock: true) do
+      {:ok, actor} -> {:ok, actor}
+      {:error, :forbidden} -> {:error, :not_found}
+    end
+  end
 
   defp organization(actor), do: actor.role_assignment.organization_id
 end

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>biz-kit</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Theme and text size before first paint, so the window never flashes the wrong look. -->
+  <script src="prefs.js"></script>
+</head>
+<body>
+  <header class="titlebar" data-tauri-drag-region>
+    <button class="icon-btn" id="toggle-sidebar" title="Toggle sidebar (Ctrl+B)" aria-label="Toggle sidebar">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12"/></svg>
+    </button>
+    <span class="brand" data-tauri-drag-region><span class="brand-mark" aria-hidden="true"></span>biz-kit</span>
+    <div class="chips" id="chips" data-tauri-drag-region></div>
+    <span class="spacer" data-tauri-drag-region></span>
+    <span class="sync" id="sync" data-tauri-drag-region>loading…</span>
+    <button class="icon-btn" id="open-settings" title="Settings (Ctrl+,)" aria-label="Settings">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 14V9M3 6V2M8 14V8M8 5V2M13 14v-3M13 8V2M1 9h4M6 5h4M11 11h4"/></svg>
+    </button>
+    <div class="win-btns">
+      <button class="icon-btn" data-win="minimize" aria-label="Minimize"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button>
+      <button class="icon-btn" data-win="toggleMaximize" aria-label="Maximize"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10"/></svg></button>
+      <button class="icon-btn close" data-win="close" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="sidebar" id="sidebar" aria-label="biz-kit">
+      <div class="side-view" id="view-deck">
+        <div id="panel-groups"></div>
+        <section>
+          <h2>Layouts</h2>
+          <ul class="layout-list" id="layout-list"></ul>
+        </section>
+        <section class="foot">
+          <button class="side-item" id="settings-item" title="Settings (Ctrl+,)">
+            <span class="glyph"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 14V9M3 6V2M8 14V8M8 5V2M13 14v-3M13 8V2M1 9h4M6 5h4M11 11h4"/></svg></span>
+            Settings<kbd class="k">Ctrl ,</kbd>
+          </button>
+          <p class="hint trunc" id="config-path"></p>
+        </section>
+      </div>
+
+      <!-- Settings live in the sidebar, not a dialog: the Operations webview covers its tile, so an overlay could hide under it. -->
+      <div class="side-view settings" id="view-settings" hidden>
+        <div class="settings-head">
+          <button class="icon-btn" id="close-settings" title="Back to panels (Esc)" aria-label="Back to panels">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
+          </button>
+          <h2>Settings</h2>
+        </div>
+        <section>
+          <h2>Theme</h2>
+          <div class="themes" id="themes" role="radiogroup" aria-label="Theme"></div>
+        </section>
+        <section>
+          <h2><label for="font-size">Text size</label></h2>
+          <div class="row slider-row">
+            <button class="btn" id="font-down" aria-label="Smaller text">A−</button>
+            <span class="font-value" id="font-value"></span>
+            <button class="btn" id="font-up" aria-label="Larger text">A+</button>
+          </div>
+          <input type="range" id="font-size" class="slider">
+          <p class="hint">Default <span id="font-default"></span>px. <kbd>Ctrl</kbd> <kbd>+</kbd> <kbd>−</kbd> change it, <kbd>Ctrl</kbd> <kbd>0</kbd> resets.</p>
+        </section>
+        <section>
+          <h2>Shortcuts</h2>
+          <dl class="keys">
+            <dt><kbd>Ctrl</kbd> <kbd>1</kbd>–<kbd>4</kbd></dt><dd>Add or highlight a panel</dd>
+            <dt><kbd>Ctrl</kbd> <kbd>B</kbd></dt><dd>Hide or show the sidebar</dd>
+            <dt><kbd>Ctrl</kbd> <kbd>,</kbd></dt><dd>Settings</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Back to panels, or restore a zoomed tile</dd>
+          </dl>
+          <p class="hint">Shortcuts reach the app while focus is outside the Operations page.</p>
+        </section>
+        <section class="foot">
+          <p class="hint">Stored on this machine, not in <code>config.json</code>.</p>
+          <button class="btn" id="reset-prefs">Restore defaults</button>
+        </section>
+      </div>
+    </nav>
+    <main class="tiles" id="tiles"><div class="empty">Loading…</div></main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

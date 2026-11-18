@@ -26,3 +26,7 @@ dist-ssr
 # SvelteKit
 .svelte-kit
 build
+
+# Python acceptance and installer tools
+__pycache__/
+candidate/
