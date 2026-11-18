@@ -25,7 +25,9 @@ defmodule Dispatch.Fleet.Assignment do
 
     # Keep the historical E1 identity during rollout. The global E3 constraints
     # are explicitly named because an Ash tenant identity would add tenant_id.
-    identity_wheres_to_sql one_active_per_operator: "status = 'ACTIVE' AND operator_exclusive"
+    identity_wheres_to_sql one_active_per_operator: "status = 'ACTIVE' AND operator_exclusive",
+                           one_active_per_vehicle: "status = 'ACTIVE' AND vehicle_id IS NOT NULL",
+                           one_active_per_trailer: "status = 'ACTIVE' AND trailer_id IS NOT NULL"
 
     unique_index_names [
       {[:operator_user_id], "assignments_active_exclusive_user_uniq",
@@ -87,6 +89,15 @@ defmodule Dispatch.Fleet.Assignment do
     identity :one_active_per_operator, [:operator_participant_id],
       where: expr(status == :ACTIVE and operator_exclusive == true),
       message: "the driver is unavailable for this assignment"
+
+    # A vehicle or trailer is on at most one ACTIVE trip at a time, whoever
+    # drives it. Enforced by the database, so concurrent activations cannot
+    # both commit (formal/quint/obligations/dispatch.qnt).
+    identity :one_active_per_vehicle, [:vehicle_id],
+      where: expr(status == :ACTIVE and not is_nil(vehicle_id))
+
+    identity :one_active_per_trailer, [:trailer_id],
+      where: expr(status == :ACTIVE and not is_nil(trailer_id))
   end
 
   relationships do

@@ -38,7 +38,9 @@ defmodule RestaurantHost.World do
       chapter: chapter,
       merchant: "shop",
       currency: :USD,
-      tax_rate: "0.0825",
+      jurisdiction: "US-MI",
+      delivery_enabled: Keyword.get(opts, :delivery_enabled, false),
+      delivery_site: opts[:delivery_site],
       menu: [
         %{id: "margherita", name: "Margherita", sku: "MARG", price_minor: 1250},
         %{id: "pepperoni", name: "Pepperoni", sku: "PEPP", price_minor: 1400}

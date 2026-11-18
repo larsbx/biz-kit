@@ -6,6 +6,11 @@
 // activity, listing and terms URLs share that actor's origin (same_origin/2,
 // attributedTo == actor). The result is a candidate map with no authority
 // field: it never names the local seller unless the local seller signed it.
+// Host: FederationService is read-only discovery with no business-command
+// endpoint; a subscription becomes local authority only through
+// CoopSubstrate.FederationAuthority.port/1 (a signed local grant admitted with
+// a revocation fence). The pilot approval_verifier path lacks that atomic
+// fence (FederationService.SubscriptionAuthority moduledoc).
 // Abstracted: two origins; an activity is (verified transport origin, claimed
 // actor origin, listing origin). The host's own policy is out of scope.
 module federation_core_spec {

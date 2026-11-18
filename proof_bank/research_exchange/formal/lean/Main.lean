@@ -158,6 +158,7 @@ def rewardPhase (j : Json) : Except String Reward.Phase := do
   | "leased" => return .leased
   | "submitted" => return .submitted
   | "accepted" => return .accepted
+  | "rejected" => return .rejected
   | _ => throw "unknown reward phase"
 
 def rewardState (j : Json) : Except String Reward.State := do
@@ -246,6 +247,7 @@ def rewardPhaseString : Reward.Phase → String
   | .leased => "leased"
   | .submitted => "submitted"
   | .accepted => "accepted"
+  | .rejected => "rejected"
 
 def rewardStateJson (s : Reward.State) : Json := Json.mkObj [
   ("now", toJson s.now), ("generation", toJson s.generation),

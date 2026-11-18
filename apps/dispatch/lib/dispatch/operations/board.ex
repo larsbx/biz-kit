@@ -505,7 +505,17 @@ defmodule Dispatch.Operations.Board do
       {:invalid, @driver_unavailable}
     else
       message = Exception.message(error)
-      if message =~ "STALE_VERSION", do: :stale, else: {:invalid, first_line(message)}
+
+      cond do
+        message =~ "STALE_VERSION" ->
+          :stale
+
+        message =~ "one_active_per_vehicle" or message =~ "one_active_per_trailer" ->
+          {:invalid, conflict(message)}
+
+        true ->
+          {:invalid, first_line(message)}
+      end
     end
   end
 
@@ -521,6 +531,17 @@ defmodule Dispatch.Operations.Board do
   end
 
   defp occupancy_conflict?(_error), do: false
+
+  defp conflict(message) do
+    holder =
+      cond do
+        message =~ "one_active_per_vehicle" -> "the vehicle is already on an active trip"
+        message =~ "one_active_per_trailer" -> "the trailer is already on an active trip"
+        true -> "the driver already has an active trip"
+      end
+
+    holder <> "; complete or cancel it first"
+  end
 
   defp first_line(message) do
     message

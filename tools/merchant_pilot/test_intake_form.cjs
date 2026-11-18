@@ -13,6 +13,8 @@ const base=__dirname;
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'pilot-form-test-'));
 const bundle=JSON.parse(fs.readFileSync(base+'/intake.synthetic.json'));
 await page.goto('file://'+base+'/intake.html');
+const schema=JSON.parse(fs.readFileSync(base+'/intake.record-schema.json'));
+assert.deepEqual(await page.evaluate(()=>schemas),schema,'browser and published schema diverge');
 const outputs=[];
 for(const collection of ['merchants','requests','invitations','quotes','fee_arrangements','orders','costs']){
  await page.selectOption('#kind',collection);
@@ -41,6 +43,23 @@ for(const collection of ['merchants','requests','invitations','quotes','fee_arra
  const download=await promise;const saved=path.join(temporary,collection+'.json');await download.saveAs(saved);
  const parsed=JSON.parse(fs.readFileSync(saved));
  assert.deepEqual(parsed.record,record,collection+' record mismatch');outputs.push(collection);
+ if(collection==='orders'){
+  const expected=structuredClone(record);
+  for(const role of ['servicing_store','platform']){
+   const fee=page.locator('[data-key="fees"] > [data-key="'+role+'"]');
+   const gross=fee.locator('[data-key="gross_minor"] input');
+   await gross.fill('');
+   assert.equal(await gross.evaluate(input=>input.validity.valueMissing),true,role+' accepts a partial fee');
+   await fee.locator(':scope > input[type=checkbox]').check();
+   assert.equal(await gross.isDisabled(),true,role+' unknown does not disable amount validation');
+   expected.data.fees[role]=null;
+  }
+  const unknown=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download prepared record',exact:true}).click();
+  const unknownPath=path.join(temporary,'unknown-fees.json');
+  await (await unknown).saveAs(unknownPath);
+  assert.deepEqual(JSON.parse(fs.readFileSync(unknownPath)).record,expected);
+ }
 }
 const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth);
 if(overflow)throw Error('mobile horizontal overflow');

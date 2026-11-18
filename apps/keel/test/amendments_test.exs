@@ -94,12 +94,17 @@ defmodule Keel.AmendmentsTest do
       sole = Org.new([people([:ann]), Forms.sole_proprietorship(:s, :ann)])
       assert Org.can?(sole, :ann, :sell, @t)
 
+      # A6: the manager holds a role of their own; seating them in the
+      # one-seat principal role would make the org invalid, which grants nothing.
       hired =
         Org.new([
           people([:ann, :mgr]),
           Forms.sole_proprietorship(:s, :ann),
-          %Seat{party: :mgr, role: {:s, :principal}, during: Keel.Interval.new(~D[2027-01-01])}
+          %Keel.Role{id: {:s, :manager}, unit: {:s, :hq}, grants: [:*]},
+          %Seat{party: :mgr, role: {:s, :manager}, during: Keel.Interval.new(~D[2027-01-01])}
         ])
+
+      assert Keel.Invariants.valid?(hired)
 
       refute Org.can?(hired, :mgr, :sell, ~D[2027-06-01])
       refute Org.can?(hired, :mgr, :*, ~D[2027-06-01])

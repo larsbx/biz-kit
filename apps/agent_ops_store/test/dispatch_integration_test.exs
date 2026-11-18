@@ -81,6 +81,47 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
         if Process.get(:revoke_on_read) == ticks,
           do: Process.put(:fixture_state, revoke_read(current))
 
+        case Process.get(:proof_bank_mutation) do
+          {^ticks, :task_version} ->
+            Process.put(
+              :fixture_state,
+              put_in(current, [:tasks, {"chapter1", "tenant1", "project1", "task1"}, :version], 3)
+            )
+
+          {^ticks, :operator_revoked} ->
+            Process.put(
+              :fixture_state,
+              TaskCore.State.handle_event(
+                %{
+                  event_id: "proof-bank-operator-revoked",
+                  type: "TaskOperatorRevokedV1",
+                  chapter_id: "chapter1",
+                  payload: %{
+                    "tenant_id" => "tenant1",
+                    "project_id" => "project1",
+                    "authorization_event_id" => "operator1"
+                  }
+                },
+                current
+              )
+            )
+
+          {^ticks, :profile_digest_changed} ->
+            profile_id = Map.fetch!(current.agent_runs, key).execution_profile_id
+
+            Process.put(
+              :registry,
+              put_in(
+                Process.get(:registry),
+                [profile_id, :manifest, "parameters", "backend"],
+                "changed-after-claim"
+              )
+            )
+
+          _ ->
+            :ok
+        end
+
         {:ok,
          %{
            state: Process.get(:fixture_state),
@@ -268,13 +309,22 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     )
   end
 
-  setup do
-    Process.put(:run_suffix, Base.encode16(:crypto.strong_rand_bytes(5), case: :lower))
+  setup context do
+    random_suffix = Base.encode16(:crypto.strong_rand_bytes(5), case: :lower)
+
+    suffix =
+      case context[:launch_drift] do
+        nil -> random_suffix
+        marker -> "drift-" <> marker <> "-" <> random_suffix
+      end
+
+    Process.put(:run_suffix, suffix)
     Process.put(:launches, [])
     Process.put(:terminations, [])
     Process.put(:context_reads, 0)
     Process.delete(:revoke_on_read)
     Process.delete(:reject_reference)
+    Process.delete(:proof_bank_mutation)
 
     profiles = %{
       "local" => profile("local", LocalWorker),
@@ -393,6 +443,43 @@ defmodule AgentOpsStore.DispatchIntegrationTest do
     assert Process.get(:launches) == []
     assert {:ok, row} = Postgres.snapshot(conn, effect("run1"))
     assert row.phase == "cancel_requested"
+  end
+
+  for {profile_id, run_name} <- [{"local", "run1"}, {"remote", "run2"}] do
+    for {mutation, refusal} <- [
+          task_version: :stale_agent_run_task,
+          operator_revoked: :agent_run_operator_revoked,
+          profile_digest_changed: :execution_profile_digest_mismatch
+        ] do
+      @tag launch_drift: "#{profile_id}-#{mutation}"
+      test "#{mutation} after the durable claim prevents #{profile_id} adapter launch", %{
+        conn: conn
+      } do
+        key = run_key(unquote(run_name))
+        effect_id = effect(unquote(run_name))
+        refusal = unquote(refusal)
+        Process.put(:proof_bank_mutation, {2, unquote(mutation)})
+
+        assert {:error, :authority_changed_after_claim} =
+                 Coordinator.deliver(conn, key, Host, "worker1")
+
+        assert Process.get(:launches) == []
+        assert {:ok, row} = Postgres.snapshot(conn, effect_id)
+        assert row.phase == "cancel_requested"
+        assert row.attempts == 1
+        assert row.backend_ref == nil
+        assert {:error, ^refusal} = Coordinator.prepare(key, Host)
+
+        # Redelivery retains the same durable fence and never retries launch.
+        assert {:error, ^refusal} = Coordinator.deliver(conn, key, Host, "worker2")
+        assert {:ok, retained} = Postgres.snapshot(conn, effect_id)
+        assert retained.phase == "cancel_requested"
+        assert retained.version == row.version
+        assert retained.attempts == 1
+        assert retained.backend_ref == nil
+        assert Process.get(:launches) == []
+      end
+    end
   end
 
   test "ambiguous launch acknowledgment remains leased, never automatically retried", %{

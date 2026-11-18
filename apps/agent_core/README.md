@@ -83,13 +83,14 @@ backend reconciliation of uncertain expired attempts. Expiration alone never
 permits a duplicate launch: a backend must prove absence or recover an
 already-produced result first.
 
-**No durable dispatcher has been built.** A production host must persist each
-state transition with a transactional compare-and-swap, protect lease tokens,
-recheck signed ledger authority and user consent at each critical boundary,
-provide idempotent backend launch using the same effect ID, and reconcile
-external execution handles. In-memory tests do not demonstrate crash-safe
-storage, mutual exclusion across nodes, real cancellation, or admissible
-business effects.
+The staging `AgentOpsStore.Coordinator` uses PostgreSQL compare-and-swap to
+persist claims, rechecks authority after claiming, and validates the committed
+lease immediately before adapter launch. Invalid, cancelled or expired leases
+remain blocked for reconciliation. These checks do not make an external launch
+atomic with a later authority change. Production still requires protected host
+credentials, real backend idempotency, verified cancellation and recovery
+observations, and independently authorized business effects. See the
+[launch acceptance contract](../../docs/architecture/2026-11-15-agentcore-launch-lease-acceptance.md).
 
 ## Container-volume persistence (Docker or Podman)
 
@@ -103,8 +104,8 @@ This does not introduce a second business ledger.
 
 Volumes provide persistence, **not** transactional serialization or
 independent guarantees against duplicate external side effects. The
-production coordinator still needs a PostgreSQL-backed CAS host adapter,
-idempotent backend effect IDs, proof-referenced reconciliation, explicit
+production coordinator still needs independently accepted backend effect
+idempotency, proof-referenced reconciliation, deployment of explicit
 read/execution authorization, and recovery tests. Scratch storage for
 individual agents must remain isolated from this database volume.
 

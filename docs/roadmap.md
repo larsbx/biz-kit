@@ -1,5 +1,25 @@
 # biz-kit roadmap
 
+## Dispatch spatial workspace and minimal stack — 2026-11-11
+
+The accepted [God's Eye View integration roadmap](plans/2026-11-11-dispatch-spatial-workspace.md)
+selects one spatial workspace over authorized Dispatch observations and existing
+business commands. **Owner clarification: the earlier auxiliary stack was
+proposed, not implemented.** The plan avoids building unnecessary components;
+there is no six-to-four-to-two service retirement sequence.
+
+GEV-00 through GEV-08 cover requirements and the minimal profile, the spatial
+contract and proof obligations, fleet layer, complete queries/planning, admitted
+actions, context, history/handoff and deployment acceptance. Use suitable hosted
+tiles/geocoding; add Traccar, local cartography, a routing engine or an optimizer
+only when the selected workflow requires them. Existing Dispatch storage,
+native collection and the separate assignment-ledger migration keep their
+current contracts.
+
+Implementation remains pending. The first target is an authorized fleet view
+with freshness, accuracy, record links, revocation clearing and location-demand
+cleanup, built directly on the selected minimal architecture.
+
 ## Proof Bank application foundry — 2026-11-01
 
 The [Proof Bank B0 rollout](architecture/2026-11-01-proof-bank-rollout.md)
@@ -210,6 +230,64 @@ module tests successfully; it did not run local Elixir/PostgreSQL reproductions
 of the findings. CI success is evidence for the checks actually run, not for
 absence of these races.
 
+## Next: enforcement gaps (formal coverage findings, 2026-11-06)
+
+Writing a model for every app's obligation
+([formal coverage](../formal/quint/obligations/README.md)) showed where the
+code is weaker than the obligation it should enforce. The gaps are closed one
+at a time in this order: authority and data integrity first, by app priority
+and blast radius. Each fix is test-first in code; when it lands, its model's
+header cites the enforcing code and the gap leaves the README table.
+
+1. **dispatch: vehicle and trailer exclusivity.** Two ACTIVE trips could share
+   a vehicle or trailer. *Closed:* partial unique indexes
+   `one_active_per_vehicle` / `one_active_per_trailer`, with a
+   concurrent-sessions test.
+2. **keel: `Org.can?/4` on an invalid graph.** Permissions were derived
+   without checking validity, so a delegation cycle could launder authority.
+   *Closed:* `can?/4` requires `Invariants.valid_at?/2` (SPEC §4, amendment
+   A6), fail-closed per instant.
+3. **biz_kit_cluster: fencing after a partition.** *Closed as a modelling
+   error:* ledger appends are fenced by the event store's expected-version
+   check (a stale appender is refused); the model now says so. Other
+   singletons' in-memory state still diverges during a partition, as the
+   cluster ADR accepts.
+4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
+   allowed execution when the marker file was missing. *Closed:* only a
+   marker reading `local` allows direct execution; a missing, empty or
+   remote marker refuses. Fixed ahead of the
+   [decommission](architecture/2026-11-06-sprucegoose-decommission.md) by
+   owner decision.
+5. **eatsbot_core: history atomic with state.** `UpdateHistory` wrote the
+   history row in `after_transaction`, so a failure left state with no
+   history. *Closed:* the row is written in `after_action`, inside the state
+   change's transaction.
+6. **marketing_core: verify delivery evidence.** *Closed as a host contract
+   that is already enforced:* `Attribution.eligible?/3` is pure and trusts
+   `delivery_status: :confirmed`, and its only host, `BizKit.MarketingBridge`,
+   binds that to a host-verified receipt (id, digest, fields) and refuses a
+   forged one. The model now cites the bridge.
+7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
+   bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
+   (below). *Started with Dispatch* (owner decision):
+   [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md)
+   gives the assignment lifecycle a signed, admitted path and a fold rebuilt
+   from the ledger. Dispatch's board still writes rows; parity, the command
+   switch and the writer fence follow. eatsbot's fence is item 8.
+8. **eatsbot: retirement cutover fence.** The legacy writer could not be stopped. *Closed:*
+   governance orders the fence on the ledger (`LegacyWriterFenced`, for a
+   closed set of writers, only under declared governance), and
+   `mix coop.fence_writer` installs it in eatsbot's database in one
+   transaction: statement triggers refuse every write, after waiting for
+   writers in flight. It fences every deployment of the legacy writer.
+   Migrating the accepted history remains the R5 runbook's step.
+9. **barter_core, federation_core: host contracts.** *Closed by host
+   review:* nothing in the repo transfers barter assets (preview only, no
+   host); `FederationService` is read-only and turns a subscription into
+   authority only through a signed local grant
+   (`CoopSubstrate.FederationAuthority`). Residual: the pilot
+   `approval_verifier` path has no atomic revocation fence.
+
 ## Next
 
 1. **Close the security and validation gate above.** Land focused corrections
@@ -283,7 +361,8 @@ What remains, in order:
   shadows, boards and inbox captures are not migrated; they go with its
   writer.
 - **Dispatch and ownership.** Move dispatch, Keel ownership and shared
-  principal facts onto the same admission path.
+  principal facts onto the same admission path. First slice:
+  [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md).
 - **Cutover.** Fence the old writers behind a signed baseline and prove
   replay. Then retire the old row authority, the local certified writer,
   the business outboxes and the duplicate issuers.

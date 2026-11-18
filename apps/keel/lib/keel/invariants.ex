@@ -58,6 +58,15 @@ defmodule Keel.Invariants do
 
   def valid?(org), do: check(org) == []
 
+  @doc """
+  Whether `org` is well formed at `t`: every static check, and every temporal
+  check evaluated at `t`. `Keel.Org.can?/4` grants nothing where this is false.
+  """
+  def valid_at?(%Org{} = org, t) do
+    Enum.all?(@static, &(apply(__MODULE__, &1, [org]) == [])) and
+      Enum.all?(@temporal, &(apply(__MODULE__, &1, [org, t]) == []))
+  end
+
   ## Static
 
   def references(org) do

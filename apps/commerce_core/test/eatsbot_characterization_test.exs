@@ -15,6 +15,11 @@ defmodule CommerceCore.EatsbotCharacterizationTest do
   @sha256 "f9fc2e50fe44d7afd20501dd4835c7eacb08bb2cc1ed9d1c16dac8639824b848"
   @path Path.expand("fixtures/eatsbot_characterization/pricing.jsonl", __DIR__)
 
+  # Explicit tables, not `String.to_existing_atom/1`: whether an atom "exists"
+  # depends on which modules happen to be loaded when this async test runs.
+  @currencies Map.new(~w(USD EUR CLP JPY)a, &{Atom.to_string(&1), &1})
+  @adjustments Map.new(~w(discount_total tax_total delivery_fee tip)a, &{Atom.to_string(&1), &1})
+
   test "the fixture is the pinned copy from #{@source}" do
     assert :crypto.hash(:sha256, File.read!(@path)) |> Base.encode16(case: :lower) == @sha256
   end
@@ -34,7 +39,7 @@ defmodule CommerceCore.EatsbotCharacterizationTest do
   defp price(%{"currency" => currency, "lines" => lines, "adjustments" => adjustments}) do
     result =
       Pricing.price(
-        String.to_existing_atom(currency),
+        Map.fetch!(@currencies, currency),
         Enum.map(lines, fn l ->
           %{
             unit_price: money(l["unit_price"]),
@@ -42,7 +47,7 @@ defmodule CommerceCore.EatsbotCharacterizationTest do
             discount: money(l["discount"])
           }
         end),
-        Map.new(adjustments, fn {k, v} -> {String.to_existing_atom(k), money(v)} end)
+        Map.new(adjustments, fn {k, v} -> {Map.fetch!(@adjustments, k), money(v)} end)
       )
 
     case result do
@@ -60,7 +65,7 @@ defmodule CommerceCore.EatsbotCharacterizationTest do
     end
   end
 
-  defp money([currency, minor]), do: Money.from_integer(minor, String.to_existing_atom(currency))
+  defp money([currency, minor]), do: Money.from_integer(minor, Map.fetch!(@currencies, currency))
 
   defp recorded_money(money) do
     {currency, minor, _exp, _rem} = Money.to_integer_exp(money)
