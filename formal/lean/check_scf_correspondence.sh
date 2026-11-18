@@ -25,6 +25,7 @@ export SCF_LEAN_OBSERVATIONS="$scratch/ScfObservations.lean"
 printf 'import BizKitScf\nopen BizKitScf\n' > "$SCF_LEAN_OBSERVATIONS"
 
 elixir -r "$source_dir/chart.ex" -r "$source_dir/entry.ex" -r "$source_dir/ledger.ex" \
+  -r "$source_dir/statements.ex" \
   -r apps/scf_core/test/test_helper.exs -r apps/scf_core/test/source_correspondence_test.exs \
   -e 'ExUnit.configure(seed: 0)'
 
