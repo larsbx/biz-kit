@@ -708,8 +708,8 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
-        "apps/order_core/lib/order_core/lifecycle.ex": "c111f79024681197d1b657cb89790d7ec4cdef8d",
-        "apps/order_core/lib/order_core/placement.ex": "71e54ff747f2c21522115151e508e6300cf05724",
+        "apps/order_core/lib/order_core/lifecycle.ex": "fba844e751d28af954931278891c9a0c53af9521",
+        "apps/order_core/lib/order_core/placement.ex": "10e7f2711447ea1d1703e582822521aa6b902807",
         "apps/order_core/test/lifecycle_test.exs": "dce86fddaa3ff649f2f081057c9e96678f400f27"
       }
     },
@@ -1234,6 +1234,18 @@
       "registered": [],
       "refreshed_paths": [
         "apps/restaurant_core/lib/restaurant_core/admission.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "0d07ed900ba4dfb01c46ba44d2e84163b734a21a",
+      "date": "2026-11-18",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/order_core/lib/order_core/lifecycle.ex",
+        "apps/order_core/lib/order_core/placement.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
