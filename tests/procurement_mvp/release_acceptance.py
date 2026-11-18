@@ -65,17 +65,17 @@ def validate_receipt(value: dict, revision: str, artifact_sha256: str) -> None:
     require(value.get("trust") == "unsigned-runner-observation", "incorrect evidence trust label")
 
 
-def unpack(archive: Path, destination: Path, revision: str) -> Path:
+def unpack(archive: Path, destination: Path, revision: str, *, name: str = "procurement") -> Path:
     require(bool(re.fullmatch(r"[0-9a-f]{40}", revision)), "expected a full source revision")
     with tarfile.open(archive, "r:gz") as bundle:
         members = bundle.getmembers()
         require(bool(members), "empty release archive")
-        require(all(m.name == "procurement" or m.name.startswith("procurement/") for m in members),
+        require(all(m.name == name or m.name.startswith(name + "/") for m in members),
                 "archive contains files outside the release root")
         bundle.extractall(destination, members=members, filter="data")
-    root = destination / "procurement"
+    root = destination / name
     require((root / "SOURCE_REVISION").read_text().strip() == revision, "packaged source revision mismatch")
-    require(os.access(root / "bin/procurement", os.X_OK), "packaged executable missing")
+    require(os.access(root / "bin" / name, os.X_OK), "packaged executable missing")
     require(bool(list(root.glob("erts-*/bin/erlexec"))), "packaged ERTS missing")
     return root
 
@@ -169,7 +169,8 @@ class Browser:
         return any(cookie.name == "_procurement_pilot" and cookie.secure for cookie in self.cookies)
 
 
-def proxy(backend_port: int, certificate: Path, key: Path, observations: Queue | None = None):
+def proxy(backend_port: int, certificate: Path, key: Path, observations: Queue | None = None,
+          *, received: Queue | None = None):
     class Forward(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass  # No cookies, credentials or request bodies in receipts.
@@ -181,6 +182,8 @@ def proxy(backend_port: int, certificate: Path, key: Path, observations: Queue |
             self.forward()
 
         def forward(self):
+            if received is not None:
+                received.put(self.command)
             length = int(self.headers.get("Content-Length", "0"))
             if length > 16_384:
                 self.send_error(413)
@@ -429,7 +432,7 @@ def lifecycle(browser: Browser, token: str, checks: dict, dispatch) -> tuple[str
 
 
 def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None, tls_pair=None,
-               delivery_factory=None) -> dict:
+               delivery_factory=None, tls_factory=None) -> dict:
     env = database_environment(dict(os.environ))
     for executable in ("createdb", "dropdb", "pg_dump", "pg_restore", "openssl"):
         require(shutil.which(executable) is not None, f"required tool unavailable: {executable}")
@@ -440,6 +443,8 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
     require((desktop_deb is None) == (tls_pair is None), "native acceptance requires a package and a trusted TLS pair")
     require(delivery_factory is None or desktop_deb is None,
             "separate Dispatch acceptance does not claim graphical courier or Tauri coverage")
+    require(tls_factory is None or (delivery_factory is not None and tls_pair is None),
+            "custom TLS fixtures require separate Dispatch acceptance")
     with ExitStack() as stack:
         directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="bizkit-procurement-"))
         work = Path(directory)
@@ -466,25 +471,28 @@ def acceptance(archive: Path, revision: str, receipts: Path, *, desktop_deb=None
             harness.create_database(database)
             harness.run([harness.executable, "eval", "ProcurementHost.ReleaseTasks.migrate()"], label="migrate")
             checks["migration"] = True
-            if delivery_factory is not None:
-                delivery = delivery_factory(harness)
-                # The real Dispatch tenant must exist before the offline route
-                # enrollment. The host remains the only canonical appender.
-                delivery.prepare()
-            seeded = harness.fixture("seed")
-            if tls_pair is None:
+            if tls_factory is not None:
+                certificate, key, trust_anchor = tls_factory(harness)
+            elif tls_pair is None:
                 certificate, key = work / "tls.crt", work / "tls.key"
                 harness.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                              "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=127.0.0.1",
                              "-addext", "subjectAltName=IP:127.0.0.1"], label="test-certificate")
+                trust_anchor = certificate
             else:
                 certificate, key = tls_pair
-            harness.start()
+                trust_anchor = certificate
             observations = Queue() if desktop_deb is not None else None
             tls = proxy(port, certificate, key, observations)
             origin = f"https://127.0.0.1:{tls.server_address[1]}"
+            if delivery_factory is not None:
+                delivery = delivery_factory(harness, origin)
+                # The real Dispatch tenant must exist before offline route enrollment.
+                delivery.prepare()
+            seeded = harness.fixture("seed")
+            harness.start()
             if desktop_deb is None:
-                browser = Browser(origin, certificate)
+                browser = Browser(origin, trust_anchor)
             else:
                 from tauri_client import packaged_browser
 
