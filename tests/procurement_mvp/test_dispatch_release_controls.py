@@ -1,7 +1,10 @@
 """Negative controls for the combined runner; these are not worker acceptance."""
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -243,6 +246,46 @@ class IsolationTests(unittest.TestCase):
         harness.child = object()
         with self.assertRaises(RuntimeError):
             harness.fixture("inspect_dispatch")
+
+
+class SourceReceiptTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        runner = Path(__file__).resolve().parents[2] / "scripts/test-procurement-dispatch.sh"
+        marker = '  python3 - "$receipts" "$revision" <<\'PY\'\n'
+        cls.program = runner.read_text().split(marker, 1)[1].split("\nPY\n", 1)[0]
+
+    def run_receipt(self, destination, restaurant_log="1 test, 0 failures\n"):
+        for name in ("revision.txt", "toolchain.txt", "runner-controls.log", "dependencies.log",
+                     "compile.log", "contracts.log"):
+            (destination / name).write_text("synthetic runner observation\n")
+        for name in ("signer-count.log", "dispatch.log", "worker.log"):
+            (destination / name).write_text("1 test, 0 failures\n")
+        if restaurant_log is not None:
+            (destination / "restaurant-worker.log").write_text(restaurant_log)
+        return subprocess.run([sys.executable, "-c", self.program, str(destination), REVISION],
+                              capture_output=True, text=True)
+
+    def test_source_receipt_binds_restaurant_log_and_excludes_packaged_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            (destination / "packaged-acceptance.log").write_text("older packaged observation")
+            result = self.run_receipt(destination)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            value = json.loads((destination / "result.json").read_text())
+            self.assertTrue(value["checks"]["restaurant_checkout_to_courier_confirmation"])
+            self.assertEqual(value["files_sha256"]["restaurant-worker.log"],
+                             hashlib.sha256((destination / "restaurant-worker.log").read_bytes()).hexdigest())
+            self.assertNotIn("packaged-acceptance.log", value["files_sha256"])
+            self.assertFalse(value["packaged_dispatch_worker"])
+
+    def test_missing_empty_failed_or_invalid_restaurant_log_refuses_success(self):
+        for log in (None, "", "1 test, 1 failure\n", "1 test, 0 failures, 1 invalid\n"):
+            with self.subTest(log=log), tempfile.TemporaryDirectory() as directory:
+                destination = Path(directory)
+                result = self.run_receipt(destination, log)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((destination / "result.json").exists())
 
 
 if __name__ == "__main__":

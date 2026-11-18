@@ -85,7 +85,7 @@ mkdir -p "$stage/apps" "$stage/config"
 # ProcurementHost, RestaurantHost or a second business ledger.
 for app in coop_substrate biz_kit_cluster task_core order_core restaurant_core \
   fulfillment_core agent_core agent_ops_store group_buy_core inventory_core \
-  federation_core federation_service commerce_core barter_core dispatch_core procurement_host dispatch \
+  federation_core federation_service commerce_core barter_core dispatch_core procurement_host restaurant_host dispatch \
   biz_kit_identity biz_kit_extension; do
   cp -R "$root/apps/$app" "$stage/apps/"
 done
@@ -122,6 +122,9 @@ else
   (cd apps/dispatch; mix test \
     --include integration --warnings-as-errors integration_test/procurement_delivery_test.exs) \
     2>&1 | tee "$receipts/worker.log"
+  (cd apps/dispatch; mix test \
+    --include integration --warnings-as-errors integration_test/restaurant_handoff_acceptance_test.exs) \
+    2>&1 | tee "$receipts/restaurant-worker.log"
   (cd apps/dispatch; mix openapi.check; mix ash_postgres.generate_migrations --check) \
     2>&1 | tee "$receipts/contracts.log"
 
@@ -133,7 +136,7 @@ import sys
 from pathlib import Path
 
 out = Path(sys.argv[1])
-for name in ("signer-count.log", "dispatch.log", "worker.log"):
+for name in ("signer-count.log", "dispatch.log", "worker.log", "restaurant-worker.log"):
     log = (out / name).read_text()
     if (not re.search(r"\b[1-9][0-9]* tests?, 0 failures\b", log)
             or re.search(r"\b[1-9][0-9]* invalid\b", log)):
@@ -141,7 +144,8 @@ for name in ("signer-count.log", "dispatch.log", "worker.log"):
 # Packaged execution has its own receipt. Never sweep a prior packaged build
 # or its logs into this source-worker result just because the directory exists.
 source_files = ("revision.txt", "toolchain.txt", "runner-controls.log", "dependencies.log",
-                "compile.log", "signer-count.log", "dispatch.log", "worker.log", "contracts.log")
+                "compile.log", "signer-count.log", "dispatch.log", "worker.log",
+                "restaurant-worker.log", "contracts.log")
 logs = {name: hashlib.sha256((out / name).read_bytes()).hexdigest() for name in source_files}
 result = {
     "revision": sys.argv[2],
@@ -149,7 +153,8 @@ result = {
     "fixture": "synthetic-disposable-loopback",
     "trust": "unsigned-runner-observation",
     "checks": {"signer_count_rejection": True, "dispatch_regressions": True,
-               "real_worker_assignment_and_custody": True, "machine_contract": True},
+               "real_worker_assignment_and_custody": True, "machine_contract": True,
+               "restaurant_checkout_to_courier_confirmation": True},
     "files_sha256": logs,
     "packaged_dispatch_worker": False,
     "live_delivery": False,

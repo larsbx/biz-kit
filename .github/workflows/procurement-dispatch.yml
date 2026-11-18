@@ -5,6 +5,7 @@ on:
       - 'apps/dispatch/**'
       - 'apps/dispatch_core/**'
       - 'apps/procurement_host/**'
+      - 'apps/restaurant_host/**'
       - 'apps/coop_substrate/**'
       - 'apps/biz_kit_identity/**'
       - 'apps/biz_kit_cluster/**'
@@ -70,7 +71,7 @@ jobs:
       - run: mix local.hex --force && mix local.rebar --force
       - name: Create the disposable Dispatch database role
         run: psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
-      - name: Source worker and packaged procurement with authorized courier receipts
+      - name: Source courier receipts for procurement and restaurant orders, plus packaged procurement
         run: bash scripts/test-procurement-dispatch.sh
       - uses: actions/upload-artifact@v4
         if: always()
