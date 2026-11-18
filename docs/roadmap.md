@@ -233,9 +233,11 @@ header cites the enforcing code and the gap leaves the README table.
    singletons' in-memory state still diverges during a partition, as the
    cluster ADR accepts.
 4. **spruce_goose: authority marker fails open.** `ensure_local_execution_allowed/0`
-   allows execution when the marker file is missing. The app is due for
-   decommission ([checklist](architecture/2026-11-06-sprucegoose-decommission.md)),
-   so fixing it needs an owner decision.
+   allowed execution when the marker file was missing. *Closed:* only a
+   marker reading `local` allows direct execution; a missing, empty or
+   remote marker refuses. Fixed ahead of the
+   [decommission](architecture/2026-11-06-sprucegoose-decommission.md) by
+   owner decision.
 5. **eatsbot_core: history atomic with state.** `UpdateHistory` wrote the
    history row in `after_transaction`, so a failure left state with no
    history. *Closed:* the row is written in `after_action`, inside the state
@@ -247,9 +249,18 @@ header cites the enforcing code and the gap leaves the README table.
    forged one. The model now cites the bridge.
 7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
    bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
-   (below).
-8. **eatsbot: retirement cutover fence.** Not implemented; it belongs to the
-   eatsbot retirement.
+   (below). *Started with Dispatch* (owner decision):
+   [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md)
+   gives the assignment lifecycle a signed, admitted path and a fold rebuilt
+   from the ledger. Dispatch's board still writes rows; parity, the command
+   switch and the writer fence follow. eatsbot's fence is item 8.
+8. **eatsbot: retirement cutover fence.** The legacy writer could not be stopped. *Closed:*
+   governance orders the fence on the ledger (`LegacyWriterFenced`, for a
+   closed set of writers, only under declared governance), and
+   `mix coop.fence_writer` installs it in eatsbot's database in one
+   transaction: statement triggers refuse every write, after waiting for
+   writers in flight. It fences every deployment of the legacy writer.
+   Migrating the accepted history remains the R5 runbook's step.
 9. **barter_core, federation_core: host contracts.** *Closed by host
    review:* nothing in the repo transfers barter assets (preview only, no
    host); `FederationService` is read-only and turns a subscription into
@@ -330,7 +341,8 @@ What remains, in order:
   shadows, boards and inbox captures are not migrated; they go with its
   writer.
 - **Dispatch and ownership.** Move dispatch, Keel ownership and shared
-  principal facts onto the same admission path.
+  principal facts onto the same admission path. First slice:
+  [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md).
 - **Cutover.** Fence the old writers behind a signed baseline and prove
   replay. Then retire the old row authority, the local certified writer,
   the business outboxes and the duplicate issuers.

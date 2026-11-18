@@ -63,6 +63,7 @@ pub struct Settings {
     pub protected_paths: Vec<String>,
     pub checks: Vec<Check>,
     pub dispatch: Option<Dispatch>,
+    pub procurement_origin: Option<String>,
 }
 
 impl Default for Settings {
@@ -77,6 +78,7 @@ impl Default for Settings {
             protected_paths: vec![],
             checks: vec![],
             dispatch: None,
+            procurement_origin: None,
         }
     }
 }

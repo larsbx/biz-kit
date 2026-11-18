@@ -112,9 +112,15 @@ defmodule CoopSubstrate.Protocol.Validity do
   # the registration keeps a new type from being registered but left unchecked.
   @task_types Map.keys(TaskCore.Admission.event_types())
   @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
+  @dispatch_types Map.keys(DispatchCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+  defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
+    CoopSubstrate.WriterFence.check(env, gate)
+  end
+
   defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
     CoopSubstrate.FederationAuthority.check(env, gate)
   end
@@ -129,6 +135,10 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @restaurant_types do
     RestaurantCore.Admission.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @dispatch_types do
+    DispatchCore.Admission.check(env, gate)
   end
 
   defp type_check(%Envelope{type: "RoleKeyDeclared", chapter_id: ch, payload: p} = env, gate) do
@@ -918,6 +928,13 @@ defmodule CoopSubstrate.Protocol.Validity do
           check_party_key(env, "assignee", assignee)
         end
     end
+  end
+
+  # The source-bound V1 event records an inert, dual-signed proposal.
+  # Unlike legacy NettingExecuted, it does NOT close obligations or issue
+  # a net receivable. The gate checks the signed, exact current source list.
+  defp type_check(%Envelope{type: "CommercialSetoffIntentRecordedV1"} = env, gate) do
+    CoopSubstrate.CommercialSetoffIntent.check(env, gate)
   end
 
   # -- Phase 9A: netting execution + exposure caps (docs/phase9a_plan.md) ------

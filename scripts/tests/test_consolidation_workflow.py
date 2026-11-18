@@ -12,6 +12,7 @@ JOB = "ledger-and-orchestration"
 COMPILE = "Compile the umbrella"
 SPRUCE_DB = "Create and migrate orchestration database"
 SPRUCE = "Test orchestration after notes retirement"
+TASK_HOST = "Test the task host"
 EATSBOT_SETUP = "Prepare eatsbot's locale data and database"
 EATSBOT = "Test eatsbot (orders, deliveries, storefront API)"
 FORMAT = "Verify eatsbot formatting"
@@ -99,7 +100,8 @@ class ConsolidationWorkflowTest(unittest.TestCase):
     def test_failed_prerequisites_do_not_run_dependent_suites(self):
         for failure, dependent in [
             (COMPILE, (EATSBOT_SETUP, EATSBOT, FORMAT)),
-            (SPRUCE_DB, (REGISTRY, PLAYWRIGHT, BROWSER)),
+            (SPRUCE_DB, (REGISTRY,)),
+            (TASK_HOST, (PLAYWRIGHT, BROWSER)),
             (NODE, (WEB, PLAYWRIGHT, BROWSER)),
             (PLAYWRIGHT, (BROWSER,)),
         ]:
@@ -107,6 +109,14 @@ class ConsolidationWorkflowTest(unittest.TestCase):
                 status, outcomes = self.simulate(failure)
                 self.assertEqual(status, "failure")
                 self.assert_outcomes(outcomes, "skipped", *dependent)
+
+    def test_browser_uses_task_host_and_survives_unrelated_spruce_setup_failure(self):
+        status, outcomes = self.simulate(SPRUCE_DB)
+        self.assertEqual(status, "failure")
+        self.assert_outcomes(outcomes, "success", WEB, PLAYWRIGHT, BROWSER)
+        steps = {step.get("name"): step for step in self.job["steps"]}
+        self.assertEqual(steps[BROWSER]["working-directory"], "apps/task_host")
+        self.assertEqual(steps[WEB]["run"], "node --test apps/task_host/test/js/*.test.mjs")
 
     def test_cancelled_run_stops_acceptance(self):
         status, outcomes = self.simulate(cancelled_after=SPRUCE)

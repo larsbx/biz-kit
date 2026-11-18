@@ -7,36 +7,68 @@ Needs tauri-driver 2.0.4 and WebKitWebDriver on PATH. Uses disposable XDG dirs
 and a synthetic config; never touches an operator's files or credentials.
 """
 import argparse
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
-import signal
-import socket
+import ssl
 import subprocess
 import tempfile
-import time
-import urllib.error
-import urllib.request
+import threading
 
 
-def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+from native_webdriver import native_session, until
 
 
-def until(check, description):
-    end = time.monotonic() + 20
-    while time.monotonic() < end:
-        result = check()
-        if result:
-            return result
-        time.sleep(0.05)
-    raise AssertionError(f"Timed out: {description}")
+@contextmanager
+def procurement_fixture(tls):
+    if tls is None:
+        yield None
+        return
+
+    unexpected = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/":
+                self.send_response(303)
+                self.send_header("Location", "/requests")
+                self.end_headers()
+                return
+            if self.path in {"/foreign", "/popup"}:
+                unexpected.append(self.path)
+            port = self.server.server_port
+            html = (
+                '<h1>Procurement HTTPS fixture</h1>'
+                '<a id="orders" href="/orders">Orders</a> '
+                f'<a id="foreign" href="https://localhost:{port}/foreign">Foreign origin</a> '
+                '<a id="popup" target="_blank" href="/popup">New window</a>'
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+
+        def log_message(self, *_):
+            pass
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(*tls)
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"https://127.0.0.1:{server.server_port}", unexpected
+        finally:
+            server.shutdown()
+            thread.join()
 
 
-def run(binary, session_timeout=60, service_owner_fixture=False):
-    with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp:
+def run(binary, session_timeout=60, service_owner_fixture=False, procurement_tls=None):
+    with tempfile.TemporaryDirectory(prefix="biz-kit-panels-") as tmp, procurement_fixture(procurement_tls) as procurement:
         root = Path(tmp)
         fixture = root / "app.json"
         original = '{"token":"original-native-fixture"}'
@@ -60,55 +92,20 @@ def run(binary, session_timeout=60, service_owner_fixture=False):
             assert service_file.stat().st_uid == 0 and os.getuid() != 0, "ownership fixture needs an ordinary editing user"
         config = root / "config" / "biz-kit"
         config.mkdir(parents=True)
-        (config / "config.json").write_text(json.dumps({
+        config_path = config / "config.json"
+        config_data = {
             "hosts": [{"name": "local", "label": "Local fixture", "ssh": None}],
             "configs": [{"path": str(fixture), "label": "Native fixture"}],
             "scriptsDir": str(root / "scripts"),
-        }))
+        }
+        config_path.write_text(json.dumps(config_data))
         env = {**os.environ, "XDG_CONFIG_HOME": str(root / "config"),
                "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache")}
-        port, native_port = free_port(), free_port()
-        # Ignore shell proxy variables for the local WebDriver connection.
-        http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-        def request(method, path, payload=None, timeout=30):
-            data = None if payload is None else json.dumps(payload).encode()
-            req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=data,
-                                         headers={"Content-Type": "application/json"}, method=method)
+        with (
+            (root / "driver.log").open("w+") as log,
+            native_session(binary, env, log, session_timeout) as (request, base),
+        ):
             try:
-                with http.open(req, timeout=timeout) as reply:
-                    result = json.load(reply)
-            except urllib.error.HTTPError as error:
-                raise AssertionError(error.read().decode()) from error
-            value = result.get("value")
-            if isinstance(value, dict) and "error" in value:
-                raise AssertionError(value)
-            return value
-
-        with open(root / "driver.log", "w+") as log:
-            driver = subprocess.Popen(["tauri-driver", "--port", str(port), "--native-port", str(native_port)],
-                                      env=env, stdout=log, stderr=log, start_new_session=True)
-            session = None
-            try:
-                def ready():
-                    if driver.poll() is not None:
-                        log.seek(0)
-                        raise AssertionError(log.read())
-                    try:
-                        for endpoint in (port, native_port):
-                            with socket.create_connection(("127.0.0.1", endpoint), timeout=0.1):
-                                pass
-                        return True
-                    except OSError:
-                        return False
-                until(ready, "tauri-driver")
-                print("Native acceptance: creating Tauri/WebKit session", flush=True)
-                session = request("POST", "/session", {"capabilities": {"alwaysMatch": {
-                    "tauri:options": {"application": str(binary)},
-                }}}, timeout=session_timeout)["sessionId"]
-                base = f"/session/{session}"
-                print("Native acceptance: session ready; exercising mounted editors", flush=True)
-
                 def js(script, *args):
                     return request("POST", base + "/execute/sync", {"script": script, "args": list(args)})
 
@@ -251,38 +248,73 @@ def run(binary, session_timeout=60, service_owner_fixture=False):
                     assert service_file.read_text() == service_original
                     print("PASS: native service-owned group-writable config save refused without ownership/content changes")
 
+                if procurement:
+                    origin, unexpected = procurement
+                    launcher = '[data-panel=procurement].tile button:not(.icon-btn)'
+                    click('.entry[data-panel=procurement]')
+                    click(launcher)
+                    until(lambda: js("return document.querySelector('[data-panel=procurement].tile [role=alert]')?.textContent.includes('not configured')"), "missing procurement config")
+                    config_path.write_text(json.dumps(dict(config_data, procurementOrigin=origin)))
+                    main = request("GET", base + "/window")
+                    click(launcher)
+                    handles = until(lambda: (rows if len(rows := request("GET", base + "/window/handles")) == 2 else None), "procurement window")
+                    remote = next(handle for handle in handles if handle != main)
+                    request("POST", base + "/window", {"handle": remote})
+                    until(lambda: js("return location.pathname === '/requests' && document.querySelector('h1')?.textContent === 'Procurement HTTPS fixture'"), "trusted HTTPS page and redirect")
+                    print("PASS: packaged Procurement launcher and trusted HTTPS redirect", flush=True)
 
+                    # Drive ordinary navigation directly in the remote document.
+                    # WebKitDriver's element lookup can disconnect in this window.
+                    js("setTimeout(() => document.querySelector('#foreign').click(), 0)")
+                    point = js("""const b = document.querySelector('#popup').getBoundingClientRect();
+                        return {x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2)};""")
+                    # Use a user gesture so browser popup suppression cannot stand
+                    # in for the app's explicit new-window refusal.
+                    request("POST", base + "/actions", {"actions": [{
+                        "type": "pointer", "id": "procurement-popup", "parameters": {"pointerType": "mouse"},
+                        "actions": [
+                            {"type": "pointerMove", "duration": 0, **point},
+                            {"type": "pointerDown", "button": 0},
+                            {"type": "pointerUp", "button": 0},
+                        ],
+                    }]})
+                    js("setTimeout(() => document.querySelector('#orders').click(), 0)")
+                    until(lambda: js("return location.pathname === '/orders'"), "same-origin procurement navigation")
+                    assert not unexpected, f"procurement escaped its window or origin: {unexpected}"
+                    assert set(request("GET", base + "/window/handles")) == {main, remote}
+                    print("PASS: packaged Procurement same-origin navigation and popup blocking", flush=True)
+
+                    for command, args in [
+                        ("app_info", {}),
+                        ("read_config", {"host": "local", "path": str(fixture)}),
+                        ("run_on", {"host": "local", "script": "printf unexpected"}),
+                    ]:
+                        denied = request("POST", base + "/execute/async", {
+                            "script": """
+                                const done = arguments[arguments.length - 1];
+                                const bridge = window.__TAURI_INTERNALS__;
+                                if (!bridge?.invoke) { done(true); return; }
+                                bridge.invoke(arguments[0], arguments[1]).then(() => done(false), () => done(true));
+                            """,
+                            "args": [command, args],
+                        })
+                        assert denied is True, f"procurement webview invoked {command}"
+                    print("PASS: packaged Procurement webview desktop IPC denial", flush=True)
 
             except Exception:
-                if session:
-                    try:
-                        print("Native geometry:", request("POST", f"/session/{session}/execute/sync", {
-                            "script": "return [...document.querySelectorAll('.main,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
-                        print("Native page:", request("POST", f"/session/{session}/execute/sync", {
-                            "script": "return {url:location.href,ready:document.readyState,text:document.body.innerText.slice(0,1000)}", "args": []}))
-                        print("Native errors:", request("POST", f"/session/{session}/execute/sync", {
-                            "script": "return window.nativeErrors", "args": []}))
-                    except Exception:
-                        pass
+                try:
+                    print("Native geometry:", request("POST", base + "/execute/sync", {
+                        "script": "return [...document.querySelectorAll('.main,.tile-surface,.tile,textarea')].map(e => ({tag:e.tagName,cls:e.className,rect:e.getBoundingClientRect().toJSON()}))", "args": []}))
+                    print("Native page:", request("POST", base + "/execute/sync", {
+                        "script": "return {url:location.href,ready:document.readyState,text:document.body.innerText.slice(0,1000)}", "args": []}))
+                    print("Native errors:", request("POST", base + "/execute/sync", {
+                        "script": "return window.nativeErrors", "args": []}))
+                except Exception:
+                    pass
                 log.flush()
                 log.seek(0)
                 print(log.read())
                 raise
-            finally:
-                try:
-                    if session:
-                        request("DELETE", f"/session/{session}")
-                finally:
-                    # Also stop WebKit/app descendants after a failed session handshake.
-                    try:
-                        os.killpg(driver.pid, signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        driver.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(driver.pid, signal.SIGKILL)
-                        driver.wait()
 
 
 if __name__ == "__main__":
@@ -292,5 +324,7 @@ if __name__ == "__main__":
                         help="Bound the native WebDriver handshake (seconds; default: 60).")
     parser.add_argument("--service-owner-fixture", action="store_true",
                         help="Also require the Linux CI service-owned file regression (uses sudo only to create the disposable fixture).")
+    parser.add_argument("--procurement-tls", nargs=2, metavar=("CERTIFICATE", "KEY"),
+                        help="Also check the Procurement webview using a disposable HTTPS certificate trusted by this test system.")
     args = parser.parse_args()
-    run(args.binary, args.session_timeout, args.service_owner_fixture)
+    run(args.binary, args.session_timeout, args.service_owner_fixture, args.procurement_tls)

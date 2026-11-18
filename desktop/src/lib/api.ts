@@ -79,6 +79,8 @@ export const previewCommand = (host: string, script: string) =>
 export const runOn = (host: string, script: string) =>
   invoke<Output>("run_on", { host, script });
 
+export const openProcurement = () => invoke<void>("open_procurement");
+
 export function runScript(path: string, args: string[], onLine: (l: Line) => void) {
   const ch = new Channel<Line>();
   ch.onmessage = onLine;

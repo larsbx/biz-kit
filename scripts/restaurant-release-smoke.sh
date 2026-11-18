@@ -27,7 +27,7 @@ cat > "$work/restaurant.json" <<JSON
   "chapter": "$chapter",
   "merchant": "shop",
   "currency": "USD",
-  "tax_rate": "0.0825",
+  "jurisdiction": "US-MI",
   "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
   "storefront": {"device_id": "storefront", "key_id": "k-store"},
   "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board",

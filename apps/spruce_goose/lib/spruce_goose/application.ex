@@ -5,23 +5,15 @@ defmodule SpruceGoose.Application do
   @impl true
   def start(_type, _args) do
     verify_sop_adoption!()
-    # A malformed trusted proxy stops this node here rather than failing
-    # every request later.
-    SpruceGoose.Web.RateLimit.trusted()
 
+    # Its web surface moved to the task host
+    # (docs/architecture/2026-11-09-task-host.md); SpruceGoose binds no port.
     children =
       [
-        {AshAuthentication.Oauth2Server.Supervisor, [otp_app: :spruce_goose]},
         SpruceGoose.Repo,
-        {BizKit.Cluster.Singleton, SpruceGoose.Web.RateLimit.Counts},
         {Oban, Application.fetch_env!(:spruce_goose, Oban)},
         {AshAuthentication.Supervisor, [otp_app: :spruce_goose]}
-      ] ++
-        cli_service_children() ++
-        if(Application.get_env(:spruce_goose, :start_web_endpoint, false),
-          do: [SpruceGoose.Web.Endpoint],
-          else: []
-        )
+      ] ++ cli_service_children()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: SpruceGoose.Supervisor)
   end

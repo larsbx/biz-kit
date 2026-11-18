@@ -1,0 +1,118 @@
+name: Procurement MVP quick start
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'QUICKSTART_PROCUREMENT.md'
+      - 'scripts/procurement-quickstart.sh'
+      - 'tools/procurement-quickstart/**'
+      - 'tests/procurement_mvp/**'
+      - 'proofs/procurement_mvp/**'
+      - 'scripts/test-procurement-host.sh'
+      - 'apps/procurement_host/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/commerce_core/**'
+      - 'apps/biz_kit_cluster/**'
+      - 'apps/task_core/**'
+      - 'apps/order_core/**'
+      - 'apps/restaurant_core/**'
+      - 'apps/agent_core/**'
+      - 'apps/agent_ops_store/**'
+      - 'apps/group_buy_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'config/**'
+      - 'native/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - '.github/workflows/procurement-quickstart.yml'
+  pull_request:
+    paths:
+      - 'QUICKSTART_PROCUREMENT.md'
+      - 'scripts/procurement-quickstart.sh'
+      - 'tools/procurement-quickstart/**'
+      - 'tests/procurement_mvp/**'
+      - 'proofs/procurement_mvp/**'
+      - 'scripts/test-procurement-host.sh'
+      - 'apps/procurement_host/**'
+      - 'apps/coop_substrate/**'
+      - 'apps/commerce_core/**'
+      - 'apps/biz_kit_cluster/**'
+      - 'apps/task_core/**'
+      - 'apps/order_core/**'
+      - 'apps/restaurant_core/**'
+      - 'apps/agent_core/**'
+      - 'apps/agent_ops_store/**'
+      - 'apps/group_buy_core/**'
+      - 'apps/inventory_core/**'
+      - 'apps/federation_core/**'
+      - 'apps/federation_service/**'
+      - 'config/**'
+      - 'native/**'
+      - 'mix.exs'
+      - 'mix.lock'
+      - '.github/workflows/procurement-quickstart.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: procurement-quickstart-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - name: Wrapper and receipt adversarial controls (not application acceptance)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/procurement-quickstart-controls
+          git rev-parse HEAD > .artifacts/procurement-quickstart-controls/revision.txt
+          bash -n scripts/procurement-quickstart.sh
+          python3 -m unittest discover -s tests/procurement_mvp -p test_quickstart.py -v 2>&1 | tee .artifacts/procurement-quickstart-controls/tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-quickstart-controls-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-quickstart-controls
+          if-no-files-found: error
+  execution:
+    needs: controls
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - name: Install isolated tools and execute the exact committed application
+        run: bash scripts/procurement-quickstart.sh run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement-quickstart-${{ env.SOURCE_REVISION }}
+          path: .artifacts/procurement-quickstart
+          if-no-files-found: error
+          retention-days: 14
+  acceptance:
+    if: always()
+    needs: [controls, execution]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: No failed or skipped dependency can count as acceptance
+        env:
+          CONTROLS: ${{ needs.controls.result }}
+          EXECUTION: ${{ needs.execution.result }}
+        run: |
+          test "$CONTROLS" = success
+          test "$EXECUTION" = success
+          echo "Scoped synthetic execution at $SOURCE_REVISION; not deployment approval."

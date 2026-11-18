@@ -31,7 +31,7 @@ defmodule RestaurantHost.Orders do
 
     with {:ok, lines} <- lines(r, basket, names),
          bases = Enum.map(lines, &Money.mult!(&1.unit_price, &1.quantity)),
-         {:ok, tax} <- Tax.flat(r.currency, %{rate: r.tax_rate, fee_taxable?: false}, bases, zero),
+         {:ok, tax} <- Tax.flat(r.currency, r.tax, bases, zero),
          adjustments = %{
            discount_total: zero,
            tax_total: tax.total,

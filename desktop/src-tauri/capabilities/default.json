@@ -3,5 +3,24 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "allow-app-info",
+    "allow-run-on",
+    "allow-preview-command",
+    "allow-list-units",
+    "allow-unit-action-script",
+    "allow-host-health",
+    "allow-list-scripts",
+    "allow-run-script",
+    "allow-list-configs",
+    "allow-read-config",
+    "allow-diff-config",
+    "allow-write-config",
+    "allow-dispatch-status",
+    "allow-dispatch-sign-in",
+    "allow-dispatch-sign-out",
+    "allow-dispatch-request",
+    "allow-open-procurement"
+  ]
 }

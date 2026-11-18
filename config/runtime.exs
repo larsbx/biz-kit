@@ -297,12 +297,13 @@ config :spruce_goose,
   ledger_recovery_mode: System.get_env("LEDGER_RECOVERY_MODE", "false") in ["1", "true"],
   ledger_recovery_database: System.get_env("LEDGER_RECOVERY_DATABASE")
 
-config :spruce_goose,
+# Blueprint sources (TaskHost.Blueprints.ForgejoVerifier, mix coop.blueprint).
+config :task_host,
   forgejo_read_token_file:
     System.get_env(
       "SPRUCE_GOOSE_FORGEJO_READ_TOKEN_FILE",
       Application.get_env(
-        :spruce_goose,
+        :task_host,
         :forgejo_read_token_file,
         "/home/admin-papa/.config/sprucegoose/forgejo-read-token"
       )
@@ -311,7 +312,7 @@ config :spruce_goose,
     System.get_env(
       "SPRUCE_GOOSE_FORGEJO_API_URL",
       Application.get_env(
-        :spruce_goose,
+        :task_host,
         :forgejo_api_url,
         "https://ubuntu-8gb-hil-1.tail2188e6.ts.net:8448/api/v1"
       )
@@ -374,74 +375,35 @@ config :spruce_goose,
   cli_request_timeout:
     String.to_integer(System.get_env("SPRUCE_GOOSE_CLI_REQUEST_TIMEOUT_MS", "30000"))
 
-# MCP/OAuth endpoint. Opt-in and loopback-only.
+# Postgres TLS for the release databases (SpruceGoose's and the task host's).
 #
-# SpruceGoose is CLI-first; nothing binds a port unless this is switched on.
-# The bind address is deliberately not configurable from the environment:
-# exposing the MCP tool surface beyond loopback is a separate, governed
-# security decision, not an ops toggle.
-mcp_enabled? = System.get_env("SPRUCE_GOOSE_MCP_ENABLED", "false") in ["1", "true"]
+# `ssl: true` alone leaves peer verification to library and OTP defaults, so
+# whether the connection was actually verified depended on nothing stated
+# here. For a system whose entire authority lives in this database, that is
+# pinned explicitly. DATABASE_SSL=false turns TLS off; DATABASE_CA_CERT_FILE
+# names a bundle, otherwise the system store is used, which OTP exposes as
+# :public_key.cacerts_get/0.
+postgres_ssl = fn database_url ->
+  ssl_flag = System.get_env("DATABASE_SSL", "true")
 
-config :spruce_goose, :start_web_endpoint, mcp_enabled?
+  if ssl_flag != "false" and ssl_flag != "0" do
+    cacert =
+      case System.get_env("DATABASE_CA_CERT_FILE") do
+        value when is_binary(value) and value != "" -> [cacertfile: value]
+        _ -> [cacerts: :public_key.cacerts_get()]
+      end
 
-if mcp_enabled? do
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise "SECRET_KEY_BASE is required when SPRUCE_GOOSE_MCP_ENABLED is true"
-
-  if byte_size(secret_key_base) < 64 do
-    raise "SECRET_KEY_BASE must be at least 64 bytes; generate one with `mix phx.gen.secret`"
+    [
+      verify: :verify_peer,
+      depth: 3,
+      server_name_indication: String.to_charlist(URI.parse(database_url).host || ""),
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ] ++ cacert
+  else
+    false
   end
-
-  for {var, setting} <- [
-        {"TOKEN_SIGNING_SECRET", :token_signing_secret},
-        {"OAUTH2_SIGNING_SECRET", :oauth2_signing_secret}
-      ] do
-    case System.get_env(var) do
-      nil ->
-        if config_env() == :prod,
-          do: raise("#{var} is required when SPRUCE_GOOSE_MCP_ENABLED is true")
-
-      value ->
-        config :spruce_goose, [{setting, value}]
-    end
-  end
-
-  oauth_actor_bindings =
-    case System.get_env("SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS") do
-      value when is_binary(value) and value != "" ->
-        uuid = ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
-
-        value
-        |> String.split(",", trim: true)
-        |> Enum.reduce(%{}, fn entry, bindings ->
-          case String.split(entry, "=", parts: 2) do
-            [client_id, actor_id] ->
-              if not Regex.match?(uuid, client_id) or not Regex.match?(uuid, actor_id) do
-                raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS entries must be canonical lowercase UUID=UUID pairs"
-              end
-
-              if Map.has_key?(bindings, client_id) do
-                raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS contains duplicate OAuth client ID #{client_id}"
-              end
-
-              Map.put(bindings, client_id, actor_id)
-
-            _ ->
-              raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS entries must be canonical lowercase UUID=UUID pairs"
-          end
-        end)
-
-      _ ->
-        raise "SPRUCE_GOOSE_OAUTH_ACTOR_BINDINGS is required when MCP is enabled"
-    end
-
-  config :spruce_goose, :oauth_client_actor_bindings, oauth_actor_bindings
-
-  config :spruce_goose, SpruceGoose.Web.Endpoint,
-    http: [ip: {127, 0, 0, 1}, port: String.to_integer(System.get_env("MCP_PORT", "4000"))],
-    secret_key_base: secret_key_base,
-    server: true
 end
 
 if config_env() == :prod and spruce_goose_released? do
@@ -457,41 +419,58 @@ if config_env() == :prod and spruce_goose_released? do
     System.get_env("DATABASE_URL") ||
       raise "DATABASE_URL is required in production"
 
-  ssl_flag = System.get_env("DATABASE_SSL", "true")
-  ssl = ssl_flag != "false" and ssl_flag != "0"
-
-  # `ssl: true` alone leaves peer verification to library and OTP defaults, so
-  # whether the connection was actually verified depended on nothing stated
-  # here. For a system whose entire authority lives in this database, that is
-  # pinned explicitly. DATABASE_CA_CERT_FILE names a bundle; otherwise the
-  # system store is used, which OTP exposes as :public_key.cacerts_get/0.
-  ssl_opts =
-    if ssl do
-      cacert =
-        case System.get_env("DATABASE_CA_CERT_FILE") do
-          value when is_binary(value) and value != "" -> [cacertfile: value]
-          _ -> [cacerts: :public_key.cacerts_get()]
-        end
-
-      [
-        verify: :verify_peer,
-        depth: 3,
-        server_name_indication: String.to_charlist(URI.parse(database_url).host || ""),
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-        ]
-      ] ++ cacert
-    end
-
   config :spruce_goose, SpruceGoose.Repo,
     url: database_url,
-    ssl: if(ssl, do: ssl_opts, else: false),
+    ssl: postgres_ssl.(database_url),
     pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
 
   config :spruce_goose,
     token_signing_secret:
       System.get_env("TOKEN_SIGNING_SECRET") ||
         raise("Missing environment variable `TOKEN_SIGNING_SECRET`!")
+end
+
+# ── task_host ───────────────────────────────────────────────────────────────
+# Sign-in, the web view, its signed commands and the change feed, moved from
+# SpruceGoose (docs/architecture/2026-11-09-task-host.md). Loopback-only, as
+# SpruceGoose's endpoint was: a reverse proxy on the host publishes it. Its
+# database holds native apps' sessions; pointed at the one SpruceGoose used,
+# signed-in devices stay signed in. Environment names keep their SPRUCE_GOOSE_
+# prefix until SpruceGoose's decommission.
+task_host_released? = release_name not in ["eatsbot", "restaurant"]
+
+if config_env() == :prod and task_host_released? do
+  secret_key_base =
+    System.get_env("SECRET_KEY_BASE") || raise "SECRET_KEY_BASE is required for the task host"
+
+  if byte_size(secret_key_base) < 64 do
+    raise "SECRET_KEY_BASE must be at least 64 bytes; generate one with `mix phx.gen.secret`"
+  end
+
+  # 4001 beside dispatch's 4000 in the biz_kit release. MCP_PORT, SpruceGoose's
+  # endpoint's setting, still applies where a deployment set it.
+  task_host_port = System.get_env("TASK_HOST_PORT") || System.get_env("MCP_PORT") || "4001"
+
+  config :task_host, TaskHost.Web.Endpoint,
+    http: [ip: {127, 0, 0, 1}, port: String.to_integer(task_host_port)],
+    secret_key_base: secret_key_base,
+    server: true
+
+  task_host_database_url =
+    System.get_env("TASK_HOST_DATABASE_URL") || System.get_env("DATABASE_URL") ||
+      raise "TASK_HOST_DATABASE_URL (or DATABASE_URL) is required in production"
+
+  config :task_host, TaskHost.Repo,
+    url: task_host_database_url,
+    ssl: postgres_ssl.(task_host_database_url),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
+
+  # Where the ledger keeps the bytes custody receipts name. Unset, it stays
+  # `priv/artifacts` relative to the release's working directory, as before;
+  # set it before moving a deployment, and keep the bytes with it.
+  if dir = System.get_env("COOP_ARTIFACT_DIR") do
+    config :coop_substrate, :artifact_dir, dir
+  end
 end
 
 # ── coop_substrate ──────────────────────────────────────────────────────────
@@ -545,12 +524,14 @@ if release_name == "restaurant" do
 end
 
 # ── biz_kit_identity ────────────────────────────────────────────────────────
-# Native apps' sessions last until the person signs out, kept by hash in
-# SpruceGoose's Postgres so a restart does not end them
-# (docs/architecture/2026-10-21-native-sign-in.md). Both releases carry
-# SpruceGoose; tests of the apps that do not configure their own.
+# Native apps' sessions last until the person signs out, kept by hash in the
+# task host's Postgres so a restart does not end them
+# (docs/architecture/2026-10-21-native-sign-in.md). Both releases carry the
+# task host; tests of the apps that do not configure their own.
 if config_env() in [:dev, :prod] do
-  config :biz_kit_identity, :session_store, SpruceGoose.Web.NativeSessionStore
+  config :biz_kit_identity,
+    session_store: BizKit.Identity.PostgresSessionStore,
+    session_repo: TaskHost.Repo
 end
 
 # Human sign-in. WorkOS is the first provider; any BizKit.Identity.Provider can
@@ -581,13 +562,13 @@ if config_env() == :dev do
   # scripts/e2e-stack.sh signs a whole cast in, from one address, within a
   # minute. It is not the limiter's test, so it raises that bucket alone.
   if limit = System.get_env("SPRUCE_GOOSE_SIGN_IN_LIMIT") do
-    config :spruce_goose, SpruceGoose.Web.RateLimit,
+    config :task_host, TaskHost.Web.RateLimit,
       overrides: %{sign_in: {String.to_integer(limit), 60_000}}
   end
 
   # Development serves /auth over plain HTTP; a secure cookie would never come
   # back, and sign-in could not complete. Every other environment keeps it.
-  config :spruce_goose, :secure_cookies, false
+  config :task_host, :secure_cookies, false
 
   if people = System.get_env("BIZKIT_DEVELOPMENT_SIGN_IN") do
     config :biz_kit_identity,
@@ -621,7 +602,7 @@ if config_env() in [:dev, :prod] do
   end
 
   if public_url = System.get_env("SPRUCE_GOOSE_PUBLIC_URL") do
-    config :spruce_goose, :public_url, public_url
+    config :task_host, :public_url, public_url
   end
 end
 
@@ -638,8 +619,8 @@ if config_env() == :prod do
 
   # Reverse proxies whose x-forwarded-for is believed, e.g. "10.0.0.0/8,::1".
   if proxies = System.get_env("SPRUCE_GOOSE_TRUSTED_PROXIES") do
-    config :spruce_goose,
-           SpruceGoose.Web.RateLimit,
+    config :task_host,
+           TaskHost.Web.RateLimit,
            trusted_proxies: proxies |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
   end
 end

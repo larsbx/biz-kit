@@ -31,6 +31,7 @@ defmodule CoopSubstrate.Projections.Membership do
       orchestration: CoopSubstrate.Projections.Tasks.init(),
       group_buys: CoopSubstrate.GroupBuys.init(),
       restaurant: RestaurantCore.Admission.init(),
+      dispatch: DispatchCore.Admission.init(),
       entities: %{},
       members: %{},
       memberships: %{},
@@ -43,6 +44,8 @@ defmodule CoopSubstrate.Projections.Membership do
       throughput_rules: %{},
       floor_rules: %{},
       obligations: %{},
+      # Pure, signed proposals only; never reserve/close source obligations.
+      commercial_setoff_intents: %{},
       role_keys: %{},
       federation_grants: %{},
       # Who each role key was declared for (its optional `member_id`), by
@@ -92,6 +95,7 @@ defmodule CoopSubstrate.Projections.Membership do
   # but not folded here would leave every later check reading stale state.
   @task_types Map.keys(TaskCore.Admission.event_types())
   @restaurant_types Map.keys(RestaurantCore.Admission.event_types())
+  @dispatch_types Map.keys(DispatchCore.Admission.event_types())
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
@@ -108,6 +112,11 @@ defmodule CoopSubstrate.Projections.Membership do
   @impl true
   def handle_event(%Envelope{type: type} = env, state) when type in @restaurant_types do
     %{state | restaurant: RestaurantCore.Admission.fold(env, state)}
+  end
+
+  @impl true
+  def handle_event(%Envelope{type: type} = env, state) when type in @dispatch_types do
+    %{state | dispatch: DispatchCore.Admission.fold(env, state)}
   end
 
   @impl true
@@ -233,6 +242,15 @@ defmodule CoopSubstrate.Projections.Membership do
     update_in(state, [:obligations, Access.key({ch, p["obligation_id"]})], fn ob ->
       %{ob | open: false}
     end)
+  end
+
+  # The source-bound commercial intent is only a signed proposal: no debt
+  # discharge, journal mutation, reservation or financial settlement here.
+  def handle_event(
+        %Envelope{type: "CommercialSetoffIntentRecordedV1"} = env,
+        state
+      ) do
+    CoopSubstrate.CommercialSetoffIntent.fold(env, state)
   end
 
   # Phase 9A: an executed netting round closes every open like-denominated

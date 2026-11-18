@@ -6,6 +6,7 @@ import Services from "./panels/Services.svelte";
 import Scripts from "./panels/Scripts.svelte";
 import Configs from "./panels/Configs.svelte";
 import Dispatch from "./panels/Dispatch.svelte";
+import Procurement from "./panels/Procurement.svelte";
 import Settings from "./panels/Settings.svelte";
 
 /**
@@ -30,6 +31,7 @@ export const PANELS: Panel[] = [
   { id: "scripts", label: "Scripts", hint: "Run with live output", icon: "scripts", group: "Hosts", requiresHosts: true, component: Scripts },
   { id: "configs", label: "Configs", hint: "Edit files, diff first", icon: "configs", group: "Hosts", requiresHosts: true, component: Configs },
   { id: "dispatch", label: "Dispatch", hint: "Loads, stops and trips", icon: "dispatch", group: "Business", requiresHosts: false, component: Dispatch },
+  { id: "procurement", label: "Procurement", hint: "Requests, quotes and orders", icon: "procurement", group: "Business", requiresHosts: false, component: Procurement },
   { id: "settings", label: "Settings", hint: "Theme and text size", icon: "settings", group: "App", requiresHosts: false, component: Settings },
 ];
 

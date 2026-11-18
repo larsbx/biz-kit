@@ -15,6 +15,7 @@ mod configs;
 mod dispatch;
 mod exec;
 mod health;
+mod procurement;
 mod scripts;
 mod services;
 mod settings;
@@ -39,6 +40,7 @@ pub fn run() {
             dispatch::dispatch_sign_in,
             dispatch::dispatch_sign_out,
             dispatch::dispatch_request,
+            procurement::open_procurement,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

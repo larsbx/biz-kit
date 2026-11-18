@@ -265,7 +265,7 @@ defmodule SpruceGoose.Workflows.Task do
            SpruceGoose.Authz.read_one(SpruceGoose.Workflows.BlueprintRevision, id: revision_id),
          true <- revision.project_id == roadmap.project_id,
          {:ok, %{digest: digest, bytes: bytes}} <-
-           SpruceGoose.Blueprints.SourceVerifier.verify(
+           TaskHost.Blueprints.SourceVerifier.verify(
              revision.repository,
              revision.source_commit,
              revision.source_path

@@ -33,9 +33,7 @@ These are open defects or host duties, not proofs; `docs/roadmap.md`
 
 | App | Gap |
 | --- | --- |
-| spruce_goose | `AuthorityRuntime.ensure_local_execution_allowed/0` returns `:ok` when the marker file is missing (fails open) |
-| biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2` |
-| eatsbot | The retirement cutover fence is not implemented; the legacy writer starts unconditionally |
+| biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2`. Dispatch assignments have a ledger path (`DispatchCore.Admission`) that the board does not use yet; eatsbot can be fenced (`CoopSubstrate.WriterFence`) |
 
 Enforced at the host, not in the core: marketing_core (the core trusts
 `delivery_status: :confirmed`; `BizKit.MarketingBridge` binds it to a

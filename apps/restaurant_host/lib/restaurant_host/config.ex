@@ -1,7 +1,7 @@
 defmodule RestaurantHost.Config do
   @moduledoc """
   A restaurant's production configuration. The restaurant file (JSON) names
-  the Log chapter, merchant, currency, tax rate, menu and devices; each
+  the Log chapter, merchant, currency, tax jurisdiction, menu and devices; each
   device's 32-byte signing seed comes only from the environment, as base64 in
   `RESTAURANT_DEVICE_SEED_<DEVICE_ID>` (upper-cased, non-alphanumerics as `_`),
   so the file can be reviewed and versioned without holding a secret. A board's
@@ -12,14 +12,14 @@ defmodule RestaurantHost.Config do
 
       {
         "chapter": "chapter-genesis", "merchant": "shop",
-        "currency": "USD", "tax_rate": "0.0825",
+        "currency": "USD", "jurisdiction": "US-MI",
         "menu": [{"id": "margherita", "name": "Margherita", "sku": "MARG", "price_minor": 1250}],
         "storefront": {"device_id": "storefront", "key_id": "k-store"},
         "boards": {"board-1": {"device_id": "board-1", "key_id": "k-board", "pairing_sha256": "…"}}
       }
   """
 
-  @top ~w(chapter merchant currency tax_rate menu storefront boards)
+  @top ~w(chapter merchant currency jurisdiction menu storefront boards)
   @device ~w(device_id key_id)
 
   @doc "Read the restaurant file at `path` with seeds from `env`."
@@ -37,7 +37,7 @@ defmodule RestaurantHost.Config do
          {:ok, chapter} <- segment(doc, "chapter"),
          {:ok, merchant} <- segment(doc, "merchant"),
          {:ok, currency} <- currency(doc["currency"]),
-         {:ok, tax_rate} <- tax_rate(doc["tax_rate"]),
+         {:ok, jurisdiction} <- jurisdiction(doc["jurisdiction"]),
          {:ok, menu} <- menu(doc["menu"]),
          {:ok, storefront} <- device("storefront", doc["storefront"], env, false),
          {:ok, boards} <- boards(doc["boards"], env),
@@ -47,7 +47,7 @@ defmodule RestaurantHost.Config do
          chapter: chapter,
          merchant: merchant,
          currency: currency,
-         tax_rate: tax_rate,
+         jurisdiction: jurisdiction,
          menu: menu,
          storefront: storefront,
          boards: boards
@@ -92,19 +92,16 @@ defmodule RestaurantHost.Config do
 
   defp currency(_), do: {:error, {:invalid, "currency"}}
 
-  defp tax_rate(rate) when is_binary(rate) do
-    case Decimal.parse(rate) do
-      {d, ""} ->
-        if Decimal.compare(d, 0) != :lt and Decimal.compare(d, 1) == :lt,
-          do: {:ok, rate},
-          else: invalid("tax_rate")
-
-      _ ->
-        invalid("tax_rate")
+  # A jurisdiction with a known tax profile (`CommerceCore.Tax.Jurisdictions`),
+  # never a free-form rate: the rules behind a rate are part of the profile.
+  defp jurisdiction(code) when is_binary(code) do
+    case CommerceCore.Tax.Jurisdictions.profile(code) do
+      {:ok, _} -> {:ok, code}
+      {:error, _} -> invalid("jurisdiction")
     end
   end
 
-  defp tax_rate(_), do: invalid("tax_rate")
+  defp jurisdiction(_), do: invalid("jurisdiction")
 
   defp menu([_ | _] = items) do
     if Enum.all?(items, &item?/1),
