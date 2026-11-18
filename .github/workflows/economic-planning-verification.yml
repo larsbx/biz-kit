@@ -61,6 +61,15 @@ jobs:
         run: >-
           python3 proof_bank/research_exchange/tools/bootstrap.py
           --destination "$RUNNER_TEMP/economic-planning-tools"
+      - name: Check synthetic source admission and epoch obligations
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$PLANNING_SOURCE_HEAD"
+          lean_relative="$(python3 -c 'import json; print(json.load(open("proof_bank/research_exchange/toolchains.lock.json"))["downloads"]["lean"]["installed_relative"])')"
+          {
+            "$RUNNER_TEMP/economic-planning-tools/$lean_relative/bin/lean" proof_bank/economic_planning/lean/Admission.lean &&
+            (cd proof_bank/economic_planning && python3 -B -m unittest -v adapter.test_admission)
+          } 2>&1 | tee "$RUNNER_TEMP/economic-planning-admission.log"
       - name: Prove contracts and verify the offline replay boundary
         run: >-
           python3 -I proof_bank/economic_planning/tools/verify.py
@@ -72,6 +81,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: economic-planning-${{ env.PLANNING_SOURCE_HEAD }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/economic-planning-evidence
+          path: |
+            ${{ runner.temp }}/economic-planning-evidence
+            ${{ runner.temp }}/economic-planning-admission.log
           if-no-files-found: warn
           retention-days: 30
