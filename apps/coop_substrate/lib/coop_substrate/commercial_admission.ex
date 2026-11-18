@@ -138,7 +138,7 @@ defmodule CoopSubstrate.CommercialAdmission do
          :ok <- bind_authority(authority, p),
          {:ok, rows} <- source_rows(gate, state, ch, p),
          :ok <- exact_sources(rows, p),
-         :ok <- unreserved(state, ch, rows) do
+         :ok <- unreserved(gate, state, ch, rows) do
       :ok
     end
   end
@@ -187,7 +187,7 @@ defmodule CoopSubstrate.CommercialAdmission do
 
       with :ok <- exact_sources(rows, prepared),
            :ok <- fresh_intent(gate, state, chapter, intent_id),
-           :ok <- unreserved(state, chapter, rows),
+           :ok <- unreserved(gate, state, chapter, rows),
            do: {:ok, prepared}
     else
       {:error, _} = error -> error
@@ -537,9 +537,14 @@ defmodule CoopSubstrate.CommercialAdmission do
     end)
   end
 
-  defp unreserved(state, ch, rows) do
-    if Enum.any?(rows, &Map.has_key?(state.reservations, {ch, &1["obligation_id"]})),
-      do: {:error, :commercial_source_already_reserved},
-      else: :ok
+  defp unreserved(gate, state, ch, rows) do
+    review_claims = get_in(gate, [:commercial_setoff_admission, :claims]) || %{}
+
+    if Enum.any?(rows, fn row ->
+         key = {ch, row["obligation_id"]}
+         Map.has_key?(state.reservations, key) or Map.has_key?(review_claims, key)
+       end),
+       do: {:error, :commercial_source_already_reserved},
+       else: :ok
   end
 end
