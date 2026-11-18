@@ -1,0 +1,49 @@
+{
+  "source_revision": "2192359288daab6291798619586f12b37e6b3f78",
+  "run_id": 42110873119,
+  "run_url": "https://github.com/larsbx/biz-kit/actions/runs/42110873119",
+  "jobs": {
+    "formal": {
+      "id": 127537766923,
+      "result": "success",
+      "lean_module": "BizKitDriverExclusivity",
+      "axiom_audit_declarations": 104,
+      "quint_directed_tests": 9,
+      "bounded_depth": 8,
+      "negative_controls": [
+        "snapshotStep/safety",
+        "tenantStep/globalSafety"
+      ]
+    },
+    "portable_linkage": {
+      "id": 127537767353,
+      "result": "success"
+    },
+    "runtime": {
+      "id": 127537767576,
+      "result": "success",
+      "ordinary_tests": 61,
+      "ordinary_failures": 0,
+      "exclusivity_cases_in_ordinary_suite": 14,
+      "global_driver_boundary": {
+        "tests": 14,
+        "expected_failures": 1,
+        "required_assertion": "distinct trip must wait on the index conflict",
+        "runner_result": "confirmed"
+      },
+      "operator_profile_boundary": {
+        "tests": 14,
+        "expected_failures": 1,
+        "required_assertion": "proposed acceptance: another participant's role must not relax exclusivity",
+        "runner_result": "confirmed"
+      }
+    }
+  },
+  "interpretation": {
+    "E1": "Observed in supplied two-trip PostgreSQL cases, with deployed migration in the disposable CI database.",
+    "E2_E3": "Not established; limitation witnesses passed and stronger assertions were refuted.",
+    "profile_correction": "Unapplied review patch.",
+    "refinement": "Not proved.",
+    "acceptance": "No owner acceptance or production/deployment claim."
+  }
+}
