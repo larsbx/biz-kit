@@ -45,7 +45,7 @@ before changing the deployment and copies it into place on each install or upgra
 | `~/ops/bizops-dev/operations.json` | `TASK_HOST_OPERATIONS_CONFIG` |
 | `~/ops/bizops-dev/state/` | working directory, artifacts, `genesis_checkpoint.bin` |
 
-## Bootstrap (done 2026-11-10)
+## Genesis (recorded 2026-11-10)
 
 Genesis ran once with the service stopped: governance `k-3141779e` for
 `chapter-genesis`. Run commands that need the env file through
@@ -70,6 +70,19 @@ ssh -L 4001:127.0.0.1:4001 papa      # then open http://127.0.0.1:4001/app
    `systemctl --user restart bizops-dev`, then use `/operations`.
 
 ## Bootstrap verification
+
+The hosted Operations acceptance workflow ran both browser tests successfully
+at commit `7c013ae2f248b085e7a9e720829a1de66be31c57`. Chromium used the
+development provider on an isolated loopback TaskHost with synthetic keys
+and records. The test verified that inspection left the request pending,
+the governance signature granted administrator access, and the original
+browser could see the configured workspace and record.
+[Hosted acceptance run](https://github.com/larsbx/biz-kit/actions/runs/42818293394)
+
+Packaged release acceptance still requires a run through the installed
+helper and systemd user unit on an isolated host. The checks below cover
+that deployment path.
+
 
 Run `bash deploy/papa-operations-dev/test-bootstrap.sh` on a Linux development
 machine. It uses a temporary home and stand-ins for PostgreSQL, systemd, curl

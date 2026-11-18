@@ -8,14 +8,10 @@ defmodule CoopSubstrate.AgentBackendReceiverTest do
   """
   use CoopSubstrate.LogCase, async: false
 
-  alias AgentCore.Preflight
   alias AgentOpsStore.Postgres
   alias CoopSubstrate.{AgentBackendReceiver, AgentBackendRequest, AgentStagingFixture}
-  alias CoopSubstrate.{AgentStagingSQL, Canonical, Log}
-  alias CoopSubstrate.Projections.Tasks, as: Projection
-  alias TaskCore.AgentRuns
+  alias CoopSubstrate.Log
 
-  @key {"chapter-genesis", "tenant-1", "project-1", "run-1"}
   @context %{environment: :staging}
   @binding ~w(effect_id backend_id admission_id plan_digest execution_deadline)
 
@@ -30,87 +26,17 @@ defmodule CoopSubstrate.AgentBackendReceiverTest do
   end
 
   setup do
-    AgentStagingSQL.setup!()
-    fixture = AgentStagingFixture.prepare()
-    features = ~w(text idempotent_launch_v1 effect_lookup_v1 cancellation_v1 bounded_results_v1)
-
-    manifest = %{
-      "id" => "approved-profile",
-      "version" => 1,
-      "adapter_module" => Atom.to_string(NoBackend),
-      "parameters" => %{
-        "capabilities" => %{
-          "features" => features,
-          "data_classes" => ["internal"],
-          "regions" => ["local"],
-          "max_duration_ms" => 300_000,
-          "max_output_bytes" => 4096
-        }
-      }
-    }
-
-    profile = %{id: "approved-profile", approved: true, adapter: NoBackend, manifest: manifest}
-    read = AgentStagingFixture.access_grant(fixture, "read")
-    execute = AgentStagingFixture.access_grant(fixture, "execute")
-
-    intent =
-      AgentStagingFixture.request(fixture, %{
-        "execution_profile_digest" => {:bytes, Canonical.hash!(manifest)},
-        "max_duration_ms" => 300_000
-      })
-
-    assert {:ok, _} = Log.append([read, execute, intent])
-    grants = %{read: read.event_id, execute: execute.event_id}
-    registry = %{"approved-profile" => profile}
-
-    requirements = %{
-      "features" => features,
-      "data_classes" => ["internal"],
-      "region" => "local",
-      "max_duration_ms" => 300_000,
-      "max_output_bytes" => 4096
-    }
-
-    assert {:ok, state} = Log.replay(Projection)
-    assert {:ok, run} = AgentRuns.authorized?(state, @key, grants)
-    assert {:ok, plan} = Preflight.prepare(run, registry, &Canonical.hash!/1, requirements)
-    config = Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)
-
-    conn =
-      start_supervised!(
-        {Postgrex, Keyword.take(config, [:hostname, :port, :username, :password, :database])}
-      )
-
-    assert {:ok, :new} = Postgres.register(conn, plan)
-    assert {:ok, row} = Postgres.snapshot(conn, plan.effect_id)
-
-    assert {:ok, lease} =
-             Postgres.claim(conn, plan.effect_id, row.version, "receiver-test", 300_000, 2)
-
-    request = %{
-      run_key: @key,
-      grants: grants,
-      registry: registry,
-      requirements: requirements,
-      plan: plan,
-      lease: lease
-    }
-
-    assert {:ok, admission} = Log.admit_agent_launch(@context, request)
+    admission = AgentStagingFixture.admit!(NoBackend)
     store = AgentBackendReceiver.new_store()
-    assert {:ok, create} = AgentBackendRequest.create(plan, admission, store.store_id)
 
-    %{
-      conn: conn,
-      fixture: fixture,
-      request: request,
-      effect: plan.effect_id,
-      admission: admission,
-      store: store,
-      create: create,
-      head: Log.head(),
-      intent_id: intent.event_id
-    }
+    assert {:ok, create} =
+             AgentBackendRequest.create(
+               admission.request.plan,
+               admission.admission,
+               store.store_id
+             )
+
+    Map.merge(admission, %{store: store, create: create})
   end
 
   for kind <- [:operator, :task_version, :profile_digest] do

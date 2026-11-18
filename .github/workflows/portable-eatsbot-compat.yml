@@ -40,6 +40,8 @@ jobs:
           elixir-version: '1.18.4'
       - name: Copy source out of umbrella and validate standalone version
         shell: bash
+        env:
+          MIX_ENV: test
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/portable-eatsbot"
@@ -58,5 +60,5 @@ jobs:
           cd "$RUNNER_TEMP/portable-eatsbot/${{ matrix.app }}"
           mix --version
           mix deps.get
-          MIX_ENV=test mix compile --warnings-as-errors
-          MIX_ENV=test mix test --no-start
+          mix compile --warnings-as-errors
+          mix test --no-start

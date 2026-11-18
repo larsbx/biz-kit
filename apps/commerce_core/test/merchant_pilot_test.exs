@@ -1,5 +1,10 @@
 defmodule CommerceCore.MerchantPilotTest do
   use ExUnit.Case, async: true
+
+  if String.to_integer(System.otp_release()) < 27 do
+    @moduletag skip: "Merchant Pilot requires OTP 27+ for its strict JSON codec"
+  end
+
   alias CommerceCore.MerchantPilot
   alias CommerceCore.MerchantPilot.{CLI, Intake, InvalidEvidence, JSON, Scorecard, Validation}
   @root Path.expand("../../../tools/merchant_pilot", __DIR__)
