@@ -83,7 +83,7 @@ export SCF_ENTITY=ma-sarl SCF_FIRST_YEAR=2026
 
 # 2. Build the release.
 MIX_ENV=prod mix deps.get --only prod
-MIX_ENV=prod mix release scf
+MIX_ENV=prod mix release scf --overwrite
 
 # 3. With the server stopped: create the event store, then set up the book.
 _build/prod/rel/scf/bin/scf eval 'ScfHost.ReleaseTasks.migrate()'
@@ -95,7 +95,10 @@ _build/prod/rel/scf/bin/scf start      # or `daemon`; `stop` to stop
 ```
 
 Open <http://localhost:4090/login> and sign in with the **console token**
-that `setup` printed. It is shown once, and only its digest is stored. Use
+that `setup` printed. It is shown once, and only its digest is stored. If you
+lose it, stop the server, run
+`_build/prod/rel/scf/bin/scf eval 'ScfHost.ReleaseTasks.rotate_tokens()'` for
+new console and API tokens, and start again. Use
 Chromium or Firefox: the session cookie is `Secure`, which they honour for
 `http://localhost`.
 
@@ -186,7 +189,7 @@ The root [mix.exs](mix.exs) defines both profiles from the same source and lock:
 | --- | --- | --- |
 | `orchestration` | Ledger, identity, cluster, the task host and SpruceGoose; excludes Dispatch | `MIX_ENV=prod mix release orchestration` |
 | `biz_kit` | The above plus Dispatch and Keel | `MIX_ENV=prod mix release biz_kit` |
-| `scf` | Ledger and the SCF accounting host; see the [quickstart](#quickstart-local-accounting-scf) | `MIX_ENV=prod mix release scf` |
+| `scf` | Ledger and the SCF accounting host; see the [quickstart](#quickstart-local-accounting-scf) | `MIX_ENV=prod mix release scf --overwrite` |
 
 [docs/deploy.md](docs/deploy.md) describes settings, migration limits and
 `scripts/release-smoke.sh`, which builds, boots and exercises `orchestration`.

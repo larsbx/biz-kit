@@ -80,6 +80,25 @@ defmodule ScfHost.ReleaseTasksTest do
     assert File.read!(first.env_path) == before
   end
 
+  test "lost tokens are recovered by rotation: new digests, same ledger, same keys", %{opts: opts} do
+    {:ok, first} = ReleaseTasks.setup(opts)
+    before = ReleaseTasks.read_env(first.env_path)
+    head = Log.head()
+
+    assert {:ok, %{console_token: token, api_token: api}} =
+             ReleaseTasks.setup(Map.put(opts, :rotate_tokens, true))
+
+    assert token != first.console_token and api != first.api_token
+    after_ = ReleaseTasks.read_env(first.env_path)
+    assert after_["SCF_LOGIN_SHA256"] == Base.encode16(:crypto.hash(:sha256, token), case: :lower)
+    assert after_["SCF_API_SHA256"] == Base.encode16(:crypto.hash(:sha256, api), case: :lower)
+
+    assert Map.drop(after_, ~w(SCF_LOGIN_SHA256 SCF_API_SHA256)) ==
+             Map.drop(before, ~w(SCF_LOGIN_SHA256 SCF_API_SHA256))
+
+    assert Log.head() == head
+  end
+
   test "a chapter governed by another key is never adopted", %{opts: opts} do
     other = new_member("governance", "someone-else")
 

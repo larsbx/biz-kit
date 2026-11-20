@@ -15,7 +15,8 @@ defmodule ScfHost.ReleaseTasks do
      (or renews a lapsed grant for) the accountant key;
   4. writes `SCF_DATA_DIR/scf.env` (0600) with everything the host reads,
      printing the console and API tokens once; the file holds only their
-     SHA-256 digests, and a rerun never re-issues them.
+     SHA-256 digests, and a rerun never re-issues them. If they are lost,
+     `rotate_tokens/0` issues new ones.
 
   All keys and data stay on this machine.
   """
@@ -27,10 +28,18 @@ defmodule ScfHost.ReleaseTasks do
   def migrate, do: CoopSubstrate.ReleaseTasks.init_event_stores()
 
   @doc "Run setup from the environment and report on stdout."
-  def setup do
+  def setup, do: run(%{})
+
+  @doc """
+  Issue new console and API tokens (if the printed ones were lost); their old
+  digests stop working, and so do existing sessions. No ledger event.
+  """
+  def rotate_tokens, do: run(%{rotate_tokens: true})
+
+  defp run(extra) do
     {:ok, _} = Application.ensure_all_started(:coop_substrate)
 
-    case setup(options(System.get_env())) do
+    case setup(Map.merge(options(System.get_env()), extra)) do
       {:ok, result} ->
         IO.puts(
           "SCF book ready: #{result.entity_id}, exercice #{result.open_year}. Settings: #{result.env_path}"
@@ -196,6 +205,17 @@ defmodule ScfHost.ReleaseTasks do
 
     {secrets, tokens} =
       case existing do
+        %{"SCF_LOGIN_SHA256" => _, "SCF_API_SHA256" => _, "SCF_SECRET_KEY_BASE" => secret}
+        when is_map_key(o, :rotate_tokens) ->
+          console = token()
+          api = token()
+
+          {%{
+             "SCF_LOGIN_SHA256" => digest(console),
+             "SCF_API_SHA256" => digest(api),
+             "SCF_SECRET_KEY_BASE" => secret
+           }, %{console_token: console, api_token: api}}
+
         %{"SCF_LOGIN_SHA256" => _, "SCF_API_SHA256" => _, "SCF_SECRET_KEY_BASE" => _} ->
           {Map.take(existing, ~w(SCF_LOGIN_SHA256 SCF_API_SHA256 SCF_SECRET_KEY_BASE)), %{}}
 
