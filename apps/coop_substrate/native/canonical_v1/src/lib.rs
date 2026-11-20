@@ -127,9 +127,7 @@ fn do_encode(term: Term) -> Result<Vec<u8>, EncodeError> {
 }
 
 fn bytes_to_binary<'a>(env: Env<'a>, bytes: &[u8]) -> Binary<'a> {
-    let mut owned = OwnedBinary::new(bytes.len()).expect("binary allocation failed");
-    owned.as_mut_slice().copy_from_slice(bytes);
-    Binary::from_owned(owned, env)
+    Binary::from_owned(OwnedBinary::from_slice(bytes), env)
 }
 
 #[rustler::nif]

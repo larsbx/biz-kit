@@ -16,11 +16,15 @@ on:
       - "apps/coop_substrate/test/cross_currency_provenance_test.exs"
       - "apps/coop_substrate/test/signing_domain_test.exs"
       - "docs/architecture/2026-11-14-cross-currency-source-provenance-fixture.md"
+      - "docs/architecture/2026-11-15-cross-currency-local-source-snapshot.md"
+      - "docs/architecture/2026-11-16-cross-currency-authority-evidence.md"
       - "docs/architecture/2026-11-15-commercial-accounting-preview.md"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_source_snapshot.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_authority_evidence.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_source_lineage.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex"
@@ -28,6 +32,8 @@ on:
       - "apps/coop_substrate/lib/coop_substrate/projections/membership.ex"
       - "apps/coop_substrate/test/commercial_setoff_proof_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_sources_test.exs"
+      - "apps/coop_substrate/test/cross_currency_source_snapshot_test.exs"
+      - "apps/coop_substrate/test/cross_currency_authority_evidence_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_intent_test.exs"
       - "apps/coop_substrate/test/commercial_source_lineage_test.exs"
       - "docs/architecture/2026-11-03-commercial-setoff-source-binding-v1.md"
@@ -51,11 +57,15 @@ on:
       - "apps/coop_substrate/test/cross_currency_provenance_test.exs"
       - "apps/coop_substrate/test/signing_domain_test.exs"
       - "docs/architecture/2026-11-14-cross-currency-source-provenance-fixture.md"
+      - "docs/architecture/2026-11-15-cross-currency-local-source-snapshot.md"
+      - "docs/architecture/2026-11-16-cross-currency-authority-evidence.md"
       - "docs/architecture/2026-11-15-commercial-accounting-preview.md"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_source_snapshot.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_authority_evidence.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_source_lineage.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex"
@@ -63,6 +73,8 @@ on:
       - "apps/coop_substrate/lib/coop_substrate/projections/membership.ex"
       - "apps/coop_substrate/test/commercial_setoff_proof_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_sources_test.exs"
+      - "apps/coop_substrate/test/cross_currency_source_snapshot_test.exs"
+      - "apps/coop_substrate/test/cross_currency_authority_evidence_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_intent_test.exs"
       - "apps/coop_substrate/test/commercial_source_lineage_test.exs"
       - "docs/architecture/2026-11-03-commercial-setoff-source-binding-v1.md"
@@ -133,8 +145,13 @@ jobs:
           apps/coop_substrate/test/commercial_setoff_test.exs
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex
+          apps/coop_substrate/lib/coop_substrate/cross_currency_source_snapshot.ex
+          apps/coop_substrate/lib/coop_substrate/cross_currency_authority_evidence.ex
+          apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex
           apps/coop_substrate/test/commercial_setoff_proof_test.exs
           apps/coop_substrate/test/commercial_setoff_sources_test.exs
+          apps/coop_substrate/test/cross_currency_source_snapshot_test.exs
+          apps/coop_substrate/test/cross_currency_authority_evidence_test.exs
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex
           apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
           apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
@@ -158,6 +175,8 @@ jobs:
           test/commercial_setoff_test.exs
           test/commercial_setoff_proof_test.exs
           test/commercial_setoff_sources_test.exs
+          test/cross_currency_source_snapshot_test.exs
+          test/cross_currency_authority_evidence_test.exs
           test/commercial_setoff_intent_test.exs
           test/commercial_source_lineage_test.exs
           test/commercial_admission_test.exs
