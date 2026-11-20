@@ -11,30 +11,31 @@ defmodule ScfHost.Auth do
   @session_ms 14_400_000
   @api_ms 300_000
 
-  def from_env! do
-    seed = hex!("SCF_SIGNING_SEED_HEX")
-    login = hex!("SCF_LOGIN_SHA256")
-    api = if System.get_env("SCF_API_SHA256") in [nil, ""], do: nil, else: hex!("SCF_API_SHA256")
-    secret = System.fetch_env!("SCF_SECRET_KEY_BASE")
+  @doc "Settings from an environment map (the process env, or a setup env file)."
+  def from_env!(env \\ System.get_env()) do
+    fetch = &Map.fetch!(env, &1)
+    hex = &Base.decode16!(fetch.(&1), case: :mixed)
+    seed = hex.("SCF_SIGNING_SEED_HEX")
+    login = hex.("SCF_LOGIN_SHA256")
+    api = if env["SCF_API_SHA256"] in [nil, ""], do: nil, else: hex.("SCF_API_SHA256")
+    secret = fetch.("SCF_SECRET_KEY_BASE")
 
     if byte_size(seed) != 32 or byte_size(login) != 32 or (api && byte_size(api) != 32) or
          byte_size(secret) < 64,
        do: raise("invalid SCF secret lengths")
 
     %{
-      chapter_id: System.fetch_env!("SCF_CHAPTER"),
-      entity_id: System.fetch_env!("SCF_ENTITY"),
-      accountant_id: System.fetch_env!("SCF_ACCOUNTANT"),
-      key_id: System.fetch_env!("SCF_KEY_ID"),
-      grant_version: String.to_integer(System.fetch_env!("SCF_GRANT_VERSION")),
+      chapter_id: fetch.("SCF_CHAPTER"),
+      entity_id: fetch.("SCF_ENTITY"),
+      accountant_id: fetch.("SCF_ACCOUNTANT"),
+      key_id: fetch.("SCF_KEY_ID"),
+      grant_version: String.to_integer(fetch.("SCF_GRANT_VERSION")),
       seed: seed,
       login_digest: login,
       api_digest: api,
       secret_key_base: secret
     }
   end
-
-  defp hex!(name), do: Base.decode16!(System.fetch_env!(name), case: :mixed)
 
   def settings, do: Application.fetch_env!(:scf_host, :settings)
   def server, do: Application.get_env(:scf_host, :log_server, Log.server())

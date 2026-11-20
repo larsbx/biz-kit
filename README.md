@@ -66,6 +66,58 @@ repository; its reviewed Markdown snapshot is included as reference content.
 - Rust (for `coop_substrate`'s `canonical_v1` NIF)
 - PostgreSQL 16; PostGIS for `dispatch`'s integration tier
 
+## Quickstart: local accounting (SCF)
+
+Algerian accounting under the Système Comptable Financier, on your own
+machine: a French console and a JSON API over the signed ledger. Books
+(`EVENTSTORE_*`) and pièces justificatives (`SCF_DATA_DIR`) stay local; see
+[the SCF host decision](docs/architecture/2026-11-16-scf-host.md#local-first).
+It needs the [toolchain](#toolchain) and a local PostgreSQL 16.
+
+```sh
+# 1. Where the books and pièces live (keep this directory, and back it up
+#    together with the database).
+export EVENTSTORE_USERNAME=postgres EVENTSTORE_PASSWORD=postgres EVENTSTORE_DATABASE=scf_eventstore
+export SCF_DATA_DIR="$HOME/.local/share/biz-kit/scf"
+export SCF_ENTITY=ma-sarl SCF_FIRST_YEAR=2026
+
+# 2. Build the release.
+MIX_ENV=prod mix deps.get --only prod
+MIX_ENV=prod mix release scf
+
+# 3. With the server stopped: create the event store, then set up the book.
+_build/prod/rel/scf/bin/scf eval 'ScfHost.ReleaseTasks.migrate()'
+_build/prod/rel/scf/bin/scf eval 'ScfHost.ReleaseTasks.setup()'
+
+# 4. Start it with the settings setup wrote.
+set -a; . "$SCF_DATA_DIR/scf.env"; set +a
+_build/prod/rel/scf/bin/scf start      # or `daemon`; `stop` to stop
+```
+
+Open <http://localhost:4090/login> and sign in with the **console token**
+that `setup` printed. It is shown once, and only its digest is stored. Use
+Chromium or Firefox: the session cookie is `Secure`, which they honour for
+`http://localhost`.
+
+* `setup` is safe to rerun. It never re-issues tokens. It renews a lapsed
+  accountant grant (`SCF_GRANT_DAYS`, default 365). It refuses a chapter
+  (`SCF_CHAPTER`, default `local`) that is governed by another key. Its
+  signing keys are `0600` files in `SCF_DATA_DIR/keys`.
+* The console offers the journal (with contrepassation), saisie d'écriture,
+  balance générale, compte de résultat and bilan (with clôture), and the TVA
+  position for the G50. Every écriture needs its pièce: the file is stored
+  locally, and the ledger refuses an écriture whose pièce this machine does
+  not hold.
+* The API uses the **API token** as `Authorization: Bearer <token>`:
+  `PUT /api/v1/pieces` (bytes, `x-content-sha256`), `POST /api/v1/commands`,
+  `GET /api/v1/journal`, `GET /api/v1/statements?from=…&to=…` (or `mois=YYYY-MM`).
+* Tests: `(cd apps/scf_core && mix test)` needs nothing. For
+  `(cd apps/scf_host && mix test)`, first create the test event store with
+  `(cd apps/coop_substrate && MIX_ENV=test mix event_store.create && MIX_ENV=test mix event_store.init)`.
+
+The chart, TVA and closing rules have not yet been reviewed by an Algerian
+accountant; check them before relying on the figures.
+
 ## Build and test
 
 ```sh
@@ -134,6 +186,7 @@ The root [mix.exs](mix.exs) defines both profiles from the same source and lock:
 | --- | --- | --- |
 | `orchestration` | Ledger, identity, cluster, the task host and SpruceGoose; excludes Dispatch | `MIX_ENV=prod mix release orchestration` |
 | `biz_kit` | The above plus Dispatch and Keel | `MIX_ENV=prod mix release biz_kit` |
+| `scf` | Ledger and the SCF accounting host; see the [quickstart](#quickstart-local-accounting-scf) | `MIX_ENV=prod mix release scf` |
 
 [docs/deploy.md](docs/deploy.md) describes settings, migration limits and
 `scripts/release-smoke.sh`, which builds, boots and exercises `orchestration`.
