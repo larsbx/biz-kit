@@ -97,6 +97,8 @@ defmodule Dispatch.MixProject do
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:stream_data, "~> 1.1"},
       {:excoveralls, "~> 0.18", only: :test},
+      # LiveViewTest parses with LazyHTML; Dispatch must consolidate its protocols.
+      {:lazy_html, "~> 0.1.13", only: :test},
       {:phoenix_live_reload, "~> 1.5", only: :dev}
     ]
   end
