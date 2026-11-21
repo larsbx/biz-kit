@@ -24,6 +24,7 @@ The intended obligations remain:
 | AT-5 | A candidate never implies task completion, accepted evidence or a business effect | Existing candidate boundary; no general business-write tool is introduced |
 | AT-6 | Explicit durable admission orders against the actual canonical source and retains one exact-plan identity | Native signed/SQL ordering and restart acceptance; no backend start or implementation-refinement proof |
 | AT-7 | A reference receiver retains one bound request identity and refuses creates after its durable fence acknowledgement | Independent-process SQLite and signed-host conformance cases; no physical execution or cross-store atomicity proof |
+| AT-8 | A fixed local worker is not respawned after an ambiguous start, and termination requires an bound pidfd exit observation | Linux fixed-worker and signed-host acceptance cases; no general adapter, sandbox, cross-store atomicity or model-refinement proof |
 
 `formal/lean/BizKitAgentTask.lean` contains the authorization model and a
 separate `decideValidatedLaunch` guard. Its `blocked` outcome distinguishes
@@ -62,3 +63,12 @@ separately specifies durable request binding, lost-reply reconciliation,
 permanent tombstones and pinned store identity. Its `unknown` observation is
 not final absence, and its fence acknowledgement is not termination. No
 reference response becomes a verified production recovery observation.
+
+The [fixed local worker contract](../../architecture/2026-11-16-agentcore-fixed-local-worker.md)
+adds actual bounded child work, lost-creation-reply reconciliation and kernel
+termination observation for one non-forking process. Existing `starting` records
+never authorize a replacement spawn. The host still must deliver withdrawal to
+the provider and obtain its own fence acknowledgement. These implementation
+tests do not extend the Lean or Quint models and do not establish automatic
+revocation delivery, sandbox policy enforcement, host power-loss recovery or
+general `RecoveryPort` finality.

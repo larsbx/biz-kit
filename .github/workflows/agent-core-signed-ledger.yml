@@ -9,6 +9,7 @@ on:
       - "apps/coop_substrate/**"
       - "deploy/agent-core/**"
       - "experiments/agent_backend_receiver/**"
+      - "experiments/agent_local_worker/**"
       - "config/**"
       - "mix.lock"
       - "scripts/agent_launch_admission_probe.exs"
@@ -22,6 +23,7 @@ on:
       - "apps/coop_substrate/**"
       - "deploy/agent-core/**"
       - "experiments/agent_backend_receiver/**"
+      - "experiments/agent_local_worker/**"
       - "config/**"
       - "mix.lock"
       - "scripts/agent_launch_admission_probe.exs"
@@ -72,6 +74,7 @@ jobs:
           cp -R deploy/agent-core "$AGENT_LAUNCH_STAGE/deploy/"
           cp scripts/agent_launch_admission_probe.exs "$AGENT_LAUNCH_STAGE/scripts/"
           cp -R experiments/agent_backend_receiver "$AGENT_LAUNCH_STAGE/experiments/"
+          cp -R experiments/agent_local_worker "$AGENT_LAUNCH_STAGE/experiments/"
           cat > "$AGENT_LAUNCH_STAGE/mix.exs" <<'EOF'
           defmodule SignedAgentLaunchHarness.MixProject do
             use Mix.Project
@@ -93,6 +96,15 @@ jobs:
           python3 -c 'import sqlite3; print("SQLite", sqlite3.sqlite_version)'
           python3 -m unittest discover -s experiments/agent_backend_receiver -p 'test_*.py' -v \
             2>&1 | tee "$AGENT_LAUNCH_STAGE/backend-receiver.log"
+      - name: Verify real fixed local workers, lost replies and kernel termination
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AGENT_LAUNCH_STAGE"
+          export AGENT_LAUNCH_SOURCE_REVISION="$(cat source-revision.txt)"
+          export AGENT_LOCAL_WORKER_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/local-worker-evidence"
+          python3 -m unittest discover -s experiments/agent_local_worker -p 'test_*.py' -v \
+            2>&1 | tee "$AGENT_LAUNCH_STAGE/local-worker.log"
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -126,22 +138,29 @@ jobs:
             apps/coop_substrate/test/agent_launch_admission_test.exs \
             apps/coop_substrate/test/agent_backend_request_test.exs \
             apps/coop_substrate/test/agent_backend_receiver_test.exs \
+            apps/coop_substrate/test/agent_local_worker_test.exs \
             apps/coop_substrate/test/agent_event_acceptance_test.exs \
+            apps/coop_substrate/acceptance/agent_backend_execution_test.exs \
             apps/coop_substrate/test/support/agent_staging_fixture.ex \
             apps/coop_substrate/test/support/agent_staging_sql.ex \
             apps/coop_substrate/test/support/agent_backend_receiver.ex \
+            apps/coop_substrate/test/support/agent_local_worker.ex \
+            apps/coop_substrate/test/support/agent_execution_fixture.ex \
             scripts/agent_launch_admission_probe.exs
-      - name: Verify genuine signed authority, SQL fences and session recovery
+      - name: Verify signed authority, SQL fences and local workload recovery
         shell: bash
         run: |
           set -euo pipefail
           export AGENT_LAUNCH_SOURCE_REVISION="$(cat "$AGENT_LAUNCH_STAGE/source-revision.txt")"
           export AGENT_BACKEND_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/backend-evidence"
+          export AGENT_LOCAL_WORKER_EVIDENCE_DIR="$AGENT_LAUNCH_STAGE/local-worker-evidence"
           cd "$AGENT_LAUNCH_STAGE/apps/coop_substrate"
           for seed in 1 9173; do
             mix test test/agent_event_acceptance_test.exs test/task_agent_run_intents_test.exs \
               test/agent_launch_admission_test.exs \
               test/agent_backend_request_test.exs test/agent_backend_receiver_test.exs \
+              test/agent_local_worker_test.exs \
+              acceptance/agent_backend_execution_test.exs \
               --warnings-as-errors --trace --seed "$seed" \
               | tee "$AGENT_LAUNCH_STAGE/signed-launch-$seed.log"
           done
@@ -190,4 +209,6 @@ jobs:
             ${{ runner.temp }}/biz-kit-signed-agent-launch/admission-restart.json
             ${{ runner.temp }}/biz-kit-signed-agent-launch/backend-receiver.log
             ${{ runner.temp }}/biz-kit-signed-agent-launch/backend-evidence/**
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/local-worker.log
+            ${{ runner.temp }}/biz-kit-signed-agent-launch/local-worker-evidence/**
           if-no-files-found: error

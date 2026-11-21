@@ -21,6 +21,8 @@
     "allow-dispatch-sign-out",
     "allow-dispatch-request",
     "allow-open-procurement",
+    "allow-procurement-status",
+    "allow-save-procurement-origin",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",

@@ -32,7 +32,11 @@ events, in the shape of `TaskCore.Admission`: a governance-signed
 device, run `OrderCore.Placement` and `Kitchen.apply/3`. The trusted context
 comes from the grant, never the payload, and `test/admission_test.exs` proves
 admission refines the kitchen reducer (same outcome, same state, for any step
-sequence).
+sequence). `check/2` adds a fence on new grants that the fold never applies, so
+older history replays unchanged: within a chapter, a Dispatch key is none of
+the device or role keys and serves one tenant, and a merchant grants each key
+once, revoked or not. `test/key_separation_test.exs` proves `check/2` admits a
+grant exactly when `admit/3` does and those keys stay apart.
 
 Money is Hawala's. The device prices an order with `CommerceCore.Checkout`
 before signing; admission records that snapshot in integer minor units and

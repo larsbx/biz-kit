@@ -33,7 +33,7 @@ These are open defects or host duties, not proofs; `docs/roadmap.md`
 
 | App | Gap |
 | --- | --- |
-| biz-kit | Dispatch, eatsbot and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2`. Dispatch assignments have a ledger path (`DispatchCore.Admission`) that the board does not use yet; eatsbot can be fenced (`CoopSubstrate.WriterFence`) |
+| biz-kit | Dispatch and spruce_goose still write their own databases directly, bypassing `CoopSubstrate.Log.append/2`. Dispatch assignments have a ledger path (`DispatchCore.Admission`) that the board does not use yet. The legacy eatsbot writer is retired (decommission R6) |
 
 Enforced at the host, not in the core: marketing_core (the core trusts
 `delivery_status: :confirmed`; `BizKit.MarketingBridge` binds it to a
@@ -47,8 +47,7 @@ transfers barter assets; the cores only preview and have no host), biz_kit_exten
 invoke or write path exists), restaurant_host (the governance seed is never
 sent; only "signs only what was shown" is guarded), hawala_capability
 (test-only adapter), school_ops (free-text titles are unchecked and
-unmodelled), eatsbot_extension_prometheus (`/metrics` authentication is
-deployment configuration), biz_kit_cluster (ledger appends are fenced by the
+unmodelled), biz_kit_cluster (ledger appends are fenced by the
 event store's expected-version check, so a stale appender is refused; other
 singletons' in-memory state diverges per side during a partition, as
 `docs/architecture/2026-10-19-cluster.md` records).

@@ -5,6 +5,9 @@ What is delivered and what comes next: [the roadmap](../roadmap.md).
 The consolidation target is one signed business-event ledger and rebuildable
 domain views. The imported histories and existing identifiers remain intact.
 
+- [Cross-currency setoff — remaining obligations](cross-currency-setoff-obligations.md):
+  completed exact-head evidence, pending inert drafts, additional formal assurance,
+  and separate authority, admission, discharge and accounting requirements.
 - [Producer cooperative capital integration — 2026-11-13](2026-11-13-producer-capital-integration.md):
   versioned inert membership ($250 annual) and producer-asset unit-buyout
   previews, source-bound proposal digests, legacy patronage/SCF boundaries,
@@ -20,6 +23,12 @@ domain views. The imported histories and existing identifiers remain intact.
   planning, history and minimal deployment. The earlier auxiliary stack was
   proposed only; omit unneeded components from the first build. Implementation
   and field acceptance remain pending.
+- [Economic planning verification layer — 2026-11-11](2026-11-11-economic-planning-verification.md):
+  accepted multimodal GEV/economics scope, including physical conditions, energy,
+  markets, central banks, geopolitics, commodities and precious metals. Begin
+  with the inert Lean/Quint evidence, capacity, cost and publication contracts;
+  live adapters, empirical forecasts and application integration follow their
+  separate acceptance gates.
 - [Task host — 2026-11-09](2026-11-09-task-host.md): SpruceGoose's web
   surface (`/auth`, the task view, its commands and the feed) rehosted on
   `apps/task_host`; native sessions kept; `/mcp` and the OAuth2 issuer dropped.

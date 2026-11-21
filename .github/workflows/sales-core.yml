@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'apps/sales_core/**'
-      - 'apps/eatsbot_core/lib/marketing/**'
       - 'mix.exs'
       - 'mix.lock'
       - 'config/**'
@@ -43,7 +42,6 @@ jobs:
           apps/sales_core/lib/sales_core/campaign.ex
           apps/sales_core/test/sales_core_test.exs
           apps/sales_core/test/consent_wire_test.exs
-          apps/eatsbot_core/lib/marketing/consent_bridge.ex
       - name: Test isolated business rules
         working-directory: apps/sales_core
         run: mix test --no-start
