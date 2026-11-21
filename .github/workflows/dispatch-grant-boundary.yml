@@ -1,0 +1,79 @@
+name: Dispatch grant boundary acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/dispatch/**'
+      - 'apps/biz_kit_identity/**'
+      - 'docs/architecture/2026-11-02-dispatch-grant-boundary.md'
+      - '.github/workflows/dispatch-grant-boundary.yml'
+      - 'mix.*'
+      - 'config/**'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dispatch-grant-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  committed-session-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MIX_ENV: test
+      EVENTSTORE_USERNAME: postgres
+      EVENTSTORE_PASSWORD: postgres
+      PGPASSWORD: postgres
+      DATABASE_URL: ecto://dispatch:dispatch@localhost:5432/dispatch_test
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: erlef/setup-beam@v1
+        with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
+      - uses: dtolnay/rust-toolchain@1.93.0
+      - name: Record exact source revision
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          mkdir -p acceptance-evidence
+          git rev-parse HEAD > acceptance-evidence/source-revision.txt
+          sha256sum apps/dispatch/lib/dispatch/access/{actor,mutation_authority}.ex apps/dispatch/lib/dispatch/operations/board.ex apps/dispatch/lib/dispatch_web/plugs/{resolve_actor,portal_session}.ex apps/dispatch/test/dispatch/operations/board_grant_concurrency_test.exs > acceptance-evidence/sources.sha256
+      - name: Install locked dependencies
+        run: mix deps.get --check-locked
+      - name: Create database role
+        run: psql -h localhost -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
+      - name: Initialize signed ledger storage
+        working-directory: apps/coop_substrate
+        run: mix event_store.create --quiet && mix event_store.init --quiet
+      - name: Focused committed-session regressions
+        working-directory: apps/dispatch
+        shell: bash
+        run: |
+          set -o pipefail
+          mix ash.setup --quiet
+          mix test test/dispatch/operations/board_grant_concurrency_test.exs --include integration --seed 0 --trace 2>&1 | tee ../../acceptance-evidence/grant-boundary.log
+      - name: Broader Dispatch authorization and signed business acceptance
+        working-directory: apps/dispatch
+        shell: bash
+        run: |
+          set -o pipefail
+          mix test --include integration 2>&1 | tee ../../acceptance-evidence/dispatch-all.log
+      - name: Upload exact-revision acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dispatch-grant-boundary-${{ env.EXPECTED_HEAD }}
+          path: acceptance-evidence/
