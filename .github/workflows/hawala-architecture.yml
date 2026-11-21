@@ -23,8 +23,8 @@ jobs:
   canonical-pairing:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Verify immutable Hawala proof/profile source and identical paired decisions
@@ -39,7 +39,7 @@ jobs:
   elixir-test-host:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -56,7 +56,7 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('sha=' + pin['source_commit'] + '\n')
           PYCODE
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: larsbx/hawala-core
           ref: ${{ steps.service-pin.outputs.sha }}
@@ -90,7 +90,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read immutable TB-first storage revision
         id: native-pin
         run: |
@@ -101,7 +101,7 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('sha=' + pin['source_commit'] + '\n')
           PYCODE
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: larsbx/hawala-core
           ref: ${{ steps.native-pin.outputs.sha }}
