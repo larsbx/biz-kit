@@ -4,6 +4,10 @@ defmodule CommerceCore.Checkout do
   priced lines, one order per cart, channel-scoped idempotency, and exactly one
   delivery request for delivery.
 
+  Home-bound candidates pass `%{home_id: ..., merchant: ...}` to `new/3`;
+  grants and snapshots must carry that exact pair. Merchant-string constructors
+  remain compatibility candidates and reject home-bound grants.
+
   The host supplies a trusted cart snapshot and order index in `new/3`, and a
   verified per-cart checkout grant in `apply/3`. It must serialize admission and
   persist the cart completion, order and delivery outbox atomically. This module
@@ -21,6 +25,7 @@ defmodule CommerceCore.Checkout do
 
   defdelegate channels, to: Placement
   defdelegate new(workflow, merchant, carts), to: Placement
+  defdelegate fetch_cart(state, trusted, id), to: Placement
 
   @doc "Authorize before inspecting cart existence, status, prices or idempotency history."
   def apply(state, trusted, command), do: Placement.apply(state, trusted, command, &price/2)

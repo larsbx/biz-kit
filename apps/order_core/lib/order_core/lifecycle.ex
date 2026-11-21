@@ -26,6 +26,8 @@ defmodule OrderCore.Lifecycle do
   `replay/3` checks the mathematical history only, not its provenance or grants.
   """
 
+  alias OrderCore.Ownership
+
   @core_states ~w(placed accepted dispatched completed cancelled failed)a
   @terminal ~w(completed cancelled failed)a
   @delivery_owned ~w(dispatched completed failed)a
@@ -140,6 +142,15 @@ defmodule OrderCore.Lifecycle do
   defp admits?(:delivery, fulfillment), do: fulfillment == :delivery
   defp admits?(:not_delivery, fulfillment), do: fulfillment != :delivery
 
+  def new(workflow, %{home_id: _, merchant: merchant} = owner, id, fulfillment) do
+    with true <- Ownership.valid?(owner),
+         {:ok, state} <- new(workflow, merchant, id, fulfillment) do
+      {:ok, Ownership.stamp(owner, state)}
+    else
+      _ -> {:error, :invalid_order}
+    end
+  end
+
   def new(%{fulfillments: fulfillments}, merchant, id, fulfillment)
       when is_binary(merchant) and byte_size(merchant) > 0 and
              is_binary(id) and byte_size(id) > 0 do
@@ -185,7 +196,14 @@ defmodule OrderCore.Lifecycle do
     end
   end
 
-  defp scoped?(%{merchant: m, id: id}, %{merchant: m, order_id: id}), do: true
+  defp scoped?(%{home_id: _, id: id} = state, %{order_id: id} = trusted),
+    do: Ownership.check(state, trusted) == :ok
+
+  defp scoped?(%{home_id: _}, _), do: false
+
+  defp scoped?(%{merchant: m, id: id}, %{merchant: m, order_id: id} = trusted),
+    do: not Map.has_key?(trusted, :home_id)
+
   defp scoped?(_, _), do: false
 
   defp apply_authorized(
