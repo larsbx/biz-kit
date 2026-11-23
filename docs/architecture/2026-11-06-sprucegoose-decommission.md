@@ -51,12 +51,17 @@ Writers to fence: the live task-row writer, the `certified_events` /
 
 | Condition | State at `a085ae0f` | Gate |
 | --- | --- | --- |
-| Ledger coverage of retained paths | Lifecycle, todos, predecessor cycles, SOP versions, readiness, hierarchy and blueprints are on the ledger. Approvals still run legacy checks (`Revise`, `Blueprints.Applier`, `Checks.HasRole`) | Each retained approval path admitted by a signed ledger event, with a refusal test |
+| Ledger coverage of retained paths | Lifecycle, todos, predecessor cycles, SOP versions, readiness, hierarchy and blueprints are on the ledger. *Met (2026-11-23):* `Blueprints.Applier` is replaced by `TaskBlueprintAppliedV1` (`mix coop.blueprint`); `Checks.HasRole` retires with the Ash resources it guards, ledger grants deciding instead; `Revise` is not migrated (owner decision, §4) | Each retained approval path admitted by a signed ledger event, with a refusal test |
 | Legacy task import | `SpruceGoose.Ledger` import receipts and baselines | Baseline events never overwrite existing ledger tasks |
 | Project owners | Existing projects are ownerless and accept no new tasks until governance backfills them (principal kind, operator grant, owner) | Every live project has an owner |
 | Dual-read parity | `ledger replay-status` | Only explained differences, such as the uncertified state moves of migration `20261021090000` |
-| Signed fence | Not started | A covered command cannot succeed through a row write or the old writer, and a failed append changes no state. Configuration rollback is not a fence |
+| Signed fence | *Implemented, not yet ordered:* governance appends `LegacyWriterFenced` for `spruce_goose`, then `mix coop.fence_writer spruce_goose --chapter … --database-url …` puts a refusing statement trigger on every table of SpruceGoose's database in one transaction, leaving only the task host's `identity_native_sessions` and `schema_migrations` writable (`CoopSubstrate.WriterFence`) | A covered command cannot succeed through a row write or the old writer, and a failed append changes no state. Configuration rollback is not a fence |
 | Replay proof | Not started | Replay after the fence reproduces the projections |
+
+The order at cutover: owners backfilled, dual-read parity explained, history
+of §3 copied out with digests, then the fence, then the replay proof. The fence
+stops every SpruceGoose write, the CLI service's included, and nothing on the
+ledger lifts it; a rollback is the database owner dropping the triggers.
 
 ## 3. History to preserve as inert audit data
 
@@ -76,7 +81,10 @@ None of it converts into ledger authorization.
 
 ## 4. Not migrated
 
-They are retired with the writer, per the salvage decision: wait notes; the
+They are retired with the writer, per the salvage decision: `Revise` (TOML
+revisions of a roadmap's, workflow's or task's text; owner decision
+2026-11-23: a task's text stays as created, and a change is a new task or a
+change suggestion); wait notes; the
 blocked, impact and critical-path views; inbox captures; boards, columns and
 filters; runtime shadows; derivation permits and outcome receipts; release
 provenance; the deployment domain; `Kernel.Constitution` (callers only in its

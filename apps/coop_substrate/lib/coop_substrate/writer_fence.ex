@@ -16,6 +16,10 @@ defmodule CoopSubstrate.WriterFence do
      two writers. It fences every writer of that database, whichever
      repository deployed it, which a flag in one copy of the code could not.
 
+  A writer's database may also hold tables another app still writes, which
+  the fence leaves writable (`exempt/1`): SpruceGoose's holds the task host's
+  native sessions (docs/architecture/2026-11-09-task-host.md).
+
   Not fenced: DDL, and the database owner, who can drop the triggers. A
   rollback is therefore a deliberate act by the owner, outside this module;
   re-running `install/3` restores the fence and covers tables created since.
@@ -25,12 +29,20 @@ defmodule CoopSubstrate.WriterFence do
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
 
   @type_name "LegacyWriterFenced"
-  @writers ~w(eatsbot)
+  # Each fenceable writer, with the `public` tables in its database that other
+  # apps still write and the fence leaves alone.
+  @writers %{
+    "eatsbot" => [],
+    "spruce_goose" => ~w(identity_native_sessions schema_migrations)
+  }
   @trigger "biz_kit_writer_fence"
   @function "public.biz_kit_refuse_fenced_write"
 
   @doc "The writers a fence may name."
-  def writers, do: @writers
+  def writers, do: @writers |> Map.keys() |> Enum.sort()
+
+  @doc "The tables a writer's fence leaves writable."
+  def exempt(writer), do: Map.fetch!(@writers, writer)
 
   def event_types do
     %{
@@ -46,7 +58,7 @@ defmodule CoopSubstrate.WriterFence do
   @doc "Append-gate check: a known writer, in a chapter with declared governance."
   def check(%Envelope{chapter_id: chapter, payload: %{"writer" => writer}}, gate) do
     cond do
-      writer not in @writers -> {:error, {:unknown_writer, writer}}
+      not Map.has_key?(@writers, writer) -> {:error, {:unknown_writer, writer}}
       map_size(gate.role_keys[{chapter, "governance"}] || %{}) == 0 -> {:error, :no_governance}
       true -> :ok
     end
@@ -132,20 +144,26 @@ defmodule CoopSubstrate.WriterFence do
     )
 
     # Replacing the trigger lets a re-run cover tables created since without
-    # stacking triggers.
+    # stacking triggers; an exempt table loses any trigger an earlier run put
+    # on it.
     Postgrex.query!(
       conn,
       """
-      CREATE OR REPLACE FUNCTION pg_temp.biz_kit_fence_all() RETURNS integer LANGUAGE plpgsql AS $$
-      DECLARE t text; n integer := 0;
+      CREATE OR REPLACE FUNCTION pg_temp.biz_kit_fence_all(exempt text[]) RETURNS integer
+      LANGUAGE plpgsql AS $$
+      DECLARE r record; n integer := 0;
       BEGIN
-        FOR t IN SELECT format('%I.%I', schemaname, tablename) FROM pg_tables
+        FOR r IN SELECT format('%I.%I', schemaname, tablename) AS t,
+                        schemaname = 'public' AND tablename = ANY(exempt) AS free
+                 FROM pg_tables
                  WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
                    AND schemaname NOT LIKE 'pg\\_%' LOOP
-          EXECUTE format('DROP TRIGGER IF EXISTS #{@trigger} ON %s', t);
-          EXECUTE format('CREATE TRIGGER #{@trigger} BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ' ||
-                         'ON %s FOR EACH STATEMENT EXECUTE FUNCTION #{@function}()', t);
-          n := n + 1;
+          EXECUTE format('DROP TRIGGER IF EXISTS #{@trigger} ON %s', r.t);
+          IF NOT r.free THEN
+            EXECUTE format('CREATE TRIGGER #{@trigger} BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ' ||
+                           'ON %s FOR EACH STATEMENT EXECUTE FUNCTION #{@function}()', r.t);
+            n := n + 1;
+          END IF;
         END LOOP;
         RETURN n;
       END $$
@@ -153,7 +171,11 @@ defmodule CoopSubstrate.WriterFence do
       []
     )
 
-    %{rows: [[tables]]} = Postgrex.query!(conn, "SELECT pg_temp.biz_kit_fence_all()", [])
+    %{rows: [[tables]]} =
+      Postgrex.query!(conn, "SELECT pg_temp.biz_kit_fence_all($1)", [
+        exempt(env.payload["writer"])
+      ])
+
     %{writer: env.payload["writer"], event_id: env.event_id, tables: tables}
   end
 end

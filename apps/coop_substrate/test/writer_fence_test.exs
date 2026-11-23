@@ -115,6 +115,45 @@ defmodule CoopSubstrate.WriterFenceTest do
     assert refused?(l, "INSERT INTO later VALUES (1)")
   end
 
+  test "SpruceGoose's fence leaves the task host's tables writable, and a re-run frees them",
+       %{legacy: l, opts: opts, signer: signer} do
+    for sql <- [
+          "CREATE TABLE identity_native_sessions (token_hash bytea PRIMARY KEY)",
+          "CREATE TABLE schema_migrations (version bigint PRIMARY KEY)"
+        ],
+        do: Postgrex.query!(l, sql, [])
+
+    # An earlier, unscoped fence had put its trigger on an exempt table.
+    Postgrex.query!(
+      l,
+      "CREATE FUNCTION biz_kit_refuse_fenced_write() RETURNS trigger LANGUAGE plpgsql AS " <>
+        "$$ BEGIN RAISE EXCEPTION 'fenced' USING ERRCODE = 'insufficient_privilege'; END $$",
+      []
+    )
+
+    Postgrex.query!(
+      l,
+      "CREATE TRIGGER biz_kit_writer_fence BEFORE INSERT ON identity_native_sessions " <>
+        "FOR EACH STATEMENT EXECUTE FUNCTION biz_kit_refuse_fenced_write()",
+      []
+    )
+
+    {:ok, _} = WriterFence.declare(@chapter, "spruce_goose", "legacy writer cut over", signer)
+    # orders, deliveries.history and the fence's own table; not the two exempt.
+    assert {:ok, %{tables: 3}} = WriterFence.install(@chapter, "spruce_goose", opts)
+
+    assert refused?(l, "INSERT INTO orders VALUES (2, 'placed')")
+    assert refused?(l, "DELETE FROM biz_kit_writer_fence")
+
+    assert {:ok, _} =
+             Postgrex.query(l, "INSERT INTO identity_native_sessions VALUES ('\\x01')", [])
+
+    assert {:ok, _} =
+             Postgrex.query(l, "INSERT INTO schema_migrations VALUES (20261021120000)", [])
+
+    assert WriterFence.exempt("eatsbot") == []
+  end
+
   test "a write in flight at cutover commits before the fence; none after it",
        %{legacy: l, opts: opts, signer: signer} do
     {:ok, _} = WriterFence.declare(@chapter, "eatsbot", "R5 cutover", signer)

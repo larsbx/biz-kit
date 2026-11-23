@@ -300,7 +300,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "61ae2370d901306cc1ef7e07dd158bee67112556",
+        "mix.exs": "8446c85ec5f3ec15d5be9cd522c3639fcc65a372",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -1234,6 +1234,17 @@
       "registered": [],
       "refreshed_paths": [
         "apps/restaurant_core/lib/restaurant_core/admission.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "e7d12d96c21e60eeea181eb171ae879ed3599bae",
+      "date": "2026-11-23",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "mix.exs"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
