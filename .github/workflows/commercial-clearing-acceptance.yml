@@ -218,6 +218,7 @@ jobs:
       - name: Check the review reservation and legacy fence model
         run: |
           npm install --global @informalsystems/quint@0.32.0
+          bash scripts/quint-evaluator.sh
           spec=formal/quint/commercial_setoff_review.qnt
           quint typecheck "$spec"
           quint verify "$spec" --invariant=safety --max-steps=8

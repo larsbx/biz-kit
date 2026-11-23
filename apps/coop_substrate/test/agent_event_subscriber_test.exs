@@ -32,7 +32,7 @@ defmodule CoopSubstrate.AgentEventSubscriberTest do
       )
 
     name = "agent-native-" <> CoopSubstrate.ULID.generate()
-    on_exit(fn -> EventStore.unsubscribe_from_stream("ledger", name) end)
+    on_exit(fn -> unsubscribe(name) end)
     %{conn: conn, name: name}
   end
 
@@ -117,7 +117,7 @@ defmodule CoopSubstrate.AgentEventSubscriberTest do
     :sys.get_state(pid)
     assert checkpoint(c.conn, c.name) == head
     stop_supervised!(AgentEventSubscriber)
-    EventStore.unsubscribe_from_stream("ledger", c.name)
+    unsubscribe(c.name)
     restart_log()
 
     {:ok, _} =
@@ -161,7 +161,7 @@ defmodule CoopSubstrate.AgentEventSubscriberTest do
     assert {:ok, :existing} = EventRegistrations.register(c.conn, c.name, bundle)
     assert :ok = EventStore.ack(again, 1)
     await_checkpoint(c.conn, c.name, 1)
-    EventStore.unsubscribe_from_stream("ledger", c.name)
+    unsubscribe(c.name)
     flush_deliveries()
     subscribe(c.name)
     assert_receive {:events, [%RecordedEvent{event_number: 2}]}, 5000
@@ -190,5 +190,13 @@ defmodule CoopSubstrate.AgentEventSubscriberTest do
              )
 
     assert checkpoint(c.conn, c.name) == 0
+  end
+
+  # Stopping the subscriber lets EventStore's subscription process exit on its
+  # own, so it may already be gone when we unsubscribe; either way it is.
+  defp unsubscribe(name) do
+    EventStore.unsubscribe_from_stream("ledger", name)
+  catch
+    :exit, {:noproc, _} -> :ok
   end
 end

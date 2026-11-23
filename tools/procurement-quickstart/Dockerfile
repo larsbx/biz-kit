@@ -38,6 +38,15 @@ RUN useradd --uid 10001 --create-home evidence \
  && mkdir /work /evidence && chown -R evidence:evidence /work /evidence /opt/cargo /opt/rustup /opt/quint
 USER evidence
 ENV HOME=/home/evidence PYTHONDONTWRITEBYTECODE=1 PROCUREMENT_ENABLED=false GIT_OPTIONAL_LOCKS=0
+# Quint would list releases through api.github.com at first use; shared runners
+# exhaust that anonymous rate limit. Install the evaluator it expects from the
+# release's direct download URL instead (as scripts/quint-evaluator.sh does).
+RUN version=$(sed -n "s/^exports\.QUINT_EVALUATOR_VERSION = '\(v[0-9.]*\)';$/\1/p" \
+      /opt/quint/node_modules/@informalsystems/quint/dist/src/rust/binaryManager.js) \
+ && test -n "$version" \
+ && mkdir -p "$HOME/.quint/rust-evaluator-$version" \
+ && curl -fsSL --retry 3 "https://github.com/informalsystems/quint/releases/download/evaluator/$version/quint_evaluator-x86_64-unknown-linux-gnu.tar.gz" \
+    | tar -xz -C "$HOME/.quint/rust-evaluator-$version" quint_evaluator
 RUN git config --global safe.directory /source \
  && mix local.hex --force && mix local.rebar --force \
  && elixir --version && lean --version && quint --version && rustc --version

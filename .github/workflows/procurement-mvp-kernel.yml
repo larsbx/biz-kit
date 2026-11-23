@@ -88,6 +88,7 @@ jobs:
           git rev-parse HEAD | tee .artifacts/procurement-quint/revision.txt
           npm install --prefix "$RUNNER_TEMP/quint" --no-save @informalsystems/quint@0.33.1
           quint="$RUNNER_TEMP/quint/node_modules/.bin/quint"
+          bash scripts/quint-evaluator.sh "$quint"
           "$quint" --version | tee .artifacts/procurement-quint/toolchain.txt
           "$quint" typecheck proofs/procurement_mvp/workflow.qnt 2>&1 | tee .artifacts/procurement-quint/typecheck.log
           "$quint" test proofs/procurement_mvp/workflow.qnt --seed=20261108 2>&1 | tee .artifacts/procurement-quint/tests.log

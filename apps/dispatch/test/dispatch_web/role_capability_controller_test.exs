@@ -99,6 +99,7 @@ defmodule DispatchWeb.RoleCapabilityControllerTest do
       assert response.status == 200
 
       listed = Jason.decode!(response.resp_body)["role_assignments"]
+
       assert %{
                "id" => ctx.assignment.id,
                "label" => "#{ctx.org.name} — #{ctx.assignment.role_definition.label}"

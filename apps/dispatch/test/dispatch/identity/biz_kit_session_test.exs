@@ -107,7 +107,7 @@ defmodule Dispatch.Identity.Tokens.BizKitSessionTest do
       org = Fixtures.carrier()
       %{participant: driver} = Fixtures.person(org.id, org, oidc_subject: ctx.principal)
       Fixtures.assignment(org.id, org, driver, "DRIVER")
-      :ok
+      %{org: org}
     end
 
     defp get_v1(path, token) do
@@ -121,7 +121,8 @@ defmodule Dispatch.Identity.Tokens.BizKitSessionTest do
     test "reaches the principal's own dispatch user, and stops when the session ends", ctx do
       conn = get_v1("/v1/me/role-assignments", ctx.session)
       assert conn.status == 200
-      assert [%{"label" => "Driver"}] = Jason.decode!(conn.resp_body)["role_assignments"]
+      label = "#{ctx.org.name} — Driver"
+      assert [%{"label" => ^label}] = Jason.decode!(conn.resp_body)["role_assignments"]
 
       Identity.logout(ctx.session)
 
