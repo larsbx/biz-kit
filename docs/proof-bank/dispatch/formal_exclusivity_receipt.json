@@ -1,0 +1,59 @@
+{
+  "status": "local-and-hosted-model-runtime-replay-passed-at-e1d81bfa",
+  "base_revision": "2192359288daab6291798619586f12b37e6b3f78",
+  "source_sha256": {
+    "formal/lean/BizKitDriverExclusivity.lean": "4b8216ce5fc7ce0853550c38951a7caf6b311494a46c9f093f3bb4a6223bbdba",
+    "formal/lean/lakefile.toml": "7967f2fd92855863a104c26a869503cf44809263d497d75eb2fbbc6ae8d96664",
+    "formal/lean/check.sh": "dd0cf0a23197600038fc85ef03fb00219038d57483468c12ce8bf73ace77b078",
+    "formal/quint/dispatch_exclusivity.qnt": "6224689e06bf8db68651d93add0c736ba2a758b42862ba2ac82aa1a5252b4089",
+    "formal/quint/check_dispatch_exclusivity.sh": "ab3d3d0595332a2f9bb86157afbc4333ce02644791c2f56e462c7ab0a005962b",
+    "formal/quint/check.sh": "9d54266ddd1d742aca1e7579cafd15a6286a79b5128f9b2c4159e4515d617acd"
+  },
+  "lean": {
+    "version": "4.35.0",
+    "archive_sha256": "7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d",
+    "target": "BizKitDriverExclusivity",
+    "build": "passed",
+    "fresh_kernel_replay": "passed",
+    "axiom_audit_revision": "46024e005996495c65ef609368e11ab39c4222e3",
+    "audited_declarations": 114,
+    "axiom_allowlist": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "axiom_audit": "passed",
+    "environment_note": "Self-executable readlink compatibility shim; no kernel or proof-source change."
+  },
+  "quint": {
+    "version": "0.32.0",
+    "rust_evaluator_version": "0.6.0",
+    "apalache_version": "0.56.1",
+    "typecheck": "passed",
+    "directed_tests_passed": 11,
+    "safe_sampling": {
+      "samples": 3000,
+      "max_steps": 25,
+      "seed": 1,
+      "result": "no invariant violation found"
+    },
+    "bounded_check": {
+      "max_steps": 8,
+      "result": "NoError"
+    },
+    "negative_controls": {
+      "snapshotStep/safety": "invariant violation found",
+      "tenantStep/globalSafety": "invariant violation found"
+    }
+  },
+  "claims_excluded": [
+    "Elixir/Ash/PostgreSQL refinement",
+    "deployed database invariant",
+    "owner approval of E2/E3",
+    "authority and identity provenance",
+    "liveness or deadlock freedom"
+  ],
+  "hosted_baseline_receipt": "hosted_exclusivity_receipt_21923592.json",
+  "hosted_extension_receipt": "hosted_exclusivity_receipt_e1d81bfa.json",
+  "hosted_candidate_receipt": "hosted_exclusivity_receipt_c9f30a38.json"
+}

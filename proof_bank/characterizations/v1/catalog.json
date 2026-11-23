@@ -364,7 +364,7 @@
       "evidence_git_blobs": {
         "apps/coop_substrate/lib/coop_substrate/canonical.ex": "a61cbebaa3154f2615c6e5d5c63d8c2fc298c2b3",
         "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex": "d792dba38347b34c897ee502be9ea5625620043a",
-        "apps/coop_substrate/test/canonical_test.exs": "d5534845cc1e99d6df22135821fee24076169e44"
+        "apps/coop_substrate/test/canonical_test.exs": "d1d10532308be2d9dcdeef937d9627a15ed20b13"
       }
     },
     {
@@ -396,7 +396,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
-        "apps/dispatch/lib/dispatch/operations/board.ex": "62fb826ed46e3c65ccaf7b01d8c982f9b4748960",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "d71796a0c2948edc19d06bd172a867f13ab65636",
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
       }
     },
@@ -708,8 +708,8 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "5fec85d8f1d975f8267ccf0d5a7ffea1fde5de7a",
       "evidence_git_blobs": {
-        "apps/order_core/lib/order_core/lifecycle.ex": "c111f79024681197d1b657cb89790d7ec4cdef8d",
-        "apps/order_core/lib/order_core/placement.ex": "71e54ff747f2c21522115151e508e6300cf05724",
+        "apps/order_core/lib/order_core/lifecycle.ex": "fba844e751d28af954931278891c9a0c53af9521",
+        "apps/order_core/lib/order_core/placement.ex": "10e7f2711447ea1d1703e582822521aa6b902807",
         "apps/order_core/test/lifecycle_test.exs": "dce86fddaa3ff649f2f081057c9e96678f400f27"
       }
     },
@@ -1239,11 +1239,25 @@
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
     },
     {
-      "at_sha": "e7d12d96c21e60eeea181eb171ae879ed3599bae",
+      "at_sha": "0d07ed900ba4dfb01c46ba44d2e84163b734a21a",
+      "date": "2026-11-18",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/order_core/lib/order_core/lifecycle.ex",
+        "apps/order_core/lib/order_core/placement.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "55aeff21af78ac3d360441eecb8e891d32744359",
       "date": "2026-11-23",
       "decision": "owner: register and refresh; re-characterize at the next milestone",
       "registered": [],
       "refreshed_paths": [
+        "apps/coop_substrate/test/canonical_test.exs",
+        "apps/dispatch/lib/dispatch/operations/board.ex",
         "mix.exs"
       ],
       "renamed": {},

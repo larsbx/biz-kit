@@ -24,18 +24,19 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports: [5432:5432]
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
       MIX_ENV: test
+      DATABASE_URL: ecto://postgres:postgres@localhost:5432/dispatch_test
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
       SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         id: checkout
       - uses: erlef/setup-beam@v1
         with:
@@ -83,6 +84,17 @@ jobs:
           apps/agent_core/test/preflight_test.exs
           apps/agent_core/test/attempts_test.exs
           apps/agent_ops_store/mix.exs
+          apps/agent_ops_store/lib/agent_ops_store/event_registrations.ex
+          apps/agent_ops_store/test/event_registrations_postgres_test.exs
+          apps/coop_substrate/lib/coop_substrate/agent_event_effects.ex
+          apps/coop_substrate/lib/coop_substrate/agent_event_delivery.ex
+          apps/coop_substrate/test/agent_event_delivery_test.exs
+          apps/coop_substrate/lib/coop_substrate/agent_event_subscriber.ex
+          apps/coop_substrate/test/agent_event_effects_test.exs
+          apps/coop_substrate/test/agent_event_subscriber_test.exs
+          apps/coop_substrate/test/agent_event_acceptance_test.exs
+          apps/coop_substrate/test/support/agent_staging_fixture.ex
+          apps/coop_substrate/test/support/agent_staging_sql.ex
           apps/agent_ops_store/lib/agent_ops_store/postgres.ex
           apps/agent_ops_store/lib/agent_ops_store/event_cursor.ex
           apps/agent_ops_store/lib/agent_ops_store/event_replay.ex
@@ -316,6 +328,9 @@ jobs:
           apps/dispatch/lib/dispatch_web/schemas/role_capabilities.ex
           apps/dispatch/test/dispatch/access/capability_signer_test.exs
           apps/dispatch/test/dispatch_web/role_capability_controller_test.exs
+          apps/dispatch/lib/dispatch_web/controllers/mobile_session_controller.ex
+          apps/dispatch/test/dispatch_web/mobile_session_test.exs
+          apps/dispatch/test/dispatch_web/mobile_acceptance_test.exs
           apps/dispatch/lib/dispatch/accounts/validations/known_constraints.ex
           apps/biz_kit_identity/lib/biz_kit/identity/native_logins.ex
           apps/biz_kit_identity/test/native_sign_in_test.exs
@@ -378,6 +393,8 @@ jobs:
       # local (`mix test --include integration`). The contract check keeps
       # apps/dispatch/contracts/openapi.json, which the field app is held to,
       # in step with the router.
+      - name: Initialize the Dispatch unit-tier database with the configured service role
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE dispatch_test;'
       - name: Test dispatch (unit tier) and its contract
         working-directory: apps/dispatch
         run: mix test && mix openapi.check
@@ -430,7 +447,7 @@ jobs:
       # The web view: its modules against the ledger's canonical vectors, then
       # the first workflow in Chromium (sign in, enrol the device key, accept
       # an agent's suggestion, signed in the browser).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         id: web_node
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         with:
@@ -451,7 +468,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test Consolidation step dependencies
         run: |
           python3 -m venv "$RUNNER_TEMP/consolidation-regression"
@@ -473,7 +490,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports: [5432:5432]
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -481,7 +498,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -499,12 +516,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       # Apalache, which `quint verify` downloads, needs Java 17+.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17

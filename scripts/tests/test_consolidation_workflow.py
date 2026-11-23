@@ -14,7 +14,7 @@ SPRUCE_DB = "Create and migrate orchestration database"
 SPRUCE = "Test orchestration after notes retirement"
 TASK_HOST = "Test the task host"
 REGISTRY = "Test registry revocation across separate database sessions"
-NODE = "actions/setup-node@v4"
+NODE = "actions/setup-node"
 WEB = "Test the web view's modules"
 PLAYWRIGHT = "Install Playwright and Chromium"
 BROWSER = "Test the workflow in a browser"
@@ -33,7 +33,7 @@ class ConsolidationWorkflowTest(unittest.TestCase):
         failed = False
         cancelled = False
         for step in self.job["steps"]:
-            name = step.get("name") or step["uses"]
+            name = step.get("name") or step["uses"].split("@")[0]
             condition = step.get("if")
             if condition is None:
                 runs = not (failed or cancelled)

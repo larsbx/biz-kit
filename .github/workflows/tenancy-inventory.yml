@@ -1,0 +1,32 @@
+name: Multi-organization tenancy inventory
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  source-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deterministic inventory scanner
+        run: python3 -m unittest discover -s tools -p 'test_tenant_inventory.py' -v
+      - name: Produce exact-source T0 audit queue (not a security certification)
+        run: |
+          python3 tools/tenant_inventory.py --revision "${{ github.sha }}" --summary
+          python3 tools/tenant_inventory.py --revision "${{ github.sha }}" --output tenancy-inventory.json
+      - name: Publish audit queue for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenancy-inventory
+          path: tenancy-inventory.json
+          retention-days: 14

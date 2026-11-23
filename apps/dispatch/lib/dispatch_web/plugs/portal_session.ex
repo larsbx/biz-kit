@@ -91,6 +91,15 @@ defmodule DispatchWeb.Plugs.PortalSession do
 
     case PrincipalResolution.actor(subject, requested) do
       {:ok, actor} ->
+        actor = %{
+          actor
+          | authentication: %{
+              subject: subject,
+              expires_at: nil,
+              session_reference: get_session(conn, @session_reference)
+            }
+        }
+
         conn
         |> assign(:actor, actor)
         |> assign(:tenant, actor.tenant_id)

@@ -155,4 +155,50 @@ theorem chapter_is_in_source_identity :
     ((0, 7) : SourceKey) ≠ ((1, 7) : SourceKey) := by
   decide
 
+/-! The review gate accepts a bounded list at runtime. The model below proves
+the reservation rule for arbitrary finite lists. Evidence freshness and exact
+signed-term equality are Boolean premises supplied by the admission boundary. -/
+
+def reviewReady (s : State) (intent : IntentKey) (sources : List SourceKey)
+    (profile evidenceCurrent exactTerms : Bool) : Bool :=
+  profile && evidenceCurrent && exactTerms && !s.intents intent &&
+    sources.all (fun key => !s.consumed key)
+
+def reserveReview (s : State) (intent : IntentKey) (sources : List SourceKey)
+    (profile evidenceCurrent exactTerms : Bool) : State :=
+  if reviewReady s intent sources profile evidenceCurrent exactTerms then
+    { consumed := fun key => sources.contains key || s.consumed key
+      intents := fun key => key == intent || s.intents key
+      commits := s.commits + 1 }
+  else s
+
+theorem review_refuses_stale_evidence (s : State) (intent : IntentKey)
+    (sources : List SourceKey) (profile exactTerms : Bool) :
+    reserveReview s intent sources profile false exactTerms = s := by
+  simp [reserveReview, reviewReady]
+
+theorem review_refuses_changed_terms (s : State) (intent : IntentKey)
+    (sources : List SourceKey) (profile evidenceCurrent : Bool) :
+    reserveReview s intent sources profile evidenceCurrent false = s := by
+  simp [reserveReview, reviewReady]
+
+theorem review_reserves_every_source (s : State) (intent : IntentKey)
+    (sources : List SourceKey) (key : SourceKey)
+    (ready : reviewReady s intent sources true true true = true)
+    (cited : key ∈ sources) :
+    (reserveReview s intent sources true true true).consumed key = true := by
+  simp [reserveReview, ready, cited]
+
+theorem review_refuses_overlap (s : State) (intent : IntentKey) (sources : List SourceKey)
+    (key : SourceKey) (cited : key ∈ sources) (used : s.consumed key = true) :
+    reserveReview s intent sources true true true = s := by
+  have rejected : reviewReady s intent sources true true true = false := by
+    cases h : reviewReady s intent sources true true true with
+    | false => rfl
+    | true =>
+      obtain ⟨a, b⟩ := key
+      simp [reviewReady] at h
+      exact (Bool.noConfusion (used.symm.trans (h.2 a b cited)))
+  simp [reserveReview, rejected]
+
 end BizKitCommercialSetoff
