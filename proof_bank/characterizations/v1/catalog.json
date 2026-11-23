@@ -300,7 +300,7 @@
       "proof_status": "not_proven",
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
-        "mix.exs": "61ae2370d901306cc1ef7e07dd158bee67112556",
+        "mix.exs": "8446c85ec5f3ec15d5be9cd522c3639fcc65a372",
         "docs/architecture/2026-10-24-modular-business-platform.md": "2c6be683a48cbd269ace68383b6b9e5883466c6c"
       }
     },
@@ -364,7 +364,7 @@
       "evidence_git_blobs": {
         "apps/coop_substrate/lib/coop_substrate/canonical.ex": "a61cbebaa3154f2615c6e5d5c63d8c2fc298c2b3",
         "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex": "d792dba38347b34c897ee502be9ea5625620043a",
-        "apps/coop_substrate/test/canonical_test.exs": "d5534845cc1e99d6df22135821fee24076169e44"
+        "apps/coop_substrate/test/canonical_test.exs": "d1d10532308be2d9dcdeef937d9627a15ed20b13"
       }
     },
     {
@@ -396,7 +396,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/dispatch/lib/dispatch/access.ex": "6a83a92472fbcc97113c3f42978291a5c198af5b",
-        "apps/dispatch/lib/dispatch/operations/board.ex": "62fb826ed46e3c65ccaf7b01d8c982f9b4748960",
+        "apps/dispatch/lib/dispatch/operations/board.ex": "d71796a0c2948edc19d06bd172a867f13ab65636",
         "apps/dispatch/test/dispatch/operations/board_concurrency_test.exs": "48fa43eb9281bd961a59bc9c080f5a938364795d"
       }
     },
@@ -1246,6 +1246,19 @@
       "refreshed_paths": [
         "apps/order_core/lib/order_core/lifecycle.ex",
         "apps/order_core/lib/order_core/placement.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "d2756bb396107c49bb062f3607ef4b42a2f80478",
+      "date": "2026-11-23",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/coop_substrate/test/canonical_test.exs",
+        "apps/dispatch/lib/dispatch/operations/board.ex",
+        "mix.exs"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
