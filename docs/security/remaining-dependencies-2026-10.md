@@ -1,5 +1,19 @@
 # Remaining dependency security correction (issue #157)
 
+## November 23 shared-lock audit repair
+
+The full-lock audit on main `d2756bb3` reported three advisories. Only these two
+lock records change. Release requirements are unchanged:
+
+| Package | Affected lock | Corrected lock | Advisory |
+| --- | --- | --- | --- |
+| phoenix | 1.8.16 | 1.8.17 | [EEF-CVE-2026-128361](https://osv.dev/vulnerability/EEF-CVE-2026-128361), [EEF-CVE-2026-129344](https://osv.dev/vulnerability/EEF-CVE-2026-129344) |
+| phoenix_live_view | 1.2.13 | 1.2.15 | [EEF-CVE-2026-126334](https://osv.dev/vulnerability/EEF-CVE-2026-126334) |
+
+Dependabot's `ea775f6d` moved Bandit to 1.15.0 (`~> 1.15.0`), so the production
+listener's exact-version assertion now names 1.15.0. With these two changes,
+the complete shared-lock audit reports no advisories.
+
 ## November 1 federation CI audit repair
 
 On 2026-11-01, PR #226 head `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`

@@ -761,6 +761,7 @@ defmodule CoopSubstrate.CommercialAdmissionTest do
         flunk("canonical appender did not recover")
     end
   end
+
   test "protected V2 reservation produces balanced hypothetical journals and no discharge", ctx do
     ctx = protected!(ctx)
 
@@ -871,5 +872,4 @@ defmodule CoopSubstrate.CommercialAdmissionTest do
 
     assert :ok = Log.verify_chains()
   end
-
 end

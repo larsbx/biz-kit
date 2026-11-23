@@ -95,7 +95,9 @@ jobs:
       - name: Install pinned Quint in isolated tools directory
         run: npm install --prefix "$RUNNER_TEMP/merchant-quint" --no-audit --no-fund @informalsystems/quint@0.32.0
       - name: Install digest-verified Apalache without archive ownership changes
-        run: bash tools/merchant_pilot/formal/install_apalache.sh "$RUNNER_TEMP/merchant-quint-home"
+        run: |
+          bash tools/merchant_pilot/formal/install_apalache.sh "$RUNNER_TEMP/merchant-quint-home"
+          QUINT_HOME="$RUNNER_TEMP/merchant-quint-home" bash scripts/quint-evaluator.sh "$RUNNER_TEMP/merchant-quint/node_modules/.bin/quint"
       - name: Scenarios, mutation witnesses, seeded simulation, Elixir conformance and bounded model checking
         env:
           QUINT_HOME: ${{ runner.temp }}/merchant-quint-home

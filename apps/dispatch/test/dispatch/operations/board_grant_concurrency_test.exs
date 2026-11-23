@@ -14,7 +14,10 @@ defmodule Dispatch.Operations.BoardGrantConcurrencyTest do
     org = Fixtures.carrier()
     %{user: user, participant: person} = Fixtures.person(org.id, org)
     actor = Fixtures.actor(org.id, org, person, "DISPATCHER")
-    trip = Fixtures.assignment_record(org.id, org, person)
+    # The trip's driver holds a driving role, as activation requires.
+    %{user: driver_user, participant: driver} = Fixtures.person(org.id, org)
+    Fixtures.assignment(org.id, org, driver, "DRIVER")
+    trip = Fixtures.assignment_record(org.id, org, driver)
 
     on_exit(fn ->
       :ok = Sandbox.checkout(Repo, sandbox: false)
@@ -24,7 +27,9 @@ defmodule Dispatch.Operations.BoardGrantConcurrencyTest do
         Repo.query!("DELETE FROM #{table} WHERE tenant_id = $1", [uuid(org.id)])
       end
 
-      Repo.query!("DELETE FROM users WHERE id = $1", [uuid(user.id)])
+      for id <- [user.id, driver_user.id],
+          do: Repo.query!("DELETE FROM users WHERE id = $1", [uuid(id)])
+
       Repo.query!("DELETE FROM organizations WHERE id = $1", [uuid(org.id)])
       Sandbox.checkin(Repo)
     end)

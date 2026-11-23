@@ -113,6 +113,7 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
 
       assert first.label ==
                "#{ctx.org.name} — #{ctx.assignment.role_definition.label} [#{ctx.assignment.id}]"
+
       assert second.label ==
                "#{ctx.org.name} — #{same_role.role_definition.label} [#{same_role.id}]"
     end
@@ -124,8 +125,10 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
 
       assert {:ok, actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
       assert actor.role_assignment.id == ctx.assignment.id
+
       assert {:error, :role_assignment_not_held} =
                PrincipalResolution.actor(ctx.user.oidc_subject, ctx.second.id)
+
       assert Enum.map(PrincipalResolution.selectable(ctx.user.oidc_subject), & &1.id) ==
                [ctx.assignment.id]
     end
@@ -168,11 +171,13 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
 
       assert {:error, :role_assignment_not_active} =
                PrincipalResolution.revalidate(forged)
+
       assert {:ok, original} = PrincipalResolution.revalidate(genuine)
       assert original.principal_id == ctx.driver.id
     end
 
-    test "suspended participant invalidates a held actor before a stream or job can use it", ctx do
+    test "suspended participant invalidates a held actor before a stream or job can use it",
+         ctx do
       assert {:ok, held_actor} = PrincipalResolution.actor(ctx.user.oidc_subject)
 
       ctx.driver
@@ -181,6 +186,7 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
 
       assert {:error, :role_assignment_not_active} =
                PrincipalResolution.revalidate(held_actor)
+
       assert {:error, :no_active_assignment} = PrincipalResolution.actor(ctx.user.oidc_subject)
     end
 
@@ -193,6 +199,7 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
 
       assert {:error, :role_assignment_not_active} =
                PrincipalResolution.revalidate(held_actor)
+
       assert {:error, :unknown_principal} = PrincipalResolution.actor(ctx.user.oidc_subject)
     end
 
@@ -205,6 +212,7 @@ defmodule Dispatch.Identity.PrincipalResolutionTest do
 
       assert PrincipalResolution.selectable(ctx.user.oidc_subject) == []
       assert {:error, :no_active_assignment} = PrincipalResolution.actor(ctx.user.oidc_subject)
+
       assert {:error, :role_assignment_not_active} =
                PrincipalResolution.revalidate(held_actor)
     end

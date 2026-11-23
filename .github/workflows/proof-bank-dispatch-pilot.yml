@@ -108,7 +108,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install pinned Quint
-        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0 && bash scripts/quint-evaluator.sh
       - name: Bounded Quint checks and negative controls
         run: bash formal/quint/check.sh
 

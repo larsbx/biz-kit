@@ -296,6 +296,15 @@
         "note": "Consent.record/3: strictly newer events and single-use evidence receipts, so no stale or replayed grant restores consent after withdrawal."
       }
     ],
+    "scf_core": [
+      {
+        "quint": "formal/quint/obligations/scf_core.qnt",
+        "main": "scf_core",
+        "control": "scf_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness"
+      }
+    ],
     "school_ops": [
       {
         "quint": "formal/quint/obligations/school_ops.qnt",

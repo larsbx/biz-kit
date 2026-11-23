@@ -32,7 +32,7 @@ fn revision(raw: &Option<String>) -> String {
     hash.update(b"biz-kit-procurement-settings-v1\0");
     hash.update([u8::from(raw.is_some())]);
     if let Some(raw) = raw { hash.update(raw.as_bytes()); }
-    format!("{:x}", hash.finalize())
+    hash.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn document(raw: &Option<String>) -> Result<Value, String> {
