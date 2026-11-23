@@ -151,10 +151,11 @@ defmodule Dispatch.Accounts.AdministrationTest do
     end
 
     test "closed global user cannot grant with a stale assignment", ctx do
-      participant = Ash.get!(Dispatch.Accounts.Participant, ctx.admin.id,
-        authorize?: false,
-        tenant: ctx.tenant
-      )
+      participant =
+        Ash.get!(Dispatch.Accounts.Participant, ctx.admin.id,
+          authorize?: false,
+          tenant: ctx.tenant
+        )
 
       user = Ash.get!(Dispatch.Accounts.User, participant.user_id, authorize?: false)
 
@@ -173,6 +174,7 @@ defmodule Dispatch.Accounts.AdministrationTest do
       |> Ash.update!(authorize?: false)
 
       assert grant(ctx, ctx.driver, "DISPATCHER") == {:error, :not_found}
+
       assert Administration.revoke(ctx.actor, granted.id, granted.version, ctx.now) ==
                {:error, :not_found}
     end
