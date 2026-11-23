@@ -55,11 +55,14 @@ Writers to fence: the live task-row writer, the `certified_events` /
 | Legacy task import | `SpruceGoose.Ledger` import receipts and baselines | Baseline events never overwrite existing ledger tasks |
 | Project owners | Existing projects are ownerless and accept no new tasks until governance backfills them (principal kind, operator grant, owner) | Every live project has an owner |
 | Dual-read parity | `ledger replay-status` | Only explained differences, such as the uncertified state moves of migration `20261021090000` |
-| Signed fence | *Implemented, not yet ordered:* governance appends `LegacyWriterFenced` for `spruce_goose`, then `mix coop.fence_writer spruce_goose --chapter … --database-url …` puts a refusing statement trigger on every table of SpruceGoose's database in one transaction, leaving only the task host's `identity_native_sessions` and `schema_migrations` writable (`CoopSubstrate.WriterFence`) | A covered command cannot succeed through a row write or the old writer, and a failed append changes no state. Configuration rollback is not a fence |
+| Signed fence | *Implemented, not yet ordered:* governance appends `LegacyWriterFenced` for `spruce_goose`, then `mix coop.fence_writer spruce_goose --chapter … --database-url …` puts a refusing statement trigger on every table of SpruceGoose's database in one transaction, leaving only the task host's `identity_native_sessions` and `schema_migrations` writable (`CoopSubstrate.WriterFence`). The fence is refused until the §3 archive is recorded on the ledger | A covered command cannot succeed through a row write or the old writer, and a failed append changes no state. Configuration rollback is not a fence |
 | Replay proof | Not started | Replay after the fence reproduces the projections |
 
 The order at cutover: owners backfilled, dual-read parity explained, history
-of §3 copied out with digests, then the fence, then the replay proof. The fence
+of §3 copied out with digests and recorded (`mix coop.archive_writer`), then
+the fence, then the replay proof. The fence enforces the archive step: neither
+`mix coop.fence_writer` nor `WriterFence.install/3` proceeds for SpruceGoose
+without a `LegacyHistoryArchived` record. The fence
 stops every SpruceGoose write, the CLI service's included, and nothing on the
 ledger lifts it; a rollback is the database owner dropping the triggers.
 
@@ -78,6 +81,33 @@ None of it converts into ledger authorization.
   the Systemwide SOP digest).
 - **`outbox_events`:** drain or reconcile the backlog before the dispatcher and
   Oban are removed.
+
+*Implemented, not yet run (`CoopSubstrate.HistoryArchive`):*
+
+    mix coop.archive_writer spruce_goose --database-url postgres://… --out DIR \
+      --file <the deployment's Systemwide SOP> --chapter C
+
+- **What leaves:** `actor_grants` (closed grants and grant history included),
+  `certified_events`, `notes`, `events`, `ledger_import_receipts`,
+  `grandfathered_baselines` and `outbox_events`. They are copied from one
+  repeatable-read snapshot as PostgreSQL binary `COPY`, which is lossless:
+  the ETF bytes stay byte for byte, and a copy restores row for row into a
+  table of the recorded column types.
+- **Files:** `priv/constitution/adopted.json` is copied, and so is each
+  `--file`. The Systemwide SOP lives at a deployment path, so it is passed
+  explicitly.
+- **Manifest:** `manifest.json` lists every table with its row count, column
+  types, SHA-256 and size, and every file with its digest. A table the
+  database lacks is listed as absent.
+- **Outbox:** undispatched `outbox_events` rows stop the export until they
+  are drained. `--allow-undispatched-outbox` keeps them in the archive
+  instead, and the manifest records how many there are.
+- **Ledger record:** governance signs `LegacyHistoryArchived` (`writer`,
+  `manifest_sha256`). It records the digest and grants nothing.
+  `mix coop.archive_writer --verify DIR --chapter C` re-hashes an archive and
+  checks that the ledger records it.
+- **Where copies are kept:** decided at cutover. Each copy is checked with
+  `--verify`.
 
 ## 4. Not migrated
 

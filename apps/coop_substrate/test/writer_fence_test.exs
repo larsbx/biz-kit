@@ -17,27 +17,13 @@ defmodule CoopSubstrate.WriterFenceTest do
         })
       )
 
-    {:ok, admin} = raw_conn()
-    db = "writer_fence_#{System.unique_integer([:positive])}"
-    Postgrex.query!(admin, "CREATE DATABASE #{db}", [])
-    opts = Keyword.put(admin_opts(), :database, db)
-    {:ok, legacy} = Postgrex.start_link(opts)
+    {legacy, opts} = CoopSubstrate.LegacyDb.create!("writer_fence")
     Postgrex.query!(legacy, "CREATE TABLE orders (id int PRIMARY KEY, state text)", [])
     Postgrex.query!(legacy, "CREATE SCHEMA deliveries", [])
     Postgrex.query!(legacy, "CREATE TABLE deliveries.history (id int)", [])
     Postgrex.query!(legacy, "INSERT INTO orders VALUES (1, 'placed')", [])
 
-    on_exit(fn ->
-      {:ok, admin} = raw_conn()
-      Postgrex.query!(admin, "DROP DATABASE IF EXISTS #{db} WITH (FORCE)", [])
-    end)
-
     %{gov: gov, legacy: legacy, opts: opts, signer: Map.put(gov.signer, :seed, gov.seed)}
-  end
-
-  defp admin_opts do
-    Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)
-    |> Keyword.take([:hostname, :port, :username, :password])
   end
 
   defp refused?(conn, sql) do
@@ -139,6 +125,9 @@ defmodule CoopSubstrate.WriterFenceTest do
     )
 
     {:ok, _} = WriterFence.declare(@chapter, "spruce_goose", "legacy writer cut over", signer)
+    # Its history archive is recorded first (CoopSubstrate.HistoryArchiveTest).
+    digest = String.duplicate("0", 64)
+    {:ok, _} = CoopSubstrate.HistoryArchive.declare(@chapter, "spruce_goose", digest, signer)
     # orders, deliveries.history and the fence's own table; not the two exempt.
     assert {:ok, %{tables: 3}} = WriterFence.install(@chapter, "spruce_goose", opts)
 
@@ -210,9 +199,7 @@ defmodule CoopSubstrate.WriterFenceTest do
         })
       )
 
-    url =
-      "postgres://#{URI.encode_www_form(opts[:username])}:#{URI.encode_www_form(opts[:password] || "")}" <>
-        "@#{opts[:hostname]}:#{opts[:port] || 5432}/#{opts[:database]}"
+    url = CoopSubstrate.LegacyDb.url(opts)
 
     run =
       &Mix.Tasks.Coop.FenceWriter.run([

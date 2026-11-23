@@ -16,6 +16,9 @@ defmodule CoopSubstrate.WriterFence do
      two writers. It fences every writer of that database, whichever
      repository deployed it, which a flag in one copy of the code could not.
 
+  A writer whose history is kept is fenced only once its archive is on the
+  ledger (`CoopSubstrate.HistoryArchive`), so its history is copied first.
+
   A writer's database may also hold tables another app still writes, which
   the fence leaves writable (`exempt/1`): SpruceGoose's holds the task host's
   native sessions (docs/architecture/2026-11-09-task-host.md).
@@ -96,6 +99,7 @@ defmodule CoopSubstrate.WriterFence do
   """
   def install(chapter, writer, conn_opts) do
     with {:ok, env} <- order(chapter, writer),
+         :ok <- CoopSubstrate.HistoryArchive.ready_to_fence(chapter, writer),
          {:ok, conn} <- Postgrex.start_link(conn_opts) do
       try do
         Postgrex.transaction(conn, &fence!(&1, env), timeout: :infinity)

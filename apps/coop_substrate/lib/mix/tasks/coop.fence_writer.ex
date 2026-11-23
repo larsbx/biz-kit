@@ -8,6 +8,8 @@ defmodule Mix.Tasks.Coop.FenceWriter do
   If the ledger holds no `LegacyWriterFenced` order for the writer in the
   chapter, shows the order and, once confirmed, signs it with the governance
   key in `HARNESS_KEYS_DIR` and appends it (`--reason` is then required).
+  A writer whose history is kept needs its archive recorded first
+  (`mix coop.archive_writer`); until then nothing is signed.
   Then installs the fence on the writer's database, in one transaction, from
   the order on the ledger. Running it again re-applies the fence, covering
   tables created since. Starts the application, so the ledger is reachable.
@@ -16,7 +18,7 @@ defmodule Mix.Tasks.Coop.FenceWriter do
   use Mix.Task
 
   alias CoopSubstrate.Harness.Ops
-  alias CoopSubstrate.WriterFence
+  alias CoopSubstrate.{HistoryArchive, WriterFence}
 
   @usage "usage: mix coop.fence_writer <WRITER> --chapter C --database-url URL [--reason R] [--yes]"
 
@@ -29,8 +31,12 @@ defmodule Mix.Tasks.Coop.FenceWriter do
 
     with [writer] <- positional,
          chapter when is_binary(chapter) <- opts[:chapter],
-         {:ok, conn_opts} <- conn_opts(opts[:database_url]) do
+         {:ok, conn_opts} <- CoopSubstrate.DatabaseUrl.to_postgrex(opts[:database_url]) do
       Mix.Task.run("app.start")
+
+      with {:error, :history_not_archived} <- HistoryArchive.ready_to_fence(chapter, writer),
+           do: Mix.raise("record #{writer}'s history first: mix coop.archive_writer #{writer} …")
+
       :ok = ordered(chapter, writer, opts)
 
       case WriterFence.install(chapter, writer, conn_opts) do
@@ -72,25 +78,4 @@ defmodule Mix.Tasks.Coop.FenceWriter do
         Mix.raise("cannot read the ledger: #{inspect(reason)}")
     end
   end
-
-  defp conn_opts(url) when is_binary(url) do
-    case URI.parse(url) do
-      %URI{scheme: s, host: host, path: "/" <> db} = uri
-      when s in ["postgres", "postgresql"] and is_binary(host) and db != "" ->
-        {user, pass} =
-          case String.split(uri.userinfo || "", ":", parts: 2) do
-            [u, p] -> {URI.decode(u), URI.decode(p)}
-            [u] -> {URI.decode(u), nil}
-          end
-
-        {:ok,
-         [hostname: host, port: uri.port || 5432, database: db, username: user, password: pass]
-         |> Enum.reject(fn {_, v} -> v in [nil, ""] end)}
-
-      _ ->
-        :error
-    end
-  end
-
-  defp conn_opts(_), do: :error
 end

@@ -124,6 +124,7 @@ defmodule CoopSubstrate.Protocol.Validity do
   @commercial_admission_types Map.keys(CommercialSetoffAdmission.event_types())
   @commercial_types Map.keys(CoopSubstrate.CommercialAdmission.event_types())
   @writer_fence_types Map.keys(CoopSubstrate.WriterFence.event_types())
+  @history_archive_types Map.keys(CoopSubstrate.HistoryArchive.event_types())
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @commercial_admission_types do
     CommercialSetoffAdmission.check(env, gate)
@@ -135,6 +136,10 @@ defmodule CoopSubstrate.Protocol.Validity do
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @writer_fence_types do
     CoopSubstrate.WriterFence.check(env, gate)
+  end
+
+  defp type_check(%Envelope{type: type} = env, gate) when type in @history_archive_types do
+    CoopSubstrate.HistoryArchive.check(env, gate)
   end
 
   defp type_check(%Envelope{type: type} = env, gate) when type in @federation_types do
