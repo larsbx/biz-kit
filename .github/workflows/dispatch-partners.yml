@@ -42,9 +42,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/dispatch-spatial-quint" --ignore-scripts --no-audit --no-fund @informalsystems/quint@0.32.0
           echo "$RUNNER_TEMP/dispatch-spatial-quint/node_modules/.bin" >> "$GITHUB_PATH"
-          QUINT_HOME="$RUNNER_TEMP/dispatch-spatial-quint-home" bash scripts/quint-evaluator.sh "$RUNNER_TEMP/dispatch-spatial-quint/node_modules/.bin/quint"
       - name: Install digest-verified Apalache
-        run: bash tools/merchant_pilot/formal/install_apalache.sh "$RUNNER_TEMP/dispatch-spatial-quint-home"
+        run: |
+          bash tools/merchant_pilot/formal/install_apalache.sh "$RUNNER_TEMP/dispatch-spatial-quint-home"
+          QUINT_HOME="$RUNNER_TEMP/dispatch-spatial-quint-home" bash scripts/quint-evaluator.sh "$RUNNER_TEMP/dispatch-spatial-quint/node_modules/.bin/quint"
       - name: Check spatial invariants, witnesses and deliberate unsafe controls
         env:
           QUINT_HOME: ${{ runner.temp }}/dispatch-spatial-quint-home
