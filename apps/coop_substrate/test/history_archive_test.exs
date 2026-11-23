@@ -111,6 +111,17 @@ defmodule CoopSubstrate.HistoryArchiveTest do
     assert manifest(c.out)["outbox"] == %{"table" => "outbox_events", "undispatched" => 2}
   end
 
+  test "two files with one base name are refused before anything is written", c do
+    other = Path.join([c.root, "elsewhere", "adopted.json"])
+    File.mkdir_p!(Path.dirname(other))
+    File.write!(other, "{}")
+
+    assert {:error, {:duplicate_file_name, "adopted.json"}} =
+             HistoryArchive.export("spruce_goose", c.opts, c.out, files: c.files ++ [other])
+
+    refute File.exists?(c.out)
+  end
+
   test "an archive is never written over an existing one", c do
     {:ok, _} = export(c)
     assert {:error, {:exists, _}} = export(c)
@@ -180,7 +191,8 @@ defmodule CoopSubstrate.HistoryArchiveTest do
       )
 
     url = LegacyDb.url(c.opts)
-    [sop] = c.files
+    sop = Path.join(c.root, "systemwide-sop.md")
+    File.write!(sop, "---\nsop_id: systemwide-sop\nversion: 1\n---\n")
 
     archive =
       &Mix.Tasks.Coop.ArchiveWriter.run([
@@ -206,6 +218,7 @@ defmodule CoopSubstrate.HistoryArchiveTest do
     archive.(["--out", first])
     assert_received {:mix_shell, :info, ["archived: spruce_goose, 7 tables into " <> _]}
     assert File.exists?(Path.join(first, "files/adopted.json"))
+    assert File.exists?(Path.join(first, "files/systemwide-sop.md"))
     assert_raise Mix.Error, ~r/not recorded on the ledger/, fn -> verify.(first) end
 
     second = Path.join(c.root, "second")

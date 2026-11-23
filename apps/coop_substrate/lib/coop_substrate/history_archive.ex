@@ -106,19 +106,19 @@ defmodule CoopSubstrate.HistoryArchive do
   def export(writer, conn_opts, dir, opts \\ []) do
     spec = spec(writer) || raise ArgumentError, "#{writer} keeps no history"
     staging = "#{dir}.partial-#{System.unique_integer([:positive])}"
+    files = Keyword.get(opts, :files, [])
 
-    with {:ok, conn} <-
-           if(File.exists?(dir),
-             do: {:error, {:exists, dir}},
-             else: Postgrex.start_link(conn_opts)
-           ) do
+    with :ok <- distinct_names(files),
+         false <- File.exists?(dir),
+         {:ok, _} <- Application.ensure_all_started(:postgrex),
+         {:ok, conn} <- Postgrex.start_link(conn_opts) do
       try do
         File.mkdir_p!(Path.join(staging, "tables"))
         File.mkdir_p!(Path.join(staging, "files"))
 
         with {:ok, {tables, outbox}} <-
                Postgrex.transaction(conn, &snapshot!(&1, spec, staging, opts), timeout: :infinity) do
-          files = Enum.map(Keyword.get(opts, :files, []), &copy_file!(&1, staging))
+          files = Enum.map(files, &copy_file!(&1, staging))
 
           manifest =
             Jason.encode!(
@@ -147,6 +147,20 @@ defmodule CoopSubstrate.HistoryArchive do
         GenServer.stop(conn)
         File.rm_rf!(staging)
       end
+    else
+      true -> {:error, {:exists, dir}}
+      error -> error
+    end
+  end
+
+  # Files land under their base names, so two sources may not share one.
+  defp distinct_names(files) do
+    case files
+         |> Enum.map(&Path.basename/1)
+         |> Enum.frequencies()
+         |> Enum.find(&(elem(&1, 1) > 1)) do
+      nil -> :ok
+      {name, _} -> {:error, {:duplicate_file_name, name}}
     end
   end
 

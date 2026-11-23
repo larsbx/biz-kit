@@ -68,6 +68,9 @@ defmodule Mix.Tasks.Coop.ArchiveWriter do
 
           if chapter = opts[:chapter], do: record(chapter, writer, digest, opts)
 
+        {:error, {:duplicate_file_name, name}} ->
+          Mix.raise("two files are named #{name}; an archive keeps each under its base name")
+
         {:error, {:undispatched_outbox, n}} ->
           Mix.raise(
             "#{n} outbox rows are undispatched: drain them, or keep them in the archive " <>
