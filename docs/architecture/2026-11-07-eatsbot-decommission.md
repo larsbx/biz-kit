@@ -14,6 +14,33 @@ Sources: the plan, the [source audit](2026-10-28-eatsbot-source-revision-audit.m
 `apps/restaurant_core/README.md` and [issue #176](https://github.com/larsbx/biz-kit/issues/176),
 read at main `89d5e8a2`.
 
+## Status as of November 24, 2026: retired in biz-kit
+
+Eatsbot runs through biz-kit, as the rebuilt eatsbot (`restaurant_host`). The
+host that served the legacy copy, `adder-ws`, is a test stack (owner,
+2026-11-16), so no customer data needed an archive or a drain.
+
+| Package | State | Evidence |
+| --- | --- | --- |
+| R0 inventory | Done | [R0 inventory](2026-11-16-eatsbot-r0-inventory.md): surfaces, secrets, personal data, Kafka unused, no job queue |
+| R4 parallel proof | Done for delivery | #402 merged: restaurant checkout to courier-confirmed delivery through Dispatch ([local run](2026-11-16-eatsbot-402-local-acceptance.md)) |
+| R5 switch | Merged | #426: the e2e stack serves `restaurant_host` and starts no legacy app. Its database was recreated on every start, so a trigger fence would not survive one; the switch is the stop |
+| R6 retire | Merged | #426 removed `apps/eatsbot*`, the release, its config and CI; eatsbot#41 removed the Fly workflows and `fly.toml` |
+
+Still open, each the owner's:
+
+1. **Deploy.** `deploy-adder-ws` runs only with the repository variables
+   `ADDER_WS_CD=true` and `ADDER_WS_CD_ACCEPTANCE=v1`, unset while activation
+   awaits tailnet evidence ([adder-ws CD](../adder-ws-cd.md)). Until then
+   `adder-ws` serves what it last pulled.
+2. **Fly.** `fly apps destroy eatsbot` (and its database app, if any); revoke
+   the Fly tokens behind `FLY_API_TOKEN` and `FLY_API_TOKEN_SSH`, then delete
+   both secrets in `larsbx/eatsbot`.
+3. **Archive.** Archive `larsbx/eatsbot` read-only (Definition, point 4).
+
+The dated status below and the tables after it are the record of how this got
+here.
+
 ## Migration status as of November 14, 2026
 
 **The replacement source is on Biz-kit `main`. Production cutover is still open.**

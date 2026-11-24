@@ -30,7 +30,10 @@ defmodule CoopSubstrate.WriterFence do
 
   @type_name "LegacyWriterFenced"
   # Each fenceable writer, with the `public` tables in its database that other
-  # apps still write and the fence leaves alone.
+  # apps still write and the fence leaves alone. eatsbot: retired (decommission
+  # R5/R6). spruce_goose: Mama's database, where its three writers (task rows,
+  # certified events, actor registry) all write, and the task host keeps its
+  # native sessions.
   @writers %{
     "eatsbot" => [],
     "spruce_goose" => ~w(identity_native_sessions schema_migrations)

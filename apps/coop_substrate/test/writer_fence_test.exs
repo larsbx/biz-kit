@@ -233,4 +233,38 @@ defmodule CoopSubstrate.WriterFenceTest do
     assert key_id == gov.key_id
     assert refused?(l, "INSERT INTO orders VALUES (2, 'placed')")
   end
+
+  test "spruce_goose: one order fences its three writers' database; orders are per writer",
+       %{legacy: l, opts: opts, signer: signer} do
+    # SpruceGoose's task rows, certified events, actor registry and Oban jobs
+    # live in one database, so one fence covers all three writers.
+    for sql <- [
+          "CREATE TABLE workflow_tasks (id text PRIMARY KEY, state text)",
+          "CREATE TABLE certified_events (id bigint, etf bytea)",
+          "CREATE TABLE actors (id text, kind text)",
+          "CREATE TABLE oban_jobs (id bigint, state text)",
+          "INSERT INTO workflow_tasks VALUES ('tsk-1', 'ready')"
+        ],
+        do: Postgrex.query!(l, sql, [])
+
+    # Another writer's order fences nothing here.
+    {:ok, _} = WriterFence.declare(@chapter, "eatsbot", "R5 cutover", signer)
+    assert {:error, :not_ordered} = WriterFence.install(@chapter, "spruce_goose", opts)
+    refute refused?(l, "UPDATE workflow_tasks SET state = 'started'")
+
+    {:ok, _} = WriterFence.declare(@chapter, "spruce_goose", "Mama handover", signer)
+    assert {:ok, %{tables: tables}} = WriterFence.install(@chapter, "spruce_goose", opts)
+    assert tables >= 7
+
+    for sql <- [
+          "UPDATE workflow_tasks SET state = 'completed'",
+          "INSERT INTO certified_events VALUES (1, '\\x00')",
+          "DELETE FROM actors",
+          "INSERT INTO oban_jobs VALUES (1, 'available')"
+        ],
+        do: assert(refused?(l, sql), sql)
+
+    assert %{rows: [["tsk-1", "started"]]} =
+             Postgrex.query!(l, "SELECT id, state FROM workflow_tasks", [])
+  end
 end
