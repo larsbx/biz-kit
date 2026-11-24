@@ -1,0 +1,1990 @@
+{
+  "description": "Uncalibrated synthetic demand-first market. Every scope has distinct physical stock lots.",
+  "annual_membership_fee_minor": 25000,
+  "policy": {
+    "mechanism": "purchase",
+    "cadence_hours": 0,
+    "selection": "first_quote",
+    "max_cycle_length": null,
+    "rematch_rounds": 0,
+    "failure_penalty_minor": 0,
+    "coordination_cost_minor_per_order": 100
+  },
+  "shocks": [],
+  "limits": {
+    "max_events": 100000,
+    "max_candidate_pairs": 50000,
+    "solver_work_budget": 1000000
+  },
+  "schema_version": "1.0",
+  "scenario_id": "demand-0-100-5-2",
+  "start_at": "2026-01-01T00:00:00Z",
+  "observed_until_hour": 840,
+  "currency": "USD",
+  "businesses": [
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-0"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-1"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-10"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-11"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-12"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-13"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-14"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-15"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-16"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-17"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-18"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-19"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-2"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-3"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-4"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-5"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-6"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-7"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-8"
+    },
+    {
+      "response_probability": 1.0,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 1.0,
+      "receipt_delay_hours": 0,
+      "id": "buyer-9"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-0"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 24,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-1"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 48,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-2"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 2,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-3"
+    },
+    {
+      "response_probability": 0.8,
+      "response_delay_hours": 24,
+      "acceptance_probability": 1.0,
+      "fulfillment_probability": 0.95,
+      "receipt_delay_hours": 0,
+      "id": "supplier-4"
+    }
+  ],
+  "requests": [
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0000",
+      "buyer_id": "buyer-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 41,
+      "due_at_hour": 209,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0001",
+      "buyer_id": "buyer-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 488,
+      "due_at_hour": 656,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0002",
+      "buyer_id": "buyer-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 143,
+      "due_at_hour": 311,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0003",
+      "buyer_id": "buyer-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 101,
+      "due_at_hour": 269,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0004",
+      "buyer_id": "buyer-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 362,
+      "due_at_hour": 530,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0005",
+      "buyer_id": "buyer-5",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 453,
+      "due_at_hour": 621,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0006",
+      "buyer_id": "buyer-6",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 95,
+      "due_at_hour": 263,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0007",
+      "buyer_id": "buyer-7",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 249,
+      "due_at_hour": 417,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0008",
+      "buyer_id": "buyer-8",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 244,
+      "due_at_hour": 412,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0009",
+      "buyer_id": "buyer-9",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 327,
+      "due_at_hour": 495,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0010",
+      "buyer_id": "buyer-10",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 564,
+      "due_at_hour": 732,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0011",
+      "buyer_id": "buyer-11",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 617,
+      "due_at_hour": 785,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0012",
+      "buyer_id": "buyer-12",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 610,
+      "due_at_hour": 778,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0013",
+      "buyer_id": "buyer-13",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 188,
+      "due_at_hour": 356,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0014",
+      "buyer_id": "buyer-14",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 487,
+      "due_at_hour": 655,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0015",
+      "buyer_id": "buyer-15",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 39,
+      "due_at_hour": 207,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0016",
+      "buyer_id": "buyer-16",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 220,
+      "due_at_hour": 388,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0017",
+      "buyer_id": "buyer-17",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 504,
+      "due_at_hour": 672,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0018",
+      "buyer_id": "buyer-18",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 498,
+      "due_at_hour": 666,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0019",
+      "buyer_id": "buyer-19",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 16,
+      "due_at_hour": 184,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0020",
+      "buyer_id": "buyer-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 174,
+      "due_at_hour": 342,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0021",
+      "buyer_id": "buyer-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 149,
+      "due_at_hour": 317,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0022",
+      "buyer_id": "buyer-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 127,
+      "due_at_hour": 295,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0023",
+      "buyer_id": "buyer-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 379,
+      "due_at_hour": 547,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0024",
+      "buyer_id": "buyer-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 189,
+      "due_at_hour": 357,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0025",
+      "buyer_id": "buyer-5",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 23,
+      "due_at_hour": 191,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0026",
+      "buyer_id": "buyer-6",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 71,
+      "due_at_hour": 239,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0027",
+      "buyer_id": "buyer-7",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 446,
+      "due_at_hour": 614,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0028",
+      "buyer_id": "buyer-8",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 610,
+      "due_at_hour": 778,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0029",
+      "buyer_id": "buyer-9",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 367,
+      "due_at_hour": 535,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0030",
+      "buyer_id": "buyer-10",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 162,
+      "due_at_hour": 330,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0031",
+      "buyer_id": "buyer-11",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 611,
+      "due_at_hour": 779,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0032",
+      "buyer_id": "buyer-12",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 419,
+      "due_at_hour": 587,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0033",
+      "buyer_id": "buyer-13",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 256,
+      "due_at_hour": 424,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0034",
+      "buyer_id": "buyer-14",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 343,
+      "due_at_hour": 511,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0035",
+      "buyer_id": "buyer-15",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 493,
+      "due_at_hour": 661,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0036",
+      "buyer_id": "buyer-16",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 317,
+      "due_at_hour": 485,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0037",
+      "buyer_id": "buyer-17",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 608,
+      "due_at_hour": 776,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0038",
+      "buyer_id": "buyer-18",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 228,
+      "due_at_hour": 396,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0039",
+      "buyer_id": "buyer-19",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 411,
+      "due_at_hour": 579,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0040",
+      "buyer_id": "buyer-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 456,
+      "due_at_hour": 624,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0041",
+      "buyer_id": "buyer-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 540,
+      "due_at_hour": 708,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0042",
+      "buyer_id": "buyer-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 333,
+      "due_at_hour": 501,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0043",
+      "buyer_id": "buyer-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 192,
+      "due_at_hour": 360,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0044",
+      "buyer_id": "buyer-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 411,
+      "due_at_hour": 579,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0045",
+      "buyer_id": "buyer-5",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 14,
+      "due_at_hour": 182,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0046",
+      "buyer_id": "buyer-6",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 622,
+      "due_at_hour": 790,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0047",
+      "buyer_id": "buyer-7",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 102,
+      "due_at_hour": 270,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0048",
+      "buyer_id": "buyer-8",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 281,
+      "due_at_hour": 449,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0049",
+      "buyer_id": "buyer-9",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 669,
+      "due_at_hour": 837,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0050",
+      "buyer_id": "buyer-10",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 285,
+      "due_at_hour": 453,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0051",
+      "buyer_id": "buyer-11",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 265,
+      "due_at_hour": 433,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0052",
+      "buyer_id": "buyer-12",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 622,
+      "due_at_hour": 790,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0053",
+      "buyer_id": "buyer-13",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 550,
+      "due_at_hour": 718,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0054",
+      "buyer_id": "buyer-14",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 9,
+      "due_at_hour": 177,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0055",
+      "buyer_id": "buyer-15",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 345,
+      "due_at_hour": 513,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0056",
+      "buyer_id": "buyer-16",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 42,
+      "due_at_hour": 210,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0057",
+      "buyer_id": "buyer-17",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 369,
+      "due_at_hour": 537,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0058",
+      "buyer_id": "buyer-18",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 489,
+      "due_at_hour": 657,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0059",
+      "buyer_id": "buyer-19",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 535,
+      "due_at_hour": 703,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0060",
+      "buyer_id": "buyer-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 306,
+      "due_at_hour": 474,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0061",
+      "buyer_id": "buyer-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 485,
+      "due_at_hour": 653,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0062",
+      "buyer_id": "buyer-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 118,
+      "due_at_hour": 286,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0063",
+      "buyer_id": "buyer-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 343,
+      "due_at_hour": 511,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0064",
+      "buyer_id": "buyer-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 67,
+      "due_at_hour": 235,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0065",
+      "buyer_id": "buyer-5",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 394,
+      "due_at_hour": 562,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0066",
+      "buyer_id": "buyer-6",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 459,
+      "due_at_hour": 627,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0067",
+      "buyer_id": "buyer-7",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 377,
+      "due_at_hour": 545,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0068",
+      "buyer_id": "buyer-8",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 196,
+      "due_at_hour": 364,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0069",
+      "buyer_id": "buyer-9",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 538,
+      "due_at_hour": 706,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0070",
+      "buyer_id": "buyer-10",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 407,
+      "due_at_hour": 575,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0071",
+      "buyer_id": "buyer-11",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 638,
+      "due_at_hour": 806,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0072",
+      "buyer_id": "buyer-12",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 387,
+      "due_at_hour": 555,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0073",
+      "buyer_id": "buyer-13",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 151,
+      "due_at_hour": 319,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0074",
+      "buyer_id": "buyer-14",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 330,
+      "due_at_hour": 498,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0075",
+      "buyer_id": "buyer-15",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 9,
+      "due_at_hour": 177,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0076",
+      "buyer_id": "buyer-16",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 537,
+      "due_at_hour": 705,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0077",
+      "buyer_id": "buyer-17",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 596,
+      "due_at_hour": 764,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0078",
+      "buyer_id": "buyer-18",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 528,
+      "due_at_hour": 696,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0079",
+      "buyer_id": "buyer-19",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 41,
+      "due_at_hour": 209,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0080",
+      "buyer_id": "buyer-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 164,
+      "due_at_hour": 332,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0081",
+      "buyer_id": "buyer-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 542,
+      "due_at_hour": 710,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0082",
+      "buyer_id": "buyer-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 436,
+      "due_at_hour": 604,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0083",
+      "buyer_id": "buyer-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 397,
+      "due_at_hour": 565,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0084",
+      "buyer_id": "buyer-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 186,
+      "due_at_hour": 354,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-2-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0085",
+      "buyer_id": "buyer-5",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 505,
+      "due_at_hour": 673,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0086",
+      "buyer_id": "buyer-6",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 392,
+      "due_at_hour": 560,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0087",
+      "buyer_id": "buyer-7",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 293,
+      "due_at_hour": 461,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0088",
+      "buyer_id": "buyer-8",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 427,
+      "due_at_hour": 595,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0089",
+      "buyer_id": "buyer-9",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 361,
+      "due_at_hour": 529,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0090",
+      "buyer_id": "buyer-10",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 469,
+      "due_at_hour": 637,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0091",
+      "buyer_id": "buyer-11",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 20,
+      "due_at_hour": 188,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0092",
+      "buyer_id": "buyer-12",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 562,
+      "due_at_hour": 730,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-3-a0-c0"
+      ],
+      "id": "request-0093",
+      "buyer_id": "buyer-13",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 113,
+      "due_at_hour": 281,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0094",
+      "buyer_id": "buyer-14",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 636,
+      "due_at_hour": 804,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0095",
+      "buyer_id": "buyer-15",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 124,
+      "due_at_hour": 292,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-1-a0-c0",
+        "lot-2-a0-c0"
+      ],
+      "id": "request-0096",
+      "buyer_id": "buyer-16",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 455,
+      "due_at_hour": 623,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0097",
+      "buyer_id": "buyer-17",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 647,
+      "due_at_hour": 815,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-0-a0-c0",
+        "lot-1-a0-c0"
+      ],
+      "id": "request-0098",
+      "buyer_id": "buyer-18",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 261,
+      "due_at_hour": 429,
+      "max_unit_price_minor": 20000
+    },
+    {
+      "withdraw_at_hour": null,
+      "exchange_offer_id": null,
+      "acceptable_offer_ids": [
+        "lot-3-a0-c0",
+        "lot-4-a0-c0"
+      ],
+      "id": "request-0099",
+      "buyer_id": "buyer-19",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 1,
+      "qualified_at_hour": 642,
+      "due_at_hour": 810,
+      "max_unit_price_minor": 20000
+    }
+  ],
+  "offers": [
+    {
+      "id": "lot-0-a0-c0",
+      "seller_id": "supplier-0",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 20,
+      "available_at_hour": 0,
+      "expires_at_hour": 1008,
+      "unit_price_minor": 1000,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-1-a0-c0",
+      "seller_id": "supplier-1",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 20,
+      "available_at_hour": 0,
+      "expires_at_hour": 1008,
+      "unit_price_minor": 1050,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-2-a0-c0",
+      "seller_id": "supplier-2",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 20,
+      "available_at_hour": 0,
+      "expires_at_hour": 1008,
+      "unit_price_minor": 1100,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-3-a0-c0",
+      "seller_id": "supplier-3",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 20,
+      "available_at_hour": 0,
+      "expires_at_hour": 1008,
+      "unit_price_minor": 1150,
+      "delivery_hours": 48
+    },
+    {
+      "id": "lot-4-a0-c0",
+      "seller_id": "supplier-4",
+      "category": "materials",
+      "area": "metro-a",
+      "unit": "lot",
+      "quantity": 20,
+      "available_at_hour": 0,
+      "expires_at_hour": 1008,
+      "unit_price_minor": 1200,
+      "delivery_hours": 48
+    }
+  ]
+}

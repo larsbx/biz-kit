@@ -5,7 +5,12 @@ defmodule CoopSubstrate.Projections.AdmissionGate do
   alias CoopSubstrate.CommercialAdmission
   alias CoopSubstrate.Projections.Membership
 
-  def init, do: Map.put(Membership.init(), :commercial_admission, CommercialAdmission.init())
+  def init do
+    Membership.init()
+    |> Map.put(:commercial_admission, CommercialAdmission.init())
+    |> Map.put(:member_key_epochs, %{})
+    |> Map.put(:legacy_archived_writers, MapSet.new())
+  end
 
   def handle_event(env, gate) do
     next =
@@ -15,6 +20,36 @@ defmodule CoopSubstrate.Projections.AdmissionGate do
         Membership.handle_event(env, gate)
       end
 
+    next = track_member_key_epoch(env, next)
+    next = track_history_archive(env, next)
     CommercialAdmission.fold(env, gate, next)
   end
+
+  # Admission uses the ordered prefix, including earlier events in one batch.
+  # This tracks an admitted assertion, not archive-file integrity or completeness.
+  defp track_history_archive(
+         %{type: "LegacyHistoryArchived", chapter_id: chapter, payload: payload},
+         gate
+       ) do
+    update_in(gate, [:legacy_archived_writers], fn writers ->
+      MapSet.put(writers, {chapter, payload["writer"]})
+    end)
+  end
+
+  defp track_history_archive(_env, gate), do: gate
+
+  # The Log assigns this position before validating and folding the batch.
+  # Replay restores the same position even if a rotation restores old keys.
+  defp track_member_key_epoch(%{type: type} = env, gate)
+       when type in ~w(MemberRegistered KeyRotated KeyRecoveryRotated) do
+    member = {env.chapter_id, env.payload["member_id"]}
+
+    if Map.has_key?(gate.members, member) do
+      put_in(gate, [:member_key_epochs, Access.key(member)], env.global_seq)
+    else
+      gate
+    end
+  end
+
+  defp track_member_key_epoch(_env, gate), do: gate
 end

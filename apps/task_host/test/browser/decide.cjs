@@ -73,6 +73,11 @@ async function signIn(browser, subject) {
     if ((await next()) !== "go") throw new Error("expected go");
     await admin.reload();
     await admin.getByText("This browser administers this chapter").waitFor();
+    // Administration lives in sections the default layout leaves closed.
+    for (const label of ["Approve a request", "Projects of this chapter", "A person in this chapter",
+      "Administrators of this chapter", "This device"]) {
+      await admin.getByLabel("Add section", { exact: true }).selectOption({ label });
+    }
 
     // Sign what a page shows in its confirmation, if it is `type` (and `includes`).
     const signOn = async (p, type, includes = "") => {

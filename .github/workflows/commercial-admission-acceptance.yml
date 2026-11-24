@@ -88,7 +88,7 @@ jobs:
           java-version: '21.0.13+9.0.LTS'
           java-package: jre
       - name: Install pinned Quint
-        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.33.1
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.33.1 && bash scripts/quint-evaluator.sh
       - name: Independent bounded model and targeted counterexamples
         env:
           COMMERCIAL_QUINT_EVIDENCE_DIR: ${{ github.workspace }}/commercial-evidence/quint

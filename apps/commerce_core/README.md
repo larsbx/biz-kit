@@ -40,6 +40,11 @@ In tests, the helper starts Localize's currency loader using the bundled
 English locale cache owned by Localize itself, without starting Eatsbot's web,
 database, or queue services. Production CommerceCore code never calls Eatsbot.
 
+The portable Eatsbot compatibility workflow uses Elixir 1.18 and OTP 26.
+The offline [Merchant Pilot](../../tools/merchant_pilot/README.md) requires
+OTP 27+ for its strict JSON codec. Its tests are skipped on OTP 26 and run
+in the OTP 27 standalone package workflow.
+
 The only declared runtime dependency is `ex_money`. This kernel does not
 depend on Eatsbot, Dispatch, SchoolOps, Ash resources, storage, network,
 tenant-specific policies or the umbrella runtime. Its source lives inside
@@ -85,3 +90,16 @@ Hawala gateway, followed by downstream persistence; this core exposes no
 financial-acceptance action.
 
 See [the fixture provenance, intentional differences and remaining migration gates](../../docs/architecture/2026-10-31-eatsbot-safety-compatibility.md).
+
+## Home ownership boundary
+
+For home-bound candidates use `%{home_id: "home", merchant: "organization"}`
+as the owner passed to `Catalog.new/1`, `Checkout.new/3` or
+`OrderCore.Lifecycle.new/4`. Catalog operations require that same owner; checkout and
+order grants additionally carry `home_id`. Cart snapshots carry owner and
+principal; `Checkout.fetch_cart/3` requires a per-cart `:cart_read` host grant.
+The host must authenticate and revalidate all context and serialize the one
+authoritative writer. Merchant-only constructors are compatibility candidates.
+
+See [Eatsbot ownership audit and PostgreSQL admission gates](../../docs/architecture/2026-11-01-eatsbot-home-isolation-boundary.md).
+These pure guards do not establish legacy resource tenancy or RLS.

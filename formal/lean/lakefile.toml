@@ -1,6 +1,6 @@
 name = "BizKitEventProofs"
 version = "0.1.0"
-defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDriverExclusivity", "BizKitDriverExclusivityE3", "BizKitDispatchSpatial", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission", "BizKitProcurementContract", "BizKitAgentTask"]
+defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDispatchSpatial", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission", "BizKitProcurementContract", "BizKitAgentTask", "BizKitDriverExclusivity", "BizKitDriverExclusivityE3", "BizKitScf", "BizKitCommercialLineage"]
 
 [[lean_lib]]
 name = "BizKitLeases"
@@ -27,12 +27,6 @@ name = "BizKitInventory"
 name = "BizKitInventoryLocations"
 
 [[lean_lib]]
-name = "BizKitDriverExclusivity"
-
-[[lean_lib]]
-name = "BizKitDriverExclusivityE3"
-
-[[lean_lib]]
 name = "BizKitCommerce"
 
 [[lean_lib]]
@@ -46,3 +40,15 @@ name = "BizKitProcurementContract"
 
 [[lean_lib]]
 name = "BizKitAgentTask"
+
+[[lean_lib]]
+name = "BizKitDriverExclusivity"
+
+[[lean_lib]]
+name = "BizKitDriverExclusivityE3"
+
+[[lean_lib]]
+name = "BizKitScf"
+
+[[lean_lib]]
+name = "BizKitCommercialLineage"

@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -111,6 +113,44 @@ class AuditTest(unittest.TestCase):
                          module.quint_checks(self.coverage))
 
 
+class CoverageJsonTest(unittest.TestCase):
+    quint = {"quint": "formal/quint/obligations/scf_core.qnt", "main": "scf_core",
+             "control": "scf_core_control", "invariant": "obligation",
+             "witness": "obligationWitness"}
+    lean = {"lean": "BizKitScf", "theorem": "obligation"}
+
+    def test_text_merge_duplicate_app_fails_audit_and_quint_listing(self):
+        # This is the actual shape of the #387/#442 merge hazard: two app
+        # keys, each with a valid artifact. Ordinary JSON parsing loses Quint.
+        text = ('{"schema": "' + module.SCHEMA + '", "covered": {"scf_core": '
+                + json.dumps([self.quint]) + ', "scf_core": '
+                + json.dumps([self.lean]) + '}, "uncovered": []}')
+        self.assertEqual([self.lean], json.loads(text)["covered"]["scf_core"])
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "formal").mkdir()
+            (root / module.COVERAGE).write_text(text)
+            for args in ([], ["--quint-checks"]):
+                with self.subTest(args=args):
+                    result = subprocess.run(
+                        [sys.executable, "-I", str(source), "--root", str(root), *args],
+                        capture_output=True, text=True)
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("duplicate JSON key: scf_core", result.stderr)
+                    self.assertEqual("", result.stdout)
+
+    def test_combined_scf_artifacts_preserve_quint_execution(self):
+        coverage = module.parse_coverage(json.dumps({
+            "schema": module.SCHEMA,
+            "covered": {"scf_core": [self.quint, self.lean]}, "uncovered": [],
+        }))
+        self.assertEqual([self.quint, self.lean], coverage["covered"]["scf_core"])
+        self.assertEqual(
+            [(self.quint["quint"], "scf_core", "scf_core_control",
+              "obligation", "obligationWitness", 6)],
+            module.quint_checks(coverage))
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -147,3 +187,15 @@ class BaseRefTest(unittest.TestCase):
         base, problem = module.load_base(self.root, "HEAD")
         self.assertIsNone(base)
         self.assertIn("unreadable ratchet base", problem)
+
+    def test_duplicate_base_app_key_fails_closed(self):
+        (self.root / "formal").mkdir()
+        (self.root / module.COVERAGE).write_text(
+            '{"covered": {"scf_core": [{"quint": "old.qnt"}], '
+            '"scf_core": [{"lean": "BizKitScf"}]}, "uncovered": []}')
+        self.git("add", ".")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "ambiguous")
+        base, problem = module.load_base(self.root, "HEAD")
+        self.assertIsNone(base)
+        self.assertIn("unreadable ratchet base", problem)
+        self.assertIn("duplicate JSON key: scf_core", problem)

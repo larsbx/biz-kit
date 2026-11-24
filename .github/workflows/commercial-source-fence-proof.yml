@@ -4,12 +4,18 @@ on:
   pull_request:
     paths:
       - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/BizKitCommercialLineage.lean"
+      - "formal/lean/CommercialLineageFixtures.lean"
+      - "formal/lean/check_lineage_fixtures.sh"
+      - "apps/coop_substrate/test/fixtures/commercial_lineage.tsv"
       - "formal/lean/CheckCommercialSourceFence.lean"
       - "formal/lean/install-toolchain.sh"
       - "formal/lean/lean-toolchain"
       - "formal/lean/lakefile.toml"
       - "formal/lean/check.sh"
       - "formal/quint/commercial_source_fence.qnt"
+      - "formal/quint/commercial_lineage.qnt"
+      - "formal/quint/check_commercial_lineage.sh"
       - "formal/quint/check_commercial_source_fence.sh"
       - "docs/architecture/2026-11-08-commercial-source-fence-proof.md"
       - ".github/workflows/commercial-source-fence-proof.yml"
@@ -17,12 +23,18 @@ on:
     branches: [main]
     paths:
       - "formal/lean/BizKitCommercialSetoff.lean"
+      - "formal/lean/BizKitCommercialLineage.lean"
+      - "formal/lean/CommercialLineageFixtures.lean"
+      - "formal/lean/check_lineage_fixtures.sh"
+      - "apps/coop_substrate/test/fixtures/commercial_lineage.tsv"
       - "formal/lean/CheckCommercialSourceFence.lean"
       - "formal/lean/install-toolchain.sh"
       - "formal/lean/lean-toolchain"
       - "formal/lean/lakefile.toml"
       - "formal/lean/check.sh"
       - "formal/quint/commercial_source_fence.qnt"
+      - "formal/quint/commercial_lineage.qnt"
+      - "formal/quint/check_commercial_lineage.sh"
       - "formal/quint/check_commercial_source_fence.sh"
       - "docs/architecture/2026-11-08-commercial-source-fence-proof.md"
       - ".github/workflows/commercial-source-fence-proof.yml"
@@ -42,13 +54,15 @@ jobs:
         with:
           node-version: "22"
       - name: Install version-pinned Quint
-        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0 && bash scripts/quint-evaluator.sh
       - name: Verify no double discharge and refute unsafe guards
         run: |
           git rev-parse HEAD
           quint --version
           sha256sum formal/quint/{commercial_source_fence.qnt,check_commercial_source_fence.sh}
           bash formal/quint/check_commercial_source_fence.sh
+      - name: Check lineage closure and unsafe reassignment controls
+        run: bash formal/quint/check_commercial_lineage.sh
 
   lean-source-fence:
     runs-on: ubuntu-24.04
@@ -77,6 +91,10 @@ jobs:
           lake env lean -DwarningAsError=true BizKitCommercialSetoff.lean
           lake build BizKitCommercialSetoff
           lake env leanchecker --fresh --verbose BizKitCommercialSetoff
+          lake env lean -DwarningAsError=true BizKitCommercialLineage.lean
+          lake build BizKitCommercialLineage
+          lake env leanchecker --fresh --verbose BizKitCommercialLineage
+          bash check_lineage_fixtures.sh
       - name: Execute source-fence checks and audit compiled axioms
         working-directory: formal/lean
         run: lake env lean -DwarningAsError=true CheckCommercialSourceFence.lean

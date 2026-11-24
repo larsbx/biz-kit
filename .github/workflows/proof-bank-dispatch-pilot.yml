@@ -24,6 +24,8 @@ on:
       - 'apps/dispatch/test/dispatch/accounts/administration_test.exs'
       - 'apps/dispatch/test/dispatch/operations/trips_test.exs'
       - 'apps/dispatch/test/dispatch/operations/locations_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/location_work_test.exs'
+      - 'apps/dispatch/test/dispatch/restaurant_delivery_test.exs'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -55,6 +57,8 @@ on:
       - 'apps/dispatch/test/dispatch/accounts/administration_test.exs'
       - 'apps/dispatch/test/dispatch/operations/trips_test.exs'
       - 'apps/dispatch/test/dispatch/operations/locations_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/location_work_test.exs'
+      - 'apps/dispatch/test/dispatch/restaurant_delivery_test.exs'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -126,7 +130,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install pinned Quint
-        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0 && bash scripts/quint-evaluator.sh
       - name: Bounded Quint checks and negative controls
         run: bash formal/quint/check.sh
 
@@ -142,6 +146,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       MIX_ENV: test
+      BIZKIT_BUNDLED_TEST_LOCALE: "true"
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
       PGPASSWORD: postgres
@@ -181,9 +186,12 @@ jobs:
             test/dispatch/operations/board_concurrency_test.exs \
             test/dispatch/operations/board_driver_exclusivity_test.exs \
             test/dispatch/operations/board_authority_concurrency_test.exs \
+            test/dispatch/operations/board_grant_concurrency_test.exs \
             test/dispatch/fleet_test.exs \
             test/dispatch/fleet/assignment_policy_test.exs \
             test/dispatch/accounts/administration_test.exs \
             test/dispatch/operations/trips_test.exs \
             test/dispatch/operations/locations_test.exs \
+            test/dispatch/operations/location_work_test.exs \
+            test/dispatch/restaurant_delivery_test.exs \
             test/dispatch_web/operations_controller_test.exs

@@ -1,0 +1,110 @@
+name: Procurement and Dispatch packaged-process acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'config/**'
+      - 'native/**'
+      - 'mix.*'
+      - '.tool-versions'
+      - 'tests/procurement_mvp/**'
+      - 'scripts/test-procurement-dispatch.sh'
+      - '.github/workflows/procurement-dispatch-packaged.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: procurement-dispatch-packaged-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packaged-only:
+    name: Two bundled releases on one hosted runner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
+        env:
+          POSTGRES_USER: acceptance
+          POSTGRES_PASSWORD: disposable-packaged-acceptance
+          POSTGRES_DB: postgres
+        ports: ['127.0.0.1::5432']
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U acceptance -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVENTSTORE_HOST: 127.0.0.1
+      EVENTSTORE_USERNAME: acceptance
+      EVENTSTORE_PASSWORD: disposable-packaged-acceptance
+      PROCUREMENT_DISPATCH_ACCEPTANCE: disposable-local-postgres
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          persist-credentials: false
+      - name: Install pinned OTP and Elixir with Hex and Rebar
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          version-type: strict
+          version-file: .tool-versions
+      - name: Install pinned Rust and Cargo
+        run: |
+          rustup toolchain install 1.91.1 --profile minimal
+          rustup default 1.91.1
+      - name: Install PostgreSQL 16 clients and build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16 openssl build-essential pkg-config util-linux
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
+      - name: Verify disposable PostgreSQL and PostGIS versions
+        env:
+          EVENTSTORE_PORT: ${{ job.services.postgres.ports['5432'] }}
+          PGPASSWORD: ${{ env.EVENTSTORE_PASSWORD }}
+          PGCONNECT_TIMEOUT: '5'
+        run: |
+          sql=(psql -X -v ON_ERROR_STOP=1 -h "$EVENTSTORE_HOST" -p "$EVENTSTORE_PORT"
+               -U "$EVENTSTORE_USERNAME" -d postgres)
+          test "$("${sql[@]}" -Atc "SELECT current_setting('server_version_num')::integer / 10000")" = 16
+          postgis=$("${sql[@]}" -Atc "SELECT default_version FROM pg_available_extensions WHERE name = 'postgis'")
+          [[ "$postgis" == 3.4.* ]]
+          {
+            printf 'PostgreSQL server %s\nPostGIS available %s\n' "$("${sql[@]}" -Atc 'SHOW server_version')" "$postgis"
+            psql --version
+          } | tee "$RUNNER_TEMP/packaged-database-toolchain.txt"
+          printf 'EVENTSTORE_PORT=%s\n' "$EVENTSTORE_PORT" >> "$GITHUB_ENV"
+      - name: Build and exercise both release archives
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          bash scripts/test-procurement-dispatch.sh --packaged-only
+      - name: Verify the packaged-process evidence before upload
+        run: |
+          evidence=".artifacts/procurement-dispatch-packaged/$SOURCE_REVISION"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests/procurement_mvp python3 - "$evidence" "$SOURCE_REVISION" <<'PY'
+          from pathlib import Path
+          import sys
+
+          from packaged_dispatch_acceptance import verify_evidence
+
+          verify_evidence(Path(sys.argv[1]), sys.argv[2])
+          PY
+          cp "$RUNNER_TEMP/packaged-database-toolchain.txt" "$evidence/database-toolchain.txt"
+      - name: Upload the verified receipt and both release archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: procurement-dispatch-packaged-${{ env.SOURCE_REVISION }}
+          path: |
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/revision.txt
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/toolchain.txt
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/database-toolchain.txt
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/artifact.sha256
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/procurement-release.tar.gz
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/dispatch-acceptance-release.tar.gz
+            .artifacts/procurement-dispatch-packaged/${{ env.SOURCE_REVISION }}/packaged/receipt.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0

@@ -8,6 +8,15 @@ The read-only `school_ops` curriculum and `bizops_kb` business reference apps
 use version-pinned content snapshots: each records its upstream commit rather
 than claiming a subtree history import.
 
+The [Biz-kit ethos](docs/ethos.md) describes the principles that guide how
+businesses work together through the platform.
+
+[Economic simulation experiments](experiments/economic_simulation/README.md)
+provide a separate Python laboratory for demand-first procurement, thin markets,
+barter cycles and physical fulfillment risk. Versioned JSON scenarios/results,
+paired policy runs and optional Mesa/NegMAS adapters form the interface boundary;
+synthetic purchase exports use the existing Elixir pilot scorecard.
+
 | App | Path | Imported from | Role |
 | --- | --- | --- | --- |
 | `keel` | `apps/keel` | `larsbx/keel` | Company-structure primitives: pure functions, no runtime |

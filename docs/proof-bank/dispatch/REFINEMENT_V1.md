@@ -177,3 +177,11 @@ tests. Both stronger-policy assertions were refuted as expected. A later,
 separately labelled review-only runner tests the unapplied profile-binding
 patch against a derived source tree and restores/recompiles the baseline;
 its candidate result is not evidence for unchanged-source behavior.
+
+
+The candidate experiment passed at `c9f30a38` in run 42220377524: the known
+profile-provenance assertion failed in the baseline and all 14 candidate cases
+passed under the reviewed patch; baseline restoration/recompilation succeeded.
+The patch stays unapplied in the committed operational module. Reconciliation
+with main `83954f1f` changes dependencies, so acceptance of that integrated
+head requires its own run. This does not close E2/E3 or refinement obligations.

@@ -11,7 +11,6 @@
 //! `/v1` path and gets the response, and nothing outside `/v1/` can be named.
 
 use crate::settings::{self, Dispatch};
-use rand::RngCore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
@@ -103,7 +102,7 @@ fn client() -> Result<reqwest::Client, String> {
 
 fn random_url_safe(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
-    rand::thread_rng().fill_bytes(&mut buf);
+    rand::fill(&mut buf[..]);
     base64url(&buf)
 }
 

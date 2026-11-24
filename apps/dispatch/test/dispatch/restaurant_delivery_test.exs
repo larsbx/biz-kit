@@ -19,6 +19,7 @@ defmodule Dispatch.RestaurantDeliveryTest do
     load = load(tenant, reference)
     other_load = load(tenant, "other-reference")
     operator = F.participant(tenant, carrier)
+    F.assignment(tenant, carrier, operator, "DRIVER")
 
     assignment =
       Assignment

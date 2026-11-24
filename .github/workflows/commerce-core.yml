@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -54,6 +54,10 @@ jobs:
           apps/commerce_core/lib/commerce_core/checkout.ex
           apps/commerce_core/test/kitchen_checkout_safety_test.exs
           apps/commerce_core/test/checkout_test.exs
+          apps/commerce_core/test/home_isolation_test.exs
+          apps/order_core/lib/order_core/ownership.ex
+          apps/order_core/lib/order_core/placement.ex
+          apps/order_core/lib/order_core/lifecycle.ex
           apps/commerce_core/lib/commerce_core/catalog.ex
           apps/commerce_core/lib/commerce_core/catalog_wire.ex
           apps/commerce_core/test/catalog_test.exs

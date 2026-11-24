@@ -1,5 +1,33 @@
 # biz-kit roadmap
 
+## Legacy retirement — reconciled 2026-11-23
+
+This is the current retirement status. Older dated sections below retain
+their historical implementation context; they do not reopen superseded owner
+decisions or establish a production cutover.
+
+| Scope | Delivered source | Next evidence |
+| --- | --- | --- |
+| SpruceGoose retained orchestration | Task host, native sessions, hierarchy, `TaskBlueprintAppliedV1`, signed task rules; archive export, verified preflight and writer fence | Production owner backfill, explained parity, quiesced final history, durable verified copies, outbox disposition, fence and post-fence replay |
+| Standalone Mama | Existing source/authority history; an earlier Evergreen-to-Mama migration | New Mama-to-Biz-kit consumer/authority succession and verified-retirement record; the old migration is not this cutover |
+| Legacy Eatsbot in Biz-kit | #426 removes the five legacy apps/release and serves `restaurant_host`; #348/#349/#378 retain selected commerce/delivery paths; #402 delivery fixture merged | Observe actual replacement host revision/health; finish host/CD acceptance |
+| Standalone Eatsbot | eatsbot #41 removes main's Fly deployment files | Cloud app/database disposition if present, credential revocation, restricted retention and read-only repository archival |
+
+Use the [SpruceGoose checklist](architecture/2026-11-06-sprucegoose-decommission.md),
+[Eatsbot checklist](architecture/2026-11-07-eatsbot-decommission.md), and
+[cutover acceptance runbook](architecture/2026-11-23-retirement-cutover-acceptance.md).
+The runbook includes strict archive preflight and a Mama succession template.
+No operational cutover is recorded by this source update.
+
+Owner decisions remain in force: SpruceGoose `Revise` is dropped; task text
+stays as created and a change is a new task or change suggestion. The task
+host owns rehosted web/auth surfaces, with native sessions preserved in
+`biz_kit_identity`. Discarded boards, inbox, deployment and runtime-shadow
+domains are not rebuilt. Eatsbot starts empty, drops GraphQL and Telegram,
+and keeps Biz-kit accounts, signed menu editing and CommerceCore discounts.
+Its owner-confirmed disposable `adder-ws` stack needs no archive/drain;
+this exception does not apply to an uninspected legacy copy with real data.
+
 ## Dispatch spatial workspace and minimal stack — 2026-11-11
 
 The accepted [God's Eye View integration roadmap](plans/2026-11-11-dispatch-spatial-workspace.md)
@@ -19,6 +47,35 @@ current contracts.
 Implementation remains pending. The first target is an authorized fleet view
 with freshness, accuracy, record links, revocation clearing and location-demand
 cleanup, built directly on the selected minimal architecture.
+
+## Priority: multi-organization tenant isolation — 2026-11-01
+
+The [tenant-first architecture and acceptance contract](architecture/2026-11-01-multi-organization-tenancy.md)
+and [tracking issue #233](https://github.com/larsbx/biz-kit/issues/233)
+place organizational isolation ahead of optional provider and network expansion.
+**WorkOS feature expansion and NetBird integration are deferred**; do not
+remove the existing WorkOS sign-in adapter. WorkOS organization/permission
+records are not a business-authority source, and NetBird connectivity would
+not enforce tenant isolation.
+
+The [partial T0 source review](architecture/2026-11-01-multi-organization-t0-source-audit.md)
+records unscoped legacy Eatsbot/SpruceGoose models as shared-tenant rollout
+blockers at that revision. Main subsequently removed the five legacy Eatsbot
+applications; the historical audit is not a current application inventory. The standalone tenancy inventory workflow emits an exact-source
+review queue, not authorization proof. The first Dispatch implementation also
+refreshes user/participant/organization status before held-actor operations
+and locks actor role, participant, user, organization and role definition
+inside administrative mutations. Two-connection revocation/suspension tests
+are added, but hosted acceptance is still unverified.
+
+The stages are: **T0** ownership and unsafe-query inventory; **T1** verified,
+non-unioning acting context on web/native/stream/job/extension paths; **T2**
+Ash, raw SQL, PostgreSQL and hosted integration isolation; **T3** explicit
+partner sharing and domain-owner admission; **T4** signed portability to an
+independently governed home, with single-writer fencing. The first Dispatch
+slice adds organization-qualified role labels and checks organization
+lifecycle during role selection/revalidation. It does not establish T2/RLS,
+production cutover or cross-home federation.
 
 ## Proof Bank application foundry — 2026-11-01
 
@@ -267,20 +324,21 @@ header cites the enforcing code and the gap leaves the README table.
    `delivery_status: :confirmed`, and its only host, `BizKit.MarketingBridge`,
    binds that to a host-verified receipt (id, digest, fields) and refuses a
    forged one. The model now cites the bridge.
-7. **biz-kit: direct domain writers.** Dispatch, eatsbot and spruce_goose
-   bypass `CoopSubstrate.Log.append/2`; tracked as consolidation steps 3–5
-   (below). *Started with Dispatch* (owner decision):
+7. **biz-kit: direct domain writers.** Dispatch and SpruceGoose retain
+   direct-writer cutover obligations; the five legacy Eatsbot apps have since
+   been removed (#426). *Started with Dispatch* (owner decision):
    [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md)
    gives the assignment lifecycle a signed, admitted path and a fold rebuilt
    from the ledger. Dispatch's board still writes rows; parity, the command
-   switch and the writer fence follow. eatsbot's fence is item 8.
-8. **eatsbot: retirement cutover fence.** The legacy writer could not be stopped. *Closed:*
-   governance orders the fence on the ledger (`LegacyWriterFenced`, for a
-   closed set of writers, only under declared governance), and
-   `mix coop.fence_writer` installs it in eatsbot's database in one
-   transaction: statement triggers refuse every write, after waiting for
-   writers in flight. It fences every deployment of the legacy writer.
-   Migrating the accepted history remains the R5 runbook's step.
+   switch and the writer fence follow. Eatsbot's deployment-specific
+   disposition is item 8.
+8. **eatsbot: retirement cutover fence.** The generic signed database fence
+   is implemented, but the [November 16 owner inventory](architecture/2026-11-16-eatsbot-r0-inventory.md)
+   selected stop/removal for the disposable test stack: old startup recreated
+   its database and erased triggers. #426 implements that source switch and
+   removal. No test-stack archive/drain is required. Actual host observation
+   and standalone infrastructure retirement remain open; generic fence code
+   does not establish that every deployment is fenced.
 9. **barter_core, federation_core: host contracts.** *Closed by host
    review:* nothing in the repo transfers barter assets (preview only, no
    host); `FederationService` is read-only and turns a subscription into
@@ -325,7 +383,7 @@ the app signs in through biz-kit's [native sign-in](architecture/2026-10-21-nati
 (d-patch `core:auth`, ADR-0011), and biz-kit checks [device keys](architecture/2026-10-21-device-keys.md).
 The native-session and device-signing client integration is merged
 ([d-patch #17](https://github.com/larsbx/d-patch/pull/17)); it is no longer
-a missing implementation step. Deployment still exposes SpruceGoose's `/auth`,
+a missing implementation step. The rehosted task host exposes `/auth`,
 sets `BIZKIT_NATIVE_REDIRECT_URIS`, and selects Dispatch's `BizKitSession`
 verifier.
 
@@ -351,15 +409,13 @@ What remains, in order:
 
 ## Later: consolidation steps 3–5
 
-- **Orchestration write surface.** Move SpruceGoose's remaining writes onto
-  the ledger with dual-read parity, then fence the old writer:
-  - its Ash hierarchy and schema-1 blueprints.
-
-  Its todos, predecessor-cycle refusal and SOP versions are on the ledger
-  ([what the ledger keeps from SpruceGoose](architecture/2026-10-20-sprucegoose-salvage.md)).
-  Its deployment domain, derivation permits, release provenance, runtime
-  shadows, boards and inbox captures are not migrated; they go with its
-  writer.
+- **Orchestration cutover.** The retained hierarchy and blueprints are on
+  the ledger (`TaskBlueprintAppliedV1`, `mix coop.blueprint`), alongside todos,
+  predecessor-cycle refusal and SOP versions. Complete owner backfill,
+  explained dual-read parity, quiesced final archive, verified durable copies,
+  the writer fence and replay; see the current retirement section above.
+  `Revise` and the discarded deployment/provenance/runtime-shadow/board/inbox
+  domains retire with the writer and are not migration targets.
 - **Dispatch and ownership.** Move dispatch, Keel ownership and shared
   principal facts onto the same admission path. First slice:
   [assignments on the ledger](architecture/2026-11-09-dispatch-assignments-on-the-ledger.md).
@@ -375,10 +431,14 @@ What remains, in order:
 
 Portal correction in progress: see [revocation-aware portal authentication](architecture/2026-10-23-revocation-aware-portal.md). This implementation is not yet acceptance evidence and does not close the administrative P1 or required hosted-integration P2.
 
-## Modular business platform (2026-10-24)
+## Modular business platform (historical 2026-10-24 baseline)
 
 [Architecture decision](architecture/2026-10-24-modular-business-platform.md):
-keep Eatsbot, d-patch and SchoolOps independently evolvable. Extract reusable
+the original plan kept Eatsbot, d-patch and SchoolOps independently evolvable.
+Eatsbot's separate-product status is superseded by the October 28 retirement
+decision and November 16 approved source removal. The extraction goals below
+are historical context, not instructions to recreate the removed legacy app.
+Extract reusable
 capabilities from real domain implementations into narrowly scoped biz-kit
 modules and contract/SDK surfaces; do not freeze domain product development.
 This is additive to the existing signed-ledger consolidation and **does not

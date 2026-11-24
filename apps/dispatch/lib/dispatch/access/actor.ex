@@ -12,9 +12,9 @@ defmodule Dispatch.Access.Actor do
   to, and the field is not a list. Building an actor is the moment the selection
   happens, and it is the value the audit event records.
 
-  `at` is carried rather than read from the clock, so a policy decision, the
-  audit entry describing it, and a test asserting an expiry boundary all refer
-  to the same instant.
+  `at` describes this snapshot. A serialized mutation must reload authority
+  and choose a fresh server instant after acquiring its locks. HTTP entry
+  points also carry verified authentication metadata for expiry/session checks.
 
   A `SERVICE` principal (Section 23.2) uses the same shape. It simply never
   holds a self-service capability — `Dispatch.Accounts.Validations.SelfServicePrincipal`
@@ -25,14 +25,15 @@ defmodule Dispatch.Access.Actor do
   alias Dispatch.Accounts.RoleAssignment
 
   @enforce_keys [:principal_type, :principal_id, :tenant_id, :role_assignment, :at]
-  defstruct [:principal_type, :principal_id, :tenant_id, :role_assignment, :at]
+  defstruct [:principal_type, :principal_id, :tenant_id, :role_assignment, :at, :authentication]
 
   @type t :: %__MODULE__{
           principal_type: :PARTICIPANT | :SERVICE,
           principal_id: Ash.UUID.t(),
           tenant_id: Ash.UUID.t(),
           role_assignment: RoleAssignment.t(),
-          at: DateTime.t()
+          at: DateTime.t(),
+          authentication: map() | nil
         }
 
   @doc """

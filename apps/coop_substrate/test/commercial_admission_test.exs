@@ -761,4 +761,115 @@ defmodule CoopSubstrate.CommercialAdmissionTest do
         flunk("canonical appender did not recover")
     end
   end
+
+  test "protected V2 reservation produces balanced hypothetical journals and no discharge", ctx do
+    ctx = protected!(ctx)
+
+    assert {:error, :not_an_authoritative_protected_reservation} =
+             CoopSubstrate.CommercialAccountingPreview.preview(@chapter, "INTENT-1")
+
+    {:ok, [_]} = Log.append(intent(ctx, payload(ctx)))
+    head = Log.head()
+    gate_before = Log.gate()
+
+    assert {:ok, plan} =
+             CoopSubstrate.CommercialAccountingPreview.preview(@chapter, "INTENT-1")
+
+    assert plan.status == :hypothetical_unposted_accounting
+    assert plan.evidence_scope == :canonical_local_read_only
+    assert plan.observed_head == head
+    assert plan.currency == "USD"
+    assert plan.parties == ["M-alice", "M-bob"]
+    assert plan.original_gross_minor == 160
+    assert plan.proposed_gross_reduction_minor == 120
+    assert plan.residual_gross_minor == 40
+    assert plan.accounting_posted == false
+    assert plan.contractual_discharge == :not_established
+    assert plan.financial_settlement == :none
+    assert plan.provider_instruction == :none
+
+    assert Enum.map(plan.source_allocations, fn row ->
+             {row.source_id, row.proposed_offset_minor, row.remaining_minor}
+           end) == [{"OB-1", 60, 40}, {"OB-2", 60, 0}]
+
+    assert plan.residual_obligations == [
+             %{source_id: "OB-1", debtor: "M-alice", creditor: "M-bob", remaining_minor: 40}
+           ]
+
+    assert length(plan.journal_intents) == 8
+
+    for {_actor, rows} <- Enum.group_by(plan.journal_intents, & &1.actor) do
+      debit = rows |> Enum.filter(&(&1.side == :debit)) |> Enum.sum_by(& &1.amount_minor)
+      credit = rows |> Enum.filter(&(&1.side == :credit)) |> Enum.sum_by(& &1.amount_minor)
+      control = Enum.filter(rows, &(&1.account == :commercial_clearing_control))
+      control_dr = control |> Enum.filter(&(&1.side == :debit)) |> Enum.sum_by(& &1.amount_minor)
+      control_cr = control |> Enum.filter(&(&1.side == :credit)) |> Enum.sum_by(& &1.amount_minor)
+
+      assert debit == credit
+      assert control_dr == control_cr
+      assert Enum.all?(rows, &(&1.status == :unposted_no_legal_effect))
+    end
+
+    assert Log.head() == head
+    assert Log.gate() == gate_before
+    assert Log.gate().obligations[{@chapter, "OB-1"}].open
+    assert Log.gate().obligations[{@chapter, "OB-2"}].open
+    assert :ok = Log.verify_chains()
+
+    restart_log()
+
+    assert {:ok, ^plan} =
+             CoopSubstrate.CommercialAccountingPreview.preview(@chapter, "INTENT-1")
+
+    assert Log.gate().obligations[{@chapter, "OB-1"}].open
+  end
+
+  test "FIFO allocation does not pretend to discharge surplus sources", ctx do
+    ctx = protected!(ctx)
+    {:ok, [_]} = Log.append(source_event(ctx, "OB-3", :ab, 25))
+
+    {:ok, prepared} =
+      CommercialAdmission.prepare(
+        Log.gate(),
+        @chapter,
+        "INTENT-3",
+        {"M-alice", "M-bob"},
+        "USD",
+        ctx.gov.signer.key_id
+      )
+
+    {:ok, [_]} = Log.append(intent(ctx, prepared))
+
+    assert {:ok, plan} =
+             CoopSubstrate.CommercialAccountingPreview.preview(@chapter, "INTENT-3")
+
+    assert plan.original_gross_minor == 185
+    assert plan.proposed_gross_reduction_minor == 120
+    assert plan.residual_gross_minor == 65
+
+    assert Enum.map(plan.source_allocations, fn row ->
+             {row.source_id, row.proposed_offset_minor, row.remaining_minor}
+           end) == [{"OB-1", 60, 40}, {"OB-2", 60, 0}, {"OB-3", 0, 25}]
+
+    assert length(plan.journal_intents) == 8
+    assert Enum.all?(plan.journal_intents, &(&1.source_id != "OB-3"))
+    assert length(plan.residual_obligations) == 2
+    assert Log.gate().obligations[{@chapter, "OB-3"}].open
+
+    damaged =
+      put_in(
+        Log.gate(),
+        [:commercial_admission, :reservations, {@chapter, "OB-1"}],
+        {@chapter, "other-intent"}
+      )
+
+    assert {:error, :source_reservation_or_lineage_changed} =
+             CoopSubstrate.CommercialAccountingPreview.from_gate(
+               damaged,
+               @chapter,
+               "INTENT-3"
+             )
+
+    assert :ok = Log.verify_chains()
+  end
 end
