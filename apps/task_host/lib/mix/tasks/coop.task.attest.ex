@@ -41,7 +41,12 @@ defmodule Mix.Tasks.Coop.Task.Attest do
          {:ok, %{"task_id" => ^task, "version" => version}} <-
            Client.get(base, scope, "/tasks/#{task}/view", signer),
          {:ok, %{tree: tree, bytes: bytes}} <-
-           SourceVerifier.verify(repo, commit, path, Keyword.take(opts, [:source_checkout])) do
+           SourceVerifier.verify_artifact(
+             repo,
+             commit,
+             path,
+             Keyword.take(opts, [:source_checkout])
+           ) do
       digest = :crypto.hash(:sha256, bytes)
       hex = Base.encode16(digest, case: :lower)
       source = %{"repository" => repo, "commit" => commit, "tree" => tree, "path" => path}

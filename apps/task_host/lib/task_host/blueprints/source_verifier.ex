@@ -1,5 +1,5 @@
 defmodule TaskHost.Blueprints.SourceVerifier do
-  @moduledoc "Fetch and verify immutable blueprint source bytes."
+  @moduledoc "Fetch and verify immutable blueprint and artifact source bytes."
 
   @callback verify(String.t(), String.t(), String.t()) ::
               {:ok, %{tree: String.t(), digest: String.t(), bytes: binary()}} | {:error, term()}
@@ -11,6 +11,17 @@ defmodule TaskHost.Blueprints.SourceVerifier do
 
       :error ->
         verify_default(repository, commit, path)
+    end
+  end
+
+  @doc "Verify a Git source blob up to the task custody byte limit."
+  def verify_artifact(repository, commit, path, opts \\ []) do
+    case Keyword.fetch(opts, :source_checkout) do
+      {:ok, checkout} ->
+        TaskHost.Blueprints.LocalGitVerifier.verify_artifact(repository, commit, path, checkout)
+
+      :error ->
+        TaskHost.Blueprints.ForgejoVerifier.verify_artifact(repository, commit, path)
     end
   end
 

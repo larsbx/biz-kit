@@ -10,18 +10,6 @@ defmodule TaskHost.Web.OperatorMigrationTest do
   alias CoopSubstrate.Log
   alias TaskHost.OperatorClient, as: Client
 
-  defmodule PinnedSource do
-    @moduledoc false
-    def verify("org/sources", commit, "inputs/file.txt") do
-      bytes =
-        if commit == String.duplicate("a", 40),
-          do: "Pinned task input",
-          else: "Substituted task input"
-
-      {:ok, %{tree: String.duplicate("b", 40), bytes: bytes}}
-    end
-  end
-
   setup do
     providers!()
     world = world()
@@ -89,6 +77,23 @@ defmodule TaskHost.Web.OperatorMigrationTest do
     )
 
     file
+  end
+
+  defp git!(checkout, args) do
+    {result, 0} =
+      System.cmd("git", ["-C", checkout] ++ args,
+        env: [{"GIT_CONFIG_NOSYSTEM", "1"}, {"GIT_CONFIG_GLOBAL", "/dev/null"}],
+        stderr_to_stdout: true
+      )
+
+    String.trim(result)
+  end
+
+  defp commit_source!(checkout, path, bytes) do
+    File.write!(Path.join(checkout, path), bytes)
+    git!(checkout, ["add", "--", path])
+    git!(checkout, ["-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "Pinned artifact"])
+    git!(checkout, ["rev-parse", "HEAD"])
   end
 
   test "list and show use exact scope, stable IDs and one ledger snapshot", w do
@@ -484,20 +489,22 @@ defmodule TaskHost.Web.OperatorMigrationTest do
   end
 
   test "a Git source receipt binds scope, origin and custody under a distinct reviewer", w do
-    previous = Application.get_env(:task_host, :blueprint_source_verifier)
-    Application.put_env(:task_host, :blueprint_source_verifier, PinnedSource)
+    checkout = Path.join(w.dir, "source")
+    path = "inputs/file.txt"
+    File.mkdir_p!(Path.join(checkout, "inputs"))
+    git!(checkout, ["init", "--quiet"])
+    git!(checkout, ["config", "user.name", "Artifact fixture"])
+    git!(checkout, ["config", "user.email", "fixture@example.invalid"])
+    git!(checkout, ["config", "remote.origin.url", "https://github.com/org/sources.git"])
 
-    on_exit(fn ->
-      if previous,
-        do: Application.put_env(:task_host, :blueprint_source_verifier, previous),
-        else: Application.delete_env(:task_host, :blueprint_source_verifier)
-    end)
+    content = :binary.copy(<<"x">>, 1_048_577)
+    commit = commit_source!(checkout, path, content)
+    substituted = commit_source!(checkout, path, "Substituted task input")
 
     create!(w.w, w.grant, "old-task", "project-1", w.device)
     fields = %{"task_id" => "old-task"}
     pin = %{"task_id" => "old-task", "expected_version" => 1, "lifecycle_version" => 1}
     cli(w, ["act", intent!(w, "propose", fields, pin), "--yes"])
-    content = "Pinned task input"
     digest = :crypto.hash(:sha256, content)
 
     append!(
@@ -543,13 +550,23 @@ defmodule TaskHost.Web.OperatorMigrationTest do
 
       capture_io(fn ->
         Mix.Tasks.Coop.Task.Attest.run(
-          [scope, "old-task", "input", custody, "org/sources", commit, "inputs/file.txt", "--yes"] ++
+          [
+            scope,
+            "old-task",
+            "input",
+            custody,
+            "org/sources",
+            commit,
+            path,
+            "--source-checkout",
+            checkout,
+            "--yes"
+          ] ++
             args(%{w | opts: reviewer_opts})
         )
       end)
     end
 
-    commit = String.duplicate("a", 40)
     assert [_, id] = Regex.run(~r/"event_id":"([^"]+)"/, attest.(commit))
     {chapter, tenant, project} = w.scope
     task = Log.gate().orchestration.tasks[{chapter, tenant, project, "old-task"}]
@@ -560,7 +577,8 @@ defmodule TaskHost.Web.OperatorMigrationTest do
              custody_receipt_id: ^custody,
              principal_id: ^principal,
              artifact_digest: {:bytes, ^digest},
-             source: %{"commit" => ^commit}
+             size_bytes: 1_048_577,
+             source: %{"commit" => ^commit, "path" => ^path}
            } =
              task.artifact_sources[id]
 
@@ -573,7 +591,7 @@ defmodule TaskHost.Web.OperatorMigrationTest do
     assert_raise Mix.Error, ~r/artifact_source_already_attested/, fn -> attest.(commit) end
 
     assert_raise Mix.Error, ~r/artifact_not_attached/, fn ->
-      attest.(String.duplicate("c", 40))
+      attest.(substituted)
     end
 
     assert Log.head() == before

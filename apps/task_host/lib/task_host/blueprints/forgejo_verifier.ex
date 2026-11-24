@@ -1,6 +1,6 @@
 defmodule TaskHost.Blueprints.ForgejoVerifier do
   @moduledoc """
-  Verify blueprint identity and bytes through Forgejo's read API.
+  Verify blueprint and artifact identity and bytes through Forgejo's read API.
 
   ## What "verify" has to mean here
 
@@ -36,7 +36,13 @@ defmodule TaskHost.Blueprints.ForgejoVerifier do
   @hex40 ~r/\A[0-9a-f]{40}\z/
 
   @impl true
-  def verify(repository, commit, path) do
+  def verify(repository, commit, path), do: verify_source(repository, commit, path, :blueprint)
+
+  @doc "Verify the Git artifact using the task custody limit."
+  def verify_artifact(repository, commit, path),
+    do: verify_source(repository, commit, path, :artifact)
+
+  defp verify_source(repository, commit, path, kind) do
     with {:ok, {owner, repo}} <- repository_parts(repository),
          :ok <- valid_commit(commit),
          {:ok, segments} <- path_segments(path),
@@ -45,7 +51,7 @@ defmodule TaskHost.Blueprints.ForgejoVerifier do
          {:ok, declared_tree} <- fetch_commit(owner, repo, commit, token, request),
          {:ok, entries} <- fetch_tree(owner, repo, commit, declared_tree, token, request),
          {:ok, blob} <- resolve_blob(owner, repo, entries, segments, token, request),
-         {:ok, bytes} <- fetch_bytes(owner, repo, commit, path, blob, token, request) do
+         {:ok, bytes} <- fetch_bytes(owner, repo, commit, path, blob, token, request, kind) do
       {:ok, %{tree: declared_tree, digest: sha256(bytes), bytes: bytes}}
     end
   end
@@ -172,7 +178,7 @@ defmodule TaskHost.Blueprints.ForgejoVerifier do
     end)
   end
 
-  defp fetch_bytes(owner, repo, commit, path, blob, token, request) do
+  defp fetch_bytes(owner, repo, commit, path, blob, token, request, kind) do
     encoded_path = path |> String.split("/") |> Enum.map_join("/", &segment/1)
     url = api_url("/repos/#{segment(owner)}/#{segment(repo)}/contents/#{encoded_path}")
 
@@ -185,47 +191,49 @@ defmodule TaskHost.Blueprints.ForgejoVerifier do
          ) do
       {:ok, %{status: 200, body: %{"encoding" => "base64", "content" => content}}}
       when is_binary(content) ->
-        with {:ok, bytes} <- decode_content(content),
-             :ok <- bounded(bytes),
-             :ok <- matches_blob(bytes, blob) do
+        with {:ok, bytes} <- decode_content(content, kind),
+             :ok <- bounded(bytes, kind),
+             :ok <- matches_blob(bytes, blob, kind) do
           {:ok, bytes}
         end
 
       {:ok, %{status: status}} ->
-        {:error, "Forgejo blueprint fetch returned HTTP #{status}"}
+        {:error, "Forgejo #{kind} fetch returned HTTP #{status}"}
 
       {:error, reason} ->
-        {:error, "Forgejo blueprint fetch failed: #{inspect(reason)}"}
+        {:error, "Forgejo #{kind} fetch failed: #{inspect(reason)}"}
     end
   end
 
-  defp decode_content(content) do
+  defp decode_content(content, kind) do
     case Base.decode64(String.replace(content, ~r/\s+/, "")) do
-      {:ok, bytes} when byte_size(bytes) > 0 -> {:ok, bytes}
-      _ -> {:error, "Forgejo returned invalid or empty blueprint bytes"}
+      {:ok, bytes} when byte_size(bytes) > 0 or kind == :artifact -> {:ok, bytes}
+      _ when kind == :blueprint -> {:error, "Forgejo returned invalid or empty blueprint bytes"}
+      _ -> {:error, "Forgejo returned invalid artifact bytes"}
     end
   end
 
-  # `receive_timeout` bounds how long the response may take, not how large it
-  # may be. A manifest is a small YAML file; anything else is refused rather
-  # than buffered.
-  defp bounded(bytes) do
-    max = Application.fetch_env!(:task_host, :blueprint_max_bytes)
+  defp bounded(bytes, kind) do
+    max =
+      case kind do
+        :blueprint -> Application.fetch_env!(:task_host, :blueprint_max_bytes)
+        :artifact -> CoopSubstrate.ArtifactCustody.limit()
+      end
 
     if byte_size(bytes) <= max,
       do: :ok,
-      else: {:error, "blueprint bytes exceed #{max} bytes"}
+      else: {:error, "#{kind} bytes exceed #{max} bytes"}
   end
 
   # The tree named this blob before the bytes were requested, so this is what
   # binds the manifest to the commit rather than to the server's goodwill.
-  defp matches_blob(bytes, blob) do
+  defp matches_blob(bytes, blob, kind) do
     object = "blob #{byte_size(bytes)}\0" <> bytes
     actual = :crypto.hash(:sha, object) |> Base.encode16(case: :lower)
 
     if actual == blob,
       do: :ok,
-      else: {:error, "Forgejo blueprint bytes hash to blob #{actual}, but the tree names #{blob}"}
+      else: {:error, "Forgejo #{kind} bytes hash to blob #{actual}, but the tree names #{blob}"}
   end
 
   defp repository_parts(repository) do
