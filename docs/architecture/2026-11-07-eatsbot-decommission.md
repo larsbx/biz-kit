@@ -1,6 +1,6 @@
 # Eatsbot decommission checklist
 
-Originally written November 7, 2026; reconciled November 23, 2026.
+Originally written November 7, 2026; reconciled November 24, 2026.
 This checklist restates the
 [salvage and retirement plan](2026-10-28-eatsbot-salvage-and-retirement-plan.md)
 for the path the code has since taken: the rebuilt eatsbot
@@ -15,11 +15,11 @@ Sources: the plan, the [source audit](2026-10-28-eatsbot-source-revision-audit.m
 [safety compatibility](2026-10-31-eatsbot-safety-compatibility.md),
 [deploy](../deploy.md), `apps/restaurant_host/README.md`,
 `apps/restaurant_core/README.md` and [issue #176](https://github.com/larsbx/biz-kit/issues/176),
-originally read at main `89d5e8a2`; reconciled against main `40d49e85`, the
+originally read at main `89d5e8a2`; reconciled against main `4136c4f3`, the
 [November 16 R0 inventory](2026-11-16-eatsbot-r0-inventory.md), merged #426/#402,
 and the standalone retirement work.
 
-## Retirement status as of November 23, 2026
+## Retirement status as of November 24, 2026
 
 **Legacy source retirement is complete in Biz-kit; host and standalone
 infrastructure retirement need their own evidence.** The owner confirmed on
@@ -32,17 +32,32 @@ it does not silently discharge an obligation found elsewhere.
 
 | Area | Source evidence and remaining boundary |
 | --- | --- |
+| R0 inventory | [November 16 inventory](2026-11-16-eatsbot-r0-inventory.md): surfaces, secrets and personal data recorded; Kafka unused and no job queue on the disposable stack. |
 | Accounts, menu, discounts, staff and revocation | [#348](https://github.com/larsbx/biz-kit/pull/348): prebound Biz-kit identities, scoped history, signed menu publishing, merchant-funded fixed discounts, staff sign-in and device revocation. D4–D6 are decided and implemented. |
 | Fixed-route delivery | [#349](https://github.com/larsbx/biz-kit/pull/349)/[#378](https://github.com/larsbx/biz-kit/pull/378): Dispatch owns transport; distinct pickup/drop-off codes bind order and assignment. Delivery evidence grants no payment/settlement authority. |
 | Restaurant-to-Dispatch acceptance | [#402](https://github.com/larsbx/biz-kit/pull/402) merged at `e358db60`, head `ed68dc92`: synthetic checkout/courier fixture, restart recovery and receipt replay. It is source-level acceptance, not observed deployment. The [November 16 local report](2026-11-16-eatsbot-402-local-acceptance.md) remains evidence of its own earlier revision. |
 | Stack switch and legacy removal | [#426](https://github.com/larsbx/biz-kit/pull/426), merge `bc53e414`: legacy apps/release/config/unused dependencies removed; stack scripts serve `restaurant_host`. Its local rehearsal reports no listener on `:4100`. Running-host revision and health remain distinct evidence. |
 | Standalone Fly source removal | [eatsbot #41](https://github.com/larsbx/eatsbot/pull/41), merge `fe649ff0`: main's Fly deploy/reset workflows and `fly.toml` removed. Default `dev` still carries old files. Cloud app/database disposition, token revocation and repository archival are not established by this merge. |
 
-**Remaining operational evidence.** Use the
+**Remaining operational evidence, each the owner's.**
+
+1. **Deploy.** `deploy-adder-ws` requires `ADDER_WS_CD=true` and
+   `ADDER_WS_CD_ACCEPTANCE=v1`; activation awaits the
+   [host/tailnet acceptance](../adder-ws-cd.md). Until deployment is observed,
+   `adder-ws` serves the revision it last pulled. Record the actual replacement
+   revision and health after the switch.
+2. **Fly.** Record the disposition of `eatsbot` and its database app, if any;
+   the outstanding retirement action is `fly apps destroy eatsbot` after the
+   deployment inventory confirms the target. Revoke the tokens behind
+   `FLY_API_TOKEN` and `FLY_API_TOKEN_SSH`, then delete both obsolete secrets in
+   `larsbx/eatsbot`.
+3. **Archive.** Retain any required history under its access restrictions and
+   archive `larsbx/eatsbot` read-only (Definition, point 4).
+
+Use the
 [retirement acceptance runbook](2026-11-23-retirement-cutover-acceptance.md#4-eatsbots-distinct-operational-remainder):
-actual replacement revision/health; [Adder-ws host/tailnet acceptance](../adder-ws-cd.md)
-before CD activation; Fly app/database disposition if present; obsolete token
-revocation; restricted retention and read-only archival of `larsbx/eatsbot`.
+source retirement and the owner-confirmed empty stack do not establish these
+separate host and infrastructure outcomes.
 Keep [issue #176](https://github.com/larsbx/biz-kit/issues/176) open for these
 and the separately scoped marketing rounding-parity obligation. No step here
 claims operational execution. Production delivery acceptance, when requested,
