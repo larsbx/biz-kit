@@ -1,5 +1,17 @@
 # Remaining dependency security correction (issue #157)
 
+## November 24 shared-lock audit repair
+
+Two advisories published on 2026-11-24 put every full-lock audit red. Only
+these two lock records change. Release requirements are unchanged:
+
+| Package | Affected lock | Corrected lock | Advisory |
+| --- | --- | --- | --- |
+| db_connection | 2.10.2 | 2.10.3 | [EEF-CVE-2026-133555](https://osv.dev/vulnerability/EEF-CVE-2026-133555) |
+| ash | 3.37.6 | 3.38.1 | [EEF-CVE-2026-120299](https://osv.dev/vulnerability/EEF-CVE-2026-120299) |
+
+With these two changes, the complete shared-lock audit reports no advisories.
+
 ## November 23 shared-lock audit repair
 
 The full-lock audit on main `d2756bb3` reported three advisories. Only these two
