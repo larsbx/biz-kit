@@ -59,6 +59,34 @@ defmodule Dispatch.Support.ConcurrentSessions do
     end
   end
 
+  @doc """
+  The backends `waiter` is blocked by, once it is in a heavyweight lock wait
+  (optionally the named `wait_event`), polled for up to 2.5 s; `[]` if never.
+  """
+  @spec blockers(integer(), String.t() | nil, non_neg_integer()) :: [integer()]
+  def blockers(waiter, wait_event \\ nil, attempts \\ 100)
+  def blockers(_waiter, _wait_event, 0), do: []
+
+  def blockers(waiter, wait_event, attempts) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT pg_blocking_pids(pid) FROM pg_stat_activity
+        WHERE pid = $1 AND wait_event_type = 'Lock' AND ($2::text IS NULL OR wait_event = $2)
+        """,
+        [waiter, wait_event]
+      )
+
+    case rows do
+      [[[_ | _] = pids]] ->
+        Enum.sort(pids)
+
+      _ ->
+        Process.sleep(25)
+        blockers(waiter, wait_event, attempts - 1)
+    end
+  end
+
   @doc "Deletes everything a board test created in `org`'s tenant, then `users`."
   @spec cleanup(%{id: Ash.UUID.t()}, [%{id: Ash.UUID.t()}]) :: :ok
   def cleanup(org, users) do
