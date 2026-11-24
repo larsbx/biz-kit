@@ -25,7 +25,9 @@ defmodule CoopSubstrate.WriterFence do
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
 
   @type_name "LegacyWriterFenced"
-  @writers ~w(eatsbot)
+  # eatsbot: retired (decommission R5/R6). spruce_goose: Mama's database, where
+  # its three writers (task rows, certified events, actor registry) all write.
+  @writers ~w(eatsbot spruce_goose)
   @trigger "biz_kit_writer_fence"
   @function "public.biz_kit_refuse_fenced_write"
 
