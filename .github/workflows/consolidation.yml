@@ -465,6 +465,12 @@ jobs:
         if: ${{ !cancelled() && steps.browser_setup.outcome == 'success' }}
         working-directory: apps/task_host
         run: mix test --only browser
+      # Keep signed retirement acceptance observable after unrelated failures.
+      # Fixture keys and fences affect only this job's disposable databases.
+      - name: Test signed retirement archive and fence boundaries
+        if: ${{ !cancelled() && steps.umbrella.outcome == 'success' }}
+        working-directory: apps/coop_substrate
+        run: mix test test/history_archive_test.exs test/writer_fence_test.exs --trace --seed 1
       # Run in a fresh VM without app.start or the destructive mix test alias.
       # The runner creates/drops only its own scratch databases and exercises
       # the standalone read-only ledger client as well as binary COPY restore.

@@ -43,11 +43,13 @@ constructing a governance declaration remains an assertion: deterministic
 ledger admission checks record ordering, not local archive bytes. Installation
 cannot bypass file verification through the old three-argument API.
 
-## Executed acceptance
+## Executed local acceptance
 
 **The full umbrella build passed with `--warnings-as-errors`; the committed
-acceptance runner passed 64 tests, 0 failures.** The independent Python
-Consolidation workflow regression passed 10 tests, 0 failures.
+acceptance runner passed 64 tests, 0 failures** at
+`8b14a9b03c20ebb21063f9224cabf574527c41fa`. The independent Python
+Consolidation workflow regression passed 11 tests, 0 failures after the
+November 24 addition of the signed-retirement CI step.
 
 | Test group | Count | Evidence exercised |
 | --- | ---: | --- |
@@ -69,7 +71,9 @@ This supersedes the initial 57-test result, which compiled a 70-module subset
 because registry fetching was unavailable. The follow-up compiled the actual
 umbrella and ran the committed entry point directly, after fetching the locked
 dependency archives. The source diff was unchanged throughout that acceptance
-run. These are local execution results; no hosted workflow was dispatched.
+run. These are local execution results. Hosted results for
+[PR #445](https://github.com/larsbx/biz-kit/pull/445) must be read separately
+at their reported source and checkout revisions.
 
 The four added replay cases reuse the existing canonical bytes and signature
 of the committed `envelope-core` vector. They create no signature or governance
@@ -111,14 +115,42 @@ checks passed. The two changed signed integration test modules were compiled
 against the full umbrella as definitions with ExUnit autorun disabled and
 statically reviewed. They were not executed.
 
-## Continuous acceptance and roadmap correction
+## Continuous acceptance
 
 Consolidation now includes the same boot-free `--restore` runner against its
-disposable PostgreSQL service on explicit loopback port 55473. Its guard requires
-successful umbrella compilation, permits execution after an unrelated suite
-failure, and stops on cancellation. The 10-test Python workflow regression
-checks these dependencies and keeps a failure of this step red. Publishing the
-review branch does not trigger this PR workflow; its hosted result is pending.
+disposable PostgreSQL service on explicit loopback port 55473. The separately
+authorized signed-retirement step runs the 17 history-archive/writer-fence
+integration tests against that job's disposable service on port 5432. Both
+guards require successful umbrella compilation, permit execution after an
+unrelated suite failure, and stop on cancellation. The 11-test Python workflow
+regression checks these dependencies and keeps each step's failure red without
+blocking the other retirement check.
+
+## Authorized signed integration (2026-11-24)
+
+The owner approved governance signing and fence installation solely in
+disposable test environments, plus opening the stacked review PR. PR #445 is
+based on #443's branch, `ccr-867804bc-bqx5an-history`. Its focused CI command is:
+
+```sh
+# Within apps/coop_substrate, using the CI job's disposable PostgreSQL service:
+MIX_ENV=test mix test test/history_archive_test.exs test/writer_fence_test.exs --trace --seed 1
+```
+
+Retain the step-level result of `Test signed retirement archive and fence boundaries` separately
+from `Test retirement preflight without application boot`; the latter does
+not generate signatures or install fences. Consolidation's default checkout
+tests GitHub's synthetic PR merge commit. Record the PR head and actual checkout
+SHA/tree with hosted evidence; do not describe it as an exact-head checkout.
+
+For local reproduction, do not assume `EVENTSTORE_PORT` redirects the signed
+suite: test configuration uses port 5432 for both EventStore and Records, and
+the `mix test` alias resets its configured database. Use a wholly disposable
+5432 service, or explicitly configure both stores before any startup/reset.
+This authorization does not extend to production archives, governance records,
+writer fences, deployment configuration or merging the PR.
+
+## Roadmap correction
 
 The roadmap and existing cutover runbook now distinguish legacy
 `ledger replay-status` from source-to-TaskCore parity. The former compares
@@ -136,9 +168,10 @@ real governance/archive/fence records, atomic `[archive, fence]` acceptance /
 `[fence, archive]` refusal, trigger installation, conflicting installed identities,
 exemptions, retries and concurrency. Replaying a committed signed non-governance
 vector exercises cryptographic prefix verification, but does not execute those
-authority-changing paths. Creating governance signatures and installing fences
-were outside this task's execution authorization. Opening the stacked PR also
-triggers those tests automatically; PR publication remains pending.
+authority-changing paths. The November 24 test-only authorization and PR #445
+enable their hosted execution; inspect the actual signed step's result before
+closing this engineering gate. No operational gate follows from a synthetic
+test signature or fence.
 
 Production closure remains the [cutover acceptance runbook](2026-11-23-retirement-cutover-acceptance.md):
 owner backfill, explained parity, physical source identity, source/provenance
@@ -150,5 +183,6 @@ and `reason`; keep the selected archive reference in the operational receipt.
 The roadmap reconciliation preserves the later owner decisions. Eatsbot's
 confirmed disposable stack requires no archival/drain exercise; its host,
 external infrastructure, credentials and repository archival are separate
-remaining actions. No production archive, governance signing, writer-fence
-installation or deployment-configuration change is recorded by this work.
+remaining actions. No production archive, production governance signing,
+production writer-fence installation or deployment-configuration change is
+recorded by this work.

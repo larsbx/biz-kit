@@ -18,6 +18,7 @@ NODE = "actions/setup-node"
 WEB = "Test the web view's modules"
 PLAYWRIGHT = "Install Playwright and Chromium"
 BROWSER = "Test the workflow in a browser"
+SIGNED_RETIREMENT = "Test signed retirement archive and fence boundaries"
 RETIREMENT = "Test retirement preflight without application boot"
 OUTCOME = re.compile(r"steps\.([a-z_]+)\.outcome == 'success'")
 
@@ -80,7 +81,7 @@ class ConsolidationWorkflowTest(unittest.TestCase):
     def test_earlier_application_failure_still_runs_the_web_view(self):
         status, outcomes = self.simulate("Test Keel normative conformance")
         self.assertEqual(status, "failure")
-        self.assert_outcomes(outcomes, "success", WEB, RETIREMENT)
+        self.assert_outcomes(outcomes, "success", WEB, SIGNED_RETIREMENT, RETIREMENT)
         self.assert_outcomes(outcomes, "skipped", SPRUCE_DB, REGISTRY, BROWSER)
 
     def test_failing_suites_do_not_block_other_suites(self):
@@ -91,7 +92,7 @@ class ConsolidationWorkflowTest(unittest.TestCase):
 
     def test_failed_prerequisites_do_not_run_dependent_suites(self):
         for failure, dependent in [
-            (COMPILE, (SPRUCE_DB, TASK_HOST, REGISTRY, RETIREMENT)),
+            (COMPILE, (SPRUCE_DB, TASK_HOST, REGISTRY, SIGNED_RETIREMENT, RETIREMENT)),
             (SPRUCE_DB, (REGISTRY,)),
             (TASK_HOST, (PLAYWRIGHT, BROWSER)),
             (NODE, (WEB, PLAYWRIGHT, BROWSER)),
@@ -113,7 +114,23 @@ class ConsolidationWorkflowTest(unittest.TestCase):
     def test_cancelled_run_stops_acceptance(self):
         status, outcomes = self.simulate(cancelled_after=SPRUCE)
         self.assertEqual(status, "cancelled")
-        self.assert_outcomes(outcomes, "skipped", REGISTRY, WEB, BROWSER, RETIREMENT)
+        self.assert_outcomes(
+            outcomes, "skipped", REGISTRY, WEB, BROWSER, SIGNED_RETIREMENT, RETIREMENT
+        )
+
+    def test_signed_retirement_acceptance_runs_the_two_disposable_integration_modules(self):
+        steps = {step.get("name"): step for step in self.job["steps"]}
+        step = steps[SIGNED_RETIREMENT]
+        self.assertEqual(
+            step["if"], "${{ !cancelled() && steps.umbrella.outcome == 'success' }}"
+        )
+        self.assertEqual(step["working-directory"], "apps/coop_substrate")
+        self.assertEqual(
+            step["run"],
+            "mix test test/history_archive_test.exs test/writer_fence_test.exs --trace --seed 1",
+        )
+        self.assertEqual(self.job["env"]["MIX_ENV"], "test")
+        self.assertIn("5432:5432", self.job["services"]["postgres"]["ports"])
 
     def test_retirement_acceptance_is_boot_free_and_uses_the_disposable_service(self):
         steps = {step.get("name"): step for step in self.job["steps"]}
@@ -134,15 +151,18 @@ class ConsolidationWorkflowTest(unittest.TestCase):
         self.assertIn("55473:5432", self.job["services"]["postgres"]["ports"])
 
     def test_retirement_acceptance_survives_other_failures_and_keeps_its_own_failure_red(self):
-        for failure in ["Test the common ledger", SPRUCE, BROWSER]:
+        for failure in ["Verify changed Elixir formatting", "Test the common ledger", SPRUCE, BROWSER]:
             with self.subTest(failure=failure):
                 status, outcomes = self.simulate(failure)
                 self.assertEqual(status, "failure")
-                self.assert_outcomes(outcomes, "success", RETIREMENT)
+                self.assert_outcomes(outcomes, "success", SIGNED_RETIREMENT, RETIREMENT)
 
-        status, outcomes = self.simulate(RETIREMENT)
-        self.assertEqual(status, "failure")
-        self.assert_outcomes(outcomes, "failure", RETIREMENT)
+        for failure, independent in [(SIGNED_RETIREMENT, RETIREMENT), (RETIREMENT, SIGNED_RETIREMENT)]:
+            with self.subTest(failure=failure):
+                status, outcomes = self.simulate(failure)
+                self.assertEqual(status, "failure")
+                self.assert_outcomes(outcomes, "failure", failure)
+                self.assert_outcomes(outcomes, "success", independent)
 
     def test_failures_cannot_be_masked(self):
         self.assertNotIn("continue-on-error", self.job)
