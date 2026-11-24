@@ -6,15 +6,26 @@ on:
       - 'apps/proof_bank_core/**'
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
       - 'apps/dispatch/lib/dispatch/fleet/**'
-      - 'apps/dispatch/lib/dispatch/access/driving.ex'
+      - 'apps/dispatch/lib/dispatch/access/**'
+      - 'apps/dispatch/lib/dispatch/access.ex'
+      - 'apps/dispatch/lib/dispatch/repo.ex'
+      - 'apps/dispatch/lib/dispatch/accounts/role_*.ex'
       - 'apps/dispatch/lib/dispatch/accounts/participant.ex'
       - 'apps/dispatch/priv/repo/migrations/**'
+      - 'apps/dispatch/priv/resource_snapshots/**'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
-      - 'scripts/dispatch/check-exclusivity-controls.sh'
-      - 'scripts/dispatch/review-profile-binding-patch.sh'
+      - 'scripts/dispatch/**'
+      - 'apps/dispatch/priv/repo/e3/**'
+      - 'apps/dispatch/test/dispatch/fleet*_test.exs'
+      - 'apps/dispatch/test/dispatch/fleet/**'
+      - 'apps/dispatch/test/dispatch/accounts/administration_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/trips_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/locations_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/location_work_test.exs'
+      - 'apps/dispatch/test/dispatch/restaurant_delivery_test.exs'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -28,15 +39,26 @@ on:
       - 'apps/proof_bank_core/**'
       - 'apps/dispatch/lib/dispatch/operations/board.ex'
       - 'apps/dispatch/lib/dispatch/fleet/**'
-      - 'apps/dispatch/lib/dispatch/access/driving.ex'
+      - 'apps/dispatch/lib/dispatch/access/**'
+      - 'apps/dispatch/lib/dispatch/access.ex'
+      - 'apps/dispatch/lib/dispatch/repo.ex'
+      - 'apps/dispatch/lib/dispatch/accounts/role_*.ex'
       - 'apps/dispatch/lib/dispatch/accounts/participant.ex'
       - 'apps/dispatch/priv/repo/migrations/**'
+      - 'apps/dispatch/priv/resource_snapshots/**'
       - 'apps/dispatch/lib/dispatch/identity/principal_resolution.ex'
       - 'apps/dispatch/test/dispatch/operations/board*_test.exs'
       - 'apps/dispatch/test/dispatch_web/operations_controller_test.exs'
       - 'apps/dispatch/test/support/**'
-      - 'scripts/dispatch/check-exclusivity-controls.sh'
-      - 'scripts/dispatch/review-profile-binding-patch.sh'
+      - 'scripts/dispatch/**'
+      - 'apps/dispatch/priv/repo/e3/**'
+      - 'apps/dispatch/test/dispatch/fleet*_test.exs'
+      - 'apps/dispatch/test/dispatch/fleet/**'
+      - 'apps/dispatch/test/dispatch/accounts/administration_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/trips_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/locations_test.exs'
+      - 'apps/dispatch/test/dispatch/operations/location_work_test.exs'
+      - 'apps/dispatch/test/dispatch/restaurant_delivery_test.exs'
       - 'apps/dispatch/lib/dispatch_web/plugs/authenticate.ex'
       - 'apps/dispatch/lib/dispatch/identity/tokens/**'
       - 'apps/biz_kit_identity/**'
@@ -124,6 +146,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       MIX_ENV: test
+      BIZKIT_BUNDLED_TEST_LOCALE: "true"
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
       PGPASSWORD: postgres
@@ -143,6 +166,8 @@ jobs:
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
+      - name: Disposable migration preflight and SQL constraint acceptance
+        run: bash scripts/dispatch/check-e3-database.sh
       - name: Install locked dependencies
         run: mix deps.get --check-locked
       - name: Create Dispatch role
@@ -153,7 +178,7 @@ jobs:
       - name: Prepare Dispatch PostGIS database
         working-directory: apps/dispatch
         run: mix ash.setup --quiet
-      - name: Transition, concurrency and grant revocation integration tests
+      - name: E3 policy, transition, concurrency and authority integration tests
         working-directory: apps/dispatch
         run: |
           mix test --include integration \
@@ -161,11 +186,12 @@ jobs:
             test/dispatch/operations/board_concurrency_test.exs \
             test/dispatch/operations/board_driver_exclusivity_test.exs \
             test/dispatch/operations/board_authority_concurrency_test.exs \
+            test/dispatch/operations/board_grant_concurrency_test.exs \
+            test/dispatch/fleet_test.exs \
+            test/dispatch/fleet/assignment_policy_test.exs \
+            test/dispatch/accounts/administration_test.exs \
+            test/dispatch/operations/trips_test.exs \
+            test/dispatch/operations/locations_test.exs \
+            test/dispatch/operations/location_work_test.exs \
+            test/dispatch/restaurant_delivery_test.exs \
             test/dispatch_web/operations_controller_test.exs
-      - name: Require the two proposed exclusivity controls to refute current behavior
-        working-directory: apps/dispatch
-        run: bash ../../scripts/dispatch/check-exclusivity-controls.sh
-      - name: Review the unapplied profile-binding patch in a temporary experiment
-        env:
-          REVIEWED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bash scripts/dispatch/review-profile-binding-patch.sh "$REVIEWED_REVISION"

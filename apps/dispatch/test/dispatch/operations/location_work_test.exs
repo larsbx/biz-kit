@@ -206,16 +206,39 @@ defmodule Dispatch.Operations.LocationWorkTest do
     assert LocationWork.load(ctx.tracker, ctx.load.id) == {:error, :not_found}
   end
 
-  test "observation binding cannot disclose a load belonging to another carrier", ctx do
+  test "another carrier's valid observation cannot disclose its work", ctx do
     other = Fixtures.organization(ctx.tenant, :CARRIER)
-    foreign = Fixtures.load(ctx.tenant, other)
+    foreign_driver = Fixtures.participant(ctx.tenant, other)
+    foreign_desk = Fixtures.participant(ctx.tenant, other)
+    foreign_actor = Fixtures.actor(ctx.tenant, other, foreign_driver, "DRIVER")
+    foreign_tracker = Fixtures.tracker(ctx.tenant, other, foreign_desk)
+    foreign_load = Fixtures.load(ctx.tenant, other)
 
-    Dispatch.Repo.query!(
-      "UPDATE assignments SET load_id = $1 WHERE id = $2 AND tenant_id = $3",
-      [Ecto.UUID.dump!(foreign.id), Ecto.UUID.dump!(ctx.trip.id), Ecto.UUID.dump!(ctx.tenant)]
-    )
+    foreign_trip =
+      Fixtures.assignment_record(ctx.tenant, other, foreign_driver, load: foreign_load)
 
-    assert LocationWork.fetch(ctx.tracker, ctx.driver.id, ctx.observation_id) ==
+    {device, seed} = Fixtures.keyed_device(ctx.tenant, foreign_driver)
+    assert {:ok, grant} = Locations.begin_consent(foreign_actor, foreign_trip.id)
+
+    foreign_ctx = %{
+      trip: foreign_trip,
+      device: device,
+      seed: seed,
+      tracker: foreign_tracker,
+      driver: foreign_driver
+    }
+
+    sample = Fixtures.location_sample(foreign_ctx, grant)
+    assert {:ok, [%{result: "ACCEPTED"}]} = Locations.ingest(foreign_actor, [sample])
+    foreign_observation = observation_id(foreign_ctx)
+
+    assert {:ok, work} =
+             LocationWork.fetch(foreign_tracker, foreign_driver.id, foreign_observation)
+
+    assert work.assignment.ref.id == foreign_trip.id
+    assert work.load.ref.id == foreign_load.id
+
+    assert LocationWork.fetch(ctx.tracker, foreign_driver.id, foreign_observation) ==
              {:error, :not_found}
   end
 

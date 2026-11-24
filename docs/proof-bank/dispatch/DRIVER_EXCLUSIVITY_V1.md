@@ -1,5 +1,12 @@
 # Driver exclusivity: review proposal for #296
 
+> Historical PR #312 evidence and proposal, pinned to the revisions below.
+> The owner subsequently approved E3 implementation in a draft PR and disposable
+> database validation on 2026-11-06. See [E3 implementation](E3_IMPLEMENTATION.md)
+> for the new behavior, migration, acceptance gates and remaining proof limits.
+> Commands and expected failing probes in this historical document describe its
+> pinned revisions; they are not the acceptance contract for the E3 branch.
+
 Source baseline: `fd0e5cc20335ab58e5ccd3f39463c63897c4d585` (main inspected
 2026-11-05). Status: **hosted model, runtime and candidate evidence passed at `c9f30a38`;
 E2/E3 remain proposals and no implementation refinement is proved**.

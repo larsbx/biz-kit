@@ -13,6 +13,7 @@ defmodule DispatchWeb.OperationsController do
   use OpenApiSpex.ControllerSpecs
 
   alias Dispatch.Idempotency
+  alias Dispatch.Fleet.Assignment
   alias Dispatch.Operations.Board
   alias DispatchWeb.Problem
   alias DispatchWeb.Schemas
@@ -200,6 +201,11 @@ defmodule DispatchWeb.OperationsController do
 
   defp refuse(conn, {:invalid, detail}),
     do: Problem.send(conn, 422, "INVALID", detail)
+
+  # Ash can unwind directly to the idempotency ledger's outer transaction,
+  # bypassing Board's usual rollback handler.
+  defp refuse(conn, %Ash.Changeset{resource: Assignment} = changeset),
+    do: refuse(conn, Board.refusal(changeset))
 
   defp refuse(conn, :key_reused),
     do:

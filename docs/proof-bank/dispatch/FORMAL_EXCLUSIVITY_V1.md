@@ -1,5 +1,12 @@
 # Dispatch exclusivity: Lean and Quint verification layer
 
+> Historical PR #312 evidence and proposal, pinned to the revisions below.
+> The owner subsequently approved E3 implementation in a draft PR and disposable
+> database validation on 2026-11-06. See [E3 implementation](E3_IMPLEMENTATION.md)
+> for the new behavior, migration, acceptance gates and remaining proof limits.
+> Commands and expected failing probes in this historical document describe its
+> pinned revisions; they are not the acceptance contract for the E3 branch.
+
 This is a specification/testbank for issue #296, added to draft PR #312.
 It changes no assignment writer, database constraint or operational policy.
 E2 and E3 remain proposed requirements. Formal model results do not establish

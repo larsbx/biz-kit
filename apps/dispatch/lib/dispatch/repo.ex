@@ -10,7 +10,7 @@ defmodule Dispatch.Repo do
 
   @impl AshPostgres.Repo
   def installed_extensions do
-    ["ash-functions", "uuid-ossp", "citext", "postgis"]
+    ["ash-functions", "uuid-ossp", "citext", "postgis", "btree_gist"]
   end
 
   @impl AshPostgres.Repo
