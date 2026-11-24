@@ -10,6 +10,15 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
   alias CoopSubstrate.Protocol.Envelope
 
   @chapter "chapter-genesis"
+  @fixture Path.join(__DIR__, "fixtures/commercial_lineage.tsv")
+  @external_resource @fixture
+  @model_states @fixture
+                |> File.read!()
+                |> String.split("\n", trim: true)
+                |> Map.new(fn line ->
+                  [name, original, open, revision] = String.split(line, "\t")
+                  {name, {original == "true", open == "true", String.to_integer(revision)}}
+                end)
 
   setup do
     principals =
@@ -46,6 +55,27 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
 
   defp ledger_row(id), do: Log.gate().commercial_source_lineage[{@chapter, id}]
 
+  defp assert_model_state(id, history) do
+    gate = Log.gate()
+    row = gate.commercial_source_lineage[{@chapter, id}]
+
+    assert {row.original_only, row.open, row.source_revision} ==
+             Map.fetch!(@model_states, history)
+
+    assert Lineage.original_only?(gate, @chapter, id) == row.original_only
+  end
+
+  defp discharge(ctx) do
+    multi_signed_event(
+      [
+        role(ctx.principals["M-alice"], "debtor"),
+        role(ctx.principals["M-bob"], "creditor")
+      ],
+      "ObligationDischarged",
+      %{"obligation_id" => "OB-1"}
+    )
+  end
+
   test "origin digest equals the exact signed core and survives canonical restart", ctx do
     {:ok, [original]} = Log.append(event(ctx, "OB-1", "M-alice", "M-bob", 100))
     {:ok, signed_core} = Envelope.signing_bytes(original)
@@ -54,20 +84,17 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
     assert %{
              original_signed_core_digest: ^expected,
              latest_signed_core_digest: ^expected,
-             source_revision: 1,
-             original_only: true,
              source_kind: :original_attested,
-             open: true,
              legal_effect: :not_verified,
              financial_settlement: :none
            } = ledger_row("OB-1")
 
-    assert Lineage.original_only?(Log.gate(), @chapter, "OB-1")
+    assert_model_state("OB-1", "recorded")
     assert :ok = Log.verify_chains()
 
     restart_log()
     assert ledger_row("OB-1").original_signed_core_digest == expected
-    assert Lineage.original_only?(Log.gate(), @chapter, "OB-1")
+    assert_model_state("OB-1", "recorded")
   end
 
   test "assignment out and back cannot reconstruct original-only source authority", ctx do
@@ -86,6 +113,8 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
         )
       )
 
+    assert_model_state("OB-1", "assigned")
+
     {:ok, [_]} =
       Log.append(
         multi_signed_event(
@@ -100,45 +129,45 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
 
     assert Log.gate().obligations[{@chapter, "OB-1"}].debtor_id == "M-alice"
 
-    assert %{source_revision: 3, source_kind: :assigned, open: true, original_only: false} =
-             ledger_row("OB-1")
+    assert %{source_kind: :assigned} = ledger_row("OB-1")
+    assert_model_state("OB-1", "assigned_back")
 
     assert ledger_row("OB-1").original_signed_core_digest == initial
     refute ledger_row("OB-1").latest_signed_core_digest == initial
-    refute Lineage.original_only?(Log.gate(), @chapter, "OB-1")
 
     restart_log()
-    assert ledger_row("OB-1").source_revision == 3
-    refute Lineage.original_only?(Log.gate(), @chapter, "OB-1")
+    assert_model_state("OB-1", "assigned_back")
+
+    assert {:ok, [_]} = Log.append(discharge(ctx))
+    assert_model_state("OB-1", "assigned_back_discharged")
+    restart_log()
+    assert_model_state("OB-1", "assigned_back_discharged")
     assert :ok = Log.verify_chains()
   end
 
   test "direct obligation discharge records signed lineage closure only", ctx do
     {:ok, [_]} = Log.append(event(ctx, "OB-1", "M-alice", "M-bob", 100))
 
-    {:ok, [_]} =
-      Log.append(
-        multi_signed_event(
-          [
-            role(ctx.principals["M-alice"], "debtor"),
-            role(ctx.principals["M-bob"], "creditor")
-          ],
-          "ObligationDischarged",
-          %{"obligation_id" => "OB-1"}
-        )
-      )
+    {:ok, [_]} = Log.append(discharge(ctx))
 
     assert %{
-             source_revision: 2,
              source_kind: :direct_discharge_attested,
-             original_only: false,
-             open: false,
              financial_settlement: :none
            } =
              ledger_row("OB-1")
 
-    refute Lineage.original_only?(Log.gate(), @chapter, "OB-1")
+    assert_model_state("OB-1", "direct_discharge")
     assert Log.gate().obligations[{@chapter, "OB-1"}].open == false
+
+    restart_log()
+    before = Log.head()
+
+    assert {:error, {:reject, _index, {:obligation_already_recorded, "OB-1"}}} =
+             Log.append(event(ctx, "OB-1", "M-alice", "M-bob", 100))
+
+    assert {:error, {:reject, _index, :obligation_discharged}} = Log.append(discharge(ctx))
+    assert Log.head() == before
+    assert_model_state("OB-1", "direct_discharge")
   end
 
   test "legacy bilateral netting closes its source histories and marks residual as derived",
@@ -169,19 +198,10 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
         )
       )
 
-    assert %{
-             source_revision: 2,
-             source_kind: :legacy_netting_closed,
-             original_only: false,
-             open: false
-           } = ledger_row("OB-1")
-
-    assert %{
-             source_revision: 2,
-             source_kind: :legacy_netting_closed,
-             original_only: false,
-             open: false
-           } = ledger_row("OB-2")
+    for id <- ["OB-1", "OB-2"] do
+      assert %{source_kind: :legacy_netting_closed} = ledger_row(id)
+      assert_model_state(id, "legacy_netting")
+    end
 
     assert %{
              source_revision: 1,
@@ -198,6 +218,8 @@ defmodule CoopSubstrate.CommercialSourceLineageTest do
     before = Log.gate().commercial_source_lineage
     restart_log()
     assert before == Log.gate().commercial_source_lineage
+    assert_model_state("OB-1", "legacy_netting")
+    assert_model_state("OB-2", "legacy_netting")
     assert :ok = Log.verify_chains()
   end
 end
