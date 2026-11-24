@@ -28,3 +28,16 @@ tests and the restaurant admission tests.
 ```sh
 cd apps/order_core && mix test --no-start
 ```
+
+## Home-scoped candidate projections
+
+`Placement.new(workflow, owner, carts)` and
+`Lifecycle.new(workflow, owner, id, fulfillment)` accept an ownership map
+`%{home_id: ..., merchant: ...}` as well as merchant-only compatibility input.
+`OrderCore.Ownership` checks the pair before protected state, history, pricing
+or idempotency is inspected. Home-scoped cart and order snapshots must retain
+that pair; merchant-only projections refuse grants carrying a home identifier.
+`Placement.fetch_cart/3` requires a current exact cart-read grant.
+
+These are trusted-input candidate checks. They do not authenticate grants,
+provide shared-database tenancy, fence writers or establish financial settlement.

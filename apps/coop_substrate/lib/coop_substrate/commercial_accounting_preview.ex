@@ -67,8 +67,7 @@ defmodule CoopSubstrate.CommercialAccountingPreview do
            accounting_recognition: :none,
            discharge: :none,
            settlement: :none,
-           event:
-             %Envelope{type: @reservation, chapter_id: ^chapter, payload: p} = event
+           event: %Envelope{type: @reservation, chapter_id: ^chapter, payload: p} = event
          } <- Map.get(intents, intent),
          :ok <- Envelope.verify(event),
          :ok <- validate_header(p, intent_id),
@@ -144,7 +143,7 @@ defmodule CoopSubstrate.CommercialAccountingPreview do
         {:error, :invalid_source_terms}
 
       Enum.map(rows, & &1["obligation_id"]) !=
-          (rows |> Enum.map(& &1["obligation_id"]) |> Enum.uniq() |> Enum.sort()) ->
+          rows |> Enum.map(& &1["obligation_id"]) |> Enum.uniq() |> Enum.sort() ->
         {:error, :duplicate_or_unsorted_source}
 
       not Enum.all?(rows, fn row ->
@@ -162,7 +161,7 @@ defmodule CoopSubstrate.CommercialAccountingPreview do
           source.original_event_id == row["original_event_id"] and
           source.latest_event_id == row["latest_event_id"] and
           row["original_event_hash"] == {:bytes, source.original_event_hash} and
-          row["latest_event_hash"] == {:bytes, source.latest_event_hash}
+            row["latest_event_hash"] == {:bytes, source.latest_event_hash}
       end) ->
         {:error, :source_reservation_or_lineage_changed}
 

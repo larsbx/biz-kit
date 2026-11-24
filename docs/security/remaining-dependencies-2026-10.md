@@ -1,5 +1,61 @@
 # Remaining dependency security correction (issue #157)
 
+## November 24 shared-lock advisory follow-up
+
+The earlier #446 head `9200bcdc` passed its full-lock audit with Ash 3.38.0.
+Later on November 24, Hex published two additional affected ranges. The fresh
+[audit at `d69c9881`](https://github.com/larsbx/biz-kit/actions/runs/45428177242/job/138565817774)
+reports exactly these two findings:
+
+| Package | Affected lock | Corrected lock | Advisory and affected range |
+| --- | --- | --- | --- |
+| ash | 3.38.0 | 3.38.1 | [EEF-CVE-2026-120299 / GHSA-rwmx-99mc-qr2x](https://osv.dev/vulnerability/EEF-CVE-2026-120299): `>= 3.24.0 and < 3.38.1`; keyword input fields reached trusted storage casting. Published November 24 at 13:13:20 UTC. |
+| db_connection | 2.10.2 | 2.10.3 | [EEF-CVE-2026-133555 / GHSA-gmmq-fw75-wq46](https://osv.dev/vulnerability/EEF-CVE-2026-133555): `>= 1.1.0 and < 2.10.3`; forged stream `:log` options reached MFA callbacks. Published November 24 at 14:12:48 UTC. |
+
+Only these two lock records change. Ash's fourteen dependency requirements
+and DBConnection's Telemetry requirement are unchanged. DBConnection raises
+its Elixir minimum from `~> 1.11` to `~> 1.12`, within the repository's tested
+toolchains. Dispatch and SpruceGoose now require Ash
+`~> 3.38 and >= 3.38.1`, retaining the existing major-version bound while
+excluding the newly affected patch. No new direct DBConnection dependency is
+introduced.
+
+Both old and replacement package archives were checked against the official
+Hex release metadata, and their inner checksums were independently recomputed
+from `VERSION`, `metadata.config` and `contents.tar.gz`:
+
+| Replacement release | Archive SHA-256 (outer) | Recomputed inner checksum |
+| --- | --- | --- |
+| [Ash 3.38.1](https://hex.pm/api/packages/ash/releases/3.38.1) | `ad594df16b9bde134530e5552a9f9293e96e78b9b9d7a04f73c369eb3fb9ee61` | `ffd5d589a6b40c5c4c22b546e0170ec3a265393aa63018e8ab21d33b85391c9e` |
+| [DBConnection 2.10.3](https://hex.pm/api/packages/db_connection/releases/2.10.3) | `ff441940bfd9ef5cced632e0e36d4ac823abeb9cae2767203fb9b4ccd1bd83cb` | `9d641d9cb56ed7cd03d0f5520b64f023f8c9a2531944991c952aa38e8afd5405` |
+
+Local Elixir 1.19 / OTP 27 formatting and lock-structure checks passed. An
+isolated Hex 2.7.0 audit could not fetch registry records because its HTTP
+connections were reset; it exited nonzero and provides no clean-audit evidence.
+The corrected revision still requires a successful hosted full-lock audit.
+
+The replacement releases also contain keyset handling and connection
+checkout/deadline changes. Locked dependency installation, compilation and
+runtime acceptance must therefore pass on the corrected revision; package
+metadata and a clean audit alone do not establish runtime compatibility.
+The audit prints its SARIF and returns its original exit status. No finding
+is ignored, and the dated results below remain evidence for their original
+revisions.
+
+## November 23 shared-lock audit repair
+
+The full-lock audit on main `d2756bb3` reported three advisories. Only these two
+lock records change. Release requirements are unchanged:
+
+| Package | Affected lock | Corrected lock | Advisory |
+| --- | --- | --- | --- |
+| phoenix | 1.8.16 | 1.8.17 | [EEF-CVE-2026-128361](https://osv.dev/vulnerability/EEF-CVE-2026-128361), [EEF-CVE-2026-129344](https://osv.dev/vulnerability/EEF-CVE-2026-129344) |
+| phoenix_live_view | 1.2.13 | 1.2.15 | [EEF-CVE-2026-126334](https://osv.dev/vulnerability/EEF-CVE-2026-126334) |
+
+Dependabot's `ea775f6d` moved Bandit to 1.15.0 (`~> 1.15.0`), so the production
+listener's exact-version assertion now names 1.15.0. With these two changes,
+the complete shared-lock audit reports no advisories.
+
 ## November 1 federation CI audit repair
 
 On 2026-11-01, PR #226 head `68ffa46608428fc4e61bbe23c1dfa8e3f1baa1e5`

@@ -55,7 +55,7 @@ defmodule CoopSubstrate.Constants do
   `member` is deliberately absent — member keys live in the member registry
   (`MemberRegistered`/`KeyRotated`), never here.
   """
-  def declarable_roles, do: ["governance", "steward", "checkpoint"]
+  def declarable_roles, do: ["governance", "steward", "checkpoint", "commercial_setoff_reviewer"]
 
   @doc """
   Interview consent use-classes (corpus 11 §1.2; Phase 2A). Every use of

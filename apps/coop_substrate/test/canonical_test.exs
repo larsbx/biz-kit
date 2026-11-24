@@ -126,6 +126,24 @@ defmodule CoopSubstrate.CanonicalTest do
     assert {:error, :too_large} = ReferenceEncoder.encode(big)
   end
 
+  test "copies and hashes wrapped bytes at the encoded size limit" do
+    max_bytes = CoopSubstrate.Constants.max_canonical_bytes()
+    # This CBOR byte string uses a one-byte marker and a 16-bit length.
+    payload = :binary.copy(<<0xFF>>, max_bytes - 3)
+    term = {:bytes, payload}
+    expected = <<0x59, byte_size(payload)::16, payload::binary>>
+
+    assert {:ok, ^expected} = Canonical.encode(term)
+    assert {:ok, ^expected} = ReferenceEncoder.encode(term)
+    digest = :crypto.hash(:sha256, expected)
+    assert {:ok, ^digest} = Canonical.hash(term)
+
+    oversized = {:bytes, payload <> <<0>>}
+    assert {:error, :too_large} = Canonical.encode(oversized)
+    assert {:error, :too_large} = Canonical.hash(oversized)
+    assert {:error, :too_large} = ReferenceEncoder.encode(oversized)
+  end
+
   # -- generators ---------------------------------------------------------------
 
   defp canonical_term do

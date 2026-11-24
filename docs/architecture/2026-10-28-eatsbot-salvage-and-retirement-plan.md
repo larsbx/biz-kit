@@ -1,15 +1,38 @@
 # Eatsbot salvage and verified retirement plan
 
-Date: 2026-10-28. Status: **Proposed target architecture; inventory and retirement plan, not a production shutdown**.
+Date: 2026-10-28; status reconciled 2026-11-23. **Retained capabilities and
+legacy source removal are implemented in Biz-kit; actual host and standalone
+infrastructure retirement require separate evidence.** The original work
+packages below are historical design context where later decisions supersede
+their deployment assumptions.
 
-Since 2026-11-07 the [Eatsbot decommission checklist](2026-11-07-eatsbot-decommission.md) defines when this plan is done, for the rebuilt eatsbot (`restaurant_host`) that now replaces the legacy runtime. The R0–R6 packages and refusal rules below still apply.
-Paired with [the cross-repository extension ADR](2026-10-28-cross-repository-extension-and-hawala-capability.md) (biz-kit PR #175) and the [Eatsbot retirement ADR](https://github.com/larsbx/eatsbot/blob/dev/docs/modules/decisions/pages/biz-kit-interoperability-and-source-ownership.adoc) (eatsbot PR #35).
+The [Eatsbot decommission checklist](2026-11-07-eatsbot-decommission.md) is the
+current R0–R6 status. The [November 16 owner inventory](2026-11-16-eatsbot-r0-inventory.md)
+establishes the disposable `adder-ws` test-stack exception: no customer data,
+no archive/drain, and approved stopping/removal of legacy apps instead of
+triggers erased on every old startup. #426 completed that source switch and
+removal; #402's delivery fixture is merged. D1 starts empty; D2/D3 drop
+Telegram/GraphQL; D4–D6 retain Biz-kit accounts, CommerceCore discounts and
+signed menu editing. These decisions do not apply an empty-data assumption to
+any other uninspected legacy deployment.
+
+Paired with [the cross-repository extension ADR](2026-10-28-cross-repository-extension-and-hawala-capability.md)
+(biz-kit PR #175) and the standalone
+[platform storage and retirement ADR](https://github.com/larsbx/eatsbot/blob/a552153a5b6b47ee596aa10c81a0dcf13eeecf5c/docs/modules/decisions/pages/platform-storage-and-retirement.adoc).
+Use the [retirement acceptance runbook](2026-11-23-retirement-cutover-acceptance.md#4-eatsbots-distinct-operational-remainder)
+for the outstanding host, Fly infrastructure/credentials and read-only
+repository archival evidence. Source removal does not prove these operations.
 
 ## Decision and end state
 
 **Decommission Eatsbot as an independently maintained product and application. Salvage reusable code, tests, contracts, and domain semantics into the canonical biz-kit capabilities; leave no permanent active duplicate Eatsbot writer or runtime.** This supersedes the earlier idea that Eatsbot should remain a permanently independent first-class product.
 
-The existing Eatsbot repository (`larsbx/eatsbot`, default branch `dev`) and imported copies under `apps/eatsbot*` are **temporary source and compatibility assets**. Production source/writer authority remains with the current deployment **only until proven and explicitly authorized cutover**. This ADR does not order a deployment shutdown, switch any database writer, or authorize a destructive purge. After approved cutover and a defined rollback/retention window, archive Eatsbot as read-only provenance, rather than delete its history.
+The standalone Eatsbot repository (`larsbx/eatsbot`, default branch `dev`)
+retains source provenance. Its imported `apps/eatsbot*` copies have been
+removed; their history remains in Git. Preserve any actual deployment's
+authority until its approved cutover, and archive the standalone source
+read-only after applicable retention. This ADR alone does not shut down a
+deployment or authorize a destructive purge.
 
 The platform must gain generic capabilities without forcing restaurant labels, Telegram IDs, Eatsbot DB schemas or trust assumptions into other applications. Use source-attributed, independently tested *extraction* rather than a whole-app copy.
 
@@ -63,7 +86,12 @@ Both represent early R1/R2 development; the legacy authoritative writers, migrat
 Both are staged R3 **contract composition only**. They have no live host signatures, current-grant rechecks at append, actual ledger writes, durable queues or production traffic cutover. Their shared `biz_kit_composition/mix.exs` additions must be reconciled after the parent core PRs merge.
 
 
-## Decommission work packages (each separately reviewed)
+## Original decommission work packages (each separately reviewed)
+
+The current checklist applies the later decisions above. In particular, the
+old Fly-production assumption, migration/drain requirement and mandatory
+database-trigger mechanism do not describe the confirmed disposable test
+stack. Keep the general refusal rules for any deployment with real obligations.
 
 **R0 — Baseline and freeze.** Record exact standalone `dev` commit, imported-copy commit(s), current deployments, DNS/webhooks, clients, databases, schemas, secrets, third-party APIs, queues, CI, active orders/deliveries/subscribers/obligations, privacy/retention rules and archive/legal needs. Add a dual-source divergence diff: the current imported and standalone copies have some differing files, so do not assume an identical tree. Freeze **new** legacy-product features once an operational freeze is approved, except fixes required for safety, contractual commitments and security.
 
@@ -90,4 +118,6 @@ Both are staged R3 **contract composition only**. They have no live host signatu
 - [ ] Current production endpoints/consumers are verified on replacement implementations, with deployment rollback and privacy/security review.
 - [ ] Only then the legacy service is disabled, deprecated packages removed and the repository archived under approved retention.
 
-**This document is a planned decommission, not proof of a completed decommission.** None of the numbered phases is established as passed merely by merging this ADR.
+**This document is not proof of operational retirement.** The current
+checklist records completed source phases and the remaining operational
+evidence; neither is inferred merely from merging this ADR.

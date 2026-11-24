@@ -46,6 +46,7 @@ defmodule CoopSubstrate.Projections.Membership do
       obligations: %{},
       # Source signed-core lineage remains a read projection, not a writer.
       commercial_source_lineage: %{},
+      commercial_setoff_admission: CoopSubstrate.CommercialSetoffAdmission.init(),
       # Pure, signed proposals only; never reserve/close source obligations.
       commercial_setoff_intents: %{},
       role_keys: %{},
@@ -101,6 +102,11 @@ defmodule CoopSubstrate.Projections.Membership do
 
   @group_buy_types Map.keys(CoopSubstrate.GroupBuys.event_types())
   @federation_types Map.keys(CoopSubstrate.FederationAuthority.event_types())
+  @commercial_admission_types Map.keys(CoopSubstrate.CommercialSetoffAdmission.event_types())
+
+  def handle_event(%Envelope{type: type} = env, state) when type in @commercial_admission_types do
+    CoopSubstrate.CommercialSetoffAdmission.fold(env, state)
+  end
 
   def handle_event(%Envelope{type: type} = env, state) when type in @federation_types do
     CoopSubstrate.FederationAuthority.fold(env, state)
@@ -153,10 +159,12 @@ defmodule CoopSubstrate.Projections.Membership do
       _member ->
         {:bytes, pubkey} = p["new_pubkey"]
 
-        put_in(state, [:members, Access.key({ch, p["member_id"]})], %{
+        state
+        |> put_in([:members, Access.key({ch, p["member_id"]})], %{
           pubkey: pubkey,
           key_id: p["new_key_id"]
         })
+        |> CoopSubstrate.CommercialSetoffAdmission.rotate_member_key(ch, p["member_id"])
     end
   end
 
@@ -171,6 +179,7 @@ defmodule CoopSubstrate.Projections.Membership do
       pubkey: pubkey,
       key_id: p["new_key_id"]
     })
+    |> CoopSubstrate.CommercialSetoffAdmission.rotate_member_key(ch, p["member_id"])
     |> update_in([:escalations, Access.key({ch, p["authorization_item_id"]})], fn item ->
       Map.put(item, :consumed, true)
     end)
@@ -203,9 +212,16 @@ defmodule CoopSubstrate.Projections.Membership do
     end)
     |> update_in([:role_key_members], &Map.delete(&1, {ch, p["role"], p["key_id"]}))
     |> then(fn next ->
-      if p["role"] == "governance",
-        do: CoopSubstrate.FederationAuthority.revoke_key(next, ch, p["key_id"]),
-        else: next
+      case p["role"] do
+        "governance" ->
+          CoopSubstrate.FederationAuthority.revoke_key(next, ch, p["key_id"])
+
+        "commercial_setoff_reviewer" ->
+          CoopSubstrate.CommercialSetoffAdmission.revoke_reviewer(next, ch, p["key_id"])
+
+        _ ->
+          next
+      end
     end)
   end
 

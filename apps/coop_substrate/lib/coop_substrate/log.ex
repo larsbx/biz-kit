@@ -553,6 +553,13 @@ defmodule CoopSubstrate.Log do
 
   defp procurement_duplicate(envelopes, gate) do
     case CoopSubstrate.Procurement.duplicate(envelopes, gate) do
+      :new -> commercial_duplicate(envelopes, gate)
+      result -> result
+    end
+  end
+
+  defp commercial_duplicate(envelopes, gate) do
+    case CoopSubstrate.CommercialSetoffAdmission.duplicate(envelopes, gate) do
       :new -> existing_duplicate(envelopes, gate)
       result -> result
     end

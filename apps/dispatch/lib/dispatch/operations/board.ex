@@ -211,13 +211,15 @@ defmodule Dispatch.Operations.Board do
       lock = fn -> lock_trip!(actor, trip.id) end
 
       transaction(actor, "assignment.update.status", lock, fn actor ->
-        with {:ok, trip} <- own_trip(actor, trip.id),
+        with {:ok, actor} <- Dispatch.Access.MutationAuthority.transition(actor),
+             {:ok, trip} <- own_trip(actor, trip.id),
              :ok <- current(trip, expected_version),
              :ok <- permitted(trip.status, action),
              :ok <- driver_in_force(actor, trip, action) do
           trip
           |> Ash.Changeset.for_update(action, %{expected_version: expected_version})
-          # REVIEWED-UNAUTHORIZED: authorized above; the trip's load is the actor's.
+          # REVIEWED-UNAUTHORIZED: current selected authority is locked above
+          # through mutation/audit commit; the trip's load is the actor's.
           |> Ash.update(authorize?: false, tenant: actor.tenant_id)
           |> audited(actor, Map.fetch!(@transition_events, action), "assignment", & &1.id)
         end
@@ -235,8 +237,13 @@ defmodule Dispatch.Operations.Board do
   # A write is authorized by the grant as committed, never by the snapshot it
   # was called with (issue #254): checked fresh on entry, then again under
   # `FOR SHARE` in the mutation's transaction, after any other lock it waits on.
-  defp authorized(actor, capability, opts \\ []),
-    do: PrincipalResolution.authorize(actor, capability, opts)
+  defp authorized(actor, capability, opts \\ []) do
+    with {:ok, fresh} <- PrincipalResolution.authorize(actor, capability, opts) do
+      # Authority refresh must retain the verified HTTP metadata that the
+      # transition admission rechecks after waiting for the trip lock.
+      {:ok, %{fresh | authentication: actor.authentication}}
+    end
+  end
 
   defp organization(%Actor{role_assignment: %RoleAssignment{organization_id: id}}), do: id
 

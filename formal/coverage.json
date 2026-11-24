@@ -296,6 +296,20 @@
         "note": "Consent.record/3: strictly newer events and single-use evidence receipts, so no stale or replayed grant restores consent after withdrawal."
       }
     ],
+    "scf_core": [
+      {
+        "quint": "formal/quint/obligations/scf_core.qnt",
+        "main": "scf_core",
+        "control": "scf_core_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness"
+      },
+      {
+        "lean": "BizKitScf",
+        "theorem": "obligation",
+        "note": "Unbounded validated-entry ledger model: reachable debit-credit equality, frozen closed-period prefixes and monotone closure, exact-retry idempotence, and accountwise cancellation for a fresh open-date reversal without line overrides. Separate income and balance-sheet equations over the admitted chart partition; balance-sheet equality requires a zero-sum trial balance. Includes checked admission witnesses and counterexamples. Elixir refinement, parsing, projection extraction and single-correction admission are not claimed."
+      }
+    ],
     "school_ops": [
       {
         "quint": "formal/quint/obligations/school_ops.qnt",
@@ -336,13 +350,6 @@
         "control": "task_host_control",
         "invariant": "obligation",
         "witness": "obligationWitness"
-      }
-    ],
-    "scf_core": [
-      {
-        "lean": "BizKitScf",
-        "theorem": "obligation",
-        "note": "Unbounded validated-entry ledger model: reachable debit-credit equality, frozen closed-period prefixes and monotone closure, exact-retry idempotence, and accountwise cancellation for a fresh open-date reversal without line overrides. Separate income and balance-sheet equations over the admitted chart partition; balance-sheet equality requires a zero-sum trial balance. Includes checked admission witnesses and counterexamples. Elixir refinement, parsing, projection extraction and single-correction admission are not claimed."
       }
     ]
   },
