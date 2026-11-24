@@ -1286,7 +1286,7 @@
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
     },
     {
-      "at_sha": "b4a3c4898f013d86d106f832ef7a0e1f39ee7010",
+      "at_sha": "29f5a39445aa9247bcc8622b102802ad11f95f5c",
       "date": "2026-11-24",
       "decision": "owner: register and refresh; re-characterize at the next milestone",
       "registered": [],
