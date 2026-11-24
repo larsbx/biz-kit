@@ -21,6 +21,9 @@ defmodule Mix.Tasks.Coop.Blueprint do
   The origin must match the repository label; it is not remote authentication.
   The selected commit and path, and the exact bytes verified there, are still
   what the governance key authorizes. Without this option, Forgejo is unchanged.
+
+  Use `--register` to record verified source for an existing project.
+  An application can cite that receipt with `--registration EVENT_ID`.
   """
 
   use Mix.Task
@@ -28,20 +31,30 @@ defmodule Mix.Tasks.Coop.Blueprint do
   alias CoopSubstrate.Blueprints
   alias CoopSubstrate.Governance.Client
   alias CoopSubstrate.Harness.Ops
+  alias CoopSubstrate.ULID
   alias TaskHost.Blueprints.SourceVerifier
 
-  @usage "usage: mix coop.blueprint <CHAPTER>/<TENANT>/<PROJECT> <REPOSITORY> <COMMIT> <PATH> [--source-checkout PATH] [--server URL] [--yes]"
+  @usage "usage: mix coop.blueprint <CHAPTER>/<TENANT>/<PROJECT> <REPOSITORY> <COMMIT> <PATH> [--register | --registration EVENT_ID] [--source-checkout PATH] [--server URL] [--yes]"
 
   @impl true
   def run(args) do
     Mix.Task.run("app.config")
 
     {opts, positional, invalid} =
-      OptionParser.parse(args, strict: [server: :string, yes: :boolean, source_checkout: :string])
+      OptionParser.parse(args,
+        strict: [
+          server: :string,
+          yes: :boolean,
+          source_checkout: :string,
+          register: :boolean,
+          registration: :string
+        ]
+      )
 
     with [] <- invalid,
          [scope, repository, commit, path] <- positional,
-         [chapter, tenant, project] <- String.split(scope, "/") do
+         [chapter, tenant, project] <- String.split(scope, "/"),
+         :ok <- valid_mode(opts) do
       base = opts[:server] || CoopSubstrate.Governance.Client.default_server()
       apply_blueprint(base, {chapter, tenant, project}, repository, commit, path, opts)
     else
@@ -56,35 +69,52 @@ defmodule Mix.Tasks.Coop.Blueprint do
          {:ok, blueprint} <- Blueprints.read(bytes) do
       source = %{"repository" => repository, "commit" => commit, "tree" => tree, "path" => path}
 
+      source =
+        if opts[:registration],
+          do: Map.put(source, "registration_event_id", opts[:registration]),
+          else: source
+
+      {mode, verb, done, suffix} =
+        if opts[:register],
+          do: {:register, "Register", "registered", "/registrations"},
+          else: {:apply, "Apply", "applied", ""}
+
       Mix.shell().info("""
       #{repository} @ #{commit} (tree #{tree}) #{path}
       manifest sha256: #{Base.encode16(:crypto.hash(:sha256, bytes), case: :lower)}
       #{describe(blueprint)}
-      Apply to #{chapter} / #{tenant} / #{project}, signed by governance key #{signer.key_id}?
+      #{verb} to #{chapter} / #{tenant} / #{project}, signed by governance key #{signer.key_id}?
       """)
 
-      if opts[:yes] || Mix.shell().yes?("Apply?") do
+      if opts[:yes] || Mix.shell().yes?("#{verb}?") do
         url =
           "#{String.trim_trailing(base, "/")}/api/v1/chapters/#{Client.segment(chapter)}" <>
-            "/tenants/#{Client.segment(tenant)}/projects/#{Client.segment(project)}/blueprints"
+            "/tenants/#{Client.segment(tenant)}/projects/#{Client.segment(project)}/blueprints" <>
+            suffix
 
         params = Map.put(source, "manifest", Base.url_encode64(bytes, padding: false))
 
         case Client.sign_held(
                url,
                signer,
-               &Blueprints.expected?(&1, {chapter, tenant, project}, source, bytes),
+               &Blueprints.expected?(&1, {chapter, tenant, project}, source, bytes, mode),
                params
              ) do
-          {:ok, %{"event_id" => id}} -> Mix.shell().info("applied: event #{id}")
-          {:error, reason} -> Mix.raise("not applied: #{inspect(reason)}")
+          {:ok, %{"event_id" => id}} -> Mix.shell().info("#{done}: event #{id}")
+          {:error, reason} -> Mix.raise("not #{done}: #{inspect(reason)}")
         end
       else
-        Mix.shell().info("not applied; nothing was signed")
+        Mix.shell().info("#{verb} declined")
       end
     else
       {:error, reason} -> Mix.raise("cannot apply: #{inspect(reason)}")
     end
+  end
+
+  defp valid_mode(opts) do
+    if opts[:registration] == nil or (!opts[:register] and ULID.valid?(opts[:registration])),
+      do: :ok,
+      else: :error
   end
 
   defp describe(blueprint) do

@@ -20,14 +20,18 @@ defmodule TaskHost.Web.BlueprintController do
   import TaskHost.Web.Requests
 
   alias CoopSubstrate.Blueprints
+  alias CoopSubstrate.ULID
 
-  def prepare(conn, %{"chapter_id" => ch, "tenant_id" => t, "project_id" => p}) do
+  def prepare(conn, params), do: prepare(conn, params, :apply)
+  def prepare_registration(conn, params), do: prepare(conn, params, :register)
+
+  defp prepare(conn, %{"chapter_id" => ch, "tenant_id" => t, "project_id" => p}, mode) do
     with :ok <- governing(conn, ch),
          {:ok, body} <- json_body(conn),
          {:ok, signer} <- string(body["governance_key_id"]),
-         {:ok, source} <- source(body),
+         {:ok, source} <- source(body, mode),
          {:ok, bytes} <- bytes(body["manifest"]),
-         {:ok, pending} <- Blueprints.prepare({ch, t, p}, source, bytes, signer) do
+         {:ok, pending} <- Blueprints.prepare({ch, t, p}, source, bytes, signer, mode) do
       held(conn, pending)
     else
       %Plug.Conn{} = refused -> refused
@@ -35,21 +39,44 @@ defmodule TaskHost.Web.BlueprintController do
     end
   end
 
-  def apply(conn, %{"chapter_id" => ch, "tenant_id" => t, "project_id" => p, "held_id" => id}) do
+  def apply(conn, params), do: submit(conn, params, :apply)
+  def register(conn, params), do: submit(conn, params, :register)
+
+  defp submit(
+         conn,
+         %{"chapter_id" => ch, "tenant_id" => t, "project_id" => p, "held_id" => id},
+         mode
+       ) do
     with {:ok, body} <- json_body(conn),
          {:ok, signature} <- bytes(body["signature"]),
-         {:ok, env} <- Blueprints.apply({ch, t, p}, id, signature) do
+         {:ok, env} <- Blueprints.submit({ch, t, p}, id, signature, mode) do
       appended(conn, env)
     else
       error -> refuse(conn, error)
     end
   end
 
-  defp source(body) do
+  defp source(body, mode) do
     fields = ~w(repository commit tree path)
 
-    if Enum.all?(fields, &is_binary(body[&1])),
-      do: {:ok, Map.take(body, fields)},
-      else: {:error, :bad_request}
+    with true <- Enum.all?(fields, &is_binary(body[&1])),
+         {:ok, registration} <- registration(body, mode) do
+      {:ok, Map.merge(Map.take(body, fields), registration)}
+    else
+      _ -> {:error, :bad_request}
+    end
+  end
+
+  defp registration(body, mode) do
+    case Map.fetch(body, "registration_event_id") do
+      :error ->
+        {:ok, %{}}
+
+      {:ok, id} when mode == :apply ->
+        if ULID.valid?(id), do: {:ok, %{"registration_event_id" => id}}, else: :error
+
+      _ ->
+        :error
+    end
   end
 end

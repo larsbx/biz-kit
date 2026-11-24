@@ -42,6 +42,29 @@ defmodule TaskHost.Web.AuthController do
     with {:ok, session, id} <- session(conn), do: {:ok, session.principal, id}
   end
 
+  @doc """
+  A task command or artifact request's authenticated principal. Native
+  clients present the existing revocable session as a bearer. The device
+  key and the current ledger grant are still checked by command admission.
+  """
+  def operator_principal(conn) do
+    with {:ok, session, id} <- operator_session(conn), do: {:ok, session.principal, id}
+  end
+
+  @doc "The live session and identity used for native device enrolment."
+  def operator_session(conn) do
+    case get_req_header(conn, "authorization") do
+      [] ->
+        session(conn)
+
+      ["Bearer " <> token] when token != "" ->
+        with {:ok, session} <- Identity.session(token), do: {:ok, session, token}
+
+      _ ->
+        {:error, :no_credentials}
+    end
+  end
+
   @doc "The live session itself (principal and the identity it signed in with) and its ID."
   @spec session(Plug.Conn.t()) :: {:ok, map(), String.t()} | {:error, atom()}
   def session(conn) do
@@ -205,8 +228,7 @@ defmodule TaskHost.Web.AuthController do
     |> send_resp(204, "")
   end
 
-  # A native app's session. Only `/auth/me` and `/auth/logout` read it here:
-  # elsewhere in the host an Authorization header means a signed request.
+  # A native app's session, also used in the designated operator routes.
   defp bearer_or_cookie_principal(conn) do
     case bearer(conn) do
       nil ->

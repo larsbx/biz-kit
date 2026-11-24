@@ -152,6 +152,13 @@ defmodule TaskHost.Web.Requests do
     :project_already_owned,
     :project_owner_ineligible,
     :unexpected_successor_project,
+    :blueprint_predecessors_fixed,
+    :readiness_not_defined,
+    :readiness_edit_state,
+    :invalid_predecessor,
+    :predecessor_exists,
+    :unknown_predecessor_edge,
+    :stale_task_version,
     :unknown_role_key,
     :no_submission
   ]
@@ -161,10 +168,12 @@ defmodule TaskHost.Web.Requests do
   `Authorization: CoopGovernance …` header) may act on, or
   `{:unauthorized, reason}`.
   """
-  def governance_read(conn) do
+  def governance_read(conn), do: governance_read(conn, &Read.authorize/2)
+
+  def governance_read(conn, authorize) do
     with [header] <- get_req_header(conn, "authorization"),
          {:ok, request, signature} <- Authorization.parse(header, conn.method, conn.request_path) do
-      Read.authorize(request, signature)
+      authorize.(request, signature)
       |> case do
         {:ok, chapters} -> {:ok, chapters}
         {:error, reason} -> {:unauthorized, reason}
@@ -255,6 +264,9 @@ defmodule TaskHost.Web.Requests do
 
         {:invalid, :empty_task_field} ->
           {400, "empty_field"}
+
+        {:stale_todo_version, _, _} ->
+          {409, "stale_todo_version"}
 
         # What the ledger would refuse, named, so the page can say why.
         {:invalid, reason} ->

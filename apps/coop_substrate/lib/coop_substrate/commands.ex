@@ -64,12 +64,16 @@ defmodule CoopSubstrate.Commands do
           Decisions.decision() | Steps.action()
         ) ::
           {:ok, pending()} | {:error, term()}
-  def prepare(principal, key_id, {chapter, _, _} = scope, command) do
+  def prepare(principal, key_id, scope, command),
+    do: prepare(principal, key_id, scope, command, nil)
+
+  @doc "Prepare under one exact grant when the caller names its event ID."
+  def prepare(principal, key_id, {chapter, _, _} = scope, command, expected_grant) do
     o = Log.gate().orchestration
     builder = if elem(command, 0) in [:accept, :amend, :decline], do: Decisions, else: Steps
-    role = if elem(command, 0) == :review, do: "reviewer", else: "operator"
+    role = if elem(command, 0) in [:review, :attest_artifact], do: "reviewer", else: "operator"
 
-    with {:ok, grant_id, grant} <- grant(o, role, principal, key_id, scope),
+    with {:ok, grant_id, grant} <- grant(o, role, principal, key_id, scope, expected_grant),
          {:ok, type, payload} <-
            builder.command(o, scope, command, %{
              "principal_id" => principal,
@@ -219,14 +223,15 @@ defmodule CoopSubstrate.Commands do
     end
   end
 
-  defp grant(o, role, principal, key_id, scope) do
+  defp grant(o, role, principal, key_id, scope, expected_grant) do
     {grants, missing} =
       if role == "reviewer",
         do: {o.dod_grants, :no_reviewer_grant},
         else: {o.grants, :no_operator_grant}
 
     Enum.find_value(grants, {:error, missing}, fn {id, g} ->
-      if g.active and g.principal_id == principal and g.key_id == key_id and
+      if (expected_grant == nil or id == expected_grant) and
+           g.active and g.principal_id == principal and g.key_id == key_id and
            {g.chapter_id, g.tenant_id, g.project_id} == scope,
          do: {:ok, id, g}
     end)

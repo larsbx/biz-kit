@@ -34,10 +34,13 @@ defmodule CoopSubstrate.Governance.Read do
 
   @doc "The chapters this signed request may read, as of now; spends its nonce."
   @spec authorize(request(), binary()) :: {:ok, [String.t()]} | {:error, atom()}
-  def authorize(request, signature) do
+  def authorize(request, signature), do: authorize(request, signature, Log.gate())
+
+  @doc "Authorize against the same immutable gate the caller will read."
+  def authorize(request, signature, %{role_keys: role_keys}) do
     now = System.system_time(:millisecond)
 
-    with {:ok, chapters} <- chapters(Log.gate().role_keys, request, signature, now),
+    with {:ok, chapters} <- chapters(role_keys, request, signature, now),
          :ok <- Nonces.claim(request.nonce, request.timestamp_ms),
          do: {:ok, chapters}
   end

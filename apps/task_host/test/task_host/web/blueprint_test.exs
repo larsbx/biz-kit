@@ -127,4 +127,44 @@ defmodule TaskHost.Web.BlueprintTest do
 
     assert Log.gate().orchestration.hierarchy[{w.chapter, tenant(), "project-1"}] == nil
   end
+
+  test "registration is inert, replayable, and application cites the exact pinned source", w do
+    forge!("Launch")
+    scope = {w.chapter, tenant(), "project-1"}
+    before = Log.gate().orchestration
+
+    assert [_, registration] =
+             Regex.run(~r/registered: event (\S+)/, blueprint!(w, ["--register"]))
+
+    after_registration = Log.gate().orchestration
+    assert after_registration.hierarchy == before.hierarchy
+    assert after_registration.blueprints == before.blueprints
+    assert after_registration.tasks == before.tasks
+
+    assert %{scope: ^scope, source: %{commit: @commit, tree: @tree}} =
+             after_registration.blueprint_registrations[registration]
+
+    assert_raise Mix.Error, ~r/blueprint_already_registered/, fn ->
+      blueprint!(w, ["--register"])
+    end
+
+    bytes = :persistent_term.get(Forge)
+    :persistent_term.put(Forge, bytes <> "# different bytes\n")
+
+    assert_raise Mix.Error, ~r/blueprint_registration_mismatch/, fn ->
+      blueprint!(w, ["--registration", registration])
+    end
+
+    :persistent_term.put(Forge, bytes)
+
+    assert [_, applied] =
+             Regex.run(~r/applied: event (\S+)/, blueprint!(w, ["--registration", registration]))
+
+    assert %{registration_event_id: ^registration} = Log.gate().orchestration.blueprints[applied]
+
+    assert {:ok, replayed} = Log.replay(CoopSubstrate.Projections.Membership)
+
+    assert replayed.orchestration.blueprint_registrations[registration] ==
+             after_registration.blueprint_registrations[registration]
+  end
 end

@@ -35,14 +35,18 @@ defmodule TaskHost.Web.TodoTest do
     body = Map.put(body, "key_id", w.device.signer.key_id)
 
     with {201, held} <- post(path(w) <> "/commands", w.session, body) do
-      signature =
-        held["signing_bytes"]
-        |> Base.url_decode64!(padding: false)
-        |> Crypto.sign(w.device.seed)
-        |> Base.url_encode64(padding: false)
-
-      post("/api/v1/commands/#{held["id"]}", w.session, %{"signature" => signature})
+      submit(w, held)
     end
+  end
+
+  defp submit(w, held) do
+    signature =
+      held["signing_bytes"]
+      |> Base.url_decode64!(padding: false)
+      |> Crypto.sign(w.device.seed)
+      |> Base.url_encode64(padding: false)
+
+    post("/api/v1/commands/#{held["id"]}", w.session, %{"signature" => signature})
   end
 
   defp post(path, cookie, body) do
@@ -106,5 +110,62 @@ defmodule TaskHost.Web.TodoTest do
 
     assert answer.reason == "Answered by phone"
     assert answer.principal_id == w.person
+  end
+
+  test "dependency edits refuse a stale read before prepare and a stale signature at append", w do
+    for {id, title, deps} <- [
+          {"read", "Read", []},
+          {"answer", "Answer", []},
+          {"submit", "Submit", ["answer"]}
+        ] do
+      assert {201, _} =
+               step(w, %{
+                 "action" => "add_todo",
+                 "task_id" => "task-1",
+                 "todo_id" => id,
+                 "title" => title,
+                 "depends_on" => deps
+               })
+    end
+
+    edit = fn v, title, deps ->
+      %{
+        "action" => "revise_todo",
+        "task_id" => "task-1",
+        "todo_id" => "answer",
+        "title" => title,
+        "depends_on" => deps,
+        "expected_todo_version" => v
+      }
+    end
+
+    before = Log.head()
+    assert {409, %{"error" => "todo_cycle"}} = step(w, edit.(1, "Answer", ["submit"]))
+    assert {400, %{"error" => "bad_action"}} = step(w, edit.("1", "Answer", ["read"]))
+    assert Log.head() == before
+    assert {201, _} = step(w, edit.(1, "Answer", ["read"]))
+
+    before = Log.head()
+    assert {409, %{"error" => "stale_todo_version"}} = step(w, edit.(1, "Answer", []))
+    assert Log.head() == before
+
+    request = Map.put(edit.(2, "Answer", []), "key_id", w.device.signer.key_id)
+    assert {201, held} = post(path(w) <> "/commands", w.session, request)
+    assert held["payload"]["expected_todo_version"] == 2
+    assert {201, _} = step(w, edit.(2, "Answer the brief", ["read"]))
+
+    before = Log.head()
+    assert {409, %{"error" => "stale_todo_version"}} = submit(w, held)
+    assert Log.head() == before
+    assert {201, _} = step(w, edit.(3, "Answer the brief", []))
+
+    %{tasks: %{"task-1" => task}} = View.select(Log.gate(), {w.chapter, tenant(), "project-1"})
+    assert task.version == 1
+
+    assert [
+             %{id: "read", version: 1},
+             %{id: "answer", title: "Answer the brief", depends_on: [], version: 4},
+             %{id: "submit", depends_on: ["answer"], version: 1}
+           ] = task.todos
   end
 end

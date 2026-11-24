@@ -41,7 +41,7 @@ defmodule TaskCore.Steps do
   than the task's:
 
     * add a todo → `TaskTodoAddedV1`, with a title and the todos it depends on;
-    * revise a todo → `TaskTodoRevisedV1`;
+    * revise a todo → `TaskTodoRevisedV1`, optionally at the version the caller read;
     * complete a todo → `TaskTodoCompletedV1`;
     * drop a todo → `TaskTodoDroppedV1`, with a reason.
 
@@ -65,6 +65,7 @@ defmodule TaskCore.Steps do
           | {:start, String.t()}
           | {:agree_dod, String.t()}
           | {:submit_evidence, String.t(), %{String.t() => String.t()}}
+          | {:attest_artifact, String.t(), map()}
           | {:review, String.t(), String.t(), String.t()}
           | {:complete, String.t(), String.t()}
           | {:cancel, String.t(), String.t()}
@@ -75,13 +76,14 @@ defmodule TaskCore.Steps do
           | {:instantiate, String.t(), String.t(), String.t(), %{String.t() => String.t()}}
           | {:add_todo, String.t(), String.t(), String.t(), [String.t()]}
           | {:revise_todo, String.t(), String.t(), String.t(), [String.t()]}
+          | {:revise_todo, String.t(), String.t(), String.t(), [String.t()], pos_integer()}
           | {:complete_todo, String.t(), String.t()}
           | {:drop_todo, String.t(), String.t(), String.t()}
 
   # Definition of Done commands predate lifecycle versions: their actor is
   # principal and grant only.
   @unversioned ~w(TaskDoDAgreedV1 TaskEvidenceSubmittedV2 TaskDoDReviewedV1
-                  ArtifactCustodyRecordedV1 TaskIntakeCatalogueAdoptedV1)
+                  ArtifactCustodyRecordedV1 TaskIntakeCatalogueAdoptedV1 TaskArtifactSourceAttestedV1)
 
   @spec command(map(), TaskCore.State.scope(), action(), map()) ::
           {:ok, String.t(), map()} | {:error, term()}
@@ -186,6 +188,11 @@ defmodule TaskCore.Steps do
   defp todo_step(_task, {:add_todo, _, _, title, depends_on}),
     do: {:ok, "TaskTodoAddedV1", %{"title" => title, "depends_on" => depends_on}}
 
+  defp todo_step(_task, {:revise_todo, _, _, title, depends_on, expected}) do
+    {:ok, "TaskTodoRevisedV1",
+     %{"title" => title, "depends_on" => depends_on, "expected_todo_version" => expected}}
+  end
+
   defp todo_step(task, action) do
     case task.todos[elem(action, 2)] do
       nil ->
@@ -227,6 +234,14 @@ defmodule TaskCore.Steps do
 
   defp step(_o, _task, {:complete, _, review}),
     do: {:ok, "TaskCompletedV1", %{"review_event_id" => review}}
+
+  defp step(_o, _task, {:attest_artifact, _, fields}) do
+    {:ok, "TaskArtifactSourceAttestedV1",
+     Map.take(
+       fields,
+       ~w(name custody_receipt_id artifact_digest size_bytes repository commit tree path)
+     )}
+  end
 
   defp step(_o, %{dod: %{} = dod}, {:agree_dod, _}),
     do: {:ok, "TaskDoDAgreedV1", %{"definition_event_id" => dod.event_id}}

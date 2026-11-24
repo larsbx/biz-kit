@@ -113,6 +113,97 @@ defmodule CoopSubstrate.Feed.View do
     end
   end
 
+  @doc "One task at its full ledger key, with the same disclosure as the project feed."
+  def fetch_task(gate, {chapter, tenant, project}, id) do
+    case gate.orchestration.tasks[{chapter, tenant, project, id}] do
+      nil -> {:error, :unknown_task}
+      record -> {:ok, Map.put(task(record), :task_id, id)}
+    end
+  end
+
+  @doc "The scoped hierarchy, including projects without an applied blueprint."
+  def hierarchy(gate, scope) do
+    o = gate.orchestration
+
+    case {o.hierarchy[scope], o.projects[scope]} do
+      {nil, nil} ->
+        {:error, :unknown_project}
+
+      {tree, _project} ->
+        roadmaps =
+          for {key, roadmap} <- Enum.sort((tree && tree.roadmaps) || %{}) do
+            workflows =
+              for {id, %{revision: revision}} <- Enum.sort(roadmap.workflows) do
+                %{blueprint: blueprint, source: source} = o.blueprints[revision]
+                {:ok, workflow} = TaskCore.Blueprint.workflow(blueprint, key, id)
+
+                %{
+                  workflow_id: id,
+                  name: workflow["name"],
+                  revision_event_id: revision,
+                  source: source,
+                  definitions: workflow["tasks"]
+                }
+              end
+
+            %{roadmap_key: key, name: roadmap.name, workflows: workflows}
+          end
+
+        {:ok,
+         json(%{
+           name: tree && tree.name,
+           owner: TaskCore.Projects.owner(o, scope),
+           roadmaps: roadmaps
+         })}
+    end
+  end
+
+  @doc "Direct predecessor and successor edges, with the events that defined them."
+  def dependencies(gate, {chapter, tenant, project}, task_id) do
+    all = gate.orchestration.tasks
+
+    case all[{chapter, tenant, project, task_id}] do
+      nil ->
+        {:error, :unknown_task}
+
+      task ->
+        {ids, origin} = dependency_definition(task)
+
+        predecessors =
+          for id <- Enum.sort(ids) do
+            %{task_id: id, state: all[{chapter, tenant, project, id}][:state], defined_by: origin}
+          end
+
+        successors =
+          for {{^chapter, ^tenant, ^project, id}, other} <- all,
+              {ids, origin} = dependency_definition(other),
+              task_id in ids do
+            %{task_id: id, state: other.state, defined_by: origin}
+          end
+
+        {:ok,
+         %{
+           chapter_id: chapter,
+           tenant_id: tenant,
+           project_id: project,
+           task_id: task_id,
+           state: task.state,
+           version: task.version,
+           blocked: Enum.any?(predecessors, &(&1.state != "completed")),
+           predecessors: predecessors,
+           successors: Enum.sort_by(successors, & &1.task_id)
+         }}
+    end
+  end
+
+  defp dependency_definition(%{readiness: %{predecessor_ids: ids, event_id: event_id}}),
+    do: {ids, %{kind: "readiness", event_id: event_id}}
+
+  defp dependency_definition(%{blueprint: %{predecessor_ids: ids, run_event_id: event_id}}),
+    do: {ids, %{kind: "workflow_run", event_id: event_id}}
+
+  defp dependency_definition(_), do: {[], nil}
+
   # Every workflow the project's blueprints define, under the revision now
   # governing it, keyed `roadmap/workflow` (each part URI-encoded), with its
   # definitions in the blueprint's order: what a person needs to run it.
@@ -171,7 +262,7 @@ defmodule CoopSubstrate.Feed.View do
   defp task(t) do
     t
     |> Map.take(~w(state version title description definition_of_done timing timing_version
-                   timing_delegation_id last_event_id started_by cancellation)a)
+                   timing_delegation_id last_event_id started_by cancellation artifact_sources)a)
     |> Map.put(:dod, dod(t.dod))
     |> Map.put(:readiness, readiness(t[:readiness]))
     |> Map.put(:blueprint, t[:blueprint])
