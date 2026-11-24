@@ -191,6 +191,29 @@ defmodule DispatchWeb.MobileAcceptanceTest do
     assert call(ctx, :post, "/v1/me/status-events", queued).status == 401
   end
 
+  test "unavailable ledger refuses enrolment and even a previously accepted replay", ctx do
+    queued = declaration(ctx)
+    accepted = call(ctx, :post, "/v1/me/status-events", queued) |> body(201)
+    :ok = Application.stop(:coop_substrate)
+
+    try do
+      refute MobileDevices.available?()
+
+      for {path, params} <- [
+            {"/v1/me/devices", ctx.params},
+            {"/v1/me/status-events", queued}
+          ] do
+        assert call(ctx, :post, path, params) |> body(503) |> Map.fetch!("code") ==
+                 "DEVICE_UNAVAILABLE"
+      end
+    after
+      {:ok, _} = Application.ensure_all_started(:coop_substrate)
+    end
+
+    assert MobileDevices.available?()
+    assert call(ctx, :post, "/v1/me/status-events", queued) |> body(201) == accepted
+  end
+
   test "an approved short key prefix does not approve a different public key", ctx do
     <<prefix::binary-size(4), _::binary>> = ctx.public
     collision = prefix <> :crypto.strong_rand_bytes(28)

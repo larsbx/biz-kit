@@ -21,6 +21,15 @@ All scenarios use disposable local databases, identities and signing material.
 The work does not merge the stack, deploy services, enroll real businesses or
 couriers, or initiate live deliveries.
 
+## Packaged-host continuation
+
+The [separate-process packaged acceptance](2026-11-15-packaged-procurement-dispatch.md)
+extends this source suite with the revision-bound procurement archive and an
+actual Dispatch source VM. Its distinct receipt records both runtime identities,
+real SQL assignments and custody bindings. The existing quick-start and Tauri
+synthetic-courier receipts remain separate evidence classes. The full packaged
+Dispatch deployment and external courier browser remain outside this gate.
+
 ## Reused interfaces
 
 The procurement source adapter already exists in the #353/#354 stack. The same

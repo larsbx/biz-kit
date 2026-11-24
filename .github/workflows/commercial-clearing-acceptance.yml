@@ -10,28 +10,43 @@ on:
       - "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex"
       - "apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_admission.ex"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_accounting_preview.ex"
+      - "apps/coop_substrate/test/commercial_admission_test.exs"
       - "apps/coop_substrate/test/support/cross_currency_provenance_fixture.ex"
       - "apps/coop_substrate/test/cross_currency_provenance_test.exs"
       - "apps/coop_substrate/test/signing_domain_test.exs"
       - "docs/architecture/2026-11-14-cross-currency-source-provenance-fixture.md"
+      - "docs/architecture/2026-11-15-cross-currency-local-source-snapshot.md"
+      - "docs/architecture/2026-11-16-cross-currency-authority-evidence.md"
+      - "docs/architecture/2026-11-15-commercial-accounting-preview.md"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_source_snapshot.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_authority_evidence.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_source_lineage.ex"
+      - "apps/coop_substrate/lib/coop_substrate/constants.ex"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/test/commercial_setoff_admission_test.exs"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_admission.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/validity.ex"
       - "apps/coop_substrate/lib/coop_substrate/projections/membership.ex"
       - "apps/coop_substrate/test/commercial_setoff_proof_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_sources_test.exs"
+      - "apps/coop_substrate/test/cross_currency_source_snapshot_test.exs"
+      - "apps/coop_substrate/test/cross_currency_authority_evidence_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_intent_test.exs"
       - "apps/coop_substrate/test/commercial_source_lineage_test.exs"
       - "apps/coop_substrate/test/fixtures/commercial_lineage.tsv"
       - "docs/architecture/2026-11-03-commercial-setoff-source-binding-v1.md"
       - "docs/architecture/2026-11-08-commercial-exact-source-intent.md"
       - "docs/architecture/2026-11-09-commercial-source-lineage.md"
+      - "docs/architecture/2026-11-13-commercial-setoff-review-admission.md"
       - "docs/architecture/2026-11-03-ledger-first-commercial-clearing.md"
+      - "formal/quint/commercial_setoff_review.qnt"
       - ".github/workflows/commercial-clearing-acceptance.yml"
   push:
     branches: [main]
@@ -43,28 +58,43 @@ on:
       - "apps/coop_substrate/lib/coop_substrate/protocol/envelope.ex"
       - "apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_admission.ex"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_accounting_preview.ex"
+      - "apps/coop_substrate/test/commercial_admission_test.exs"
       - "apps/coop_substrate/test/support/cross_currency_provenance_fixture.ex"
       - "apps/coop_substrate/test/cross_currency_provenance_test.exs"
       - "apps/coop_substrate/test/signing_domain_test.exs"
       - "docs/architecture/2026-11-14-cross-currency-source-provenance-fixture.md"
+      - "docs/architecture/2026-11-15-cross-currency-local-source-snapshot.md"
+      - "docs/architecture/2026-11-16-cross-currency-authority-evidence.md"
+      - "docs/architecture/2026-11-15-commercial-accounting-preview.md"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff.ex"
       - "apps/coop_substrate/test/commercial_setoff_test.exs"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_source_snapshot.ex"
+      - "apps/coop_substrate/lib/coop_substrate/cross_currency_authority_evidence.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex"
       - "apps/coop_substrate/lib/coop_substrate/commercial_source_lineage.ex"
+      - "apps/coop_substrate/lib/coop_substrate/constants.ex"
+      - "apps/coop_substrate/lib/coop_substrate/log.ex"
+      - "apps/coop_substrate/test/commercial_setoff_admission_test.exs"
+      - "apps/coop_substrate/lib/coop_substrate/commercial_setoff_admission.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex"
       - "apps/coop_substrate/lib/coop_substrate/protocol/validity.ex"
       - "apps/coop_substrate/lib/coop_substrate/projections/membership.ex"
       - "apps/coop_substrate/test/commercial_setoff_proof_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_sources_test.exs"
+      - "apps/coop_substrate/test/cross_currency_source_snapshot_test.exs"
+      - "apps/coop_substrate/test/cross_currency_authority_evidence_test.exs"
       - "apps/coop_substrate/test/commercial_setoff_intent_test.exs"
       - "apps/coop_substrate/test/commercial_source_lineage_test.exs"
       - "apps/coop_substrate/test/fixtures/commercial_lineage.tsv"
       - "docs/architecture/2026-11-03-commercial-setoff-source-binding-v1.md"
       - "docs/architecture/2026-11-08-commercial-exact-source-intent.md"
       - "docs/architecture/2026-11-09-commercial-source-lineage.md"
+      - "docs/architecture/2026-11-13-commercial-setoff-review-admission.md"
       - "docs/architecture/2026-11-03-ledger-first-commercial-clearing.md"
+      - "formal/quint/commercial_setoff_review.qnt"
       - ".github/workflows/commercial-clearing-acceptance.yml"
 
 permissions:
@@ -129,15 +159,25 @@ jobs:
           apps/coop_substrate/test/commercial_setoff_test.exs
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_proof.ex
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_sources.ex
+          apps/coop_substrate/lib/coop_substrate/cross_currency_source_snapshot.ex
+          apps/coop_substrate/lib/coop_substrate/cross_currency_authority_evidence.ex
+          apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex
           apps/coop_substrate/test/commercial_setoff_proof_test.exs
           apps/coop_substrate/test/commercial_setoff_sources_test.exs
+          apps/coop_substrate/test/cross_currency_source_snapshot_test.exs
+          apps/coop_substrate/test/cross_currency_authority_evidence_test.exs
           apps/coop_substrate/lib/coop_substrate/commercial_setoff_intent.ex
           apps/coop_substrate/lib/coop_substrate/protocol/type_registry.ex
           apps/coop_substrate/lib/coop_substrate/protocol/validity.ex
           apps/coop_substrate/lib/coop_substrate/projections/membership.ex
           apps/coop_substrate/test/commercial_setoff_intent_test.exs
           apps/coop_substrate/lib/coop_substrate/commercial_source_lineage.ex
+          apps/coop_substrate/lib/coop_substrate/commercial_accounting_preview.ex
+          apps/coop_substrate/test/commercial_admission_test.exs
           apps/coop_substrate/test/commercial_source_lineage_test.exs
+          apps/coop_substrate/lib/coop_substrate/commercial_admission.ex
+          apps/coop_substrate/lib/coop_substrate/commercial_setoff_admission.ex
+          apps/coop_substrate/test/commercial_setoff_admission_test.exs
           apps/coop_substrate/test/support/cross_currency_provenance_fixture.ex
           apps/coop_substrate/test/cross_currency_provenance_test.exs
           apps/coop_substrate/test/signing_domain_test.exs
@@ -152,9 +192,41 @@ jobs:
           test/commercial_setoff_test.exs
           test/commercial_setoff_proof_test.exs
           test/commercial_setoff_sources_test.exs
+          test/cross_currency_source_snapshot_test.exs
+          test/cross_currency_authority_evidence_test.exs
           test/commercial_setoff_intent_test.exs
           test/commercial_source_lineage_test.exs
+          test/commercial_setoff_admission_test.exs
+          test/commercial_admission_test.exs
           test/netting_execution_test.exs
           test/obligation_rail_test.exs
           test/cross_currency_provenance_test.exs
           test/signing_domain_test.exs
+
+  source-bound-review-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Check the review reservation and legacy fence model
+        run: |
+          npm install --global @informalsystems/quint@0.32.0
+          bash scripts/quint-evaluator.sh
+          spec=formal/quint/commercial_setoff_review.qnt
+          quint typecheck "$spec"
+          quint verify "$spec" --invariant=safety --max-steps=8
+          if quint run "$spec" --invariant=noAdmissionAfterLegacy --max-samples=10000 \
+            --max-steps=20 --seed=1 > witness.log 2>&1; then
+            cat witness.log
+            exit 1
+          fi
+          grep -F '[violation]' witness.log

@@ -48,7 +48,7 @@ defmodule Dispatch.MixProject do
   defp deps do
     [
       # Domain, persistence, and authorization (Section 19.1).
-      {:ash, "~> 3.0"},
+      {:ash, "~> 3.38 and >= 3.38.1"},
       {:ash_postgres, "~> 2.10"},
       {:ash_phoenix, "~> 2.0"},
       {:ash_authentication, "~> 5.0-rc"},
@@ -97,6 +97,8 @@ defmodule Dispatch.MixProject do
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:stream_data, "~> 1.1"},
       {:excoveralls, "~> 0.18", only: :test},
+      # LiveViewTest parses with LazyHTML; Dispatch must consolidate its protocols.
+      {:lazy_html, "~> 0.1.13", only: :test},
       {:phoenix_live_reload, "~> 1.5", only: :dev}
     ]
   end

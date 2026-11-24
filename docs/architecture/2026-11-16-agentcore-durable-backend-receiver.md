@@ -180,6 +180,9 @@ counts and observed failures belong in the PR and run artifacts.
 
 ## Next provider obligation
 
+The [local execution crash-replay acceptance](2026-11-16-agentcore-execution-crash-replay.md)
+exercises an actual restricted Linux workload using this request identity.
+
 A real provider must implement equivalent durable effect binding, lookup
 and permanent cancellation fencing without treating this reference ID as a
 bearer launch permission. Its acceptance must exercise actual workload

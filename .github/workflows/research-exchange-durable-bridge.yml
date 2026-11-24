@@ -77,7 +77,19 @@ jobs:
           npm install --global --ignore-scripts --no-audit --no-fund npm@11.9.0
           test "$(npm --version)" = '11.9.0'
           python3 -B proof_bank/research_exchange/tools/bootstrap.py --destination "$RUNNER_TEMP/research-exchange-tools"
-      - name: Complete representation, model and real MCP execution acceptance
+      - name: Prepare the pinned mathlib source imports
+        run: |
+          set -euo pipefail
+          SOURCE_LEAN_ROOT="$RUNNER_TEMP/research-exchange-tools/lean-4.35.0-linux"
+          export PATH="$SOURCE_LEAN_ROOT/bin:$PATH"
+          mathlib="$RUNNER_TEMP/exchange-mathlib"
+          git clone --branch v4.35.0 --depth 1 https://github.com/leanprover-community/mathlib4.git "$mathlib"
+          git -C "$mathlib" checkout --detach 56a005855ea17e0b0958f73ec801ae140b0a1679
+          (cd "$mathlib" && lake build +Mathlib.Data.Nat.Prime.Defs)
+          python3 -B proof_bank/research_exchange_bridge/tools/prepare_source_imports.py \
+            "$mathlib" "$RUNNER_TEMP/exchange-source-imports" \
+            | tee "$RUNNER_TEMP/research-exchange-bridge/source-imports.json"
+      - name: Complete representation, model and both real MCP profile acceptances
         env:
           BRIDGE_EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -90,26 +102,10 @@ jobs:
             --java-bin "$FRE_TOOLS/jdk-21.0.13+9-jre/bin/java" \
             --quint-home "$FRE_TOOLS/quint-home" \
             --elixir "$(command -v elixir)" \
+            --source-imports "$RUNNER_TEMP/exchange-source-imports" \
             --output-dir "$RUNNER_TEMP/research-exchange-bridge/profile"
           python3 -B proof_bank/research_exchange_mcp/tools/verify_core_snapshot.py --require-clean \
             --output "$RUNNER_TEMP/research-exchange-bridge/core-snapshot-after.json"
-      - name: Compile and replay the pinned submitted-source profile
-        run: |
-          set -euo pipefail
-          export EXCHANGE_LEAN_ROOT="$RUNNER_TEMP/research-exchange-tools/lean-4.35.0-linux"
-          export PATH="$EXCHANGE_LEAN_ROOT/bin:$PATH"
-          export EXCHANGE_SOURCE_IMPORTS="$RUNNER_TEMP/exchange-source-imports"
-          mathlib="$RUNNER_TEMP/exchange-mathlib"
-          git clone --branch v4.35.0 --depth 1 https://github.com/leanprover-community/mathlib4.git "$mathlib"
-          git -C "$mathlib" checkout --detach 56a005855ea17e0b0958f73ec801ae140b0a1679
-          (cd "$mathlib" && lake build +Mathlib.Data.Nat.Prime.Defs)
-          evidence="$RUNNER_TEMP/research-exchange-bridge"
-          python3 -B proof_bank/research_exchange_bridge/tools/prepare_source_imports.py \
-            "$mathlib" "$EXCHANGE_SOURCE_IMPORTS" | tee "$evidence/source-imports.json"
-          export EXCHANGE_SOURCE_EVIDENCE="$evidence/source-replay.json"
-          PYTHONPATH=proof_bank python3 -B -m unittest research_exchange_bridge.tests.test_source -v \
-            2>&1 | tee "$evidence/source-acceptance.log"
-          test -s "$EXCHANGE_SOURCE_EVIDENCE"
       - name: Preserve exact-revision bridge evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

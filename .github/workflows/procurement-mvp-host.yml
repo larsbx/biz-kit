@@ -171,6 +171,7 @@ jobs:
           done
           npm install --prefix "$RUNNER_TEMP/quint" --no-save @informalsystems/quint@0.33.1
           quint="$RUNNER_TEMP/quint/node_modules/.bin/quint"
+          bash scripts/quint-evaluator.sh "$quint"
           "$quint" --version | tee .artifacts/procurement-formal/quint-version.txt
           for model in workflow admission; do
             "$quint" typecheck "proofs/procurement_mvp/$model.qnt" 2>&1 | tee ".artifacts/procurement-formal/$model-typecheck.log"

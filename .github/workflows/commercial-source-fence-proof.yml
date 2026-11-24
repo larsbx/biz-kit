@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install version-pinned Quint
-        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0 && bash scripts/quint-evaluator.sh
       - name: Verify no double discharge and refute unsafe guards
         run: |
           git rev-parse HEAD

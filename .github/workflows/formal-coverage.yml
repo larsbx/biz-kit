@@ -6,6 +6,7 @@ on:
       - "formal/**"
       - "proof_bank/**"
       - "apps/*/mix.exs"
+      - "apps/scf_core/**"
       - "scripts/formal_coverage_audit.py"
       - "scripts/tests/test_formal_coverage_audit.py"
       - ".github/workflows/formal-coverage.yml"
@@ -15,6 +16,7 @@ on:
       - "formal/**"
       - "proof_bank/**"
       - "apps/*/mix.exs"
+      - "apps/scf_core/**"
       - "scripts/formal_coverage_audit.py"
       - "scripts/tests/test_formal_coverage_audit.py"
       - ".github/workflows/formal-coverage.yml"
@@ -50,7 +52,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install version-pinned Quint
-        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0
+        run: npm install --global --no-audit --no-fund @informalsystems/quint@0.32.0 && bash scripts/quint-evaluator.sh
       - name: Simulate, verify, witness and control every covered Quint model
         run: bash formal/check_coverage.sh
 
@@ -74,3 +76,9 @@ jobs:
           echo "$RUNNER_TEMP/bizkit-lean/bin" >> "$GITHUB_PATH"
       - name: Lean build, fresh kernel replay and all-module axiom audit
         run: bash formal/lean/check.sh
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Replay source-pinned SCF runtime observations in Lean
+        run: bash formal/lean/check_scf_correspondence.sh

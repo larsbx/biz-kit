@@ -424,6 +424,45 @@ defmodule CoopSubstrate.AgentBackendRequestTest do
     end
   end
 
+  test "recovery compares the original admission plan, deadline and known backend identity", c do
+    found =
+      accepted(c.request) |> Map.merge(%{"operation" => "lookup", "disposition" => "existing"})
+
+    fenced = fenced(c.request) |> Map.put("operation", "lookup")
+    other_backend = "agent-backend:" <> String.duplicate("c", 32)
+
+    for receipt <- [found, fenced] do
+      assert {:ok, ^receipt} =
+               AgentBackendRequest.verify_lookup_binding(c.request, receipt, @backend)
+
+      for {key, value} <- [
+            {"backend_id", other_backend},
+            {"plan_digest", String.duplicate("f", 64)},
+            {"execution_deadline", "2030-01-01T00:00:31.123456Z"}
+          ] do
+        assert {:error, :agent_backend_binding_conflict} =
+                 AgentBackendRequest.verify_lookup_binding(
+                   c.request,
+                   Map.put(receipt, key, value),
+                   @backend
+                 )
+      end
+    end
+
+    for receipt <- [
+          Map.merge(fenced, empty_binding()),
+          found
+          |> Map.merge(empty_binding())
+          |> Map.merge(%{"state" => "unknown", "disposition" => "unknown"})
+        ] do
+      assert {:error, :agent_backend_identity_unobserved} =
+               AgentBackendRequest.verify_lookup_binding(c.request, receipt)
+    end
+
+    assert {:error, :invalid_agent_backend_request} =
+             AgentBackendRequest.verify_lookup_binding(%{}, found)
+  end
+
   test "provider errors use a finite mapping and require the exact pinned store", c do
     errors = [
       {"effect_fenced", :agent_backend_effect_fenced},

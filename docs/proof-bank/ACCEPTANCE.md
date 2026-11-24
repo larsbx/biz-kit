@@ -20,7 +20,7 @@ evidence cannot silently retain an old pin until an unrelated catalog edit.
 
 ## Catalog maintenance
 
-The catalog currently registers the platform and 32 umbrella applications.
+The catalog is an evolving registry of the platform and its umbrella applications; counts are generated from the current checked-out catalog rather than asserted in this document.
 Registration and refreshed evidence hashes preserve the existing conservative
 statuses. Under the recorded interim owner policy, refresh changed evidence with:
 
@@ -33,6 +33,23 @@ python3 -m unittest discover -s scripts/tests -p 'test_proof_bank_characterizati
 Refresh logs changed paths without asserting re-inspection. App drift, missing or
 escaping evidence paths, and promoted statuses remain failures. Review and commit
 the refresh before requesting acceptance; rerunning without changes is a no-op.
+
+## Read-only per-application coverage report
+
+The characterization CI now produces a per-application source evidence report
+in its GitHub job summary, including exact source catalog identity, candidate
+review state, observed test-file leads and remaining proof/runtime evidence
+gaps. Reproduce locally:
+
+```sh
+python3 scripts/proof_bank_coverage_report.py --format markdown
+python3 scripts/proof_bank_coverage_report.py --format json
+python3 -m unittest discover -s scripts/tests -p 'test_proof_bank_coverage_report.py' -v
+```
+
+Generation fails closed when the underlying catalog inventory/evidence check
+fails. The report does **not** execute tests or change statuses, and can never
+turn a test-file lead into a proved application.
 
 ## Pilot evidence and remaining gates
 

@@ -1,0 +1,24 @@
+[project]
+name = "biz-kit-economic-simulation"
+version = "0.1.0"
+description = "Synthetic economic experiments with explicit matching and fulfillment boundaries"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+# Optional research runtimes. The dependency-free engine imports neither package.
+mesa = ["mesa==3.5.2"]
+# NegMAS is AGPL-3.0-or-later; keep this opt-in extra separate from core use.
+negmas = ["negmas==0.17.0"]
+research = ["mesa==3.5.2", "negmas==0.17.0"]
+
+[dependency-groups]
+dev = ["jsonschema==4.23.0"]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
