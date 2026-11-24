@@ -1,7 +1,7 @@
 defmodule CoopSubstrate.HistoryArchiveTest do
   use CoopSubstrate.LogCase, async: false
 
-  alias CoopSubstrate.{HistoryArchive, LegacyDb, Log, WriterFence}
+  alias CoopSubstrate.{HistoryArchive, HistoryArchiveFixture, LegacyDb, Log, WriterFence}
 
   @chapter "chapter-genesis"
 
@@ -152,16 +152,89 @@ defmodule CoopSubstrate.HistoryArchiveTest do
              )
   end
 
-  test "SpruceGoose is fenced only once its history archive is on the ledger", c do
-    {:ok, _} = WriterFence.declare(@chapter, "spruce_goose", "cut over", c.signer)
-    assert {:error, :history_not_archived} = WriterFence.install(@chapter, "spruce_goose", c.opts)
+  test "SpruceGoose requires an earlier complete archive bound to canonical governance", c do
+    head = Log.head()
+
+    assert {:error, {:reject, 0, :history_not_archived}} =
+             WriterFence.declare(@chapter, "spruce_goose", "cut over", c.signer)
+
+    assert Log.head() == head
+    assert {:error, :not_ordered} = WriterFence.order(@chapter, "spruce_goose")
+    assert {:error, :not_ordered} = WriterFence.install(@chapter, "spruce_goose", c.opts)
 
     assert {:ok, _} =
              Postgrex.query(c.legacy, "INSERT INTO notes VALUES (3, 'still writable')", [])
 
-    {:ok, %{manifest_sha256: digest}} = export(c)
-    {:ok, _} = HistoryArchive.declare(@chapter, "spruce_goose", digest, c.signer)
-    assert {:ok, %{tables: 4}} = WriterFence.install(@chapter, "spruce_goose", c.opts)
+    # Generic exports may describe absence, but such an archive is not a
+    # complete cutover archive, even if its exact digest has been recorded.
+    {:ok, %{manifest_sha256: partial_digest}} = export(c)
+    {:ok, [partial]} = HistoryArchive.declare(@chapter, "spruce_goose", partial_digest, c.signer)
+
+    assert {:error, {:required_archive_table_absent, "actor_grants"}} =
+             HistoryArchive.preflight(@chapter, "spruce_goose",
+               archive: c.out,
+               manifest_sha256: partial_digest,
+               archive_event_id: partial.event_id
+             )
+
+    for table <- ~w(actor_grants events ledger_import_receipts grandfathered_baselines),
+        do: Postgrex.query!(c.legacy, "CREATE TABLE #{table} (id bigint PRIMARY KEY)", [])
+
+    Postgrex.query!(c.legacy, "DROP TABLE outbox_events", [])
+
+    Postgrex.query!(
+      c.legacy,
+      "CREATE TABLE outbox_events (#{HistoryArchiveFixture.outbox_schema()})",
+      []
+    )
+
+    Postgrex.query!(
+      c.legacy,
+      "INSERT INTO outbox_events " <>
+        "(id, event_key, aggregate_type, aggregate_id, event_type, payload, status, attempts, " <>
+        "available_at, dispatched_at, inserted_at, updated_at) VALUES " <>
+        "('00000000-0000-0000-0000-000000000001', 'task:one', 'task', 'one', 'task.changed', " <>
+        "'{}', 'dispatched', 1, now(), now(), now(), now())",
+      []
+    )
+
+    complete = Path.join(c.root, "complete")
+    files = HistoryArchiveFixture.provenance_files!(Path.join(c.root, "provenance"))
+
+    {:ok, %{manifest_sha256: digest}} =
+      HistoryArchive.export("spruce_goose", c.opts, complete, files: files)
+
+    {:ok, [archived]} = HistoryArchive.declare(@chapter, "spruce_goose", digest, c.signer)
+    options = [archive: complete, manifest_sha256: digest, archive_event_id: archived.event_id]
+
+    assert {:error, :archive_record_digest_mismatch} =
+             HistoryArchive.preflight(
+               @chapter,
+               "spruce_goose",
+               Keyword.put(options, :archive_event_id, partial.event_id)
+             )
+
+    assert {:ok, %{fence_event_id: nil, cutover_authorized: false}} =
+             HistoryArchive.preflight(@chapter, "spruce_goose", options)
+
+    {:ok, [fenced]} = WriterFence.declare(@chapter, "spruce_goose", "cut over", c.signer)
+
+    assert {:ok,
+            %{
+              archive_event_id: archive_id,
+              fence_event_id: fence_id,
+              ledger_head: %{global_seq: sequence},
+              cutover_authorized: false
+            }} = HistoryArchive.preflight(@chapter, "spruce_goose", options)
+
+    assert archive_id == archived.event_id
+    assert fence_id == fenced.event_id
+    assert sequence == fenced.global_seq
+
+    assert {:error, :archive_verification_required} =
+             WriterFence.install(@chapter, "spruce_goose", c.opts)
+
+    assert {:ok, %{tables: 8}} = WriterFence.install(@chapter, "spruce_goose", c.opts, options)
   end
 
   test "mix coop.archive_writer exports, records with the governance key, and verifies", c do
@@ -205,8 +278,8 @@ defmodule CoopSubstrate.HistoryArchiveTest do
 
     verify = &Mix.Tasks.Coop.ArchiveWriter.run(["--verify", &1, "--chapter", @chapter])
 
-    # The fence is not even ordered until the history is recorded.
-    assert_raise Mix.Error, ~r/record spruce_goose's history first/, fn ->
+    # Required archive inputs are checked before a signer can be loaded.
+    assert_raise Mix.Error, ~r/archive verification required/, fn ->
       Mix.Tasks.Coop.FenceWriter.run(
         ~w(spruce_goose --chapter #{@chapter} --database-url #{url} --reason x --yes)
       )

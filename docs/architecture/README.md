@@ -37,11 +37,16 @@ domain views. The imported histories and existing identifiers remain intact.
   signed, admitted events, with equipment exclusivity at the append gate. The
   board does not use it yet.
 - [SpruceGoose decommission checklist — 2026-11-06](2026-11-06-sprucegoose-decommission.md):
-  proposed; surfaces to rehost, the authority cutover, history kept as inert
-  audit data, and what is not migrated.
+  retained surfaces rehosted, archive/preflight/fence safeguards implemented;
+  production owner/parity/history/fence/replay and Mama succession remain
+  operational gates. Revise and the discarded domains are not rebuilt.
 - [Eatsbot decommission checklist — 2026-11-07](2026-11-07-eatsbot-decommission.md):
-  proposed; the 10-28 plan restated for the rebuilt eatsbot: surfaces to
-  rehost or drop, single-writer cutover, open obligations, and R0–R6 status.
+  current R0–R6 status: legacy umbrella source removed, replacement retained;
+  owner-confirmed disposable stack needs no archive/drain. Host observation,
+  standalone infrastructure/credentials and source archival remain separate.
+- [Retirement cutover acceptance — 2026-11-23](2026-11-23-retirement-cutover-acceptance.md):
+  strict archive preflight, ordered operational gates, cutover receipt and
+  Mama succession inventory. No production action is recorded by the template.
 - [PostgreSQL event log, Redis operations and TigerBeetle — 2026-10-30](2026-10-30-postgres-event-log-redis-consolidation.md):
   selected staged EventStore-library replacement, Redis/Oban/Kafka consolidation,
   SQL priorities, legacy retirement and compatibility/recovery gates; implementation pending.
@@ -54,9 +59,9 @@ domain views. The imported histories and existing identifiers remain intact.
   exact standalone/imported blob comparisons at fixed commits; 7 matching,
   6 different and 2 imported-only checked sources, not live deployment evidence.
 - [Eatsbot salvage and verified retirement — 2026-10-28](2026-10-28-eatsbot-salvage-and-retirement-plan.md):
-  proposed extraction into MarketingCore/DispatchCore and existing Sales/Commerce/Fulfillment
-  with R0–R6 source inventory, migration, authorization, cutover and archive gates.
-  Its exit conditions are restated by the 2026-11-07 checklist.
+  original extraction plan with later owner decisions and source retirement
+  reconciled. The current checklist scopes outstanding host/infrastructure
+  gates; historical Fly and migration assumptions do not override R0.
 - [ExtensionV1 semantic upgrade assessment — 2026-11-02](2026-11-02-extension-upgrade-compatibility.md):
   fail-closed V1 compatibility and review-required changes; no deployment approval.
 - [ExtensionV1 source-pinned release lock — 2026-11-02](2026-11-02-extension-source-lock.md):

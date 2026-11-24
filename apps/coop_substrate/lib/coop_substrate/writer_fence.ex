@@ -5,19 +5,34 @@ defmodule CoopSubstrate.WriterFence do
 
   1. Governance signs `LegacyWriterFenced` (`writer`, `reason`) and the Log
      admits it, only for a writer in the closed set `writers/0` and only in a
-     chapter whose governance key is declared (no bootstrap mode). Nothing
-     unfences a writer, so the order is irreversible on the ledger.
-  2. `install/3` reads that event back from the ledger and, in ONE transaction
-     on the legacy database, records it in `biz_kit_writer_fence` and puts a
+     chapter whose governance key is declared (no bootstrap mode). A writer
+     with a history specification requires an earlier admitted archive record
+     in the same chapter. Nothing unfences a writer, so the order is irreversible
+     on the ledger.
+  2. `install/4` reads that event back from the ledger, verifies the selected
+     archive where required, and, in ONE transaction on the legacy database,
+     records it in `biz_kit_writer_fence` and puts a
      statement trigger refusing INSERT, UPDATE, DELETE and TRUNCATE on every
      table outside the system schemas, the fence table included. Creating a
      trigger waits for writers already holding the table, so every write
-     either committed before the fence or is refused after it: no instant has
-     two writers. It fences every writer of that database, whichever
-     repository deployed it, which a flag in one copy of the code could not.
+     either committed before the fence or is refused after it. It fences every
+     ordinary writer of that database, whichever repository deployed it, which
+     a flag in one copy of the code could not.
 
-  A writer whose history is kept is fenced only once its archive is on the
-  ledger (`CoopSubstrate.HistoryArchive`), so its history is copied first.
+  A writer whose history is kept requires `archive`, `manifest_sha256` and
+  `archive_event_id` options. `CoopSubstrate.HistoryArchive.preflight/3` reopens
+  the files and matches that exact archive record in a verified ledger prefix.
+  Its selected fence event must equal the order used for installation. The
+  legacy three-argument API cannot bypass this check.
+
+  The archive's source hostname and database must match the actual connection
+  options; the caller cannot override those expected labels. This is a label
+  comparison, not authentication of a database instance. Successful installation
+  returns the archive verification evidence alongside its fence result.
+
+  The existing signed fence schema does not bind one archive digest. Source
+  quiescence or a final-delta procedure, durable archive custody, and activating
+  the successor only after fence commit remain operational requirements.
 
   A writer's database may also hold tables another app still writes, which
   the fence leaves writable (`exempt/1`): SpruceGoose's holds the task host's
@@ -25,10 +40,10 @@ defmodule CoopSubstrate.WriterFence do
 
   Not fenced: DDL, and the database owner, who can drop the triggers. A
   rollback is therefore a deliberate act by the owner, outside this module;
-  re-running `install/3` restores the fence and covers tables created since.
+  re-running `install/4` restores the fence and covers tables created since.
   """
 
-  alias CoopSubstrate.Log
+  alias CoopSubstrate.{HistoryArchive, Log}
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
 
   @type_name "LegacyWriterFenced"
@@ -58,13 +73,21 @@ defmodule CoopSubstrate.WriterFence do
     }
   end
 
-  @doc "Append-gate check: a known writer, in a chapter with declared governance."
+  @doc "Append-gate check: known writer, declared governance, and any required prior archive."
   def check(%Envelope{chapter_id: chapter, payload: %{"writer" => writer}}, gate) do
     cond do
       not Map.has_key?(@writers, writer) -> {:error, {:unknown_writer, writer}}
       map_size(gate.role_keys[{chapter, "governance"}] || %{}) == 0 -> {:error, :no_governance}
-      true -> :ok
+      true -> check_prior_archive(gate, chapter, writer)
     end
+  end
+
+  defp check_prior_archive(gate, chapter, writer) do
+    archived = Map.get(gate, :legacy_archived_writers, MapSet.new())
+
+    if HistoryArchive.spec(writer) == nil or MapSet.member?(archived, {chapter, writer}),
+      do: :ok,
+      else: {:error, :history_not_archived}
   end
 
   @doc "Sign and append the fence order with a governance signer."
@@ -95,14 +118,25 @@ defmodule CoopSubstrate.WriterFence do
 
   @doc """
   Install the fence on the legacy database `conn_opts` (Postgrex options),
-  once the ledger holds the order. Idempotent.
+  once the ledger holds the order. Idempotent for that exact chapter and order.
+  History-bearing writers require `:archive`, `:manifest_sha256`, and
+  `:archive_event_id`; files and ledger binding are rechecked before connecting
+  to the legacy database. Writers without a history specification need no options.
   """
-  def install(chapter, writer, conn_opts) do
+  def install(chapter, writer, conn_opts, opts \\ []) do
     with {:ok, env} <- order(chapter, writer),
-         :ok <- CoopSubstrate.HistoryArchive.ready_to_fence(chapter, writer),
+         {:ok, archive_opts} <- archive_options(writer, conn_opts, opts),
+         {:ok, evidence} <- HistoryArchive.preflight(chapter, writer, archive_opts),
+         :ok <- check_preflight_order(env, evidence),
          {:ok, conn} <- Postgrex.start_link(conn_opts) do
       try do
-        Postgrex.transaction(conn, &fence!(&1, env), timeout: :infinity)
+        Postgrex.transaction(
+          conn,
+          fn transaction ->
+            fence!(transaction, env) |> Map.put(:archive_verification, evidence)
+          end,
+          timeout: :infinity
+        )
       rescue
         error in Postgrex.Error -> {:error, error}
       after
@@ -110,6 +144,41 @@ defmodule CoopSubstrate.WriterFence do
       end
     end
   end
+
+  defp archive_options(writer, conn_opts, opts) do
+    cond do
+      HistoryArchive.spec(writer) == nil ->
+        {:ok, opts}
+
+      not (is_list(conn_opts) and Keyword.keyword?(conn_opts) and
+             is_list(opts) and Keyword.keyword?(opts)) ->
+        {:error, :archive_source_required}
+
+      true ->
+        hostname = Keyword.get(conn_opts, :hostname, "localhost")
+        database = Keyword.get(conn_opts, :database)
+
+        if is_binary(hostname) and hostname != "" and is_binary(database) and database != "" do
+          source = %{"hostname" => hostname, "database" => database}
+          {:ok, Keyword.put(opts, :expected_source, source)}
+        else
+          {:error, :archive_source_required}
+        end
+    end
+  end
+
+  @doc false
+  def check_preflight_order(%Envelope{payload: %{"writer" => writer}}, :no_history_required) do
+    if HistoryArchive.spec(writer) == nil,
+      do: :ok,
+      else: {:error, :fence_order_mismatch}
+  end
+
+  def check_preflight_order(%Envelope{event_id: expected}, %{fence_event_id: actual})
+      when is_binary(actual) and actual == expected,
+      do: :ok
+
+  def check_preflight_order(_env, _evidence), do: {:error, :fence_order_mismatch}
 
   defp fence!(conn, env) do
     Postgrex.query!(
@@ -123,16 +192,36 @@ defmodule CoopSubstrate.WriterFence do
     )
 
     %{rows: recorded} =
-      Postgrex.query!(conn, "SELECT 1 FROM public.biz_kit_writer_fence WHERE writer = $1", [
-        env.payload["writer"]
-      ])
-
-    if recorded == [] do
       Postgrex.query!(
         conn,
-        "INSERT INTO public.biz_kit_writer_fence (writer, chapter_id, event_id) VALUES ($1, $2, $3)",
-        [env.payload["writer"], env.chapter_id, env.event_id]
+        "SELECT chapter_id, event_id FROM public.biz_kit_writer_fence WHERE writer = $1 FOR UPDATE",
+        [env.payload["writer"]]
       )
+
+    expected_chapter = env.chapter_id
+    expected_event = env.event_id
+
+    case recorded do
+      [] ->
+        Postgrex.query!(
+          conn,
+          "INSERT INTO public.biz_kit_writer_fence (writer, chapter_id, event_id) VALUES ($1, $2, $3)",
+          [env.payload["writer"], expected_chapter, expected_event]
+        )
+
+      [[^expected_chapter, ^expected_event]] ->
+        :ok
+
+      rows ->
+        Postgrex.rollback(
+          conn,
+          {:fence_order_conflict,
+           %{
+             writer: env.payload["writer"],
+             expected: %{chapter_id: expected_chapter, event_id: expected_event},
+             recorded: rows
+           }}
+        )
     end
 
     Postgrex.query!(

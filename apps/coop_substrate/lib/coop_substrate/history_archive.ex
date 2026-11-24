@@ -15,11 +15,16 @@ defmodule CoopSubstrate.HistoryArchive do
   2. `verify/1` re-hashes an archive against its manifest and names every
      changed, missing or unlisted file.
   3. Governance signs `LegacyHistoryArchived` (`writer`, `manifest_sha256`).
-     `CoopSubstrate.WriterFence` installs a fence for a writer with a spec
-     only once such a record exists, so history is copied before writes stop.
+     This is an assertion, not a verification receipt. `preflight/3` binds a
+     complete, re-opened archive to an exact record in a verified canonical
+     ledger prefix, before the first fence order when one exists. The fence
+     command checks before signing and the installer checks again before
+     opening the legacy database. Source quiescence and durable custody remain
+     operational requirements.
   """
 
   alias CoopSubstrate.Log
+  alias CoopSubstrate.HistoryArchive.{Governance, LedgerReader, Preflight}
   alias CoopSubstrate.Protocol.{Envelope, TypeRegistry}
 
   @type_name "LegacyHistoryArchived"
@@ -89,13 +94,124 @@ defmodule CoopSubstrate.HistoryArchive do
     end
   end
 
-  @doc "`:ok` once a writer that keeps history has an archive on the ledger."
+  @doc "Existence check only; use `preflight/3` for cutover acceptance."
   def ready_to_fence(chapter, writer) do
     cond do
       spec(writer) == nil -> :ok
       match?({:ok, _}, recorded(chapter, writer)) -> :ok
       true -> {:error, :history_not_archived}
     end
+  end
+
+  @doc """
+  Read-only archive-to-ledger preflight. History-bearing writers require
+  `:archive`, `:manifest_sha256` and `:archive_event_id`. An optional
+  `:expected_source` compares hostname/database labels; installation supplies
+  those labels from its actual connection options, never from a receipt.
+
+  Replays and verifies the canonical ledger itself, not its linked indexes.
+  The returned evidence is suitable for retaining with the cutover record,
+  but does not authorize cutover, freeze writers, or establish durable storage.
+  An EventStore read client must already be running, or `:start_reader` may
+  request a temporary read-only client after the files pass. No Log appender
+  is needed.
+  """
+  def preflight(chapter, writer, opts \\ []) do
+    if spec(writer) == nil do
+      {:ok, :no_history_required}
+    else
+      with {:ok, dir, digest, event_id} <- preflight_options(opts),
+           {:ok, archive} <- Preflight.verify(dir, writer, digest),
+           :ok <- check_source(archive.source, opts[:expected_source]),
+           {:ok, head, selected} <- archive_governance(chapter, writer, event_id, digest, opts) do
+        {:ok,
+         Map.merge(archive, selected)
+         |> Map.merge(%{
+           schema: "biz-kit.writer-preflight.v1",
+           chapter_id: chapter,
+           archive: Path.expand(dir),
+           ledger_head: %{
+             global_seq: head.global_seq,
+             global_hash: if(head.global_hash, do: Base.encode16(head.global_hash, case: :lower))
+           },
+           cutover_authorized: false,
+           operational_prerequisites: operational_prerequisites(archive.outbox_undispatched)
+         })}
+      end
+    end
+  end
+
+  defp archive_governance(chapter, writer, event_id, digest, opts) do
+    read = fn ->
+      with {:ok, head} <- archive_ledger_head(),
+           {:ok, governance} <- Log.replay_verified(Governance, head),
+           {:ok, selected} <- Governance.select(governance, chapter, writer, event_id, digest),
+           do: {:ok, head, selected}
+    end
+
+    if opts[:start_reader] == true, do: LedgerReader.run(read), else: read.()
+  end
+
+  defp preflight_options(opts) when is_list(opts) do
+    if Keyword.keyword?(opts) and
+         Enum.all?([:archive, :manifest_sha256, :archive_event_id], fn key ->
+           is_binary(opts[key]) and opts[key] != ""
+         end) do
+      {:ok, opts[:archive], opts[:manifest_sha256], opts[:archive_event_id]}
+    else
+      {:error, :archive_verification_required}
+    end
+  end
+
+  defp preflight_options(_), do: {:error, :archive_verification_required}
+
+  @doc false
+  def check_source(_actual, nil), do: :ok
+
+  def check_source(actual, %{"hostname" => hostname, "database" => database} = expected)
+      when is_binary(hostname) and hostname != "" and is_binary(database) and database != "" do
+    labels = ~w(hostname database)
+
+    if Map.take(actual, labels) == Map.take(expected, labels),
+      do: :ok,
+      else:
+        {:error, {:archive_source_mismatch, Map.take(expected, labels), Map.take(actual, labels)}}
+  end
+
+  def check_source(_actual, _expected), do: {:error, :archive_source_required}
+
+  # Capture a bounded canonical prefix without starting Log (whose recovery
+  # repairs linked streams). replay_verified/2 checks the signatures, both
+  # chains, and this exact head against the same raw records it folds.
+  defp archive_ledger_head do
+    case CoopSubstrate.EventStore.stream_info("ledger") do
+      {:ok, %{stream_version: sequence}} when is_integer(sequence) and sequence > 0 ->
+        with {:ok, hash} <- Log.head_at(sequence),
+             do: {:ok, %{global_seq: sequence, global_hash: hash}}
+
+      {:ok, %{stream_version: 0}} ->
+        {:ok, %{global_seq: 0, global_hash: nil}}
+
+      {:error, :stream_not_found} ->
+        {:ok, %{global_seq: 0, global_hash: nil}}
+
+      {:error, reason} ->
+        {:error, {:ledger_read_failed, reason}}
+
+      _ ->
+        {:error, :invalid_ledger_head}
+    end
+  end
+
+  defp operational_prerequisites(pending) do
+    [
+      "project_owner_backfill",
+      "explained_dual_read_parity",
+      "source_and_provenance_quiescent_through_fence_commit",
+      "verified_durable_archive_custody_and_restore",
+      "post_fence_replay_and_restart_proof",
+      "independent_mama_succession_acceptance"
+    ] ++ if(pending > 0, do: ["preserved_outbox_reconciliation"], else: [])
   end
 
   @doc """
