@@ -271,7 +271,8 @@ defmodule CoopSubstrate.Enrolments do
     |> Enum.map_join("-", &Enum.join/1)
   end
 
-  defp key_id(<<prefix::binary-size(4), _::binary>>),
+  @doc "The enrolled device key identifier for a public key."
+  def key_id(<<prefix::binary-size(4), _::binary>>),
     do: "k-" <> Base.encode16(prefix, case: :lower)
 
   defp token(bytes), do: Base.url_encode64(:crypto.strong_rand_bytes(bytes), padding: false)

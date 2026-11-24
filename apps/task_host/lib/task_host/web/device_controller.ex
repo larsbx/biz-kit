@@ -19,7 +19,8 @@ defmodule TaskHost.Web.DeviceController do
            → 201 {id, statement (base64url)}
       POST /api/v1/devices/challenges/:id  {"signature"} → 201 {code, expires_at}
 
-  All need the session cookie. The device signs the statement it was given,
+  Enrolment and device listing accept a browser cookie or native session.
+  The device signs the statement it was given,
   after decoding it, as proof that it holds the key; the code then goes to an
   administrator. A role is operator unless the request names reviewer
   (docs/architecture/2026-10-19-execution.md); the same key may be enrolled
@@ -34,7 +35,7 @@ defmodule TaskHost.Web.DeviceController do
   alias TaskHost.Web.AuthController
 
   def index(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
-    case AuthController.principal(conn) do
+    case AuthController.operator_principal(conn) do
       {:ok, principal, _id} -> json(conn, Devices.list(principal, {c, t, p}))
       error -> refuse(conn, error)
     end
@@ -78,7 +79,7 @@ defmodule TaskHost.Web.DeviceController do
   end
 
   def request(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
-    with {:ok, session, _id} <- AuthController.session(conn),
+    with {:ok, session, _id} <- AuthController.operator_session(conn),
          {:ok, body} <- json_body(conn),
          {:ok, key_id} <- string(body["key_id"]),
          {:ok, pubkey} <- bytes(body["public_key"]),
@@ -101,7 +102,7 @@ defmodule TaskHost.Web.DeviceController do
   end
 
   def prove(conn, %{"id" => id}) do
-    with {:ok, principal, _id} <- AuthController.principal(conn),
+    with {:ok, principal, _id} <- AuthController.operator_principal(conn),
          {:ok, body} <- json_body(conn),
          {:ok, signature} <- bytes(body["signature"]),
          {:ok, request} <- Enrolments.prove(principal, id, signature) do

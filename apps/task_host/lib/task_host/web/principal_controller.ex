@@ -29,7 +29,31 @@ defmodule TaskHost.Web.PrincipalController do
 
   import TaskHost.Web.Requests
 
-  alias CoopSubstrate.Offboarding
+  alias CoopSubstrate.{Log, Offboarding}
+  alias CoopSubstrate.Governance.Read
+  alias TaskHost.TaskInventory
+
+  def inventory(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
+    conn = Plug.Conn.fetch_query_params(conn)
+    {gate, _} = snapshot = Log.read_snapshot()
+
+    with {:ok, chapters} <- governance_read(conn, &Read.authorize(&1, &2, gate)),
+         true <- c in chapters or {:unauthorized, :not_governance} do
+      case TaskInventory.authority(snapshot, {c, t, p}, conn.query_params) do
+        {:ok, page} ->
+          conn
+          |> Plug.Conn.put_resp_header("cache-control", "no-store")
+          |> json(Map.merge(page, %{chapter_id: c, tenant_id: t, project_id: p}))
+
+        {:error, reason} ->
+          conn
+          |> put_status(if(reason == :stale_snapshot, do: 409, else: 400))
+          |> json(%{error: Atom.to_string(reason)})
+      end
+    else
+      {:unauthorized, reason} -> unauthorized(conn, reason)
+    end
+  end
 
   def show(conn, %{"id" => id}) do
     case governance_read(conn) do

@@ -40,7 +40,7 @@ defmodule TaskHost.Web.ArtifactController do
   def create(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
     task = query(conn, "evidence_for")
 
-    with {:ok, principal, _session} <- AuthController.principal(conn),
+    with {:ok, principal, _session} <- AuthController.operator_principal(conn),
          true <- task == nil or is_binary(task),
          ["application/octet-stream" <> _] <- get_req_header(conn, "content-type"),
          [hex] <- get_req_header(conn, "x-content-sha256"),
@@ -58,7 +58,7 @@ defmodule TaskHost.Web.ArtifactController do
   end
 
   def evidence(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p, "task_id" => id}) do
-    with {:ok, principal, _session} <- AuthController.principal(conn),
+    with {:ok, principal, _session} <- AuthController.operator_principal(conn),
          {:ok, e} <- ArtifactCustody.evidence(principal, {c, t, p}, id) do
       json(conn, %{
         submission_event_id: e.submission_event_id,
@@ -75,7 +75,7 @@ defmodule TaskHost.Web.ArtifactController do
 
   # Always a download of opaque bytes: nothing a person uploaded runs here.
   def show(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p, "receipt_id" => id}) do
-    with {:ok, principal, _session} <- AuthController.principal(conn),
+    with {:ok, principal, _session} <- AuthController.operator_principal(conn),
          {:ok, bytes} <- ArtifactCustody.read(principal, {c, t, p}, id) do
       conn
       |> put_resp_content_type("application/octet-stream", nil)

@@ -14,6 +14,9 @@ defmodule TaskHost.Web.CommandController do
            {"action": "ready", "task_id", "custody_receipts": {name: receipt id}, "key_id"}
            {"action": "revoke_delegation", "delegation_event_id", "key_id"}
            {"action": "record_custody", "artifact_digest": hex SHA-256, "key_id"}
+           {"action": "attest_artifact", "task_id", "name", "custody_receipt_id",
+            "artifact_digest": hex SHA-256, "size_bytes", "repository", "commit",
+            "tree", "path", "key_id"} (independent reviewer device)
            {"action": "start", "task_id", "key_id"}
            {"action": "submit_evidence", "task_id", "custody_receipts": {criterion: receipt id}, "key_id"}
            {"action": "review", "task_id", "decision": "accept" | "refuse", "reason", "key_id"}
@@ -23,7 +26,7 @@ defmodule TaskHost.Web.CommandController do
            {"action": "instantiate", "revision_event_id", "roadmap_key", "workflow_id",
             "task_ids": {definition id: new task id}, "key_id"}
            {"action": "add_todo" | "revise_todo", "task_id", "todo_id", "title",
-            "depends_on": [todo id], "key_id"}
+            "depends_on": [todo id], "key_id", "expected_todo_version"? (revise only)}
            {"action": "complete_todo", "task_id", "todo_id", "key_id"}
            {"action": "drop_todo", "task_id", "todo_id", "reason", "key_id"}
              (docs/architecture/2026-10-20-sprucegoose-salvage.md)
@@ -31,25 +34,31 @@ defmodule TaskHost.Web.CommandController do
       POST /api/v1/commands/:id  {"signature": base64url}
            → 201 {event_id, global_seq}
 
-  Both need the session cookie, and only accept `application/json`: a
+  Both need a browser session cookie or a native bearer session. When given,
+  `grant_event_id` selects the exact active grant. The endpoints only accept
+  `application/json`: a
   cross-site form cannot send it, and SameSite=Lax keeps the cookie off
   cross-site POSTs anyway. The device must sign the bytes it was given; the
   server holds no key.
+
+  When editing dependencies read from the feed, send the TODO version from
+  that read. The ledger rejects an older version before signing and at append.
   """
 
   use Phoenix.Controller, formats: [:json]
 
   import TaskHost.Web.Requests
 
-  alias CoopSubstrate.Commands
+  alias CoopSubstrate.{Commands, ULID}
   alias TaskHost.Web.AuthController
 
   def prepare(conn, %{"chapter_id" => c, "tenant_id" => t, "project_id" => p}) do
-    with {:ok, principal, _session} <- AuthController.principal(conn),
+    with {:ok, principal, _session} <- AuthController.operator_principal(conn),
          {:ok, body} <- json_body(conn),
          {:ok, decision} <- command(body),
          {:ok, key_id} <- string(body["key_id"]),
-         {:ok, pending} <- Commands.prepare(principal, key_id, {c, t, p}, decision) do
+         {:ok, grant} <- requested_grant(body),
+         {:ok, pending} <- Commands.prepare(principal, key_id, {c, t, p}, decision, grant) do
       held(conn, pending)
     else
       error -> refuse(conn, error)
@@ -57,13 +66,20 @@ defmodule TaskHost.Web.CommandController do
   end
 
   def submit(conn, %{"id" => id}) do
-    with {:ok, principal, _session} <- AuthController.principal(conn),
+    with {:ok, principal, _session} <- AuthController.operator_principal(conn),
          {:ok, body} <- json_body(conn),
          {:ok, signature} <- bytes(body["signature"]),
          {:ok, env} <- Commands.submit(principal, id, signature) do
       appended(conn, env)
     else
       error -> refuse(conn, error)
+    end
+  end
+
+  defp requested_grant(body) do
+    case Map.fetch(body, "grant_event_id") do
+      :error -> {:ok, nil}
+      {:ok, id} -> if(ULID.valid?(id), do: {:ok, id}, else: {:error, :bad_request})
     end
   end
 
@@ -115,6 +131,30 @@ defmodule TaskHost.Web.CommandController do
     end
   end
 
+  defp action(
+         %{
+           "action" => "attest_artifact",
+           "task_id" => task,
+           "artifact_digest" => hex,
+           "size_bytes" => size
+         } = body
+       )
+       when is_binary(task) and is_binary(hex) and is_integer(size) and size >= 0 do
+    names = ~w(name custody_receipt_id repository commit tree path)
+
+    with true <- Enum.all?(names, &is_binary(body[&1])),
+         {:ok, <<_::256>> = digest} <- Base.decode16(hex, case: :lower) do
+      fields =
+        body
+        |> Map.take(names)
+        |> Map.merge(%{"artifact_digest" => {:bytes, digest}, "size_bytes" => size})
+
+      {:ok, {:attest_artifact, task, fields}}
+    else
+      _ -> {:error, :bad_action}
+    end
+  end
+
   defp action(%{
          "action" => "instantiate",
          "revision_event_id" => rev,
@@ -128,18 +168,31 @@ defmodule TaskHost.Web.CommandController do
       else: {:error, :bad_action}
   end
 
-  defp action(%{
-         "action" => a,
-         "task_id" => t,
-         "todo_id" => todo,
-         "title" => title,
-         "depends_on" => deps
-       })
+  defp action(
+         %{
+           "action" => a,
+           "task_id" => t,
+           "todo_id" => todo,
+           "title" => title,
+           "depends_on" => deps
+         } = body
+       )
        when a in ~w(add_todo revise_todo) and is_binary(t) and is_binary(todo) and
               is_binary(title) and is_list(deps) do
-    if Enum.all?(deps, &is_binary/1),
-      do: {:ok, {@actions[a], t, todo, title, deps}},
-      else: {:error, :bad_action}
+    with true <- Enum.all?(deps, &is_binary/1) do
+      case Map.fetch(body, "expected_todo_version") do
+        :error ->
+          {:ok, {@actions[a], t, todo, title, deps}}
+
+        {:ok, v} when a == "revise_todo" and is_integer(v) and v > 0 ->
+          {:ok, {:revise_todo, t, todo, title, deps, v}}
+
+        _ ->
+          {:error, :bad_action}
+      end
+    else
+      false -> {:error, :bad_action}
+    end
   end
 
   defp action(%{"action" => "complete_todo", "task_id" => t, "todo_id" => todo})

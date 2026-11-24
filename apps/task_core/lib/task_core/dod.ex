@@ -34,6 +34,8 @@ defmodule TaskCore.DoD do
   @scope %{"tenant_id" => :string, "project_id" => :string}
   @subject Map.merge(@scope, %{"task_id" => :string, "expected_version" => :int})
   @actor %{"principal_id" => :string, "authorization_event_id" => :string}
+  @source_fields ~w(repository commit tree path)
+  @source_receipt "TaskArtifactSourceAttestedV1"
 
   def event_types do
     grant =
@@ -86,6 +88,22 @@ defmodule TaskCore.DoD do
           "artifact_custody",
           Map.merge(Map.merge(@scope, @actor), %{"artifact_digest" => :hash}),
           false
+        ),
+      @source_receipt =>
+        spec(
+          "reviewer",
+          "task_artifact_sources",
+          Map.merge(Map.merge(@subject, @actor), %{
+            "name" => :string,
+            "custody_receipt_id" => :string,
+            "artifact_digest" => :hash,
+            "size_bytes" => :int,
+            "repository" => :string,
+            "commit" => :string,
+            "tree" => :string,
+            "path" => :string
+          }),
+          true
         ),
       "TaskEvidenceSubmittedV2" =>
         spec(
@@ -264,6 +282,62 @@ defmodule TaskCore.DoD do
     end
   end
 
+  def check(%{type: @source_receipt, payload: p} = env, state, _keys) do
+    scope = State.scope(env)
+    digest = p["artifact_digest"]
+
+    with {:ok, grant} <- reviewer_grant(state, p["authorization_event_id"]),
+         :ok <- authorized(env, grant),
+         :ok <- independent_verifier(state, scope, grant),
+         {:ok, task} <- current_task(env, state),
+         {:ok, _} <- TaskCore.Blueprint.Source.normalize(Map.put(p, "manifest_digest", digest)),
+         true <- text?(p["name"]) or {:error, :invalid_artifact_source},
+         :ok <- source_attachment(task, p),
+         %{chapter_id: ch, tenant_id: t, project_id: project, digest: ^digest} <-
+           state.custody_receipts[p["custody_receipt_id"]] || {:error, :unknown_custody_receipt},
+         true <- {ch, t, project} == scope or {:error, :custody_scope_mismatch},
+         {:ok, size} <- state.host.verify_artifact(elem(digest, 1), 8 * 1024 * 1024),
+         true <- size == p["size_bytes"] or {:error, :artifact_size_mismatch} do
+      :ok
+    else
+      {:error, _} = error -> error
+      %{digest: _} -> {:error, :custody_digest_mismatch}
+      _ -> {:error, :invalid_artifact_source}
+    end
+  end
+
+  defp independent_verifier(state, scope, reviewer) do
+    distinct =
+      Enum.all?(state.grants, fn {_, g} ->
+        not (g.active and {g.chapter_id, g.tenant_id, g.project_id} == scope and
+               (g.principal_id == reviewer.principal_id or g.pubkey == reviewer.pubkey))
+      end)
+
+    if distinct, do: :ok, else: {:error, :artifact_verifier_also_operator}
+  end
+
+  defp source_attachment(task, p) do
+    name = p["name"]
+    receipt = p["custody_receipt_id"]
+    requirements = get_in(task, [:readiness, :artifact_requirements]) || %{}
+    evidence = get_in(task, [:dod, :submission, :custody_receipts]) || %{}
+    source = Map.take(p, @source_fields)
+    prior = Map.get(task, :artifact_sources, %{})
+
+    cond do
+      requirements[name] != p["artifact_digest"] and evidence[name] != receipt ->
+        {:error, :artifact_not_attached}
+
+      Enum.any?(prior, fn {_, value} ->
+        value.name == name and value.custody_receipt_id == receipt and value.source == source
+      end) ->
+        {:error, :artifact_source_already_attested}
+
+      true ->
+        :ok
+    end
+  end
+
   defp check_submission(%{payload: p} = env, state) do
     with {:ok, grant} <-
            fetch_grant(state.grants, p["authorization_event_id"], :unknown_task_grant),
@@ -350,6 +424,8 @@ defmodule TaskCore.DoD do
   # leaves `proposed`; evidence and its review are of the work once it is under way.
   defp open_states(type) when type in ~w(TaskDoDDefinedV1 TaskDoDDefinedV2 TaskDoDAgreedV1),
     do: ["proposed"]
+
+  defp open_states(@source_receipt), do: ~w(proposed queued ready in_progress)
 
   defp open_states(_type), do: ["proposed", "in_progress"]
 
@@ -468,6 +544,27 @@ defmodule TaskCore.DoD do
     state
     |> put_in([:custody_receipts, Access.key(env.event_id)], receipt)
     |> put_in([:dod_commands, Access.key(env.event_id)], env)
+  end
+
+  def handle_event(%{type: @source_receipt, payload: p} = env, state) do
+    receipt = %{
+      name: p["name"],
+      custody_receipt_id: p["custody_receipt_id"],
+      artifact_digest: p["artifact_digest"],
+      size_bytes: p["size_bytes"],
+      principal_id: p["principal_id"],
+      authorization_event_id: p["authorization_event_id"],
+      source: Map.take(p, @source_fields)
+    }
+
+    update_in(state, [:tasks, State.task_key(env)], fn task ->
+      Map.update(
+        task,
+        :artifact_sources,
+        %{env.event_id => receipt},
+        &Map.put(&1, env.event_id, receipt)
+      )
+    end)
   end
 
   def handle_event(%{type: type} = env, state) when type in @commands do

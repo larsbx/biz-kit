@@ -246,6 +246,27 @@ defmodule TaskHost.LocalGitBlueprintVerifierTest do
     assert message =~ "exceeds 1048576 bytes"
   end
 
+  test "checks artifact Git blobs against the custody limit", fixture do
+    limit = CoopSubstrate.ArtifactCustody.limit()
+    accepted = :binary.copy(<<1>>, limit)
+
+    pin = fn bytes ->
+      blob = write_object!(fixture.checkout, "blob", bytes)
+      subtree = write_object!(fixture.checkout, "tree", entry("100644", "launch.yaml", blob))
+      commit_for_subtree!(fixture, subtree)
+    end
+
+    assert {:ok, %{bytes: ^accepted}} =
+             SourceVerifier.verify_artifact(@repository, pin.(accepted), @path,
+               source_checkout: fixture.checkout
+             )
+
+    assert {:error, "Git blob exceeds #{limit} bytes"} ==
+             SourceVerifier.verify_artifact(@repository, pin.(accepted <> <<1>>), @path,
+               source_checkout: fixture.checkout
+             )
+  end
+
   test "local selection is explicit and never falls back on verification failure", fixture do
     previous = Application.get_env(:task_host, :blueprint_source_verifier)
     Application.put_env(:task_host, :blueprint_source_verifier, DefaultVerifier)

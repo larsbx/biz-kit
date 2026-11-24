@@ -12,6 +12,9 @@ defmodule TaskCore.Hierarchy do
       to be their normal form, for this project. Each roadmap and workflow
       it names is created or renamed by key, never removed; a workflow is
       then governed by this revision. A source is applied once.
+    * `TaskBlueprintRegisteredV1`, by governance: the same pinned identity
+      for an existing project, with its verified manifest. Registration
+      records source provenance. Only application changes hierarchy.
     * `TaskWorkflowInstantiatedV1`, by an operator: one run of a workflow
       under its current revision, naming a new task for every definition.
       Each task starts in the inbox with the definition's title and its
@@ -47,30 +50,35 @@ defmodule TaskCore.Hierarchy do
     "workflow_id" => :string,
     "task_ids" => :any
   }
+  @blueprint_events ~w(TaskBlueprintAppliedV1 TaskBlueprintRegisteredV1)
 
   def event_types do
     %{
-      "TaskBlueprintAppliedV1" => spec("governance", @source),
+      "TaskBlueprintAppliedV1" =>
+        spec("governance", @source, %{"registration_event_id" => :string}),
+      "TaskBlueprintRegisteredV1" => spec("governance", @source),
       "TaskWorkflowInstantiatedV1" => spec("operator", @run)
     }
   end
 
-  defp spec(role, fields) do
+  defp spec(role, fields, optional \\ %{}) do
     %{
       required_roles: [role],
       disclosure_class: :edges,
       stream: {:payload_fields, "task_hierarchy", ~w(tenant_id project_id)},
-      payload: %{required: Map.merge(@scope, fields), optional: %{}}
+      payload: %{required: Map.merge(@scope, fields), optional: optional}
     }
   end
 
-  def init, do: %{blueprints: %{}, hierarchy: %{}, hierarchy_commands: %{}}
+  def init,
+    do: %{blueprints: %{}, blueprint_registrations: %{}, hierarchy: %{}, hierarchy_commands: %{}}
 
   # -- admission -----------------------------------------------------------------
 
-  def check(%{type: "TaskBlueprintAppliedV1", payload: p} = env, state, keys) do
+  def check(%{type: type, payload: p} = env, state, keys) when type in @blueprint_events do
     with :ok <- Admission.governance_declared(env, keys),
          :ok <- source(p),
+         :ok <- registration(env, state),
          :ok <- fresh_source(env, state),
          {:ok, decoded} <- read(state.host, elem(p["manifest_digest"], 1)),
          {:ok, blueprint} <- normal(decoded),
@@ -99,14 +107,37 @@ defmodule TaskCore.Hierarchy do
     end
   end
 
-  # One revision per source in a project, as SpruceGoose records it.
-  defp fresh_source(env, state) do
-    if Enum.any?(state.blueprints, fn {_, b} ->
+  defp registration(%{type: "TaskBlueprintRegisteredV1"} = env, state) do
+    scope = State.scope(env)
+
+    if Map.has_key?(state.projects, scope) or Map.has_key?(state.hierarchy, scope),
+      do: :ok,
+      else: {:error, :unknown_blueprint_project}
+  end
+
+  defp registration(%{payload: %{"registration_event_id" => id} = payload} = env, state) do
+    expected = %{scope: State.scope(env), source: source_record(payload)}
+
+    if state.blueprint_registrations[id] == expected,
+      do: :ok,
+      else: {:error, :blueprint_registration_mismatch}
+  end
+
+  defp registration(_, _), do: :ok
+
+  defp fresh_source(%{type: "TaskBlueprintRegisteredV1"} = env, state),
+    do: fresh_source(env, state.blueprint_registrations, :blueprint_already_registered)
+
+  defp fresh_source(env, state),
+    do: fresh_source(env, state.blueprints, :blueprint_already_applied)
+
+  defp fresh_source(env, records, reason) do
+    if Enum.any?(records, fn {_, b} ->
          {b.scope, b.source.repository, b.source.commit, b.source.path} ==
            {State.scope(env), env.payload["repository"], env.payload["commit"],
             env.payload["path"]}
        end),
-       do: {:error, :blueprint_already_applied},
+       do: {:error, reason},
        else: :ok
   end
 
@@ -157,17 +188,16 @@ defmodule TaskCore.Hierarchy do
 
   # -- fold -------------------------------------------------------------------------
 
+  def handle_event(%{type: "TaskBlueprintRegisteredV1", payload: p} = env, state) do
+    record = %{scope: State.scope(env), source: source_record(p)}
+    put_in(state, [:blueprint_registrations, Access.key(env.event_id)], record)
+  end
+
   def handle_event(%{type: "TaskBlueprintAppliedV1", payload: p} = env, state) do
     blueprint = p["blueprint"]
     scope = State.scope(env)
 
-    source = %{
-      repository: p["repository"],
-      commit: p["commit"],
-      tree: p["tree"],
-      path: p["path"],
-      manifest_digest: p["manifest_digest"]
-    }
+    source = source_record(p)
 
     project =
       Map.get(state.hierarchy, scope, %{roadmaps: %{}})
@@ -176,6 +206,7 @@ defmodule TaskCore.Hierarchy do
 
     revision =
       %{scope: scope, source: source, blueprint: blueprint}
+      |> Map.put(:registration_event_id, p["registration_event_id"])
       |> bind_contracts(blueprint, p["manifest_digest"])
 
     state
@@ -227,6 +258,16 @@ defmodule TaskCore.Hierarchy do
   end
 
   def handle_event(_env, state), do: state
+
+  defp source_record(p) do
+    %{
+      repository: p["repository"],
+      commit: p["commit"],
+      tree: p["tree"],
+      path: p["path"],
+      manifest_digest: p["manifest_digest"]
+    }
+  end
 
   defp apply_roadmaps(roadmaps, blueprint, revision) do
     Enum.reduce(blueprint["roadmaps"], roadmaps, fn r, acc ->

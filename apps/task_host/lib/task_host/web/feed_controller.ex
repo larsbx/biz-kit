@@ -34,7 +34,10 @@ defmodule TaskHost.Web.FeedController do
 
   alias BizKit.Identity
   alias CoopSubstrate.Feed
-  alias CoopSubstrate.Feed.SSE
+  alias CoopSubstrate.Feed.{Access, SSE, View}
+  alias CoopSubstrate.Log
+  alias TaskCore.Projects
+  alias TaskHost.TaskInventory
   alias TaskHost.Web.AuthController
 
   @doc "The stream: one frame up to the head, then a frame per change."
@@ -52,6 +55,90 @@ defmodule TaskHost.Web.FeedController do
       end
     else
       {:error, reason} -> refuse(conn, reason)
+    end
+  end
+
+  @doc "Read a task's direct edges from one authorized ledger projection."
+  def dependencies(conn, %{"task_id" => task_id} = params) do
+    read(conn, scope(params), fn {gate, _}, reader ->
+      View.dependencies(gate, reader.scope, task_id)
+    end)
+  end
+
+  def tasks(conn, params) do
+    conn = fetch_query_params(conn)
+    read(conn, scope(params), &TaskInventory.page(&1, &2.scope, conn.query_params))
+  end
+
+  def projects(conn, _params) do
+    conn = fetch_query_params(conn)
+
+    with {:ok, principal, session} <- AuthController.operator_principal(conn),
+         result = TaskInventory.projects(Log.read_snapshot(), principal, conn.query_params),
+         {:ok, %{principal: ^principal}} <- Identity.session(session) do
+      respond(conn, result)
+    else
+      {:error, reason} -> refuse(conn, reason)
+    end
+  end
+
+  def inspect_task(conn, %{"task_id" => task_id} = params) do
+    read(conn, scope(params), fn {gate, _}, reader ->
+      View.fetch_task(gate, reader.scope, task_id)
+    end)
+  end
+
+  def hierarchy(conn, params) do
+    read(conn, scope(params), fn {gate, _}, reader -> View.hierarchy(gate, reader.scope) end)
+  end
+
+  def whoami(conn, %{"chapter_id" => chapter} = params) do
+    read(conn, scope(params), fn {gate, _}, reader ->
+      {:ok,
+       %{
+         principal_id: reader.principal_id,
+         kind: Projects.kind(gate.orchestration, chapter, reader.principal_id),
+         role: reader.role,
+         grant_event_id: if(is_binary(reader.grant_id), do: reader.grant_id)
+       }}
+    end)
+  end
+
+  defp read(conn, {chapter, tenant, project} = scope, select) do
+    with {:ok, reader, login} <- reader(conn, scope, 0),
+         {gate, _} = snapshot <- Log.read_snapshot(),
+         true <- Access.live_in?(gate, reader) or {:error, :grant_revoked},
+         result = select.(snapshot, reader),
+         principal = reader.principal_id,
+         true <-
+           is_nil(login) or match?({:ok, %{principal: ^principal}}, Identity.session(login)) or
+             {:error, :unknown_session} do
+      result =
+        with {:ok, value} <- result do
+          {:ok, Map.merge(value, %{chapter_id: chapter, tenant_id: tenant, project_id: project})}
+        end
+
+      respond(conn, result)
+    else
+      {:error, reason} -> refuse(conn, reason)
+    end
+  end
+
+  defp respond(conn, result) do
+    conn = put_resp_header(conn, "cache-control", "no-store")
+
+    case result do
+      {:ok, value} ->
+        json(conn, value)
+
+      {:error, reason} when reason in [:unknown_task, :unknown_project] ->
+        error(conn, 404, Atom.to_string(reason))
+
+      {:error, :stale_snapshot} ->
+        error(conn, 409, "stale_snapshot")
+
+      {:error, reason} ->
+        error(conn, 400, Atom.to_string(reason))
     end
   end
 

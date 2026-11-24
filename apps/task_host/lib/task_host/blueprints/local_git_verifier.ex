@@ -1,6 +1,6 @@
 defmodule TaskHost.Blueprints.LocalGitVerifier do
   @moduledoc """
-  Verify a blueprint in an explicitly selected, complete local Git checkout.
+  Verify a blueprint or artifact in an explicitly selected, complete local Git checkout.
 
   Rehashes the raw commit, every tree on the selected path, and the final blob.
   Working-tree files, replacement refs, filters and network fetches are not used.
@@ -20,14 +20,21 @@ defmodule TaskHost.Blueprints.LocalGitVerifier do
 
   @spec verify(String.t(), String.t(), String.t(), String.t()) ::
           {:ok, %{tree: String.t(), digest: String.t(), bytes: binary()}} | {:error, term()}
-  def verify(repository, commit, path, checkout) do
+  def verify(repository, commit, path, checkout),
+    do: verify_source(repository, commit, path, checkout, :blueprint)
+
+  @doc "Keep the Git object checks and use the artifact custody limit for the selected blob."
+  def verify_artifact(repository, commit, path, checkout),
+    do: verify_source(repository, commit, path, checkout, :artifact)
+
+  defp verify_source(repository, commit, path, checkout, kind) do
     with :ok <- valid_source(repository, commit, path, checkout),
          {:ok, git} <- git_context(checkout),
          :ok <- repository_matches(git, repository),
          {:ok, raw_commit} <- object(git, "commit", commit, @max_commit_bytes),
          {:ok, root_tree} <- commit_tree(raw_commit),
          {:ok, blob} <- walk(git, root_tree, String.split(path, "/")),
-         {:ok, max_bytes} <- manifest_limit(),
+         {:ok, max_bytes} <- blob_limit(kind),
          {:ok, bytes} <- object(git, "blob", blob, max_bytes) do
       {:ok,
        %{
@@ -101,7 +108,9 @@ defmodule TaskHost.Blueprints.LocalGitVerifier do
     end
   end
 
-  defp manifest_limit do
+  defp blob_limit(:artifact), do: {:ok, CoopSubstrate.ArtifactCustody.limit()}
+
+  defp blob_limit(:blueprint) do
     case Application.get_env(:task_host, :blueprint_max_bytes, @max_bytes) do
       limit when is_integer(limit) and limit > 0 -> {:ok, min(limit, @max_bytes)}
       _ -> {:error, "blueprint_max_bytes must be a positive integer"}

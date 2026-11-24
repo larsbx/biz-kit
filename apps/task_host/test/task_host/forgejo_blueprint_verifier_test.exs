@@ -11,7 +11,7 @@ defmodule TaskHost.ForgejoBlueprintVerifierTest do
 
   use ExUnit.Case, async: false
 
-  alias TaskHost.Blueprints.ForgejoVerifier
+  alias TaskHost.Blueprints.{ForgejoVerifier, SourceVerifier}
 
   @commit String.duplicate("a", 40)
   @bytes "schema_version: 1\nproject: legible\n"
@@ -181,14 +181,33 @@ defmodule TaskHost.ForgejoBlueprintVerifierTest do
     assert message =~ "exceed 8 bytes"
   end
 
+  test "uses the custody size limit for artifacts fetched from Git" do
+    limit = CoopSubstrate.ArtifactCustody.limit()
+    bytes = :binary.copy(<<1>>, limit)
+    repository = build_repository(bytes)
+    Application.put_env(:task_host, :blueprint_http_request, &respond(repository, &1))
+
+    assert {:error, "blueprint bytes exceed 1048576 bytes"} =
+             ForgejoVerifier.verify("root/legible", @commit, @path)
+
+    assert {:ok, %{bytes: ^bytes}} =
+             SourceVerifier.verify_artifact("root/legible", @commit, @path)
+
+    oversized = build_repository(bytes <> <<1>>)
+    Application.put_env(:task_host, :blueprint_http_request, &respond(oversized, &1))
+
+    assert {:error, "artifact bytes exceed #{limit} bytes"} ==
+             SourceVerifier.verify_artifact("root/legible", @commit, @path)
+  end
+
   # -- a small in-memory git repository ---------------------------------------
   #
   # Real object identities rather than placeholder shas: every refusal above
   # depends on the verifier recomputing them, so a fixture with invented shas
   # would pass a verifier that checked nothing.
 
-  defp build_repository do
-    blob_sha = blob_sha(@bytes)
+  defp build_repository(bytes \\ @bytes) do
+    blob_sha = blob_sha(bytes)
 
     dir_entries = [
       %{"mode" => "100644", "path" => "project.yaml", "sha" => blob_sha, "type" => "blob"}
@@ -206,7 +225,7 @@ defmodule TaskHost.ForgejoBlueprintVerifierTest do
       root_sha: root_sha,
       dir_sha: dir_sha,
       blob_sha: blob_sha,
-      contents: @bytes,
+      contents: bytes,
       trees: %{root_sha => root_entries, dir_sha => dir_entries}
     }
   end

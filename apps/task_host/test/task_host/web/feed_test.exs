@@ -54,6 +54,156 @@ defmodule TaskHost.Web.FeedTest do
     {path, [{"authorization", header} | resume]}
   end
 
+  describe "direct task dependencies" do
+    setup w do
+      revision = apply_blueprint!(w)
+
+      [run] =
+        append!(
+          event(w, w.op, "TaskWorkflowInstantiatedV1", %{
+            "tenant_id" => tenant(),
+            "project_id" => "project-1",
+            "principal_id" => "alice",
+            "authorization_event_id" => w.op_grant.event_id,
+            "lifecycle_version" => 1,
+            "revision_event_id" => revision.event_id,
+            "roadmap_key" => "q4",
+            "workflow_id" => "release",
+            "task_ids" => %{"build" => "build-1", "ship" => "ship-1"}
+          })
+        )
+
+      create!(w, w.op_grant_2, "ship-1", "project-2")
+      %{run: run, base: serve!()}
+    end
+
+    test "mix command returns the scoped direct edges with their origin", w do
+      %{event_id: run} = w.run
+
+      args = [
+        "#{w.chapter}/#{tenant()}/project-1",
+        "ship-1",
+        "--server",
+        w.base,
+        "--grant",
+        w.op_grant.event_id,
+        "--key-id",
+        w.op.signer.key_id,
+        "--seed-file",
+        Path.join(System.tmp_dir!(), w.chapter <> ".seed")
+      ]
+
+      seed_file = List.last(args)
+      File.write!(seed_file, Base.encode16(w.op.seed))
+      File.chmod!(seed_file, 0o600)
+      previous = Mix.shell()
+      Mix.shell(Mix.Shell.Process)
+
+      on_exit(fn ->
+        File.rm!(seed_file)
+        Mix.shell(previous)
+      end)
+
+      assert :ok = Mix.Tasks.Coop.Task.Dependencies.run(args)
+      assert_received {:mix_shell, :info, [json]}
+
+      assert %{
+               "task_id" => "ship-1",
+               "blocked" => true,
+               "predecessors" => [
+                 %{
+                   "task_id" => "build-1",
+                   "state" => "inbox",
+                   "defined_by" => %{"kind" => "workflow_run", "event_id" => ^run}
+                 }
+               ],
+               "successors" => []
+             } = Jason.decode!(json)
+
+      File.chmod!(seed_file, 0o644)
+
+      assert_raise Mix.Error, ~r/invalid_private_seed_file/, fn ->
+        Mix.Tasks.Coop.Task.Dependencies.run(args)
+      end
+    end
+
+    test "scopes successors and refuses unsigned, replayed, cross-scope and revoked reads", w do
+      path = String.replace_suffix(feed_path(w), "/feed", "/tasks/build-1/dependencies")
+      header = signature(w, "GET", path, 0, w.op_grant, w.op)
+      before = Log.head()
+
+      assert call(:get, path, []).status == 401
+      conn = call(:get, path, [{"authorization", header}])
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "cache-control") == ["no-store"]
+
+      assert %{
+               "successors" => [%{"task_id" => "ship-1"}],
+               "predecessors" => [],
+               "blocked" => false
+             } =
+               Jason.decode!(conn.resp_body)
+
+      assert call(:get, path, [{"authorization", header}]).status == 401
+
+      missing = String.replace(path, "build-1", "missing")
+      missing_header = signature(w, "GET", missing, 0, w.op_grant, w.op)
+      assert call(:get, missing, [{"authorization", missing_header}]).status == 404
+
+      other = String.replace(path, "/project-1/", "/project-2/")
+      wrong = signature(w, "GET", other, 0, w.op_grant, w.op, project: "project-2")
+      assert call(:get, other, [{"authorization", wrong}]).status == 401
+      assert Log.head() == before
+
+      revoke!(w, "TaskOperatorRevokedV1", w.op_grant)
+      fresh = signature(w, "GET", path, 0, w.op_grant, w.op)
+      assert call(:get, path, [{"authorization", fresh}]).status == 401
+    end
+
+    test "a signed readiness definition is the origin once it governs the task", w do
+      append!(
+        event(w, w.op, "TaskProposedV1", %{
+          "tenant_id" => tenant(),
+          "project_id" => "project-1",
+          "task_id" => "ship-1",
+          "principal_id" => "alice",
+          "authorization_event_id" => w.op_grant.event_id,
+          "lifecycle_version" => 1,
+          "expected_version" => 1
+        })
+      )
+
+      [definition] =
+        append!(
+          event(w, w.gov, "TaskReadinessDefinedV1", %{
+            "tenant_id" => tenant(),
+            "project_id" => "project-1",
+            "task_id" => "ship-1",
+            "expected_version" => 2,
+            "artifact_requirements" => %{},
+            "sop_digest" => {:bytes, :crypto.hash(:sha256, "SOP")},
+            "predecessor_ids" => ["build-1"]
+          })
+        )
+
+      path = String.replace_suffix(feed_path(w), "/feed", "/tasks/ship-1/dependencies")
+      header = signature(w, "GET", path, 0, w.op_grant, w.op)
+      conn = call(:get, path, [{"authorization", header}])
+      assert conn.status == 200
+      id = definition.event_id
+
+      assert %{
+               "version" => 3,
+               "predecessors" => [
+                 %{
+                   "task_id" => "build-1",
+                   "defined_by" => %{"kind" => "readiness", "event_id" => ^id}
+                 }
+               ]
+             } = Jason.decode!(conn.resp_body)
+    end
+  end
+
   # -- refusals -----------------------------------------------------------------------
 
   describe "refused" do

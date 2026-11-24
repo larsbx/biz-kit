@@ -31,16 +31,37 @@ defmodule CoopSubstrate.Cancellation do
         {:cancellation, key},
         chapter,
         "TaskCancelledByGovernanceV1",
-        %{
-          "tenant_id" => tenant,
-          "project_id" => project,
-          "task_id" => task_id,
-          "expected_version" => task.version,
-          "reason" => reason
-        },
+        payload(tenant, project, task_id, task.version, reason),
         signer
       )
     end
+  end
+
+  @doc "Whether the held core cancels exactly the task and version reviewed by the client."
+  @spec expected?(map(), key(), pos_integer(), String.t()) :: boolean()
+  def expected?(
+        %{
+          "type" => "TaskCancelledByGovernanceV1",
+          "auth_ref" => nil,
+          "chapter_id" => chapter,
+          "payload" => held
+        },
+        {chapter, tenant, project, task_id},
+        version,
+        reason
+      ),
+      do: held == payload(tenant, project, task_id, version, reason)
+
+  def expected?(_core, _key, _version, _reason), do: false
+
+  defp payload(tenant, project, task_id, version, reason) do
+    %{
+      "tenant_id" => tenant,
+      "project_id" => project,
+      "task_id" => task_id,
+      "expected_version" => version,
+      "reason" => reason
+    }
   end
 
   @doc "Submit the governance signature for a held cancellation."
