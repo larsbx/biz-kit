@@ -102,7 +102,12 @@ jobs:
           cp mix.lock /tmp/bizkit-full-lock-audit/
           cd /tmp/bizkit-full-lock-audit
           printf '%s\n' 'defmodule Audit.MixProject do' ' use Mix.Project' ' def project, do: [app: :audit, version: "0.0.0", deps: []]' 'end' > mix.exs
-          mix hex.audit --format sarif --output "$GITHUB_WORKSPACE/full-lock-audit.sarif"
+          audit_status=0
+          mix hex.audit --format sarif --output "$GITHUB_WORKSPACE/full-lock-audit.sarif" || audit_status=$?
+          if ! cat "$GITHUB_WORKSPACE/full-lock-audit.sarif"; then
+            printf 'Full-lock audit SARIF could not be read.\n' >&2
+          fi
+          exit "$audit_status"
       - name: Record audit outcome
         if: always()
         run: echo 'Full-lock audit outcome = ${{ steps.audit.outcome }}; see SARIF and docs/security/remaining-dependencies-2026-10.md' >> "$GITHUB_STEP_SUMMARY"
