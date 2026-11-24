@@ -304,6 +304,35 @@ defmodule CoopSubstrate.HistoryArchivePreflightTest do
     assert {:ok, %{outbox_undispatched: 0}} = verify(modified)
   end
 
+  test "required outbox values cannot be replaced with NULL under recomputed hashes", c do
+    for name <-
+          ~w(id event_key aggregate_type aggregate_id event_type payload status attempts available_at inserted_at updated_at) do
+      columns = table(c, "outbox_events")["columns"]
+      index = Enum.find_index(columns, &(&1["name"] == name))
+      rows = Enum.map(c.outbox_rows, &List.replace_at(&1, index, nil))
+      modified = table_bytes(c, "outbox_events", Fixture.binary_copy(rows))
+
+      assert {:error, {:null_outbox_field, ^name}} = verify(modified)
+    end
+  end
+
+  test "nullable outbox values and extra columns survive reordered columns", c do
+    columns =
+      Enum.reverse(table(c, "outbox_events")["columns"]) ++
+        [%{"name" => "future_metadata", "type" => "bytea"}]
+
+    # Pending delivery has no dispatch timestamp or last error. The added
+    # column is also nullable; the known required fields are located by name.
+    row = Enum.reverse(Fixture.outbox_row(1, "pending", nil)) ++ [nil]
+
+    modified =
+      c
+      |> table_bytes("outbox_events", Fixture.binary_copy([row]), %{"columns" => columns})
+      |> manifest(&Map.put(&1, "outbox", %{"table" => "outbox_events", "undispatched" => 1}))
+
+    assert {:ok, %{outbox_undispatched: 1}} = verify(modified)
+  end
+
   test "adopted.json cannot be coherently omitted from the file list", c do
     File.rm!(Path.join(c.dir, "files/adopted.json"))
 

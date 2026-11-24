@@ -68,12 +68,60 @@ defmodule CoopSubstrate.WriterFenceGateTest do
     assert {:error, :no_governance} = WriterFence.check(fence(), Gate.init())
   end
 
-  test "installation uses the exact fence order from canonical preflight evidence" do
-    order = fence()
-    assert :ok = WriterFence.check_preflight_order(order, %{fence_event_id: order.event_id})
+  test "a linked order must belong to the requested type, chapter and known writer" do
+    for writer <- ["spruce_goose", "eatsbot"] do
+      order = fence(writer)
+      assert :ok = WriterFence.check_order_scope(order, @chapter, writer)
+
+      for changed <- [
+            %{order | type: "LegacyHistoryArchived"},
+            %{order | chapter_id: "chapter-other"},
+            %{order | payload: %{"writer" => "different-writer", "reason" => "fixture"}}
+          ] do
+        assert {:error, :fence_order_mismatch} =
+                 WriterFence.check_order_scope(changed, @chapter, writer)
+      end
+
+      assert {:error, :fence_order_mismatch} =
+               WriterFence.check_order_scope(order, "chapter-other", writer)
+    end
+
+    assert {:error, :fence_order_mismatch} =
+             WriterFence.check_order_scope(fence("unknown"), @chapter, "unknown")
+  end
+
+  test "installation binds every consumed order identity field to canonical evidence" do
+    order = %{fence() | global_seq: 3}
+
+    verified = %{
+      chapter_id: @chapter,
+      writer: "spruce_goose",
+      fence_event_id: order.event_id,
+      fence_global_seq: 3
+    }
+
+    assert :ok = WriterFence.check_preflight_order(order, verified)
+
+    # Reusing the same envelope ID in a corrupt derived link is insufficient.
+    for changed <- [
+          %{order | event_id: "different-order"},
+          %{order | type: "LegacyHistoryArchived"},
+          %{order | chapter_id: "chapter-other"},
+          %{order | payload: %{"writer" => "eatsbot", "reason" => "fixture"}},
+          %{order | global_seq: 4},
+          %{order | global_seq: 3.0},
+          %{order | global_seq: nil}
+        ] do
+      assert {:error, :fence_order_mismatch} =
+               WriterFence.check_preflight_order(changed, verified)
+    end
 
     for evidence <- [
+          %{verified | chapter_id: "chapter-other"},
+          %{verified | writer: "eatsbot"},
+          %{verified | fence_global_seq: 4},
           %{fence_event_id: "different-order"},
+          %{fence_event_id: order.event_id},
           %{fence_event_id: nil},
           %{},
           :no_history_required
@@ -82,5 +130,14 @@ defmodule CoopSubstrate.WriterFenceGateTest do
     end
 
     assert :ok = WriterFence.check_preflight_order(fence("eatsbot"), :no_history_required)
+
+    assert {:error, :fence_order_mismatch} =
+             WriterFence.check_preflight_order(fence("unknown"), :no_history_required)
+
+    assert {:error, :fence_order_mismatch} =
+             WriterFence.check_preflight_order(
+               %{fence("eatsbot") | type: "LegacyHistoryArchived"},
+               :no_history_required
+             )
   end
 end

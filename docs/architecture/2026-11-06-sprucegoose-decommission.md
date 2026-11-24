@@ -61,8 +61,8 @@ Writers to fence: the live task-row writer, the `certified_events` /
 | --- | --- | --- |
 | Ledger coverage of retained paths | Lifecycle, todos, predecessor cycles, SOP versions, readiness, hierarchy and blueprints are on the ledger. *Met (2026-11-23):* `Blueprints.Applier` is replaced by `TaskBlueprintAppliedV1` (`mix coop.blueprint`); `Checks.HasRole` retires with the Ash resources it guards, ledger grants deciding instead; `Revise` is not migrated (owner decision, §4) | Each retained approval path admitted by a signed ledger event, with a refusal test |
 | Legacy task import | `SpruceGoose.Ledger` import receipts and baselines | Baseline events never overwrite existing ledger tasks |
-| Project owners | Backfill requires principal kind, operator grant and owner; the production inventory has not been accepted here | Every live project has an owner |
-| Dual-read parity | `ledger replay-status` | Only explained differences, such as the uncertified state moves of migration `20261021090000` |
+| Project owners | Authenticated, governance-signed reads list target projects and ownerless projects. Actual backfill appends principal-kind/grant/owner events; the production inventory has not been accepted here | Every live legacy project is mapped to its retained target or explicit retirement, and every retained project has an eligible accountable owner |
+| Dual-read parity | `ledger replay-status` checks legacy certified-to-row consistency and lag. A separate read-only source-to-TaskCore comparison is still required | Identify both source and target heads/snapshots, compare retained identities and fields, and explain every difference; the uncertified state moves of migration `20261021090000` are one known legacy discrepancy |
 | Signed fence | *Implemented, not ordered in production:* the CLI requires the archive directory, exact manifest digest and archive event ID. It runs strict preflight before signing; installation rechecks the archive and verified governance order. The admitted prefix must contain an archive before a new fence order. Statement triggers cover the inventoried database tables in one transaction, leaving `public.identity_native_sessions` and `public.schema_migrations` writable | A covered command cannot succeed through a row write or the old writer; failed admission changes no state. Existing installed order identity must agree. Configuration rollback is not a fence |
 | Replay proof | Not started | Replay after the fence reproduces the projections |
 
@@ -71,6 +71,25 @@ legacy writers quiesced and in-flight transactions settled; final history
 copied and recorded; every durable copy verified; fence; post-fence replay.
 Keep the source quiescent from the final snapshot through installation.
 Repeatable-read gives a consistent snapshot, not preservation of later commits.
+
+For inventory, the existing chapter routes are `GET /api/v1/chapters/:chapter_id/projects`
+and `GET /api/v1/chapters/:chapter_id/ownerless_projects`; they require authenticated,
+governance-signed reads. Reconcile them with the live legacy project inventory:
+an empty ownerless list alone cannot establish that every legacy project was
+migrated. The [ownerless controller](../../apps/task_host/lib/task_host/web/project_ownership_controller.ex)
+only lists; `mix coop.owner.backfill` signs and submits governance events and
+must not be used as an inventory or dry-run command.
+
+[`TaskProjector.status/0`](../../apps/spruce_goose/lib/spruce_goose/kernel/task_projector.ex)
+compares stored `replay_projections` with `workflow_tasks` and reports the
+`certified_events` lag. It does not compare them to the common ledger's
+[`TaskCore` projection](../../apps/coop_substrate/lib/coop_substrate/projections/tasks.ex).
+Retain a read-only comparison report with source database/snapshot and certified
+position, target canonical ledger head, reviewed identity mappings, retained
+task/hierarchy/owner/grant/DoD/TODO/dependency/SOP/artifact fields, and a disposition
+for every missing or different item. Counts and a successful legacy replay-status
+are useful supporting evidence, not cross-authority parity acceptance. No new
+comparison command or completed production comparison is claimed here.
 
 `mix coop.preflight_writer` is a read-only check of archived bytes and verified
 ledger records. It does not authorize cutover or establish production source

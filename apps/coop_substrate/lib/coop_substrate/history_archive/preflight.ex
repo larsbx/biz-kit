@@ -4,8 +4,9 @@ defmodule CoopSubstrate.HistoryArchive.Preflight do
 
   Unlike the generic exporter, this policy requires every retained table to be
   present. It checks the exact manifest digest, file coverage and contents,
-  binary COPY framing and counts, outbox state, and adopted SOP bytes. It never
-  opens a database, reads governance, signs an event, or installs a fence.
+  binary COPY framing and counts, required outbox values and state, and adopted
+  SOP bytes. It never opens a database, reads governance, signs an event, or
+  installs a fence.
 
   Success proves consistency of the inspected files only. The caller must bind
   the digest to admitted governance and the intended database. Keep the source
@@ -19,6 +20,10 @@ defmodule CoopSubstrate.HistoryArchive.Preflight do
   @schema "biz-kit.history-archive.v1"
   @tables ~w(actor_grants certified_events notes events ledger_import_receipts grandfathered_baselines outbox_events)
   @outbox_columns ~w(id event_key aggregate_type aggregate_id event_type payload status attempts available_at dispatched_at last_error inserted_at updated_at)
+  # 20260728131000_add_transactional_outbox: id is the primary key;
+  # explicit null: false fields and timestamps() are non-nullable. Only these
+  # two retained columns allow NULL; extra deployment columns keep their policy.
+  @outbox_not_null @outbox_columns -- ~w(dispatched_at last_error)
   @magic <<"PGCOPY\n", 255, "\r\n", 0>>
   @chunk_size 65_536
 
@@ -221,7 +226,16 @@ defmodule CoopSubstrate.HistoryArchive.Preflight do
       :invalid_outbox_columns
     )
 
-    %{status: status, dispatched: dispatched}
+    not_null =
+      columns
+      |> Enum.with_index()
+      |> Enum.reduce(%{}, fn {column, index}, required ->
+        if column["name"] in @outbox_not_null,
+          do: Map.put(required, index, column["name"]),
+          else: required
+      end)
+
+    %{status: status, dispatched: dispatched, not_null: not_null}
   end
 
   defp outbox_columns!(_), do: nil
@@ -239,6 +253,14 @@ defmodule CoopSubstrate.HistoryArchive.Preflight do
         Enum.reduce(0..(count - 1), %{}, fn index, state ->
           <<size::signed-big-32>> = exact!(io, 4)
           require!(size >= -1, {:invalid_copy, :field_size})
+
+          if outbox && size == -1 do
+            case outbox.not_null[index] do
+              nil -> :ok
+              name -> refuse({:null_outbox_field, name})
+            end
+          end
+
           copy_field!(io, index, size, outbox, state)
         end)
 

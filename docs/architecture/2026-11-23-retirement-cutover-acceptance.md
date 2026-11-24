@@ -46,10 +46,11 @@ change if an expected table legitimately does not exist.
 | Missing archive/manifest, malformed structure, corrupted or omitted file | Fail with an attributable error; no signing or database mutation |
 | Incorrect manifest digest, wrong chapter/writer/event, invalid ledger prefix | Fail; a syntactically valid SHA-256 or supplied JSON record is insufficient |
 | Missing/absent required table, malformed/truncated COPY, inconsistent rows/fields | Fail; file hashing alone cannot establish completeness |
-| Missing outbox payload/identity/retry fields, inconsistent row count or dispatch metadata | Fail even when file hashes were recomputed; an intact preserved backlog reports reconciliation still required |
+| Missing outbox payload/identity/retry columns or required non-null values, inconsistent row count or dispatch metadata | Fail even when file hashes were recomputed; an intact preserved backlog reports reconciliation still required |
 | New fence before any admitted archive | Admission refuses it; the rejected append leaves the ledger unchanged |
 | Archive changed between preflight and signing/install | The action's fresh check refuses it |
 | Existing database fence names a different selected order | Refuse; do not silently reuse unrelated installed evidence |
+| Derived fence order reuses the event ID with a different chapter, writer, type or sequence | Refuse before connecting to the legacy database; compare the consumed identity with canonical evidence |
 
 Pure validation tests use synthetic files and inert inputs without keys,
 `LogCase`, application boot or database connections. Separately authorized
@@ -66,18 +67,34 @@ MIX_ENV=test mix run --no-start scripts/retirement_preflight_acceptance.exs
 
 Add `--restore` with `RETIREMENT_TEST_DATABASE_URL` pointing at an explicitly
 disposable local PostgreSQL server on a nondefault port to run the seven-table
-binary COPY round trip. That test uses no governance records or fence. The
-entry point never invokes the normal `mix test` alias, which drops the configured
-event store, or the normal test helper. Signed admission and installation
-regressions remain in the normal isolated integration suite.
+binary COPY round trip and standalone reader checks. The latter reuse a
+committed signed non-governance vector to exercise the real native verifier,
+tamper refusals and pinned-head checks without generating a signature.
+The entry point never invokes the normal `mix test` alias, which drops the
+configured event store, or the normal test helper. Signed governance admission
+and installation regressions remain in the normal isolated integration suite.
+Consolidation now includes the same boot-free acceptance step against its
+disposable service; record the hosted result at the exact reviewed revision.
 
 ## 2. SpruceGoose operational sequence
 
 1. **Inventory and parity.** Identify chapter, source database/service and
-   reviewed source revision. Backfill every live project owner and explain
-   all dual-read differences. Map retained commands and consumers to the task
-   host. Preserve native sessions and their atomic revocation; `/mcp`, its
-   OAuth issuer and the explicitly discarded domains stay retired.
+   reviewed source revision. Inventory target projects and ownerless projects
+   through the existing authenticated, governance-signed chapter GET routes;
+   reconcile these with all live legacy projects. `mix coop.owner.backfill`
+   creates governance events and is not an inventory/dry-run command. Backfill
+   each retained project's eligible owner only under separate authorization.
+   Retain `ledger replay-status` as legacy certified-to-row consistency/lag
+   evidence, then compare the retained source identities and fields with the
+   TaskCore projection at identified source snapshot/certified position and
+   target canonical ledger head. Record reviewed identity mappings and every
+   missing/different item's disposition, including deliberate retirement;
+   neither matching counts nor legacy replay-status alone proves this parity.
+   The [checklist](2026-11-06-sprucegoose-decommission.md#2-authority-cutover)
+   identifies the existing implementation paths; no comparison tool is implied.
+   Map retained commands and consumers to the task host. Preserve native
+   sessions and their atomic revocation; `/mcp`, its OAuth issuer and the
+   explicitly discarded domains stay retired.
 2. **Settle and quiesce.** Stop new task-row, certified/ShadowEvents and
    actor-registry work from CLI/service and background producers. Drain outbox
    delivery, or assign every item that will be preserved a reconciliation
@@ -114,8 +131,8 @@ regressions remain in the normal isolated integration suite.
 | --- | --- |
 | Operator/reviewer, authorization reference, observation time | Pending |
 | Chapter; source host/port/cluster/database/service; application/build revision | Pending |
-| Target host, retained commands/consumers and owner backfill inventory | Pending |
-| Dual-read report and discrepancy dispositions | Pending |
+| Target host, retained commands/consumers, legacy-to-target project mapping and eligible owner inventory | Pending |
+| Legacy replay-status; separate retained-field comparison with source snapshot/certified position, target ledger head and discrepancy dispositions | Pending |
 | Quiescence start; writer inventory; in-flight completion evidence | Pending |
 | Archive directory/copy locations; manifest SHA-256; archive event ID | Pending |
 | Required-table inventory; original bytes/provenance/custody verification | Pending |

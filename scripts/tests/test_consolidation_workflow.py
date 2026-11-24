@@ -18,6 +18,7 @@ NODE = "actions/setup-node"
 WEB = "Test the web view's modules"
 PLAYWRIGHT = "Install Playwright and Chromium"
 BROWSER = "Test the workflow in a browser"
+RETIREMENT = "Test retirement preflight without application boot"
 OUTCOME = re.compile(r"steps\.([a-z_]+)\.outcome == 'success'")
 
 
@@ -79,7 +80,7 @@ class ConsolidationWorkflowTest(unittest.TestCase):
     def test_earlier_application_failure_still_runs_the_web_view(self):
         status, outcomes = self.simulate("Test Keel normative conformance")
         self.assertEqual(status, "failure")
-        self.assert_outcomes(outcomes, "success", WEB)
+        self.assert_outcomes(outcomes, "success", WEB, RETIREMENT)
         self.assert_outcomes(outcomes, "skipped", SPRUCE_DB, REGISTRY, BROWSER)
 
     def test_failing_suites_do_not_block_other_suites(self):
@@ -90,7 +91,7 @@ class ConsolidationWorkflowTest(unittest.TestCase):
 
     def test_failed_prerequisites_do_not_run_dependent_suites(self):
         for failure, dependent in [
-            (COMPILE, (SPRUCE_DB, TASK_HOST, REGISTRY)),
+            (COMPILE, (SPRUCE_DB, TASK_HOST, REGISTRY, RETIREMENT)),
             (SPRUCE_DB, (REGISTRY,)),
             (TASK_HOST, (PLAYWRIGHT, BROWSER)),
             (NODE, (WEB, PLAYWRIGHT, BROWSER)),
@@ -112,7 +113,36 @@ class ConsolidationWorkflowTest(unittest.TestCase):
     def test_cancelled_run_stops_acceptance(self):
         status, outcomes = self.simulate(cancelled_after=SPRUCE)
         self.assertEqual(status, "cancelled")
-        self.assert_outcomes(outcomes, "skipped", REGISTRY, WEB, BROWSER)
+        self.assert_outcomes(outcomes, "skipped", REGISTRY, WEB, BROWSER, RETIREMENT)
+
+    def test_retirement_acceptance_is_boot_free_and_uses_the_disposable_service(self):
+        steps = {step.get("name"): step for step in self.job["steps"]}
+        step = steps[RETIREMENT]
+        self.assertEqual(
+            step["if"], "${{ !cancelled() && steps.umbrella.outcome == 'success' }}"
+        )
+        self.assertEqual(
+            step["run"],
+            "mix run --no-start scripts/retirement_preflight_acceptance.exs --restore",
+        )
+        self.assertEqual(step.get("working-directory", "."), ".")
+        self.assertEqual(self.job["env"]["MIX_ENV"], "test")
+        self.assertEqual(
+            step["env"]["RETIREMENT_TEST_DATABASE_URL"],
+            "postgres://postgres:postgres@127.0.0.1:55473/postgres",
+        )
+        self.assertIn("55473:5432", self.job["services"]["postgres"]["ports"])
+
+    def test_retirement_acceptance_survives_other_failures_and_keeps_its_own_failure_red(self):
+        for failure in ["Test the common ledger", SPRUCE, BROWSER]:
+            with self.subTest(failure=failure):
+                status, outcomes = self.simulate(failure)
+                self.assertEqual(status, "failure")
+                self.assert_outcomes(outcomes, "success", RETIREMENT)
+
+        status, outcomes = self.simulate(RETIREMENT)
+        self.assertEqual(status, "failure")
+        self.assert_outcomes(outcomes, "failure", RETIREMENT)
 
     def test_failures_cannot_be_masked(self):
         self.assertNotIn("continue-on-error", self.job)

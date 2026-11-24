@@ -22,8 +22,9 @@ defmodule CoopSubstrate.WriterFence do
   A writer whose history is kept requires `archive`, `manifest_sha256` and
   `archive_event_id` options. `CoopSubstrate.HistoryArchive.preflight/3` reopens
   the files and matches that exact archive record in a verified ledger prefix.
-  Its selected fence event must equal the order used for installation. The
-  legacy three-argument API cannot bypass this check.
+  Its selected fence event must match the order's chapter, writer, identity,
+  and canonical position used for installation. The legacy three-argument
+  API cannot bypass this check.
 
   The archive's source hostname and database must match the actual connection
   options; the caller cannot override those expected labels. This is a label
@@ -108,13 +109,27 @@ defmodule CoopSubstrate.WriterFence do
   @doc "The admitted fence order for `writer` in `chapter`, if any."
   def order(chapter, writer) do
     with {:ok, stream} <- TypeRegistry.stream_id(@type_name, chapter, %{"writer" => writer}),
-         {:ok, [first | _]} <- Log.read_stream(stream) do
+         {:ok, [first | _]} <- Log.read_stream(stream),
+         :ok <- check_order_scope(first, chapter, writer) do
       {:ok, first}
     else
       {:ok, []} -> {:error, :not_ordered}
       error -> error
     end
   end
+
+  # A derived link stream is a locator, not proof that its first decoded
+  # record belongs to the requested order. Validate the scope for all writers.
+  @doc false
+  def check_order_scope(
+        %Envelope{type: @type_name, chapter_id: chapter, payload: %{"writer" => writer}},
+        chapter,
+        writer
+      )
+      when is_binary(chapter) and chapter != "" and is_map_key(@writers, writer),
+      do: :ok
+
+  def check_order_scope(_env, _chapter, _writer), do: {:error, :fence_order_mismatch}
 
   @doc """
   Install the fence on the legacy database `conn_opts` (Postgrex options),
@@ -168,14 +183,34 @@ defmodule CoopSubstrate.WriterFence do
   end
 
   @doc false
-  def check_preflight_order(%Envelope{payload: %{"writer" => writer}}, :no_history_required) do
-    if HistoryArchive.spec(writer) == nil,
+  def check_preflight_order(
+        %Envelope{type: @type_name, payload: %{"writer" => writer}},
+        :no_history_required
+      ) do
+    if Map.has_key?(@writers, writer) and HistoryArchive.spec(writer) == nil,
       do: :ok,
       else: {:error, :fence_order_mismatch}
   end
 
-  def check_preflight_order(%Envelope{event_id: expected}, %{fence_event_id: actual})
-      when is_binary(actual) and actual == expected,
+  # The envelope came from the link stream; only this independent evidence
+  # was selected from the verified canonical prefix. Match every identity
+  # field consumed by fence!/2 as well as the canonical position.
+  def check_preflight_order(
+        %Envelope{
+          type: @type_name,
+          event_id: id,
+          chapter_id: chapter,
+          global_seq: sequence,
+          payload: %{"writer" => writer}
+        },
+        %{
+          fence_event_id: id,
+          chapter_id: chapter,
+          writer: writer,
+          fence_global_seq: sequence
+        }
+      )
+      when is_binary(id) and id != "" and is_integer(sequence) and sequence > 0,
       do: :ok
 
   def check_preflight_order(_env, _evidence), do: {:error, :fence_order_mismatch}
