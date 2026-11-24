@@ -23,6 +23,7 @@ lake env leanchecker --fresh --verbose BizKitCommercialAdmission
 lake env leanchecker --fresh --verbose BizKitProcurementContract
 lake env leanchecker --fresh --verbose BizKitAgentTask
 lake env leanchecker --fresh --verbose BizKitDriverExclusivity
+lake env leanchecker --fresh --verbose BizKitScf
 bash check_inventory_fixtures.sh
 
 audit_sha=46024e005996495c65ef609368e11ab39c4222e3
@@ -36,7 +37,7 @@ cp lean-toolchain "$scratch/audit/lean-toolchain"
 
 # The audit selects declarations by defining MODULE, not their namespace.
 # Auditing only BizKitEventProofs would omit BizKitBundles and BizKitLeases.
-for root in BizKitLeases BizKitBundles BizKitDispatch BizKitDispatchSpatial BizKitEventProofs BizKitOutcomeAdmission BizKitInventory BizKitInventoryLocations BizKitCommerce BizKitCommercialSetoff BizKitCommercialAdmission BizKitProcurementContract BizKitAgentTask BizKitDriverExclusivity; do
+for root in BizKitLeases BizKitBundles BizKitDispatch BizKitDispatchSpatial BizKitEventProofs BizKitOutcomeAdmission BizKitInventory BizKitInventoryLocations BizKitCommerce BizKitCommercialSetoff BizKitCommercialAdmission BizKitProcurementContract BizKitAgentTask BizKitDriverExclusivity BizKitScf; do
   lake env "$scratch/audit/.lake/build/bin/axiom-audit" \
     --root "$root" --allow propext,Classical.choice,Quot.sound
 done

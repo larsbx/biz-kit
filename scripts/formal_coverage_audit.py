@@ -22,6 +22,25 @@ DEFAULT_STEPS = 6
 OBLIGATIONS = "formal/quint/obligations/"
 
 
+def parse_coverage(text):
+    """Reject ambiguous registries instead of silently discarding an artifact.
+
+    A text merge can add the same app key at two different locations without
+    conflicts. JSON's usual last-key-wins parsing would then hide one proof.
+    Apply this check to current and base registries before auditing or running
+    any listed Quint models.
+    """
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    return json.loads(text, object_pairs_hook=unique_object)
+
+
 def safe(root, item):
     p = Path(item)
     return not p.is_absolute() and ".." not in p.parts and (root / p).is_file()
@@ -117,8 +136,8 @@ def load_base(root, ref):
     if git("cat-file", "-e", f"{ref}:{COVERAGE}").returncode != 0:
         return None, None
     try:
-        return json.loads(git("show", f"{ref}:{COVERAGE}").stdout), None
-    except json.JSONDecodeError as error:
+        return parse_coverage(git("show", f"{ref}:{COVERAGE}").stdout), None
+    except ValueError as error:
         return None, f"unreadable ratchet base {ref}:{COVERAGE}: {error}"
 
 
@@ -129,7 +148,10 @@ def main():
     parser.add_argument("--quint-checks", action="store_true", help="print 'model main control invariant witness steps' lines")
     args = parser.parse_args()
     root = Path(args.root).resolve()
-    coverage = json.loads((root / COVERAGE).read_text(encoding="utf-8"))
+    try:
+        coverage = parse_coverage((root / COVERAGE).read_text(encoding="utf-8"))
+    except ValueError as error:
+        parser.error(f"unreadable {COVERAGE}: {error}")
     if args.quint_checks:
         for check in quint_checks(coverage):
             print(*check)

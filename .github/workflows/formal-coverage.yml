@@ -6,6 +6,7 @@ on:
       - "formal/**"
       - "proof_bank/**"
       - "apps/*/mix.exs"
+      - "apps/scf_core/**"
       - "scripts/formal_coverage_audit.py"
       - "scripts/tests/test_formal_coverage_audit.py"
       - ".github/workflows/formal-coverage.yml"
@@ -15,6 +16,7 @@ on:
       - "formal/**"
       - "proof_bank/**"
       - "apps/*/mix.exs"
+      - "apps/scf_core/**"
       - "scripts/formal_coverage_audit.py"
       - "scripts/tests/test_formal_coverage_audit.py"
       - ".github/workflows/formal-coverage.yml"
@@ -74,3 +76,9 @@ jobs:
           echo "$RUNNER_TEMP/bizkit-lean/bin" >> "$GITHUB_PATH"
       - name: Lean build, fresh kernel replay and all-module axiom audit
         run: bash formal/lean/check.sh
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3.4"
+          elixir-version: "1.19.0"
+      - name: Replay source-pinned SCF runtime observations in Lean
+        run: bash formal/lean/check_scf_correspondence.sh
