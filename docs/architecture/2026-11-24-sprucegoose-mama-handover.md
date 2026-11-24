@@ -44,15 +44,22 @@ shell there; this environment cannot reach either host.
 | M2 import rehearsal | Restore a fresh frozen Mama dump on the target, run the ledger import from it, compare | Imported counts equal M0's; each retained approval path admitted by a signed event with a refusal test (checklist §2); every live project has an owner; replay reproduces the projections | biz-kit, then owner on the host |
 | M3 consumers | Map every `sprucegoose` CLI command evergreen uses to a `mix coop.*` task or a task-host call (S4) | Each retained command has a mix task and a test; nothing an operator needs is CLI-only | biz-kit |
 | M4 worker | `verify_artifact` on the shared worker (S3), from durable intent with receipts | A permit is consumed exactly once across a worker restart; outcomes match Oban's for the same permits | biz-kit |
-| M5 switch | Stop writes on Mama; drain `outbox_events` and `oban_jobs`; final dump; import the delta; then fence: governance signs `LegacyWriterFenced` for `spruce_goose` and `mix coop.fence_writer spruce_goose` installs it on Mama's database. Evergreen's bridge is disabled | A write to Mama's database is refused after the fence (`WriterFenceTest`, spruce_goose case); M0 counts plus the delta equal the ledger's; rollback documented as an authority move that keeps every new ledger event | Owner, on mama and the target |
-| M6 retire | Archive Mama's database and `certified_events` bytes read-only with digests (§3); remove `apps/spruce_goose`, its release wiring and settings from biz-kit; archive `larsbx/sprucegoose` | Proof Bank, formal coverage and CI updated as for Eatsbot R6 | biz-kit, then owner |
+| M5 switch | Stop writes on Mama; drain `outbox_events` and `oban_jobs`; final dump; import the delta. Export and verify the final complete history archive (§3), retain it durably, and admit governance's `LegacyHistoryArchived` record before any fence order. Then governance signs `LegacyWriterFenced` for `spruce_goose`; `mix coop.fence_writer spruce_goose` verifies the selected archive and installs the fence on Mama's database. Disable Evergreen's bridge and activate the successor only after fence commit | Archive preflight matches the manifest digest, exact archive event, chapter and writer in the verified ledger prefix, before the first fence. A write to Mama's database is refused after the fence (`WriterFenceTest`, spruce_goose case); M0 counts plus the delta equal the ledger's; rollback preserves every new ledger event | Owner, on mama and the target |
+| M6 retire | Reverify durable custody of M5's archive and retained `certified_events` bytes; remove `apps/spruce_goose`, its release wiring and settings from biz-kit; archive `larsbx/sprucegoose` | M5's archive remains readable and matches its recorded digest; post-fence restart/replay/recovery evidence is recorded; Proof Bank, formal coverage and CI updated as for Eatsbot R6 | biz-kit, then owner |
+
+The [cutover acceptance runbook](2026-11-23-retirement-cutover-acceptance.md)
+defines the archive, source-identity, quiescence and outbox evidence for M5.
+Pass the archive directory, manifest digest and archive event ID to the fence
+command. M6 retains and rechecks this evidence; it is not the first archive.
 
 ## Ready now
 
 - **The fence covers SpruceGoose.** `CoopSubstrate.WriterFence` admits
   `spruce_goose` (one order fences the database its three writers share: task
   rows, certified events, actor registry), tested with SpruceGoose's tables and
-  per-writer orders.
+  per-writer orders after a verified archive. The task host's native sessions
+  and schema migrations remain writable; a recorded digest alone does not
+  authorize installation.
 - **M0's check.** `scripts/sprucegoose-mama-readonly.sql`, run against a
   database migrated from `apps/spruce_goose`: every section resolves, and it
   ends in `ROLLBACK`.

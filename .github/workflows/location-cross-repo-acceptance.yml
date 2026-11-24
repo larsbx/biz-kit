@@ -46,11 +46,12 @@ jobs:
       - uses: actions/checkout@v7
       # Nightly checks keep tracking d-patch main; PR/push checks pin the known
       # client for reproducibility. Manual runs may name another explicit ref.
+      # This pin includes d-patch#42's offline readiness and observer diagnostics.
       # "Start this server revision" prints both resolved commits.
       - uses: actions/checkout@v7
         with:
           repository: larsbx/d-patch
-          ref: ${{ inputs.d_patch_ref || (github.event_name == 'schedule' && 'main') || 'abcca4c98c13725e809aa94bd418e633a8666700' }}
+          ref: ${{ inputs.d_patch_ref || (github.event_name == 'schedule' && 'main') || '60f14d2a2c4358385147dbb68ec50fa64ee1aaeb' }}
           path: d-patch
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }

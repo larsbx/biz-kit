@@ -240,7 +240,7 @@ defmodule CoopSubstrate.AgentLocalWorkerTest do
 
   defp create(c) do
     result = AgentLocalWorker.request(c.store, c.create)
-    assert result.status == 0
+    assert result.status == 0, provider_diagnostic(result)
     assert result.response["schema"] == "bizkit.agent-local-worker-receipt.v1"
     assert result.response["execution_started"]
     assert result.response["work_count"] == 1
@@ -260,12 +260,19 @@ defmodule CoopSubstrate.AgentLocalWorkerTest do
     result =
       AgentLocalWorker.request(c.store, AgentLocalWorker.command(c.store, c.effect, operation))
 
-    assert result.status == 0
+    assert result.status == 0, provider_diagnostic(result)
     assert result.response["schema"] == "bizkit.agent-local-worker-receipt.v1"
     assert result.response["operation"] == operation
     assert result.response["store_id"] == c.store.store_id
     assert result.response["effect_id"] == c.effect
     result
+  end
+
+  defp provider_diagnostic(result) do
+    error = if is_map(result.response), do: result.response["error"], else: :invalid_response
+
+    "local worker provider error=#{inspect(error, limit: 5, printable_limit: 128)}; " <>
+      "stderr=#{inspect(result.stderr, limit: 5, printable_limit: 512)}"
   end
 
   defp cancel(c) do

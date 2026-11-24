@@ -1,7 +1,7 @@
 defmodule CoopSubstrate.WriterFenceTest do
   use CoopSubstrate.LogCase, async: false
 
-  alias CoopSubstrate.{Log, WriterFence}
+  alias CoopSubstrate.{HistoryArchive, HistoryArchiveFixture, Log, WriterFence}
 
   @chapter "chapter-genesis"
 
@@ -17,27 +17,13 @@ defmodule CoopSubstrate.WriterFenceTest do
         })
       )
 
-    {:ok, admin} = raw_conn()
-    db = "writer_fence_#{System.unique_integer([:positive])}"
-    Postgrex.query!(admin, "CREATE DATABASE #{db}", [])
-    opts = Keyword.put(admin_opts(), :database, db)
-    {:ok, legacy} = Postgrex.start_link(opts)
+    {legacy, opts} = CoopSubstrate.LegacyDb.create!("writer_fence")
     Postgrex.query!(legacy, "CREATE TABLE orders (id int PRIMARY KEY, state text)", [])
     Postgrex.query!(legacy, "CREATE SCHEMA deliveries", [])
     Postgrex.query!(legacy, "CREATE TABLE deliveries.history (id int)", [])
     Postgrex.query!(legacy, "INSERT INTO orders VALUES (1, 'placed')", [])
 
-    on_exit(fn ->
-      {:ok, admin} = raw_conn()
-      Postgrex.query!(admin, "DROP DATABASE IF EXISTS #{db} WITH (FORCE)", [])
-    end)
-
     %{gov: gov, legacy: legacy, opts: opts, signer: Map.put(gov.signer, :seed, gov.seed)}
-  end
-
-  defp admin_opts do
-    Application.fetch_env!(:coop_substrate, CoopSubstrate.EventStore)
-    |> Keyword.take([:hostname, :port, :username, :password])
   end
 
   defp refused?(conn, sql) do
@@ -73,6 +59,28 @@ defmodule CoopSubstrate.WriterFenceTest do
              WriterFence.declare("chapter-other", "eatsbot", "x", signer)
 
     assert Log.head() == head
+  end
+
+  test "archive-before-fence is enforced inside an atomic admission batch", %{gov: gov} do
+    archive =
+      signed_event(gov, "LegacyHistoryArchived", %{
+        "writer" => "spruce_goose",
+        "manifest_sha256" => String.duplicate("a", 64)
+      })
+
+    fence =
+      signed_event(gov, "LegacyWriterFenced", %{
+        "writer" => "spruce_goose",
+        "reason" => "batch ordering fixture"
+      })
+
+    head = Log.head()
+    assert {:error, {:reject, 0, :history_not_archived}} = Log.append([fence, archive])
+    assert Log.head() == head
+    assert {:error, :not_ordered} = WriterFence.order(@chapter, "spruce_goose")
+
+    assert {:ok, [recorded_archive, recorded_fence]} = Log.append([archive, fence])
+    assert recorded_archive.global_seq < recorded_fence.global_seq
   end
 
   test "without a ledger order nothing is installed and writes go on", %{legacy: l, opts: opts} do
@@ -113,6 +121,166 @@ defmodule CoopSubstrate.WriterFenceTest do
     Postgrex.query!(l, "CREATE TABLE later (id int)", [])
     assert {:ok, %{tables: 4}} = WriterFence.install(@chapter, "eatsbot", opts)
     assert refused?(l, "INSERT INTO later VALUES (1)")
+  end
+
+  test "SpruceGoose's fence leaves the task host's tables writable, and a re-run frees them",
+       %{legacy: l, opts: opts, signer: signer} do
+    for sql <- [
+          "CREATE TABLE identity_native_sessions (token_hash bytea PRIMARY KEY)",
+          "CREATE TABLE schema_migrations (version bigint PRIMARY KEY)"
+        ],
+        do: Postgrex.query!(l, sql, [])
+
+    # An earlier, unscoped fence had put its trigger on an exempt table.
+    Postgrex.query!(
+      l,
+      "CREATE FUNCTION biz_kit_refuse_fenced_write() RETURNS trigger LANGUAGE plpgsql AS " <>
+        "$$ BEGIN RAISE EXCEPTION 'fenced' USING ERRCODE = 'insufficient_privilege'; END $$",
+      []
+    )
+
+    Postgrex.query!(
+      l,
+      "CREATE TRIGGER biz_kit_writer_fence BEFORE INSERT ON identity_native_sessions " <>
+        "FOR EACH STATEMENT EXECUTE FUNCTION biz_kit_refuse_fenced_write()",
+      []
+    )
+
+    root = Path.join(System.tmp_dir!(), "fence-history-#{System.unique_integer([:positive])}")
+    files = HistoryArchiveFixture.provenance_files!(root)
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    for table <- HistoryArchive.spec("spruce_goose").tables do
+      columns =
+        if table == "outbox_events",
+          do: HistoryArchiveFixture.outbox_schema(),
+          else: "id int PRIMARY KEY, payload bytea"
+
+      Postgrex.query!(l, "CREATE TABLE #{table} (#{columns})", [])
+    end
+
+    Postgrex.query!(
+      l,
+      "INSERT INTO outbox_events " <>
+        "(id, event_key, aggregate_type, aggregate_id, event_type, payload, status, attempts, " <>
+        "available_at, dispatched_at, inserted_at, updated_at) VALUES " <>
+        "('00000000-0000-0000-0000-000000000001', 'task:one', 'task', 'one', 'task.changed', " <>
+        "'{}', 'dispatched', 1, now(), now(), now(), now())",
+      []
+    )
+
+    dir = Path.join(root, "archive")
+    export_opts = Keyword.put_new(opts, :hostname, "localhost")
+
+    assert {:ok, %{manifest_sha256: digest}} =
+             HistoryArchive.export("spruce_goose", export_opts, dir, files: files)
+
+    assert {:ok, [archived]} = HistoryArchive.declare(@chapter, "spruce_goose", digest, signer)
+    {:ok, _} = WriterFence.declare(@chapter, "spruce_goose", "legacy writer cut over", signer)
+
+    archive_opts = [archive: dir, manifest_sha256: digest, archive_event_id: archived.event_id]
+
+    assert {:error, :archive_verification_required} =
+             WriterFence.install(@chapter, "spruce_goose", opts)
+
+    assert {:error, _} =
+             WriterFence.install(
+               @chapter,
+               "spruce_goose",
+               opts,
+               Keyword.put(archive_opts, :archive, Path.join(root, "missing"))
+             )
+
+    notes = Path.join(dir, "tables/notes.pgcopy")
+    intact_notes = File.read!(notes)
+    File.write!(notes, "corrupt", [:append])
+    assert {:error, _} = WriterFence.install(@chapter, "spruce_goose", opts, archive_opts)
+    File.write!(notes, intact_notes)
+
+    expected_source = %{"hostname" => export_opts[:hostname], "database" => opts[:database]}
+
+    assert {:error, {:archive_source_mismatch, _, _}} =
+             WriterFence.install(
+               @chapter,
+               "spruce_goose",
+               Keyword.put(opts, :database, "wrong_archive_target"),
+               Keyword.put(archive_opts, :expected_source, expected_source)
+             )
+
+    assert %{rows: [[nil]]} = Postgrex.query!(l, "SELECT to_regclass('biz_kit_writer_fence')", [])
+
+    # Seven retained tables, orders, deliveries.history and the fence's own
+    # table are covered; the two task-host exemptions remain writable.
+    assert {:ok, %{tables: 10, archive_verification: %{manifest_sha256: ^digest}}} =
+             WriterFence.install(@chapter, "spruce_goose", opts, archive_opts)
+
+    assert {:ok, %{tables: 10}} =
+             WriterFence.install(@chapter, "spruce_goose", opts, archive_opts)
+
+    assert refused?(l, "INSERT INTO orders VALUES (2, 'placed')")
+    assert refused?(l, "DELETE FROM biz_kit_writer_fence")
+
+    assert {:ok, _} =
+             Postgrex.query(l, "INSERT INTO identity_native_sessions VALUES ('\\x01')", [])
+
+    assert {:ok, _} =
+             Postgrex.query(l, "INSERT INTO schema_migrations VALUES (20261021120000)", [])
+
+    assert WriterFence.exempt("eatsbot") == []
+  end
+
+  test "a conflicting database fence record is refused without changing triggers or rows", %{
+    legacy: legacy,
+    opts: opts,
+    signer: signer
+  } do
+    {:ok, _} = WriterFence.declare(@chapter, "eatsbot", "cut over", signer)
+    {:ok, order} = WriterFence.order(@chapter, "eatsbot")
+
+    Postgrex.query!(
+      legacy,
+      "CREATE TABLE public.biz_kit_writer_fence (" <>
+        "writer text PRIMARY KEY, chapter_id text NOT NULL, event_id text NOT NULL, " <>
+        "fenced_at timestamptz NOT NULL DEFAULT now())",
+      []
+    )
+
+    for {chapter, event} <- [{"chapter-other", order.event_id}, {@chapter, "other-order"}] do
+      Postgrex.query!(
+        legacy,
+        "INSERT INTO public.biz_kit_writer_fence (writer, chapter_id, event_id) " <>
+          "VALUES ('eatsbot', $1, $2) ON CONFLICT (writer) DO UPDATE " <>
+          "SET chapter_id = EXCLUDED.chapter_id, event_id = EXCLUDED.event_id",
+        [chapter, event]
+      )
+
+      assert {:error,
+              {:fence_order_conflict,
+               %{
+                 writer: "eatsbot",
+                 expected: %{chapter_id: @chapter, event_id: expected_event},
+                 recorded: [[^chapter, ^event]]
+               }}} = WriterFence.install(@chapter, "eatsbot", opts)
+
+      assert expected_event == order.event_id
+
+      assert %{rows: [[^chapter, ^event]]} =
+               Postgrex.query!(
+                 legacy,
+                 "SELECT chapter_id, event_id FROM public.biz_kit_writer_fence " <>
+                   "WHERE writer = 'eatsbot'",
+                 []
+               )
+
+      assert %{rows: [[0]]} =
+               Postgrex.query!(
+                 legacy,
+                 "SELECT count(*) FROM pg_trigger WHERE tgname = 'biz_kit_writer_fence'",
+                 []
+               )
+
+      assert {:ok, _} = Postgrex.query(legacy, "UPDATE orders SET state = 'still writable'", [])
+    end
   end
 
   test "a write in flight at cutover commits before the fence; none after it",
@@ -171,9 +339,7 @@ defmodule CoopSubstrate.WriterFenceTest do
         })
       )
 
-    url =
-      "postgres://#{URI.encode_www_form(opts[:username])}:#{URI.encode_www_form(opts[:password] || "")}" <>
-        "@#{opts[:hostname]}:#{opts[:port] || 5432}/#{opts[:database]}"
+    url = CoopSubstrate.LegacyDb.url(opts)
 
     run =
       &Mix.Tasks.Coop.FenceWriter.run([
@@ -213,9 +379,46 @@ defmodule CoopSubstrate.WriterFenceTest do
     assert {:error, :not_ordered} = WriterFence.install(@chapter, "spruce_goose", opts)
     refute refused?(l, "UPDATE workflow_tasks SET state = 'started'")
 
-    {:ok, _} = WriterFence.declare(@chapter, "spruce_goose", "Mama handover", signer)
-    assert {:ok, %{tables: tables}} = WriterFence.install(@chapter, "spruce_goose", opts)
-    assert tables >= 7
+    assert {:error, {:reject, 0, :history_not_archived}} =
+             WriterFence.declare(@chapter, "spruce_goose", "Mama handover", signer)
+
+    root = Path.join(System.tmp_dir!(), "mama-history-#{System.unique_integer([:positive])}")
+    files = HistoryArchiveFixture.provenance_files!(root)
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    # Preserve the certified-events table above and export every other required
+    # history table from the same disposable source database.
+    for table <- HistoryArchive.spec("spruce_goose").tables -- ["certified_events"] do
+      columns =
+        if table == "outbox_events",
+          do: HistoryArchiveFixture.outbox_schema(),
+          else: "id int PRIMARY KEY, payload bytea"
+
+      Postgrex.query!(l, "CREATE TABLE #{table} (#{columns})", [])
+    end
+
+    dir = Path.join(root, "archive")
+    export_opts = Keyword.put_new(opts, :hostname, "localhost")
+
+    assert {:ok, %{manifest_sha256: digest}} =
+             HistoryArchive.export("spruce_goose", export_opts, dir, files: files)
+
+    assert {:ok, [archived]} = HistoryArchive.declare(@chapter, "spruce_goose", digest, signer)
+
+    assert {:ok, [fenced]} =
+             WriterFence.declare(@chapter, "spruce_goose", "Mama handover", signer)
+
+    assert archived.global_seq < fenced.global_seq
+
+    assert {:error, :archive_verification_required} =
+             WriterFence.install(@chapter, "spruce_goose", opts)
+
+    archive_opts = [archive: dir, manifest_sha256: digest, archive_event_id: archived.event_id]
+
+    # Seven retained tables, three other Mama tables, the two setup tables
+    # and the fence's own record are all protected by the same order.
+    assert {:ok, %{tables: 13, archive_verification: %{manifest_sha256: ^digest}}} =
+             WriterFence.install(@chapter, "spruce_goose", opts, archive_opts)
 
     for sql <- [
           "UPDATE workflow_tasks SET state = 'completed'",
