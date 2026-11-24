@@ -22,7 +22,9 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-        ports: [5432:5432]
+        # The guarded retirement runner requires an explicit nondefault
+        # loopback endpoint; both host ports reach this disposable service.
+        ports: [5432:5432, 55473:5432]
         options: >-
           --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 10s
@@ -389,6 +391,27 @@ jobs:
           apps/spruce_goose/test/actors_test.exs
           apps/spruce_goose/test/actors_separate_sessions_test.exs
           apps/spruce_goose/test/shadow_event_append_test.exs
+          apps/coop_substrate/lib/coop_substrate/database_url.ex
+          apps/coop_substrate/lib/coop_substrate/history_archive.ex
+          apps/coop_substrate/lib/coop_substrate/history_archive/governance.ex
+          apps/coop_substrate/lib/coop_substrate/history_archive/ledger_reader.ex
+          apps/coop_substrate/lib/coop_substrate/history_archive/preflight.ex
+          apps/coop_substrate/lib/coop_substrate/projections/admission_gate.ex
+          apps/coop_substrate/lib/coop_substrate/writer_fence.ex
+          apps/coop_substrate/lib/mix/tasks/coop.archive_writer.ex
+          apps/coop_substrate/lib/mix/tasks/coop.fence_writer.ex
+          apps/coop_substrate/lib/mix/tasks/coop.preflight_writer.ex
+          apps/coop_substrate/test/history_archive_boundary_test.exs
+          apps/coop_substrate/test/history_archive_governance_test.exs
+          apps/coop_substrate/test/history_archive_preflight_test.exs
+          apps/coop_substrate/test/history_archive_restore_test.exs
+          apps/coop_substrate/test/history_archive_test.exs
+          apps/coop_substrate/test/support/history_archive_fixture.ex
+          apps/coop_substrate/test/support/legacy_db.ex
+          apps/coop_substrate/test/writer_fence_gate_test.exs
+          apps/coop_substrate/test/writer_fence_test.exs
+          scripts/retirement_preflight_acceptance.exs
+          scripts/tests/retirement_ledger_reader_test.exs
       # Dispatch's unit tier: no PostGIS here, so the integration tier stays
       # local (`mix test --include integration`). The contract check keeps
       # apps/dispatch/contracts/openapi.json, which the field app is held to,
@@ -463,6 +486,20 @@ jobs:
         if: ${{ !cancelled() && steps.browser_setup.outcome == 'success' }}
         working-directory: apps/task_host
         run: mix test --only browser
+      # Keep signed retirement acceptance observable after unrelated failures.
+      # Fixture keys and fences affect only this job's disposable databases.
+      - name: Test signed retirement archive and fence boundaries
+        if: ${{ !cancelled() && steps.umbrella.outcome == 'success' }}
+        working-directory: apps/coop_substrate
+        run: mix test test/history_archive_test.exs test/writer_fence_test.exs --trace --seed 1
+      # Run in a fresh VM without app.start or the destructive mix test alias.
+      # The runner creates/drops only its own scratch databases and exercises
+      # the standalone read-only ledger client as well as binary COPY restore.
+      - name: Test retirement preflight without application boot
+        if: ${{ !cancelled() && steps.umbrella.outcome == 'success' }}
+        env:
+          RETIREMENT_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55473/postgres
+        run: mix run --no-start scripts/retirement_preflight_acceptance.exs --restore
 
   workflow-regression:
     runs-on: ubuntu-24.04

@@ -16,7 +16,9 @@ defmodule Mix.Tasks.Coop.ArchiveWriter do
       mix coop.archive_writer --verify DIR [--chapter C]
 
   Re-hashes an archive against its manifest and, with `--chapter`, checks that
-  the ledger records its digest.
+  the ledger records its digest. This generic check permits absent tables;
+  cutover additionally requires `mix coop.preflight_writer` with the selected
+  archive event ID and manifest digest. Retain that receipt outside the archive.
   """
 
   use Mix.Task
@@ -92,7 +94,8 @@ defmodule Mix.Tasks.Coop.ArchiveWriter do
     Mix.shell().info("""
     Record the history archive of #{writer} in chapter #{chapter}, signed by governance key #{signer.key_id}:
       manifest sha256  #{digest}
-    Its fence can then be installed. The record grants no authority.
+    Run coop.preflight_writer before ordering or installing its fence.
+    The record grants no authority and does not certify file completeness.
     """)
 
     unless opts[:yes] || Mix.shell().yes?("Sign and append?"),
