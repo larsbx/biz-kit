@@ -1040,9 +1040,9 @@
       "runtime_conformance": "not_established",
       "registered_at_sha": "d2f293fe6abb9aa8ea512160af02e1cd07645d14",
       "evidence_git_blobs": {
-        "apps/task_host/lib/task_host/web/command_controller.ex": "40f24af1b2898c8811b1fd4b5e6dca219a3bc7c6",
-        "apps/task_host/lib/task_host/web/requests.ex": "67111e3e64dcb8ef3f8d8b8233d8bce0d3b1a8f2",
-        "apps/task_host/lib/task_host/web/auth_controller.ex": "22173f86d570815c3a164383bb9ab4e5565b86f3",
+        "apps/task_host/lib/task_host/web/command_controller.ex": "ef903f9035621b1cce1f76a6b3c4e411e43765e3",
+        "apps/task_host/lib/task_host/web/requests.ex": "997a16f3bed78d8cfafc1018af9d638c6618c005",
+        "apps/task_host/lib/task_host/web/auth_controller.ex": "2d0be453b399859c0974c2420815f512a1ed56c7",
         "apps/task_host/test/task_host/web/command_test.exs": "a7fbe14b7ed5ce6aa45cb942a310dba66c4c41f9"
       }
     }
@@ -1292,6 +1292,19 @@
       "registered": [],
       "refreshed_paths": [
         "apps/dispatch/lib/dispatch/operations/board.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "bcc7f1ca45dab5756162978717b7d396172a9b22",
+      "date": "2026-11-25",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [],
+      "refreshed_paths": [
+        "apps/task_host/lib/task_host/web/auth_controller.ex",
+        "apps/task_host/lib/task_host/web/command_controller.ex",
+        "apps/task_host/lib/task_host/web/requests.ex"
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
