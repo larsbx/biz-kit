@@ -252,8 +252,7 @@ defmodule ProcurementAcceptance.DispatchPeer do
   end
 
   defp trust!(origin, ca_file) do
-    {:ok, %{default_pool_config: %{conn_opts: connection}}} =
-      Registry.meta(Dispatch.Finch, :config)
+    connection = Dispatch.Application.finch_connection_options()
 
     transport = Keyword.fetch!(connection, :transport_opts)
     ensure!(Keyword.fetch!(transport, :verify) == :verify_peer)
