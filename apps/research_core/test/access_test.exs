@@ -1,5 +1,6 @@
 defmodule ResearchCore.AccessTest do
   use ExUnit.Case, async: true
+  require Bitwise
 
   alias ResearchCore.Access
 
