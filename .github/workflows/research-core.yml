@@ -1,0 +1,57 @@
+name: FieldWitness research-core acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'apps/research_core/**'
+      - 'docs/architecture/2026-11-27-fieldwitness-biz-kit-boundary.md'
+      - '.github/workflows/research-core.yml'
+      - 'README.md'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/research_core/**'
+      - 'docs/architecture/2026-11-27-fieldwitness-biz-kit-boundary.md'
+      - '.github/workflows/research-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pure-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Pin source revision
+        run: git show --no-patch --format='source=%H%nsource_tree=%T'
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3.4'
+          elixir-version: '1.19.0'
+      - name: Compile, test and format the inert core
+        working-directory: apps/research_core
+        run: |
+          mix compile --warnings-as-errors
+          mix test --no-start
+          mix format --check-formatted
+      - name: Verify portable package outside umbrella
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fieldwitness"
+          cp -R apps/research_core "$RUNNER_TEMP/fieldwitness/research_core"
+          cd "$RUNNER_TEMP/fieldwitness/research_core"
+          mix compile --warnings-as-errors
+          mix test --no-start
+      - name: Pure core must have no writer, transport or external dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e apps/research_core/config
+          test ! -e apps/research_core/priv/repo
+          ! grep -R -nE '(Log\.append|HTTPoison|Req\.|Ecto\.Repo|GenServer\.start_link|System\.cmd|File\.write)' apps/research_core/lib/

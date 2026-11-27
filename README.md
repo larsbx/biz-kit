@@ -38,6 +38,7 @@ Shared apps developed in this umbrella:
 | App | Path | Role |
 | --- | --- | --- |
 | `task_core` | `apps/task_core` | Dependency-free task/workflow rules and command admission |
+| `research_core` | `apps/research_core` | Pure, inert FieldWitness narrator/community release-eligibility kernel (no live archive or funding) |
 | `agent_core` | `apps/agent_core` | Dependency-free, agent/framework-neutral execution port and immutable execution-profile checks; no worker SDK or business writer |
 | `commerce_core` | `apps/commerce_core` | Commercial pricing, merchant-scoped catalog projection and read-only Eatsbot adapter |
 | `inventory_core` | `apps/inventory_core` | Pure scoped stock, reservations, transfers and deterministic replay (no live writer) |
