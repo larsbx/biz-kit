@@ -52,7 +52,7 @@ jobs:
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Record the actual source and prepare its isolated dependency closure
@@ -82,7 +82,7 @@ jobs:
           end
           EOF
           printf '[inputs: []]\n' > "$AGENT_LAUNCH_STAGE/.formatter.exs"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Verify the independent durable reference receiver
@@ -199,7 +199,7 @@ jobs:
             | tee "$AGENT_LAUNCH_STAGE/admission-verify.log"
       - name: Retain revision and complete acceptance logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agentcore-signed-launch-${{ github.event.pull_request.head.sha || github.sha }}
           path: |

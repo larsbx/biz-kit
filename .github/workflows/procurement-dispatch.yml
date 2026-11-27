@@ -56,13 +56,13 @@ jobs:
       DATABASE_URL: ecto://dispatch:dispatch@127.0.0.1:5432/dispatch_test
       PROCUREMENT_DISPATCH_ACCEPTANCE: disposable-local-postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
-      - uses: dtolnay/rust-toolchain@1.91.1
+      - uses: dtolnay/rust-toolchain@1.120.0
       - name: Match backup and restore clients to PostgreSQL 16
         run: |
           sudo apt-get update
@@ -73,7 +73,7 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE ROLE dispatch LOGIN SUPERUSER PASSWORD 'dispatch';"
       - name: Source courier receipts for procurement and restaurant orders, plus packaged procurement
         run: bash scripts/test-procurement-dispatch.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: procurement-dispatch-${{ env.SOURCE_REVISION }}

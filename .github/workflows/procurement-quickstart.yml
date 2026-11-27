@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
@@ -85,7 +85,7 @@ jobs:
           git rev-parse HEAD > .artifacts/procurement-quickstart-controls/revision.txt
           bash -n scripts/procurement-quickstart.sh
           python3 -m unittest discover -s tests/procurement_mvp -p test_quickstart.py -v 2>&1 | tee .artifacts/procurement-quickstart-controls/tests.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: procurement-quickstart-controls-${{ env.SOURCE_REVISION }}
@@ -96,13 +96,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_REVISION }}
           persist-credentials: false
       - name: Install isolated tools and execute the exact committed application
         run: bash scripts/procurement-quickstart.sh run
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: procurement-quickstart-${{ env.SOURCE_REVISION }}

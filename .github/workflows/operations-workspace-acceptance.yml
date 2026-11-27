@@ -33,10 +33,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: node desktop/tools/sync-task-tiles.mjs --check
@@ -65,7 +65,7 @@ jobs:
       SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Record exact source revision
@@ -137,7 +137,7 @@ jobs:
           test/task_host/web/run_readiness_test.exs
           test/task_host/web/plugin_bridge_test.exs
           test/task_host/web/execution_test.exs
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Install pinned browser

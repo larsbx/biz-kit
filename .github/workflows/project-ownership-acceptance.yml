@@ -35,7 +35,7 @@ jobs:
       SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Report exact acceptance revision
@@ -74,7 +74,7 @@ jobs:
       - name: Signed ownership HTTP acceptance
         working-directory: apps/task_host
         run: mix test test/task_host/web/project_ownership_test.exs test/task_host/web/administration_test.exs
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Pure browser contracts
