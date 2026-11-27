@@ -186,6 +186,7 @@ jobs:
             test/dispatch/operations/board_concurrency_test.exs \
             test/dispatch/operations/board_driver_exclusivity_test.exs \
             test/dispatch/operations/board_authority_concurrency_test.exs \
+            test/dispatch/operations/board_authority_expiry_test.exs \
             test/dispatch/operations/board_grant_concurrency_test.exs \
             test/dispatch/fleet_test.exs \
             test/dispatch/fleet/assignment_policy_test.exs \
@@ -195,3 +196,9 @@ jobs:
             test/dispatch/operations/location_work_test.exs \
             test/dispatch/restaurant_delivery_test.exs \
             test/dispatch_web/operations_controller_test.exs
+      # Issue #296 has not chosen when time-bounded authority must hold. This
+      # pins what the merged runtime does, so a change of behaviour is a
+      # reviewed edit here. It is a characterization, not an accepted policy.
+      - name: Characterize authority lapse during a blocked activation (policy undecided)
+        working-directory: apps/dispatch
+        run: mix test --include temporal_policy:admission test/dispatch/operations/board_authority_expiry_test.exs

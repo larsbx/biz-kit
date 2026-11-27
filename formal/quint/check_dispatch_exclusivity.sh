@@ -24,3 +24,7 @@ done
 
 # Additional E3 scenarios use five dynamically planned assignment IDs and two Users.
 bash check_dispatch_e3.sh
+
+# Issue #296: admission-time versus commit-time authority across the index wait.
+# A policy matrix, not a selected policy.
+bash check_dispatch_e3_authority.sh
