@@ -59,8 +59,7 @@ defmodule Dispatch.HTTPTransportTest do
   test "the same verified TLS options reject a trusted certificate for another hostname" do
     {port, server, certificates} = tls_server()
 
-    {:ok, %{default_pool_config: %{conn_opts: connection}}} =
-      Registry.meta(Dispatch.Finch, :config)
+    connection = Dispatch.Application.finch_connection_options()
 
     # Trust only this disposable test CA in an isolated pool. Keep every other
     # production TLS option, including verify_peer; never modify Dispatch.Finch.

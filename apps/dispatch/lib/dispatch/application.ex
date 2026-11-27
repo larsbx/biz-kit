@@ -26,8 +26,7 @@ defmodule Dispatch.Application do
         outbox_children() ++
         [
           {Finch,
-           name: Dispatch.Finch,
-           pools: %{default: [conn_opts: [transport_opts: transport_opts()]]}},
+           name: Dispatch.Finch, pools: %{default: [conn_opts: finch_connection_options()]}},
           # Serialises OIDC key refreshes so a burst of unknown key IDs cannot turn
           # into a burst of outbound fetches. Started after Finch, which it uses.
           Dispatch.Identity.Tokens.KeyStore,
@@ -35,6 +34,13 @@ defmodule Dispatch.Application do
         ] ++ restaurant_children()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Dispatch.Supervisor)
+  end
+
+  # Share the application-owned options with TLS acceptance fixtures without
+  # depending on Finch's private registry metadata.
+  @doc false
+  def finch_connection_options do
+    [transport_opts: transport_opts()]
   end
 
   defp restaurant_children do
