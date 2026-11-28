@@ -12,6 +12,7 @@ defmodule Dispatch.RestaurantHandoffAcceptanceTest do
 
   alias BizKit.Identity.Principal
   alias CoopSubstrate.{Crypto, Log}
+  alias Dispatch.Access.Actor
   alias Dispatch.Fleet.{Assignment, Load}
   alias Dispatch.{RestaurantAutomation, RestaurantDelivery}
   alias Dispatch.Support.{DeliveryPortal, Fixtures, PortalIdentity}
@@ -58,7 +59,7 @@ defmodule Dispatch.RestaurantHandoffAcceptanceTest do
     {public_key, seed} = Crypto.generate_keypair()
     enroll_dispatch!(world, tenant, public_key)
 
-    listener = start_supervised!({Bandit, plug: @endpoint, ip: {127, 0, 0, 1}, port: 0})
+    listener = start_listener(0)
     {:ok, {{127, 0, 0, 1}, port}} = ThousandIsland.listener_info(listener)
     seed_file = Path.join(System.tmp_dir!(), "restaurant-dispatch-#{Ash.UUID.generate()}.seed")
     File.write!(seed_file, Base.encode64(seed))
@@ -95,38 +96,15 @@ defmodule Dispatch.RestaurantHandoffAcceptanceTest do
       tenant: tenant,
       user: user,
       courier: courier,
-      courier_role: courier_role
+      courier_role: courier_role,
+      service: service,
+      listener_port: port
     })
   end
 
   test "restaurant checkout reaches courier-confirmed delivery exactly once", c do
-    pending = get(build_conn(), "/auth/login")
-    uri = pending |> redirected_to() |> URI.parse()
-    diner = get(recycle(pending), uri.path <> "?" <> uri.query)
-    assert redirected_to(diner) == "/"
-
-    {:ok, storefront, _} = live(recycle(diner), "/")
-    storefront |> element("#add-margherita") |> render_click()
-
-    storefront
-    |> form("#place", %{name: "Fixture diner", fulfillment: "delivery"})
-    |> render_submit()
-
-    assert [%{id: order_id, principal: principal, state: :placed, fulfillment: :delivery}] =
-             Orders.list(c.restaurant)
-
-    assert principal == c.principal
+    {storefront, board, order_id} = ready_order(c)
     dropoff_code = DeliveryCodes.code(c.restaurant, order_id, "delivered")
-    assert render(element(storefront, "#dropoff-code")) =~ dropoff_code
-
-    paired = get(build_conn(), "/board/pair/board-1/#{c.secret}")
-    {:ok, board, _} = live(recycle(paired), "/board")
-
-    for action <- ~w(accept start_preparing mark_ready) do
-      board |> element("##{action}-#{order_id}") |> render_click()
-    end
-
-    assert %{state: :ready, delivery: %{phase: :requested}} = Orders.get(c.restaurant, order_id)
     worker = start_supervised!({RestaurantAutomation, :restaurant})
     reconcile(worker)
     assert [%Load{} = load] = Ash.read!(Load, tenant: c.tenant, authorize?: false)
@@ -190,6 +168,169 @@ defmodule Dispatch.RestaurantHandoffAcceptanceTest do
            end)
 
     assert :ok = Log.verify_chains()
+  end
+
+  test "endpoint outages preserve queued work and permit one delivery after recovery", c do
+    {storefront, _board, order_id} = ready_order(c)
+    queued_head = Log.head()
+
+    assert :ok = stop_supervised(:restaurant_acceptance_http)
+    assert {:error, _} = RestaurantAutomation.poll("")
+    assert Log.head() == queued_head
+    assert Ash.read!(Load, tenant: c.tenant, authorize?: false) == []
+    assert Ash.read!(Assignment, tenant: c.tenant, authorize?: false) == []
+    assert %{state: :ready} = Orders.get(c.restaurant, order_id)
+
+    start_listener(c.listener_port)
+    worker = start_supervised!({RestaurantAutomation, :restaurant})
+    reconcile(worker)
+
+    assert [%Assignment{status: :ACTIVE} = trip] =
+             Ash.read!(Assignment, tenant: c.tenant, authorize?: false)
+
+    assert %{delivery: %{phase: :accepted}} = Orders.get(c.restaurant, order_id)
+    page = DeliveryPortal.login(c.user, c.courier_role)
+    pickup_code = DeliveryCodes.code(c.restaurant, order_id, "picked_up")
+    accepted_head = Log.head()
+
+    assert :ok = stop_supervised({RestaurantAutomation, :restaurant})
+    assert :ok = stop_supervised(:restaurant_acceptance_http)
+    refused = DeliveryPortal.receipt(page, trip, "picked_up", pickup_code)
+    assert refused.status == 422
+    assert Log.head() == accepted_head
+
+    start_listener(c.listener_port)
+    worker = start_supervised!({RestaurantAutomation, :restaurant})
+    reconcile(worker)
+    assert Log.head() == accepted_head
+
+    picked_up = DeliveryPortal.receipt(refused, trip, "picked_up", pickup_code)
+    assert picked_up.status == 200
+    pickup_head = Log.head()
+    assert DeliveryPortal.receipt(picked_up, trip, "picked_up", pickup_code).status == 200
+    assert Log.head() == pickup_head
+
+    dropoff_code = DeliveryCodes.code(c.restaurant, order_id, "delivered")
+    delivered = DeliveryPortal.receipt(picked_up, trip, "delivered", dropoff_code)
+    assert delivered.status == 200
+    reconcile(worker)
+
+    assert [%{id: assignment_id, status: :COMPLETED}] =
+             Ash.read!(Assignment, tenant: c.tenant, authorize?: false)
+
+    assert assignment_id == trip.id
+    assert [%{id: load_id}] = Ash.read!(Load, tenant: c.tenant, authorize?: false)
+    assert load_id == trip.load_id
+    assert %{state: :completed, delivery: %{phase: :delivered}} = Orders.get(c.restaurant, order_id)
+    assert_eventually(fn -> render(element(storefront, "#order-status")) =~ "Delivered" end)
+    assert :ok = Log.verify_chains()
+  end
+
+  test "a delayed signed pickup after kitchen cancellation appends nothing", c do
+    {storefront, board, order_id} = ready_order(c)
+    {:ok, actor} = Actor.from_assignment(c.service)
+    {:ok, source} = RestaurantDelivery.configuration()
+
+    config =
+      Map.merge(source, %{
+        courier: c.courier.id,
+        pickup: "Fixture kitchen",
+        dropoff: @site,
+        site: @site
+      })
+
+    assert {:ok, {load, %{status: :PLANNED} = planned}} =
+             RestaurantAutomation.prepare(actor, config, order_id)
+
+    order = Orders.get(c.restaurant, order_id)
+
+    board
+    |> form("#cancel-#{order_id}", %{
+      order_id: order_id,
+      version: to_string(order.version),
+      reason: "Cancelled before transport acceptance"
+    })
+    |> render_submit()
+
+    assert %{state: :cancelled, delivery: nil} = Orders.get(c.restaurant, order_id)
+    cancelled_head = Log.head()
+    code = DeliveryCodes.code(c.restaurant, order_id, "picked_up")
+    digest = :crypto.hash(:sha256, code)
+    {:ok, proof_id} = digest |> binary_part(0, 16) |> Ecto.UUID.load()
+
+    command = %{
+      "op" => "picked_up",
+      "order_id" => order_id,
+      "load_id" => load.id,
+      "assignment_id" => planned.id,
+      "command_id" => "picked_up-" <> proof_id,
+      "expected_version" => 1,
+      "proof_id" => proof_id,
+      "proof_digest" => Base.encode16(digest, case: :lower)
+    }
+
+    assert {:error, {:restaurant_refused, 422, body}} =
+             RestaurantDelivery.publish_automated(command, source)
+
+    assert Jason.decode!(body) == %{"error" => "delivery_order_not_ready"}
+    assert Log.head() == cancelled_head
+
+    worker = start_supervised!({RestaurantAutomation, :restaurant})
+    reconcile(worker)
+
+    assert [%{id: assignment_id, status: :CANCELLED}] =
+             Ash.read!(Assignment, tenant: c.tenant, authorize?: false)
+
+    assert assignment_id == planned.id
+    assert Log.head() == cancelled_head
+
+    assert {:error, {:restaurant_refused, 422, _}} =
+             RestaurantDelivery.publish_automated(command, source)
+
+    assert Log.head() == cancelled_head
+    assert_eventually(fn -> render(element(storefront, "#order-status")) =~ "Cancelled" end)
+    assert :ok = Log.verify_chains()
+  end
+
+  defp ready_order(c) do
+    pending = get(build_conn(), "/auth/login")
+    uri = pending |> redirected_to() |> URI.parse()
+    diner = get(recycle(pending), uri.path <> "?" <> uri.query)
+    assert redirected_to(diner) == "/"
+
+    {:ok, storefront, _} = live(recycle(diner), "/")
+    storefront |> element("#add-margherita") |> render_click()
+
+    storefront
+    |> form("#place", %{name: "Fixture diner", fulfillment: "delivery"})
+    |> render_submit()
+
+    assert [%{id: order_id, principal: principal, state: :placed, fulfillment: :delivery}] =
+             Orders.list(c.restaurant)
+
+    assert principal == c.principal
+    dropoff_code = DeliveryCodes.code(c.restaurant, order_id, "delivered")
+    assert render(element(storefront, "#dropoff-code")) =~ dropoff_code
+
+    paired = get(build_conn(), "/board/pair/board-1/#{c.secret}")
+    {:ok, board, _} = live(recycle(paired), "/board")
+
+    for action <- ~w(accept start_preparing mark_ready) do
+      board |> element("##{action}-#{order_id}") |> render_click()
+    end
+
+    assert %{state: :ready, delivery: %{phase: :requested}} = Orders.get(c.restaurant, order_id)
+    {storefront, board, order_id}
+  end
+
+  defp start_listener(port) do
+    specification =
+      Supervisor.child_spec(
+        {Bandit, plug: @endpoint, ip: {127, 0, 0, 1}, port: port},
+        id: :restaurant_acceptance_http
+      )
+
+    start_supervised!(specification)
   end
 
   defp reconcile(worker) do
