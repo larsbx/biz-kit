@@ -24,7 +24,7 @@ inductive Material where
   deriving DecidableEq, Repr
 
 inductive Audience where
-  | research | public
+  | research | publicAudience
   deriving DecidableEq, Repr
 
 structure Pair where
