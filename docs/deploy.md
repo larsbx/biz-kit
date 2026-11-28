@@ -269,6 +269,26 @@ courier, changed route, or cancellation after accepted custody requires
 operator reconciliation. The pilot uses a fixed destination and does not
 collect customer addresses in checkout.
 
+## Audit chapter key history
+
+The key fence refuses only new claims: a ledger keeps booting with any
+collision an older appender admitted. Every release that carries the ledger
+can audit that history read-only, without the appender, from a release copy
+with the release's runtime environment:
+
+```sh
+bin/restaurant eval 'CoopSubstrate.ReleaseTasks.audit_keys()'
+```
+
+It prints a JSON report and exits non-zero while any finding is open. Run the
+new release copy's audit once per ledger (restaurant, procurement, any other)
+before upgrading, against the live database or a restored copy, and remediate
+what it finds first: once the fence runs, renewing a colliding procurement
+route or operator grant is refused until its key is rotated. Run it again
+after the fenced release is the only appender, and re-run until it exits 0.
+[The key-collision audit](architecture/restaurant-key-collision-audit.md)
+gives the other recipes, the report and the remediation for each finding.
+
 ## Testing a deployment
 
 `scripts/release-smoke.sh` is what the `release-smoke` CI job runs, and it
@@ -288,8 +308,9 @@ The script signs task commands on the release's own ledger and checks:
 `scripts/restaurant-release-smoke.sh` does the same for the `restaurant`
 release (the `release-smoke` job of `restaurant-core.yml`): build, migrate
 twice, boot, check the storefront and board pairing over HTTP, then enroll both
-devices with the operator-side release command over HTTP and complete a pickup
-order on the release's own ledger in a fresh chapter. Only the initial
+devices with the operator-side release command over HTTP, complete a pickup
+order on the release's own ledger in a fresh chapter, and audit its chapter
+key history from a VM without the appender. Only the initial
 governance declaration is bootstrapped; no device grant is manually appended.
 The operator VM is checked to have no running ledger and receives no device
 seeds; the server receives no governance seed. PostgreSQL 16 is required.

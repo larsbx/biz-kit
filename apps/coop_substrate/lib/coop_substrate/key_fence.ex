@@ -34,9 +34,11 @@ defmodule CoopSubstrate.KeyFence do
   gate and Commands preflight refuse a claim, and a domain refusal comes first.
   No fold applies it: history admitted before the fence, or by an appender
   without it, boots and replays unchanged, and only the next claim is refused.
+  `CoopSubstrate.RestaurantKeyAudit` replays it over a ledger's history to
+  find such claims.
   """
 
-  alias CoopSubstrate.Procurement
+  alias CoopSubstrate.{Procurement, ProcurementDispatch}
   alias DispatchCore.Admission, as: Dispatch
   alias RestaurantCore.Admission, as: Restaurant
 
@@ -85,6 +87,33 @@ defmodule CoopSubstrate.KeyFence do
 
     restaurant ++ dispatchers ++ procurement
   end
+
+  @doc """
+  Whether the holding `held` still binds `pubkey` in `chapter` at `gate`: a
+  grant until it is revoked, a role key while it is declared on that key, a
+  dispatcher always (it is never revoked), and a route or operator slot while
+  its current version is active on that key. The key audit asks; no claim
+  depends on it.
+  """
+  def live?(gate, chapter, pubkey, {:grant, merchant, key_id}) do
+    case gate.restaurant.grants[{chapter, merchant, key_id}] do
+      %{pubkey: ^pubkey} = grant -> not Map.get(grant, :revoked, false)
+      _ -> false
+    end
+  end
+
+  def live?(gate, chapter, pubkey, {:role, role, key_id}),
+    do: get_in(gate.role_keys, [{chapter, role}, key_id]) == pubkey
+
+  def live?(_gate, _chapter, _pubkey, {:dispatcher, _tenant, _key_id}), do: true
+
+  def live?(gate, chapter, pubkey, {:route, coop}),
+    do: active?(ProcurementDispatch.route(Procurement.state(gate), chapter, coop), pubkey)
+
+  def live?(gate, chapter, pubkey, {:operator, coop, operator}),
+    do: active?(Procurement.state(gate).grants[{chapter, coop, operator}], pubkey)
+
+  defp active?(version, pubkey), do: match?(%{active: true, pubkey: ^pubkey}, version)
 
   @doc """
   The rules a claim breaks in its chapter, each with the holding it breaks it

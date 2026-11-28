@@ -1,137 +1,158 @@
 defmodule CoopSubstrate.RestaurantKeyAudit do
   @moduledoc """
-  Opt-in audit of retained restaurant and role key events against the key
-  separation rules in PR #429. Runs against the canonical Log on an already
-  running node. The result is tied to an exact global sequence and hash.
+  Opt-in audit of a ledger's chapter key history: the chapter key fence
+  (`CoopSubstrate.KeyFence`) replayed over a verified prefix. It folds the
+  appender's own gate (`AdmissionGate`) and, before each claim folds, asks the
+  fence which rules the claim breaks against the gate its prefix left. So a
+  finding exists exactly where the current fence would refuse the event:
+  restaurant device, Dispatch and role keys, and dispatcher, procurement route
+  and operator keys alike, although the name predates that scope.
+
+  A finding stays open while any binding it names still holds at the head
+  (`KeyFence.live?/4`): the seed sat with two holders, so it closes only once
+  it is retired from all of them. Each open finding lists the remediation for
+  each live binding's class. The result is tied to an exact global sequence
+  and hash. `CoopSubstrate.ReleaseTasks.audit_keys/1` runs it without the
+  appender (docs/architecture/restaurant-key-collision-audit.md).
   """
 
   @behaviour CoopSubstrate.Projection
 
-  alias CoopSubstrate.Log
-  alias CoopSubstrate.Projections.Membership
+  alias CoopSubstrate.{KeyFence, Log}
+  alias CoopSubstrate.Projections.AdmissionGate
   alias CoopSubstrate.Protocol.Envelope
 
-  @device "RestaurantDeviceGrantedV1"
-  @dispatch "RestaurantDispatchGrantedV1"
-  @grant_revoked "RestaurantDeviceRevokedV1"
-  @role "RoleKeyDeclared"
-  @role_revoked "RoleKeyRevoked"
-  @declarations [@device, @dispatch, @role]
-  @revocations [@grant_revoked, @role_revoked]
-  @key_events @declarations ++ @revocations
+  @revocations ~w(RestaurantDeviceRevokedV1 RoleKeyRevoked)
+  @identity ~w(merchant_id tenant_id role cooperative_id operator_id dispatcher_id)a
+
+  @reenroll_slot "Enroll the slot with ProcurementHost.ReleaseTasks.enroll at its next " <>
+                   "expected_version, inactive or on a fresh key; the fence refuses neither."
+
+  @remediation %{
+    restaurant_device:
+      "Revoke the grant with restaurant.manage revoke-device, then enroll a new key ID with " <>
+        "a new seed.",
+    restaurant_dispatch:
+      "Revoke the grant with restaurant.manage revoke-device, then grant-dispatch a new key " <>
+        "ID with a new seed file on the Dispatch machine.",
+    governance_key:
+      "Declare a replacement governance key, then revoke this one (RoleKeyRevoked) from an " <>
+        "administrator browser or with coop.owner.succeed, never the chapter's last one. Its " <>
+        "seed has been on another machine: rotate it even once the other binding is revoked.",
+    role_key: "No shipped command revokes this role key: governance signs its RoleKeyRevoked.",
+    dispatcher: "No ledger revocation exists: retire the seed off the ledger; this stays open.",
+    procurement_route: @reenroll_slot,
+    procurement_operator: @reenroll_slot
+  }
 
   @doc "Audit the prefix at the appender's current head."
   def scan, do: scan(Log.head())
 
   @doc "Repeat an audit at a captured Log head (using its binary global hash)."
   def scan(head) do
-    with {:ok, audit} <- Log.replay_verified(__MODULE__, head) do
-      {:ok, report(audit, head)}
-    end
+    with {:ok, audit} <- Log.replay_verified(__MODULE__, head), do: {:ok, report(audit, head)}
+  end
+
+  @doc "The report of a folded audit at `head`."
+  def report(audit, head) do
+    findings = for finding <- Enum.reverse(audit.findings), do: at_head(finding, audit)
+
+    %{
+      schema: "restaurant-key-collision-audit.v2",
+      as_of: %{global_seq: head.global_seq, global_hash: hex(head.global_hash)},
+      historical_violations: findings,
+      violation_count: length(findings),
+      open_count: Enum.count(findings, & &1.open)
+    }
   end
 
   @doc false
   @impl true
-  def init do
-    %{membership: Membership.init(), sources: %{}, revocations: %{}, findings: []}
-  end
+  def init, do: %{gate: AdmissionGate.init(), refs: %{}, revocations: %{}, findings: []}
 
   @doc false
   @impl true
-  # These are the Membership events that change restaurant grants or declared
-  # role keys. Inspect the preceding state, then apply the historical fold.
-  def handle_event(%Envelope{type: type} = event, audit) when type in @key_events do
-    next = observe_key(event, audit)
-    %{next | membership: Membership.handle_event(event, audit.membership)}
+  # Judge against the gate the event's prefix left, as the append gate does,
+  # then apply the boot fold, which is total on any ledger that boots.
+  def handle_event(%Envelope{} = event, audit) do
+    audit = audit |> judge(event) |> note_revocation(event)
+    %{audit | gate: AdmissionGate.handle_event(event, audit.gate)}
   end
 
-  def handle_event(_, audit), do: audit
+  defp judge(audit, event),
+    do: if(KeyFence.holder(event), do: claim(audit, event), else: audit)
 
-  defp observe_key(%Envelope{type: type, chapter_id: chapter, payload: payload} = event, audit)
-       when type in @declarations do
-    {:bytes, pubkey} = payload["pubkey"]
-    key = {chapter, pubkey}
-    sources = Map.get(audit.sources, key, %{})
-    current = event_ref(event)
+  # One finding per rule a claim breaks, with every earlier binding it breaks
+  # it against. The claim's binding then replaces any earlier event of the
+  # same holding, so a re-declared role or a re-sent slot is its latest event.
+  defp claim(audit, %Envelope{chapter_id: chapter} = event) do
+    {:bytes, pubkey} = event.payload["pubkey"]
+    held = KeyFence.witness(event)
+    ref = event |> event_ref() |> Map.put(:class, class(event))
 
     findings =
-      for {rule, [_ | _] = earlier} <- conflicts(current, Map.values(sources)) do
+      for [{rule, _} | _] = broken <-
+            Enum.chunk_by(KeyFence.conflicts(event, audit.gate), &elem(&1, 0)) do
+        earlier =
+          for {_, other} <- broken, do: {other, Map.fetch!(audit.refs, {chapter, pubkey, other})}
+
         %{
           rule: rule,
-          pubkey_sha256: hex(:crypto.hash(:sha256, pubkey)),
-          event: current,
-          earlier_events: Enum.sort_by(earlier, & &1.global_seq)
+          pubkey: pubkey,
+          event: {held, ref},
+          earlier: Enum.sort_by(earlier, &elem(&1, 1).global_seq)
         }
       end
 
     %{
       audit
-      | sources: Map.put(audit.sources, key, Map.put(sources, slot(event), current)),
+      | refs: Map.put(audit.refs, {chapter, pubkey, held}, ref),
         findings: Enum.reverse(findings, audit.findings)
     }
   end
 
-  defp observe_key(%Envelope{type: type, chapter_id: chapter} = event, audit)
+  # Revoked grants keep counting and revoked role keys do not, as the fence
+  # counts them; either way the binding's event records its revocation.
+  defp note_revocation(audit, %Envelope{type: type, chapter_id: chapter} = event)
        when type in @revocations do
-    slot = slot(event)
-    key = {chapter, revoked_pubkey(audit.membership, chapter, slot)}
-    sources = Map.fetch!(audit.sources, key)
-    original = Map.fetch!(sources, slot)
-    revocation = event_ref(event)
+    {held, pubkey} = revoked(audit.gate, event)
 
-    # Revoked restaurant grants keep counting. Role declarations leave the
-    # active set, but earlier findings retain their original event references.
-    sources = if type == @role_revoked, do: Map.delete(sources, slot), else: sources
-
-    %{
-      audit
-      | sources: Map.put(audit.sources, key, sources),
-        revocations: Map.put(audit.revocations, original.global_seq, revocation)
-    }
+    case audit.refs[{chapter, pubkey, held}] do
+      nil -> audit
+      ref -> put_in(audit, [:revocations, ref.global_seq], event_ref(event))
+    end
   end
 
-  defp conflicts(%{type: @device, merchant_id: merchant}, earlier) do
-    [
-      device_dispatch_key_reuse: Enum.filter(earlier, &(&1.type == @dispatch)),
-      merchant_key_reuse: merchant_grants(earlier, merchant)
-    ]
+  defp note_revocation(audit, _event), do: audit
+
+  defp revoked(gate, %{type: "RoleKeyRevoked", chapter_id: chapter, payload: p}) do
+    pubkey = get_in(gate.role_keys, [{chapter, p["role"]}, p["key_id"]])
+    {{:role, p["role"], p["key_id"]}, pubkey}
   end
 
-  defp conflicts(%{type: @dispatch, merchant_id: merchant, tenant_id: tenant}, earlier) do
-    [
-      device_dispatch_key_reuse: Enum.filter(earlier, &(&1.type == @device)),
-      dispatch_role_key_reuse: Enum.filter(earlier, &(&1.type == @role)),
-      dispatch_cross_tenant_key_reuse:
-        Enum.filter(
-          earlier,
-          &match?(%{type: @dispatch, tenant_id: other} when other != tenant, &1)
-        ),
-      merchant_key_reuse: merchant_grants(earlier, merchant)
-    ]
+  defp revoked(gate, %{chapter_id: chapter, payload: p}) do
+    grant = gate.restaurant.grants[{chapter, p["merchant_id"], p["key_id"]}]
+    {{:grant, p["merchant_id"], p["key_id"]}, grant[:pubkey]}
   end
 
-  defp conflicts(%{type: @role}, earlier),
-    do: [dispatch_role_key_reuse: Enum.filter(earlier, &(&1.type == @dispatch))]
-
-  defp merchant_grants(earlier, merchant),
-    do: Enum.filter(earlier, &match?(%{merchant_id: ^merchant}, &1))
-
-  defp slot(%Envelope{type: type, payload: payload}) when type in [@role, @role_revoked],
-    do: {:role, payload["role"], payload["key_id"]}
-
-  defp slot(%Envelope{payload: payload}),
-    do: {:grant, payload["merchant_id"], payload["key_id"]}
-
-  defp revoked_pubkey(membership, chapter, {:role, role, key_id}),
-    do: Map.fetch!(Map.fetch!(membership.role_keys, {chapter, role}), key_id)
-
-  defp revoked_pubkey(membership, chapter, {:grant, merchant, key_id}),
-    do: Map.fetch!(membership.restaurant.grants, {chapter, merchant, key_id}).pubkey
+  defp class(%{type: "RestaurantDeviceGrantedV1"}), do: :restaurant_device
+  defp class(%{type: "RestaurantDispatchGrantedV1"}), do: :restaurant_dispatch
+  defp class(%{type: "RoleKeyDeclared", payload: %{"role" => "governance"}}), do: :governance_key
+  defp class(%{type: "RoleKeyDeclared"}), do: :role_key
+  defp class(%{type: "DispatchDispatcherGrantedV1"}), do: :dispatcher
+  defp class(%{type: "ProcurementDispatchRouteV1"}), do: :procurement_route
+  defp class(%{type: "ProcurementOperatorGrantedV1"}), do: :procurement_operator
 
   defp event_ref(event) do
     {:ok, hash} = Envelope.event_hash(event)
 
-    ref = %{
+    ids =
+      for field <- @identity,
+          value = event.payload[Atom.to_string(field)],
+          into: %{},
+          do: {field, value}
+
+    Map.merge(ids, %{
       event_id: event.event_id,
       event_hash: hex(hash),
       global_seq: event.global_seq,
@@ -140,41 +161,30 @@ defmodule CoopSubstrate.RestaurantKeyAudit do
       type: event.type,
       chapter_id: event.chapter_id,
       key_id: event.payload["key_id"]
-    }
-
-    case slot(event) do
-      {:role, role, _} ->
-        Map.put(ref, :role, role)
-
-      {:grant, merchant, _} when event.type == @dispatch ->
-        Map.merge(ref, %{merchant_id: merchant, tenant_id: event.payload["tenant_id"]})
-
-      {:grant, merchant, _} ->
-        Map.put(ref, :merchant_id, merchant)
-    end
+    })
   end
 
-  defp report(audit, head) do
-    findings =
-      for finding <- Enum.reverse(audit.findings) do
-        %{
-          finding
-          | event: with_revocation(finding.event, audit.revocations),
-            earlier_events:
-              Enum.map(finding.earlier_events, &with_revocation(&1, audit.revocations))
-        }
+  defp at_head(%{rule: rule, pubkey: pubkey} = finding, audit) do
+    refs =
+      for {held, ref} <- [finding.event | finding.earlier] do
+        Map.merge(ref, %{
+          revoked_in: audit.revocations[ref.global_seq],
+          active_at_head: KeyFence.live?(audit.gate, ref.chapter_id, pubkey, held)
+        })
       end
 
+    live = Enum.filter(refs, & &1.active_at_head)
+
     %{
-      schema: "restaurant-key-collision-audit.v1",
-      as_of: %{global_seq: head.global_seq, global_hash: hex(head.global_hash)},
-      historical_violations: findings,
-      violation_count: length(findings)
+      rule: rule,
+      refusal: KeyFence.refusal(rule),
+      pubkey_sha256: hex(:crypto.hash(:sha256, pubkey)),
+      event: hd(refs),
+      earlier_events: tl(refs),
+      open: live != [],
+      remediation: Map.new(live, &{&1.class, Map.fetch!(@remediation, &1.class)})
     }
   end
-
-  defp with_revocation(ref, revocations),
-    do: Map.put(ref, :revoked_in, Map.get(revocations, ref.global_seq))
 
   defp hex(nil), do: nil
   defp hex(bytes), do: Base.encode16(bytes, case: :lower)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build the production restaurant release, migrate, boot it, check it serves
 # the storefront and pairs a board, enroll both devices, then complete a pickup order on
-# its own ledger (scripts/restaurant_release_smoke.exs). Locally and in CI; see
-# docs/deploy.md.
+# its own ledger (scripts/restaurant_release_smoke.exs) and audit its chapter key
+# history. Locally and in CI; see docs/deploy.md.
 #
 # Needs PostgreSQL reachable as $PGUSER/$PGPASSWORD (default postgres/postgres)
 # on localhost; it creates the database it names. Secrets are throwaway.
@@ -80,3 +80,7 @@ curl -fs "$url/" | grep -q "Margherita special"
 out=$("$release" rpc "Code.eval_file(\"$PWD/scripts/restaurant_release_smoke.exs\")")
 echo "$out"
 grep -q "^SMOKE OK" <<<"$out"
+
+# The chapter key audit reads the ledger beside the running appender, from a VM without one.
+audit=$("$release" eval "CoopSubstrate.ReleaseTasks.audit_keys(); nil = GenServer.whereis(CoopSubstrate.Log.server())") || { echo "$audit" >&2; exit 1; }
+grep -q '"open_count": 0' <<<"$audit"

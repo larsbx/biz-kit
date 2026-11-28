@@ -339,6 +339,36 @@ defmodule CoopSubstrate.Log do
     end
   end
 
+  @doc """
+  The stored global head, read from the ledger itself rather than from the
+  appender. A reader beside a running appender, or with none, pins a bounded
+  canonical prefix this way without starting Log (whose recovery repairs
+  linked streams). `replay_verified/2` checks the signatures, both chains,
+  and this exact head against the same raw records it folds.
+  """
+  @spec stored_head() ::
+          {:ok, %{global_seq: non_neg_integer(), global_hash: binary() | nil}}
+          | {:error, term()}
+  def stored_head do
+    case CoopSubstrate.EventStore.stream_info("ledger") do
+      {:ok, %{stream_version: sequence}} when is_integer(sequence) and sequence > 0 ->
+        with {:ok, hash} <- head_at(sequence),
+             do: {:ok, %{global_seq: sequence, global_hash: hash}}
+
+      {:ok, %{stream_version: 0}} ->
+        {:ok, %{global_seq: 0, global_hash: nil}}
+
+      {:error, :stream_not_found} ->
+        {:ok, %{global_seq: 0, global_hash: nil}}
+
+      {:error, reason} ->
+        {:error, {:ledger_read_failed, reason}}
+
+      _ ->
+        {:error, :invalid_ledger_head}
+    end
+  end
+
   @doc "The recomputed global head hash at `global_seq`, from raw ledger bytes."
   @spec head_at(pos_integer()) :: {:ok, binary()} | {:error, term()}
   def head_at(global_seq) when is_integer(global_seq) and global_seq > 0 do

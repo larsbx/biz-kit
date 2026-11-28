@@ -8,6 +8,7 @@ defmodule CoopSubstrate.RetirementLedgerReaderTest do
     HistoryArchiveFixture,
     LegacyDb,
     Log,
+    ReleaseTasks,
     ULID
   }
 
@@ -159,6 +160,28 @@ defmodule CoopSubstrate.RetirementLedgerReaderTest do
                 :stream_chain_break,
                 {:stream_id_mismatch, "incorrect/derived-stream", ^expected_stream}
               ]}}} = replay(head)
+  end
+
+  test "the key audit reads the stored head without the appender and changes nothing", c do
+    head = presigned_record!() |> store_record!()
+    before = counts(c.conn)
+    puts = &send(self(), {:printed, &1})
+    as_of = %{global_seq: 1, global_hash: Base.encode16(head.global_hash, case: :lower)}
+
+    assert {:ok, %{as_of: ^as_of, open_count: 0, violation_count: 0}} =
+             ReleaseTasks.audit_keys(puts: puts)
+
+    assert_received {:printed, json}
+    assert %{"as_of" => %{"global_seq" => 1}, "open_count" => 0} = Jason.decode!(json)
+
+    assert_raise RuntimeError, ~r/key audit refused: :ledger_head_mismatch/, fn ->
+      ReleaseTasks.audit_keys(as_of: "1:" <> String.duplicate("00", 32), puts: puts)
+    end
+
+    refute Process.whereis(EventStore)
+    refute GenServer.whereis(Log.server())
+    assert counts(c.conn) == before
+    refute Enum.any?(Application.started_applications(), &(elem(&1, 0) == :coop_substrate))
   end
 
   test "a different pinned head and a shorter stored prefix return no projection" do

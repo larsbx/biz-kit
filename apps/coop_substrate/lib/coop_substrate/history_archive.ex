@@ -143,7 +143,7 @@ defmodule CoopSubstrate.HistoryArchive do
 
   defp archive_governance(chapter, writer, event_id, digest, opts) do
     read = fn ->
-      with {:ok, head} <- archive_ledger_head(),
+      with {:ok, head} <- Log.stored_head(),
            {:ok, governance} <- Log.replay_verified(Governance, head),
            {:ok, selected} <- Governance.select(governance, chapter, writer, event_id, digest),
            do: {:ok, head, selected}
@@ -179,29 +179,6 @@ defmodule CoopSubstrate.HistoryArchive do
   end
 
   def check_source(_actual, _expected), do: {:error, :archive_source_required}
-
-  # Capture a bounded canonical prefix without starting Log (whose recovery
-  # repairs linked streams). replay_verified/2 checks the signatures, both
-  # chains, and this exact head against the same raw records it folds.
-  defp archive_ledger_head do
-    case CoopSubstrate.EventStore.stream_info("ledger") do
-      {:ok, %{stream_version: sequence}} when is_integer(sequence) and sequence > 0 ->
-        with {:ok, hash} <- Log.head_at(sequence),
-             do: {:ok, %{global_seq: sequence, global_hash: hash}}
-
-      {:ok, %{stream_version: 0}} ->
-        {:ok, %{global_seq: 0, global_hash: nil}}
-
-      {:error, :stream_not_found} ->
-        {:ok, %{global_seq: 0, global_hash: nil}}
-
-      {:error, reason} ->
-        {:error, {:ledger_read_failed, reason}}
-
-      _ ->
-        {:error, :invalid_ledger_head}
-    end
-  end
 
   defp operational_prerequisites(pending) do
     [
