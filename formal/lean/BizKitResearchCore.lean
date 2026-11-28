@@ -28,7 +28,7 @@ inductive Material where
 
 inductive Audience where
   | research
-  | public
+  | publicRelease
   deriving DecidableEq
 
 structure Record where
@@ -88,8 +88,8 @@ def sponsorOnly (s : Record) (m : Material) (a : Audience) : Prop :=
 def empty : Record := { narrators := [0], grants := fun _ _ _ => False }
 
 theorem sponsor_only_counterexample :
-    sponsorOnly (grant empty (.sponsor 7) .transcript .public) .transcript .public ∧
-      ¬ eligible (grant empty (.sponsor 7) .transcript .public) .transcript .public := by
+    sponsorOnly (grant empty (.sponsor 7) .transcript .publicRelease) .transcript .publicRelease ∧
+      ¬ eligible (grant empty (.sponsor 7) .transcript .publicRelease) .transcript .publicRelease := by
   constructor
   · refine ⟨7, ?_⟩
     exact Or.inl ⟨rfl, rfl, rfl⟩

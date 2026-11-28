@@ -183,9 +183,9 @@ defmodule ResearchCore.SignedReviewsTest do
     }
 
     {:ok, community_bytes} = SignedReviews.signing_bytes(community_intent)
+
     community_signature =
       :crypto.sign(:eddsa, :none, community_bytes, [community_secret, :ed25519])
-
 
     {:ok, approved} =
       SignedReviews.verify_and_apply(
