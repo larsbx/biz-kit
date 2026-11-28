@@ -1,6 +1,6 @@
 # FieldWitness in biz-kit: research sovereignty and sponsorship boundary
 
-Date: 2026-11-27. Status: **phase-1 pure ResearchCore only; no live integration**.
+Date: 2026-11-27. Status: **phase-1 pure ResearchCore and signed-review preflight only; no live integration**.
 This is an implementation contract, not an assertion of research/ethics
 approval, financial licensure, or deployed archival custody.
 
@@ -113,3 +113,31 @@ Related sources: `docs/architecture/2026-11-02-project-ownership.md`,
 `2026-10-12-artifact-custody.md`, `2026-11-14-project-knowledge.md`,
 `2026-11-07-producer-coop-at-cost-capital-pooling.md` and
 `2026-11-13-producer-capital-integration.md`.
+
+
+## 2026-11-27 signed-review preflight (proposed continuation)
+
+`ResearchCore.SignedReviews.signing_bytes/1` defines a domain-separated,
+length-prefixed, exact-field Ed25519 signature message binding the chapter,
+tenant, project, record, role, actor, grant/revoke action, material, audience,
+expected record revision, current key id and key epoch. It disallows unsigned
+extra fields or unsupported role/action values.
+
+`verify_and_apply/4` checks an Ed25519 signature, the exact record/revision,
+and a host-provided current authority snapshot before delegating to the
+original `ResearchCore.Access.review/7` rule. Key revocation and rotation
+must come from a separate **trusted signed projection**: passing an arbitrary
+caller-supplied `authority` map is not verification of consent. This preflight
+may be used only within a future serialized signed Log gate after the
+principal/representative's authority and key epoch have been authenticated
+at the same admission point.
+
+No new live event type, host command, media read endpoint or payment writer is
+admitted in this increment. Existing legacy `InterviewConsentGranted` events
+are chapter/interviewee-scoped and MUST NOT be reinterpreted as community-
+and material-specific FieldWitness release grants. The ordinary task owner,
+a research sponsor, or any business governance grant is not sufficient.
+
+The Proof Bank catalog registers the new application with all verification
+states remaining explicitly unproved/unexecuted. The 2026-11-27 baseline
+inventory now includes 32 apps; changes remain fail-closed until re-registered.

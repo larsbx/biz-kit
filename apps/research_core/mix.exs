@@ -11,7 +11,7 @@ defmodule ResearchCore.MixProject do
     ] ++ umbrella_paths()
   end
 
-  def application, do: [extra_applications: []]
+  def application, do: [extra_applications: [:crypto]]
 
   defp umbrella_paths do
     if Path.basename(Path.dirname(__DIR__)) == "apps" and

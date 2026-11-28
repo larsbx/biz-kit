@@ -38,7 +38,11 @@ jobs:
         run: |
           mix compile --warnings-as-errors
           mix test --no-start
-          mix format --check-formatted
+          if ! mix format --check-formatted; then
+            mix format
+            git diff --no-ext-diff -- .
+            exit 1
+          fi
       - name: Verify portable package outside umbrella
         shell: bash
         run: |
