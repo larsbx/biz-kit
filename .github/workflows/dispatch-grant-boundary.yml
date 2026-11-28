@@ -39,12 +39,12 @@ jobs:
       DATABASE_URL: ecto://dispatch:dispatch@localhost:5432/dispatch_test
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: erlef/setup-beam@v1
         with: { otp-version: '27.3.4', elixir-version: '1.19.0' }
-      - uses: dtolnay/rust-toolchain@1.93.0
+      - uses: dtolnay/rust-toolchain@1.91.1
       - name: Record exact source revision
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
@@ -73,7 +73,7 @@ jobs:
           mix test --include integration 2>&1 | tee ../../acceptance-evidence/dispatch-all.log
       - name: Upload exact-revision acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dispatch-grant-boundary-${{ env.EXPECTED_HEAD }}
           path: acceptance-evidence/

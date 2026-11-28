@@ -46,7 +46,7 @@ jobs:
     env:
       SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # The format-only audit reads the original PR #341 source revision.
@@ -55,7 +55,7 @@ jobs:
         with:
           otp-version: "27.3.4.19"
           elixir-version: "1.19.0"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Install checksum-pinned Lean 4.35.0
@@ -72,7 +72,7 @@ jobs:
           --output "$RUNNER_TEMP/cross-currency-proof-evidence"
       - name: Retain exact-source receipt and complete comparison logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cross-currency-preview-${{ env.SOURCE_HEAD }}
           path: ${{ runner.temp }}/cross-currency-proof-evidence

@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Record evaluated source revision
@@ -40,7 +40,7 @@ jobs:
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Verify pinned source commit, trees, documents and links offline

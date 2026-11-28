@@ -19,7 +19,7 @@ jobs:
       MIX_ENV: test
       ERL_FLAGS: '+S 4:4'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: team-alembic/ash_authentication
           ref: d264f101dfd8336e77c29deb0ecc3f14af5348e3
@@ -55,7 +55,7 @@ jobs:
       EVENTSTORE_PASSWORD: postgres
       SPRUCE_GOOSE_TEST_DATABASE_PASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false

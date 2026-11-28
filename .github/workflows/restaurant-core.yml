@@ -94,7 +94,7 @@ jobs:
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -125,7 +125,7 @@ jobs:
       EVENTSTORE_USERNAME: postgres
       EVENTSTORE_PASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
@@ -170,14 +170,14 @@ jobs:
       SPRUCE_GOOSE_DATABASE_URL: ecto://postgres:postgres@127.0.0.1:5432/spruce_goose_dev
       TASK_HOST_DATABASE_URL: ecto://postgres:postgres@127.0.0.1:5432/task_host_dev
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify the inventory completes with mixed currencies
         run: scripts/tests/eatsbot-r0-readonly.sh
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'
           elixir-version: '1.19.0'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Install Playwright and Chromium
@@ -225,7 +225,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27.3.4'

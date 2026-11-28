@@ -23,11 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12.14'
       - name: Exact matching and physical transition controls without optional runtimes
@@ -40,11 +40,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12.14'
       - name: Install pinned environment manager
@@ -68,7 +68,7 @@ jobs:
           python -m experiments.economic_simulation run experiments/economic_simulation/examples/demand_first.json --seed 0 --output experiments/economic_simulation/out/demand.json
           python -m experiments.economic_simulation run experiments/economic_simulation/examples/barter_fragility.json --seed 0 --output experiments/economic_simulation/out/barter.json
           python -m experiments.economic_simulation sweep experiments/economic_simulation/examples/demand_first.json --replicates 20 --policies experiments/economic_simulation/examples/policies.json --output experiments/economic_simulation/out/comparison.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: economic-simulation-${{ github.event.pull_request.head.sha || github.sha }}
           path: experiments/economic_simulation/out/*.json
@@ -77,11 +77,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12.14'
       - uses: erlef/setup-beam@v1
