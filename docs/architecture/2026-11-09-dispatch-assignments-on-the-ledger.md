@@ -17,7 +17,7 @@ on every event and folds admitted ones into the gate's `dispatch` state.
 
 | Event | Signed by | Admitted when |
 | --- | --- | --- |
-| `DispatchDispatcherGrantedV1` | a declared governance key | the dispatcher key is not already granted for the tenant |
+| `DispatchDispatcherGrantedV1` | a declared governance key | the dispatcher key is not already granted for the tenant, and its pubkey is none of the chapter's declared role keys or restaurant, procurement or other dispatcher keys |
 | `DispatchAssignmentPlannedV1` | a dispatcher granted for the tenant, with its key | the assignment id is new; it holds an operator, and optionally a vehicle and a trailer |
 | `DispatchAssignmentTransitionV1` | the same | the expected version matches and the move is legal: `activate` (PLANNED → ACTIVE), `complete` (ACTIVE → COMPLETED), `cancel` (PLANNED or ACTIVE → CANCELLED) |
 
@@ -36,7 +36,11 @@ state from the ledger.
   role grants on the ledger (step 4's grants).
 - **Dispatchers are keys, not sessions.** Dispatch authorizes a signed-in
   person by role. Here a governance grant binds a dispatcher key to a tenant,
-  as restaurant devices are bound to a merchant.
+  as restaurant devices are bound to a merchant. A grant has no revocation
+  yet, so it counts forever, and the chapter key fence
+  (`CoopSubstrate.KeyFence`) grants a dispatcher pubkey once per chapter: it
+  is never a role, restaurant device or Dispatch, procurement or other
+  dispatcher key there, even for the same tenant.
 - **Timing, loads and contacts are not modelled.** `starts_at`/`ends_at`,
   the load's own lifecycle, assignment contacts and location consents stay in
   Dispatch.

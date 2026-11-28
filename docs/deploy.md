@@ -225,11 +225,13 @@ The JSON contains `merchant_id`, `tenant_id` (Dispatch UUID), `key_id` and
 `pubkey` (base64url without padding). The key can be revoked with
 `revoke-device`. The seed is a base64-encoded 32-byte seed in a protected
 file on the Dispatch machine. The chapter keeps that key apart: the ledger
-refuses it if it is any of the chapter's device or role keys, or was granted
-for another tenant, and no role key may reuse it later. The command reports
-such a refusal only as `not_admitted`. One Dispatch key may serve several
-merchants of its tenant. Re-enabling Dispatch after a revoke, or switching
-tenant, takes a new key ID and a new seed file.
+refuses it if it is any of the chapter's device, role, dispatcher or
+procurement route or operator keys, or was granted for another tenant, and
+none of those may reuse it later, even once it is revoked. Give each
+dispatcher grant and each cooperative's procurement route its own seed too.
+The command reports such a refusal only as `not_admitted`. One Dispatch key
+may serve several merchants of its tenant. Re-enabling Dispatch after a
+revoke, or switching tenant, takes a new key ID and a new seed file.
 
 | Dispatch release variable | Value |
 | --- | --- |

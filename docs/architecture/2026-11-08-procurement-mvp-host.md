@@ -261,6 +261,18 @@ key ID and hex public key, plus `active` and `expected_version`. A first route
 uses expected version zero. The currently enrolled route's key can be rotated
 without changing the tenant or site used by outstanding orders.
 
+The chapter key fence keeps route and operator keys apart. A route key serves
+only its own cooperative and is never an operator, role, restaurant or
+dispatcher key of the chapter; an operator key is never a route, role,
+restaurant or dispatcher key, but one operator key may serve several
+cooperatives. A key enrolled with `active: true` keeps counting after it is
+rotated away or deactivated, so rotate to a fresh seed. Re-sending a
+cooperative's route on a key it held before is admitted unless another holder
+also holds that key, which only history from before the fence can contain.
+The fence never refuses an enrollment with `active: false`, so such a
+collision can still be deactivated; the slot's own checks (expected version,
+governance signer, admission time) still apply.
+
 ```json
 {
   "type": "ProcurementDispatchRouteV1",

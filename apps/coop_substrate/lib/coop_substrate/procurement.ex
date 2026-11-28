@@ -53,6 +53,23 @@ defmodule CoopSubstrate.Procurement do
     bounty_evidence: MapSet.new(), bounty_attestations: %{}, dispatch: ProcurementDispatch.init()}
   def state(gate), do: Map.get(gate, :procurement, init())
 
+  @doc """
+  Every route and operator version admitted in `chapter` that bound `pubkey`,
+  in ledger order, including versions since rotated away or deactivated. The
+  chapter key fence reads it; no transition does.
+  """
+  def key_events(state, chapter, {:bytes, pubkey}), do: key_events(state, chapter, pubkey)
+
+  def key_events(state, chapter, pubkey) do
+    events =
+      for {_id, %Envelope{type: type, chapter_id: ^chapter} = env} <- state.events,
+          type in [@grant, @route],
+          env.payload["pubkey"] == {:bytes, pubkey},
+          do: env
+
+    Enum.sort_by(events, & &1.global_seq)
+  end
+
   def event_types do
     common = %{"cooperative_id" => :string}
     operator = Map.merge(common, %{"operator_id" => :string, "grant_version" => :int,

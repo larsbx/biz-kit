@@ -13,10 +13,22 @@ defmodule CoopSubstrate.KeyFence do
       `role_key_conflicts/3` for a role key): no grant holds a declared role
       key, a Dispatch key is none of the chapter's device keys and serves one
       tenant, and a merchant grants each key once.
+    * `{:dispatcher, tenant, key_id}` — each `DispatchDispatcherGrantedV1`,
+      so a dispatcher key is granted once in its chapter.
+    * `{:procurement_route, cooperative}` — a cooperative's active
+      `ProcurementDispatchRouteV1`: the route never conflicts with its own
+      earlier versions, and serves no other cooperative.
+    * `:procurement_operator` — every active `ProcurementOperatorGrantedV1`:
+      one operator key may serve several cooperatives and operator slots.
 
   A holding of another holder is always a conflict (`:holder_key_reuse`).
-  Grants count revoked or not; a role key only while it is declared. Another
-  chapter's keys never count.
+  Grants count revoked or not, and dispatchers forever (they are never
+  revoked); a role key only while it is declared; a procurement version only
+  if it was active, and then forever, even once its slot rotates away or
+  deactivates. A version with `active` false claims nothing, so the fence
+  never refuses deactivating a slot, even where history already holds a
+  collision.
+  Another chapter's keys never count.
 
   `CoopSubstrate.Protocol.Validity.check/2` applies it last, so the append
   gate and Commands preflight refuse a claim, and a domain refusal comes first.
@@ -24,17 +36,55 @@ defmodule CoopSubstrate.KeyFence do
   without it, boots and replays unchanged, and only the next claim is refused.
   """
 
+  alias CoopSubstrate.Procurement
+  alias DispatchCore.Admission, as: Dispatch
   alias RestaurantCore.Admission, as: Restaurant
 
-  @restaurant ~w(RoleKeyDeclared RestaurantDeviceGrantedV1 RestaurantDispatchGrantedV1)
+  @grants ~w(RestaurantDeviceGrantedV1 RestaurantDispatchGrantedV1)
+  @dispatcher "DispatchDispatcherGrantedV1"
+  @route "ProcurementDispatchRouteV1"
+  @operator "ProcurementOperatorGrantedV1"
 
   @doc "The holder an event claims its key for, or nil when it claims none."
-  def holder(%{type: type}) when type in @restaurant, do: :restaurant_core
+  def holder(%{type: type}) when type in ["RoleKeyDeclared" | @grants], do: :restaurant_core
+  def holder(%{type: @dispatcher, payload: p}), do: {:dispatcher, p["tenant_id"], p["key_id"]}
+
+  def holder(%{type: @route, payload: %{"active" => true} = p}),
+    do: {:procurement_route, p["cooperative_id"]}
+
+  def holder(%{type: @operator, payload: %{"active" => true}}), do: :procurement_operator
   def holder(_), do: nil
 
+  @doc "The holding a key event's binding is listed as in `holdings/3`."
+  def witness(%{type: "RoleKeyDeclared", payload: p}), do: {:role, p["role"], p["key_id"]}
+
+  def witness(%{type: type, payload: p}) when type in @grants,
+    do: {:grant, p["merchant_id"], p["key_id"]}
+
+  def witness(%{type: @dispatcher} = env), do: holder(env)
+  def witness(%{type: @route, payload: p}), do: {:route, p["cooperative_id"]}
+
+  def witness(%{type: @operator, payload: p}),
+    do: {:operator, p["cooperative_id"], p["operator_id"]}
+
   @doc "The chapter's holdings of `pubkey`, as `{holder, holding}`."
-  def holdings(gate, chapter, pubkey),
-    do: for(held <- Restaurant.key_holdings(gate, chapter, pubkey), do: {:restaurant_core, held})
+  def holdings(gate, chapter, pubkey) do
+    restaurant =
+      for held <- Restaurant.key_holdings(gate, chapter, pubkey), do: {:restaurant_core, held}
+
+    dispatchers =
+      for {tenant, key_id} <- Dispatch.grants(gate.dispatch, chapter, pubkey),
+          held = {:dispatcher, tenant, key_id},
+          do: {held, held}
+
+    procurement =
+      for env <- Procurement.key_events(Procurement.state(gate), chapter, pubkey),
+          holder = holder(env),
+          uniq: true,
+          do: {holder, witness(env)}
+
+    restaurant ++ dispatchers ++ procurement
+  end
 
   @doc """
   The rules a claim breaks in its chapter, each with the holding it breaks it

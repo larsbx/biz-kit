@@ -157,4 +157,29 @@ defmodule DispatchCore.AdmissionTest do
     assert refused == []
     assert Admission.active(state, @ch, "t2", :operator, "o1") == nil
   end
+
+  test "grants/3 lists a key's dispatcher grants in its chapter only" do
+    other = grant() |> put_in([:payload, "key_id"], "k-other")
+
+    {state, []} =
+      run([
+        grant("t2"),
+        grant("t1"),
+        grant() |> put_in([:payload, "key_id"], "k-disp-2"),
+        put_in(other.payload["pubkey"], {:bytes, <<3::256>>})
+      ])
+
+    elsewhere = %{role_keys: %{{"elsewhere", "governance"} => %{"k-gov" => <<1::256>>}}}
+
+    state =
+      Admission.fold(%{grant() | chapter_id: "elsewhere"}, Map.put(elsewhere, :dispatch, state))
+
+    held = [{"t1", "k-disp"}, {"t1", "k-disp-2"}, {"t2", "k-disp"}]
+    assert Admission.grants(state, @ch, <<2::256>>) == held
+    assert Admission.grants(state, @ch, {:bytes, <<2::256>>}) == held
+    assert Admission.grants(state, @ch, <<3::256>>) == [{"t1", "k-other"}]
+    assert Admission.grants(state, "elsewhere", <<2::256>>) == [{"t1", "k-disp"}]
+    assert Admission.grants(state, "unknown", <<2::256>>) == []
+    assert Admission.grants(state, @ch, <<4::256>>) == []
+  end
 end

@@ -60,3 +60,104 @@ module coop_substrate {
 module coop_substrate_control {
   import coop_substrate_spec(GUARDED = false).*
 }
+
+// coop_substrate, chapter key fence: "Within a chapter, a key newly bound at
+// append time is bound by no other holder; deactivating a procurement slot is
+// never refused."
+//
+// Models CoopSubstrate.KeyFence.check/2, the last step of Validity.check/2
+// (the append gate and Commands preflight, never a fold). Holders
+// (KeyFence.holder/1): "core" (declared role keys and restaurant grants, whose
+// mutual rules RestaurantCore states and restaurant_key_fence models), each
+// DispatchCore dispatcher grant {tenant, key_id}, each cooperative's
+// procurement Dispatch route, and the procurement operators (one holder across
+// cooperatives). A binding counts forever, except that a role revocation
+// forgets a role binding. A procurement event with active false claims nothing.
+// The ledger may start with bindings admitted before the fence (`fresh` false),
+// which replay unchanged; the obligation is about bindings admitted by the
+// fence. GUARDED switches it off.
+module key_fence_spec {
+  const GUARDED: bool
+
+  pure val CHAPTERS = Set("a", "b")
+  pure val KEYS = Set("k1", "k2")
+  // (holder, slot): a slot is one place a holder binds a key
+  pure val PLACES = Set(
+    ("core", "role"), ("core", "grant"),
+    ("dispatcher:t1:x1", "dispatcher:t1:x1"), ("dispatcher:t2:x2", "dispatcher:t2:x2"),
+    ("route:c1", "route:c1"), ("route:c2", "route:c2"),
+    ("operator", "operator:c1"), ("operator", "operator:c2"))
+  pure val PROCUREMENT_SLOTS = Set("route:c1", "route:c2", "operator:c1", "operator:c2")
+
+  type Bind = { chapter: str, key: str, holder: str, slot: str, fresh: bool }
+
+  var binds: Set[Bind]
+  // procurement slots that have been deactivated: (chapter, slot)
+  var deactivated: Set[(str, str)]
+
+  // History written before the fence: one key both a route and an operator key.
+  pure val PRE_FENCE = Set(
+    { chapter: "a", key: "k1", holder: "route:c1", slot: "route:c1", fresh: false },
+    { chapter: "a", key: "k1", holder: "operator", slot: "operator:c1", fresh: false })
+
+  action init = all {
+    nondet seeded = Set(true, false).oneOf()
+    binds' = if (seeded) PRE_FENCE else Set(),
+    deactivated' = Set(),
+  }
+
+  def free(c: str, k: str, h: str): bool =
+    binds.forall(b => (b.chapter == c and b.key == k) implies b.holder == h)
+
+  action bind(c: str, k: str, h: str, s: str): bool = all {
+    not(GUARDED) or free(c, k, h),
+    binds' = binds.union(Set({ chapter: c, key: k, holder: h, slot: s, fresh: true })),
+    deactivated' = deactivated,
+  }
+
+  // RoleKeyRevoked: the registry forgets the declaration.
+  action revokeRole(c: str, k: str): bool = all {
+    binds.exists(b => b.chapter == c and b.key == k and b.slot == "role"),
+    binds' = binds.filter(b => not(b.chapter == c and b.key == k and b.slot == "role")),
+    deactivated' = deactivated,
+  }
+
+  // A route or operator re-sent with active false: no claim, never refused.
+  action deactivate(c: str, s: str): bool = all {
+    binds.exists(b => b.chapter == c and b.slot == s),
+    deactivated' = deactivated.union(Set((c, s))),
+    binds' = binds,
+  }
+
+  action step = nondet c = CHAPTERS.oneOf()
+    nondet k = KEYS.oneOf()
+    nondet p = PLACES.oneOf()
+    nondet s = PROCUREMENT_SLOTS.oneOf()
+    any { bind(c, k, p._1, p._2), revokeRole(c, k), deactivate(c, s) }
+
+  val obligation = binds.forall(b => b.fresh implies binds.forall(o =>
+    (o.chapter == b.chapter and o.key == b.key) implies o.holder == b.holder))
+
+  // One operator key serves two cooperatives, admitted by the fence.
+  val obligationWitness = not(binds.exists(b => binds.exists(o =>
+    b.fresh and o.fresh and b.holder == "operator" and o.holder == "operator" and
+      b.chapter == o.chapter and b.key == o.key and b.slot != o.slot)))
+
+  // One key bound by two holders in two chapters, both admitted by the fence.
+  val crossChapterWitness = not(binds.exists(b => binds.exists(o =>
+    b.fresh and o.fresh and b.key == o.key and b.chapter != o.chapter and
+      b.holder != o.holder)))
+
+  // A slot whose key collides from before the fence is deactivated.
+  val remediationWitness = not(deactivated.exists(d => binds.exists(b => binds.exists(o =>
+    b.chapter == d._1 and b.slot == d._2 and o.chapter == b.chapter and o.key == b.key and
+      o.holder != b.holder))))
+}
+
+module key_fence {
+  import key_fence_spec(GUARDED = true).*
+}
+
+module key_fence_control {
+  import key_fence_spec(GUARDED = false).*
+}

@@ -115,6 +115,33 @@
         "witness": "obligationWitness",
         "max_steps": 6,
         "note": "Log append admits only signed, gate-authorized, non-replayed envelopes and assigns a derived stream and an unbroken sequence/hash chain."
+      },
+      {
+        "quint": "formal/quint/obligations/coop_substrate.qnt",
+        "main": "key_fence",
+        "control": "key_fence_control",
+        "invariant": "obligation",
+        "witness": "obligationWitness",
+        "max_steps": 6,
+        "note": "A key the append gate binds is bound by no other holder in its chapter: role keys and restaurant grants, each dispatcher grant, each cooperative's procurement route, and the procurement operators, who may share one key across cooperatives (CoopSubstrate.KeyFence.check/2)."
+      },
+      {
+        "quint": "formal/quint/obligations/coop_substrate.qnt",
+        "main": "key_fence",
+        "control": "key_fence_control",
+        "invariant": "obligation",
+        "witness": "remediationWitness",
+        "max_steps": 6,
+        "note": "A procurement version with active false claims no key, so a slot whose key collides from before the fence can still be deactivated (CoopSubstrate.KeyFence.holder/1)."
+      },
+      {
+        "quint": "formal/quint/obligations/coop_substrate.qnt",
+        "main": "key_fence",
+        "control": "key_fence_control",
+        "invariant": "obligation",
+        "witness": "crossChapterWitness",
+        "max_steps": 6,
+        "note": "The fence is per chapter: one key may be bound by different holders in different chapters (CoopSubstrate.KeyFence.holdings/3)."
       }
     ],
     "dispatch": [

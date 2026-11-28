@@ -20,6 +20,10 @@ defmodule DispatchCore.Admission do
   ACTIVE assignment per tenant. Every operator is exclusive here, the
   restrictive default: the role profiles that permit concurrency are not on
   the ledger yet. The trusted context is the grant, never the payload.
+
+  A dispatcher grant is never revoked. Keeping its key apart from the
+  chapter's other keys is the host's chapter key fence, which reads the
+  grants of a key with `grants/3`; `check/2` keeps a tenant's key IDs unique.
   """
 
   @grant "DispatchDispatcherGrantedV1"
@@ -82,6 +86,17 @@ defmodule DispatchCore.Admission do
   def fold(env, gate) do
     {:ok, state} = admit(env, gate.role_keys, gate.dispatch)
     state
+  end
+
+  @doc "The dispatcher grants of `pubkey` in `chapter`, as `{tenant, key_id}`, sorted."
+  def grants(state, chapter, {:bytes, pubkey}), do: grants(state, chapter, pubkey)
+
+  def grants(state, chapter, pubkey) do
+    grants =
+      for {{^chapter, tenant, key_id}, %{pubkey: ^pubkey}} <- state.dispatchers,
+          do: {tenant, key_id}
+
+    Enum.sort(grants)
   end
 
   @doc "A tenant's assignments by id."
