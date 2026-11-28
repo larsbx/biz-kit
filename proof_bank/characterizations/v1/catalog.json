@@ -739,7 +739,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "5947052443251a14f24f7d0e6323b69b96ef8636",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "c08c05fa4cf6c9b6e220d66208982bbe80646a78",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -1064,7 +1064,7 @@
       ],
       "observed_test_path": "apps/research_core/test/signed_reviews_test.exs",
       "audit_finding": "Key identities and current authority are host-asserted; a verified preflight is not a signed ledger event, archival access or validated consent. No host or publication writer exists.",
-      "first_formal_obligation": "Prove that revocation and key rotation prevent subsequent release, and that host-supplied authority binds the exact actor and scope through append admission.",
+      "first_formal_obligation": "In an abstract per-record grant model, sponsor/operator actions cannot confer release eligibility and community/narrator withdrawal denies the exact material and audience.",
       "first_formal_layer": "L2",
       "priority": "P0",
       "review_status": "needs_owner_review",
@@ -1075,8 +1075,8 @@
       "registered_at_sha": "d90dd9d7a6b1bfcd52ee9a428c9b4cd622908797",
       "evidence_git_blobs": {
         "apps/research_core/lib/research_core/access.ex": "33f1484b5fcbb43e7d2713dd1ebc818a2db5c71a",
-        "apps/research_core/lib/research_core/signed_reviews.ex": "f3cebafbb465f3d7b6e0ca3672dbd7ce476474ac",
-        "apps/research_core/test/signed_reviews_test.exs": "b66f1a068296664ef1512166bbf7b4b01abde18b"
+        "apps/research_core/lib/research_core/signed_reviews.ex": "d488e7be1c286eafaff4c2575be4d3596c802065",
+        "apps/research_core/test/signed_reviews_test.exs": "1104001d894da1f3f59018a820271c1b21a0494f"
       }
     }
   ],
@@ -1341,6 +1341,19 @@
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "624167e8f013568520b74e900a4dc374c64e2af0",
+      "date": "2026-11-27",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "research_core"
+      ],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned portfolio bytes updated for ResearchCore inventory, without asserting formal Elixir refinement or source-characterization re-inspection."
     }
   ]
 }

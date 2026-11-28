@@ -109,7 +109,9 @@ defmodule ResearchCore.SignedReviews do
 
   defp actor_parts(_), do: {:error, :invalid_review_intent}
 
-  defp id?(value) when is_binary(value), do: byte_size(value) <= 128 and Regex.match?(@identity, value)
+  defp id?(value) when is_binary(value),
+    do: byte_size(value) <= 128 and Regex.match?(@identity, value)
+
   defp id?(_), do: false
 
   defp whole?(n), do: is_integer(n) and n >= 0 and n <= @limit

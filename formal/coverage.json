@@ -351,6 +351,13 @@
         "invariant": "obligation",
         "witness": "obligationWitness"
       }
+    ],
+    "research_core": [
+      {
+        "lean": "BizKitResearchCore",
+        "theorem": "obligation",
+        "note": "Abstract per-record cultural consent: a sponsor or business operator cannot authorize release; revoking community consent immediately denies that material/audience. Elixir signature verification, current keys, host authority, and ledger refinement remain unproved."
+      }
     ]
   },
   "uncovered": []

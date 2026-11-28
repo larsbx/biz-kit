@@ -126,23 +126,27 @@ defmodule ResearchCore.SignedReviewsTest do
              SignedReviews.signing_bytes(%{c.intent | action: :pay})
   end
 
-  test "a separately signed community decision plus narrator decision permits only named material", c do
+  test "a separately signed community decision plus narrator decision permits only named material",
+       c do
     assert {:ok, narrator_approved} =
              SignedReviews.verify_and_apply(c.record, c.intent, c.signature, c.authority)
 
     {community_pub, community_secret} = :crypto.generate_key(:eddsa, :ed25519)
+
     community_intent = %{
       c.intent
       | actor: {:community, "council"},
         key_id: "council-key",
         expected_revision: 1
     }
+
     community_authority = %{
       c.authority
       | actor: {:community, "council"},
         key_id: "council-key",
         public_key: community_pub
     }
+
     {:ok, bytes} = SignedReviews.signing_bytes(community_intent)
     community_signature = :crypto.sign(:eddsa, :none, bytes, [community_secret, :ed25519])
 
@@ -163,20 +167,25 @@ defmodule ResearchCore.SignedReviewsTest do
       SignedReviews.verify_and_apply(c.record, c.intent, c.signature, c.authority)
 
     {community_pub, community_secret} = :crypto.generate_key(:eddsa, :ed25519)
+
     community_intent = %{
       c.intent
       | actor: {:community, "council"},
         key_id: "community-device",
         expected_revision: 1
     }
+
     community_authority = %{
       c.authority
       | actor: {:community, "council"},
         key_id: "community-device",
         public_key: community_pub
     }
+
     {:ok, community_bytes} = SignedReviews.signing_bytes(community_intent)
-    community_signature = :crypto.sign(:eddsa, :none, community_bytes, [community_secret, :ed25519])
+    community_signature =
+      :crypto.sign(:eddsa, :none, community_bytes, [community_secret, :ed25519])
+
 
     {:ok, approved} =
       SignedReviews.verify_and_apply(

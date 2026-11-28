@@ -141,3 +141,17 @@ a research sponsor, or any business governance grant is not sufficient.
 The Proof Bank catalog registers the new application with all verification
 states remaining explicitly unproved/unexecuted. The 2026-11-27 baseline
 inventory now includes 32 apps; changes remain fail-closed until re-registered.
+
+
+## Abstract Lean proof coverage
+
+`formal/lean/BizKitResearchCore.lean` models a fixed narrator roster,
+community grant and exact material/audience permissions. The `obligation`
+theorem excludes sponsor and operator actions as a source of release authority
+and shows community withdrawal blocks the relevant release. A separate
+narrator-revocation lemma and a sponsor-only negative control are included.
+The proof is compiled and axiom-audited by the regular Lean coverage workflow.
+
+This model does **not** yet prove the host-supplied key epoch is current,
+signature-to-identity binding, serialized event admission, privacy enforcement,
+archival key destruction or refinement to the Elixir implementation.

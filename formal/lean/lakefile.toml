@@ -1,6 +1,6 @@
 name = "BizKitEventProofs"
 version = "0.1.0"
-defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDispatchSpatial", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission", "BizKitProcurementContract", "BizKitAgentTask", "BizKitDriverExclusivity", "BizKitDriverExclusivityE3", "BizKitScf", "BizKitCommercialLineage"]
+defaultTargets = ["BizKitLeases", "BizKitBundles", "BizKitDispatch", "BizKitDispatchSpatial", "BizKitEventProofs", "BizKitOutcomeAdmission", "BizKitInventory", "BizKitInventoryLocations", "BizKitCommerce", "BizKitCommercialSetoff", "BizKitCommercialAdmission", "BizKitProcurementContract", "BizKitAgentTask", "BizKitDriverExclusivity", "BizKitDriverExclusivityE3", "BizKitScf", "BizKitCommercialLineage", "BizKitResearchCore"]
 
 [[lean_lib]]
 name = "BizKitLeases"
@@ -52,3 +52,6 @@ name = "BizKitScf"
 
 [[lean_lib]]
 name = "BizKitCommercialLineage"
+
+[[lean_lib]]
+name = "BizKitResearchCore"
