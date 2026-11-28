@@ -63,6 +63,8 @@ defmodule ProofBankCore.Portfolio do
     # Registered without review by owner decision (2026-11-08).
     {"procurement_host", :hosted, :conformance,
      "A command must be re-signed only after an explicit pre-append clock refusal, and never after an outcome that may have committed."},
+    {"research_core", :capability, :conformance,
+     "A signed sponsor or operator intent must not substitute for exact narrator and community authorization to release testimony."},
     {"restaurant_core", :capability, :conformance,
      "A restaurant event must be admitted only when signed by a device a governance grant authorized for that action."},
     {"restaurant_host", :hosted, :conformance,

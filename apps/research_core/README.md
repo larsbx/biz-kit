@@ -23,3 +23,15 @@ result is only one condition for release, never a download authorization.
 Run `cd apps/research_core && mix test --no-start` on Elixir 1.19.
 See [the design boundary](../../docs/architecture/2026-11-27-fieldwitness-biz-kit-boundary.md)
 for finance, privacy, custody, migration and formal-proof obligations.
+
+## Signed review-intent preflight
+
+`ResearchCore.SignedReviews` verifies a domain-separated, exact-scope
+Ed25519 intent under a **host-supplied current authority** mapping (actor, key,
+epoch, scope). It refuses stale revisions, tampering and revoked/rotated keys
+when the host provides their correct current state. It performs no signing-key
+registration, event append, signature custody or authorization for downloads.
+
+Do not let sponsors or API clients supply the trusted authority mapping.
+A future CoopSubstrate integration must resolve identity, cultural authority,
+key epochs, source revisions and approvals from the serialized signed log.

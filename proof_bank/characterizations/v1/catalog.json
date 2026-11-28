@@ -739,7 +739,7 @@
       "runtime_conformance": "not_established",
       "evidence_git_blobs": {
         "apps/proof_bank_core/lib/proof_bank_core.ex": "6e61648ee1ea23ae2f938b1af64d6e45725db4aa",
-        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "5947052443251a14f24f7d0e6323b69b96ef8636",
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex": "c08c05fa4cf6c9b6e220d66208982bbe80646a78",
         "apps/proof_bank_core/test/proof_bank_core_test.exs": "ac75b4c1dbba56e74800528fc756462a9f20c3a1"
       }
     },
@@ -1045,6 +1045,39 @@
         "apps/task_host/lib/task_host/web/auth_controller.ex": "2d0be453b399859c0974c2420815f512a1ed56c7",
         "apps/task_host/test/task_host/web/command_test.exs": "a7fbe14b7ed5ce6aa45cb942a310dba66c4c41f9"
       }
+    },
+    {
+      "schema": "biz-kit.proof-bank.characterization.v1",
+      "id": "research_core",
+      "source_repo": "larsbx/biz-kit",
+      "source_sha": "07ae05ca55befe2b4ff7bbf22db2d5b54c8ff03c",
+      "category": "capability",
+      "intended_purpose": "Pure FieldWitness oral-history narrator and community consent preflight with record-scoped Ed25519 signature verification",
+      "intended_features": [
+        "Exact-scope and exact-material release eligibility",
+        "Current authority key epoch binding",
+        "Deterministic signed review preflight"
+      ],
+      "observed_code_paths": [
+        "apps/research_core/lib/research_core/access.ex",
+        "apps/research_core/lib/research_core/signed_reviews.ex"
+      ],
+      "observed_test_path": "apps/research_core/test/signed_reviews_test.exs",
+      "audit_finding": "Key identities and current authority are host-asserted; a verified preflight is not a signed ledger event, archival access or validated consent. No host or publication writer exists.",
+      "first_formal_obligation": "In an abstract per-record grant model, sponsor/operator actions cannot confer release eligibility and community/narrator withdrawal denies the exact material and audience.",
+      "first_formal_layer": "L2",
+      "priority": "P0",
+      "review_status": "needs_owner_review",
+      "test_result": "not_executed",
+      "implementation_conformance": "not_established",
+      "proof_status": "not_proven",
+      "runtime_conformance": "not_established",
+      "registered_at_sha": "d90dd9d7a6b1bfcd52ee9a428c9b4cd622908797",
+      "evidence_git_blobs": {
+        "apps/research_core/lib/research_core/access.ex": "33f1484b5fcbb43e7d2713dd1ebc818a2db5c71a",
+        "apps/research_core/lib/research_core/signed_reviews.ex": "d488e7be1c286eafaff4c2575be4d3596c802065",
+        "apps/research_core/test/signed_reviews_test.exs": "d50abee761d36279a229f69d4fcc3c1b2193f13d"
+      }
     }
   ],
   "evidence_refreshes": [
@@ -1308,6 +1341,19 @@
       ],
       "renamed": {},
       "meaning": "Pinned bytes updated without re-inspection; characterizations still describe source_sha"
+    },
+    {
+      "at_sha": "624167e8f013568520b74e900a4dc374c64e2af0",
+      "date": "2026-11-27",
+      "decision": "owner: register and refresh; re-characterize at the next milestone",
+      "registered": [
+        "research_core"
+      ],
+      "refreshed_paths": [
+        "apps/proof_bank_core/lib/proof_bank_core/portfolio.ex"
+      ],
+      "renamed": {},
+      "meaning": "Pinned portfolio bytes updated for ResearchCore inventory, without asserting formal Elixir refinement or source-characterization re-inspection."
     }
   ]
 }
