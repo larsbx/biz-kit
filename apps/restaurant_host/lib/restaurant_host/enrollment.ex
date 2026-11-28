@@ -3,10 +3,11 @@ defmodule RestaurantHost.Enrollment do
   Operator-side restaurant enrollment, shared by Mix and the production
   release. It starts only the HTTP client, never a ledger writer or the host.
   The governance seed is read from HARNESS_KEYS_DIR and never sent or printed.
+  A refusal is returned and shown as a known code (`RestaurantHost.Refusal`).
   """
   alias CoopSubstrate.Governance.Client
   alias CoopSubstrate.Harness.Ops
-  alias RestaurantHost.DeviceGrants
+  alias RestaurantHost.{DeviceGrants, Refusal}
 
   @usage "restaurant.grant DEVICE --chapter CHAPTER --merchant MERCHANT [--server URL] [--yes]"
 
@@ -30,8 +31,8 @@ defmodule RestaurantHost.Enrollment do
             io.info.("granted: event #{id}")
             :ok
 
-          _ ->
-            {:error, :not_granted}
+          other ->
+            {:error, Refusal.decode(other, :not_granted)}
         end
       else
         io.info.("not granted; nothing was signed")
@@ -47,7 +48,7 @@ defmodule RestaurantHost.Enrollment do
         :ok
 
       {:error, reason} ->
-        IO.puts(:stderr, "Enrollment refused: #{reason}. Usage: #{@usage}")
+        IO.puts(:stderr, "Enrollment refused: #{Refusal.explain(reason)}. Usage: #{@usage}")
         System.halt(1)
     end
   end

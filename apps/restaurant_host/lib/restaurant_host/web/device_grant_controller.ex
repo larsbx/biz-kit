@@ -8,7 +8,9 @@ defmodule RestaurantHost.Web.DeviceGrantController do
   use Phoenix.Controller, formats: [:json]
 
   alias CoopSubstrate.Governance.{Authorization, Read}
-  alias RestaurantHost.{DeviceGrants, Management, Restaurant}
+  alias RestaurantHost.{DeviceGrants, Management, Refusal, Restaurant}
+
+  require Logger
 
   def show(conn, %{"device" => device}) do
     case DeviceGrants.details(Restaurant.current(), device) do
@@ -121,9 +123,12 @@ defmodule RestaurantHost.Web.DeviceGrantController do
   defp refuse(conn, {:error, :unknown_device}),
     do: conn |> put_status(404) |> json(%{error: "unknown_device"})
 
-  defp refuse(conn, {:error, reason}),
-    do:
-      conn
-      |> put_status(422)
-      |> json(%{error: if(is_atom(reason), do: Atom.to_string(reason), else: "not_admitted")})
+  # A bare reason as before; a wrapped one is logged, and named only from
+  # `RestaurantHost.Refusal`'s ledger table.
+  defp refuse(conn, {:error, reason}) do
+    unless is_atom(reason),
+      do: Logger.info("restaurant command refused: #{inspect(reason, limit: 10)}")
+
+    conn |> put_status(422) |> json(%{error: Refusal.code(reason)})
+  end
 end

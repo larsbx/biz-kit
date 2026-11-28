@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Restaurant.Grant do
 
     case RestaurantHost.Enrollment.run(args, io) do
       :ok -> :ok
-      {:error, reason} -> Mix.raise("cannot grant: #{reason}")
+      {:error, reason} -> Mix.raise("cannot grant: #{RestaurantHost.Refusal.explain(reason)}")
     end
   end
 end

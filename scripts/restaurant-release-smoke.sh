@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Build the production restaurant release, migrate, boot it, check it serves
-# the storefront and pairs a board, enroll both devices, then complete a pickup order on
-# its own ledger (scripts/restaurant_release_smoke.exs) and audit its chapter key
-# history. Locally and in CI; see docs/deploy.md.
+# the storefront and pairs a board, enroll both devices, see a repeat enrollment and a
+# colliding Dispatch grant refused by name, then complete a pickup order on its own ledger
+# (scripts/restaurant_release_smoke.exs) and audit its chapter key history. Locally
+# and in CI; see docs/deploy.md.
 #
 # Needs PostgreSQL reachable as $PGUSER/$PGPASSWORD (default postgres/postgres)
 # on localhost; it creates the database it names. Secrets are throwaway.
@@ -58,11 +59,21 @@ test "$(curl -s -o /dev/null -w '%{http_code}' "$url/board/pair/board-1/wrong")"
 test "$(curl -s -o /dev/null -w '%{http_code}' "$url/board/pair/board-1/$pairing")" = 302
 
 "$release" rpc 'env = System.fetch_env!("RESTAURANT_SMOKE_BOOTSTRAP") |> File.read!() |> :erlang.binary_to_term([:safe]); {:ok, _} = CoopSubstrate.Log.append(env)'
+grant() { echo "RestaurantHost.ReleaseTasks.grant([\"$1\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"; }
 for device in storefront board-1; do
   # A separate release VM has neither device seeds nor a running appender.
   HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
-    "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.grant([\"$device\", \"--chapter\", \"$chapter\", \"--merchant\", \"shop\", \"--server\", \"$url\", \"--yes\"])"
+    "$release" eval "nil = Process.whereis(CoopSubstrate.Log); $(grant "$device")"
 done
+
+# An operator task the ledger refuses exits 1, naming the refusal and what to do.
+refused() {
+  local status=0 out
+  out=$(HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
+    "$release" eval "$2" 2>&1 >/dev/null) || status=$?
+  test "$status" = 1 && grep -q "refused: $1: " <<<"$out" || { echo "$out" >&2; exit 1; }
+}
+refused restaurant_key_already_granted "$(grant storefront)"
 
 cat > "$work/menu.json" <<JSON
 {
@@ -76,6 +87,14 @@ JSON
 HARNESS_KEYS_DIR="$work/keys" env -u RESTAURANT_DEVICE_SEED_STOREFRONT -u RESTAURANT_DEVICE_SEED_BOARD_1 \
   "$release" eval "nil = Process.whereis(CoopSubstrate.Log); RestaurantHost.ReleaseTasks.manage([\"publish-menu\", \"$work/menu.json\", \"--chapter\", \"$chapter\", \"--server\", \"$url\"])"
 curl -fs "$url/" | grep -q "Margherita special"
+
+# A Dispatch grant on the storefront's device key is refused, and named.
+pubkey=$(curl -fs "$url/api/device-grants/storefront" | sed -n 's/.*"pubkey":"\([^"]*\)".*/\1/p')
+cat > "$work/dispatch.json" <<JSON
+{"merchant_id": "shop", "tenant_id": "11111111-1111-1111-1111-111111111111",
+ "key_id": "k-dispatch", "pubkey": "$pubkey"}
+JSON
+refused key_not_separate "RestaurantHost.ReleaseTasks.manage([\"grant-dispatch\", \"$work/dispatch.json\", \"--chapter\", \"$chapter\", \"--server\", \"$url\"])"
 
 out=$("$release" rpc "Code.eval_file(\"$PWD/scripts/restaurant_release_smoke.exs\")")
 echo "$out"

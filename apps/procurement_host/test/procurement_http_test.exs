@@ -189,6 +189,58 @@ defmodule ProcurementHost.HTTPTest do
     assert request(:get, "/requests", %{}, page).status == 303
   end
 
+  test "offline enrollment names a ledger refusal: a route on the operator key", %{f: f} do
+    env = %{
+      "PROCUREMENT_GOVERNANCE_SEED_HEX" => Base.encode16(f.gov.seed),
+      "PROCUREMENT_GOVERNANCE_KEY_ID" => "gov"
+    }
+
+    previous = Map.new(env, fn {name, _} -> {name, System.get_env(name)} end)
+    System.put_env(env)
+
+    path =
+      Path.join(System.tmp_dir!(), "procurement-route-#{System.unique_integer([:positive])}.json")
+
+    on_exit(fn ->
+      File.rm(path)
+
+      Enum.each(previous, fn
+        {name, nil} -> System.delete_env(name)
+        {name, value} -> System.put_env(name, value)
+      end)
+    end)
+
+    route = fn pubkey ->
+      File.write!(
+        path,
+        Jason.encode!(%{
+          "type" => "ProcurementDispatchRouteV1",
+          "chapter_id" => f.context.chapter_id,
+          "payload" => %{
+            "cooperative_id" => "coop",
+            "tenant_id" => "11111111-1111-1111-1111-111111111111",
+            "site" => "North dock",
+            "key_id" => "route",
+            "pubkey_hex" => Base.encode16(pubkey),
+            "active" => true,
+            "expected_version" => 0
+          }
+        })
+      )
+    end
+
+    route.(f.operator.signer.pubkey)
+    head = Log.head()
+
+    assert_raise RuntimeError,
+                 ~r/procurement authority event refused: \{:reject, 0, :key_not_separate\}/,
+                 fn -> ProcurementHost.ReleaseTasks.enroll(path) end
+
+    assert Log.head() == head
+    route.(new_member("procurement_dispatch", "route").signer.pubkey)
+    assert %{event_id: _, global_seq: _} = ProcurementHost.ReleaseTasks.enroll(path)
+  end
+
   test "HTML escape and closed form conversion" do
     assert HTML.escape("<script>\"&") == "&lt;script&gt;&quot;&amp;"
     assert {:error, _} = HTML.attributes("made_up", %{})

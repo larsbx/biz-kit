@@ -2,14 +2,15 @@ defmodule RestaurantHost.Management do
   @moduledoc """
   Operator commands for the restaurant release. The host holds the exact
   command for a declared governance key, and its own Log admits the signature.
-  The operator's release copy signs locally without starting a ledger writer.
+  The operator's release copy signs locally without starting a ledger writer,
+  and shows a refusal as a known code (`RestaurantHost.Refusal`).
   """
 
   alias CoopSubstrate.Commands
   alias CoopSubstrate.Governance.Client
   alias CoopSubstrate.Harness.Ops
   alias RestaurantCore.{Delivery, Menu}
-  alias RestaurantHost.{DeviceGrants, Restaurant}
+  alias RestaurantHost.{DeviceGrants, Refusal, Restaurant}
 
   @operations %{
     "publish-menu" => "RestaurantMenuPublishedV1",
@@ -89,7 +90,7 @@ defmodule RestaurantHost.Management do
         IO.puts("Admitted restaurant command #{id}")
 
       error ->
-        IO.puts(:stderr, "Restaurant command refused: #{inspect(error, limit: 5)}")
+        IO.puts(:stderr, "Restaurant command refused: #{Refusal.describe(error)}")
         IO.puts(:stderr, "Usage: restaurant.manage OP FILE --chapter CHAPTER --server URL")
         System.halt(1)
     end

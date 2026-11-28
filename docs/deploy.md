@@ -159,9 +159,10 @@ append. The ledger refuses a repeat enrollment, a device key the merchant
 was already granted under another key ID (revoked or not), a key the chapter
 granted to Dispatch, and a key the chapter currently declares for a role
 (governance, steward, checkpoint or setoff reviewer); a granted device key,
-even once revoked, is never declared for a role later. The command reports
-each only as a refusal (`not_granted`), so check chapter governance, device
-configuration, key identifiers and seeds, and clock before preparing a new grant. This command does not rotate or revoke keys.
+even once revoked, is never declared for a role later. The command names
+each refusal and what to do about it
+([When a restaurant command is refused](#when-a-restaurant-command-is-refused)).
+This command does not rotate or revoke keys.
 Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 `_`, `.` or `-`, starting with a letter or digit. Device IDs, key IDs, derived
 seed-variable names and device keys must be distinct in one restaurant.
@@ -229,7 +230,7 @@ refuses it if it is any of the chapter's device, role, dispatcher or
 procurement route or operator keys, or was granted for another tenant, and
 none of those may reuse it later, even once it is revoked. Give each
 dispatcher grant and each cooperative's procurement route its own seed too.
-The command reports such a refusal only as `not_admitted`. One Dispatch key
+The command names such a refusal `key_not_separate`. One Dispatch key
 may serve several merchants of its tenant. Re-enabling Dispatch after a
 revoke, or switching tenant, takes a new key ID and a new seed file.
 
@@ -268,6 +269,44 @@ The routine path requires no dispatcher RPC or document review. A revoked
 courier, changed route, or cancellation after accepted custody requires
 operator reconciliation. The pilot uses a fixed destination and does not
 collect customer addresses in checkout.
+
+### When a restaurant command is refused
+
+`restaurant.grant` and `restaurant.manage`, and their release tasks, print a
+refusal's code and what to do, for example
+`Restaurant command refused: stale_menu: The menu revision moved. ...`, and
+exit non-zero. The host names these ledger refusals only to governance, on
+a signed request to prepare a command or on the held ID that request
+returned, and never echoes a key ID or role:
+
+| Code | Meaning and what to do |
+| --- | --- |
+| `key_not_separate` | The public key is already another kind of key in this chapter (a device, Dispatch, dispatcher or procurement key, revoked or not, or a declared role key) or serves another Dispatch tenant. Make a new seed and key ID. |
+| `restaurant_key_already_granted` | This merchant already granted this key ID or public key, revoked or not. Use a new key ID and seed. |
+| `restaurant_device_not_active` | No active grant has that key ID at this merchant. |
+| `stale_menu` | The menu revision moved. Read `GET /api/restaurant-menu` and prepare again. |
+| `invalid_restaurant_menu` | The menu items or prices are malformed. |
+| `invalid_restaurant_grant` | The device grant fields are malformed. |
+| `invalid_dispatch_tenant` | `tenant_id` must be the Dispatch tenant UUID. |
+| `invalid_dispatch_grant` | The Dispatch grant fields or public key are malformed. |
+| `restaurant_governance_not_declared` | The signing governance key is not declared in the chapter. |
+| `role_key_not_declared` | The signing key is not, or no longer, declared for its role, for example revoked between prepare and submit. |
+| `invalid_signature` | The signature does not verify under the held governance key. Check the seed. |
+
+The host's own refusals are unchanged: `forbidden` (the governance request
+was not authenticated; check the key ID, its seed and the clock),
+`unknown_device`, `bad_request`, `unknown_command` (the hold expired or was
+spent; prepare again), `signature_count` and `unknown_governance_key`. The
+operator's copy refuses to sign with `not_what_was_shown` when the host
+offers other bytes than the reviewed command, and also reports
+`governance_key_unavailable` and `invalid_options`. `restaurant.grant`
+reports `unexpected_proposal`, having signed nothing, when it cannot fetch
+or read the device's proposal (for example, the host is unreachable or does
+not serve that device) or the proposal names another chapter, merchant or
+device, and `not_granted` when, after the proposal was shown, the host stops
+answering or its answer cannot be read; a hold it returns without signing
+bytes is `unexpected_proposal` too. Any other ledger refusal is still
+`not_admitted`, and the host logs it at info level.
 
 ## Audit chapter key history
 

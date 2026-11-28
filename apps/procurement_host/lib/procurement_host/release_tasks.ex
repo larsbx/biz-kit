@@ -29,7 +29,10 @@ defmodule ProcurementHost.ReleaseTasks do
       timestamp_ms: div(Procurement.clock_ms(), 1_000) * 1_000,
       signers: [%{role: "governance", key_id: key, pubkey: Crypto.pubkey_from_seed(seed)}])
     {:ok, signed} = Envelope.sign(env, key, seed)
-    {:ok, [accepted]} = Log.append(signed)
-    %{event_id: accepted.event_id, global_seq: accepted.global_seq}
+
+    case Log.append(signed) do
+      {:ok, [accepted]} -> %{event_id: accepted.event_id, global_seq: accepted.global_seq}
+      {:error, reason} -> raise "procurement authority event refused: #{inspect(reason)}"
+    end
   end
 end
