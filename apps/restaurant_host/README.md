@@ -63,6 +63,20 @@ and the explicit flag; development and production keep their existing
 settings. It does not enable runtime locale downloads. `--no-start` keeps the
 host's explicit startup in its test helper.
 
+The shared PostgreSQL runner also exercises the real Dispatch worker against
+RestaurantHost over loopback HTTP. From a clean checkout, follow the disposable
+database and toolchain setup in
+[`procurement-dispatch.yml`](../../.github/workflows/procurement-dispatch.yml),
+then run `bash scripts/test-procurement-dispatch.sh`.
+
+The restaurant scenarios require checkout through delivered status, outage and
+retry recovery without duplicate assignment or custody writes, and refusal of a
+signed pickup submitted after kitchen cancellation. The runner records its
+source revision and `restaurant-worker.log` under
+`.artifacts/procurement-dispatch/<revision>/`. These scenarios use synthetic
+identities and the LiveView test client. Record a successful hosted run for the
+revision before claiming acceptance of the added cases.
+
 ## Pickup MVP boundaries
 
 Customers and staff use prebound Biz-kit identities. Discounts are
