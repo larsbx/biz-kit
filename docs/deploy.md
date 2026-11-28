@@ -156,10 +156,12 @@ configured device key. The client checks the canonical bytes match the
 reviewed grant and governance signer, then sends only a signature. Submission
 is single-use; expired, replayed, unauthorized or malformed grants cannot
 append. The ledger refuses a repeat enrollment, a device key the merchant
-was already granted under another key ID (revoked or not), and a key the
-chapter granted to Dispatch. The command reports each only as a refusal
-(`not_granted`), so check chapter governance, device configuration, key
-identifiers and seeds, and clock before preparing a new grant. This command does not rotate or revoke keys.
+was already granted under another key ID (revoked or not), a key the chapter
+granted to Dispatch, and a key the chapter currently declares for a role
+(governance, steward, checkpoint or setoff reviewer); a granted device key,
+even once revoked, is never declared for a role later. The command reports
+each only as a refusal (`not_granted`), so check chapter governance, device
+configuration, key identifiers and seeds, and clock before preparing a new grant. This command does not rotate or revoke keys.
 Device IDs, key IDs, chapter and merchant use 1–128 ASCII letters, digits,
 `_`, `.` or `-`, starting with a letter or digit. Device IDs, key IDs, derived
 seed-variable names and device keys must be distinct in one restaurant.

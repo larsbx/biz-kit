@@ -18,8 +18,9 @@ defmodule RestaurantCore.Admission do
   The trusted context is derived from the grant, never from the payload, and
   the outcome is exactly the reducers' outcome (`admit/3` serves both check and
   fold). `check/2` adds one fence on new grants that the fold never applies:
-  a chapter's Dispatch keys share nothing with its device and role keys (see
-  `check/2`). Every event is a business fact: none asserts payment or settlement.
+  within a chapter no grant holds a declared role key, and a Dispatch key
+  shares nothing with its device keys (see `check/2`). Every event is a
+  business fact: none asserts payment or settlement.
   Money is Hawala's: nothing here computes, accepts or settles an amount.
   """
 
@@ -211,59 +212,113 @@ defmodule RestaurantCore.Admission do
   `:ok` when the event may be appended to a gate holding `role_keys` and
   `restaurant`: `admit/3` admits it and, for a grant, the key fence holds.
 
-  The fence keeps a chapter's keys apart. A Dispatch key is never one of the
-  chapter's device keys or declared role keys, and serves one tenant. Within a
-  merchant, a key is granted at most once, so a revoked seed is never granted
-  there again. Revoked grants keep counting. `fold/2` does not apply the fence,
-  so history admitted before it, or by an appender without it, replays
-  unchanged. It fences new admissions only; reads never assume it.
+  The fence keeps a chapter's keys apart (`key_conflicts/2`). No grant holds a
+  declared role key, and a Dispatch key is never one of the chapter's device
+  keys and serves one tenant. Within a merchant, a key is granted at most once,
+  so a revoked seed is never granted there again. Revoked grants keep counting;
+  a revoked role key does not. The converse, a role key on a granted key, is
+  `role_key_conflicts/3`, for the host that declares role keys. `fold/2` does
+  not apply the fence, so history admitted before it, or by an appender
+  without it, replays unchanged. It fences new admissions only; reads never
+  assume it.
   """
   def check(env, gate) do
     with {:ok, _} <- admit(env, gate.role_keys, gate.restaurant),
-         do: fence(env, gate.role_keys, gate.restaurant)
+         do: fence(key_conflicts(env, gate))
   end
 
-  @doc "Whether `pubkey` was ever granted to Dispatch in `chapter`, revoked or not."
-  def dispatch_pubkey?(state, chapter, {:bytes, pubkey}),
-    do: dispatch_pubkey?(state, chapter, pubkey)
+  @key_rules [
+    :device_dispatch_key_reuse,
+    :device_role_key_reuse,
+    :dispatch_role_key_reuse,
+    :dispatch_cross_tenant_key_reuse,
+    :merchant_key_reuse
+  ]
+  @key_rank Map.new(Enum.with_index(@key_rules))
 
-  def dispatch_pubkey?(state, chapter, pubkey),
-    do:
-      Enum.any?(
-        state.grants,
-        &match?({{^chapter, _, _}, %{actor: :dispatch, pubkey: ^pubkey}}, &1)
-      )
+  @doc "The key fence's rules, most decisive first."
+  def key_rules, do: @key_rules
 
-  defp fence(
-         %{type: type, chapter_id: ch, payload: %{"pubkey" => {:bytes, key}} = p},
-         keys,
-         state
-       )
-       when type in [@grant, @dispatch_grant] do
-    held =
-      for {{^ch, merchant, _}, %{pubkey: ^key} = grant} <- state.grants, do: {merchant, grant}
+  @doc "The refusal a broken key rule causes."
+  def refusal(:merchant_key_reuse), do: :restaurant_key_already_granted
+  def refusal(rule) when rule in @key_rules, do: :key_not_separate
 
-    role_key? =
-      Enum.any?(keys, fn {{chapter, _role}, ids} -> chapter == ch and key in Map.values(ids) end)
+  @doc """
+  The chapter's holdings of `pubkey`, sorted: every grant, revoked or not, as
+  `{:grant, merchant, key_id}`, and every currently declared role key as
+  `{:role, role, key_id}`.
+  """
+  def key_holdings(gate, chapter, {:bytes, pubkey}), do: key_holdings(gate, chapter, pubkey)
 
-    cond do
-      not apart?(type, p, held, role_key?) -> {:error, :key_not_separate}
-      List.keymember?(held, p["merchant_id"], 0) -> {:error, :restaurant_key_already_granted}
-      true -> :ok
+  def key_holdings(gate, chapter, pubkey) do
+    grants =
+      for {{^chapter, merchant, key_id}, %{pubkey: ^pubkey}} <- gate.restaurant.grants,
+          do: {:grant, merchant, key_id}
+
+    roles =
+      for {{^chapter, role}, ids} <- gate.role_keys,
+          {key_id, ^pubkey} <- ids,
+          do: {:role, role, key_id}
+
+    Enum.sort(grants ++ roles)
+  end
+
+  @doc """
+  The key rules a new grant breaks in its chapter, each with the holding it
+  breaks it against, most decisive first. `[]` for every other event.
+  """
+  def key_conflicts(%{type: type, chapter_id: ch, payload: %{"pubkey" => key} = p}, gate)
+      when type in [@grant, @dispatch_grant],
+      do: conflicts(gate, ch, claim(type, p), key)
+
+  def key_conflicts(_, _), do: []
+
+  @doc "The key rules a role key on `pubkey` breaks in `chapter`, each with its grant."
+  def role_key_conflicts(gate, chapter, pubkey), do: conflicts(gate, chapter, :role, pubkey)
+
+  defp conflicts(gate, ch, claim, key) do
+    for held <- key_holdings(gate, ch, key), rule <- rules(claim, side(gate, ch, held)) do
+      {rule, held}
+    end
+    |> Enum.sort_by(fn {rule, held} -> {@key_rank[rule], held} end)
+  end
+
+  defp claim(@grant, p), do: {:device, p["merchant_id"]}
+  defp claim(@dispatch_grant, p), do: {:dispatch, p["merchant_id"], p["tenant_id"]}
+
+  defp side(_gate, _ch, {:role, _, _}), do: :role
+
+  defp side(gate, ch, {:grant, merchant, key_id}) do
+    case gate.restaurant.grants[{ch, merchant, key_id}] do
+      %{actor: :dispatch, tenant: tenant} -> {:dispatch, merchant, tenant}
+      _ -> {:device, merchant}
     end
   end
 
-  defp fence(_, _, _), do: :ok
+  # One relation, symmetric: the rules two holdings of one key break.
+  defp rules(:role, :role), do: []
+  defp rules(:role, grant), do: [role_rule(grant)]
+  defp rules(grant, :role), do: [role_rule(grant)]
+  defp rules(a, b), do: Enum.reject([apart_rule(a, b), once_rule(a, b)], &is_nil/1)
 
-  defp apart?(@dispatch_grant, p, held, role_key?),
-    do:
-      not role_key? and
-        Enum.all?(held, fn {_, grant} ->
-          grant.actor == :dispatch and grant.tenant == p["tenant_id"]
-        end)
+  defp role_rule({:device, _}), do: :device_role_key_reuse
+  defp role_rule({:dispatch, _, _}), do: :dispatch_role_key_reuse
 
-  defp apart?(@grant, _, held, _),
-    do: Enum.all?(held, fn {_, grant} -> grant.actor != :dispatch end)
+  defp apart_rule({:device, _}, {:dispatch, _, _}), do: :device_dispatch_key_reuse
+  defp apart_rule({:dispatch, _, _}, {:device, _}), do: :device_dispatch_key_reuse
+
+  defp apart_rule({:dispatch, _, tenant}, {:dispatch, _, other}) when tenant != other,
+    do: :dispatch_cross_tenant_key_reuse
+
+  defp apart_rule(_, _), do: nil
+
+  defp once_rule(a, b), do: if(merchant_id(a) == merchant_id(b), do: :merchant_key_reuse)
+
+  defp merchant_id({:device, merchant}), do: merchant
+  defp merchant_id({:dispatch, merchant, _tenant}), do: merchant
+
+  defp fence([]), do: :ok
+  defp fence([{rule, _} | _]), do: {:error, refusal(rule)}
 
   @doc "The restaurant state after an admitted event."
   def fold(env, gate) do

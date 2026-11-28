@@ -61,17 +61,20 @@ module restaurant_core_control {
   import restaurant_core_spec(GUARDED = false).*
 }
 
-// restaurant_core, key fence: "Within a chapter a Dispatch key is none of the
-// chapter's device or role keys and serves one tenant; within a merchant a key
-// is granted once."
+// restaurant_core, key fence: "Within a chapter no grant holds a declared role
+// key, a Dispatch key is none of the chapter's device keys and serves one
+// tenant; within a merchant a key is granted once."
 //
 // Models the fence RestaurantCore.Admission.check/2 adds to admit/3 for
-// RestaurantDeviceGrantedV1 and RestaurantDispatchGrantedV1 (fence/3: apart,
-// then once), and Validity's RoleKeyDeclared clause (dispatch_pubkey?/3).
+// RestaurantDeviceGrantedV1 and RestaurantDispatchGrantedV1
+// (key_conflicts/2: apart, then once), and the converse for RoleKeyDeclared
+// (role_key_conflicts/3, applied by CoopSubstrate.KeyFence from Validity).
 // Abstracted: signatures (governance signs every grant), key ids and admit/3's
-// other refusals, and revocation: a revoked grant stays in the state, so
-// revoking never changes which keys are held and cannot break the obligation.
-// GUARDED switches the fence off.
+// other refusals, and grant revocation: a revoked grant stays in the state,
+// so revoking never changes which keys are held and cannot break the
+// obligation. A role revocation forgets that declaration (Membership deletes
+// it), so a revoked role key may later be granted. GUARDED switches the fence
+// off.
 module restaurant_key_fence_spec {
   const GUARDED: bool
 
@@ -79,20 +82,24 @@ module restaurant_key_fence_spec {
   pure val MERCHANTS = Set("m1", "m2")
   pure val KEYS = Set("k1", "k2", "k3")
   pure val TENANTS = Set("t1", "t2")
+  // declaration slots (role, key id)
+  pure val SLOTS = Set("governance", "steward")
 
   type Grant = { chapter: str, merchant: str, key: str, dispatch: bool, tenant: str }
 
   var grants: Set[Grant]
-  // declared role keys, any role: (chapter, key)
-  var roleKeys: Set[(str, str)]
+  // currently declared role keys: (chapter, slot, key)
+  var roleKeys: Set[(str, str, str)]
 
   action init = all { grants' = Set(), roleKeys' = Set() }
+
+  def roleKey(c: str, k: str): bool = roleKeys.exists(r => r._1 == c and r._3 == k)
 
   action grant(c: str, m: str, k: str, d: bool, t: str): bool = {
     val held = grants.filter(h => h.chapter == c and h.key == k)
     val apart =
-      if (d) not(roleKeys.contains((c, k))) and held.forall(h => h.dispatch and h.tenant == t)
-      else held.forall(h => not(h.dispatch))
+      not(roleKey(c, k)) and
+        (if (d) held.forall(h => h.dispatch and h.tenant == t) else held.forall(h => not(h.dispatch)))
     val once = held.forall(h => h.merchant != m)
     all {
       not(GUARDED) or (apart and once),
@@ -101,9 +108,16 @@ module restaurant_key_fence_spec {
     }
   }
 
-  action declareRole(c: str, k: str): bool = all {
-    not(GUARDED) or not(grants.exists(g => g.chapter == c and g.key == k and g.dispatch)),
-    roleKeys' = roleKeys.union(Set((c, k))),
+  action declareRole(c: str, s: str, k: str): bool = all {
+    not(roleKeys.exists(r => r._1 == c and r._2 == s)),
+    not(GUARDED) or not(grants.exists(g => g.chapter == c and g.key == k)),
+    roleKeys' = roleKeys.union(Set((c, s, k))),
+    grants' = grants,
+  }
+
+  action revokeRole(c: str, s: str): bool = all {
+    roleKeys.exists(r => r._1 == c and r._2 == s),
+    roleKeys' = roleKeys.filter(r => not(r._1 == c and r._2 == s)),
     grants' = grants,
   }
 
@@ -112,13 +126,14 @@ module restaurant_key_fence_spec {
     nondet k = KEYS.oneOf()
     nondet d = Set(true, false).oneOf()
     nondet t = TENANTS.oneOf()
-    any { grant(c, m, k, d, t), declareRole(c, k) }
+    nondet s = SLOTS.oneOf()
+    any { grant(c, m, k, d, t), declareRole(c, s, k), revokeRole(c, s) }
 
   val obligation =
     grants.forall(g => grants.forall(h =>
       (g != h and g.chapter == h.chapter and g.key == h.key) implies
         (g.merchant != h.merchant and g.dispatch == h.dispatch and (not(g.dispatch) or g.tenant == h.tenant))))
-    and grants.forall(g => g.dispatch implies not(roleKeys.contains((g.chapter, g.key))))
+    and grants.forall(g => not(roleKey(g.chapter, g.key)))
 
   // One Dispatch key serves two merchants of its tenant.
   val obligationWitness = not(grants.exists(g => grants.exists(h =>

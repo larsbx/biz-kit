@@ -33,9 +33,12 @@ device, run `OrderCore.Placement` and `Kitchen.apply/3`. The trusted context
 comes from the grant, never the payload, and `test/admission_test.exs` proves
 admission refines the kitchen reducer (same outcome, same state, for any step
 sequence). `check/2` adds a fence on new grants that the fold never applies, so
-older history replays unchanged: within a chapter, a Dispatch key is none of
-the device or role keys and serves one tenant, and a merchant grants each key
-once, revoked or not. `test/key_separation_test.exs` proves `check/2` admits a
+older history replays unchanged: within a chapter, no grant holds a declared
+role key, a Dispatch key is none of the device keys and serves one tenant, and
+a merchant grants each key once, revoked or not. `key_conflicts/2` names each
+rule a grant breaks with the holding it breaks it against, and
+`role_key_conflicts/3` states the converse, which the substrate applies when a
+role key is declared. `test/key_separation_test.exs` proves `check/2` admits a
 grant exactly when `admit/3` does and those keys stay apart.
 
 Money is Hawala's. The device prices an order with `CommerceCore.Checkout`

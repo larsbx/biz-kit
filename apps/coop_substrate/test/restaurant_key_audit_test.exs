@@ -99,13 +99,14 @@ defmodule CoopSubstrate.RestaurantKeyAuditTest do
     other_gov = new_member("governance")
     shared_device = new_member()
     shared_dispatch = new_member()
+    role_elsewhere = new_member()
+    rotated_key = new_member()
     replacement = new_member()
 
     assert {:ok, _} =
              Log.append([
                role(gov, "governance", gov.signer.key_id, gov),
                role(other_gov, "governance", other_gov.signer.key_id, other_gov, @other_chapter),
-               role(gov, "steward", "operator", shared_device),
                device(gov, "shared-merchant", "device", shared_device),
                revoke_grant(gov, "shared-merchant", "device"),
                device(gov, "other-merchant", "device", shared_device),
@@ -117,11 +118,11 @@ defmodule CoopSubstrate.RestaurantKeyAuditTest do
                  shared_device,
                  @other_chapter
                ),
-               role(gov, "checkpoint", "outside-dispatch", shared_device),
-               device(gov, "third-merchant", "outside-dispatch", shared_device),
+               role(other_gov, "checkpoint", "outside", role_elsewhere, @other_chapter),
+               device(gov, "third-merchant", "outside", role_elsewhere),
                role(gov, "checkpoint", "rotated", shared_dispatch),
                revoke_role(gov, "checkpoint", "rotated"),
-               role(gov, "checkpoint", "rotated", replacement),
+               role(gov, "checkpoint", "rotated", rotated_key),
                dispatch(gov, "shared-merchant", @tenant_a, "courier", shared_dispatch),
                revoke_grant(gov, "shared-merchant", "courier"),
                dispatch(gov, "other-merchant", @tenant_a, "courier", shared_dispatch),

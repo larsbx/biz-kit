@@ -62,14 +62,18 @@ defmodule CoopSubstrate.Protocol.Validity do
       per-type check). Genesis (the first governance key) is trust-on-first-
       use, self-certified; later declarations/revocations are governance-
       signed; revoking the last governance key is unrepresentable. A key the
-      chapter granted to restaurant Dispatch is never declared a role key
-      (`RestaurantCore.Admission.check/2` fences the converse).
+      chapter ever granted to a restaurant device or Dispatch is never
+      declared a role key (the chapter key fence, below).
     * `KeyRotated` (1D) — self-rotation: for a REGISTERED member, the
       rotation must be signed by the member's current key and `old_key_id`
       must match it (rotations chain). Rotations for unregistered ids stay
       inert-and-ungated (1A compatibility; ChapterStats still records them).
       Governance-recovery rotation (lost key) is flagged open (08 §10.3).
       Everything else: no log-dependent constraints.
+
+  Last, for an event that binds a key, the chapter key fence
+  (`CoopSubstrate.KeyFence`): within a chapter, each key has one holder. It
+  runs only here, at the append gate and Commands preflight, never in a fold.
   """
 
   alias CoopSubstrate.Capital.AccrualRules
@@ -78,6 +82,7 @@ defmodule CoopSubstrate.Protocol.Validity do
   alias CoopSubstrate.Dispatch
   alias CoopSubstrate.Finance
   alias CoopSubstrate.Floor
+  alias CoopSubstrate.KeyFence
   alias CoopSubstrate.Membership.Lifecycle
   alias CoopSubstrate.Projections.Membership
   alias CoopSubstrate.Protocol.Envelope
@@ -87,9 +92,9 @@ defmodule CoopSubstrate.Protocol.Validity do
   def check(%Envelope{} = env, gate) do
     with :ok <- CoopSubstrate.CommercialAdmission.fence(env, gate),
          :ok <- check_role_keys(env, gate),
-         :ok <- CommercialSetoffAdmission.check_existing_rail(env, gate) do
-      type_check(env, gate)
-    end
+         :ok <- CommercialSetoffAdmission.check_existing_rail(env, gate),
+         :ok <- type_check(env, gate),
+         do: KeyFence.check(env, gate)
   end
 
   # Bootstrap-then-enforce (Phase 1D, docs/phase1d_plan.md P4): once a chapter
@@ -172,9 +177,6 @@ defmodule CoopSubstrate.Protocol.Validity do
 
       Map.has_key?(declared, p["key_id"]) ->
         {:error, {:role_key_already_declared, p["role"], p["key_id"]}}
-
-      RestaurantCore.Admission.dispatch_pubkey?(gate.restaurant, ch, p["pubkey"]) ->
-        {:error, :key_not_separate}
 
       governance == nil and p["role"] != "governance" ->
         # No governance exists yet: the only representable declaration is the

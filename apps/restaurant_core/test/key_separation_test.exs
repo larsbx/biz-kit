@@ -1,9 +1,9 @@
 defmodule RestaurantCore.KeySeparationTest do
   @moduledoc """
-  The fence on new restaurant grants. Within a chapter, a Dispatch key shares
-  nothing with the restaurant side (its device keys and declared role keys) and
-  serves one tenant. Within a merchant, a key is granted at most once, so a
-  revoked seed is never granted there again.
+  The fence on new restaurant grants. Within a chapter, no grant holds a
+  declared role key, and a Dispatch key is none of the device keys and serves
+  one tenant. Within a merchant, a key is granted at most once, so a revoked
+  seed is never granted there again.
 
   `apart?/2` and `once?/1` below state the invariant independently of the
   implementation. For every grant, `check/2` admits exactly when `admit/3` does
@@ -126,6 +126,11 @@ defmodule RestaurantCore.KeySeparationTest do
        {:fence, :restaurant_key_already_granted}},
       {"device: a revoked key at another merchant", device("ch", "deli", "k", pk("old")), :ok},
       {"device: another chapter's Dispatch key", device("far", "shop", "k", pk("courier")), :ok},
+      {"device: the chapter's governance key", device("ch", "deli", "k", pk("gov:ch")),
+       {:fence, :key_not_separate}},
+      {"device: the chapter's steward key", device("ch", "deli", "k", pk("steward")),
+       {:fence, :key_not_separate}},
+      {"device: another chapter's role key", device("ch", "deli", "k", pk("checkpoint")), :ok},
       {"admission first: a reused key id", dispatch("ch", "shop", "courier", pk("pos"), @t1),
        {:admit, :restaurant_key_already_granted}},
       {"admission first: an undeclared signer",
@@ -156,15 +161,70 @@ defmodule RestaurantCore.KeySeparationTest do
     end
   end
 
-  test "a Dispatch key is one of the chapter's Dispatch keys, revoked or not" do
+  test "a chapter's holdings of a key, and the rules a grant or role key breaks against them" do
     g = base()
-    assert Admission.dispatch_pubkey?(g.restaurant, "ch", pk("courier"))
-    assert Admission.dispatch_pubkey?(g.restaurant, "ch", {:bytes, pk("courier")})
-    refute Admission.dispatch_pubkey?(g.restaurant, "far", pk("courier"))
-    refute Admission.dispatch_pubkey?(g.restaurant, "ch", pk("pos"))
+    assert Admission.key_holdings(g, "ch", pk("courier")) == [{:grant, "shop", "courier"}]
+    assert Admission.key_holdings(g, "ch", {:bytes, pk("old")}) == [{:grant, "shop", "old"}]
+    assert Admission.key_holdings(g, "ch", pk("steward")) == [{:role, "steward", "stw"}]
+    assert Admission.key_holdings(g, "far", pk("courier")) == []
 
-    revoked = Admission.fold(revoke("ch", "shop", "courier"), g)
-    assert Admission.dispatch_pubkey?(revoked, "ch", pk("courier"))
+    # Grants count revoked or not; a role key only while it is declared.
+    revoked = %{g | restaurant: Admission.fold(revoke("ch", "shop", "courier"), g)}
+    assert Admission.key_holdings(revoked, "ch", pk("courier")) == [{:grant, "shop", "courier"}]
+    undeclared = put_in(g, [:role_keys, {"ch", "steward"}], %{})
+    assert Admission.key_holdings(undeclared, "ch", pk("steward")) == []
+
+    assert Admission.role_key_conflicts(g, "ch", pk("courier")) ==
+             [{:dispatch_role_key_reuse, {:grant, "shop", "courier"}}]
+
+    assert Admission.role_key_conflicts(g, "ch", pk("old")) ==
+             [{:device_role_key_reuse, {:grant, "shop", "old"}}]
+
+    assert Admission.role_key_conflicts(g, "ch", pk("steward")) == []
+    assert Admission.role_key_conflicts(g, "far", pk("pos")) == []
+
+    assert Admission.key_conflicts(dispatch("ch", "shop", "d", pk("pos"), @t1), g) == [
+             {:device_dispatch_key_reuse, {:grant, "shop", "pos"}},
+             {:merchant_key_reuse, {:grant, "shop", "pos"}}
+           ]
+
+    assert Admission.key_conflicts(revoke("ch", "shop", "pos"), g) == []
+
+    assert Map.new(Admission.key_rules(), &{&1, Admission.refusal(&1)}) == %{
+             device_dispatch_key_reuse: :key_not_separate,
+             device_role_key_reuse: :key_not_separate,
+             dispatch_role_key_reuse: :key_not_separate,
+             dispatch_cross_tenant_key_reuse: :key_not_separate,
+             merchant_key_reuse: :restaurant_key_already_granted
+           }
+  end
+
+  test "sides before once: a grant on a role key its merchant already holds" do
+    # As history from before the fence may hold: shop's pos and courier keys
+    # were declared checkpoint keys after they were granted.
+    g =
+      put_in(base(), [:role_keys, {"ch", "checkpoint"}], %{
+        "c1" => pk("pos"),
+        "c2" => pk("courier")
+      })
+
+    board = device("ch", "shop", "k", pk("pos"))
+
+    assert Admission.key_conflicts(board, g) == [
+             {:device_role_key_reuse, {:role, "checkpoint", "c1"}},
+             {:merchant_key_reuse, {:grant, "shop", "pos"}}
+           ]
+
+    assert Admission.check(board, g) == {:error, :key_not_separate}
+
+    courier = dispatch("ch", "shop", "d", pk("courier"), @t1)
+
+    assert Admission.key_conflicts(courier, g) == [
+             {:dispatch_role_key_reuse, {:role, "checkpoint", "c2"}},
+             {:merchant_key_reuse, {:grant, "shop", "courier"}}
+           ]
+
+    assert Admission.check(courier, g) == {:error, :key_not_separate}
   end
 
   # -- The invariant, stated without the implementation ---------------------
@@ -175,8 +235,8 @@ defmodule RestaurantCore.KeySeparationTest do
   defp role_keys(keys, ch),
     do: for({{^ch, _role}, ids} <- keys, key <- Map.values(ids), do: key)
 
-  # Within a chapter: one key, one side; a Dispatch key is no role key and
-  # serves one tenant.
+  # Within a chapter: one key, one side; no grant holds a role key, and a
+  # Dispatch key serves one tenant.
   defp apart?(state, keys) do
     grants = Map.to_list(state.grants)
 
@@ -189,9 +249,7 @@ defmodule RestaurantCore.KeySeparationTest do
     Enum.all?(shared, fn {g, h} ->
       side(g) == side(h) and (side(g) == :device or g.tenant == h.tenant)
     end) and
-      Enum.all?(grants, fn {{ch, _, _}, g} ->
-        side(g) == :device or g.pubkey not in role_keys(keys, ch)
-      end)
+      Enum.all?(grants, fn {{ch, _, _}, g} -> g.pubkey not in role_keys(keys, ch) end)
   end
 
   # Within a merchant: each key granted once, revoked or not.
@@ -205,14 +263,14 @@ defmodule RestaurantCore.KeySeparationTest do
     chapters: ~w(a b),
     merchants: ~w(m1 m2),
     key_ids: ~w(k1 k2 k3),
-    pubkeys: Enum.map(~w(p1 p2 p3 p4), &:crypto.hash(:sha256, &1)),
+    pubkeys: Enum.map(~w(p1 p2 p3 p4 gov:a), &:crypto.hash(:sha256, &1)),
     tenants: [
       "11111111-1111-1111-1111-111111111111",
       "22222222-2222-2222-2222-222222222222"
     ]
   }
 
-  # p4 is a steward key of "a", p3 a checkpoint key of "b".
+  # p4 is a steward key of "a", p3 a checkpoint key of "b", gov:a a governance key.
   @small_keys %{
     {"a", "governance"} => %{"gov" => :crypto.hash(:sha256, "gov:a")},
     {"b", "governance"} => %{"gov" => :crypto.hash(:sha256, "gov:b")},

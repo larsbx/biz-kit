@@ -130,6 +130,17 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
         "pubkey" => {:bytes, pubkey}
       })
 
+  defp device_grant(gov, merchant, key_id, pubkey),
+    do:
+      signed_event(gov, "RestaurantDeviceGrantedV1", %{
+        "merchant_id" => merchant,
+        "device_id" => "device-" <> key_id,
+        "key_id" => key_id,
+        "pubkey" => {:bytes, pubkey},
+        "actor" => "staff",
+        "actions" => ["accept"]
+      })
+
   defp declare(gov, role, key_id, pubkey),
     do:
       signed_event(gov, "RoleKeyDeclared", %{
@@ -220,6 +231,57 @@ defmodule CoopSubstrate.RestaurantAdmissionTest do
              Log.append(dispatch_grant(ctx.gov, "deli", "courier", ctx.pos.signer.pubkey))
 
     assert inspect(refusal) =~ "key_not_separate"
+    assert Log.head() == head
+  end
+
+  test "a ledger already holding a device on the governance key boots, replays it, and refuses the next one",
+       ctx do
+    head = Log.head()
+    # Admitted before the fence covered role keys: a board on the governance key.
+    persist_unchecked!(device_grant(ctx.gov, "shop", "board", ctx.gov.signer.pubkey))
+    restart_log()
+
+    assert Log.head().global_seq == head.global_seq + 1
+    gate = Log.gate()
+    assert %{pubkey: pubkey} = gate.restaurant.grants[{@ch, "shop", "board"}]
+    assert pubkey == ctx.gov.signer.pubkey
+    {:ok, replayed} = Log.replay(Membership)
+    assert replayed.restaurant == gate.restaurant
+    assert :ok = Log.verify_chains()
+
+    head = Log.head()
+
+    # Also at shop, which already holds it: sides before once.
+    for {merchant, key_id} <- [{"deli", "board"}, {"shop", "board-2"}] do
+      assert Log.append(device_grant(ctx.gov, merchant, key_id, ctx.gov.signer.pubkey)) ==
+               {:error, {:reject, 0, :key_not_separate}}
+    end
+
+    assert Log.head() == head
+  end
+
+  test "a ledger already holding a role key on a device key boots, replays it, and refuses the next one",
+       ctx do
+    head = Log.head()
+    # Admitted before the fence covered device keys: pos's key declared a steward key.
+    persist_unchecked!(declare(ctx.gov, "steward", "k-pos", ctx.pos.signer.pubkey))
+    restart_log()
+
+    assert Log.head().global_seq == head.global_seq + 1
+    gate = Log.gate()
+    assert gate.role_keys[{@ch, "steward"}] == %{"k-pos" => ctx.pos.signer.pubkey}
+    {:ok, replayed} = Log.replay(Membership)
+    assert {replayed.role_keys, replayed.restaurant} == {gate.role_keys, gate.restaurant}
+    assert :ok = Log.verify_chains()
+
+    head = Log.head()
+
+    for claim <- [
+          declare(ctx.gov, "checkpoint", "k-pos", ctx.pos.signer.pubkey),
+          device_grant(ctx.gov, "deli", "board", ctx.pos.signer.pubkey)
+        ],
+        do: assert(Log.append(claim) == {:error, {:reject, 0, :key_not_separate}})
+
     assert Log.head() == head
   end
 end
